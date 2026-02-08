@@ -2,8 +2,8 @@
 #![no_main]
 #![allow(clippy::empty_loop)]
 
-use riscv_rt::entry;
 use panic_halt as _;
+use riscv_rt::entry;
 
 // Matches `SystemBus::new()` default `uart1` base.
 // Note: In a real system, we'd use a HAL, but for a minimal test this is fine.

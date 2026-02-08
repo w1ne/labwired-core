@@ -7,87 +7,274 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
     Nop,
-    MovImm { rd: u8, imm: u8 },           // MOV Rd, #imm8
-    Branch { offset: i32 },               // B <label>
-    BranchCond { cond: u8, offset: i32 }, // Bcc <label>
+    MovImm {
+        rd: u8,
+        imm: u8,
+    }, // MOV Rd, #imm8
+    Branch {
+        offset: i32,
+    }, // B <label>
+    BranchCond {
+        cond: u8,
+        offset: i32,
+    }, // Bcc <label>
 
     // Arithmetic & Logic
-    AddReg { rd: u8, rn: u8, rm: u8 },   // ADD Rd, Rn, Rm
-    AddImm3 { rd: u8, rn: u8, imm: u8 }, // ADD Rd, Rn, #imm3
-    AddImm8 { rd: u8, imm: u8 },         // ADD Rd, #imm8
+    AddReg {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    }, // ADD Rd, Rn, Rm
+    AddImm3 {
+        rd: u8,
+        rn: u8,
+        imm: u8,
+    }, // ADD Rd, Rn, #imm3
+    AddImm8 {
+        rd: u8,
+        imm: u8,
+    }, // ADD Rd, #imm8
 
-    SubReg { rd: u8, rn: u8, rm: u8 },   // SUB Rd, Rn, Rm
-    SubImm3 { rd: u8, rn: u8, imm: u8 }, // SUB Rd, Rn, #imm3
-    SubImm8 { rd: u8, imm: u8 },         // SUB Rd, #imm8
+    SubReg {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    }, // SUB Rd, Rn, Rm
+    SubImm3 {
+        rd: u8,
+        rn: u8,
+        imm: u8,
+    }, // SUB Rd, Rn, #imm3
+    SubImm8 {
+        rd: u8,
+        imm: u8,
+    }, // SUB Rd, #imm8
 
-    CmpImm { rn: u8, imm: u8 }, // CMP Rn, #imm8
-    CmpReg { rn: u8, rm: u8 },  // CMP Rn, Rm
-    MovReg { rd: u8, rm: u8 },  // MOV Rd, Rm (High registers)
-    Movw { rd: u8, imm: u16 },  // MOVW Rd, #imm16
-    Movt { rd: u8, imm: u16 },  // MOVT Rd, #imm16
+    CmpImm {
+        rn: u8,
+        imm: u8,
+    }, // CMP Rn, #imm8
+    CmpReg {
+        rn: u8,
+        rm: u8,
+    }, // CMP Rn, Rm
+    MovReg {
+        rd: u8,
+        rm: u8,
+    }, // MOV Rd, Rm (High registers)
+    Movw {
+        rd: u8,
+        imm: u16,
+    }, // MOVW Rd, #imm16
+    Movt {
+        rd: u8,
+        imm: u16,
+    }, // MOVT Rd, #imm16
 
-    AddSp { imm: u16 },            // ADD SP, SP, #imm
-    SubSp { imm: u16 },            // SUB SP, SP, #imm
-    AddRegHigh { rd: u8, rm: u8 }, // ADD Rd, Rm (at least one high register)
-    Cpsie,                         // CPSIE i
-    Cpsid,                         // CPSID i
+    AddSp {
+        imm: u16,
+    }, // ADD SP, SP, #imm
+    SubSp {
+        imm: u16,
+    }, // SUB SP, SP, #imm
+    AddRegHigh {
+        rd: u8,
+        rm: u8,
+    }, // ADD Rd, Rm (at least one high register)
+    Cpsie, // CPSIE i
+    Cpsid, // CPSID i
 
-    And { rd: u8, rm: u8 }, // AND Rd, Rm
-    Orr { rd: u8, rm: u8 }, // ORR Rd, Rm
-    Eor { rd: u8, rm: u8 }, // EOR Rd, Rm
-    Mvn { rd: u8, rm: u8 }, // MVN Rd, Rm
+    And {
+        rd: u8,
+        rm: u8,
+    }, // AND Rd, Rm
+    Orr {
+        rd: u8,
+        rm: u8,
+    }, // ORR Rd, Rm
+    Eor {
+        rd: u8,
+        rm: u8,
+    }, // EOR Rd, Rm
+    Mvn {
+        rd: u8,
+        rm: u8,
+    }, // MVN Rd, Rm
 
     // Shifts
-    Lsl { rd: u8, rm: u8, imm: u8 }, // LSL Rd, Rm, #imm5
-    Lsr { rd: u8, rm: u8, imm: u8 }, // LSR Rd, Rm, #imm5
-    Asr { rd: u8, rm: u8, imm: u8 }, // ASR Rd, Rm, #imm5
+    Lsl {
+        rd: u8,
+        rm: u8,
+        imm: u8,
+    }, // LSL Rd, Rm, #imm5
+    Lsr {
+        rd: u8,
+        rm: u8,
+        imm: u8,
+    }, // LSR Rd, Rm, #imm5
+    Asr {
+        rd: u8,
+        rm: u8,
+        imm: u8,
+    }, // ASR Rd, Rm, #imm5
 
     // Memory
-    LdrImm { rt: u8, rn: u8, imm: u8 }, // LDR Rt, [Rn, #imm] (imm is *4)
-    StrImm { rt: u8, rn: u8, imm: u8 }, // STR Rt, [Rn, #imm] (imm is *4)
-    LdrLit { rt: u8, imm: u16 },        // LDR Rt, [PC, #imm]
-    LdrbImm { rt: u8, rn: u8, imm: u8 }, // LDRB Rt, [Rn, #imm]
-    StrbImm { rt: u8, rn: u8, imm: u8 }, // STRB Rt, [Rn, #imm]
-    LdrhImm { rt: u8, rn: u8, imm: u8 }, // LDRH Rt, [Rn, #imm] (imm is *2)
-    StrhImm { rt: u8, rn: u8, imm: u8 }, // STRH Rt, [Rn, #imm] (imm is *2)
+    LdrImm {
+        rt: u8,
+        rn: u8,
+        imm: u8,
+    }, // LDR Rt, [Rn, #imm] (imm is *4)
+    StrImm {
+        rt: u8,
+        rn: u8,
+        imm: u8,
+    }, // STR Rt, [Rn, #imm] (imm is *4)
+    LdrLit {
+        rt: u8,
+        imm: u16,
+    }, // LDR Rt, [PC, #imm]
+    LdrbImm {
+        rt: u8,
+        rn: u8,
+        imm: u8,
+    }, // LDRB Rt, [Rn, #imm]
+    StrbImm {
+        rt: u8,
+        rn: u8,
+        imm: u8,
+    }, // STRB Rt, [Rn, #imm]
+    LdrhImm {
+        rt: u8,
+        rn: u8,
+        imm: u8,
+    }, // LDRH Rt, [Rn, #imm] (imm is *2)
+    StrhImm {
+        rt: u8,
+        rn: u8,
+        imm: u8,
+    }, // STRH Rt, [Rn, #imm] (imm is *2)
 
     // Stack
-    Push { registers: u8, m: bool }, // PUSH {Rlist, LR?}
-    Pop { registers: u8, p: bool },  // POP {Rlist, PC?}
-    Ldm { rn: u8, registers: u8 },   // LDM Rn, {Rlist}
-    Stm { rn: u8, registers: u8 },   // STM Rn, {Rlist}
+    Push {
+        registers: u8,
+        m: bool,
+    }, // PUSH {Rlist, LR?}
+    Pop {
+        registers: u8,
+        p: bool,
+    }, // POP {Rlist, PC?}
+    Ldm {
+        rn: u8,
+        registers: u8,
+    }, // LDM Rn, {Rlist}
+    Stm {
+        rn: u8,
+        registers: u8,
+    }, // STM Rn, {Rlist}
 
     // Control Flow
-    Cbz { rn: u8, imm: u8 },  // CBZ Rn, <label>
-    Cbnz { rn: u8, imm: u8 }, // CBNZ Rn, <label>
-    Bl { offset: i32 },       // BL <label> (32-bit T1+T2)
-    Bx { rm: u8 },            // BX Rm
-    Mul { rd: u8, rn: u8 },   // MUL Rd, Rn (Rd = Rn * Rd)
+    Cbz {
+        rn: u8,
+        imm: u8,
+    }, // CBZ Rn, <label>
+    Cbnz {
+        rn: u8,
+        imm: u8,
+    }, // CBNZ Rn, <label>
+    Bl {
+        offset: i32,
+    }, // BL <label> (32-bit T1+T2)
+    Bx {
+        rm: u8,
+    }, // BX Rm
+    Mul {
+        rd: u8,
+        rn: u8,
+    }, // MUL Rd, Rn (Rd = Rn * Rd)
 
     // SP-Relative
-    LdrSp { rt: u8, imm: u16 },    // LDR Rt, [SP, #imm]
-    StrSp { rt: u8, imm: u16 },    // STR Rt, [SP, #imm]
-    AddSpReg { rd: u8, imm: u16 }, // ADD Rd, SP, #imm (ADR-like for SP)
+    LdrSp {
+        rt: u8,
+        imm: u16,
+    }, // LDR Rt, [SP, #imm]
+    StrSp {
+        rt: u8,
+        imm: u16,
+    }, // STR Rt, [SP, #imm]
+    AddSpReg {
+        rd: u8,
+        imm: u16,
+    }, // ADD Rd, SP, #imm (ADR-like for SP)
 
     // Other ALU
-    Uxtb { rd: u8, rm: u8 },           // UXTB Rd, Rm
-    Adr { rd: u8, imm: u16 },          // ADR Rd, <label>
-    AsrReg { rd: u8, rm: u8 },         // ASR Rd, Rm
-    LdrReg { rt: u8, rn: u8, rm: u8 }, // LDR Rt, [Rn, Rm]
-    Rsbs { rd: u8, rn: u8 },           // RSBS Rd, Rn, #0
+    Uxtb {
+        rd: u8,
+        rm: u8,
+    }, // UXTB Rd, Rm
+    Adr {
+        rd: u8,
+        imm: u16,
+    }, // ADR Rd, <label>
+    AsrReg {
+        rd: u8,
+        rm: u8,
+    }, // ASR Rd, Rm
+    LdrReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDR Rt, [Rn, Rm]
+    Rsbs {
+        rd: u8,
+        rn: u8,
+    }, // RSBS Rd, Rn, #0
 
     // Bit Field Instructions (Thumb-2)
-    Bfi { rd: u8, rn: u8, lsb: u8, width: u8 }, // BFI Rd, Rn, #lsb, #width
-    Bfc { rd: u8, lsb: u8, width: u8 },         // BFC Rd, #lsb, #width
-    Sbfx { rd: u8, rn: u8, lsb: u8, width: u8 }, // SBFX Rd, Rn, #lsb, #width
-    Ubfx { rd: u8, rn: u8, lsb: u8, width: u8 }, // UBFX Rd, Rn, #lsb, #width
+    Bfi {
+        rd: u8,
+        rn: u8,
+        lsb: u8,
+        width: u8,
+    }, // BFI Rd, Rn, #lsb, #width
+    Bfc {
+        rd: u8,
+        lsb: u8,
+        width: u8,
+    }, // BFC Rd, #lsb, #width
+    Sbfx {
+        rd: u8,
+        rn: u8,
+        lsb: u8,
+        width: u8,
+    }, // SBFX Rd, Rn, #lsb, #width
+    Ubfx {
+        rd: u8,
+        rn: u8,
+        lsb: u8,
+        width: u8,
+    }, // UBFX Rd, Rn, #lsb, #width
 
     // Misc Thumb-2 Instructions
-    Clz { rd: u8, rm: u8 },   // CLZ Rd, Rm
-    Rbit { rd: u8, rm: u8 },  // RBIT Rd, Rm
-    Rev { rd: u8, rm: u8 },   // REV Rd, Rm
-    Rev16 { rd: u8, rm: u8 }, // REV16 Rd, Rm
-    RevSh { rd: u8, rm: u8 }, // REVSH Rd, Rm
+    Clz {
+        rd: u8,
+        rm: u8,
+    }, // CLZ Rd, Rm
+    Rbit {
+        rd: u8,
+        rm: u8,
+    }, // RBIT Rd, Rm
+    Rev {
+        rd: u8,
+        rm: u8,
+    }, // REV Rd, Rm
+    Rev16 {
+        rd: u8,
+        rm: u8,
+    }, // REV16 Rd, Rm
+    RevSh {
+        rd: u8,
+        rm: u8,
+    }, // REVSH Rd, Rm
 
     DataProc32 {
         op: u8,
@@ -426,8 +613,6 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
     Instruction::Unknown(opcode)
 }
 
-
-
 /// Decodes a 32-bit Thumb instruction (requires two 16-bit halfwords)
 pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // 32-bit Thumb instruction encoding:
@@ -472,21 +657,21 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
 
         // BFI / BFC
         if (h2 & 0x8000) == 0 {
-             let lsbbb = ((h2 >> 12) & 0x7) << 2 | ((h2 >> 6) & 0x3);
-             // Encoding of msb in h2 is mmmmm
-             let msb = (h2 & 0x1F) as u8;
-             let lsb = lsbbb as u8; // 5 bits
+            let lsbbb = ((h2 >> 12) & 0x7) << 2 | ((h2 >> 6) & 0x3);
+            // Encoding of msb in h2 is mmmmm
+            let msb = (h2 & 0x1F) as u8;
+            let lsb = lsbbb as u8; // 5 bits
 
-             // Width = msb - lsb + 1
-             // If msb < lsb, it's UNPREDICTABLE (or handled as 0 length?)
-             if msb >= lsb {
-                 let width = msb - lsb + 1;
-                 if rn == 0xF {
-                     return Instruction::Bfc { rd, lsb, width };
-                 } else {
-                     return Instruction::Bfi { rd, rn, lsb, width };
-                 }
-             }
+            // Width = msb - lsb + 1
+            // If msb < lsb, it's UNPREDICTABLE (or handled as 0 length?)
+            if msb >= lsb {
+                let width = msb - lsb + 1;
+                if rn == 0xF {
+                    return Instruction::Bfc { rd, lsb, width };
+                } else {
+                    return Instruction::Bfi { rd, rn, lsb, width };
+                }
+            }
         }
     }
 
@@ -496,14 +681,14 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let rn = (h1 & 0xF) as u8;
         let rd = ((h2 >> 8) & 0xF) as u8;
 
-        let lsb = (  ((h2 >> 12) & 0x7) << 2 | ((h2 >> 6) & 0x3) ) as u8; // 5 bits
+        let lsb = (((h2 >> 12) & 0x7) << 2 | ((h2 >> 6) & 0x3)) as u8; // 5 bits
         let width_m1 = (h2 & 0x1F) as u8;
         let width = width_m1 + 1;
 
         if is_unsigned {
-             return Instruction::Ubfx { rd, rn, lsb, width };
+            return Instruction::Ubfx { rd, rn, lsb, width };
         } else {
-             return Instruction::Sbfx { rd, rn, lsb, width };
+            return Instruction::Sbfx { rd, rn, lsb, width };
         }
     }
 
@@ -517,14 +702,19 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
 
         if (h1 & 0xFFF0) == 0xFA90 {
             // FA9m
-            let op = (h2 >> 4) & 0xF; // 1000=8, 1001=9, 1010=A, 1011=B
+            let op = (h2 >> 4) & 0xF;
             match op {
                 0x8 => return Instruction::Rev { rd, rm },
                 0x9 => return Instruction::Rev16 { rd, rm },
                 0xA => return Instruction::Rbit { rd, rm },
                 0xB => return Instruction::RevSh { rd, rm },
-                0xC => return Instruction::Clz { rd, rm },
                 _ => {}
+            }
+        } else if (h1 & 0xFFF0) == 0xFAB0 {
+            // FABm
+            let op = (h2 >> 4) & 0xF;
+            if op == 0x8 {
+                return Instruction::Clz { rd, rm };
             }
         }
     }
@@ -619,8 +809,6 @@ mod tests {
             Instruction::Rev { rd: 0, rm: 2 }
         );
     }
-
-
 
     #[test]
     fn test_decode_mov_cmp_add_sub_imm8() {

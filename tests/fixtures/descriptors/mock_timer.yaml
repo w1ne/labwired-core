@@ -1,0 +1,22 @@
+peripheral: "MockTimer"
+version: "1.0"
+registers:
+  - id: "CTRL"
+    address_offset: 0x00
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+    fields:
+      - name: "EN"
+        bit_range: [0, 0]
+        description: "Enable"
+  - id: "COUNT"
+    address_offset: 0x04
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+  - id: "ARR"
+    address_offset: 0x08
+    size: 32
+    access: "R/W"
+    reset_value: 0xFFFFFFFF

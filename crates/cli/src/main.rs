@@ -852,7 +852,17 @@ fn run_test(args: TestArgs) -> ExitCode {
             let mut machine = labwired_core::Machine::new(cpu, bus);
             machine.observers.push(metrics.clone());
             if let Err(e) = machine.load_firmware(&program) {
-                return handle_load_error(&args, &metrics, &resolved_limits, &firmware_bytes, &uart_tx, &machine.cpu, &firmware_path, system_path.as_ref(), e);
+                return handle_load_error(
+                    &args,
+                    &metrics,
+                    &resolved_limits,
+                    &firmware_bytes,
+                    &uart_tx,
+                    &machine.cpu,
+                    &firmware_path,
+                    system_path.as_ref(),
+                    e,
+                );
             }
             (true, Some(machine), None)
         }
@@ -861,22 +871,59 @@ fn run_test(args: TestArgs) -> ExitCode {
             let mut machine = labwired_core::Machine::new(cpu, bus);
             machine.observers.push(metrics.clone());
             if let Err(e) = machine.load_firmware(&program) {
-                return handle_load_error(&args, &metrics, &resolved_limits, &firmware_bytes, &uart_tx, &machine.cpu, &firmware_path, system_path.as_ref(), e);
+                return handle_load_error(
+                    &args,
+                    &metrics,
+                    &resolved_limits,
+                    &firmware_bytes,
+                    &uart_tx,
+                    &machine.cpu,
+                    &firmware_path,
+                    system_path.as_ref(),
+                    e,
+                );
             }
             (true, None, Some(machine))
         }
         _ => {
             let msg = format!("Unsupported architecture: {:?}", program.arch);
             error!("{}", msg);
-            write_config_error_outputs(&args, Some(&firmware_path), system_path.as_ref(), Some(&firmware_bytes), Some(&resolved_limits), msg);
+            write_config_error_outputs(
+                &args,
+                Some(&firmware_path),
+                system_path.as_ref(),
+                Some(&firmware_bytes),
+                Some(&resolved_limits),
+                msg,
+            );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
 
     if let Some(mut machine) = machine_arm {
-        execute_test_loop(&args, &mut machine, &resolved_limits, &assertions, &firmware_bytes, &uart_tx, &metrics, &firmware_path, system_path.as_ref())
+        execute_test_loop(
+            &args,
+            &mut machine,
+            &resolved_limits,
+            &assertions,
+            &firmware_bytes,
+            &uart_tx,
+            &metrics,
+            &firmware_path,
+            system_path.as_ref(),
+        )
     } else if let Some(mut machine) = machine_riscv {
-        execute_test_loop(&args, &mut machine, &resolved_limits, &assertions, &firmware_bytes, &uart_tx, &metrics, &firmware_path, system_path.as_ref())
+        execute_test_loop(
+            &args,
+            &mut machine,
+            &resolved_limits,
+            &assertions,
+            &firmware_bytes,
+            &uart_tx,
+            &metrics,
+            &firmware_path,
+            system_path.as_ref(),
+        )
     } else {
         unreachable!()
     }
