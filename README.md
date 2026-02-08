@@ -7,6 +7,7 @@ LabWired is a next-generation simulation platform designed to bridge the gap bet
 
 **Key Features:**
 - **Declarative Configuration**: Define Chips and Boards in YAML (including memory maps and peripherals).
+- **Declarative Register Maps**: Model new peripherals via YAML descriptors without writing Rust code.
 - **System Services**: Full support for SysTick, Vector Table Boot, and Exception Handling.
 - **Core Peripheral Ecosystem**: STM32F1-compatible GPIO, RCC, Timers, I2C, and SPI models.
 - **Interactive Debugging**: Standard DAP support with DWARF-based source mapping for VS Code.

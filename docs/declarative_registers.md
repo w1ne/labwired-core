@@ -1,8 +1,13 @@
-# Declarative Register Maps (Design)
+# Declarative Register Maps
 
-One of LabWired's core goals is to break the "peripheral modeling bottleneck." Instead of writing manual Rust code for every peripheral, we aim to use declarative YAML specifications to define register maps and behaviors.
+One of LabWired's core goals is to break the "peripheral modeling bottleneck." Instead of writing manual Rust code for every peripheral, LabWired uses declarative YAML specifications to define register maps and behaviors.
 
-## YAML Schema Concept
+> [!NOTE]
+> This feature is fully implemented as of v0.11.0.
+
+## YAML Schema
+
+The schema allows defining registers, their bitfields, and side effects (e.g., clear-on-read):
 
 ```yaml
 peripheral: "SPI"
@@ -30,11 +35,11 @@ registers:
       on_write: "start_tx"
 ```
 
-## Proposed Architecture
+## Architecture
 
-1. **Parser**: A Rust crate that reads these YAML files into a structured `PeripheralDescriptor` IR.
-2. **Generic Peripheral**: A standard implementation of the `Peripheral` trait that takes a `PeripheralDescriptor` and manages a byte buffer for registers.
-3. **Logic Hooks**: A way to attach custom Rust logic (e.g., "start_tx") to specific register offsets defined in the YAML.
+1. **Parser**: The `labwired-config` crate reads these YAML files into a structured `PeripheralDescriptor` IR.
+2. **Generic Peripheral**: A implementation of the `Peripheral` trait in `labwired-core` (`GenericPeripheral`) that uses the descriptor to manage register access.
+3. **Logic Hooks**: Support for attaching custom Rust logic (e.g., "start_tx") to specific register offsets defined in the YAML via `SideEffects`.
 
 ## Benefits
 
@@ -42,8 +47,6 @@ registers:
 - **Correctness**: Reset values and access permissions are enforced by the generic engine.
 - **Speed**: New peripherals can be "modeled" in minutes by copying data from a silicon vendor's SVD file.
 
-## Next Steps
+## Getting Started
 
-- Implement the `PeripheralDescriptor` parser using `serde_yaml`.
-- Develop the `GenericPeripheral` implementation.
-- Build a code generator or a dynamic interpreter for these maps.
+See the [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for a step-by-step guide on creating your first declarative peripheral.
