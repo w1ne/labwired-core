@@ -39,4 +39,9 @@ LabWired core is currently tightly coupled to ARM Cortex-M architecture, specifi
 - Update `run_interactive` and `run_test` to explicitly call the Cortex-M configuration logic before creating the `Machine`.
 
 ## Status: Completed
-The multi-architecture refactor has been successfully implemented, enabling support for RISC-V alongside the original ARM Cortex-M architecture. This has been verified through unit tests and successful integration of the RISC-V GDB stub.
+The multi-architecture refactor has been successfully implemented:
+-   **Core Interface**: Generic `Cpu` trait is decoupled from ARM-specific registers.
+-   **Machine Initialization**: `Machine` is now architecture-agnostic, with system setup helpers for Cortex-M and RISC-V.
+-   **Snapshots**: `CpuSnapshot` refactored into an enum, supporting standardized state capture for both ARM and RISC-V.
+-   **Test Runner**: The `labwired test` command automatically detects the architecture from ELF files and runs the appropriate simulation loop.
+-   **Regression Testing**: CI pipeline validated with real ELF binaries for ARM (M0, M3) and RISC-V.

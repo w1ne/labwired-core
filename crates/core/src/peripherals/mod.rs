@@ -6,6 +6,7 @@
 
 pub mod adc;
 pub mod afio;
+pub mod declarative;
 pub mod dma;
 pub mod exti;
 pub mod gpio;

@@ -1203,8 +1203,12 @@ mod tests {
         let snap = machine.snapshot();
 
         // Verify CPU
-        assert_eq!(snap.cpu.registers[0], 42);
-        assert_eq!(snap.cpu.registers[15], 0x0800_0000); // PC is R15
+        if let crate::snapshot::CpuSnapshot::Arm(s) = &snap.cpu {
+            assert_eq!(s.registers[0], 42);
+            assert_eq!(s.registers[15], 0x0800_0000); // PC is R15
+        } else {
+            panic!("Expected ARM snapshot");
+        }
 
         // Verify Peripheral via JSON Value inspection
         // snap.peripherals is HashMap<String, serde_json::Value>
@@ -1222,5 +1226,27 @@ mod tests {
 
         // Check deserialization
         let _snap_restored: MachineSnapshot = serde_json::from_str(&json_str).unwrap();
+    }
+
+    #[test]
+    fn test_declarative_peripheral_integration() {
+        use crate::peripherals::declarative::GenericPeripheral;
+        use labwired_config::PeripheralDescriptor;
+
+        let yaml_path = "../../tests/fixtures/descriptors/mock_timer.yaml";
+        let desc = PeripheralDescriptor::from_file(yaml_path).expect("Failed to load YAML");
+        let mut p = GenericPeripheral::new(desc);
+
+        // Verify Reset Values
+        assert_eq!(p.read(0x00).unwrap(), 0x00, "CTRL reset value");
+        assert_eq!(p.read(0x08).unwrap(), 0xFF, "ARR reset value byte 0");
+
+        // Verify Write/Read
+        p.write(0x00, 0x01).unwrap();
+        assert_eq!(p.read(0x00).unwrap(), 0x01, "CTRL write value");
+
+        // Verify Access Control (COUNT is RO)
+        p.write(0x04, 0x55).unwrap();
+        assert_eq!(p.read(0x04).unwrap(), 0x00, "COUNT should be RO");
     }
 }

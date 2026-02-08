@@ -295,28 +295,10 @@ impl Cpu for RiscV {
     }
 
     fn snapshot(&self) -> crate::snapshot::CpuSnapshot {
-        // Mapping RISC-V registers to the snapshot format.
-        // Snapshot struct is currently tailored to ARM (r0-r12, sp, lr, pc, xpsr).
-        // We'll map:
-        // x0-x12 -> r0-r12
-        // x2 (sp) -> sp
-        // x1 (ra) -> lr
-        // pc -> pc
-        // This is imperfect but allows some visibility.
-        // Ideally CpuSnapshot should be an enum or map.
-        let mut regs = [0u32; 17];
-        regs[..13].copy_from_slice(&self.x[..13]);
-        regs[13] = self.x[2]; // SP
-        regs[14] = self.x[1]; // LR/RA
-        regs[15] = self.pc;
-
-        crate::snapshot::CpuSnapshot {
-            registers: regs.to_vec(),
-            xpsr: 0,
-            primask: false,
-            pending_exceptions: 0,
-            vtor: 0,
-        }
+        crate::snapshot::CpuSnapshot::RiscV(crate::snapshot::RiscVCpuSnapshot {
+            registers: self.x.to_vec(),
+            pc: self.pc,
+        })
     }
 }
 
@@ -422,5 +404,18 @@ mod tests {
         // Ensure x3 is still 0
         assert_eq!(machine.cpu.read_reg(3), 0);
     }
+
+    #[test]
+    fn test_riscv_snapshot() {
+        let mut cpu = RiscV::new();
+        cpu.write_reg(1, 42);
+        cpu.pc = 0x1234;
+        let snapshot = cpu.snapshot();
+        if let crate::snapshot::CpuSnapshot::RiscV(s) = snapshot {
+            assert_eq!(s.registers[1], 42);
+            assert_eq!(s.pc, 0x1234);
+        } else {
+            panic!("Expected RiscV snapshot");
+        }
+    }
 }
-// Tests will be added here

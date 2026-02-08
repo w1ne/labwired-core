@@ -10,9 +10,9 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::str::FromStr;
-use std::sync::atomic::Ordering;
+// use std::sync::atomic::Ordering; // Removed as unused
 use std::sync::{Arc, Mutex};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
 
@@ -172,15 +172,7 @@ struct TestConfig {
     script: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct CortexMCpuSnapshot {
-    registers: [u32; 16],
-    xpsr: u32,
-    pending_exceptions: u32,
-    primask: bool,
-    vtor: u32,
-}
+use labwired_core::snapshot::CpuSnapshot;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PeripheralSnapshot {
@@ -201,8 +193,8 @@ struct InteractiveSnapshotConfig {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Snapshot {
-    CortexM {
-        cpu: CortexMCpuSnapshot,
+    Standard {
+        cpu: CpuSnapshot,
         steps_executed: u64,
         cycles: u64,
         instructions: u64,
@@ -218,7 +210,7 @@ enum Snapshot {
         limits: TestLimits,
         config: TestConfig,
     },
-    InteractiveCortexM {
+    Interactive {
         snapshot_schema_version: String,
         status: String,
         steps_executed: u64,
@@ -228,24 +220,13 @@ enum Snapshot {
         #[serde(skip_serializing_if = "Option::is_none")]
         message: Option<String>,
         firmware_hash: String,
-        cpu: CortexMCpuSnapshot,
+        cpu: CpuSnapshot,
         peripherals: Vec<PeripheralSnapshot>,
         config: InteractiveSnapshotConfig,
     },
 }
 
-fn snapshot_cortexm_cpu(cpu: &labwired_core::cpu::CortexM) -> CortexMCpuSnapshot {
-    CortexMCpuSnapshot {
-        registers: [
-            cpu.r0, cpu.r1, cpu.r2, cpu.r3, cpu.r4, cpu.r5, cpu.r6, cpu.r7, cpu.r8, cpu.r9,
-            cpu.r10, cpu.r11, cpu.r12, cpu.sp, cpu.lr, cpu.pc,
-        ],
-        xpsr: cpu.xpsr,
-        pending_exceptions: cpu.pending_exceptions,
-        primask: cpu.primask,
-        vtor: cpu.vtor.load(Ordering::Relaxed),
-    }
-}
+// snapshot_cortexm_cpu removed, use cpu.snapshot() directly
 
 struct InteractiveSnapshotInputs<'a> {
     firmware_path: &'a Path,
@@ -256,10 +237,10 @@ struct InteractiveSnapshotInputs<'a> {
     message: Option<String>,
 }
 
-fn write_interactive_snapshot(
+fn write_interactive_snapshot<C: labwired_core::Cpu>(
     path: &Path,
     metrics: &labwired_core::metrics::PerformanceMetrics,
-    machine: &labwired_core::Machine<labwired_core::cpu::CortexM>,
+    machine: &labwired_core::Machine<C>,
     inputs: InteractiveSnapshotInputs<'_>,
 ) {
     if let Some(parent) = path.parent() {
@@ -296,7 +277,9 @@ fn write_interactive_snapshot(
         })
         .collect::<Vec<_>>();
 
-    let snapshot = Snapshot::InteractiveCortexM {
+    let cpu_snapshot = machine.cpu.snapshot();
+
+    let snapshot = Snapshot::Interactive {
         snapshot_schema_version: "1.0".to_string(),
         status: if matches!(
             inputs.stop_reason,
@@ -312,7 +295,7 @@ fn write_interactive_snapshot(
         stop_reason: inputs.stop_reason,
         message: inputs.message,
         firmware_hash,
-        cpu: snapshot_cortexm_cpu(&machine.cpu),
+        cpu: cpu_snapshot,
         peripherals,
         config: InteractiveSnapshotConfig {
             firmware: inputs.firmware_path.to_path_buf(),
@@ -527,11 +510,26 @@ fn run_interactive_riscv(
         return ExitCode::from(EXIT_PASS);
     }
 
-    if cli.snapshot.is_some() {
-        warn!("Snapshots not yet supported for RISC-V. Ignoring --snapshot.");
-    }
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
 
-    let _result = run_simulation_loop(&cli, &mut machine, &metrics);
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
 
     report_metrics(&machine.cpu, &metrics);
     ExitCode::from(EXIT_PASS)
@@ -848,50 +846,158 @@ fn run_test(args: TestArgs) -> ExitCode {
     };
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
-    let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
-    let mut machine = labwired_core::Machine::new(cpu, bus);
-    machine.observers.push(metrics.clone());
+    let (_cpu_configured, machine_arm, machine_riscv) = match program.arch {
+        labwired_core::Arch::Arm => {
+            let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+            let mut machine = labwired_core::Machine::new(cpu, bus);
+            machine.observers.push(metrics.clone());
+            if let Err(e) = machine.load_firmware(&program) {
+                return handle_load_error(
+                    &args,
+                    &metrics,
+                    &resolved_limits,
+                    &firmware_bytes,
+                    &uart_tx,
+                    &machine.cpu,
+                    &firmware_path,
+                    system_path.as_ref(),
+                    e,
+                );
+            }
+            (true, Some(machine), None)
+        }
+        labwired_core::Arch::RiscV => {
+            let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+            let mut machine = labwired_core::Machine::new(cpu, bus);
+            machine.observers.push(metrics.clone());
+            if let Err(e) = machine.load_firmware(&program) {
+                return handle_load_error(
+                    &args,
+                    &metrics,
+                    &resolved_limits,
+                    &firmware_bytes,
+                    &uart_tx,
+                    &machine.cpu,
+                    &firmware_path,
+                    system_path.as_ref(),
+                    e,
+                );
+            }
+            (true, None, Some(machine))
+        }
+        _ => {
+            let msg = format!("Unsupported architecture: {:?}", program.arch);
+            error!("{}", msg);
+            write_config_error_outputs(
+                &args,
+                Some(&firmware_path),
+                system_path.as_ref(),
+                Some(&firmware_bytes),
+                Some(&resolved_limits),
+                msg,
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
 
-    if let Err(e) = machine.load_firmware(&program) {
-        let err_msg = format!("Simulation error during load/reset: {}", e);
-        error!("{}", err_msg);
-        let stop_reason_details = build_stop_reason_details(
-            &StopReason::Halt,
-            &resolved_limits,
-            0,
-            metrics.get_cycles(),
-            0,
-            0,
-            std::time::Duration::from_secs(0),
-        );
-        write_outputs(
+    if let Some(mut machine) = machine_arm {
+        execute_test_loop(
             &args,
-            "error",
-            0,
-            &metrics,
-            StopReason::Halt,
-            stop_reason_details,
-            resolved_limits,
-            vec![],
+            &mut machine,
+            &resolved_limits,
+            &assertions,
             &firmware_bytes,
             &uart_tx,
-            &machine.cpu,
+            &metrics,
             &firmware_path,
             system_path.as_ref(),
-            std::time::Duration::from_secs(0),
-        );
-        return ExitCode::from(EXIT_RUNTIME_ERROR);
+        )
+    } else if let Some(mut machine) = machine_riscv {
+        execute_test_loop(
+            &args,
+            &mut machine,
+            &resolved_limits,
+            &assertions,
+            &firmware_bytes,
+            &uart_tx,
+            &metrics,
+            &firmware_path,
+            system_path.as_ref(),
+        )
+    } else {
+        unreachable!()
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_load_error<C: labwired_core::Cpu>(
+    args: &TestArgs,
+    metrics: &Arc<labwired_core::metrics::PerformanceMetrics>,
+    resolved_limits: &TestLimits,
+    firmware_bytes: &[u8],
+    uart_tx: &Arc<Mutex<Vec<u8>>>,
+    cpu: &C,
+    firmware_path: &Path,
+    system_path: Option<&PathBuf>,
+    e: labwired_core::SimulationError,
+) -> ExitCode {
+    let err_msg = format!("Simulation error during load/reset: {}", e);
+    error!("{}", err_msg);
+    let stop_reason_details = build_stop_reason_details(
+        &StopReason::Halt,
+        resolved_limits,
+        0,
+        metrics.get_cycles(),
+        0,
+        0,
+        std::time::Duration::from_secs(0),
+    );
+    write_outputs(
+        args,
+        "error",
+        0,
+        metrics,
+        StopReason::Halt,
+        stop_reason_details,
+        resolved_limits.clone(),
+        vec![],
+        firmware_bytes,
+        uart_tx,
+        cpu,
+        firmware_path,
+        system_path,
+        std::time::Duration::from_secs(0),
+    );
+    ExitCode::from(EXIT_RUNTIME_ERROR)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_test_loop<C: labwired_core::Cpu>(
+    args: &TestArgs,
+    machine: &mut labwired_core::Machine<C>,
+    resolved_limits: &TestLimits,
+    assertions: &[TestAssertion],
+    firmware_bytes: &[u8],
+    uart_tx: &Arc<Mutex<Vec<u8>>>,
+    metrics: &Arc<labwired_core::metrics::PerformanceMetrics>,
+    firmware_path: &Path,
+    system_path: Option<&PathBuf>,
+) -> ExitCode {
+    let max_steps = resolved_limits.max_steps;
+    let max_cycles = resolved_limits.max_cycles;
+    let max_uart_bytes = resolved_limits.max_uart_bytes;
+    let detect_stuck = resolved_limits.no_progress_steps;
+    let script_wall_time_ms = resolved_limits.wall_time_ms;
 
     let start = std::time::Instant::now();
     let mut stop_reason = StopReason::MaxSteps;
     let mut steps_executed: u64 = 0;
     let mut sim_error_happened = false;
-    let mut prev_pc = machine.cpu.pc;
+    let mut prev_pc = machine.cpu.get_pc();
     let mut stuck_counter: u64 = 0;
 
     for step in 0..max_steps {
-        if !args.breakpoint.is_empty() && args.breakpoint.contains(&machine.cpu.pc) {
+        if !args.breakpoint.is_empty() && args.breakpoint.contains(&machine.cpu.get_pc()) {
             stop_reason = StopReason::Halt;
             steps_executed = step;
             break;
@@ -933,7 +1039,8 @@ fn run_test(args: TestArgs) -> ExitCode {
 
         // Check no_progress (PC stuck)
         if let Some(limit) = detect_stuck {
-            if machine.cpu.pc == prev_pc {
+            let current_pc = machine.cpu.get_pc();
+            if current_pc == prev_pc {
                 stuck_counter += 1;
                 if stuck_counter >= limit {
                     stop_reason = StopReason::NoProgress;
@@ -945,7 +1052,7 @@ fn run_test(args: TestArgs) -> ExitCode {
                 }
             } else {
                 stuck_counter = 0;
-                prev_pc = machine.cpu.pc;
+                prev_pc = current_pc;
             }
         }
     }
@@ -959,7 +1066,7 @@ fn run_test(args: TestArgs) -> ExitCode {
     let mut all_passed = true;
     let mut expected_stop_reason_matched = false;
 
-    for assertion in assertions.clone() {
+    for assertion in assertions {
         let passed = match &assertion {
             TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
             TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
@@ -979,7 +1086,10 @@ fn run_test(args: TestArgs) -> ExitCode {
             );
         }
 
-        assertion_results.push(AssertionResult { assertion, passed });
+        assertion_results.push(AssertionResult {
+            assertion: assertion.clone(),
+            passed,
+        });
     }
 
     let stop_requires_assertion = matches!(
@@ -987,9 +1097,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         StopReason::WallTime | StopReason::MaxUartBytes | StopReason::NoProgress
     );
 
-    let status = if !all_passed {
-        "fail"
-    } else if stop_requires_assertion && !expected_stop_reason_matched {
+    let status = if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
         "fail"
     } else if sim_error_happened && !expected_stop_reason_matched {
         "error"
@@ -1001,7 +1109,7 @@ fn run_test(args: TestArgs) -> ExitCode {
     let uart_bytes = uart_tx.lock().map(|g| g.len() as u64).unwrap_or(0);
     let stop_reason_details = build_stop_reason_details(
         &stop_reason,
-        &resolved_limits,
+        resolved_limits,
         steps_executed,
         metrics.get_cycles(),
         uart_bytes,
@@ -1009,19 +1117,19 @@ fn run_test(args: TestArgs) -> ExitCode {
         duration,
     );
     write_outputs(
-        &args,
+        args,
         status,
         steps_executed,
-        &metrics,
+        metrics,
         stop_reason.clone(),
         stop_reason_details,
-        resolved_limits,
+        resolved_limits.clone(),
         assertion_results,
-        &firmware_bytes,
-        &uart_tx,
+        firmware_bytes,
+        uart_tx,
         &machine.cpu,
-        &firmware_path,
-        system_path.as_ref(),
+        firmware_path,
+        system_path,
         duration,
     );
 
@@ -1035,7 +1143,7 @@ fn run_test(args: TestArgs) -> ExitCode {
 }
 
 #[allow(clippy::too_many_arguments, clippy::if_same_then_else)]
-fn write_outputs(
+fn write_outputs<C: labwired_core::Cpu>(
     args: &TestArgs,
     status: &str,
     steps_executed: u64,
@@ -1046,7 +1154,7 @@ fn write_outputs(
     assertions: Vec<AssertionResult>,
     firmware_bytes: &[u8],
     uart_tx: &Arc<Mutex<Vec<u8>>>,
-    cpu: &labwired_core::cpu::CortexM,
+    cpu: &C,
     firmware_path: &Path,
     system_path: Option<&PathBuf>,
     duration: std::time::Duration,
@@ -1090,19 +1198,10 @@ fn write_outputs(
                 Err(e) => error!("Failed to create result.json: {}", e),
             }
 
-            // snapshot.json
+            // result.json handles cpu generically now
             let snapshot_path = output_dir.join("snapshot.json");
-            let snapshot = Snapshot::CortexM {
-                cpu: CortexMCpuSnapshot {
-                    registers: [
-                        cpu.r0, cpu.r1, cpu.r2, cpu.r3, cpu.r4, cpu.r5, cpu.r6, cpu.r7, cpu.r8,
-                        cpu.r9, cpu.r10, cpu.r11, cpu.r12, cpu.sp, cpu.lr, cpu.pc,
-                    ],
-                    xpsr: cpu.xpsr,
-                    pending_exceptions: cpu.pending_exceptions,
-                    primask: cpu.primask,
-                    vtor: cpu.vtor.load(Ordering::Relaxed),
-                },
+            let snapshot = Snapshot::Standard {
+                cpu: cpu.snapshot(),
                 steps_executed,
                 cycles: result.cycles,
                 instructions: result.instructions,

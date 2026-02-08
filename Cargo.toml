@@ -12,6 +12,7 @@ members = [
     "crates/cli",
     "crates/firmware",
     "crates/firmware-ci-fixture",
+    "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
 ]
 exclude = ["crates/firmware-hal-test"]

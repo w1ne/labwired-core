@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+[package]
+name = "riscv-ci-fixture"
+version = "0.10.0"
+edition = "2021"
+
+[dependencies]
+riscv = "0.10"
+riscv-rt = "0.12"
+panic-halt = "0.2"
+
+[[bin]]
+name = "riscv-ci-fixture"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.release]
+codegen-units = 1
+debug = true
+lto = true
+opt-level = "s"

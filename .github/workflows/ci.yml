@@ -33,7 +33,7 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        targets: thumbv7m-none-eabi, thumbv6m-none-eabi
+        targets: thumbv7m-none-eabi, thumbv6m-none-eabi, riscv32i-unknown-none-elf
         components: clippy, rustfmt
 
     - name: Rust Cache
@@ -46,13 +46,16 @@ jobs:
       run: cargo fmt --all -- --check
 
     - name: Clippy (Host)
-      run: cargo clippy --workspace --exclude firmware --exclude firmware-ci-fixture -- -D warnings
+      run: cargo clippy --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture -- -D warnings
 
     - name: Clippy (Firmware)
       run: cargo clippy -p firmware --target thumbv7m-none-eabi -- -D warnings
 
-    - name: Clippy (CI Fixture)
+    - name: Clippy (CI Fixture ARM)
       run: cargo clippy -p firmware-ci-fixture --target thumbv6m-none-eabi -- -D warnings
+
+    - name: Clippy (CI Fixture RISC-V)
+      run: cargo clippy -p riscv-ci-fixture --target riscv32i-unknown-none-elf -- -D warnings
 
     # - name: Security Audit
     #   uses: rustsec/audit-check@v2.0.0
@@ -60,13 +63,19 @@ jobs:
     #     token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build (Host)
-      run: cargo build --workspace --exclude firmware --exclude firmware-ci-fixture --verbose
+      run: cargo build --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture --verbose
 
-    - name: Build (Firmware)
+    - name: Build (Firmware ARM)
       run: cargo build -p firmware --target thumbv7m-none-eabi --verbose
 
+    - name: Build (CI Fixture ARM)
+      run: cargo build -p firmware-ci-fixture --target thumbv6m-none-eabi --release --verbose
+
+    - name: Build (CI Fixture RISC-V)
+      run: cargo build -p riscv-ci-fixture --target riscv32i-unknown-none-elf --release --verbose
+
     - name: Run Tests
-      run: cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --verbose
+      run: cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture --verbose
 
     - name: Test Coverage
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -80,11 +89,26 @@ jobs:
     # Skip CI checks for direct pushes to develop (temporary for fast iteration)
     # Still run for: PRs to develop, anything related to main, and release tags
     if: github.ref != 'refs/heads/develop' || github.event_name != 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm-m0
+            script: examples/ci/uart-ok.yaml
+            firmware: ""
+          - arch: arm-m3
+            script: examples/ci/uart-ok.yaml
+            firmware: "target/thumbv7m-none-eabi/release/firmware-ci-fixture"
+          - arch: riscv
+            script: examples/ci/riscv-uart-ok.yaml
+            firmware: ""
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi, thumbv7m-none-eabi, riscv32i-unknown-none-elf
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -92,11 +116,26 @@ jobs:
           workspaces: |
             . -> target
 
+      - name: Build Fixture
+        run: |
+          case "${{ matrix.arch }}" in
+            arm-m0)
+              cargo build -p firmware-ci-fixture --target thumbv6m-none-eabi --release
+              ;;
+            arm-m3)
+              cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi --release
+              ;;
+            riscv)
+              cargo build -p riscv-ci-fixture --target riscv32i-unknown-none-elf --release
+              ;;
+          esac
+
       - name: Run labwired test
         id: labwired
         uses: ./.github/actions/labwired-test
         with:
-          script: examples/ci/uart-ok.yaml
+          script: ${{ matrix.script }}
+          firmware: ${{ matrix.firmware }}
           output_dir: out/artifacts
           profile: release
           no_uart_stdout: true
@@ -105,7 +144,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: labwired-artifacts
+          name: labwired-artifacts-${{ matrix.arch }}
           path: out/artifacts
           if-no-files-found: warn
 

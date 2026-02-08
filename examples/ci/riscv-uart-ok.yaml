@@ -6,9 +6,9 @@
 
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv6m-none-eabi/release/firmware-ci-fixture"
-  system: "../../configs/systems/ci-fixture-uart1.yaml"
+  firmware: "../../target/riscv32i-unknown-none-elf/release/riscv-ci-fixture"
+  system: "../../configs/systems/ci-fixture-riscv-uart1.yaml"
 limits:
   max_steps: 1000
 assertions:
-  - uart_contains: "OK"
+  - uart_contains: "RV OK"

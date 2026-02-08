@@ -80,6 +80,64 @@ impl SystemManifest {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Access {
+    #[serde(alias = "R/W", alias = "rw")]
+    ReadWrite,
+    #[serde(alias = "RO", alias = "r")]
+    ReadOnly,
+    #[serde(alias = "WO", alias = "w")]
+    WriteOnly,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FieldDescriptor {
+    pub name: String,
+    pub bit_range: [u8; 2], // [msb, lsb]
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SideEffectsDescriptor {
+    #[serde(default)]
+    pub on_read: Option<String>,
+    #[serde(default)]
+    pub on_write: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RegisterDescriptor {
+    pub id: String,
+    pub address_offset: u64,
+    pub size: u8, // 8, 16, 32
+    pub access: Access,
+    pub reset_value: u32,
+    #[serde(default)]
+    pub fields: Vec<FieldDescriptor>,
+    #[serde(default)]
+    pub side_effects: Option<SideEffectsDescriptor>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PeripheralDescriptor {
+    pub peripheral: String,
+    pub version: String,
+    pub registers: Vec<RegisterDescriptor>,
+}
+
+impl PeripheralDescriptor {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let content = std::fs::read_to_string(&path)?;
+        Self::from_yaml(&content)
+    }
+
+    pub fn from_yaml(yaml: &str) -> Result<Self> {
+        serde_yaml::from_str(yaml).context("Failed to parse Peripheral Descriptor")
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct TestInputs {
@@ -377,5 +435,40 @@ assertions: []
 
         let loaded = load_test_script(&script_path).unwrap();
         assert!(matches!(loaded, LoadedTestScript::LegacyV1(_)));
+    }
+
+    #[test]
+    fn test_peripheral_descriptor_parsing() {
+        let yaml = r#"
+peripheral: "SPI"
+version: "1.0"
+registers:
+  - id: "CR1"
+    address_offset: 0x00
+    size: 16
+    access: "R/W"
+    reset_value: 0x0000
+    fields:
+      - name: "SPE"
+        bit_range: [6, 6]
+        description: "SPI Enable"
+  - id: "DR"
+    address_offset: 0x0C
+    size: 16
+    access: "R/W"
+    reset_value: 0x0000
+    side_effects:
+      on_read: "clear_rxne"
+      on_write: "start_tx"
+"#;
+        let desc = PeripheralDescriptor::from_yaml(yaml).unwrap();
+        assert_eq!(desc.peripheral, "SPI");
+        assert_eq!(desc.registers.len(), 2);
+        assert_eq!(desc.registers[0].id, "CR1");
+        assert_eq!(desc.registers[0].access, Access::ReadWrite);
+        assert_eq!(
+            desc.registers[1].side_effects.as_ref().unwrap().on_read,
+            Some("clear_rxne".to_string())
+        );
     }
 }

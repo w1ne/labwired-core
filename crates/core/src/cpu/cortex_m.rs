@@ -214,7 +214,7 @@ impl Cpu for CortexM {
     }
 
     fn snapshot(&self) -> crate::snapshot::CpuSnapshot {
-        crate::snapshot::CpuSnapshot {
+        crate::snapshot::CpuSnapshot::Arm(crate::snapshot::ArmCpuSnapshot {
             registers: vec![
                 self.r0, self.r1, self.r2, self.r3, self.r4, self.r5, self.r6, self.r7, self.r8,
                 self.r9, self.r10, self.r11, self.r12, self.sp, self.lr, self.pc,
@@ -223,7 +223,7 @@ impl Cpu for CortexM {
             primask: self.primask,
             pending_exceptions: self.pending_exceptions,
             vtor: self.vtor.load(Ordering::Relaxed),
-        }
+        })
     }
 
     fn step(
@@ -302,6 +302,24 @@ impl Cpu for CortexM {
         let mut cycles = 1;
 
         match instruction {
+            Instruction::Bfi { .. }
+            | Instruction::Bfc { .. }
+            | Instruction::Sbfx { .. }
+            | Instruction::Ubfx { .. }
+            | Instruction::Clz { .. }
+            | Instruction::Rbit { .. }
+            | Instruction::Rev { .. }
+            | Instruction::Rev16 { .. }
+            | Instruction::RevSh { .. }
+            | Instruction::DataProc32 { .. }
+            | Instruction::Movw { .. }
+            | Instruction::Movt { .. } => {
+                unreachable!(
+                    "32-bit instruction {:?} should be handled via Prefix32",
+                    instruction
+                );
+            }
+
             Instruction::Nop => { /* Do nothing */ }
             Instruction::MovImm { rd, imm } => {
                 self.write_reg(rd, imm as u32);
@@ -723,704 +741,525 @@ impl Cpu for CortexM {
 
             Instruction::Prefix32(h1) => {
                 cycles = 2;
-                // ... (existing)
-                // This is the first half of a 32-bit instruction
                 let next_pc = (self.pc & !1) + 2;
                 if let Ok(h2) = bus.read_u16(next_pc as u64) {
-                    if (h1 & 0xFE00) == 0xEA00 && (h2 & 0x8000) == 0 {
-                        let op = ((h1 >> 5) & 0xF) as u8;
-                        let s = ((h1 >> 4) & 0x1) != 0;
-                        let rn = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let rm = (h2 & 0xF) as u8;
+                    // Use the new modular decoder
+                    let instruction32 = crate::decoder::arm::decode_thumb_32(h1, h2);
 
-                        let imm3 = ((h2 >> 12) & 0x7) as u32;
-                        let imm2 = ((h2 >> 6) & 0x3) as u32;
-                        let imm5 = (imm3 << 2) | imm2;
-                        let stype = (h2 >> 4) & 0x3;
+                    tracing::debug!(" decoded 32-bit: {:?}", instruction32);
 
-                        let op1 = self.read_reg(rn);
-                        let mut op2 = self.read_reg(rm);
+                    match instruction32 {
+                        Instruction::Bfi { rd, rn, lsb, width } => {
+                            let src = self.read_reg(rn);
+                            let dst = self.read_reg(rd);
+                            let mask = ((1u32 << width) - 1) << lsb;
+                            let result = (dst & !mask) | ((src << lsb) & mask);
+                            self.write_reg(rd, result);
+                            self.update_nz(result);
+                            pc_increment = 4;
+                        }
+                        Instruction::Bfc { rd, lsb, width } => {
+                            let dst = self.read_reg(rd);
+                            let mask = ((1u32 << width) - 1) << lsb;
+                            let result = dst & !mask;
+                            self.write_reg(rd, result);
+                            self.update_nz(result);
+                            pc_increment = 4;
+                        }
+                        Instruction::Sbfx { rd, rn, lsb, width } => {
+                            let src = self.read_reg(rn);
+                            let val = (src >> lsb) & ((1 << width) - 1);
+                            let sign_bit = 1 << (width - 1);
+                            let result = if (val & sign_bit) != 0 {
+                                val | (!0 << width)
+                            } else {
+                                val
+                            };
+                            self.write_reg(rd, result);
+                            self.update_nz(result);
+                            pc_increment = 4;
+                        }
+                        Instruction::Ubfx { rd, rn, lsb, width } => {
+                            let src = self.read_reg(rn);
+                            let result = (src >> lsb) & ((1 << width) - 1);
+                            self.write_reg(rd, result);
+                            self.update_nz(result);
+                            pc_increment = 4;
+                        }
+                        Instruction::Clz { rd, rm } => {
+                            let val = self.read_reg(rm);
+                            let result = val.leading_zeros();
+                            self.write_reg(rd, result);
+                            pc_increment = 4;
+                        }
+                        Instruction::Rbit { rd, rm } => {
+                            let val = self.read_reg(rm);
+                            let result = val.reverse_bits();
+                            self.write_reg(rd, result);
+                            pc_increment = 4;
+                        }
+                        Instruction::Rev { rd, rm } => {
+                            let val = self.read_reg(rm);
+                            let result = val.swap_bytes();
+                            self.write_reg(rd, result);
+                            pc_increment = 4;
+                        }
+                        Instruction::Rev16 { rd, rm } => {
+                            let val = self.read_reg(rm);
+                            let low = ((val & 0xFF) << 8) | ((val >> 8) & 0xFF);
+                            let high = ((val & 0xFF0000) << 8) | ((val >> 8) & 0xFF0000);
+                            self.write_reg(rd, high | low);
+                            pc_increment = 4;
+                        }
+                        Instruction::RevSh { rd, rm } => {
+                            let val = self.read_reg(rm);
+                            // REVSH: Reverse byte order in lower halfword, sign extend
+                            let low = ((val & 0xFF) << 8) | ((val >> 8) & 0xFF);
+                            let result = (low as i16) as u32; // Sign extend
+                            self.write_reg(rd, result);
+                            pc_increment = 4;
+                        }
+                        Instruction::DataProc32 {
+                            op,
+                            rn,
+                            rd,
+                            rm,
+                            imm5,
+                            shift_type,
+                            set_flags,
+                        } => {
+                            let op1 = self.read_reg(rn);
+                            let mut op2 = self.read_reg(rm);
 
-                        match stype {
-                            0 => op2 <<= imm5, // LSL
-                            1 => {
-                                // LSR
-                                op2 = if imm5 == 0 { 0 } else { op2 >> imm5 };
-                            }
-                            2 => {
-                                // ASR
-                                op2 = if imm5 == 0 {
-                                    if (op2 & 0x80000000) != 0 {
-                                        0xFFFFFFFF
+                            // Apply shift to op2
+                            match shift_type {
+                                0 => op2 <<= imm5,                                  // LSL
+                                1 => op2 = if imm5 == 0 { 0 } else { op2 >> imm5 }, // LSR
+                                2 => {
+                                    // ASR
+                                    op2 = if imm5 == 0 {
+                                        if (op2 & 0x80000000) != 0 {
+                                            0xFFFFFFFF
+                                        } else {
+                                            0
+                                        }
                                     } else {
-                                        0
+                                        ((op2 as i32) >> imm5) as u32
+                                    };
+                                }
+                                3 => {
+                                    if imm5 != 0 {
+                                        op2 = op2.rotate_right(imm5 as u32)
                                     }
+                                } // ROR
+                                _ => {}
+                            }
+
+                            let mut result = 0u32;
+                            match op {
+                                0x0 => {
+                                    result = op1 & op2;
+                                    self.write_reg(rd, result);
+                                } // AND
+                                0x1 => {
+                                    result = op1 & !op2;
+                                    self.write_reg(rd, result);
+                                } // BIC
+                                0x2 => {
+                                    // ORR / MOV
+                                    result = if rn == 0xF { op2 } else { op1 | op2 };
+                                    self.write_reg(rd, result);
+                                }
+                                0x3 => {
+                                    // ORN / MVN
+                                    result = if rn == 0xF { !op2 } else { op1 | !op2 };
+                                    self.write_reg(rd, result);
+                                }
+                                0x4 => {
+                                    result = op1 ^ op2;
+                                    self.write_reg(rd, result);
+                                } // EOR
+                                0x8 => {
+                                    result = op1.wrapping_add(op2);
+                                    self.write_reg(rd, result);
+                                } // ADD
+                                0xD => {
+                                    result = op1.wrapping_sub(op2);
+                                    self.write_reg(rd, result);
+                                } // SUB
+                                _ => {
+                                    tracing::warn!("Unknown DataProc32 op {:#x}", op);
+                                }
+                            }
+
+                            if set_flags {
+                                self.update_nz(result);
+                            }
+                            pc_increment = 4;
+                        }
+                        _ => {
+                            // Fallback to legacy decoding
+                            if (h1 & 0xFE00) == 0xE800 {
+                                // Load/store dual, load/store exclusive, table branch
+                                let op = ((h1 >> 7) & 3) as u8;
+                                let rn = (h1 & 0xF) as u8;
+                                let rt = ((h2 >> 12) & 0xF) as u8;
+                                let rt2 = ((h2 >> 8) & 0xF) as u8;
+                                let imm8 = (h2 & 0xFF) as u32;
+
+                                if (h1 & 0x01F0) == 0x00D0 && (h2 & 0xFFF0) == 0xF000 {
+                                    // TBB / TBH
+                                    let rm = (h2 & 0xF) as u8;
+                                    let is_tbh = (h2 & 0x0010) != 0;
+
+                                    let mut base = self.read_reg(rn);
+                                    if rn == 15 {
+                                        base = (self.pc & !3).wrapping_add(4);
+                                    }
+                                    let index = self.read_reg(rm);
+
+                                    if is_tbh {
+                                        let addr = base.wrapping_add(index << 1);
+                                        if let Ok(halfword) = bus.read_u16(addr as u64) {
+                                            let offset = (halfword as u32) << 1;
+                                            self.pc = self.pc.wrapping_add(4).wrapping_add(offset);
+                                            pc_increment = 0;
+                                        }
+                                    } else {
+                                        let addr = base.wrapping_add(index);
+                                        if let Ok(byte) = bus.read_u8(addr as u64) {
+                                            let offset = (byte as u32) << 1;
+                                            self.pc = self.pc.wrapping_add(4).wrapping_add(offset);
+                                            pc_increment = 0;
+                                        }
+                                    }
+                                } else if op == 2 || op == 3 {
+                                    // STRD / LDRD (immediate) - simplified
+                                    let is_load = op == 3;
+                                    let base = self.read_reg(rn);
+                                    let addr = base.wrapping_add(imm8 << 2);
+
+                                    if is_load {
+                                        if let Ok(v1) = bus.read_u32(addr as u64) {
+                                            self.write_reg(rt, v1);
+                                        }
+                                        if let Ok(v2) = bus.read_u32((addr + 4) as u64) {
+                                            self.write_reg(rt2, v2);
+                                        }
+                                    } else {
+                                        let v1 = self.read_reg(rt);
+                                        let v2 = self.read_reg(rt2);
+                                        let _ = bus.write_u32(addr as u64, v1);
+                                        let _ = bus.write_u32((addr + 4) as u64, v2);
+                                    }
+                                    pc_increment = 4;
                                 } else {
-                                    ((op2 as i32) >> imm5) as u32
+                                    // ...
+                                    pc_increment = 4;
+                                }
+                            } else if (h1 & 0xF800) == 0xF000 && (h2 & 0x8000) == 0x8000 {
+                                // B.W / BL
+                                let s = ((h1 >> 10) & 0x1) as i32;
+                                let j1 = ((h2 >> 13) & 0x1) as i32;
+                                let j2 = ((h2 >> 11) & 0x1) as i32;
+                                let i1 = (!(j1 ^ s)) & 0x1;
+                                let i2 = (!(j2 ^ s)) & 0x1;
+                                let imm11 = (h2 & 0x7FF) as i32;
+
+                                let is_bl = (h2 & 0x1000) != 0;
+                                let imm_h1 = if is_bl {
+                                    (h1 & 0x3FF) as i32
+                                } else {
+                                    (h1 & 0x7FF) as i32
                                 };
-                            }
-                            3 => {
-                                // ROR
-                                if imm5 != 0 {
-                                    op2 = op2.rotate_right(imm5);
-                                }
-                            }
-                            _ => {}
-                        }
 
-                        let mut result = 0u32;
-                        match op {
-                            0x0 => {
-                                // AND
-                                result = op1 & op2;
-                                self.write_reg(rd, result);
-                                pc_increment = 4;
-                            }
-                            0x1 => {
-                                // BIC
-                                result = op1 & !op2;
-                                self.write_reg(rd, result);
-                                pc_increment = 4;
-                            }
-                            0x2 => {
-                                // ORR / MOV
-                                if rn == 0xF {
-                                    result = op2;
+                                let mut offset = if is_bl {
+                                    (s << 24)
+                                        | (i1 << 23)
+                                        | (i2 << 22)
+                                        | (imm_h1 << 12)
+                                        | (imm11 << 1)
                                 } else {
-                                    result = op1 | op2;
+                                    // T4 (B): S:I1:I2:imm11:imm11:0. Total 25 bits.
+                                    (s << 24)
+                                        | (i1 << 23)
+                                        | (i2 << 22)
+                                        | (imm_h1 << 12)
+                                        | (imm11 << 1)
+                                };
+
+                                if (offset & (1 << 24)) != 0 {
+                                    offset |= !0x01FF_FFFF;
                                 }
-                                self.write_reg(rd, result);
+
+                                if is_bl {
+                                    self.lr = (self.pc + 4) | 1;
+                                }
+                                self.pc = (self.pc as i32 + 4 + offset) as u32;
+                                pc_increment = 0;
+                            } else if (h1 & 0xFBF0) == 0xF240 {
+                                // MOVW (T1)
+                                let i = (h1 >> 10) & 0x1;
+                                let imm4 = h1 & 0xF;
+                                let imm3 = (h2 >> 12) & 0x7;
+                                let rd = ((h2 >> 8) & 0xF) as u8;
+                                let imm8 = h2 & 0xFF;
+                                let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+                                self.write_reg(rd, imm16 as u32);
                                 pc_increment = 4;
-                            }
-                            0x3 => {
-                                // ORN / MVN
-                                if rn == 0xF {
-                                    result = !op2;
-                                } else {
-                                    result = op1 | !op2;
-                                }
-                                self.write_reg(rd, result);
+                            } else if (h1 & 0xFBF0) == 0xF2C0 {
+                                // MOVT (T1)
+                                let i = (h1 >> 10) & 0x1;
+                                let imm4 = h1 & 0xF;
+                                let imm3 = (h2 >> 12) & 0x7;
+                                let rd = ((h2 >> 8) & 0xF) as u8;
+                                let imm8 = h2 & 0xFF;
+                                let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+                                let old_val = self.read_reg(rd);
+                                let new_val = (old_val & 0x0000FFFF) | ((imm16 as u32) << 16);
+                                self.write_reg(rd, new_val);
                                 pc_increment = 4;
-                            }
-                            0x4 => {
-                                // EOR
-                                result = op1 ^ op2;
-                                self.write_reg(rd, result);
-                                pc_increment = 4;
-                            }
-                            0x8 => {
-                                // ADD
-                                result = op1.wrapping_add(op2);
-                                self.write_reg(rd, result);
-                                pc_increment = 4;
-                            }
-                            0xD => {
-                                // SUB
-                                result = op1.wrapping_sub(op2);
-                                self.write_reg(rd, result);
-                                pc_increment = 4;
-                            }
-                            _ => {
-                                tracing::warn!("Unknown 32-bit Data-processing (shifted reg) at PC={:#x}: op={:#x}", self.pc, op);
-                            }
-                        }
+                            } else if (h1 & 0xFB00) == 0xF000 && (h2 & 0x8000) == 0 {
+                                // Data-processing (modified immediate)
+                                let i = (h1 >> 10) & 0x1;
+                                let op = ((h1 >> 5) & 0xF) as u8;
+                                let s = ((h1 >> 4) & 0x1) != 0;
+                                let rn = (h1 & 0xF) as u8;
+                                let imm3 = (h2 >> 12) & 0x7;
+                                let rd = ((h2 >> 8) & 0xF) as u8;
+                                let imm8 = h2 & 0xFF;
+                                let imm12 = (i << 11) | (imm3 << 8) | imm8;
+                                let imm32 = thumb_expand_imm(imm12 as u32); // restored usage
+                                let op1 = self.read_reg(rn);
+                                let mut result = 0u32;
+                                let mut update_pc = true;
 
-                        if s {
-                            self.update_nz(result);
-                        }
-                    } else if (h1 & 0xFE00) == 0xE800 {
-                        // Load/store dual, load/store exclusive, table branch
-                        let op = ((h1 >> 7) & 3) as u8;
-                        let rn = (h1 & 0xF) as u8;
-                        let rt = ((h2 >> 12) & 0xF) as u8;
-                        let rt2 = ((h2 >> 8) & 0xF) as u8;
-                        let imm8 = (h2 & 0xFF) as u32;
-
-                        if (h1 & 0x01F0) == 0x00D0 && (h2 & 0xFFF0) == 0xF000 {
-                            // TBB / TBH
-                            let rm = (h2 & 0xF) as u8;
-                            let is_tbh = (h2 & 0x0010) != 0;
-
-                            let mut base = self.read_reg(rn);
-                            if rn == 15 {
-                                base = (self.pc & !3).wrapping_add(4);
-                            }
-                            let index = self.read_reg(rm);
-
-                            if is_tbh {
-                                let addr = base.wrapping_add(index << 1);
-                                if let Ok(halfword) = bus.read_u16(addr as u64) {
-                                    let offset = (halfword as u32) << 1;
-                                    self.pc = self.pc.wrapping_add(4).wrapping_add(offset);
-                                    pc_increment = 0;
-                                }
-                            } else {
-                                let addr = base.wrapping_add(index);
-                                if let Ok(byte) = bus.read_u8(addr as u64) {
-                                    let offset = (byte as u32) << 1;
-                                    self.pc = self.pc.wrapping_add(4).wrapping_add(offset);
-                                    pc_increment = 0;
-                                }
-                            }
-                        } else if op == 2 || op == 3 {
-                            // STRD / LDRD (immediate) - simplified
-                            let is_load = op == 3;
-                            let base = self.read_reg(rn);
-                            let addr = base.wrapping_add(imm8 << 2);
-
-                            if is_load {
-                                if let Ok(v1) = bus.read_u32(addr as u64) {
-                                    self.write_reg(rt, v1);
-                                }
-                                if let Ok(v2) = bus.read_u32((addr + 4) as u64) {
-                                    self.write_reg(rt2, v2);
-                                }
-                            } else {
-                                let v1 = self.read_reg(rt);
-                                let v2 = self.read_reg(rt2);
-                                let _ = bus.write_u32(addr as u64, v1);
-                                let _ = bus.write_u32((addr + 4) as u64, v2);
-                            }
-                            pc_increment = 4;
-                        } else {
-                            tracing::warn!(
-                                "Unknown 32-bit E8xx at PC={:#x}: h1={:#06x} h2={:#06x}",
-                                self.pc,
-                                h1,
-                                h2
-                            );
-                        }
-                    } else if (h1 & 0xF800) == 0xF000 && (h2 & 0x8000) == 0x8000 {
-                        // B.W / BL
-                        let s = ((h1 >> 10) & 0x1) as i32;
-                        let j1 = ((h2 >> 13) & 0x1) as i32;
-                        let j2 = ((h2 >> 11) & 0x1) as i32;
-                        let i1 = (!(j1 ^ s)) & 0x1;
-                        let i2 = (!(j2 ^ s)) & 0x1;
-                        let imm11 = (h2 & 0x7FF) as i32;
-
-                        let is_bl = (h2 & 0x1000) != 0;
-                        let imm_h1 = if is_bl {
-                            (h1 & 0x3FF) as i32
-                        } else {
-                            (h1 & 0x7FF) as i32
-                        };
-
-                        let mut offset = if is_bl {
-                            (s << 24) | (i1 << 23) | (i2 << 22) | (imm_h1 << 12) | (imm11 << 1)
-                        } else {
-                            // T4 (B): S:I1:I2:imm11:imm11:0. Total 25 bits.
-                            // imm11 from h1 is at bits 10:0.
-                            (s << 24) | (i1 << 23) | (i2 << 22) | (imm_h1 << 12) | (imm11 << 1)
-                        };
-
-                        // Sign extend from bit 24
-                        if (offset & (1 << 24)) != 0 {
-                            offset |= !0x01FF_FFFF;
-                        }
-
-                        if is_bl {
-                            self.lr = (self.pc + 4) | 1;
-                        }
-                        self.pc = (self.pc as i32 + 4 + offset) as u32;
-                        pc_increment = 0;
-                    } else if (h1 & 0xFBF0) == 0xF240 {
-                        // MOVW (T1)
-                        let i = (h1 >> 10) & 0x1;
-                        let imm4 = h1 & 0xF;
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm8 = h2 & 0xFF;
-
-                        // Encoding: imm4 : i : imm3 : imm8
-                        let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
-                        self.write_reg(rd, imm16 as u32);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFBF0) == 0xF2C0 {
-                        // MOVT (T1)
-                        let i = (h1 >> 10) & 0x1;
-                        let imm4 = h1 & 0xF;
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm8 = h2 & 0xFF;
-
-                        // Encoding: imm4 : i : imm3 : imm8
-                        let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
-                        let old_val = self.read_reg(rd);
-                        let new_val = (old_val & 0x0000FFFF) | ((imm16 as u32) << 16);
-                        self.write_reg(rd, new_val);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFB00) == 0xF000 && (h2 & 0x8000) == 0 {
-                        // Data-processing (modified immediate)
-                        // Encoding: 1111 0i0 op S rn 0 imm3 rd imm8
-                        let i = (h1 >> 10) & 0x1;
-                        let op = ((h1 >> 5) & 0xF) as u8;
-                        let s = ((h1 >> 4) & 0x1) != 0;
-                        let rn = (h1 & 0xF) as u8;
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm8 = h2 & 0xFF;
-
-                        let imm12 = (i << 11) | (imm3 << 8) | imm8;
-                        let imm32 = thumb_expand_imm(imm12 as u32);
-
-                        let op1 = self.read_reg(rn);
-                        let mut result = 0u32;
-                        let mut update_pc = true;
-
-                        match op {
-                            0x0 => {
-                                // AND
-                                result = op1 & imm32;
-                                self.write_reg(rd, result);
-                            }
-                            0x1 => {
-                                // BIC
-                                result = op1 & !imm32;
-                                self.write_reg(rd, result);
-                            }
-                            0x2 => {
-                                // ORR / MOV
-                                if rn == 0xF {
-                                    result = imm32;
-                                } else {
-                                    result = op1 | imm32;
-                                }
-                                self.write_reg(rd, result);
-                            }
-                            0x3 => {
-                                // ORN / MVN
-                                if rn == 0xF {
-                                    result = !imm32;
-                                } else {
-                                    result = op1 | !imm32;
-                                }
-                                self.write_reg(rd, result);
-                            }
-                            0x4 => {
-                                // EOR
-                                result = op1 ^ imm32;
-                                self.write_reg(rd, result);
-                            }
-                            0x8 => {
-                                // ADD
-                                result = op1.wrapping_add(imm32);
-                                self.write_reg(rd, result);
-                            }
-                            0xA => {
-                                // ADC
-                                let carry = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
-                                result = op1.wrapping_add(imm32).wrapping_add(carry);
-                                self.write_reg(rd, result);
-                            }
-                            0xB => {
-                                // SBC
-                                let carry = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
-                                result = op1.wrapping_sub(imm32).wrapping_sub(1 - carry);
-                                self.write_reg(rd, result);
-                            }
-                            0xD => {
-                                // SUB
-                                result = op1.wrapping_sub(imm32);
-                                self.write_reg(rd, result);
-                            }
-                            0xE => {
-                                // RSB
-                                result = imm32.wrapping_sub(op1);
-                                self.write_reg(rd, result);
-                            }
-                            _ => {
-                                tracing::warn!("Unknown 32-bit Data-processing (modified imm) at PC={:#x}: op={:#x}", self.pc, op);
-                                update_pc = false;
-                            }
-                        }
-
-                        if s {
-                            self.update_nz(result);
-                        }
-
-                        if update_pc {
-                            pc_increment = 4;
-                        }
-                    } else if (h1 & 0xFB00) == 0xF100 && (h2 & 0x8000) == 0 {
-                        // Data-processing (plain binary immediate)
-                        // Encoding: 1111 0i1 op S rn 0 imm3 rd imm8
-                        let i = (h1 >> 10) & 0x1;
-                        let op = ((h1 >> 5) & 0xF) as u8;
-                        let rn = (h1 & 0xF) as u8;
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm8 = h2 & 0xFF;
-
-                        let imm12 = (i << 11) | (imm3 << 8) | imm8;
-                        let op1 = self.read_reg(rn);
-
-                        match op {
-                            0x0 => {
-                                // ADD (imm12)
-                                self.write_reg(rd, op1.wrapping_add(imm12 as u32));
-                                pc_increment = 4;
-                            }
-                            0xA => {
-                                // SUB (imm12)
-                                self.write_reg(rd, op1.wrapping_sub(imm12 as u32));
-                                pc_increment = 4;
-                            }
-                            _ => {
-                                tracing::warn!("Unknown 32-bit Data-processing (plain binary imm) at PC={:#x}: op={:#x}", self.pc, op);
-                            }
-                        }
-                    } else if (h1 & 0xFF00) == 0xF800 {
-                        // LDR/STR (immediate) T3/T4
-                        // F80x -> STRB
-                        // F81x -> LDRB
-                        // F82x -> STRH
-                        // F83x -> LDRH
-                        // F84x -> STR
-                        // F85x -> LDR
-                        let op1 = (h1 >> 4) & 0xF;
-                        let rn = (h1 & 0xF) as u8;
-                        let rt = ((h2 >> 12) & 0xF) as u8;
-
-                        // Check for T3 (immediate 12-bit) vs T4 (immediate 8-bit with PUW)
-                        // T3 has bit 3 of op1 set (bits 23-20 of instruction are 1xxx)
-                        // T4 has bit 3 of op1 clear (bits 23-20 of instruction are 0xxx)
-                        let is_t4 = (op1 & 0x8) == 0;
-                        let is_register_offset = is_t4 && (h2 & 0x0800) == 0;
-
-                        if !is_register_offset {
-                            let mut supported = true;
-                            let addr;
-                            let offset: i32;
-                            let mut writeback = false;
-                            let mut writeback_val = 0u32;
-
-                            if !is_t4 {
-                                // T3: 12-bit immediate
-                                offset = (h2 & 0xFFF) as i32;
-                                addr = self.read_reg(rn).wrapping_add(offset as u32);
-                            } else {
-                                // T4: 8-bit immediate with PUW
-                                // Format: 1 P U W imm8
-                                let p = (h2 >> 10) & 1;
-                                let u = (h2 >> 9) & 1;
-                                let w = (h2 >> 8) & 1;
-                                let imm8 = (h2 & 0xFF) as i32;
-
-                                offset = if u != 0 { imm8 } else { -imm8 };
-                                let base = self.read_reg(rn);
-
-                                if p != 0 {
-                                    // Offset or pre-indexed
-                                    addr = base.wrapping_add(offset as u32);
-                                    if w != 0 {
-                                        writeback = true;
-                                        writeback_val = addr;
+                                match op {
+                                    0x0 => {
+                                        result = op1 & imm32;
+                                        self.write_reg(rd, result);
+                                    } // AND
+                                    0x1 => {
+                                        result = op1 & !imm32;
+                                        self.write_reg(rd, result);
+                                    } // BIC
+                                    0x2 => {
+                                        // ORR / MOV
+                                        result = if rn == 0xF { imm32 } else { op1 | imm32 };
+                                        self.write_reg(rd, result);
                                     }
-                                } else {
-                                    // Post-indexed
-                                    addr = base;
-                                    writeback = true;
-                                    writeback_val = base.wrapping_add(offset as u32);
-                                }
-                            }
-
-                            match op1 & 0x7 {
-                                0 => {
-                                    // STRB
-                                    let val = (self.read_reg(rt) & 0xFF) as u8;
-                                    let _ = bus.write_u8(addr as u64, val);
-                                }
-                                1 => {
-                                    // LDRB
-                                    if let Ok(val) = bus.read_u8(addr as u64) {
-                                        self.write_reg(rt, val as u32);
+                                    0x3 => {
+                                        // ORN / MVN
+                                        result = if rn == 0xF { !imm32 } else { op1 | !imm32 };
+                                        self.write_reg(rd, result);
+                                    }
+                                    0x4 => {
+                                        result = op1 ^ imm32;
+                                        self.write_reg(rd, result);
+                                    } // EOR
+                                    0x8 => {
+                                        result = op1.wrapping_add(imm32);
+                                        self.write_reg(rd, result);
+                                    } // ADD
+                                    0xA => {
+                                        // ADC
+                                        let carry = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
+                                        result = op1.wrapping_add(imm32).wrapping_add(carry);
+                                        self.write_reg(rd, result);
+                                    }
+                                    0xB => {
+                                        // SBC
+                                        let carry = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
+                                        result = op1.wrapping_sub(imm32).wrapping_sub(1 - carry);
+                                        self.write_reg(rd, result);
+                                    }
+                                    0xD => {
+                                        result = op1.wrapping_sub(imm32);
+                                        self.write_reg(rd, result);
+                                    } // SUB
+                                    0xE => {
+                                        result = imm32.wrapping_sub(op1);
+                                        self.write_reg(rd, result);
+                                    } // RSB
+                                    _ => {
+                                        update_pc = false;
                                     }
                                 }
-                                2 => {
-                                    // STRH
-                                    let val = (self.read_reg(rt) & 0xFFFF) as u16;
-                                    let _ = bus.write_u16(addr as u64, val);
+                                if s && update_pc {
+                                    self.update_nz(result);
                                 }
-                                3 => {
-                                    // LDRH
-                                    if let Ok(val) = bus.read_u16(addr as u64) {
-                                        self.write_reg(rt, val as u32);
-                                    }
+                                if update_pc {
+                                    pc_increment = 4;
                                 }
-                                4 => {
-                                    // STR
-                                    let val = self.read_reg(rt);
-                                    let _ = bus.write_u32(addr as u64, val);
+                            } else if (h1 & 0xFB00) == 0xF100 && (h2 & 0x8000) == 0 {
+                                // Data-processing (plain binary immediate)
+                                let i = (h1 >> 10) & 0x1;
+                                let op = ((h1 >> 5) & 0xF) as u8;
+                                let rn = (h1 & 0xF) as u8;
+                                let imm3 = (h2 >> 12) & 0x7;
+                                let rd = ((h2 >> 8) & 0xF) as u8;
+                                let imm8 = h2 & 0xFF;
+                                let imm12 = (i << 11) | (imm3 << 8) | imm8;
+                                let op1 = self.read_reg(rn);
+                                match op {
+                                    0x0 => {
+                                        self.write_reg(rd, op1.wrapping_add(imm12 as u32));
+                                        pc_increment = 4;
+                                    } // ADD
+                                    0xA => {
+                                        self.write_reg(rd, op1.wrapping_sub(imm12 as u32));
+                                        pc_increment = 4;
+                                    } // SUB
+                                    _ => {}
                                 }
-                                5 => {
-                                    // LDR
-                                    if let Ok(val) = bus.read_u32(addr as u64) {
-                                        self.write_reg(rt, val);
-                                    }
-                                }
-                                _ => {
-                                    supported = false;
-                                }
-                            }
+                            } else if (h1 & 0xFF00) == 0xF800 {
+                                // LDR/STR (immediate) T3/T4
+                                let op1 = (h1 >> 4) & 0xF;
+                                let rn = (h1 & 0xF) as u8;
+                                let rt = ((h2 >> 12) & 0xF) as u8;
+                                let is_t4 = (op1 & 0x8) == 0;
+                                let is_reg_offset = is_t4 && (h2 & 0x0800) == 0;
 
-                            if supported {
-                                if writeback {
-                                    self.write_reg(rn, writeback_val);
+                                if !is_reg_offset {
+                                    let mut supported = true;
+                                    let addr: u32;
+                                    let mut wb = false;
+                                    let mut wb_val = 0u32;
+
+                                    if !is_t4 {
+                                        // T3
+                                        let offset = (h2 & 0xFFF) as i32;
+                                        addr = self.read_reg(rn).wrapping_add(offset as u32);
+                                    } else {
+                                        // T4
+                                        let p = (h2 >> 10) & 1;
+                                        let u = (h2 >> 9) & 1;
+                                        let w = (h2 >> 8) & 1;
+                                        let imm8 = (h2 & 0xFF) as i32;
+                                        let offset = if u != 0 { imm8 } else { -imm8 };
+                                        let base = self.read_reg(rn);
+                                        if p != 0 {
+                                            addr = base.wrapping_add(offset as u32);
+                                            if w != 0 {
+                                                wb = true;
+                                                wb_val = addr;
+                                            }
+                                        } else {
+                                            addr = base;
+                                            wb = true;
+                                            wb_val = base.wrapping_add(offset as u32);
+                                        }
+                                    }
+
+                                    match op1 & 0x7 {
+                                        0 => {
+                                            let val = (self.read_reg(rt) & 0xFF) as u8;
+                                            let _ = bus.write_u8(addr as u64, val);
+                                        }
+                                        1 => {
+                                            if let Ok(v) = bus.read_u8(addr as u64) {
+                                                self.write_reg(rt, v as u32);
+                                            }
+                                        }
+                                        2 => {
+                                            let val = (self.read_reg(rt) & 0xFFFF) as u16;
+                                            let _ = bus.write_u16(addr as u64, val);
+                                        }
+                                        3 => {
+                                            if let Ok(v) = bus.read_u16(addr as u64) {
+                                                self.write_reg(rt, v as u32);
+                                            }
+                                        }
+                                        4 => {
+                                            let val = self.read_reg(rt);
+                                            let _ = bus.write_u32(addr as u64, val);
+                                        }
+                                        5 => {
+                                            if let Ok(v) = bus.read_u32(addr as u64) {
+                                                self.write_reg(rt, v);
+                                            }
+                                        }
+                                        _ => {
+                                            supported = false;
+                                        }
+                                    }
+                                    if supported {
+                                        if wb {
+                                            self.write_reg(rn, wb_val);
+                                        }
+                                        pc_increment = 4;
+                                    }
+                                } else {
+                                    // Reg offset
+                                    let rm = (h2 & 0xF) as u8;
+                                    let imm2 = ((h2 >> 4) & 0x3) as u32;
+                                    let addr =
+                                        self.read_reg(rn).wrapping_add(self.read_reg(rm) << imm2);
+                                    match op1 & 0x7 {
+                                        0 => {
+                                            let val = (self.read_reg(rt) & 0xFF) as u8;
+                                            let _ = bus.write_u8(addr as u64, val);
+                                        }
+                                        1 => {
+                                            if let Ok(v) = bus.read_u8(addr as u64) {
+                                                self.write_reg(rt, v as u32);
+                                            }
+                                        }
+                                        2 => {
+                                            let val = (self.read_reg(rt) & 0xFFFF) as u16;
+                                            let _ = bus.write_u16(addr as u64, val);
+                                        }
+                                        3 => {
+                                            if let Ok(v) = bus.read_u16(addr as u64) {
+                                                self.write_reg(rt, v as u32);
+                                            }
+                                        }
+                                        4 => {
+                                            let val = self.read_reg(rt);
+                                            let _ = bus.write_u32(addr as u64, val);
+                                        }
+                                        5 => {
+                                            if let Ok(v) = bus.read_u32(addr as u64) {
+                                                self.write_reg(rt, v);
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                    pc_increment = 4;
                                 }
+                            } else if (h1 & 0xFFF0) == 0xFB90 {
+                                // SDIV
+                                let rn = (h1 & 0xF) as u8;
+                                let rd = ((h2 >> 8) & 0xF) as u8;
+                                let rm = (h2 & 0xF) as u8;
+                                let dividend = self.read_reg(rn) as i32;
+                                let divisor = self.read_reg(rm) as i32;
+                                let result = if divisor == 0 {
+                                    0
+                                } else {
+                                    dividend.wrapping_div(divisor) as u32
+                                };
+                                self.write_reg(rd, result);
+                                pc_increment = 4;
+                            } else if (h1 & 0xFFF0) == 0xFBB0 {
+                                // UDIV
+                                let rn = (h1 & 0xF) as u8;
+                                let rd = ((h2 >> 8) & 0xF) as u8;
+                                let rm = (h2 & 0xF) as u8;
+                                let dividend = self.read_reg(rn);
+                                let divisor = self.read_reg(rm);
+                                let result = if divisor == 0 { 0 } else { dividend / divisor };
+                                self.write_reg(rd, result);
                                 pc_increment = 4;
                             } else {
-                                tracing::warn!("Unknown 32-bit instruction at PC={:#x}: {:#06x} {:#06x} (Unsupported F8xx op={})", self.pc, h1, h2, op1);
+                                tracing::warn!("Internal: Unhandled 32-bit: {:04x} {:04x}", h1, h2);
+                                pc_increment = 4;
                             }
-                        } else {
-                            // Register offset (T2)
-                            // Format: 000000 imm2 rm
-                            let rm = (h2 & 0xF) as u8;
-                            let imm2 = ((h2 >> 4) & 0x3) as u32;
-
-                            let base = self.read_reg(rn);
-                            let offset = self.read_reg(rm) << imm2;
-                            let addr = base.wrapping_add(offset);
-
-                            match op1 & 0x7 {
-                                0 => {
-                                    // STRB
-                                    let val = (self.read_reg(rt) & 0xFF) as u8;
-                                    let _ = bus.write_u8(addr as u64, val);
-                                }
-                                1 => {
-                                    // LDRB
-                                    if let Ok(val) = bus.read_u8(addr as u64) {
-                                        self.write_reg(rt, val as u32);
-                                    }
-                                }
-                                2 => {
-                                    // STRH
-                                    let val = (self.read_reg(rt) & 0xFFFF) as u16;
-                                    let _ = bus.write_u16(addr as u64, val);
-                                }
-                                3 => {
-                                    // LDRH
-                                    if let Ok(val) = bus.read_u16(addr as u64) {
-                                        self.write_reg(rt, val as u32);
-                                    }
-                                }
-                                4 => {
-                                    // STR
-                                    let val = self.read_reg(rt);
-                                    let _ = bus.write_u32(addr as u64, val);
-                                }
-                                5 => {
-                                    // LDR
-                                    if let Ok(val) = bus.read_u32(addr as u64) {
-                                        self.write_reg(rt, val);
-                                    }
-                                }
-                                _ => {
-                                    tracing::warn!(
-                                        "Unknown 32-bit Register offset F8xx at PC={:#x}: op1={}",
-                                        self.pc,
-                                        op1
-                                    );
-                                }
-                            }
-                            pc_increment = 4;
                         }
-                    } else if (h1 & 0xFFF0) == 0xFB90 {
-                        // SDIV
-                        let rn = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let rm = (h2 & 0xF) as u8;
-
-                        let dividend = self.read_reg(rn) as i32;
-                        let divisor = self.read_reg(rm) as i32;
-
-                        let result = if divisor == 0 {
-                            0 // Division by zero returns 0 per ARMv7-M spec
-                        } else {
-                            dividend.wrapping_div(divisor) as u32
-                        };
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xFBB0 {
-                        // UDIV (unsigned division) T1 encoding
-                        // Pattern: 1111 1011 1011 xxxx 1111 xxxx 1111 xxxx
-                        let rn = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let rm = (h2 & 0xF) as u8;
-
-                        let dividend = self.read_reg(rn);
-                        let divisor = self.read_reg(rm);
-
-                        let result = if divisor == 0 {
-                            0 // Division by zero returns 0 per ARMv7-M spec
-                        } else {
-                            dividend / divisor
-                        };
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xF360 && (h2 & 0x8000) == 0 && (h1 & 0xF) == 0xF {
-                        // BFC (Bit Field Clear) T1 encoding
-                        // Pattern: 1111 0011 0110 1111 0xxx xxxx xxxx xxxx
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm2 = (h2 >> 6) & 0x3;
-                        let msb = h2 & 0x1F;
-
-                        let lsb = ((imm3 << 2) | imm2) as u8;
-                        let width = (msb - (lsb as u16) + 1) as u8;
-
-                        let dst = self.read_reg(rd);
-                        let mask = ((1u32 << width) - 1) << lsb;
-                        let result = dst & !mask;
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xF360 && (h2 & 0x8000) == 0 {
-                        // BFI (Bit Field Insert) T1 encoding
-                        // Pattern: 1111 0011 0110 xxxx 0xxx xxxx xxxx xxxx
-                        let rn = (h1 & 0xF) as u8;
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm2 = (h2 >> 6) & 0x3;
-                        let msb = h2 & 0x1F;
-
-                        let lsb = ((imm3 << 2) | imm2) as u8;
-                        let width = (msb - (lsb as u16) + 1) as u8;
-
-                        let src = self.read_reg(rn);
-                        let dst = self.read_reg(rd);
-                        let mask = ((1u32 << width) - 1) << lsb;
-                        let result = (dst & !mask) | ((src << lsb) & mask);
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xF340 && (h2 & 0x8000) == 0 {
-                        // SBFX (Signed Bit Field Extract) T1 encoding
-                        // Pattern: 1111 0011 0100 xxxx 0xxx xxxx xxxx xxxx
-                        let rn = (h1 & 0xF) as u8;
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm2 = (h2 >> 6) & 0x3;
-                        let widthm1 = h2 & 0x1F;
-
-                        let lsb = ((imm3 << 2) | imm2) as u8;
-                        let width = (widthm1 + 1) as u8;
-
-                        let src = self.read_reg(rn);
-                        let extracted = (src >> lsb) & ((1 << width) - 1);
-
-                        // Sign extend
-                        let sign_bit = 1 << (width - 1);
-                        let result = if (extracted & sign_bit) != 0 {
-                            extracted | (!0 << width)
-                        } else {
-                            extracted
-                        };
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xF3C0 && (h2 & 0x8000) == 0 {
-                        // UBFX (Unsigned Bit Field Extract) T1 encoding
-                        // Pattern: 1111 0011 1100 xxxx 0xxx xxxx xxxx xxxx
-                        let rn = (h1 & 0xF) as u8;
-                        let imm3 = (h2 >> 12) & 0x7;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let imm2 = (h2 >> 6) & 0x3;
-                        let widthm1 = h2 & 0x1F;
-
-                        let lsb = ((imm3 << 2) | imm2) as u8;
-                        let width = (widthm1 + 1) as u8;
-
-                        let src = self.read_reg(rn);
-                        let result = (src >> lsb) & ((1 << width) - 1);
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xFAB0 && (h2 & 0xF0F0) == 0xF080 {
-                        // CLZ (Count Leading Zeros) T1 encoding
-                        // Pattern: 1111 1010 1011 xxxx 1111 xxxx 1000 xxxx
-                        let rm = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-
-                        let value = self.read_reg(rm);
-                        let result = value.leading_zeros();
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xFA90 && (h2 & 0xF0F0) == 0xF0A0 {
-                        // RBIT (Reverse Bits) T1 encoding
-                        // Pattern: 1111 1010 1001 xxxx 1111 xxxx 1010 xxxx
-                        let rm = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-
-                        let value = self.read_reg(rm);
-                        let result = value.reverse_bits();
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xFA90 && (h2 & 0xF0F0) == 0xF080 {
-                        // REV (Byte-Reverse Word) T2 encoding
-                        // Pattern: 1111 1010 1001 xxxx 1111 xxxx 1000 xxxx
-                        let rm = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-
-                        let value = self.read_reg(rm);
-                        let result = value.swap_bytes();
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xFA90 && (h2 & 0xF0F0) == 0xF090 {
-                        // REV16 (Byte-Reverse Packed Halfword) T2 encoding
-                        // Pattern: 1111 1010 1001 xxxx 1111 xxxx 1001 xxxx
-                        let rm = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-
-                        let value = self.read_reg(rm);
-                        let low = ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);
-                        let high = ((value & 0xFF0000) << 8) | ((value >> 8) & 0xFF0000);
-                        let result = high | low;
-
-                        self.write_reg(rd, result);
-                        pc_increment = 4;
-                    } else {
-                        // Enhanced unknown instruction diagnostics
-                        let pattern_hint = match h1 & 0xF800 {
-                            0xF000 => "32-bit Thumb-2 instruction",
-                            0xE800 => "Coprocessor or advanced SIMD",
-                            _ => "Unknown pattern",
-                        };
-
-                        tracing::warn!(
-                            "Unknown 32-bit instruction at PC={:#x}: {:#06x} {:#06x} ({})",
-                            self.pc,
-                            h1,
-                            h2,
-                            pattern_hint
-                        );
-                        tracing::debug!("  Instruction bits: h1={:#018b} h2={:#018b}", h1, h2);
-                        pc_increment = 4;
                     }
                 } else {
                     tracing::error!("Bus Read Fault (32-bit suffix) at {:#x}", next_pc);
-                    pc_increment = 2;
                 }
-            }
-            Instruction::Movw { .. } | Instruction::Movt { .. } => {
-                unreachable!("32-bit instructions should be handled in Prefix32 path");
-            }
-            Instruction::Bfi { .. }
-            | Instruction::Bfc { .. }
-            | Instruction::Sbfx { .. }
-            | Instruction::Ubfx { .. }
-            | Instruction::Clz { .. }
-            | Instruction::Rbit { .. }
-            | Instruction::Rev { .. }
-            | Instruction::Rev16 { .. } => {
-                unreachable!("32-bit Thumb-2 instructions should be handled in Prefix32 path");
             }
 
             Instruction::Unknown(op) => {

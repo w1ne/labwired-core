@@ -100,7 +100,7 @@ assertions:
 
     let snapshot_content = std::fs::read_to_string(&snapshot_path).unwrap();
     let snapshot: serde_json::Value = serde_json::from_str(&snapshot_content).unwrap();
-    assert_eq!(snapshot["type"], "cortex_m");
+    assert_eq!(snapshot["type"], "standard");
     assert!(snapshot["cpu"]["registers"].is_array());
     assert_eq!(snapshot["cpu"]["registers"].as_array().unwrap().len(), 16);
     assert!(snapshot["cpu"]["registers"][15].is_number());

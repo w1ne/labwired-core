@@ -1,3 +1,0 @@
-cargo:rustc-link-search=/home/andrii/Projects/labwired/crates/firmware-hal-test/target/thumbv7m-none-eabi/release/build/stm32f1-c40d4dc4eb199a88/out
-cargo:rerun-if-changed=src/stm32f103/device.x
-cargo:rerun-if-changed=build.rs

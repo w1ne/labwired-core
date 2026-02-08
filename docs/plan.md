@@ -161,8 +161,8 @@ Bridge the "peripheral modeling bottleneck" by enabling execution of real-world 
 - [ ] Per-peripheral cycle accounting (modular ticking costs)
 
 ### Phase B: Advanced ISA & Peripheral Expansion
-- [ ] Bit field instructions (`BFI`, `BFC`, `SBFX`, `UBFX`)
-- [ ] Misc Thumb-2 instructions (`CLZ`, `RBIT`, `REV`, `REV16`)
+- [x] Bit field instructions (`BFI`, `BFC`, `SBFX`, `UBFX`)
+- [x] Misc Thumb-2 instructions (`CLZ`, `RBIT`, `REV`, `REV16`)
 - [ ] **ADC Peripheral**: Implement as a modular, standalone component.
 
 ### Phase C: Pluggable Observability Tools
@@ -171,9 +171,9 @@ Bridge the "peripheral modeling bottleneck" by enabling execution of real-world 
 - [ ] Basic breakpoint support (PC-based halt)
 
 ### Phase D: Ecosystem & Documentation
-- [ ] **Peripheral Development Tutorial**: Guide on creating decoupled, custom sensor mocks.
-- [ ] Example: STM32 I2C sensor interaction walkthrough.
-- [/] **Declarative Register Maps**: Formalize YAML specifications to decouple register logic from Rust code.
+- [x] **Peripheral Development Tutorial**: Guide on creating decoupled, custom sensor mocks.
+- [x] Example: STM32 I2C sensor interaction walkthrough.
+- [x] **Declarative Register Maps**: Formalize YAML specifications to decouple register logic from Rust code.
 - [ ] Documentation: "Getting Started with Real Firmware" guide.
 
 ### Success Criteria

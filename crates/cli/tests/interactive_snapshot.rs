@@ -36,7 +36,7 @@ fn test_cli_interactive_writes_snapshot() {
 
     let snapshot_content = std::fs::read_to_string(&snapshot_path).unwrap();
     let snapshot: serde_json::Value = serde_json::from_str(&snapshot_content).unwrap();
-    assert_eq!(snapshot["type"], "interactive_cortex_m");
+    assert_eq!(snapshot["type"], "interactive");
 
     let regs = snapshot["cpu"]["registers"].as_array().unwrap();
     assert_eq!(regs.len(), 16);
