@@ -1,0 +1,16 @@
+peripheral: "TEST_TIMER"
+version: "1.0"
+registers:
+  - id: "CTRL"
+    address_offset: 0x00
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+    fields:
+      - name: "EN"
+        bit_range: [0, 0]
+  - id: "COUNT"
+    address_offset: 0x04
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
