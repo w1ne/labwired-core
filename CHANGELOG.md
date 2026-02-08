@@ -6,27 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.11.0] - 2026-02-08
+
+### Added
+- **Declarative Register Maps**:
+    - **Modeling**: Enabled peripheral definition via YAML descriptors using `labwired-config`.
+    - **Simulation**: Implemented `GenericPeripheral` in `labwired-core` supporting dynamic MMR modeling, bitwise masking, and reset state.
+    - **Integration**: Added support for `type: "declarative"` in chip descriptors, allowing zero-code peripheral additions.
+    - **Documentation**: New [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for declarative IP cores.
+- **ISA Extensions**:
+    - **Misc Thumb-2**: Implemented `CLZ` (Count Leading Zeros), `RBIT` (Bit Reverse), `REV`, `REV16`, `REVSH` instructions.
+    - **RISC-V Support**: Initial support for RV32I Base Integer Instruction Set with multi-arch GDB support.
+- **Observability**:
+    - **Interactive Snapshots**: Enhanced serialization for cross-architecture CPU states.
+
 ### Fixed
 - **Instruction Set Coverage**:
     - **Thumb-2 Data Processing**: Fixed `thumb_expand_imm` logic for bitmask expansion (XYXY patterns).
-    - **Memory Access**: Standardized `F8xx` block handling for T3/T4 variants, including signed 8-bit offsets, pre/post-indexing, and writeback.
-    - **Shifted Registers**: Implemented full barrel shifter logic for data-processing instructions (LSL, LSR, ASR, ROR).
-    - **Control Flow**: Added support for 16-bit `CBZ` and `CBNZ` branch instructions.
-    - **Hints**: Added catch-all `NOP` for hint and `IT` block instructions (`0xBFxx`) to prevent crashes in HAL-heavy code.
+    - **Decoder**: Resolved critical regression in **Thumb-2 `CLZ` decoding** (missing opcode range 0xFABx).
+    - **Memory Access**: Standardized `F8xx` block handling for T3/T4 variants.
+- **CLI Test Runner**:
+    - Fixed stale snapshot type expectations in `interactive_snapshot` and `outputs` integration tests.
 - **Peripherals**:
-    - **UART**: Completed status register implementation with `TXE` (Transmit Empty) and `TC` (Transmission Complete) flags to support blocking HAL drivers.
-
-### Added
-- **ISA Extensions**:
-    - **Misc Thumb-2**: Implemented `CLZ` (Count Leading Zeros) instruction.
-    - **Instruction Decoder**: Enhanced 32-bit Thumb-2 instruction reassembly and opcode extraction for cleaner extension support.
-
-### Added
-- **RISC-V Support**:
-    - **Architecture**: Initial support for RISC-V (RV32I) Base Integer Instruction Set.
-    - **Decoder**: Full RV32I instruction decoding including branches, loads, stores, and arithmetic.
-    - **CPU Model**: `RiscV` struct implementing the generic `Cpu` trait with 32 general-purpose registers (x0-x31).
-    - **GDB Support**: Refactored `labwired-gdbstub` into a generic multi-architecture implementation and enabled GDB server for RISC-V targets.
+    - **UART**: Completed status register implementation with `TXE` and `TC` flags.
 
 ## [0.10.0] - 2026-02-06
 
