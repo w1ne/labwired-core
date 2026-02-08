@@ -8,6 +8,7 @@ use crate::memory::LinearMemory;
 use crate::peripherals::nvic::NvicState;
 use crate::peripherals::uart::Uart;
 use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
+use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -195,6 +196,32 @@ impl SystemBus {
                 "exti" => Box::new(crate::peripherals::exti::Exti::new()),
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+                "declarative" => {
+                    let descriptor_path = p_cfg
+                        .config
+                        .get("path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "Field 'path' is required in 'config' for declarative peripheral '{}'",
+                                p_cfg.id
+                            )
+                        })?;
+
+                    // Resolve path relative to the chip descriptor if needed?
+                    // For now, let's assume it's relative to the CWD or we should handle it like manifest.chip
+                    let desc = labwired_config::PeripheralDescriptor::from_file(descriptor_path)
+                        .with_context(|| {
+                            format!(
+                                "Failed to load declarative descriptor for '{}' from '{}'",
+                                p_cfg.id, descriptor_path
+                            )
+                        })?;
+
+                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+                        desc,
+                    ))
+                }
                 other => {
                     tracing::warn!(
                         "Unsupported peripheral type '{}' for id '{}'; skipping",
@@ -527,5 +554,45 @@ impl crate::Bus for SystemBus {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_system_bus_from_config_declarative() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip_path = root.join("tests/fixtures/test_chip_declarative.yaml");
+        let manifest_path = root.join("tests/fixtures/test_system_declarative.yaml");
+
+        let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+        let manifest = SystemManifest::from_file(&manifest_path).unwrap();
+
+        let bus =
+            SystemBus::from_config(&chip, &manifest).expect("Failed to create bus from config");
+
+        // Verify TIMER1 is present at 0x40001000
+        let found = bus
+            .peripherals
+            .iter()
+            .find(|p| p.name == "TIMER1")
+            .expect("TIMER1 not found");
+        assert_eq!(found.base, 0x40001000);
+        assert_eq!(found.size, 1024);
+
+        // Verify we can read/write to it through the bus
+        // Address 0x40001000 + 0x00 = CTRL register (reset value 0)
+        let ctrl_val = bus.read_u32(0x40001000).unwrap();
+        assert_eq!(ctrl_val, 0);
+
+        // Address 0x40001000 + 0x04 = COUNT register
+        let mut bus = bus;
+        bus.write_u32(0x40001004, 0x12345678).unwrap();
+        let count_val = bus.read_u32(0x40001004).unwrap();
+        assert_eq!(count_val, 0x12345678);
     }
 }
