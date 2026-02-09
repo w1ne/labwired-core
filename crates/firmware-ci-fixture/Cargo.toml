@@ -11,7 +11,6 @@ edition = "2021"
 
 [dependencies]
 cortex-m = "0.7"
-cortex-m-rt = "0.7"
 panic-halt = "0.2"
 
 [[bin]]
