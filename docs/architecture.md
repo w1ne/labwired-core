@@ -9,16 +9,24 @@ graph TD
     CLI[labwired-cli] --> Config[labwired-config]
     CLI --> Loader[labwired-loader]
     CLI --> Core[labwired-core]
+    CLI --> GDB[labwired-gdbstub]
+    CLI --> DAP[labwired-dap]
+
     Config --> Core
     Loader --> Core
+    GDB --> Core
+    DAP --> Core
 
     subgraph Core [labwired-core]
-        CPU[Cortex-M CPU]
+        Machine
+        CPU[Cpu Trait]
         Bus[System Bus]
         Dec[Decoder]
         Mem[Linear Memory]
         Periphs[Dynamic Peripherals]
 
+        Machine --> CPU
+        Machine --> Bus
         CPU --> Dec
         CPU --> Bus
         Bus --> Mem
@@ -28,7 +36,7 @@ graph TD
 
 ## Component Definitions
 
-### 1. `sim-core`
+### 1. `labwired-core`
 The execution engine. Designed to be `no_std` compatible and **architecture-agnostic**.
 
 #### **Pluggable Core Pattern**
@@ -36,10 +44,15 @@ The `Machine` struct is generic over the `Cpu` trait (`Machine<C: Cpu>`). This a
 The `Cpu` trait defines the minimal interface:
 ```rust
 trait Cpu {
-    fn reset(&mut self);
-    fn step(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
+    fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
+    fn step(&mut self, bus: &mut dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> SimResult<()>;
+    // ... Debug accessors ...
 }
 ```
+
+The system currently supports:
+- **Arm (Cortex-M)**: Via `CortexM` struct.
+- **RISC-V**: Via `RiscV` struct (initial support).
 
 #### **Memory Model**
 
@@ -55,21 +68,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
     fn tick(&mut self) -> PeripheralTickResult; // Returns IRQ status, cycles, and DMA requests
+    fn snapshot(&self) -> serde_json::Value;
 }
 ```
 
-#### **CPU (Cortex-M Stub)**
-Represents the processor state.
-- **Registers**:
-    - `R0-R12`: General Purpose
-    - `SP (R13)`: Stack Pointer
-    - `LR (R14)`: Link Register
-    - `PC (R15)`: Program Counter
-    - `xPSR`: Program Status Register
-- **Execution Cycle**:
-    1.  **Fetch**: Read 16-bit Opcode from `PC` via `Bus`.
-    2.  **Decode**: Translate Opcode into `Instruction` enum via `Decoder`.
-    3.  **Execute**: Update PC/Registers based on `Instruction`.
+#### **Debug Support**
+The core exposes a `DebugControl` trait implemented by `Machine`, allowing external tools (like GDB or DAP) to:
+- Read/Write Core Registers.
+- Read/Write Memory.
+- Set/Clear Breakpoints.
+- Single Step or Run (with stop reasons).
 
 #### **Decoder (Thumb-2)**
 A stateless module confirming to ARMv7-M Thumb-2 encoding.
@@ -118,10 +126,14 @@ To maintain modularity and comply with Rust's ownership rules, LabWired uses a t
 The CPU supports robust reassembly of 32-bit Thumb-2 instructions (`BL`, `MOVW`, `MOVT`, `MOV.W`, `MVN.W`, `SDIV`, `UDIV`) by fetching the suffix half-word during the execution of a `Prefix32` opcode.
 
 ### 2. `labwired-config`
-Handles hardware declaration and validation.
-- **Schemas**: Defines `ChipDescriptor` and `SystemManifest` (YAML).
-- **Size Parsing**: Converts human-readable strings like "128KB" to raw byte sizes.
-- **Dependency**: Used by `CLI` to initialize the `Machine` and by `Core` to map peripherals.
+Handles hardware declaration, validation, and test scripting.
+- **Chips**: `ChipDescriptor` defines memory map (Flash/RAM) and peripheral base addresses.
+- **System**: `SystemManifest` defines the board-level configuration (chip selection, external devices).
+- **Peripherals**: `PeripheralDescriptor` defines register maps, fields, and side-effects.
+- **Tests**: `TestScript` (v1.0) defines automated test scenarios with:
+    - Inputs (firmware, system config)
+    - Limits (steps, cycles, wall time)
+    - Assertions (UART output regex, expected stop reason)
 
 ### 3. `labwired-loader`
 Handles binary parsing.
@@ -131,7 +143,21 @@ Handles binary parsing.
 
 ### 4. `labwired-cli`
 The host runner and entry point.
-- **Initialization**: Parses `--firmware` and optional `--system` manifest.
+- **Initialization**: Parses arguments and loads configuration.
 - **Configuration**: Resolves Chip Descriptors and wiring via `labwired-config`.
 - **Loading**: Loads ELF segments into the dynamically configured `SystemBus`.
-- **Simulation**: Runs the `Machine::step()` loop.
+- **Modes**:
+    - **Run**: continuous execution.
+    - **Debug**: Starts GDB server or DAP server.
+    - **Test**: Runs automated test scripts.
+
+### 5. `labwired-gdbstub`
+Implements the GDB Remote Serial Protocol (RSP) to allow debugging LabWired from GDB.
+- Wraps `Machine` in a `LabwiredTarget`.
+- Implements `gdbstub::Target` traits for single-step, breakpoints, and register/memory access.
+- Supports both Arm and RISC-V architectures.
+
+### 6. `labwired-dap`
+Implements the Debug Adapter Protocol (DAP) to allow debugging LabWired directly from VS Code.
+- Provides a DAP server that communicates with the IDE.
+- Controls the `Machine` execution.

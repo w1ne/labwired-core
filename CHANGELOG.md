@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **SVD Ingestor**: New tool (`crates/svd-ingestor`) to automatically generate `PeripheralDescriptor` YAMLs from CMSIS-SVD files.
+    - Supports nested clusters and register arrays (unrolling).
+    - Includes rigorous quality gates: E2E tests, Property-Based Fuzzing, and strict documentation.
+- **Strategic Horizon**: Integrated long-term vision into `docs/plan.md`, prioritized by revenue impact (Browser Wedge, Enterprise Safety, Digital Twin).
+
 ## [0.11.0] - 2026-02-08
 
 ### Added
