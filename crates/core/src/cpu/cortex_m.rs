@@ -226,6 +226,33 @@ impl Cpu for CortexM {
         })
     }
 
+    fn apply_snapshot(&mut self, snapshot: &crate::snapshot::CpuSnapshot) {
+        if let crate::snapshot::CpuSnapshot::Arm(s) = snapshot {
+            if s.registers.len() >= 16 {
+                self.r0 = s.registers[0];
+                self.r1 = s.registers[1];
+                self.r2 = s.registers[2];
+                self.r3 = s.registers[3];
+                self.r4 = s.registers[4];
+                self.r5 = s.registers[5];
+                self.r6 = s.registers[6];
+                self.r7 = s.registers[7];
+                self.r8 = s.registers[8];
+                self.r9 = s.registers[9];
+                self.r10 = s.registers[10];
+                self.r11 = s.registers[11];
+                self.r12 = s.registers[12];
+                self.sp = s.registers[13];
+                self.lr = s.registers[14];
+                self.pc = s.registers[15];
+            }
+            self.xpsr = s.xpsr;
+            self.primask = s.primask;
+            self.pending_exceptions = s.pending_exceptions;
+            self.vtor.store(s.vtor, Ordering::Relaxed);
+        }
+    }
+
     fn step(
         &mut self,
         bus: &mut dyn Bus,
@@ -752,15 +779,25 @@ impl Cpu for CortexM {
                         Instruction::Bfi { rd, rn, lsb, width } => {
                             let src = self.read_reg(rn);
                             let dst = self.read_reg(rd);
-                            let mask = ((1u32 << width) - 1) << lsb;
-                            let result = (dst & !mask) | ((src << lsb) & mask);
+                            let mask = if width == 32 {
+                                !0
+                            } else {
+                                ((1u32.wrapping_shl(width as u32)).wrapping_sub(1))
+                                    .wrapping_shl(lsb as u32)
+                            };
+                            let result = (dst & !mask) | ((src.wrapping_shl(lsb as u32)) & mask);
                             self.write_reg(rd, result);
                             self.update_nz(result);
                             pc_increment = 4;
                         }
                         Instruction::Bfc { rd, lsb, width } => {
                             let dst = self.read_reg(rd);
-                            let mask = ((1u32 << width) - 1) << lsb;
+                            let mask = if width == 32 {
+                                !0
+                            } else {
+                                ((1u32.wrapping_shl(width as u32)).wrapping_sub(1))
+                                    .wrapping_shl(lsb as u32)
+                            };
                             let result = dst & !mask;
                             self.write_reg(rd, result);
                             self.update_nz(result);
@@ -768,20 +805,33 @@ impl Cpu for CortexM {
                         }
                         Instruction::Sbfx { rd, rn, lsb, width } => {
                             let src = self.read_reg(rn);
-                            let val = (src >> lsb) & ((1 << width) - 1);
-                            let sign_bit = 1 << (width - 1);
-                            let result = if (val & sign_bit) != 0 {
-                                val | (!0 << width)
+                            let width_mask = if width == 32 {
+                                !0
                             } else {
-                                val
+                                (1u32.wrapping_shl(width as u32)).wrapping_sub(1)
                             };
+                            let val = (src.wrapping_shr(lsb as u32)) & width_mask;
+
+                            let result = if width == 32 {
+                                val
+                            } else {
+                                let shift = 32 - width;
+                                ((val.wrapping_shl(shift as u32)) as i32).wrapping_shr(shift as u32)
+                                    as u32
+                            };
+
                             self.write_reg(rd, result);
                             self.update_nz(result);
                             pc_increment = 4;
                         }
                         Instruction::Ubfx { rd, rn, lsb, width } => {
                             let src = self.read_reg(rn);
-                            let result = (src >> lsb) & ((1 << width) - 1);
+                            let width_mask = if width == 32 {
+                                !0
+                            } else {
+                                (1u32.wrapping_shl(width as u32)).wrapping_sub(1)
+                            };
+                            let result = (src.wrapping_shr(lsb as u32)) & width_mask;
                             self.write_reg(rd, result);
                             self.update_nz(result);
                             pc_increment = 4;

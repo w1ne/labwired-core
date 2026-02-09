@@ -47,6 +47,7 @@ pub enum Instruction {
     Fence,                                // FENCE
     Ecall,                                // ECALL
     Ebreak,                               // EBREAK
+    Mret,                                 // MRET
     Csrrw { rd: u8, rs1: u8, csr: u16 },  // CSRRW
     Csrrs { rd: u8, rs1: u8, csr: u16 },  // CSRRS
     Csrrc { rd: u8, rs1: u8, csr: u16 },  // CSRRC
@@ -240,9 +241,10 @@ pub fn decode_rv32(inst: u32) -> Instruction {
             // SYSTEM
             let csr = (inst >> 20) as u16;
             match funct3 {
-                0 => match inst >> 20 {
+                0x0 => match inst >> 20 {
                     0x000 => Instruction::Ecall,
                     0x001 => Instruction::Ebreak,
+                    0x302 => Instruction::Mret,
                     _ => Instruction::Unknown(inst),
                 },
                 1 => Instruction::Csrrw { rd, rs1, csr },

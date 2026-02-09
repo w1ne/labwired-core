@@ -85,6 +85,7 @@ pub trait Cpu {
     fn get_register(&self, id: u8) -> u32;
     fn set_register(&mut self, id: u8, val: u32);
     fn snapshot(&self) -> snapshot::CpuSnapshot;
+    fn apply_snapshot(&mut self, snapshot: &snapshot::CpuSnapshot);
 }
 
 /// Trait representing a memory-mapped peripheral
@@ -102,6 +103,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
     }
     fn snapshot(&self) -> serde_json::Value {
         serde_json::Value::Null
+    }
+    fn restore(&mut self, _state: serde_json::Value) -> SimResult<()> {
+        Ok(())
     }
 }
 
@@ -254,6 +258,16 @@ impl<C: Cpu> Machine<C> {
                 .map(|p| (p.name.clone(), p.dev.snapshot()))
                 .collect(),
         }
+    }
+
+    pub fn apply_snapshot(&mut self, snapshot: snapshot::MachineSnapshot) -> SimResult<()> {
+        self.cpu.apply_snapshot(&snapshot.cpu);
+        for p in &mut self.bus.peripherals {
+            if let Some(state) = snapshot.peripherals.get(&p.name) {
+                p.dev.restore(state.clone())?;
+            }
+        }
+        Ok(())
     }
 }
 
