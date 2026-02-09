@@ -5,12 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 
 [target.thumbv7m-none-eabi]
-rustflags = [
-  "-C", "link-arg=-Tlink.x",
-  "-L", "crates/firmware",
-]
+rustflags = []
 
 [target.thumbv6m-none-eabi]
-rustflags = [
-  "-C", "link-arg=-Tminimal.ld",
-]
+rustflags = []

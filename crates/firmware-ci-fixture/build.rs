@@ -22,6 +22,7 @@ fn main() {
         .write_all(include_bytes!("minimal.ld"))
         .unwrap();
     println!("cargo:rustc-link-search={}", out.display());
+    println!("cargo:rustc-link-arg=-Tminimal.ld");
 
     println!("cargo:rerun-if-changed=memory.x");
     println!("cargo:rerun-if-changed=minimal.ld");
