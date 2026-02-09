@@ -99,8 +99,29 @@ pub struct FieldDescriptor {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadAction {
+    None,
+    Clear,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WriteAction {
+    None,
+    #[serde(alias = "oneToClear")]
+    WriteOneToClear,
+    #[serde(alias = "zeroToClear")]
+    WriteZeroToClear,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SideEffectsDescriptor {
+    #[serde(default)]
+    pub read_action: Option<ReadAction>,
+    #[serde(default)]
+    pub write_action: Option<WriteAction>,
     #[serde(default)]
     pub on_read: Option<String>,
     #[serde(default)]

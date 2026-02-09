@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use svd_ingestor::{process_peripheral, IngestError};
+use svd_ingestor::process_peripheral;
 use svd_parser::svd::{Device, Peripheral};
 
 fn get_fixture_path(name: &str) -> PathBuf {
@@ -31,7 +31,7 @@ fn test_parse_dummy_stm32() {
     let descriptor = process_peripheral(&device, peripheral).expect("Failed to process peripheral");
 
     assert_eq!(descriptor.peripheral, "USART1");
-    assert_eq!(descriptor.registers.len(), 2);
+    assert_eq!(descriptor.registers.len(), 3);
 
     // Verify SR register
     let sr = descriptor
@@ -71,6 +71,22 @@ fn test_parse_dummy_stm32() {
         .find(|f| f.name == "DR")
         .expect("DR field not found");
     assert_eq!(dr_field.bit_range, [8, 0]);
+
+    // Verify CR register (Side Effects)
+    let cr = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "CR")
+        .expect("CR not found");
+
+    let side_effects = cr
+        .side_effects
+        .as_ref()
+        .expect("Side effects missing for CR");
+    assert_eq!(
+        side_effects.write_action,
+        Some(labwired_config::WriteAction::WriteOneToClear)
+    );
 }
 
 #[test]

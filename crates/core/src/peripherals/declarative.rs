@@ -5,8 +5,10 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
-use labwired_config::{Access, PeripheralDescriptor};
+use labwired_config::PeripheralDescriptor;
 use std::any::Any;
+
+use std::cell::RefCell;
 
 /// A generic peripheral implementation that uses a `PeripheralDescriptor` to define its
 /// register layout and access permissions.
@@ -15,7 +17,7 @@ use std::any::Any;
 #[derive(Debug)]
 pub struct GenericPeripheral {
     descriptor: PeripheralDescriptor,
-    data: Vec<u8>,
+    data: RefCell<Vec<u8>>,
 }
 
 impl GenericPeripheral {
@@ -54,7 +56,10 @@ impl GenericPeripheral {
             }
         }
 
-        Self { descriptor, data }
+        Self {
+            descriptor,
+            data: RefCell::new(data),
+        }
     }
 }
 
@@ -65,10 +70,21 @@ impl Peripheral for GenericPeripheral {
             let reg_start = reg.address_offset;
             let reg_end = reg_start + (reg.size as u64 / 8);
             if offset >= reg_start && offset < reg_end {
-                if reg.access == Access::WriteOnly {
+                if reg.access == labwired_config::Access::WriteOnly {
                     return Ok(0);
                 }
-                return Ok(self.data[offset as usize]);
+
+                let mut data = self.data.borrow_mut();
+                let val = data[offset as usize];
+
+                // Side Effects: ReadAction
+                if let Some(side_effects) = &reg.side_effects {
+                    if let Some(labwired_config::ReadAction::Clear) = side_effects.read_action {
+                        data[offset as usize] = 0;
+                    }
+                }
+
+                return Ok(val);
             }
         }
         Ok(0)
@@ -80,10 +96,28 @@ impl Peripheral for GenericPeripheral {
             let reg_start = reg.address_offset;
             let reg_end = reg_start + (reg.size as u64 / 8);
             if offset >= reg_start && offset < reg_end {
-                if reg.access == Access::ReadOnly {
+                if reg.access == labwired_config::Access::ReadOnly {
                     return Ok(());
                 }
-                self.data[offset as usize] = value;
+
+                let mut data = self.data.borrow_mut();
+
+                // Side Effects: WriteAction
+                if let Some(side_effects) = &reg.side_effects {
+                    match side_effects.write_action {
+                        Some(labwired_config::WriteAction::WriteOneToClear) => {
+                            data[offset as usize] &= !value;
+                        }
+                        Some(labwired_config::WriteAction::WriteZeroToClear) => {
+                            data[offset as usize] &= value;
+                        }
+                        _ => {
+                            data[offset as usize] = value;
+                        }
+                    }
+                } else {
+                    data[offset as usize] = value;
+                }
                 return Ok(());
             }
         }
@@ -105,7 +139,7 @@ impl Peripheral for GenericPeripheral {
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
             "peripheral": self.descriptor.peripheral,
-            "data": self.data
+            "data": *self.data.borrow()
         })
     }
 }
@@ -201,5 +235,37 @@ mod tests {
         p.write(0x07, 0x22).unwrap();
         assert_eq!(p.read(0x06).unwrap(), 0x11);
         assert_eq!(p.read(0x07).unwrap(), 0x22);
+    }
+    #[test]
+    fn test_side_effects_rtc() {
+        let mut desc = mock_descriptor();
+        desc.registers[0].side_effects = Some(labwired_config::SideEffectsDescriptor {
+            read_action: Some(labwired_config::ReadAction::Clear),
+            write_action: None,
+            on_read: None,
+            on_write: None,
+        });
+
+        let p = GenericPeripheral::new(desc);
+        // Initial reset value 0x12345678. Byte 0 is 0x78.
+        assert_eq!(p.read(0x00).unwrap(), 0x78);
+        assert_eq!(p.read(0x00).unwrap(), 0x00); // Cleared on read
+    }
+
+    #[test]
+    fn test_side_effects_w1c() {
+        let mut desc = mock_descriptor();
+        desc.registers[0].side_effects = Some(labwired_config::SideEffectsDescriptor {
+            read_action: None,
+            write_action: Some(labwired_config::WriteAction::WriteOneToClear),
+            on_read: None,
+            on_write: None,
+        });
+
+        let mut p = GenericPeripheral::new(desc);
+        // Byte 0 is 0x78 (binary: 0111 1000)
+        // Write 0x08 (binary: 0000 1000) to clear bit 3.
+        p.write(0x00, 0x08).unwrap();
+        assert_eq!(p.read(0x00).unwrap(), 0x70); // 0x78 & !0x08 = 0x70
     }
 }

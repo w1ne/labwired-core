@@ -59,6 +59,20 @@
             </field>
           </fields>
         </register>
+        <register>
+          <name>CR</name>
+          <description>Control register with side effects</description>
+          <addressOffset>0x08</addressOffset>
+          <size>32</size>
+          <access>read-write</access>
+          <modifiedWriteValues>oneToClear</modifiedWriteValues>
+          <fields>
+            <field>
+              <name>EIE</name>
+              <bitRange>[0:0]</bitRange>
+            </field>
+          </fields>
+        </register>
       </registers>
     </peripheral>
   </peripherals>
