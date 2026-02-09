@@ -4,13 +4,6 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-[target.thumbv7m-none-eabi]
-rustflags = [
-  "-C", "link-arg=-Tlink.x",
-  "-L", "crates/firmware",
-]
 
-[target.thumbv6m-none-eabi]
-rustflags = [
-  "-C", "link-arg=-Tminimal.ld",
-]
+# Linker configuration for ARM targets is handled in build.rs
+# of respective crates to avoid global interference.
