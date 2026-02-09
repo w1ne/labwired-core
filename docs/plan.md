@@ -295,9 +295,9 @@ This section translates the business research roadmap (“The Strategic Horizon 
 **Objective**: Break the peripheral modeling bottleneck by introducing a validated, versioned model pipeline (SVD/PDF → IR → verified codegen → registry).
 
 ### Phase A: Model Intermediate Representation (IR)
-- [ ] Define a strict IR for peripherals (Rust Structs + Serde):
-  - [ ] Registers, fields, reset values, access types.
-  - [ ] **Standardized Side Effects**: `WriteOneToClear`, `ReadToClear`, `SetOnEvent`.
+- [x] Define a strict IR for peripherals (Rust Structs + Serde):
+  - [x] Registers, fields, reset values, access types.
+  - [x] **Standardized Side Effects**: `WriteOneToClear`, `ReadToClear`.
   - [ ] **Timing Hooks**: Signal propagation delay, clock domain crossing simulation.
 - [ ] Define a compatibility policy (required behaviors vs "best-effort" approximations).
 

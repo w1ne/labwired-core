@@ -232,6 +232,36 @@ fn convert_register(
         }
     }
 
+    let mut side_effects = labwired_config::SideEffectsDescriptor {
+        read_action: None,
+        write_action: None,
+        on_read: None,
+        on_write: None,
+    };
+
+    if let Some(svd_parser::svd::ReadAction::Clear) = reg.read_action {
+        side_effects.read_action = Some(labwired_config::ReadAction::Clear);
+    }
+
+    if let Some(svd_write) = reg.modified_write_values {
+        match svd_write {
+            svd_parser::svd::ModifiedWriteValues::OneToClear => {
+                side_effects.write_action = Some(labwired_config::WriteAction::WriteOneToClear);
+            }
+            svd_parser::svd::ModifiedWriteValues::ZeroToClear => {
+                side_effects.write_action = Some(labwired_config::WriteAction::WriteZeroToClear);
+            }
+            _ => {}
+        }
+    }
+
+    let side_effects = if side_effects.read_action.is_some() || side_effects.write_action.is_some()
+    {
+        Some(side_effects)
+    } else {
+        None
+    };
+
     Ok(Some(RegisterDescriptor {
         id: reg.name.clone(),
         address_offset: offset,
@@ -239,7 +269,7 @@ fn convert_register(
         access,
         reset_value,
         fields,
-        side_effects: None,
+        side_effects,
     }))
 }
 
