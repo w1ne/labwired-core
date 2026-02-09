@@ -120,6 +120,7 @@ pub fn process_peripheral(
         } else {
             Some(interrupts)
         },
+        timing: None,
     })
 }
 
