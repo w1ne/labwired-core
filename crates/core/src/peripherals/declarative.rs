@@ -157,6 +157,7 @@ mod tests {
                     side_effects: None,
                 },
             ],
+            interrupts: None,
         }
     }
 

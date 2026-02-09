@@ -1,0 +1,34 @@
+peripheral: USART1
+version: 0.1.0
+registers:
+- id: SR
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 12582912
+  fields:
+  - name: TXE
+    bit_range:
+    - 7
+    - 7
+    description: Transmit data register empty
+  - name: TC
+    bit_range:
+    - 6
+    - 6
+    description: Transmission complete
+  side_effects: null
+- id: DR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DR
+    bit_range:
+    - 8
+    - 0
+    description: Data value
+  side_effects: null
+interrupts:
+  USART1: 37

@@ -14,7 +14,7 @@ LabWired is a next-generation simulation platform designed to bridge the gap bet
 - **CI Test Runner**: Deterministic `labwired test` mode with YAML scripts, JSON/JUnit outputs, and artifact bundles.
 - **Functional Stubbing**: Mock external sensors and devices without complex emulation.
 - **High Performance**: Native Rust implementation (`labwired-core`).
-- **HAL Compatible**: Supports running binaries built with standard `stm32f1xx-hal`.
+- **HAL Compatible**: Supports running binaries built with standard `stm32f1xx-hal` (see `crates/firmware-hal-test`).
 
 ## 🏗 Architecture
 The project is organized as a Rust Workspace:

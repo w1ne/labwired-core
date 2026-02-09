@@ -802,6 +802,82 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_basic_arithmetic() {
+        // MOVS R0, #10 (T1) -> 200A
+        assert_eq!(
+            decode_thumb_16(0x200A),
+            Instruction::MovImm { rd: 0, imm: 10 }
+        );
+
+        // ADDS R1, #5 (T1) -> 3105
+        assert_eq!(
+            decode_thumb_16(0x3105),
+            Instruction::AddImm8 { rd: 1, imm: 5 }
+        );
+
+        // SUBS R2, #3 (T1) -> 3A03
+        assert_eq!(
+            decode_thumb_16(0x3A03),
+            Instruction::SubImm8 { rd: 2, imm: 3 }
+        );
+    }
+
+    #[test]
+    fn test_decode_branch() {
+        // B <offset> (T1) -> E000 (offset=0) -> B PC+4
+        // E7FE -> B -2 (infinite loop)
+        // Offset is imm11 << 1.
+        // 0x7FE = 2046. Signed 11-bit: -2.
+        assert_eq!(
+            decode_thumb_16(0xE7FE),
+            Instruction::Branch { offset: -4 } // -2 * 2 = -4
+        );
+        
+        // B (T2) not implemented in 16-bit decoder, handled in T2?
+        // Wait, T2 encoding is 32-bit.
+        // T1 is 16-bit.
+    }
+
+    #[test]
+    fn test_decode_memory_ops() {
+        // LDR R0, [R1, #4] (T1) -> 6848
+        // imm5 = 1 (4>>2). rn=1. rt=0.
+        // 0110 1000 0100 1000 -> 6848
+        assert_eq!(
+            decode_thumb_16(0x6848),
+            Instruction::LdrImm { rt: 0, rn: 1, imm: 4 }
+        );
+
+        // STR R2, [R3, #0] (T1) -> 601A
+        // imm5=0. rn=3. rt=2.
+        // 0110 0000 0001 1010 -> 601A
+        assert_eq!(
+            decode_thumb_16(0x601A),
+            Instruction::StrImm { rt: 2, rn: 3, imm: 0 }
+        );
+    }
+
+    #[test]
+    fn test_decode_push_pop() {
+        // PUSH {R0, LR} (T1) -> B501
+        // 1011 0101 0000 0001
+        // m=1 (LR), regs=1 (R0)
+        assert_eq!(
+            decode_thumb_16(0xB501),
+            Instruction::Push { registers: 1, m: true }
+        );
+
+        // POP {R1, PC} (T1) -> BD02
+        // 1011 1101 0000 0010
+        // p=1 (PC), regs=2 (R1)
+        assert_eq!(
+            decode_thumb_16(0xBD02),
+            Instruction::Pop { registers: 2, p: true }
+        );
+    }
+
+
+    #[test]
     fn test_decode_misc_rev() {
         // REV R0, R2 (using F081 -> Rd=0)
         assert_eq!(
@@ -985,10 +1061,7 @@ mod tests {
         assert_eq!(decode_thumb_16(0xBF00), Instruction::Nop);
     }
 
-    #[test]
-    fn test_decode_branch() {
-        assert_eq!(decode_thumb_16(0xE002), Instruction::Branch { offset: 4 });
-    }
+
 
     #[test]
     fn test_decode_shifts() {

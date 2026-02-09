@@ -74,6 +74,9 @@ jobs:
     - name: Build (CI Fixture RISC-V)
       run: cargo build -p riscv-ci-fixture --target riscv32i-unknown-none-elf --release --verbose
 
+    - name: Check Formatting
+      run: cargo fmt --all -- --check
+
     - name: Run Tests
       run: cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture --verbose
 

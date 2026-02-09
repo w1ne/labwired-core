@@ -167,3 +167,61 @@ assertions: []
 
     assert_eq!(output.status.code(), Some(3));
 }
+
+#[test]
+fn test_cli_version_flag() {
+    let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .arg("--version")
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // Check if version is present (format usually "labwired x.y.z")
+    assert!(stdout.starts_with("labwired"));
+}
+
+#[test]
+fn test_cli_invalid_flag() {
+    let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .arg("--unknown-flag-xyz")
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("error: unexpected argument '--unknown-flag-xyz'"));
+}
+
+#[test]
+fn test_cli_execution_limit_cycles() {
+    let script = write_temp_file(
+        "script-limit",
+        r#"
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/uart-ok-thumbv7m.elf"
+limits:
+  max_steps: 100
+assertions: []
+"#,
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .args([
+            "test",
+            "--firmware",
+            "../../tests/fixtures/uart-ok-thumbv7m.elf",
+            "--script",
+            script.to_str().unwrap(),
+            "--no-uart-stdout",
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    if !output.status.success() {
+        println!("Stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("Stderr: {}", String::from_utf8_lossy(&output.stderr));
+    }
+    assert!(output.status.success());
+}
