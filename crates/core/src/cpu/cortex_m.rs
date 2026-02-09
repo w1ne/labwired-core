@@ -787,7 +787,6 @@ impl Cpu for CortexM {
                             };
                             let result = (dst & !mask) | ((src.wrapping_shl(lsb as u32)) & mask);
                             self.write_reg(rd, result);
-                            self.update_nz(result);
                             pc_increment = 4;
                         }
                         Instruction::Bfc { rd, lsb, width } => {
@@ -800,7 +799,6 @@ impl Cpu for CortexM {
                             };
                             let result = dst & !mask;
                             self.write_reg(rd, result);
-                            self.update_nz(result);
                             pc_increment = 4;
                         }
                         Instruction::Sbfx { rd, rn, lsb, width } => {
@@ -821,7 +819,6 @@ impl Cpu for CortexM {
                             };
 
                             self.write_reg(rd, result);
-                            self.update_nz(result);
                             pc_increment = 4;
                         }
                         Instruction::Ubfx { rd, rn, lsb, width } => {
@@ -833,7 +830,6 @@ impl Cpu for CortexM {
                             };
                             let result = (src.wrapping_shr(lsb as u32)) & width_mask;
                             self.write_reg(rd, result);
-                            self.update_nz(result);
                             pc_increment = 4;
                         }
                         Instruction::Clz { rd, rm } => {
