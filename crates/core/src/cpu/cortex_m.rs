@@ -853,7 +853,7 @@ impl Cpu for CortexM {
                         Instruction::Rev16 { rd, rm } => {
                             let val = self.read_reg(rm);
                             let low = ((val & 0xFF) << 8) | ((val >> 8) & 0xFF);
-                            let high = ((val & 0xFF0000) << 8) | ((val >> 8) & 0xFF0000);
+                            let high = ((val & 0x00FF0000) << 8) | ((val & 0xFF000000) >> 8);
                             self.write_reg(rd, high | low);
                             pc_increment = 4;
                         }
