@@ -7,46 +7,52 @@
 /// RISC-V RV32I Base Integer Instruction Set
 #[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
-    Lui { rd: u8, imm: u32 },            // LUI rd, imm
-    Auipc { rd: u8, imm: u32 },          // AUIPC rd, imm
-    Jal { rd: u8, imm: i32 },            // JAL rd, offset
-    Jalr { rd: u8, rs1: u8, imm: i32 },  // JALR rd, rs1, offset
-    Beq { rs1: u8, rs2: u8, imm: i32 },  // BEQ rs1, rs2, offset
-    Bne { rs1: u8, rs2: u8, imm: i32 },  // BNE rs1, rs2, offset
-    Blt { rs1: u8, rs2: u8, imm: i32 },  // BLT rs1, rs2, offset
-    Bge { rs1: u8, rs2: u8, imm: i32 },  // BGE rs1, rs2, offset
-    Bltu { rs1: u8, rs2: u8, imm: i32 }, // BLTU rs1, rs2, offset
-    Bgeu { rs1: u8, rs2: u8, imm: i32 }, // BGEU rs1, rs2, offset
-    Lb { rd: u8, rs1: u8, imm: i32 },    // LB rd, offset(rs1)
-    Lh { rd: u8, rs1: u8, imm: i32 },    // LH rd, offset(rs1)
-    Lw { rd: u8, rs1: u8, imm: i32 },    // LW rd, offset(rs1)
-    Lbu { rd: u8, rs1: u8, imm: i32 },   // LBU rd, offset(rs1)
-    Lhu { rd: u8, rs1: u8, imm: i32 },   // LHU rd, offset(rs1)
-    Sb { rs1: u8, rs2: u8, imm: i32 },   // SB rs2, offset(rs1)
-    Sh { rs1: u8, rs2: u8, imm: i32 },   // SH rs2, offset(rs1)
-    Sw { rs1: u8, rs2: u8, imm: i32 },   // SW rs2, offset(rs1)
-    Addi { rd: u8, rs1: u8, imm: i32 },  // ADDI rd, rs1, imm
-    Slti { rd: u8, rs1: u8, imm: i32 },  // SLTI rd, rs1, imm
-    Sltiu { rd: u8, rs1: u8, imm: i32 }, // SLTIU rd, rs1, imm
-    Xori { rd: u8, rs1: u8, imm: i32 },  // XORI rd, rs1, imm
-    Ori { rd: u8, rs1: u8, imm: i32 },   // ORI rd, rs1, imm
-    Andi { rd: u8, rs1: u8, imm: i32 },  // ANDI rd, rs1, imm
-    Slli { rd: u8, rs1: u8, shamt: u8 }, // SLLI rd, rs1, shamt
-    Srli { rd: u8, rs1: u8, shamt: u8 }, // SRLI rd, rs1, shamt
-    Srai { rd: u8, rs1: u8, shamt: u8 }, // SRAI rd, rs1, shamt
-    Add { rd: u8, rs1: u8, rs2: u8 },    // ADD rd, rs1, rs2
-    Sub { rd: u8, rs1: u8, rs2: u8 },    // SUB rd, rs1, rs2
-    Sll { rd: u8, rs1: u8, rs2: u8 },    // SLL rd, rs1, rs2
-    Slt { rd: u8, rs1: u8, rs2: u8 },    // SLT rd, rs1, rs2
-    Sltu { rd: u8, rs1: u8, rs2: u8 },   // SLTU rd, rs1, rs2
-    Xor { rd: u8, rs1: u8, rs2: u8 },    // XOR rd, rs1, rs2
-    Srl { rd: u8, rs1: u8, rs2: u8 },    // SRL rd, rs1, rs2
-    Sra { rd: u8, rs1: u8, rs2: u8 },    // SRA rd, rs1, rs2
-    Or { rd: u8, rs1: u8, rs2: u8 },     // OR rd, rs1, rs2
-    And { rd: u8, rs1: u8, rs2: u8 },    // AND rd, rs1, rs2
-    Fence,                               // FENCE
-    Ecall,                               // ECALL
-    Ebreak,                              // EBREAK
+    Lui { rd: u8, imm: u32 },             // LUI rd, imm
+    Auipc { rd: u8, imm: u32 },           // AUIPC rd, imm
+    Jal { rd: u8, imm: i32 },             // JAL rd, offset
+    Jalr { rd: u8, rs1: u8, imm: i32 },   // JALR rd, rs1, offset
+    Beq { rs1: u8, rs2: u8, imm: i32 },   // BEQ rs1, rs2, offset
+    Bne { rs1: u8, rs2: u8, imm: i32 },   // BNE rs1, rs2, offset
+    Blt { rs1: u8, rs2: u8, imm: i32 },   // BLT rs1, rs2, offset
+    Bge { rs1: u8, rs2: u8, imm: i32 },   // BGE rs1, rs2, offset
+    Bltu { rs1: u8, rs2: u8, imm: i32 },  // BLTU rs1, rs2, offset
+    Bgeu { rs1: u8, rs2: u8, imm: i32 },  // BGEU rs1, rs2, offset
+    Lb { rd: u8, rs1: u8, imm: i32 },     // LB rd, offset(rs1)
+    Lh { rd: u8, rs1: u8, imm: i32 },     // LH rd, offset(rs1)
+    Lw { rd: u8, rs1: u8, imm: i32 },     // LW rd, offset(rs1)
+    Lbu { rd: u8, rs1: u8, imm: i32 },    // LBU rd, offset(rs1)
+    Lhu { rd: u8, rs1: u8, imm: i32 },    // LHU rd, offset(rs1)
+    Sb { rs1: u8, rs2: u8, imm: i32 },    // SB rs2, offset(rs1)
+    Sh { rs1: u8, rs2: u8, imm: i32 },    // SH rs2, offset(rs1)
+    Sw { rs1: u8, rs2: u8, imm: i32 },    // SW rs2, offset(rs1)
+    Addi { rd: u8, rs1: u8, imm: i32 },   // ADDI rd, rs1, imm
+    Slti { rd: u8, rs1: u8, imm: i32 },   // SLTI rd, rs1, imm
+    Sltiu { rd: u8, rs1: u8, imm: i32 },  // SLTIU rd, rs1, imm
+    Xori { rd: u8, rs1: u8, imm: i32 },   // XORI rd, rs1, imm
+    Ori { rd: u8, rs1: u8, imm: i32 },    // ORI rd, rs1, imm
+    Andi { rd: u8, rs1: u8, imm: i32 },   // ANDI rd, rs1, imm
+    Slli { rd: u8, rs1: u8, shamt: u8 },  // SLLI rd, rs1, shamt
+    Srli { rd: u8, rs1: u8, shamt: u8 },  // SRLI rd, rs1, shamt
+    Srai { rd: u8, rs1: u8, shamt: u8 },  // SRAI rd, rs1, shamt
+    Add { rd: u8, rs1: u8, rs2: u8 },     // ADD rd, rs1, rs2
+    Sub { rd: u8, rs1: u8, rs2: u8 },     // SUB rd, rs1, rs2
+    Sll { rd: u8, rs1: u8, rs2: u8 },     // SLL rd, rs1, rs2
+    Slt { rd: u8, rs1: u8, rs2: u8 },     // SLT rd, rs1, rs2
+    Sltu { rd: u8, rs1: u8, rs2: u8 },    // SLTU rd, rs1, rs2
+    Xor { rd: u8, rs1: u8, rs2: u8 },     // XOR rd, rs1, rs2
+    Srl { rd: u8, rs1: u8, rs2: u8 },     // SRL rd, rs1, rs2
+    Sra { rd: u8, rs1: u8, rs2: u8 },     // SRA rd, rs1, rs2
+    Or { rd: u8, rs1: u8, rs2: u8 },      // OR rd, rs1, rs2
+    And { rd: u8, rs1: u8, rs2: u8 },     // AND rd, rs1, rs2
+    Fence,                                // FENCE
+    Ecall,                                // ECALL
+    Ebreak,                               // EBREAK
+    Csrrw { rd: u8, rs1: u8, csr: u16 },  // CSRRW
+    Csrrs { rd: u8, rs1: u8, csr: u16 },  // CSRRS
+    Csrrc { rd: u8, rs1: u8, csr: u16 },  // CSRRC
+    Csrrwi { rd: u8, imm: u8, csr: u16 }, // CSRRWI
+    Csrrsi { rd: u8, imm: u8, csr: u16 }, // CSRRSI
+    Csrrci { rd: u8, imm: u8, csr: u16 }, // CSRRCI
     Unknown(u32),
 }
 
@@ -232,13 +238,20 @@ pub fn decode_rv32(inst: u32) -> Instruction {
         }
         0x73 => {
             // SYSTEM
+            let csr = (inst >> 20) as u16;
             match funct3 {
                 0 => match inst >> 20 {
                     0x000 => Instruction::Ecall,
                     0x001 => Instruction::Ebreak,
                     _ => Instruction::Unknown(inst),
                 },
-                _ => Instruction::Unknown(inst), // CSR instructions not implemented yet
+                1 => Instruction::Csrrw { rd, rs1, csr },
+                2 => Instruction::Csrrs { rd, rs1, csr },
+                3 => Instruction::Csrrc { rd, rs1, csr },
+                5 => Instruction::Csrrwi { rd, imm: rs1, csr },
+                6 => Instruction::Csrrsi { rd, imm: rs1, csr },
+                7 => Instruction::Csrrci { rd, imm: rs1, csr },
+                _ => Instruction::Unknown(inst),
             }
         }
         _ => Instruction::Unknown(inst),

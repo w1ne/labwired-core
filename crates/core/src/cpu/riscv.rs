@@ -254,6 +254,20 @@ impl Cpu for RiscV {
                 // Minimal implementation: no-op but maybe set a flag?
                 tracing::warn!("ECALL/EBREAK encountered at {:#x}", self.pc);
             }
+            Instruction::Csrrw { rd, rs1, csr }
+            | Instruction::Csrrs { rd, rs1, csr }
+            | Instruction::Csrrc { rd, rs1, csr } => {
+                // CSR stubs: read 0, write ignored.
+                tracing::trace!("CSR access: rd={}, rs1={}, csr={:#x}", rd, rs1, csr);
+                self.write_reg(rd, 0);
+            }
+            Instruction::Csrrwi { rd, imm, csr }
+            | Instruction::Csrrsi { rd, imm, csr }
+            | Instruction::Csrrci { rd, imm, csr } => {
+                // CSR immediate stubs: read 0, write ignored.
+                tracing::trace!("CSR imm access: rd={}, imm={}, csr={:#x}", rd, imm, csr);
+                self.write_reg(rd, 0);
+            }
             Instruction::Unknown(inst) => {
                 tracing::error!("Unknown instruction {:#x} at {:#x}", inst, self.pc);
                 return Err(crate::SimulationError::DecodeError(self.pc as u64));
