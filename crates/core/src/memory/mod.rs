@@ -126,5 +126,14 @@ mod tests {
 
         // Verify partial write didn't happen (atomic load not guaranteed but check logic)
         assert_eq!(mem.read_u8(0x13FF), Some(0)); // Still 0
+        
+        // Segment 3: Exact fit at the end
+        let seg3 = Segment {
+            start_addr: 0x13FE,
+            data: vec![0xAA, 0xBB], // 2 bytes: 13FE, 13FF. Fits.
+        };
+        assert!(mem.load_from_segment(&seg3));
+        assert_eq!(mem.read_u8(0x13FE), Some(0xAA));
+        assert_eq!(mem.read_u8(0x13FF), Some(0xBB));
     }
 }

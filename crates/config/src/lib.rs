@@ -125,6 +125,8 @@ pub struct PeripheralDescriptor {
     pub peripheral: String,
     pub version: String,
     pub registers: Vec<RegisterDescriptor>,
+    #[serde(default)]
+    pub interrupts: Option<std::collections::HashMap<String, u32>>,
 }
 
 impl PeripheralDescriptor {

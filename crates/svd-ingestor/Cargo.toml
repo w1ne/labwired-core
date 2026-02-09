@@ -1,0 +1,19 @@
+[package]
+name = "svd-ingestor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+svd-parser = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+anyhow = "1.0"
+thiserror = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+labwired-config = { path = "../config" }
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
+proptest = "1.0"
+
