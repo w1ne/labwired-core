@@ -180,6 +180,8 @@ struct PeripheralSnapshot {
     base: u64,
     size: u64,
     irq: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -265,15 +267,20 @@ fn write_interactive_snapshot<C: labwired_core::Cpu>(
         }
     };
 
+    let machine_snapshot = machine.snapshot();
     let peripherals = machine
         .bus
         .peripherals
         .iter()
-        .map(|p| PeripheralSnapshot {
-            name: p.name.clone(),
-            base: p.base,
-            size: p.size,
-            irq: p.irq,
+        .map(|p| {
+            let state = machine_snapshot.peripherals.get(&p.name).cloned();
+            PeripheralSnapshot {
+                name: p.name.clone(),
+                base: p.base,
+                size: p.size,
+                irq: p.irq,
+                state,
+            }
         })
         .collect::<Vec<_>>();
 

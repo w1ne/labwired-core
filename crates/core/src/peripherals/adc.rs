@@ -157,3 +157,53 @@ impl Peripheral for Adc {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adc_basic_conversion() {
+        let mut adc = Adc::new();
+        // Enable ADON and SWSTART (Bit 30)
+        adc.write(0x08, 1).unwrap(); // ADON
+        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+
+        // Should be converting
+        assert!(adc.converting);
+        assert_eq!(adc.cycles_remaining, 14);
+
+        // Tick 14 times
+        for _ in 0..14 {
+            let res = adc.tick();
+            assert!(adc.converting);
+            assert!(!res.irq);
+        }
+
+        // Final tick
+        let _res = adc.tick();
+        assert!(!adc.converting);
+        assert_eq!(adc.dr, 1);
+        assert!((adc.sr & (1 << 1)) != 0); // EOC bit
+    }
+
+    #[test]
+    fn test_adc_interrupt() {
+        let mut adc = Adc::new();
+        // Enable EOCIE (Bit 5 in CR1)
+        adc.write(0x04, 1 << 5).unwrap();
+        // Start conversion
+        adc.write(0x08, 1).unwrap(); // ADON
+        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+
+        // Finish conversion
+        for _ in 0..15 {
+            let res = adc.tick();
+            if !adc.converting {
+                assert!(res.irq);
+                return;
+            }
+        }
+        panic!("ADC failed to complete conversion");
+    }
+}

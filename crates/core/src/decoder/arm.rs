@@ -832,7 +832,7 @@ mod tests {
             decode_thumb_16(0xE7FE),
             Instruction::Branch { offset: -4 } // -2 * 2 = -4
         );
-        
+
         // B (T2) not implemented in 16-bit decoder, handled in T2?
         // Wait, T2 encoding is 32-bit.
         // T1 is 16-bit.
@@ -845,7 +845,11 @@ mod tests {
         // 0110 1000 0100 1000 -> 6848
         assert_eq!(
             decode_thumb_16(0x6848),
-            Instruction::LdrImm { rt: 0, rn: 1, imm: 4 }
+            Instruction::LdrImm {
+                rt: 0,
+                rn: 1,
+                imm: 4
+            }
         );
 
         // STR R2, [R3, #0] (T1) -> 601A
@@ -853,7 +857,11 @@ mod tests {
         // 0110 0000 0001 1010 -> 601A
         assert_eq!(
             decode_thumb_16(0x601A),
-            Instruction::StrImm { rt: 2, rn: 3, imm: 0 }
+            Instruction::StrImm {
+                rt: 2,
+                rn: 3,
+                imm: 0
+            }
         );
     }
 
@@ -864,7 +872,10 @@ mod tests {
         // m=1 (LR), regs=1 (R0)
         assert_eq!(
             decode_thumb_16(0xB501),
-            Instruction::Push { registers: 1, m: true }
+            Instruction::Push {
+                registers: 1,
+                m: true
+            }
         );
 
         // POP {R1, PC} (T1) -> BD02
@@ -872,10 +883,12 @@ mod tests {
         // p=1 (PC), regs=2 (R1)
         assert_eq!(
             decode_thumb_16(0xBD02),
-            Instruction::Pop { registers: 2, p: true }
+            Instruction::Pop {
+                registers: 2,
+                p: true
+            }
         );
     }
-
 
     #[test]
     fn test_decode_misc_rev() {
@@ -1060,8 +1073,6 @@ mod tests {
     fn test_decode_nop() {
         assert_eq!(decode_thumb_16(0xBF00), Instruction::Nop);
     }
-
-
 
     #[test]
     fn test_decode_shifts() {
