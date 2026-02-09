@@ -43,27 +43,76 @@ pub type Result<T> = std::result::Result<T, IngestError>;
 /// * `_device` - The parent SVD device (currently unused but reserved for context).
 /// * `peripheral` - The SVD peripheral to process.
 pub fn process_peripheral(
-    _device: &Device,
+    device: &Device,
     peripheral: &Peripheral,
 ) -> Result<PeripheralDescriptor> {
     let mut registers = Vec::new();
     let mut interrupts = HashMap::new();
 
-    if let Some(children) = &peripheral.registers {
-        for cluster in children {
-            process_register_cluster(cluster, &mut registers, 0)?;
+    let p_info = match peripheral {
+        Peripheral::Single(info) => info,
+        Peripheral::Array(info, _dim) => info,
+    };
+
+    let mut current_peripheral = p_info;
+    let mut peripherals_to_process = vec![p_info];
+
+    while let Some(base_name) = &current_peripheral.derived_from {
+        let base = device
+            .peripherals
+            .iter()
+            .find(|p| match p {
+                Peripheral::Single(info) => &info.name == base_name,
+                Peripheral::Array(info, _dim) => &info.name == base_name,
+            })
+            .ok_or_else(|| {
+                IngestError::InvalidSvd(format!("Base peripheral {} not found", base_name))
+            })?;
+
+        let base_info = match base {
+            Peripheral::Single(info) => info,
+            Peripheral::Array(info, _dim) => info,
+        };
+        peripherals_to_process.push(base_info);
+        current_peripheral = base_info;
+    }
+
+    // Build register lookup map for derivedFrom resolution
+    let mut reg_map = HashMap::new();
+    for p in &peripherals_to_process {
+        if let Some(children) = &p.registers {
+            for cluster in children {
+                collect_all_registers(cluster, &mut reg_map);
+            }
         }
     }
 
-    // Sort registers by offset for cleaner output
+    // Process from most-base to derived
+    for p in peripherals_to_process.iter().rev() {
+        if let Some(children) = &p.registers {
+            for cluster in children {
+                process_register_cluster(cluster, &mut registers, 0, "", &reg_map)?;
+            }
+        }
+    }
+
+    // Deduplicate by name, keeping latest (most derived)
+    let mut unique_regs: HashMap<String, RegisterDescriptor> = HashMap::new();
+    for reg in registers {
+        unique_regs.insert(reg.id.clone(), reg);
+    }
+    let mut registers: Vec<_> = unique_regs.into_values().collect();
+
     registers.sort_by_key(|r| r.address_offset);
 
-    for interrupt in &peripheral.interrupt {
-        interrupts.insert(interrupt.name.clone(), interrupt.value);
+    for p in peripherals_to_process.iter().rev() {
+        for interrupt in &p.interrupt {
+            interrupts.insert(interrupt.name.clone(), interrupt.value);
+        }
     }
 
     Ok(PeripheralDescriptor {
-        peripheral: peripheral.name.clone(),
+        peripheral: p_info.name.clone(),
         version: "0.1.0".to_string(),
         registers,
         interrupts: if interrupts.is_empty() {
@@ -74,17 +123,47 @@ pub fn process_peripheral(
     })
 }
 
+fn collect_all_registers<'a>(
+    cluster: &'a RegisterCluster,
+    map: &mut HashMap<String, &'a svd_parser::svd::RegisterInfo>,
+) {
+    match cluster {
+        RegisterCluster::Register(reg) => match reg {
+            Register::Single(info) => {
+                map.insert(info.name.clone(), info);
+            }
+            Register::Array(info, _dim) => {
+                map.insert(info.name.clone(), info);
+            }
+        },
+        RegisterCluster::Cluster(cluster) => match cluster {
+            svd_parser::svd::Cluster::Single(info) => {
+                for child in &info.children {
+                    collect_all_registers(child, map);
+                }
+            }
+            svd_parser::svd::Cluster::Array(info, _dim) => {
+                for child in &info.children {
+                    collect_all_registers(child, map);
+                }
+            }
+        },
+    }
+}
+
 fn process_register_cluster(
     cluster: &RegisterCluster,
     registers: &mut Vec<RegisterDescriptor>,
     parent_offset: u64,
+    name_prefix: &str,
+    reg_map: &HashMap<String, &svd_parser::svd::RegisterInfo>,
 ) -> Result<()> {
     match cluster {
         RegisterCluster::Register(reg) => {
-            expand_register(reg, registers, parent_offset)?;
+            expand_register(reg, registers, parent_offset, name_prefix, reg_map)?;
         }
         RegisterCluster::Cluster(cluster) => {
-            expand_cluster(cluster, registers, parent_offset)?;
+            expand_cluster(cluster, registers, parent_offset, name_prefix, reg_map)?;
         }
     }
     Ok(())
@@ -94,28 +173,29 @@ fn expand_register(
     reg_array: &Register,
     registers: &mut Vec<RegisterDescriptor>,
     parent_offset: u64,
+    name_prefix: &str,
+    reg_map: &HashMap<String, &svd_parser::svd::RegisterInfo>,
 ) -> Result<()> {
     match reg_array {
         Register::Single(reg) => {
-            if let Some(desc) = convert_register(reg, parent_offset)? {
+            if let Some(mut desc) = convert_register(reg, parent_offset, reg_map)? {
+                if !name_prefix.is_empty() {
+                    desc.id = format!("{}_{}", name_prefix, desc.id);
+                }
                 registers.push(desc);
             }
         }
         Register::Array(reg, dim) => {
             for i in 0..dim.dim {
-                let name = replace_dim_name(&reg.name, i, dim);
+                let mut name = replace_dim_name(&reg.name, i, dim);
+                if !name_prefix.is_empty() {
+                    name = format!("{}_{}", name_prefix, name);
+                }
                 let offset = parent_offset
                     + (reg.address_offset as u64)
                     + (i as u64 * dim.dim_increment as u64);
 
-                // Clone and patch register info for specific instance
-                // Note: We can't easily modify 'reg' effectively without cloning heavy structures
-                // But convert_register only looks at properties.
-                // Or we can pass name and offset override to convert_register.
-                // Let's modify convert_register signature to accept overrides or the resolved items.
-
-                if let Some(mut desc) = convert_register(reg, 0)? {
-                    // 0 because we calculate full offset manually
+                if let Some(mut desc) = convert_register(reg, 0, reg_map)? {
                     desc.id = name;
                     desc.address_offset = offset;
                     registers.push(desc);
@@ -130,37 +210,43 @@ fn expand_cluster(
     cluster_array: &svd_parser::svd::Cluster,
     registers: &mut Vec<RegisterDescriptor>,
     parent_offset: u64,
+    name_prefix: &str,
+    reg_map: &HashMap<String, &svd_parser::svd::RegisterInfo>,
 ) -> Result<()> {
     match cluster_array {
         svd_parser::svd::Cluster::Single(cluster) => {
             let current_offset = parent_offset + cluster.address_offset as u64;
+            let cluster_name = if !name_prefix.is_empty() {
+                format!("{}_{}", name_prefix, cluster.name)
+            } else {
+                cluster.name.clone()
+            };
+
             for child in &cluster.children {
-                process_register_cluster(child, registers, current_offset)?;
+                process_register_cluster(child, registers, current_offset, &cluster_name, reg_map)?;
             }
         }
         svd_parser::svd::Cluster::Array(cluster, dim) => {
             for i in 0..dim.dim {
-                // let name = replace_dim_name(&cluster.name, i, dim); // Cluster name isn't directly used in flat list, but might be needed for debug or nested naming?
-                // For flattened registers, we just care about the offset shift.
-                // But wait, flattened registers usually inherit cluster name prefix?
-                // SVD spec: "The name of the register is the name of the cluster followed by the name of the register".
-                // Actually usually tools join them: "CLUSTER_REG".
-                // But svd-parser doesn't join them?
-                // LabWired has flat register list. If we don't prefix, we might have collisions.
-                // For MVP, assuming SVD register names are unique or fully qualified?
-                // Many SVDs use "ClusterName_RegName" for registers inside.
-                // Some use nested name.
-                // Let's implement name prefixing to be safe?
-                // Or rely on SVD being well-formed.
-                // The SVD spec says register names must be unique within a peripheral.
-                // If they are in a cluster, the cluster namespace usually matters.
-                // But let's stick to offset calculation first.
-
                 let current_offset = parent_offset
                     + (cluster.address_offset as u64)
                     + (i as u64 * dim.dim_increment as u64);
+
+                let instance_name = replace_dim_name(&cluster.name, i, dim);
+                let cluster_name = if !name_prefix.is_empty() {
+                    format!("{}_{}", name_prefix, instance_name)
+                } else {
+                    instance_name
+                };
+
                 for child in &cluster.children {
-                    process_register_cluster(child, registers, current_offset)?;
+                    process_register_cluster(
+                        child,
+                        registers,
+                        current_offset,
+                        &cluster_name,
+                        reg_map,
+                    )?;
                 }
             }
         }
@@ -190,11 +276,29 @@ fn replace_dim_name(name: &str, index: u32, dim: &svd_parser::svd::DimElement) -
 fn convert_register(
     reg: &svd_parser::svd::RegisterInfo,
     extra_offset: u64,
+    reg_map: &HashMap<String, &svd_parser::svd::RegisterInfo>,
 ) -> Result<Option<RegisterDescriptor>> {
+    let mut current_reg = reg;
+    if let Some(base_name) = &reg.derived_from {
+        if let Some(base) = reg_map.get(base_name) {
+            current_reg = base;
+        } else {
+            return Err(IngestError::InvalidSvd(format!(
+                "Base register {} not found",
+                base_name
+            )));
+        }
+    }
+
     let offset = extra_offset + reg.address_offset as u64;
 
-    let size = reg.properties.size.unwrap_or(32) as u8;
-    let access = match reg.properties.access {
+    let size = reg
+        .properties
+        .size
+        .or(current_reg.properties.size)
+        .unwrap_or(32) as u8;
+
+    let access = match reg.properties.access.or(current_reg.properties.access) {
         Some(SvdAccess::ReadWrite) => Access::ReadWrite,
         Some(SvdAccess::ReadOnly) => Access::ReadOnly,
         Some(SvdAccess::WriteOnly) => Access::WriteOnly,
@@ -202,34 +306,57 @@ fn convert_register(
         _ => Access::ReadWrite,
     };
 
-    let reset_value = reg.properties.reset_value.unwrap_or(0) as u32;
+    let reset_value = reg
+        .properties
+        .reset_value
+        .or(current_reg.properties.reset_value)
+        .unwrap_or(0) as u32;
 
     let mut fields = Vec::new();
-    if let Some(svd_fields) = &reg.fields {
+    let mut field_map = HashMap::new();
+
+    if let Some(svd_fields) = &current_reg.fields {
         for field in svd_fields {
-            // Fields can also be arrays... expanding them is needed for completeness.
-            // For now, let's treat field arrays as single fields (often just bit repetitions).
-            // Or expand them.
-            // Let's assume single fields for this step to reduce complexity, as they are inside register.
             match field {
-                Field::Single(f) => fields.push(convert_field(f)?),
+                Field::Single(f) => {
+                    field_map.insert(f.name.clone(), f.clone());
+                }
                 Field::Array(f, dim) => {
                     for i in 0..dim.dim {
                         let mut f_clone = f.clone();
                         f_clone.name = replace_dim_name(&f.name, i, dim);
-                        // bit-offset shift?
-                        // Field bit range is static in struct...
-                        // SVD spec: "The bit position of the field is ... plus dimIndex * dimIncrement".
                         let shift = i * dim.dim_increment;
-                        let _width = f.bit_range.width;
-                        let original_lsb = f.bit_range.offset;
-                        f_clone.bit_range.offset = original_lsb + shift;
-
-                        fields.push(convert_field(&f_clone)?);
+                        f_clone.bit_range.offset = f.bit_range.offset + shift;
+                        field_map.insert(f_clone.name.clone(), f_clone);
                     }
                 }
             }
         }
+    }
+
+    if let Some(svd_fields) = &reg.fields {
+        for field in svd_fields {
+            match field {
+                Field::Single(f) => {
+                    field_map.insert(f.name.clone(), f.clone());
+                }
+                Field::Array(f, dim) => {
+                    for i in 0..dim.dim {
+                        let mut f_clone = f.clone();
+                        f_clone.name = replace_dim_name(&f.name, i, dim);
+                        let shift = i * dim.dim_increment;
+                        f_clone.bit_range.offset = f.bit_range.offset + shift;
+                        field_map.insert(f_clone.name.clone(), f_clone);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut field_items: Vec<_> = field_map.into_values().collect();
+    field_items.sort_by_key(|f| f.bit_range.offset);
+    for f in field_items {
+        fields.push(convert_field(&f)?);
     }
 
     let mut side_effects = labwired_config::SideEffectsDescriptor {
@@ -239,11 +366,15 @@ fn convert_register(
         on_write: None,
     };
 
-    if let Some(svd_parser::svd::ReadAction::Clear) = reg.read_action {
+    let reg_read_action = reg.read_action.or(current_reg.read_action);
+    if let Some(svd_parser::svd::ReadAction::Clear) = reg_read_action {
         side_effects.read_action = Some(labwired_config::ReadAction::Clear);
     }
 
-    if let Some(svd_write) = reg.modified_write_values {
+    let reg_modified_write = reg
+        .modified_write_values
+        .or(current_reg.modified_write_values);
+    if let Some(svd_write) = reg_modified_write {
         match svd_write {
             svd_parser::svd::ModifiedWriteValues::OneToClear => {
                 side_effects.write_action = Some(labwired_config::WriteAction::WriteOneToClear);
@@ -319,7 +450,8 @@ mod tests {
     fn test_register_conversion() {
         let reg_enum = make_register("TEST_REG", 0x10);
         if let Register::Single(reg) = reg_enum {
-            let desc = convert_register(&reg, 0).unwrap().unwrap();
+            let reg_map = HashMap::new();
+            let desc = convert_register(&reg, 0, &reg_map).unwrap().unwrap();
             assert_eq!(desc.id, "TEST_REG");
             assert_eq!(desc.address_offset, 0x10);
             assert_eq!(desc.size, 32);

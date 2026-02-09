@@ -116,3 +116,79 @@ fn test_invalid_svd_structure() {
     let descriptor = process_peripheral(&device, &peripheral_enum).unwrap();
     assert!(descriptor.registers.is_empty());
 }
+
+#[test]
+fn test_parse_derived_peripheral() {
+    let path = get_fixture_path("advanced_stm32.svd");
+    let xml = std::fs::read_to_string(path).expect("Failed to read fixture");
+    let device = svd_parser::parse(&xml).expect("Failed to parse SVD");
+
+    let timer1 = device
+        .peripherals
+        .iter()
+        .find(|p| p.name == "TIMER1")
+        .expect("TIMER1 not found");
+
+    let descriptor = process_peripheral(&device, timer1).expect("Failed to process peripheral");
+
+    // TIMER1 is derived from TIMER_BASE (which has CR) and adds SR.
+    // So it should have 2 registers.
+    assert_eq!(descriptor.registers.len(), 2);
+    assert!(descriptor.registers.iter().any(|r| r.id == "CR"));
+    assert!(descriptor.registers.iter().any(|r| r.id == "SR"));
+}
+
+#[test]
+fn test_parse_clusters() {
+    let path = get_fixture_path("advanced_stm32.svd");
+    let xml = std::fs::read_to_string(path).expect("Failed to read fixture");
+    let device = svd_parser::parse(&xml).expect("Failed to parse SVD");
+
+    let clusters = device
+        .peripherals
+        .iter()
+        .find(|p| p.name == "CLUSTERS")
+        .expect("CLUSTERS not found");
+
+    let descriptor = process_peripheral(&device, clusters).expect("Failed to process peripheral");
+
+    // GRP[0] and GRP[1] clusters, each has REG and REGS[0..1].
+    // Total 6 registers.
+    assert_eq!(descriptor.registers.len(), 6);
+
+    // Check offsets and potentially prefixes (if implemented)
+    let r0 = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "GRP0_REG")
+        .unwrap();
+    assert_eq!(r0.address_offset, 0x00);
+
+    let rs0 = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "GRP0_REGS0")
+        .unwrap();
+    assert_eq!(rs0.address_offset, 0x04);
+
+    let rs1 = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "GRP0_REGS1")
+        .unwrap();
+    assert_eq!(rs1.address_offset, 0x08);
+
+    let r1 = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "GRP1_REG")
+        .unwrap();
+    assert_eq!(r1.address_offset, 0x10);
+
+    let rs1_0 = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "GRP1_REGS0")
+        .unwrap();
+    assert_eq!(rs1_0.address_offset, 0x14);
+}

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device schemaVersion="1.1" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" noNamespaceSchemaLocation="CMSIS-SVD.xsd">
+  <name>ADVANCED_DEVICE</name>
+  <version>1.0</version>
+  <peripherals>
+    <peripheral>
+      <name>TIMER_BASE</name>
+      <baseAddress>0x40001000</baseAddress>
+      <registers>
+        <register>
+          <name>CR</name>
+          <description>Control Register</description>
+          <addressOffset>0x00</addressOffset>
+          <size>32</size>
+          <access>read-write</access>
+          <resetValue>0x00000000</resetValue>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral derivedFrom="TIMER_BASE">
+      <name>TIMER1</name>
+      <baseAddress>0x40002000</baseAddress>
+      <!-- Should inherit CR from TIMER_BASE -->
+      <registers>
+        <register>
+          <name>SR</name>
+          <description>Status Register</description>
+          <addressOffset>0x04</addressOffset>
+          <size>32</size>
+          <access>read-only</access>
+          <resetValue>0x00000000</resetValue>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>CLUSTERS</name>
+      <baseAddress>0x40003000</baseAddress>
+      <registers>
+        <cluster>
+          <name>GRP[%s]</name>
+          <dim>2</dim>
+          <dimIncrement>0x10</dimIncrement>
+          <addressOffset>0x00</addressOffset>
+          <register>
+            <name>REG</name>
+            <addressOffset>0x00</addressOffset>
+            <size>32</size>
+          </register>
+          <register>
+            <name>REGS[%s]</name>
+            <dim>2</dim>
+            <dimIncrement>4</dimIncrement>
+            <addressOffset>0x04</addressOffset>
+            <size>32</size>
+          </register>
+        </cluster>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

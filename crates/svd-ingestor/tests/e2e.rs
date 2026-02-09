@@ -3,6 +3,7 @@ use std::fs;
 use tempfile::tempdir;
 
 #[test]
+#[allow(deprecated)]
 fn test_cli_integration() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("svd-ingestor")?;
     let temp_dir = tempdir()?;
