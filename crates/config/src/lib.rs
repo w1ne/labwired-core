@@ -99,12 +99,69 @@ pub struct FieldDescriptor {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadAction {
+    None,
+    Clear,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WriteAction {
+    None,
+    #[serde(alias = "oneToClear")]
+    WriteOneToClear,
+    #[serde(alias = "zeroToClear")]
+    WriteZeroToClear,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SideEffectsDescriptor {
+    #[serde(default)]
+    pub read_action: Option<ReadAction>,
+    #[serde(default)]
+    pub write_action: Option<WriteAction>,
     #[serde(default)]
     pub on_read: Option<String>,
     #[serde(default)]
     pub on_write: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TimingTrigger {
+    Write {
+        register: String,
+        #[serde(default)]
+        value: Option<u32>,
+        #[serde(default)]
+        mask: Option<u32>,
+    },
+    Read {
+        register: String,
+    },
+    Periodic {
+        period_cycles: u64,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TimingAction {
+    SetBits { register: String, bits: u32 },
+    ClearBits { register: String, bits: u32 },
+    WriteValue { register: String, value: u32 },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct TimingDescriptor {
+    pub id: String,
+    pub trigger: TimingTrigger,
+    pub delay_cycles: u64,
+    pub action: TimingAction,
+    #[serde(default)]
+    pub interrupt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -125,6 +182,10 @@ pub struct PeripheralDescriptor {
     pub peripheral: String,
     pub version: String,
     pub registers: Vec<RegisterDescriptor>,
+    #[serde(default)]
+    pub interrupts: Option<std::collections::HashMap<String, u32>>,
+    #[serde(default)]
+    pub timing: Option<Vec<TimingDescriptor>>,
 }
 
 impl PeripheralDescriptor {

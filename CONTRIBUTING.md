@@ -44,6 +44,12 @@ docker run --rm labwired-test
 - **Style**: We use standard `rustfmt` settings.
 - **Linting**: No `clippy` warnings allowed.
 - **Documentation**: Public APIs must have doc comments (`///`).
+- **Testing**:
+    - **Unit Tests**: Add unit tests for all new functions and modules. Run with `cargo test`.
+    - **Integration Tests**: Add integration tests in `tests/` or `crates/cli/tests/` for CLI behavior.
+    - **SVD Fixtures**: Use `tests/fixtures` for sample SVD files.
+    - **Coverage**: We use `tarpaulin` for coverage. Ensuring high coverage is encouraged.
+
 
 ## Reporting Issues
 Please open an issue on GitHub describing the bug or feature request clearly.

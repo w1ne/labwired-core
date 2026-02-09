@@ -158,17 +158,17 @@ Bridge the "peripheral modeling bottleneck" by enabling execution of real-world 
     - **Verified**: `PerformanceMetrics::{get_instructions,get_cycles,get_ips}` in `crates/core/src/metrics.rs`.
 - [x] Real-time IPS display in CLI
     - **Verified**: Periodic IPS logging in `crates/cli/src/main.rs` gated by `--trace` (v0.8.0).
-- [ ] Per-peripheral cycle accounting (modular ticking costs)
+- [x] Per-peripheral cycle accounting (modular ticking costs)
 
 ### Phase B: Advanced ISA & Peripheral Expansion
 - [x] Bit field instructions (`BFI`, `BFC`, `SBFX`, `UBFX`)
 - [x] Misc Thumb-2 instructions (`CLZ`, `RBIT`, `REV`, `REV16`)
-- [ ] **ADC Peripheral**: Implement as a modular, standalone component.
+- [x] **ADC Peripheral**: Implement as a modular, standalone component.
 
 ### Phase C: Pluggable Observability Tools
-- [ ] **State Snapshots**: Modular format (JSON/YAML) for dumping CPU/Peripheral state.
+- [x] **State Snapshots**: Modular format (JSON/YAML) for dumping CPU/Peripheral state.
 - [x] **Trace Hooks**: Implement a "subscriber" pattern for memory access and register changes.
-- [ ] Basic breakpoint support (PC-based halt)
+- [x] Basic breakpoint support (PC-based halt)
 
 ### Phase D: Ecosystem & Documentation
 - [x] **Peripheral Development Tutorial**: Guide on creating decoupled, custom sensor mocks.
@@ -295,75 +295,141 @@ This section translates the business research roadmap (“The Strategic Horizon 
 **Objective**: Break the peripheral modeling bottleneck by introducing a validated, versioned model pipeline (SVD/PDF → IR → verified codegen → registry).
 
 ### Phase A: Model Intermediate Representation (IR)
-- [ ] Define a strict IR for peripherals:
-  - [ ] Registers, fields, reset values, access types, side effects.
-  - [ ] Interrupt lines and trigger conditions.
-  - [ ] Timing hooks (what changes per tick).
-- [ ] Define a compatibility policy (required vs best-effort behaviors).
+- [x] Define a strict IR for peripherals (Rust Structs + Serde):
+  - [x] Registers, fields, reset values, access types.
+  - [x] **Standardized Side Effects**: `WriteOneToClear`, `ReadToClear`.
+  - [ ] **Timing Hooks**: Signal propagation delay, clock domain crossing simulation.
+- [ ] Define a compatibility policy (required behaviors vs "best-effort" approximations).
 
-### Phase B: Ingestion
-- [ ] SVD ingestion:
-  - [ ] Parse SVD into IR.
-  - [ ] Validate field widths, overlaps, reset values.
-- [ ] Datasheet/PDF ingestion:
-  - [ ] Extract text + tables.
-  - [ ] Chunk + index for retrieval (RAG-ready).
+### Phase B: Ingestion (SVD + PDF)
+- [ ] **Advanced SVD Parsing**:
+  - [ ] Flatten `RegisterClusters` (arrays of structs).
+  - [ ] Unroll Register Arrays (`dim` / `dimIncrement`).
+  - [ ] Resolve `derivedFrom` inheritance strictly.
+- [ ] **Datasheet/PDF Ingestion Pipeline**:
+  - [ ] Extract register tables and strictly map to SVD offsets.
+  - [ ] Extract timing diagrams and protocol constraints.
+  - [ ] Chunk text by peripheral section for RAG context windowing.
 
-### Phase C: AI Synthesis (RAG)
-- [ ] Define prompts that output structured IR deltas (not raw Rust code).
-- [ ] Build retrieval flows for key semantics:
-  - [ ] Write-1-to-clear / set-on-event behaviors.
-  - [ ] IRQ set/clear conditions and status flags.
-- [ ] Build an evaluation harness (golden peripherals) to measure accuracy before widening scope.
+### Phase C: AI Synthesis (RAG Agent)
+- [ ] **Prompt Engineering**:
+  - [ ] Design prompts to output structured `Configuration` or `SystemRDL` (not raw code).
+  - [ ] "Chain of Thought" validation: Ask LLM to explain *why* it thinks a bit is "Write-1-to-Clear".
+- [ ] **Behavioral Extraction**:
+  - [ ] Identify interrupt triggers (e.g., "TXE flag set when TDR is empty").
+  - [ ] Identify state machine transitions (e.g., "Enable bit starts the counter").
 
 ### Phase D: Verification & Code Generation
-- [ ] Generate SystemRDL from IR and validate it.
-- [ ] Generate Rust peripheral models deterministically from IR/SystemRDL.
-- [ ] Gate publishing on verification (schema + RDL + compile + unit tests + simulation tests).
+- [ ] **SystemRDL Generation**:
+  - [ ] Emit standardized SystemRDL 2.0 files as the "Golden Source" of truth.
+  - [ ] Validate RDL against known checker tools.
+- [ ] **Rust Codegen**:
+  - [ ] Implement `SystemRDL -> Rust Peripheral` compiler.
+  - [ ] Generate `bitflags` structs for all registers.
+  - [ ] Generate default `reset()` and `read()`/`write()` dispatch logic.
 
 ### Phase E: Model Registry & Distribution
-- [ ] Version and sign models (hash inputs + artifact; store provenance).
-- [ ] Define upgrade and breaking-change semantics.
-- [ ] Provide a community submission workflow and quality tiers (community vs verified).
+- [ ] **Artifact Signing**: Sign models with a trusted key to allow "Verified by LabWired" badges.
+- [ ] **Versioning**: Semantic versioning for models (e.g., `stm32-usart v1.2.0`).
+- [ ] **Community Hub**: CLI command `labwired install <model>`.
 
-### Success Criteria
-- [ ] A user can ingest an SVD + a datasheet and obtain a compiled model plugin with a provenance record.
-- [ ] Verified models are reproducible and pass an automated behavioral test suite.
-
-## Iteration 14: Enterprise Fleet Management (Business Iteration 5)
+## Iteration 15: Enterprise Fleet Management (Business Iteration 5)
 **Objective**: Deliver multi-tenant, large-scale parallel simulation with fleet observability, metering, and compliance-oriented reporting.
 
 ### Phase A: Product & Tenancy Model
-- [ ] Define tenancy hierarchy (org → projects → runs) and RBAC.
-- [ ] Define a run lifecycle API (submit → schedule → execute → collect → report).
-- [ ] Implement metering (simulation minutes, storage, concurrency).
+- [ ] Define tenancy hierarchy (Organization → Project → Run).
+- [ ] Implement RBAC (Role-Based Access Control): Admin, Editor, Viewer.
+- [ ] **Metering engine**: Track "Simulation Minutes" and "Storage Used" for billing.
 
-### Phase B: Orchestration & Isolation
-- [ ] Containerize the runner for cloud execution.
-- [ ] Implement scheduling primitives (queue, priorities, concurrency caps, retries).
-- [ ] Enforce strict isolation (CPU/RAM limits; default deny outbound network; artifact-only ingress/egress).
-- [ ] (Optional) Define a Firecracker MicroVM isolation mode for high-assurance workloads.
+### Phase B: Orchestration & Isolation (Cloud Native)
+- [ ] **Runner Containerization**: Optimize `sim-runner` Docker image (<50MB).
+- [ ] **Job Scheduler**:
+  - [ ] Priority queues (Enterprise vs Free).
+  - [ ] Concurrency limits per organization.
+- [ ] **Hardware Isolation**:
+  - [ ] **AWS Graviton (ARM64)** optimization for native execution speed (no binary translation).
+  - [ ] **Firecracker MicroVMs**: Isolate every run in a disposable VM for security.
 
-### Phase C: Artifact Store & Fleet Observability
-- [ ] Store per-run artifacts (logs, traces, configs, firmware hash, model versions, summary).
-- [ ] Define retention policies and export/download capabilities.
-- [ ] Add fleet-level monitoring (SLOs/alerts/cost visibility).
+### Phase C: Compliance & Reporting (ISO 26262)
+- [ ] **Fault Injection Framework**:
+  - [ ] API to inject hardware faults (e.g., `gpio.short_to_ground()`, `flash.ecc_error()`).
+  - [ ] Campaign runner: "Run this test suite against these 50 fault scenarios".
+- [ ] **Evidence Generation**:
+  - [ ] Generate immutable execution reports (PDF/JSON) with cryptographic signatures.
+  - [ ] **Tool Qualification Kit (TQK)**: Documentation suite verifying the simulator's correctness.
+  - [ ] Requirement Traceability: Map test results back to requirements IDs.
 
-### Phase D: Fleet Dashboard (Web)
-- [ ] Implement auth and enterprise controls (SSO OIDC/SAML, audit logs; SCIM optional).
-- [ ] Provide run views (filters by branch/commit/status) and artifact viewers (UART logs, traces).
-- [ ] Add linkable run “snapshots” for collaboration.
+### Phase D: Enterprise Dashboard
+- [ ] **Live Telemetry**: WebSocket stream of UART/Logs from running jobs.
+- [ ] **Snapshot Sharing**: "Copy Link to State" button (stores full RAM/Reg dump).
+- [ ] **SSO Integration**: SAML/OIDC for corporate login.
 
-### Phase E: Compliance & Reporting
-- [ ] Implement deterministic fault injection scenarios (sensor disconnect, voltage drop, memory faults).
-- [ ] Integrate coverage reporting and aggregate per build.
-- [ ] Generate ISO 26262-oriented evidence packs (traceability + reproducibility + tool qualification evidence scope).
+## Iteration 16: VS Code Simulator Management
+**Objective**: Enable developers to create, manage, and connect to LabWired simulator instances directly within VS Code, streamlining the workflow for both local and remote development.
 
-### Phase F: Enterprise Rollout
-- [ ] Run 1–3 design partner pilots with explicit success criteria and ROI model.
-- [ ] Define support model (SLA tiers, incident response, private support channels).
-- [ ] Validate unit economics under production-like load (cost per simulated minute at target concurrency).
+### Phase A: Simulator Management UI
+- [ ] **Creation Wizard**: GUI to select Architecture, Chip, and Firmware ELF.
+- [ ] **Instance List**: View running simulator instances (PID, Port, Status).
+- [ ] **Process Control**: Start, Stop, and Restart simulator instances from VS Code.
+
+### Phase B: Connection & Interaction
+- [ ] **Automatic Connection**: One-click connect to local instances.
+- [ ] **Remote Connection**: Support for connecting to remote/Dockerized instances via TCP/IP.
+- [ ] **Output Integration**: Stream simulator stdout/stderr to VS Code Output Channel.
+- [ ] **Terminal Integration**: Integrated terminal for interacting with the simulator CLI.
 
 ### Success Criteria
-- [ ] Fleet executes large test matrices reproducibly and produces auditable evidence artifacts.
-- [ ] Cost/metering is measurable and aligned with pricing metrics.
+- [ ] Users can launch a new simulation from a VS Code command/button.
+- [ ] Users can see a list of active simulations and terminate them.
+- [ ] Output from the simulator is visible in VS Code.
+
+## Iteration 17: Partner Ecosystem & Growth (Business Strategy)
+**Objective**: Leverage the "Partner Programs" of major chip vendors and establish LabWired as a standard industry tool.
+
+### Phase A: Accreditation & Partnerships
+- [ ] **ARM Approved Design Partner**: Apply for accreditation to validate technical rigor.
+- [ ] **Vendor Sponsorships**: Pitch to ST/NXP/Nordic to sponsor "Verified Models" for their new chips.
+- [ ] **Open Source Strategy**: Clearly define the boundary between OSS Core (Runner) and Proprietary (AI Foundry/Cloud).
+
+### Phase B: Community Growth (PLG)
+- [ ] **"Wokwi Effect"**: Ensure browser-based "Click to Run" demo is instant and frictionless.
+- [ ] **Viral Features**: "Share Snapshot" link generator for StackOverflow/Reddit support capability.
+
+## Strategic Horizon: Future Improvements
+
+These items represent the long-term vision for LabWired, designed to drive significant company revenue through market expansion, enterprise compliance, and technical differentiation.
+
+### 1. Developer Wedge: Browser-Based Simulation (Phase I Revenue)
+**Objective**: Eliminate hardware dependency at the point of discovery.
+- [ ] **Wasm Runner**: Compile the Rust core to WebAssembly for browser execution.
+- [ ] **Cloud-Only Features**: Instant shareable links to running simulations (The "Wokwi Effect").
+- [ ] **Interactive Web UI**: GUI for peripheral interaction (LEDs, buttons, displays) in the browser.
+
+### 2. Enterprise Safety: ISO 26262 Tool Qualification (Phase III Revenue)
+**Objective**: Unlock high-margin automotive and medical contracts through regulatory compliance.
+- [ ] **Tool Qualification Kit (TQK)**: Automated validation suites and safety documentation.
+- [ ] **ASIL-D Conformance**: Architectural hardening for safety-critical firmware verification.
+- [ ] **Traceability Engine**: Linking simulation results directly to requirement IDs.
+
+### 3. Technical Superiority: High-Performance Co-Simulation
+**Objective**: Capture the high-complexity SoC and NPU verification market.
+- [ ] **Zero-Copy Shared Memory IPC**: <100ns latency bridge for Verilated RTL models.
+- [ ] **Edge AI (NPU) Emulation**: Bit-exact modeling of Arm Ethos-U85/U55 including Transformer support.
+- [ ] **Dynamic Level-of-Detail (LOD)**: Hot-swapping between functional and cycle-accurate models.
+
+### 4. The Digital Twin: Multi-Physics & Time-Travel
+**Objective**: Differentiate LabWired as a Cyber-Physical platform.
+- [ ] **FMI 3.0 Native Support**: Integration with physical plant models (Battery, Thermal, Motors).
+- [ ] **Distributed Time-Travel (D-TTD)**: Global snapshotting using Chandy-Lamport for multi-node fleets.
+- [ ] **Instruction-Level Energy Profiling (ILEM)**: "Virtual Wattmeter" for Green Coding compliance.
+
+### 5. Advanced Resilience: Security & Fault Injection
+**Objective**: Enable autonomous red-teaming and security certification.
+- [ ] **Virtual Fault Injection (VFI)**: Scriptable glitching (clock/voltage) for security bypass testing.
+- [ ] **Side-Channel Emulation**: Power/EM trace generation (HW/HD models) for CPA analysis.
+- [ ] **Rowhammer Simulation**: DRAM row-access modeling for memory vulnerability testing.
+
+### 6. Scaling & Performance: Actor-Based Concurrency
+**Objective**: Support fleet-scale simulation on modern heterogeneous hardware.
+- [ ] **Lock-Free Actor Model**: Decoupling components into independent message-passing actors.
+- [ ] **Linear Hardware Scaling**: Utilizing multi-core host machines without global locks.

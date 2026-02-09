@@ -54,6 +54,31 @@ The loader will:
 
 ## 5. Integration with HALs
 
-LabWired is compatible with standard HAL libraries like `stm32-rs` and `embassy`. Since hardware flags are often partially mocked, you may need to:
-1. Use `StubPeripheral` for unknown registers.
-2. Enable `--trace` to see which register accesses are failing.
+LabWired is compatible with standard HAL libraries like `stm32f1xx-hal` and `embassy`.
+
+### Example: `firmware-hal-test`
+The project includes a reference implementation in `crates/firmware-hal-test` that demonstrates how to use the `stm32f1xx-hal` crate with LabWired.
+
+To run this example:
+
+1.  **Build the firmware**:
+    ```bash
+    cargo build --release --manifest-path crates/firmware-hal-test/Cargo.toml --target thumbv7m-none-eabi
+    ```
+
+2.  **Run the simulator**:
+    ```bash
+    cargo run -p labwired-cli -- \
+      --firmware crates/firmware-hal-test/target/thumbv7m-none-eabi/release/firmware-hal-test \
+      --system configs/systems/stm32f103-integrated-test.yaml
+    ```
+
+This firmware blinks an LED on PC13, demonstrating:
+- Clock configuration (RCC)
+- GPIO output configuration
+- `cortex-m::asm::delay` usage
+
+### Common Challenges with HALs
+Since hardware flags are often partially mocked, you may encounter hangs where the HAL waits for a bit to set.
+1.  **Use `StubPeripheral`** for unknown registers (see [Peripheral Development Guide](peripheral_development.md)).
+2.  **Enable `--trace`** to see which register accesses are failing or where the code is spinning.

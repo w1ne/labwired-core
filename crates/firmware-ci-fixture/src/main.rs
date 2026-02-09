@@ -7,13 +7,14 @@
 #![no_main]
 #![allow(clippy::empty_loop)]
 
-use cortex_m_rt::entry;
-use panic_halt as _;
-
 // Matches `SystemBus::new()` default `uart1` base.
 const UART_TX_PTR: *mut u8 = 0x4000_C000 as *mut u8;
 
-#[entry]
+#[no_mangle]
+pub extern "C" fn Reset() -> ! {
+    main()
+}
+
 fn main() -> ! {
     unsafe {
         core::ptr::write_volatile(UART_TX_PTR, b'O');
@@ -22,5 +23,10 @@ fn main() -> ! {
     }
 
     // Deterministic "PC stuck" for `no_progress` tests.
+    loop {}
+}
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }

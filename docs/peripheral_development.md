@@ -2,6 +2,22 @@
 
 This guide explains how to develop custom, decoupled peripheral models for LabWired.
 
+## Generating Peripherals from SVD
+LabWired includes a tool to automatically generate peripheral descriptor YAML files from CMSIS-SVD files. This is the recommended way to onboard new MCUs.
+
+```bash
+# Generate a single peripheral
+cargo run -p svd-ingestor -- --input STM32F401.svd --output-dir crates/config/peripherals --filter UART1
+
+# Generate all peripherals in the SVD
+cargo run -p svd-ingestor -- --input STM32F401.svd --output-dir crates/config/peripherals
+```
+
+The tool handles:
+- Register arrays (unrolling `dim` elements)
+- Nested clusters (flattening address space)
+- Interrupt extraction
+
 ## The Peripheral Trait
 
 All peripherals in LabWired must implement the `Peripheral` trait located in `labwired_core`.
@@ -160,7 +176,33 @@ impl Peripheral for MyDmaController {
 To use your peripheral:
 1. Register it in the `crates/core/src/peripherals/mod.rs`.
 2. Map it in your `SystemBus` configuration.
-3. (Optional) Define it in a YAML chip descriptor for dynamic loading.
+### 3. (Optional) Define it in a YAML chip descriptor for dynamic loading.
+
+## Rapid Prototyping with Stubs
+
+Sometimes you don't need a full peripheral model, just enough to stop the firmware from crashing when it accesses a specific address. For this, use `StubPeripheral`.
+
+In your `crate/core/src/peripherals/mod.rs` (or where you register peripherals):
+
+```rust
+use crate::peripherals::stub::StubPeripheral;
+
+// ... inside your registration logic
+let uart_stub = Box::new(StubPeripheral::new(0)); // Returns 0 on read
+bus.peripherals.push(PeripheralEntry {
+    name: "uart_stub".to_string(),
+    base: 0x4000_4400, // UART2 Base
+    size: 0x400,
+    irq: None,
+    dev: uart_stub,
+});
+```
+
+You can also pre-populate values:
+```rust
+let mut stub = StubPeripheral::new(0);
+stub.values.insert(0x00, 0x00C0); // SR returns TXE/TC
+```
 
 ## Summary Checklist
 - [ ] Implement `read` and `write` with byte-alignment logic.

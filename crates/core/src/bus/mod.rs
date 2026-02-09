@@ -196,6 +196,7 @@ impl SystemBus {
                 "exti" => Box::new(crate::peripherals::exti::Exti::new()),
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+                "adc" => Box::new(crate::peripherals::adc::Adc::new()),
                 "declarative" => {
                     let descriptor_path = p_cfg
                         .config
