@@ -1,7 +1,7 @@
 #![deny(missing_docs)]
 
 //! # SVD Ingestor
-//! 
+//!
 //! A tool for converting CMSIS-SVD files into LabWired `PeripheralDescriptor` YAML files.
 //! This crate provides the core logic for parsing and conversion.
 

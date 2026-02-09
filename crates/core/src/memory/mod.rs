@@ -126,7 +126,7 @@ mod tests {
 
         // Verify partial write didn't happen (atomic load not guaranteed but check logic)
         assert_eq!(mem.read_u8(0x13FF), Some(0)); // Still 0
-        
+
         // Segment 3: Exact fit at the end
         let seg3 = Segment {
             start_addr: 0x13FE,

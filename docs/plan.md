@@ -158,17 +158,17 @@ Bridge the "peripheral modeling bottleneck" by enabling execution of real-world 
     - **Verified**: `PerformanceMetrics::{get_instructions,get_cycles,get_ips}` in `crates/core/src/metrics.rs`.
 - [x] Real-time IPS display in CLI
     - **Verified**: Periodic IPS logging in `crates/cli/src/main.rs` gated by `--trace` (v0.8.0).
-- [ ] Per-peripheral cycle accounting (modular ticking costs)
+- [x] Per-peripheral cycle accounting (modular ticking costs)
 
 ### Phase B: Advanced ISA & Peripheral Expansion
 - [x] Bit field instructions (`BFI`, `BFC`, `SBFX`, `UBFX`)
 - [x] Misc Thumb-2 instructions (`CLZ`, `RBIT`, `REV`, `REV16`)
-- [ ] **ADC Peripheral**: Implement as a modular, standalone component.
+- [x] **ADC Peripheral**: Implement as a modular, standalone component.
 
 ### Phase C: Pluggable Observability Tools
-- [ ] **State Snapshots**: Modular format (JSON/YAML) for dumping CPU/Peripheral state.
+- [x] **State Snapshots**: Modular format (JSON/YAML) for dumping CPU/Peripheral state.
 - [x] **Trace Hooks**: Implement a "subscriber" pattern for memory access and register changes.
-- [ ] Basic breakpoint support (PC-based halt)
+- [x] Basic breakpoint support (PC-based halt)
 
 ### Phase D: Ecosystem & Documentation
 - [x] **Peripheral Development Tutorial**: Guide on creating decoupled, custom sensor mocks.

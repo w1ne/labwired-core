@@ -13,7 +13,7 @@ fn get_fixture_path(name: &str) -> PathBuf {
 fn test_parse_dummy_stm32() {
     let path = get_fixture_path("dummy_stm32.svd");
     let xml = std::fs::read_to_string(path).expect("Failed to read fixture");
-    
+
     // Parse SVD using svd-parser
     let device = svd_parser::parse(&xml).expect("Failed to parse SVD");
 
@@ -21,8 +21,12 @@ fn test_parse_dummy_stm32() {
     assert_eq!(device.name, "STM32F103");
 
     // Find peripheral
-    let peripheral = device.peripherals.iter().find(|p| p.name == "USART1").expect("USART1 not found");
-    
+    let peripheral = device
+        .peripherals
+        .iter()
+        .find(|p| p.name == "USART1")
+        .expect("USART1 not found");
+
     // Process peripheral
     let descriptor = process_peripheral(&device, peripheral).expect("Failed to process peripheral");
 
@@ -30,35 +34,55 @@ fn test_parse_dummy_stm32() {
     assert_eq!(descriptor.registers.len(), 2);
 
     // Verify SR register
-    let sr = descriptor.registers.iter().find(|r| r.id == "SR").expect("SR not found");
+    let sr = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "SR")
+        .expect("SR not found");
     assert_eq!(sr.address_offset, 0x00);
     assert_eq!(sr.fields.len(), 2);
-    
+
     // Verify fields in SR
-    let txe = sr.fields.iter().find(|f| f.name == "TXE").expect("TXE not found");
+    let txe = sr
+        .fields
+        .iter()
+        .find(|f| f.name == "TXE")
+        .expect("TXE not found");
     assert_eq!(txe.bit_range, [7, 7]); // bitRange [7:7]
-    
-    let tc = sr.fields.iter().find(|f| f.name == "TC").expect("TC not found");
+
+    let tc = sr
+        .fields
+        .iter()
+        .find(|f| f.name == "TC")
+        .expect("TC not found");
     assert_eq!(tc.bit_range, [6, 6]); // bitRange [6:6]
 
     // Verify DR register
-    let dr = descriptor.registers.iter().find(|r| r.id == "DR").expect("DR not found");
+    let dr = descriptor
+        .registers
+        .iter()
+        .find(|r| r.id == "DR")
+        .expect("DR not found");
     // <bitRange>[8:0]</bitRange> -> msb=8, lsb=0
     // But DR field name is DR?
-    let dr_field = dr.fields.iter().find(|f| f.name == "DR").expect("DR field not found");
+    let dr_field = dr
+        .fields
+        .iter()
+        .find(|f| f.name == "DR")
+        .expect("DR field not found");
     assert_eq!(dr_field.bit_range, [8, 0]);
 }
 
 #[test]
 fn test_invalid_svd_structure() {
     // Manually construct a broken peripheral to test error handling
-    // This mocks a scenario where logic might fail or return error, 
+    // This mocks a scenario where logic might fail or return error,
     // although svd-parser types are strong, logic might have valid checks.
-    
+
     // For example, if we wanted to test validation logic in svd-ingestor (if added).
     // Currently svd-ingestor doesn't have much validation, it relies on svd-parser.
     // Let's test a scenario where we pass a peripheral with no registers.
-    
+
     let device = Device::builder()
         .name("TEST".to_string())
         .peripherals(vec![])

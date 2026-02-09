@@ -5,7 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 #[cfg(test)]
-mod tests {
+mod integration_tests {
     use crate::cpu::CortexM;
     use crate::decoder::arm::{self as decoder, Instruction};
     use crate::peripherals::nvic::NvicState;
@@ -1166,7 +1166,7 @@ mod tests {
 
         // 5. Verify Result
         let dr_addr = adc_base + 0x4C;
-        let sr_addr = adc_base + 0x00;
+        let sr_addr = adc_base;
 
         let dr = machine.bus.read_u32(dr_addr).unwrap();
         let sr = machine.bus.read_u32(sr_addr).unwrap();

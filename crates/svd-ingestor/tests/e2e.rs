@@ -22,12 +22,14 @@ fn test_cli_integration() -> Result<(), Box<dyn std::error::Error>> {
         .arg("--output-dir")
         .arg(output_dir);
 
-    cmd.assert()
-        .success();
+    cmd.assert().success();
 
     // Verify output file exists
     let expected_output = output_dir.join("usart1.yaml");
-    assert!(expected_output.exists(), "Output file usart1.yaml should be created");
+    assert!(
+        expected_output.exists(),
+        "Output file usart1.yaml should be created"
+    );
 
     // Basic content check
     let content = fs::read_to_string(&expected_output)?;

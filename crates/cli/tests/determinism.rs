@@ -86,7 +86,7 @@ assertions: []
     }
 
     let first = &results[0];
-    for i in 1..runs {
-        assert_eq!(first, &results[i], "Run {} result differs from Run 0", i);
+    for (i, current) in results.iter().enumerate().skip(1) {
+        assert_eq!(first, current, "Run {} result differs from Run 0", i);
     }
 }
