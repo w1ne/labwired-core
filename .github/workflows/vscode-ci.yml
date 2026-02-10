@@ -45,7 +45,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: coactions/setup-xvfb@v1
         with:
-          run: npm test
+          run: cd vscode && npm test
 
       - name: Run Unit Tests (Docker Logic)
         run: ./node_modules/.bin/mocha out/test/unit/docker.test.js
