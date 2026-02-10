@@ -12,6 +12,20 @@ use std::sync::Arc;
 pub struct RiscV {
     pub x: [u32; 32], // x0..x31. x0 is correctly hardwired to 0 in logic.
     pub pc: u32,
+
+    // CSRs
+    pub mstatus: u32,
+    pub mie: u32,
+    pub mip: u32,
+    pub mtvec: u32,
+    pub mscratch: u32,
+    pub mepc: u32,
+    pub mcause: u32,
+    pub mtval: u32,
+
+    // CLINT-like internal state (minimal)
+    pub mtime: u64,
+    pub mtimecmp: u64,
 }
 
 impl RiscV {
@@ -31,6 +45,54 @@ impl RiscV {
         if n != 0 {
             self.x[n as usize] = val;
         }
+    }
+
+    fn read_csr(&self, csr: u16) -> u32 {
+        match csr {
+            0x300 => self.mstatus,
+            0x304 => self.mie,
+            0x344 => self.mip,
+            0x305 => self.mtvec,
+            0x340 => self.mscratch,
+            0x341 => self.mepc,
+            0x342 => self.mcause,
+            0x343 => self.mtval,
+            // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
+            0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
+            0xB80 => (self.mtime >> 32) as u32,
+            _ => 0,
+        }
+    }
+
+    fn write_csr(&mut self, csr: u16, val: u32) {
+        match csr {
+            0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
+            0x304 => self.mie = val,
+            0x344 => self.mip = val,
+            0x305 => self.mtvec = val,
+            0x340 => self.mscratch = val,
+            0x341 => self.mepc = val,
+            0x342 => self.mcause = val,
+            0x343 => self.mtval = val,
+            _ => {}
+        }
+    }
+
+    fn handle_trap(&mut self, cause: u32, epc: u32) {
+        self.mepc = epc;
+        self.mcause = cause;
+        // mtvec handling (Direct vs Vectored)
+        let mode = self.mtvec & 3;
+        let base = self.mtvec & !3;
+        if mode == 1 && (cause & 0x80000000) != 0 {
+            // Vectored interrupt
+            let irq = cause & 0x7FFFFFFF;
+            self.pc = base + irq * 4;
+        } else {
+            self.pc = base;
+        }
+        // Disable interrupts (saving previous status in MPIE if we supported it fully)
+        self.mstatus &= !(1 << 3); // Clear MIE
     }
 }
 
@@ -251,26 +313,113 @@ impl Cpu for RiscV {
             }
             Instruction::Ecall | Instruction::Ebreak => {
                 // Should trap. For now, we can just log or halt.
-                // Minimal implementation: no-op but maybe set a flag?
                 tracing::warn!("ECALL/EBREAK encountered at {:#x}", self.pc);
+                self.handle_trap(
+                    if instruction == Instruction::Ecall {
+                        11
+                    } else {
+                        3
+                    },
+                    self.pc,
+                );
+                return Ok(());
             }
-            Instruction::Csrrw { rd, rs1, csr }
-            | Instruction::Csrrs { rd, rs1, csr }
-            | Instruction::Csrrc { rd, rs1, csr } => {
-                // CSR stubs: read 0, write ignored.
-                tracing::trace!("CSR access: rd={}, rs1={}, csr={:#x}", rd, rs1, csr);
-                self.write_reg(rd, 0);
+            Instruction::Mret => {
+                // Return from trap
+                self.pc = self.mepc;
+                // mstatus.MIE = mstatus.MPIE. For now we just set MIE=1 if we assume it was enabled.
+                // Simple version:
+                self.mstatus |= 1 << 3; // Re-enable MIE
+                return Ok(());
             }
-            Instruction::Csrrwi { rd, imm, csr }
-            | Instruction::Csrrsi { rd, imm, csr }
-            | Instruction::Csrrci { rd, imm, csr } => {
-                // CSR immediate stubs: read 0, write ignored.
-                tracing::trace!("CSR imm access: rd={}, imm={}, csr={:#x}", rd, imm, csr);
-                self.write_reg(rd, 0);
+            Instruction::Csrrw { rd, rs1, csr } => {
+                let old = self.read_csr(csr);
+                let val = self.read_reg(rs1);
+                self.write_csr(csr, val);
+                if rd != 0 {
+                    self.write_reg(rd, old);
+                }
+            }
+            Instruction::Csrrs { rd, rs1, csr } => {
+                let old = self.read_csr(csr);
+                if rs1 != 0 {
+                    let val = self.read_reg(rs1);
+                    self.write_csr(csr, old | val);
+                }
+                if rd != 0 {
+                    self.write_reg(rd, old);
+                }
+            }
+            Instruction::Csrrc { rd, rs1, csr } => {
+                let old = self.read_csr(csr);
+                if rs1 != 0 {
+                    let val = self.read_reg(rs1);
+                    self.write_csr(csr, old & !val);
+                }
+                if rd != 0 {
+                    self.write_reg(rd, old);
+                }
+            }
+            Instruction::Csrrwi { rd, imm, csr } => {
+                let old = self.read_csr(csr);
+                self.write_csr(csr, imm as u32);
+                if rd != 0 {
+                    self.write_reg(rd, old);
+                }
+            }
+            Instruction::Csrrsi { rd, imm, csr } => {
+                let old = self.read_csr(csr);
+                if imm != 0 {
+                    self.write_csr(csr, old | (imm as u32));
+                }
+                if rd != 0 {
+                    self.write_reg(rd, old);
+                }
+            }
+            Instruction::Csrrci { rd, imm, csr } => {
+                let old = self.read_csr(csr);
+                if imm != 0 {
+                    self.write_csr(csr, old & !(imm as u32));
+                }
+                if rd != 0 {
+                    self.write_reg(rd, old);
+                }
             }
             Instruction::Unknown(inst) => {
                 tracing::error!("Unknown instruction {:#x} at {:#x}", inst, self.pc);
                 return Err(crate::SimulationError::DecodeError(self.pc as u64));
+            }
+        }
+
+        // Timer update (Internal minimal CLINT)
+        self.mtime = self.mtime.wrapping_add(1);
+        if self.mtime >= self.mtimecmp {
+            self.mip |= 1 << 7; // MTIP
+        } else {
+            self.mip &= !(1 << 7);
+        }
+
+        // Check for interrupts
+        if (self.mstatus & (1 << 3)) != 0 {
+            let pending = self.mip & self.mie;
+            if pending != 0 {
+                // Find highest priority interrupt (Simplified: MTIP=7, MSIP=3, MEIP=11)
+                // Priority: External > Software > Timer
+                let irq = if (pending & (1 << 11)) != 0 {
+                    11
+                } else if (pending & (1 << 3)) != 0 {
+                    3
+                } else if (pending & (1 << 7)) != 0 {
+                    7
+                } else {
+                    0xFFFFFFFF // Should not happen
+                };
+
+                if irq != 0xFFFFFFFF {
+                    self.handle_trap(0x80000000 | irq, self.pc);
+                    // Trap taken, next instruction will be handled in trap handler
+                    return Ok(());
+                }
             }
         }
 
@@ -312,7 +461,36 @@ impl Cpu for RiscV {
         crate::snapshot::CpuSnapshot::RiscV(crate::snapshot::RiscVCpuSnapshot {
             registers: self.x.to_vec(),
             pc: self.pc,
+            mstatus: self.mstatus,
+            mie: self.mie,
+            mip: self.mip,
+            mtvec: self.mtvec,
+            mscratch: self.mscratch,
+            mepc: self.mepc,
+            mcause: self.mcause,
+            mtval: self.mtval,
+            mtime: self.mtime,
+            mtimecmp: self.mtimecmp,
         })
+    }
+
+    fn apply_snapshot(&mut self, snapshot: &crate::snapshot::CpuSnapshot) {
+        if let crate::snapshot::CpuSnapshot::RiscV(s) = snapshot {
+            for (i, &val) in s.registers.iter().enumerate().take(32) {
+                self.x[i] = val;
+            }
+            self.pc = s.pc;
+            self.mstatus = s.mstatus;
+            self.mie = s.mie;
+            self.mip = s.mip;
+            self.mtvec = s.mtvec;
+            self.mscratch = s.mscratch;
+            self.mepc = s.mepc;
+            self.mcause = s.mcause;
+            self.mtval = s.mtval;
+            self.mtime = s.mtime;
+            self.mtimecmp = s.mtimecmp;
+        }
     }
 }
 
@@ -417,6 +595,52 @@ mod tests {
 
         // Ensure x3 is still 0
         assert_eq!(machine.cpu.read_reg(3), 0);
+    }
+
+    #[test]
+    fn test_riscv_timer_interrupt() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+
+        cpu.mtvec = 0x2000;
+        cpu.mie = 1 << 7; // MTIE
+        cpu.mstatus = 1 << 3; // MIE
+        cpu.mtimecmp = 5;
+
+        // Reset memory to hold our test program
+        bus.flash.data = vec![0; 0x3000];
+        // 0x0: JAL x0, 0 (Infinite loop)
+        bus.write_u32(0x0, 0x0000006F).unwrap();
+        // 0x2000: ADDI x10, x10, 1
+        bus.write_u32(0x2000, 0x00150513).unwrap();
+        // 0x2004: MRET
+        bus.write_u32(0x2004, 0x30200073).unwrap();
+
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+
+        // Step 1-4: mtime increases from 0->1, 1->2, 2->3, 3->4. No interrupt yet.
+        for i in 0..4 {
+            machine.step().unwrap();
+            assert_eq!(machine.cpu.pc, 0, "Should be in loop at step {}", i);
+        }
+
+        // Step 5: mtime becomes 5, which equals mtimecmp. Trap should be taken.
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x2000, "Trap should jump to mtvec");
+
+        // Step 6: Execute ISR ADDI x10, x10, 1
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.read_reg(10), 1);
+        assert_eq!(machine.cpu.pc, 0x2004);
+
+        // Step 7: Execute MRET
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0, "MRET should return to 0x0");
+        assert!(
+            (machine.cpu.mstatus & (1 << 3)) != 0,
+            "MIE should be re-enabled"
+        );
     }
 
     #[test]

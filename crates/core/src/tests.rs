@@ -1087,7 +1087,7 @@ mod integration_tests {
 
         // Test CLZ (Count Leading Zeros)
         // CLZ R1, R0
-        // h1 = 0xFAB0, h2 = 0xF180
+        // h1 = 0xFAB0, h2 = 0xF180 (for R0, R1)
         machine.cpu.r0 = 0x00000100; // 23 leading zeros
         machine.cpu.pc = 0x0;
         machine.bus.write_u16(0x0, 0xFAB0).unwrap();
@@ -1097,7 +1097,6 @@ mod integration_tests {
 
         // Test RBIT (Reverse Bits)
         // RBIT R2, R0
-        // h1 = 0xFA90, h2 = 0xF2A0
         machine.cpu.r0 = 0x12345678;
         machine.cpu.pc = 0x4;
         machine.bus.write_u16(0x4, 0xFA90).unwrap();
@@ -1107,7 +1106,6 @@ mod integration_tests {
 
         // Test REV (Byte-Reverse Word)
         // REV R3, R0
-        // h1 = 0xFA90, h2 = 0xF380
         machine.cpu.r0 = 0x12345678;
         machine.cpu.pc = 0x8;
         machine.bus.write_u16(0x8, 0xFA90).unwrap();
@@ -1117,13 +1115,66 @@ mod integration_tests {
 
         // Test REV16 (Byte-Reverse Packed Halfword)
         // REV16 R4, R0
-        // h1 = 0xFA90, h2 = 0xF490
         machine.cpu.r0 = 0x12345678;
         machine.cpu.pc = 0xC;
         machine.bus.write_u16(0xC, 0xFA90).unwrap();
         machine.bus.write_u16(0xE, 0xF490).unwrap();
         machine.step().unwrap();
         assert_eq!(machine.cpu.r4, 0x34127856); // Halfwords byte-reversed
+
+        // Test REVSH (Reverse byte order in lower halfword, sign extend)
+        // REVSH R5, R0
+        // h1 = 0xFA90 (Rm=0 in bits 3:0)
+        // h2: 1111 dddd 1011 mmmm where dddd=Rd=5, mmmm=Rm=0
+        // h2 = 0xF5B0
+        machine.cpu.r0 = 0x1234ABCD;
+        machine.cpu.pc = 0x10;
+        machine.bus.write_u16(0x10, 0xFA90).unwrap();
+        machine.bus.write_u16(0x12, 0xF5B0).unwrap();
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.r5, 0xFFFFCDAB);
+    }
+
+    #[test]
+    fn test_bitfield_instructions() {
+        let mut machine: Machine<CortexM> = create_machine();
+
+        // 1. BFI R0, R1, #4, #8
+        // Rd=0, Rn=1, lsb=4, width=8. msb=11.
+        // imm3=1, imm2=0, msb=11 (0x0B). h2 = 0x100B.
+        machine.cpu.r0 = 0xFFFF_FFFF;
+        machine.cpu.r1 = 0x0000_00AB;
+        machine.cpu.pc = 0x0;
+        machine.bus.write_u16(0x0, 0xF361).unwrap();
+        machine.bus.write_u16(0x2, 0x100B).unwrap();
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.r0, 0xFFFFFABF);
+
+        // 2. BFC R2, #8, #16
+        // Rd=2, lsb=8, width=16. msb=23 (0x17).
+        machine.cpu.r2 = 0xFFFF_FFFF;
+        machine.cpu.pc = 0x4;
+        machine.bus.write_u16(0x4, 0xF36F).unwrap();
+        machine.bus.write_u16(0x6, 0x2217).unwrap();
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.r2, 0xFF0000FF);
+
+        // 3. UBFX R3, R4, #4, #8
+        machine.cpu.r4 = 0x0000_ABCD;
+        machine.cpu.pc = 0x8;
+        machine.bus.write_u16(0x8, 0xF3C4).unwrap();
+        machine.bus.write_u16(0xA, 0x1307).unwrap();
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.r3, 0xBC);
+
+        // 4. SBFX R5, R6, #4, #8
+        // R6 binary: ... 1010 1000 0000. Bits 11:4 = 0xA8.
+        machine.cpu.r6 = 0x0000_0A80;
+        machine.cpu.pc = 0xC;
+        machine.bus.write_u16(0xC, 0xF346).unwrap();
+        machine.bus.write_u16(0xE, 0x1507).unwrap();
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.r5, 0xFFFFFFA8);
     }
 
     #[test]

@@ -34,4 +34,16 @@ pub struct ArmCpuSnapshot {
 pub struct RiscVCpuSnapshot {
     pub registers: Vec<u32>,
     pub pc: u32,
+
+    pub mstatus: u32,
+    pub mie: u32,
+    pub mip: u32,
+    pub mtvec: u32,
+    pub mscratch: u32,
+    pub mepc: u32,
+    pub mcause: u32,
+    pub mtval: u32,
+
+    pub mtime: u64,
+    pub mtimecmp: u64,
 }
