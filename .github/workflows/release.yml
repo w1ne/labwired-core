@@ -12,33 +12,71 @@ on:
       - 'v*'
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  build-release:
+    name: Build Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: labwired
+            asset_name: labwired-linux-x64.tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: labwired
+            asset_name: labwired-macos-x64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: labwired.exe
+            asset_name: labwired-windows-x64.zip
+
     steps:
       - uses: actions/checkout@v3
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: thumbv7m-none-eabi
+          targets: ${{ matrix.target }}
 
-      - name: Run Tests
-        run: cargo test --workspace --release --verbose
+      - name: Build CLI
+        run: cargo build -p labwired-cli --release --target ${{ matrix.target }}
+        working-directory: core
 
-      - name: Build (Host)
-        run: cargo build --workspace --exclude firmware --exclude firmware-ci-fixture --release --verbose
+      - name: Build SVD Ingestor
+        run: cargo build -p svd-ingestor --release --target ${{ matrix.target }}
+        working-directory: core
 
-      - name: Build (Firmware)
-        run: cargo build -p firmware --target thumbv7m-none-eabi --release --verbose
-
-      - name: Create Archive
+      - name: Package (Linux/macOS)
+        if: matrix.os != 'windows-latest'
         run: |
-          tar -czf labwired-linux-x64.tar.gz -C target/release labwired
+          tar -czf ${{ matrix.asset_name }} -C target/${{ matrix.target }}/release ${{ matrix.artifact_name }} svd-ingestor
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          powershell Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.artifact_name }}, target/${{ matrix.target }}/release/svd-ingestor.exe -DestinationPath ${{ matrix.asset_name }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-assets
+          path: ${{ matrix.asset_name }}
+
+  create-release:
+    needs: build-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: release-assets
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: labwired-linux-x64.tar.gz
+          files: |
+            *.tar.gz
+            *.zip
           generate_release_notes: true

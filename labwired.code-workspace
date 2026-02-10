@@ -1,0 +1,94 @@
+{
+    "folders": [
+        {
+            "name": "LabWired (Root)",
+            "path": "."
+        },
+        {
+            "name": "arm-c-hello",
+            "path": "examples/arm-c-hello"
+        }
+    ],
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "LabWired: arm-c-hello (Built-in DAP)",
+                "type": "labwired",
+                "request": "launch",
+                "program": "${workspaceFolder}/examples/arm-c-hello/target/firmware",
+                "systemConfig": "${workspaceFolder}/examples/arm-c-hello/system.yaml",
+                "stopOnEntry": true,
+                "preLaunchTask": "Build arm-c-hello"
+            },
+            {
+                "name": "LabWired: arm-c-hello (Cortex-Debug)",
+                "type": "cortex-debug",
+                "request": "attach",
+                "servertype": "external",
+                "gdbTarget": "localhost:3333",
+                "executable": "${workspaceFolder}/examples/arm-c-hello/target/firmware",
+                "cwd": "${workspaceFolder}/examples/arm-c-hello",
+                "device": "STM32F103",
+                "interface": "swd",
+                "runToEntryPoint": "_start",
+                "showDevDebugOutput": "raw",
+                "preLaunchTask": "Build and Start DAP Server (arm-c-hello)"
+            }
+        ]
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "Build arm-c-hello",
+                "type": "shell",
+                "command": "make",
+                "options": {
+                    "cwd": "${workspaceFolder}/examples/arm-c-hello"
+                },
+                "group": {
+                    "kind": "build",
+                    "isDefault": true
+                },
+                "problemMatcher": []
+            },
+            {
+                "label": "Start DAP Server (arm-c-hello)",
+                "type": "shell",
+                "command": "cargo",
+                "args": [
+                    "run",
+                    "-p",
+                    "labwired-dap",
+                    "--",
+                    "--program",
+                    "${workspaceFolder}/examples/arm-c-hello/target/firmware",
+                    "--system",
+                    "${workspaceFolder}/examples/arm-c-hello/system.yaml"
+                ],
+                "isBackground": true,
+                "problemMatcher": {
+                    "pattern": {
+                        "regexp": "^(.*)$",
+                        "file": 1
+                    },
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": ".*",
+                        "endsPattern": "GDB Server listening.*"
+                    }
+                }
+            },
+            {
+                "label": "Build and Start DAP Server (arm-c-hello)",
+                "dependsOrder": "sequence",
+                "dependsOn": [
+                    "Build arm-c-hello",
+                    "Start DAP Server (arm-c-hello)"
+                ],
+                "problemMatcher": []
+            }
+        ]
+    }
+}

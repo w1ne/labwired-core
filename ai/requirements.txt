@@ -1,0 +1,12 @@
+# LabWired AI Dependencies
+
+# Core
+pyyaml>=6.0
+pydantic>=2.0
+
+# LLM / VLM
+openai>=1.0.0
+# anthropic>=0.3.0
+
+# PDF Processing
+pypdf>=3.0.0
