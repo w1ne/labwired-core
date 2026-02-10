@@ -2,6 +2,7 @@
     "name": "labwired-vscode",
     "displayName": "LabWired Debugger",
     "version": "0.11.1",
+    "license": "MIT",
     "publisher": "w1ne",
     "description": "LabWired Debug Adapter for VS Code",
     "engines": {
