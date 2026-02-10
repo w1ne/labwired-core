@@ -13,8 +13,10 @@ on:
       - develop
     paths:
       - 'vscode/**'
+  workflow_dispatch:
 
 defaults:
+
   run:
     working-directory: ./vscode
 
