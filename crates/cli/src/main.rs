@@ -84,7 +84,34 @@ enum Commands {
 
     /// Machine control operations (load, etc.)
     Machine(MachineArgs),
+
+    /// Utilities for Asset Foundry
+    Asset(AssetArgs),
 }
+
+#[derive(Parser, Debug)]
+pub struct AssetArgs {
+    #[command(subcommand)]
+    pub command: AssetCommands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AssetCommands {
+    /// Import an SVD file and convert it to Strict IR (JSON).
+    ImportSvd(ImportSvdArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct ImportSvdArgs {
+    /// Path to the input SVD file
+    #[arg(short, long)]
+    pub input: PathBuf,
+
+    /// Path to the output JSON file
+    #[arg(short, long)]
+    pub output: PathBuf,
+}
+
 
 #[derive(Parser, Debug)]
 pub struct MachineArgs {
@@ -368,9 +395,61 @@ fn main() -> ExitCode {
     match cli.command {
         Some(Commands::Test(args)) => run_test(args),
         Some(Commands::Machine(args)) => run_machine(args),
+        Some(Commands::Asset(args)) => run_asset(args),
         None => run_interactive(cli),
     }
 }
+
+fn run_asset(args: AssetArgs) -> ExitCode {
+    match args.command {
+        AssetCommands::ImportSvd(a) => run_import_svd(a),
+    }
+}
+
+fn run_import_svd(args: ImportSvdArgs) -> ExitCode {
+    info!("Importing SVD from {:?}", args.input);
+
+    let xml = match std::fs::read_to_string(&args.input) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to read SVD file: {}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let svd = match svd_parser::parse(&xml) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to parse SVD XML: {}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let device = match labwired_ir::IrDevice::from_svd(&svd) {
+        Ok(d) => d,
+        Err(e) => {
+             error!("Failed to convert to Strict IR: {}", e);
+             return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let file = match std::fs::File::create(&args.output) {
+        Ok(f) => f,
+        Err(e) => {
+            error!("Failed to create output file: {}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    if let Err(e) = serde_json::to_writer_pretty(file, &device) {
+        error!("Failed to write JSON: {}", e);
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    info!("Successfully wrote Strict IR to {:?}", args.output);
+    ExitCode::from(EXIT_PASS)
+}
+
 
 fn run_interactive(cli: Cli) -> ExitCode {
     info!("Starting LabWired Simulator");

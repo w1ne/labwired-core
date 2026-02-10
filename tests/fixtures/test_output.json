@@ -1,0 +1,112 @@
+{
+  "name": "ADVANCED_DEVICE",
+  "description": "",
+  "peripherals": {
+    "TIMER_BASE": {
+      "name": "TIMER_BASE",
+      "base_address": 1073745920,
+      "description": null,
+      "registers": [
+        {
+          "name": "CR",
+          "offset": 0,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": "Control Register"
+        }
+      ],
+      "interrupts": []
+    },
+    "TIMER1": {
+      "name": "TIMER1",
+      "base_address": 1073750016,
+      "description": null,
+      "registers": [
+        {
+          "name": "CR",
+          "offset": 0,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": "Control Register"
+        },
+        {
+          "name": "SR",
+          "offset": 4,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [],
+          "description": "Status Register"
+        }
+      ],
+      "interrupts": []
+    },
+    "CLUSTERS": {
+      "name": "CLUSTERS",
+      "base_address": 1073754112,
+      "description": null,
+      "registers": [
+        {
+          "name": "GRP0_REG",
+          "offset": 0,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": null
+        },
+        {
+          "name": "GRP0_REGS0",
+          "offset": 4,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": null
+        },
+        {
+          "name": "GRP0_REGS1",
+          "offset": 8,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": null
+        },
+        {
+          "name": "GRP1_REG",
+          "offset": 16,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": null
+        },
+        {
+          "name": "GRP1_REGS0",
+          "offset": 20,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": null
+        },
+        {
+          "name": "GRP1_REGS1",
+          "offset": 24,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "description": null
+        }
+      ],
+      "interrupts": []
+    }
+  },
+  "interrupt_mapping": {}
+}
