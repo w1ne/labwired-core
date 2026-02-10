@@ -1,0 +1,131 @@
+body {
+    background-color: var(--vscode-sideBar-background);
+    color: var(--vscode-sideBar-foreground);
+    font-family: var(--vscode-font-family);
+    padding: 10px;
+    margin: 0;
+    overflow-x: hidden;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--vscode-widget-border);
+    padding-bottom: 8px;
+}
+
+h1 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+h3 {
+    font-size: 0.8rem;
+    margin: 0 0 5px 0;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.full-width {
+    grid-column: 1 / -1;
+}
+
+.reg-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.reg-item {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.75rem;
+    border-bottom: 1px solid var(--vscode-widget-border);
+    padding-bottom: 2px;
+}
+
+.reg-name {
+    opacity: 0.6;
+    font-size: 0.65rem;
+}
+
+.reg-value {
+    color: var(--vscode-terminal-ansiYellow);
+}
+
+.badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: #2ea043;
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.card {
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.value {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--vscode-terminal-ansiBrightBlue);
+}
+
+.chart-container {
+    height: 120px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.log-container {
+    flex-grow: 1;
+}
+
+.log {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8rem;
+    padding: 8px;
+    border-radius: 4px;
+    height: 150px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}

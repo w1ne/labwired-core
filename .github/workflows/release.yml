@@ -41,9 +41,11 @@ jobs:
 
       - name: Build CLI
         run: cargo build -p labwired-cli --release --target ${{ matrix.target }}
+        working-directory: core
 
       - name: Build SVD Ingestor
         run: cargo build -p svd-ingestor --release --target ${{ matrix.target }}
+        working-directory: core
 
       - name: Package (Linux/macOS)
         if: matrix.os != 'windows-latest'

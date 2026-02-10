@@ -44,18 +44,23 @@ jobs:
 
     - name: Check Formatting
       run: cargo fmt --all -- --check
+      working-directory: core
 
     - name: Clippy (Host)
       run: cargo clippy --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture -- -D warnings
+      working-directory: core
 
     - name: Clippy (Firmware)
       run: cargo clippy -p firmware --target thumbv7m-none-eabi -- -D warnings
+      working-directory: core
 
     - name: Clippy (CI Fixture ARM)
       run: cargo clippy -p firmware-ci-fixture --target thumbv6m-none-eabi -- -D warnings
+      working-directory: core
 
     - name: Clippy (CI Fixture RISC-V)
       run: cargo clippy -p riscv-ci-fixture --target riscv32i-unknown-none-elf -- -D warnings
+      working-directory: core
 
     # - name: Security Audit
     #   uses: rustsec/audit-check@v2.0.0
@@ -64,27 +69,34 @@ jobs:
 
     - name: Build (Host)
       run: cargo build --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture --verbose
+      working-directory: core
 
     - name: Build (Firmware ARM)
       run: cargo build -p firmware --target thumbv7m-none-eabi --verbose
+      working-directory: core
 
     - name: Build (CI Fixture ARM)
       run: cargo build -p firmware-ci-fixture --target thumbv6m-none-eabi --release --verbose
+      working-directory: core
 
     - name: Build (CI Fixture RISC-V)
       run: cargo build -p riscv-ci-fixture --target riscv32i-unknown-none-elf --release --verbose
+      working-directory: core
 
     - name: Check Formatting
       run: cargo fmt --all -- --check
+      working-directory: core
 
     - name: Run Tests
       run: cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture --verbose
+      working-directory: core
 
     - name: Test Coverage
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         cargo install cargo-tarpaulin --locked
         cargo tarpaulin --out Xml
+      working-directory: core
 
   ci-test-runner:
     name: CI Test Runner (labwired test)
@@ -105,6 +117,10 @@ jobs:
           - arch: riscv
             script: examples/ci/riscv-uart-ok.yaml
             firmware: ""
+    defaults:
+      run:
+        working-directory: core
+
     steps:
       - uses: actions/checkout@v4
 
@@ -117,7 +133,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            . -> target
+            core -> target
 
       - name: Build Fixture
         run: |
@@ -156,3 +172,41 @@ jobs:
         run: |
           echo "labwired test failed with exit_code=${{ steps.labwired.outputs.exit_code }}"
           exit ${{ steps.labwired.outputs.exit_code }}
+
+  debugger-regression:
+    name: Debugger Regression (DAP & GDB)
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/develop' || github.event_name != 'push'
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi, thumbv7m-none-eabi
+
+      - name: Install Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi qemu-user-static
+        working-directory: . # apt install doesn't care about working dir
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            core -> target
+
+      - name: Build DAP and Examples
+        run: |
+          cargo build -p labwired-dap
+          make -C examples/arm-c-hello
+
+      - name: Run DAP Pro Tests
+        run: python3 scripts/test_pro_debugger.py
+
+      - name: Run GDB RSP Tests
+        run: python3 scripts/test_gdb_rsp.py

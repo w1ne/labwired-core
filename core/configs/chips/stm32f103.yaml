@@ -1,0 +1,66 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: "stm32f103c8"
+arch: "arm"
+flash:
+  base: 0x00000000
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 37
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+  - id: "afio"
+    type: "afio"
+    base_address: 0x40010000
+    size: "1KB"
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
