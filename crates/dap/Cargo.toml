@@ -1,0 +1,24 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+[package]
+name = "labwired-dap"
+version = "0.11.0"
+edition = "2021"
+
+[dependencies]
+labwired-core = { path = "../core" }
+labwired-loader = { path = "../loader" }
+labwired-config = { path = "../config" }
+dap = "0.4.1-alpha1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+crossbeam-channel = "0.5" # For event handling
+base64 = "0.21"

@@ -1,0 +1,11 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Clippy configuration file
+# See https://doc.rust-lang.org/clippy/configuration.html for options
+
+# Example:
+# allow-unwrap-in-tests = true

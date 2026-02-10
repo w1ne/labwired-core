@@ -1,0 +1,19 @@
+#!/bin/sh
+#
+# Pre-commit hook to ensure Rust code is formatted and clean.
+#
+
+echo "Running cargo fmt --all -- --check..."
+if ! cargo fmt --all -- --check; then
+    echo "Error: Formatting check failed. Run 'cargo fmt' to fix."
+    exit 1
+fi
+
+echo "Running cargo clippy -- -D warnings..."
+if ! cargo clippy -- -D warnings; then
+    echo "Error: Clippy check failed. Fix warnings before committing."
+    exit 1
+fi
+
+echo "All checks passed!"
+exit 0

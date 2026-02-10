@@ -1,0 +1,1 @@
+/home/andrii/Projects/labwired/crates/firmware-hal-test/target/thumbv7m-none-eabi/release/firmware-hal-test: /home/andrii/Projects/labwired/crates/firmware-hal-test/build.rs /home/andrii/Projects/labwired/crates/firmware-hal-test/memory.x /home/andrii/Projects/labwired/crates/firmware-hal-test/src/main.rs

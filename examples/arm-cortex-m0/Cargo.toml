@@ -1,0 +1,11 @@
+[package]
+name = "arm-hello"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2.0"
+
+[[bin]]
+name = "firmware"
+path = "src/main.rs"

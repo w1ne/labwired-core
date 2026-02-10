@@ -1,0 +1,53 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Multi-stage Dockerfile optimized for CI/CD usage
+# Produces a minimal image containing only the labwired CLI binary
+
+# Stage 1: Builder
+FROM rust:1.93-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy all source code
+COPY . .
+
+# Build the CLI binary
+RUN cargo build --release -p labwired-cli --locked
+
+# Stage 2: Runtime
+FROM debian:bookworm-slim
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN useradd -m -u 1000 -s /bin/bash labwired
+
+# Copy the binary from builder
+COPY --from=builder /build/target/release/labwired /usr/local/bin/labwired
+
+# Set ownership
+RUN chown labwired:labwired /usr/local/bin/labwired
+
+# Switch to non-root user
+USER labwired
+WORKDIR /workspace
+
+# Verify the binary works
+RUN labwired --version
+
+# Default command shows help
+ENTRYPOINT ["labwired"]
+CMD ["--help"]

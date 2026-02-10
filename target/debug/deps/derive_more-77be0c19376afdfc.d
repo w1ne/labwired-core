@@ -1,0 +1,11 @@
+/home/andrii/Projects/labwired/core/target/debug/deps/derive_more-77be0c19376afdfc.d: /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/lib.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/syn_compat.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/utils.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/display.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/error.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/from.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/parsing.rs
+
+/home/andrii/Projects/labwired/core/target/debug/deps/libderive_more-77be0c19376afdfc.so: /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/lib.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/syn_compat.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/utils.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/display.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/error.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/from.rs /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/parsing.rs
+
+/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/lib.rs:
+/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/syn_compat.rs:
+/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/utils.rs:
+/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/display.rs:
+/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/error.rs:
+/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/from.rs:
+/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.20/src/parsing.rs:

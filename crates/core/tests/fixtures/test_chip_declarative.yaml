@@ -1,0 +1,15 @@
+name: "TestChip"
+arch: "arm"
+flash:
+  base: 0x08000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "TIMER1"
+    type: "declarative"
+    base_address: 0x40001000
+    size: "1KB"
+    config:
+      path: "tests/fixtures/test_timer_descriptor.yaml"
