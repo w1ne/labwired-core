@@ -1,0 +1,34 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+    -   id: check-yaml
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+    -   id: check-added-large-files
+
+-   repo: local
+    hooks:
+    -   id: cargo-fmt
+        name: cargo fmt
+        description: Check formatting with cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+    -   id: cargo-clippy
+        name: cargo clippy
+        description: Run clippy on the workspace
+        entry: cargo clippy --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+    -   id: cargo-check
+        name: cargo check
+        description: Run cargo check on the workspace
+        entry: cargo check --workspace --exclude firmware --exclude firmware-ci-fixture
+        language: system
+        types: [rust]
+        pass_filenames: false
