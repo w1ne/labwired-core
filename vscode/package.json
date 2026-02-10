@@ -36,18 +36,68 @@
                             },
                             "system": {
                                 "type": "string",
-                                "description": "Path to the system configuration YAML",
+                                "description": "Path to the system configuration YAML (defines memory map, peripherals)",
                                 "default": "${workspaceFolder}/system.yaml"
                             },
                             "stopOnEntry": {
                                 "type": "boolean",
-                                "description": "Stop at the entry point after launch",
+                                "description": "Automatically stop at the entry point after launch",
                                 "default": true
                             },
                             "cwd": {
                                 "type": "string",
                                 "description": "Working directory for the simulation",
                                 "default": "${workspaceFolder}"
+                            },
+                            "args": {
+                                "type": "array",
+                                "description": "Command line arguments passed to the program",
+                                "default": [],
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "env": {
+                                "type": "object",
+                                "description": "Environment variables passed to the program",
+                                "default": {}
+                            },
+                            "trace": {
+                                "type": "boolean",
+                                "description": "Enable verbose DAP logging",
+                                "default": false
+                            }
+                        }
+                    },
+                    "executionMode": {
+                        "type": "string",
+                        "enum": [
+                            "local",
+                            "docker"
+                        ],
+                        "default": "local",
+                        "description": "Where to run the simulation and debugger."
+                    },
+                    "docker": {
+                        "type": "object",
+                        "properties": {
+                            "image": {
+                                "type": "string",
+                                "default": "w1ne/labwired-dev:latest",
+                                "description": "Docker image to use for simulation and building."
+                            },
+                            "autoPull": {
+                                "type": "boolean",
+                                "default": true,
+                                "description": "Automatically pull the Docker image if missing."
+                            },
+                            "runArgs": {
+                                "type": "array",
+                                "default": [],
+                                "description": "Additional arguments for 'docker run'.",
+                                "items": {
+                                    "type": "string"
+                                }
                             }
                         }
                     }
@@ -57,7 +107,16 @@
                         "type": "labwired",
                         "request": "launch",
                         "name": "LabWired: Launch",
-                        "program": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/firmware"
+                        "program": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/firmware",
+                        "stopOnEntry": true
+                    },
+                    {
+                        "type": "labwired",
+                        "request": "launch",
+                        "name": "LabWired: Launch with System Config",
+                        "program": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/firmware",
+                        "system": "${workspaceFolder}/system.yaml",
+                        "stopOnEntry": true
                     }
                 ]
             }
@@ -117,11 +176,17 @@
     "scripts": {
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./"
+        "watch": "tsc -watch -p ./",
+        "test": "npm run compile && node ./out/test/runTest.js"
     },
     "devDependencies": {
+        "@types/glob": "^8.1.0",
+        "@types/mocha": "^10.0.1",
         "@types/node": "^16.x",
         "@types/vscode": "^1.75.0",
+        "@vscode/test-electron": "^2.3.0",
+        "glob": "^8.1.0",
+        "mocha": "^10.2.0",
         "typescript": "^4.9.5"
     }
 }

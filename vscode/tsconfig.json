@@ -8,7 +8,11 @@
         ],
         "sourceMap": true,
         "rootDir": "src",
-        "strict": true
+        "strict": true,
+        "types": [
+            "mocha",
+            "node"
+        ]
     },
     "exclude": [
         "node_modules",

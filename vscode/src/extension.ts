@@ -8,6 +8,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { LabwiredDashboardProvider } from './dashboard';
 import { TimelinePanel } from './timeline';
+import { DockerManager } from './docker';
+
 
 class LabwiredConfigurationProvider implements vscode.DebugConfigurationProvider {
     constructor(private readonly output: vscode.OutputChannel) { }
@@ -67,14 +69,75 @@ class LabwiredConfigurationProvider implements vscode.DebugConfigurationProvider
 }
 
 class LabwiredDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
-    constructor(private readonly output: vscode.OutputChannel) { }
+    constructor(
+        private readonly context: vscode.ExtensionContext,
+        private readonly output: vscode.OutputChannel
+    ) { }
 
-    createDebugAdapterDescriptor(session: vscode.DebugSession, executable: vscode.DebugAdapterExecutable | undefined): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
+    async createDebugAdapterDescriptor(session: vscode.DebugSession, executable: vscode.DebugAdapterExecutable | undefined): Promise<vscode.DebugAdapterDescriptor> {
         this.output.appendLine("LabWired: Creating Debug Adapter Descriptor...");
 
-        // For development, use the absolute path we know works
-        const dapPath = "/home/andrii/Projects/labwired/core/target/release/labwired-dap";
+        // 1. Check User Config
+        const config = vscode.workspace.getConfiguration('labwired');
+        const executionMode = config.get<string>('executionMode') || 'local';
+
+        if (executionMode === 'docker') {
+            const dockerImage = config.get<string>('docker.image') || 'w1ne/labwired-dev:latest';
+            const dockerArgs = config.get<string[]>('docker.runArgs') || [];
+            const dockerManager = new DockerManager(this.output);
+
+            const workspaceFolder = session.workspaceFolder;
+            if (!workspaceFolder) {
+                throw new Error("Debugging in Docker requires an open workspace.");
+            }
+
+            // Ensure image exists
+            if (!await dockerManager.imageExists(dockerImage)) {
+                const selection = await vscode.window.showErrorMessage(`Docker image '${dockerImage}' not found. Pull it now?`, 'Yes', 'No');
+                if (selection === 'Yes') {
+                    await dockerManager.pullImage(dockerImage);
+                } else {
+                    throw new Error("Docker image missing.");
+                }
+            }
+
+            this.output.appendLine(`LabWired: Starting DAP in Docker container (${dockerImage})...`);
+
+            const args = dockerManager.getDapArgs(dockerImage, workspaceFolder.uri.fsPath, dockerArgs);
+            // The first arg is 'run', but DebugAdapterExecutable expects the command as first arg.
+            // Actually, we want to run 'docker'.
+            return new vscode.DebugAdapterExecutable('docker', args);
+        }
+
+        let dapPath = config.get<string>('dapPath');
+
+        // 2. Check Bundled Binary (Local Mode)
+        if (!dapPath) {
+            const extPath = this.context.extensionUri.fsPath;
+            // Determine platform extension
+            const isWin = process.platform === 'win32';
+            const binName = isWin ? 'labwired-dap.exe' : 'labwired-dap';
+
+            // Check potential locations (dist/bin or bin)
+            const bundledPath = path.join(extPath, 'dist', 'bin', binName);
+            const devPath = path.join(extPath, 'bin', binName);
+
+            if (await fileExists(bundledPath)) {
+                dapPath = bundledPath;
+            } else if (await fileExists(devPath)) {
+                dapPath = devPath;
+            } else {
+                // FALLBACK for Dev Environment (hardcoded for now to keep existing flow working if binary not bundled yet)
+                dapPath = "/home/andrii/Projects/labwired/core/target/release/labwired-dap";
+            }
+        }
+
         this.output.appendLine(`LabWired: Using DAP binary at ${dapPath}`);
+
+        if (!await fileExists(dapPath)) {
+            vscode.window.showErrorMessage(`LabWired: DAP binary not found at ${dapPath}. Please check your settings or reinstall the extension.`);
+            throw new Error(`DAP binary not found at ${dapPath}`);
+        }
 
         return new vscode.DebugAdapterExecutable(dapPath, []);
     }
@@ -101,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
     const factory = new LabwiredConfigurationProvider(outputChannel);
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('labwired', factory));
 
-    const adapterFactory = new LabwiredDebugAdapterDescriptorFactory(outputChannel);
+    const adapterFactory = new LabwiredDebugAdapterDescriptorFactory(context, outputChannel);
     context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('labwired', adapterFactory));
 
     // Handle Telemetry Events
@@ -132,6 +195,31 @@ export function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`ERROR: ${e}`);
         }
     }));
+
+
+
+    // Check Docker Image on Startup if needed
+    const config = vscode.workspace.getConfiguration('labwired');
+    if (config.get<string>('executionMode') === 'docker' && config.get<boolean>('docker.autoPull')) {
+        const image = config.get<string>('docker.image') || 'w1ne/labwired-dev:latest';
+        const dockerManager = new DockerManager(outputChannel);
+        dockerManager.imageExists(image).then(exists => {
+            if (!exists) {
+                vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: `LabWired: Pulling Docker image ${image}...`,
+                    cancellable: false
+                }, async () => {
+                    try {
+                        await dockerManager.pullImage(image);
+                        vscode.window.showInformationMessage(`LabWired: Docker image ${image} ready.`);
+                    } catch (e) {
+                        vscode.window.showErrorMessage(`LabWired: Failed to pull Docker image: ${e}`);
+                    }
+                });
+            }
+        });
+    }
 
     context.subscriptions.push(vscode.commands.registerCommand('labwired.showDashboard', () => {
         vscode.commands.executeCommand('labwired.dashboard.focus');
@@ -183,6 +271,8 @@ async function compileAndRun(outputChannel: vscode.OutputChannel) {
 
     // 2. Build
     outputChannel.show();
+
+    // Local Build
     outputChannel.appendLine(`LabWired: Building ${projectType} project in ${rootPath}...`);
 
     await vscode.window.withProgress({
@@ -240,6 +330,8 @@ async function compileAndRun(outputChannel: vscode.OutputChannel) {
         vscode.window.showErrorMessage("LabWired: Debug session failed to start. Check LabWired Output for details.");
     }
 }
+
+
 
 async function fileExists(filePath: string): Promise<boolean> {
     try {
