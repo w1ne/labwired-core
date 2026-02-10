@@ -265,3 +265,141 @@ fn map_access(access: Option<Access>) -> IrAccess {
         None => IrAccess::ReadWrite, // Default reasonable assumption
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use svd_parser::svd::{self, RegisterCluster, Register};
+
+    fn create_mock_register(name: &str, offset: u32) -> Register {
+        Register::Single(svd::RegisterInfo {
+            name: name.to_string(),
+            address_offset: offset,
+            description: None,
+            properties: svd::RegisterProperties::default(),
+            fields: None,
+            write_constraint: None,
+            read_action: None,
+            modified_write_values: None,
+            display_name: None,
+            alternate_group: None,
+            alternate_register: None,
+            derived_from: None,
+        })
+    }
+
+    fn create_mock_peripheral(name: &str, base: u64) -> svd::Peripheral {
+        svd::Peripheral {
+            name: name.to_string(),
+            base_address: base,
+            description: None,
+            group_name: None,
+            prepend_to_name: None,
+            append_to_name: None,
+            header_struct_name: None,
+            disable_condition: None,
+            derived_from: None,
+            registers: Some(vec![]),
+            interrupt: vec![],
+            default_register_properties: svd::RegisterProperties::default(),
+        }
+    }
+
+    #[test]
+    fn test_flatten_basic_register() {
+        let mut out = Vec::new();
+        let reg = create_mock_register("CR", 0x00);
+        let rc = RegisterCluster::Register(reg);
+        
+        flatten_cluster(&rc, 0, "", &mut out).unwrap();
+        
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "CR");
+        assert_eq!(out[0].offset, 0x00);
+    }
+
+    #[test]
+    fn test_flatten_register_array() {
+        let mut out = Vec::new();
+        let info = svd::RegisterInfo {
+            name: "REG[%s]".to_string(),
+            address_offset: 0x00,
+            description: None,
+            properties: svd::RegisterProperties::default(),
+            fields: None,
+            write_constraint: None,
+            read_action: None,
+            modified_write_values: None,
+            display_name: None,
+            alternate_group: None,
+            alternate_register: None,
+            derived_from: None,
+        };
+        let dim = svd::DimElement {
+            dim: 3,
+            dim_increment: 0x4,
+            dim_index: None,
+            dim_name: None,
+            dim_array_index: None, 
+        };
+        
+        let rc = RegisterCluster::Register(Register::Array(info, dim));
+        flatten_cluster(&rc, 0x1000, "PERIPH_", &mut out).unwrap();
+
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0].name, "PERIPH_REG0");
+        assert_eq!(out[0].offset, 0x1000); // 0x1000 + 0
+        assert_eq!(out[1].name, "PERIPH_REG1");
+        assert_eq!(out[1].offset, 0x1004); // 0x1000 + 4
+        assert_eq!(out[2].name, "PERIPH_REG2");
+        assert_eq!(out[2].offset, 0x1008); // 0x1000 + 8
+    }
+    
+    #[test]
+    fn test_inheritance_resolution() {
+        // Mock SVD structure
+        // PARENT: [CR @ 0x00]
+        // CHILD matches PARENT but adds [SR @ 0x04]
+        
+        let mut parent = create_mock_peripheral("PARENT", 0x1000);
+        parent.registers = Some(vec![
+            RegisterCluster::Register(create_mock_register("CR", 0x00))
+        ]);
+
+        let mut child = create_mock_peripheral("CHILD", 0x2000);
+        child.derived_from = Some("PARENT".to_string());
+        child.registers = Some(vec![
+            RegisterCluster::Register(create_mock_register("SR", 0x04))
+        ]);
+
+        let device = svd::Device {
+            name: "TEST".to_string(),
+            peripherals: vec![parent, child],
+            description: String::new(),
+            address_unit_bits: 8,
+            width: 32,
+            default_register_properties: svd::RegisterProperties::default(),
+            cpu: None,
+            header_system_filename: None,
+            header_definitions_prefix: None,
+            vendor: None,
+            vendor_id: None,
+            series: None,
+            license_text: None,
+            schema_version: None,
+            no_namespace_schema_location: None,
+        };
+
+        let ir = IrDevice::from_svd(&device).unwrap();
+        
+        let child_ir = &ir.peripherals["CHILD"];
+        assert_eq!(child_ir.base_address, 0x2000);
+        assert_eq!(child_ir.registers.len(), 2);
+        
+        let cr = child_ir.registers.iter().find(|r| r.name == "CR").expect("CR not found in CHILD");
+        assert_eq!(cr.offset, 0x00); // Relative offset preserved
+        
+        let sr = child_ir.registers.iter().find(|r| r.name == "SR").expect("SR not found in CHILD");
+        assert_eq!(sr.offset, 0x04);
+    }
+}
