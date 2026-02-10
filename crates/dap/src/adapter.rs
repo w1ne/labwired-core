@@ -4,15 +4,15 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::trace::{InstructionTrace, TraceBuffer};
 use anyhow::{anyhow, Result};
 use labwired_core::{DebugControl, Machine};
 use labwired_loader::SymbolProvider;
 use serde::Serialize;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use crate::trace::{TraceBuffer, InstructionTrace};
 
 #[derive(Clone, Serialize)]
 pub struct TelemetryData {
@@ -156,7 +156,11 @@ impl LabwiredAdapter {
     }
 
     pub fn lookup_source_reverse(&self, path: &str, line: u32) -> Option<u64> {
-        self.symbols.lock().unwrap().as_ref()?.location_to_pc(path, line)
+        self.symbols
+            .lock()
+            .unwrap()
+            .as_ref()?
+            .location_to_pc(path, line)
     }
 
     pub fn get_pc(&self) -> Result<u32> {
@@ -200,7 +204,9 @@ impl LabwiredAdapter {
     pub fn reset(&self) -> Result<()> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
-            machine.reset().map_err(|e| anyhow!("Reset failed: {:?}", e))
+            machine
+                .reset()
+                .map_err(|e| anyhow!("Reset failed: {:?}", e))
         } else {
             Err(anyhow!("Machine not initialized"))
         }
@@ -273,7 +279,8 @@ impl LabwiredAdapter {
     /// Get instruction trace for a specific cycle range
     pub fn get_instruction_trace(&self, start_cycle: u64, end_cycle: u64) -> Vec<InstructionTrace> {
         let trace_buffer = self.trace_buffer.lock().unwrap();
-        trace_buffer.get_range(start_cycle, end_cycle)
+        trace_buffer
+            .get_range(start_cycle, end_cycle)
             .into_iter()
             .cloned()
             .collect()

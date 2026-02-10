@@ -236,7 +236,11 @@ mod tests {
 
         // Debug info might map to main.rs or lib core/std if inlined, but line 26 is specific enough
         println!("Resolved file: {}", loc.file);
-        assert!(loc.file.ends_with("main.rs"), "Resolved file '{}' does not end with 'main.rs'", loc.file);
+        assert!(
+            loc.file.ends_with("main.rs"),
+            "Resolved file '{}' does not end with 'main.rs'",
+            loc.file
+        );
         assert_eq!(loc.line, Some(26));
     }
 }

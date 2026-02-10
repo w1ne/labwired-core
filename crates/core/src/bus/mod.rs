@@ -233,7 +233,7 @@ impl SystemBus {
                 }
             };
 
-            let mut dev = dev;
+            let dev = dev;
             // Stubbing out peripherals with external devices is deprecated.
             // For now, we keep the original peripheral.
             /*

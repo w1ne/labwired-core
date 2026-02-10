@@ -140,7 +140,8 @@ impl DapServer {
                 match adapter_clone.continue_execution_chunk(10_000) {
                     Ok(reason) => {
                         match reason {
-                            labwired_core::StopReason::Breakpoint(_) | labwired_core::StopReason::ManualStop => {
+                            labwired_core::StopReason::Breakpoint(_)
+                            | labwired_core::StopReason::ManualStop => {
                                 {
                                     let mut r = running_clone.lock().unwrap();
                                     *r = false;
@@ -180,7 +181,8 @@ impl DapServer {
 
             // Telemetry polling
             if let Some(telemetry) = adapter_clone.get_telemetry() {
-                let _ = sender_clone.send_event("telemetry", Some(serde_json::to_value(telemetry).unwrap()));
+                let _ = sender_clone
+                    .send_event("telemetry", Some(serde_json::to_value(telemetry).unwrap()));
             }
 
             if !is_running {
@@ -233,7 +235,10 @@ impl DapServer {
             };
             tracing::info!("Received request: {}", request);
 
-            let command = request.get("command").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let command = request
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
             let req_seq = request.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
             let arguments = request.get("arguments");
 
@@ -258,15 +263,30 @@ impl DapServer {
                     sender.send_event("initialized", None)?;
                 }
                 "launch" => {
-                    let program = arguments.and_then(|a| a.get("program")).and_then(|v| v.as_str());
-                    let system_config = arguments.and_then(|a| a.get("systemConfig")).and_then(|v| v.as_str());
+                    let program = arguments
+                        .and_then(|a| a.get("program"))
+                        .and_then(|v| v.as_str());
+                    let system_config = arguments
+                        .and_then(|a| a.get("systemConfig"))
+                        .and_then(|v| v.as_str());
 
-                    tracing::info!("Launching: program={:?}, systemConfig={:?}", program, system_config);
+                    tracing::info!(
+                        "Launching: program={:?}, systemConfig={:?}",
+                        program,
+                        system_config
+                    );
 
                     if let Some(p) = program {
-                        if let Err(e) = self.adapter.load_firmware(p.into(), system_config.map(|s| s.into())) {
+                        if let Err(e) = self
+                            .adapter
+                            .load_firmware(p.into(), system_config.map(|s| s.into()))
+                        {
                             tracing::error!("Failed to load firmware: {}", e);
-                            sender.send_error_response(req_seq, "launch", &format!("Failed to load firmware: {}", e))?;
+                            sender.send_error_response(
+                                req_seq,
+                                "launch",
+                                &format!("Failed to load firmware: {}", e),
+                            )?;
                             continue;
                         }
                     }
@@ -279,34 +299,62 @@ impl DapServer {
                 "setBreakpoints" => {
                     let args = arguments.unwrap();
                     let source = args.get("source").unwrap();
-                    let path = source.get("path").and_then(|v| v.as_str()).unwrap_or_default();
-                    let lines = args.get("breakpoints").and_then(|v| v.as_array()).map(|arr| {
-                        arr.iter().map(|b| b.get("line").and_then(|v| v.as_i64()).unwrap_or(0)).collect::<Vec<i64>>()
-                    }).unwrap_or_default();
+                    let path = source
+                        .get("path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default();
+                    let lines = args
+                        .get("breakpoints")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .map(|b| b.get("line").and_then(|v| v.as_i64()).unwrap_or(0))
+                                .collect::<Vec<i64>>()
+                        })
+                        .unwrap_or_default();
 
-                    if let Err(e) = self.adapter.set_breakpoints(path.to_string(), lines.clone()) {
+                    if let Err(e) = self
+                        .adapter
+                        .set_breakpoints(path.to_string(), lines.clone())
+                    {
                         tracing::error!("Failed to set breakpoints: {}", e);
                     }
 
-                    let breakpoints: Vec<Value> = lines.into_iter().map(|l| json!({
-                        "verified": true,
-                        "line": l,
-                    })).collect();
+                    let breakpoints: Vec<Value> = lines
+                        .into_iter()
+                        .map(|l| {
+                            json!({
+                                "verified": true,
+                                "line": l,
+                            })
+                        })
+                        .collect();
 
-                    sender.send_response(req_seq, "setBreakpoints", Some(json!({ "breakpoints": breakpoints })))?;
+                    sender.send_response(
+                        req_seq,
+                        "setBreakpoints",
+                        Some(json!({ "breakpoints": breakpoints })),
+                    )?;
                 }
                 "configurationDone" => {
                     sender.send_response(req_seq, "configurationDone", None)?;
-                    sender.send_event("stopped", Some(json!({
-                        "reason": "entry",
-                        "threadId": 1,
-                        "allThreadsStopped": true
-                    })))?;
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "entry",
+                            "threadId": 1,
+                            "allThreadsStopped": true
+                        })),
+                    )?;
                 }
                 "threads" => {
-                    sender.send_response(req_seq, "threads", Some(json!({
-                        "threads": [{"id": 1, "name": "Core 0"}]
-                    })))?;
+                    sender.send_response(
+                        req_seq,
+                        "threads",
+                        Some(json!({
+                            "threads": [{"id": 1, "name": "Core 0"}]
+                        })),
+                    )?;
                 }
                 "stackTrace" => {
                     let pc = self.adapter.get_pc().unwrap_or(0);
@@ -317,37 +365,56 @@ impl DapServer {
                             "name": std::path::Path::new(&loc.file).file_name().and_then(|n| n.to_str()).unwrap_or(&loc.file),
                             "path": loc.file,
                         });
-                        (Some(source), loc.line, loc.function.unwrap_or_else(|| "main".to_string()))
+                        (
+                            Some(source),
+                            loc.line,
+                            loc.function.unwrap_or_else(|| "main".to_string()),
+                        )
                     } else {
                         // If unknown, give it a name like "0x2af00 (No source)"
                         (None, Some(0), format!("{:#x} (No debug symbols)", pc))
                     };
 
-                    sender.send_response(req_seq, "stackTrace", Some(json!({
-                        "stackFrames": [{
-                            "id": 1,
-                            "name": name,
-                            "line": line.unwrap_or(0),
-                            "column": 0,
-                            "source": source,
-                            "instructionPointerReference": format!("{:#x}", pc),
-                        }],
-                        "totalFrames": 1
-                    })))?;
+                    sender.send_response(
+                        req_seq,
+                        "stackTrace",
+                        Some(json!({
+                            "stackFrames": [{
+                                "id": 1,
+                                "name": name,
+                                "line": line.unwrap_or(0),
+                                "column": 0,
+                                "source": source,
+                                "instructionPointerReference": format!("{:#x}", pc),
+                            }],
+                            "totalFrames": 1
+                        })),
+                    )?;
                 }
                 "scopes" => {
-                    let reg_count = self.adapter.get_register_names().map(|n| n.len()).unwrap_or(16);
-                    sender.send_response(req_seq, "scopes", Some(json!({
-                        "scopes": [{
-                            "name": "Registers",
-                            "variablesReference": 1,
-                            "namedVariables": reg_count,
-                            "expensive": false,
-                        }]
-                    })))?;
+                    let reg_count = self
+                        .adapter
+                        .get_register_names()
+                        .map(|n| n.len())
+                        .unwrap_or(16);
+                    sender.send_response(
+                        req_seq,
+                        "scopes",
+                        Some(json!({
+                            "scopes": [{
+                                "name": "Registers",
+                                "variablesReference": 1,
+                                "namedVariables": reg_count,
+                                "expensive": false,
+                            }]
+                        })),
+                    )?;
                 }
                 "variables" => {
-                    let var_ref = arguments.and_then(|a| a.get("variablesReference")).and_then(|v| v.as_i64()).unwrap_or(0);
+                    let var_ref = arguments
+                        .and_then(|a| a.get("variablesReference"))
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
                     if var_ref == 1 {
                         let mut variables = Vec::new();
                         if let Ok(names) = self.adapter.get_register_names() {
@@ -362,24 +429,45 @@ impl DapServer {
                                 }));
                             }
                         }
-                        sender.send_response(req_seq, "variables", Some(json!({ "variables": variables })))?;
+                        sender.send_response(
+                            req_seq,
+                            "variables",
+                            Some(json!({ "variables": variables })),
+                        )?;
                     } else if var_ref == 0 {
-                        sender.send_response(req_seq, "variables", Some(json!({ "variables": [] })))?;
+                        sender.send_response(
+                            req_seq,
+                            "variables",
+                            Some(json!({ "variables": [] })),
+                        )?;
                     } else {
                         // For other references (e.g. memory groups), return empty for now
-                        sender.send_response(req_seq, "variables", Some(json!({ "variables": [] })))?;
+                        sender.send_response(
+                            req_seq,
+                            "variables",
+                            Some(json!({ "variables": [] })),
+                        )?;
                     }
                 }
                 "disassemble" => {
                     let args = arguments.unwrap();
-                    let addr_str = args.get("memoryReference").and_then(|v| v.as_str()).unwrap_or("0");
-                    let addr = if addr_str.starts_with("0x") {
-                        u64::from_str_radix(&addr_str[2..], 16).unwrap_or(0)
+                    let addr_str = args
+                        .get("memoryReference")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0");
+                    let addr = if let Some(stripped) = addr_str.strip_prefix("0x") {
+                        u64::from_str_radix(stripped, 16).unwrap_or(0)
                     } else {
                         addr_str.parse().unwrap_or(0)
                     };
-                    let instruction_count = args.get("instructionCount").and_then(|v| v.as_i64()).unwrap_or(10) as usize;
-                    let instruction_offset = args.get("instructionOffset").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let instruction_count = args
+                        .get("instructionCount")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(10) as usize;
+                    let instruction_offset = args
+                        .get("instructionOffset")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
 
                     let start_addr = (addr as i64 + instruction_offset * 2) as u64; // Assuming 2-byte thumb instructions for simple offset
 
@@ -389,15 +477,24 @@ impl DapServer {
                         for i in 0..instruction_count {
                             let curr_addr = start_addr + (i * 2) as u64;
                             let idx = i * 2;
-                            if idx + 2 > data.len() { break; }
+                            if idx + 2 > data.len() {
+                                break;
+                            }
 
-                            let opcode = (data[idx] as u16) | ((data[idx+1] as u16) << 8);
+                            let opcode = (data[idx] as u16) | ((data[idx + 1] as u16) << 8);
                             let instr = labwired_core::decoder::decode_thumb_16(opcode);
 
                             // Better formatting for "Ozone-like" feel
                             let instr_str = format!("{:?}", instr);
-                            let display_instr = instr_str.split_whitespace().next().unwrap_or("unknown").to_uppercase();
-                            let operands = instr_str.split_once(' ').map(|(_, rest)| rest).unwrap_or("");
+                            let display_instr = instr_str
+                                .split_whitespace()
+                                .next()
+                                .unwrap_or("unknown")
+                                .to_uppercase();
+                            let operands = instr_str
+                                .split_once(' ')
+                                .map(|(_, rest)| rest)
+                                .unwrap_or("");
 
                             instructions.push(json!({
                                 "address": format!("{:#x}", curr_addr),
@@ -407,13 +504,20 @@ impl DapServer {
                         }
                     }
 
-                    sender.send_response(req_seq, "disassemble", Some(json!({ "instructions": instructions })))?;
+                    sender.send_response(
+                        req_seq,
+                        "disassemble",
+                        Some(json!({ "instructions": instructions })),
+                    )?;
                 }
                 "readMemory" => {
                     let args = arguments.unwrap();
-                    let addr_str = args.get("memoryReference").and_then(|v| v.as_str()).unwrap_or("0");
-                    let addr = if addr_str.starts_with("0x") {
-                        u64::from_str_radix(&addr_str[2..], 16).unwrap_or(0)
+                    let addr_str = args
+                        .get("memoryReference")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0");
+                    let addr = if let Some(stripped) = addr_str.strip_prefix("0x") {
+                        u64::from_str_radix(stripped, 16).unwrap_or(0)
                     } else {
                         addr_str.parse().unwrap_or(0)
                     };
@@ -426,14 +530,22 @@ impl DapServer {
                         Ok(data) => {
                             use base64::Engine;
                             let encoded = base64::engine::general_purpose::STANDARD.encode(data);
-                            sender.send_response(req_seq, "readMemory", Some(json!({
-                                "address": format!("{:#x}", final_addr),
-                                "unreadableBytes": 0,
-                                "data": encoded,
-                            })))?;
+                            sender.send_response(
+                                req_seq,
+                                "readMemory",
+                                Some(json!({
+                                    "address": format!("{:#x}", final_addr),
+                                    "unreadableBytes": 0,
+                                    "data": encoded,
+                                })),
+                            )?;
                         }
                         Err(e) => {
-                            sender.send_error_response(req_seq, "readMemory", &format!("Read failed: {}", e))?;
+                            sender.send_error_response(
+                                req_seq,
+                                "readMemory",
+                                &format!("Read failed: {}", e),
+                            )?;
                         }
                     }
                 }
@@ -442,7 +554,11 @@ impl DapServer {
                         let mut r = self.running.lock().unwrap();
                         *r = true;
                     }
-                    sender.send_response(req_seq, "continue", Some(json!({ "allThreadsContinued": true })))?;
+                    sender.send_response(
+                        req_seq,
+                        "continue",
+                        Some(json!({ "allThreadsContinued": true })),
+                    )?;
                 }
                 "pause" => {
                     {
@@ -450,22 +566,32 @@ impl DapServer {
                         *r = false;
                     }
                     sender.send_response(req_seq, "pause", None)?;
-                    sender.send_event("stopped", Some(json!({
-                        "reason": "pause",
-                        "threadId": 1,
-                        "allThreadsStopped": true
-                    })))?;
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "pause",
+                            "threadId": 1,
+                            "allThreadsStopped": true
+                        })),
+                    )?;
                 }
                 "restart" => {
                     if let Err(e) = self.adapter.reset() {
-                        sender.send_error_response(req_seq, "restart", &format!("Reset failed: {}", e))?;
+                        sender.send_error_response(
+                            req_seq,
+                            "restart",
+                            &format!("Reset failed: {}", e),
+                        )?;
                     } else {
                         sender.send_response(req_seq, "restart", None)?;
-                        sender.send_event("stopped", Some(json!({
-                            "reason": "entry",
-                            "threadId": 1,
-                            "allThreadsStopped": true
-                        })))?;
+                        sender.send_event(
+                            "stopped",
+                            Some(json!({
+                                "reason": "entry",
+                                "threadId": 1,
+                                "allThreadsStopped": true
+                            })),
+                        )?;
                     }
                 }
                 "gotoTargets" => {
@@ -473,10 +599,14 @@ impl DapServer {
                     let args = arguments.unwrap();
                     let line = args.get("line").and_then(|v| v.as_i64()).unwrap_or(0);
                     let source = args.get("source").unwrap();
-                    let path = source.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+                    let path = source
+                        .get("path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default();
 
                     let mut targets = Vec::new();
-                    if let Some(target_addr) = self.adapter.lookup_source_reverse(path, line as u32) {
+                    if let Some(target_addr) = self.adapter.lookup_source_reverse(path, line as u32)
+                    {
                         targets.push(json!({
                             "id": 1,
                             "label": format!("Jump to line {}", line),
@@ -486,7 +616,11 @@ impl DapServer {
                         }));
                     }
 
-                    sender.send_response(req_seq, "gotoTargets", Some(json!({ "targets": targets })))?;
+                    sender.send_response(
+                        req_seq,
+                        "gotoTargets",
+                        Some(json!({ "targets": targets })),
+                    )?;
                 }
                 "goto" => {
                     let args = arguments.unwrap();
@@ -495,10 +629,12 @@ impl DapServer {
                     // In a real implementation we'd lookup the target by ID.
 
                     // VS Code usually sends instructionPointerReference if gotoTargets was used
-                    let addr_str = args.get("instructionPointerReference").and_then(|v| v.as_str());
+                    let addr_str = args
+                        .get("instructionPointerReference")
+                        .and_then(|v| v.as_str());
                     let addr = if let Some(a) = addr_str {
-                        if a.starts_with("0x") {
-                            u32::from_str_radix(&a[2..], 16).unwrap_or(0)
+                        if let Some(stripped) = a.strip_prefix("0x") {
+                            u32::from_str_radix(stripped, 16).unwrap_or(0)
                         } else {
                             a.parse().unwrap_or(0)
                         }
@@ -509,11 +645,14 @@ impl DapServer {
                     if addr != 0 {
                         let _ = self.adapter.set_pc(addr);
                         sender.send_response(req_seq, "goto", None)?;
-                        sender.send_event("stopped", Some(json!({
-                            "reason": "goto",
-                            "threadId": 1,
-                            "allThreadsStopped": true
-                        })))?;
+                        sender.send_event(
+                            "stopped",
+                            Some(json!({
+                                "reason": "goto",
+                                "threadId": 1,
+                                "allThreadsStopped": true
+                            })),
+                        )?;
                     } else {
                         sender.send_error_response(req_seq, "goto", "Invalid target address")?;
                     }
@@ -521,16 +660,22 @@ impl DapServer {
                 "next" | "stepIn" => {
                     let _ = self.adapter.step();
                     sender.send_response(req_seq, "next", None)?;
-                    sender.send_event("stopped", Some(json!({
-                        "reason": "step",
-                        "threadId": 1,
-                        "allThreadsStopped": true
-                    })))?;
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "step",
+                            "threadId": 1,
+                            "allThreadsStopped": true
+                        })),
+                    )?;
                 }
                 "readInstructionTrace" => {
                     let (start_cycle, end_cycle) = if let Some(args) = arguments {
                         let start = args.get("startCycle").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let end = args.get("endCycle").and_then(|v| v.as_u64()).unwrap_or(u64::MAX);
+                        let end = args
+                            .get("endCycle")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(u64::MAX);
                         (start, end)
                     } else {
                         (0, u64::MAX)
@@ -545,20 +690,27 @@ impl DapServer {
                     };
 
                     // Convert traces to JSON
-                    let trace_records: Vec<Value> = traces.iter().map(|t| {
-                        json!({
-                            "pc": t.pc,
-                            "cycle": t.cycle,
-                            "instruction": t.instruction,
-                            "function": t.function,
-                            "registers": t.register_delta,
+                    let trace_records: Vec<Value> = traces
+                        .iter()
+                        .map(|t| {
+                            json!({
+                                "pc": t.pc,
+                                "cycle": t.cycle,
+                                "instruction": t.instruction,
+                                "function": t.function,
+                                "registers": t.register_delta,
+                            })
                         })
-                    }).collect();
+                        .collect();
 
-                    sender.send_response(req_seq, "readInstructionTrace", Some(json!({
-                        "traces": trace_records,
-                        "totalCycles": self.adapter.get_cycle_count(),
-                    })))?;
+                    sender.send_response(
+                        req_seq,
+                        "readInstructionTrace",
+                        Some(json!({
+                            "traces": trace_records,
+                            "totalCycles": self.adapter.get_cycle_count(),
+                        })),
+                    )?;
                 }
                 _ => {
                     tracing::warn!("Unhandled command: {}", command);

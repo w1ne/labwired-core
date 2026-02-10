@@ -10,6 +10,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "Configuration and manifest parsing for LabWired hardware descriptors."
 
 [dependencies]
 serde.workspace = true
