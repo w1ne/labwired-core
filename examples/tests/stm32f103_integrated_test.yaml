@@ -1,0 +1,9 @@
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/debug/firmware"
+  system: "../../configs/systems/stm32f103-integrated-test.yaml"
+limits:
+  max_steps: 10000
+  no_progress_steps: 1000
+assertions:
+  - expected_stop_reason: no_progress
