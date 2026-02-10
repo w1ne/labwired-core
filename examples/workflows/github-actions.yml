@@ -1,0 +1,175 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Reference CI Workflow Templates for GitHub Actions
+#
+# This template shows how to integrate LabWired firmware testing into your CI pipeline.
+# Copy this file to .github/workflows/firmware-test.yml in your repository and customize.
+
+name: Firmware CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # Option 1: Use the composite action (recommended - easiest)
+  test-with-action:
+    name: Test with LabWired Action
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build your firmware first
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7m-none-eabi
+
+      - name: Build firmware
+        run: cargo build --release --target thumbv7m-none-eabi -p your-firmware
+
+      # Run LabWired tests using the composite action
+      - name: Run firmware tests
+        id: labwired
+        uses: w1ne/labwired/.github/actions/labwired-test@main
+        with:
+          script: tests/firmware-test.yaml
+          output_dir: test-results
+          profile: release
+          no_uart_stdout: true
+
+      # Upload test artifacts
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-test-results
+          path: test-results/
+          retention-days: 30
+
+  # Option 2: Use the Docker image directly (when published)
+  test-with-docker:
+    name: Test with Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build your firmware
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7m-none-eabi
+
+      - name: Build firmware
+        run: cargo build --release --target thumbv7m-none-eabi -p your-firmware
+
+      # Run tests using Docker image (uncomment when image is published)
+      # - name: Run firmware tests
+      #   run: |
+      #     docker run --rm \
+      #       -v ${{ github.workspace }}:/workspace \
+      #       -w /workspace \
+      #       ghcr.io/w1ne/labwired:latest \
+      #       test --script tests/firmware-test.yaml \
+      #            --output-dir test-results \
+      #            --no-uart-stdout
+
+      # - name: Upload test results
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: firmware-test-results-docker
+      #     path: test-results/
+
+  # Option 3: Build from source (full control, slower)
+  test-from-source:
+    name: Test from Source
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Clone LabWired
+      - name: Clone LabWired
+        run: git clone https://github.com/w1ne/labwired.git labwired-repo
+
+      # Build LabWired CLI
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7m-none-eabi
+
+      - name: Build LabWired
+        run: |
+          cd labwired-repo
+          cargo build --release -p labwired-cli
+          echo "$PWD/target/release" >> $GITHUB_PATH
+
+      # Build your firmware
+      - name: Build firmware
+        run: cargo build --release --target thumbv7m-none-eabi -p your-firmware
+
+      # Run tests
+      - name: Run firmware tests
+        run: |
+          labwired test --script tests/firmware-test.yaml \
+                        --output-dir test-results \
+                        --no-uart-stdout
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-test-results-source
+          path: test-results/
+
+  # Advanced: Matrix testing across multiple targets
+  matrix-test:
+    name: Test ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - thumbv6m-none-eabi
+          - thumbv7m-none-eabi
+          - thumbv7em-none-eabi
+        include:
+          - target: thumbv6m-none-eabi
+            test_script: tests/cortex-m0-test.yaml
+          - target: thumbv7m-none-eabi
+            test_script: tests/cortex-m3-test.yaml
+          - target: thumbv7em-none-eabi
+            test_script: tests/cortex-m4-test.yaml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build firmware
+        run: cargo build --release --target ${{ matrix.target }} -p your-firmware
+
+      - name: Run tests
+        uses: w1ne/labwired/.github/actions/labwired-test@main
+        with:
+          script: ${{ matrix.test_script }}
+          output_dir: test-results-${{ matrix.target }}
+          profile: release
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.target }}
+          path: test-results-${{ matrix.target }}/

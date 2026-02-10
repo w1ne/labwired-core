@@ -1,0 +1,25 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+[package]
+name = "firmware-hal-test"
+version = "0.11.0"
+edition = "2021"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+stm32f1xx-hal = { version = "0.10", features = ["stm32f103", "rt"] }
+panic-halt = "0.2"
+
+[profile.dev]
+opt-level = "z"
+lto = true
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1

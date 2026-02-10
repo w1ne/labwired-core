@@ -1,0 +1,3 @@
+name: "TestSystem"
+chip: "test_chip_declarative.yaml"
+external_devices: []

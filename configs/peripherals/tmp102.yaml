@@ -1,0 +1,44 @@
+# TMP102 I2C Temperature Sensor
+# Digital temperature sensor with I2C interface
+# Temperature range: -40°C to +125°C
+# Resolution: 12-bit (0.0625°C)
+
+name: "tmp102"
+type: "i2c_device"
+i2c_address: 0x48  # Default address (ADD0 pin to GND)
+
+registers:
+  - name: "temperature"
+    address: 0x00
+    size: 2
+    access: "read-only"
+    description: "Temperature register (12-bit, left-justified)"
+    # Mock value: 25°C = 0x0190 (400 in 12-bit, left-shifted by 4)
+    default_value: 0x0190
+
+  - name: "config"
+    address: 0x01
+    size: 2
+    access: "read-write"
+    description: "Configuration register"
+    default_value: 0x60A0
+    # Bits: OS, R1, R0, F1, F0, POL, TM, SD, CR1, CR0, AL, EM
+
+  - name: "t_low"
+    address: 0x02
+    size: 2
+    access: "read-write"
+    description: "Low temperature threshold"
+    default_value: 0x4B00  # 75°C
+
+  - name: "t_high"
+    address: 0x03
+    size: 2
+    access: "read-write"
+    description: "High temperature threshold"
+    default_value: 0x5000  # 80°C
+
+behavior:
+  # Return mock temperature of 25°C
+  temperature_celsius: 25.0
+  update_rate_hz: 4  # 4Hz conversion rate (default)

@@ -1,0 +1,21 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+[package]
+name = "labwired-loader"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+labwired-core = { path = "../core" }
+anyhow = { workspace = true }
+goblin = { workspace = true }
+tracing = { workspace = true }
+addr2line = "0.21"
+gimli = "0.28"
+object = "0.32"

@@ -1,0 +1,4 @@
+# LabWired - Integrated STM32 Test System
+name: "stm32f103-integrated-test"
+chip: "../chips/stm32f103.yaml"
+external_devices: []
