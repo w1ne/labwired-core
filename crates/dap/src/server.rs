@@ -380,9 +380,9 @@ impl DapServer {
                     };
                     let instruction_count = args.get("instructionCount").and_then(|v| v.as_i64()).unwrap_or(10) as usize;
                     let instruction_offset = args.get("instructionOffset").and_then(|v| v.as_i64()).unwrap_or(0);
-                    
+
                     let start_addr = (addr as i64 + instruction_offset * 2) as u64; // Assuming 2-byte thumb instructions for simple offset
-                    
+
                     let mut instructions = Vec::new();
                     // Read data in chunks to disassemble
                     if let Ok(data) = self.adapter.read_memory(start_addr, instruction_count * 4) {
@@ -390,15 +390,15 @@ impl DapServer {
                             let curr_addr = start_addr + (i * 2) as u64;
                             let idx = i * 2;
                             if idx + 2 > data.len() { break; }
-                            
+
                             let opcode = (data[idx] as u16) | ((data[idx+1] as u16) << 8);
                             let instr = labwired_core::decoder::decode_thumb_16(opcode);
-                            
+
                             // Better formatting for "Ozone-like" feel
                             let instr_str = format!("{:?}", instr);
                             let display_instr = instr_str.split_whitespace().next().unwrap_or("unknown").to_uppercase();
                             let operands = instr_str.split_once(' ').map(|(_, rest)| rest).unwrap_or("");
-                            
+
                             instructions.push(json!({
                                 "address": format!("{:#x}", curr_addr),
                                 "instruction": format!("{} {}", display_instr, operands),
@@ -406,7 +406,7 @@ impl DapServer {
                             }));
                         }
                     }
-                    
+
                     sender.send_response(req_seq, "disassemble", Some(json!({ "instructions": instructions })))?;
                 }
                 "readMemory" => {
@@ -419,9 +419,9 @@ impl DapServer {
                     };
                     let offset = args.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
                     let count = args.get("count").and_then(|v| v.as_i64()).unwrap_or(64) as usize;
-                    
+
                     let final_addr = (addr as i64 + offset) as u64;
-                    
+
                     match self.adapter.read_memory(final_addr, count) {
                         Ok(data) => {
                             use base64::Engine;
@@ -474,7 +474,7 @@ impl DapServer {
                     let line = args.get("line").and_then(|v| v.as_i64()).unwrap_or(0);
                     let source = args.get("source").unwrap();
                     let path = source.get("path").and_then(|v| v.as_str()).unwrap_or_default();
-                    
+
                     let mut targets = Vec::new();
                     if let Some(target_addr) = self.adapter.lookup_source_reverse(path, line as u32) {
                         targets.push(json!({
@@ -485,7 +485,7 @@ impl DapServer {
                             "instructionPointerReference": format!("{:#x}", target_addr),
                         }));
                     }
-                    
+
                     sender.send_response(req_seq, "gotoTargets", Some(json!({ "targets": targets })))?;
                 }
                 "goto" => {
@@ -493,7 +493,7 @@ impl DapServer {
                     let _target_id = args.get("targetId").and_then(|v| v.as_i64()).unwrap_or(0);
                     // For now we only have one target id = 1 which means "the resolved instruction"
                     // In a real implementation we'd lookup the target by ID.
-                    
+
                     // VS Code usually sends instructionPointerReference if gotoTargets was used
                     let addr_str = args.get("instructionPointerReference").and_then(|v| v.as_str());
                     let addr = if let Some(a) = addr_str {
@@ -505,7 +505,7 @@ impl DapServer {
                     } else {
                         0
                     };
-                    
+
                     if addr != 0 {
                         let _ = self.adapter.set_pc(addr);
                         sender.send_response(req_seq, "goto", None)?;
@@ -535,7 +535,7 @@ impl DapServer {
                     } else {
                         (0, u64::MAX)
                     };
-                    
+
                     let traces = if start_cycle == 0 && end_cycle == u64::MAX {
                         // Get all traces
                         self.adapter.get_all_traces()
@@ -543,7 +543,7 @@ impl DapServer {
                         // Get specific range
                         self.adapter.get_instruction_trace(start_cycle, end_cycle)
                     };
-                    
+
                     // Convert traces to JSON
                     let trace_records: Vec<Value> = traces.iter().map(|t| {
                         json!({
@@ -554,7 +554,7 @@ impl DapServer {
                             "registers": t.register_delta,
                         })
                     }).collect();
-                    
+
                     sender.send_response(req_seq, "readInstructionTrace", Some(json!({
                         "traces": trace_records,
                         "totalCycles": self.adapter.get_cycle_count(),

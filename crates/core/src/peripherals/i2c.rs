@@ -79,7 +79,11 @@ impl crate::Peripheral for I2c {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
-        Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
+        if byte_offset < 2 {
+            Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
+        } else {
+            Ok(0) // Higher bytes of 16-bit registers at 32-bit offsets are 0
+        }
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
@@ -87,16 +91,53 @@ impl crate::Peripheral for I2c {
         let byte_offset = (offset % 4) as u32;
         // Registers are 16-bit but aligned to 32-bit boundaries
 
-        let mut reg_val = self.read_reg(reg_offset);
-        let mask = 0xFF << (byte_offset * 8);
-        reg_val &= !mask;
-        reg_val |= (value as u16) << (byte_offset * 8);
-
-        self.write_reg(reg_offset, reg_val);
+        if byte_offset < 2 {
+            let mut reg_val = self.read_reg(reg_offset);
+            let mask = 0xFF << (byte_offset * 8);
+            reg_val &= !mask;
+            reg_val |= (value as u16) << (byte_offset * 8);
+            self.write_reg(reg_offset, reg_val);
+        }
         Ok(())
     }
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::I2c;
+    use crate::Peripheral;
+
+    #[test]
+    fn test_i2c_reset_values() {
+        let i2c = I2c::new();
+        assert_eq!(i2c.cr1, 0);
+        assert_eq!(i2c.cr2, 0);
+    }
+
+    #[test]
+    fn test_i2c_start_bit() {
+        let mut i2c = I2c::new();
+        // Set SB (Start Bit) in CR1 (offset 0)
+        // Bit 8 is START
+        i2c.write(0x01, 0x01).unwrap(); // Write byte 1 of CR1
+        assert_ne!(i2c.sr1 & 0x01, 0); // Check SB bit in SR1
+    }
+
+    #[test]
+    fn test_i2c_data_write() {
+        let mut i2c = I2c::new();
+        // Clear ADDR first (offset 0x14 is SR1)
+        i2c.sr1 = 0x02;
+
+        // Write to DR (offset 0x10)
+        i2c.write(0x10, 0xAA).unwrap();
+
+        assert_eq!(i2c.dr, 0xAA);
+        assert_eq!(i2c.sr1 & 0x02, 0); // ADDR should be cleared
+        assert_ne!(i2c.sr1 & 0x80, 0); // TXE should be set
     }
 }

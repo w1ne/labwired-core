@@ -2,6 +2,11 @@
 
 > High-performance, declarative firmware simulator for ARM Cortex-M and RISC-V microcontrollers.
 
+## Highlights
+
+- **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/demo-blinky/README.md)
+- **Case Study**: [Debugging STM32 Without Hardware](docs/case_study_stm32.md)
+
 ## Features
 
 - **Multi-Architecture**: ARM Cortex-M (M0, M3, M4) and RISC-V (RV32I) support

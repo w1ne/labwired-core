@@ -135,3 +135,64 @@ impl crate::Peripheral for GpioPort {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::GpioPort;
+    use crate::Peripheral;
+
+    #[test]
+    fn test_gpio_reset_values() {
+        let gpio = GpioPort::new();
+        assert_eq!(gpio.crl, 0x4444_4444);
+        assert_eq!(gpio.crh, 0x4444_4444);
+        assert_eq!(gpio.odr, 0);
+    }
+
+    #[test]
+    fn test_gpio_odr_write() {
+        let mut gpio = GpioPort::new();
+        // Write to ODR (offset 0x0C)
+        gpio.write(0x0C, 0x55).unwrap(); // Write byte 0
+        gpio.write(0x0D, 0xAA).unwrap(); // Write byte 1
+        assert_eq!(gpio.odr, 0xAA55);
+    }
+
+    #[test]
+    fn test_gpio_bsrr_set() {
+        let mut gpio = GpioPort::new();
+        // BSRR is 32-bit, offset 0x10. Writing to lower 16 bits sets ODR bits.
+        // We write 4 bytes to trigger handle_write_only_buffer
+        gpio.write(0x10, 0x01).unwrap();
+        gpio.write(0x11, 0x00).unwrap();
+        gpio.write(0x12, 0x00).unwrap();
+        gpio.write(0x13, 0x00).unwrap();
+        assert_eq!(gpio.odr, 0x0001);
+    }
+
+    #[test]
+    fn test_gpio_bsrr_reset() {
+        let mut gpio = GpioPort::new();
+        gpio.odr = 0xFFFF;
+        // BSRR upper 16 bits reset ODR bits.
+        gpio.write(0x10, 0x00).unwrap();
+        gpio.write(0x11, 0x00).unwrap();
+        gpio.write(0x12, 0x01).unwrap();
+        gpio.write(0x13, 0x00).unwrap();
+        assert_eq!(gpio.odr, 0xFFFE);
+    }
+
+    #[test]
+    fn test_gpio_brr() {
+        let mut gpio = GpioPort::new();
+        gpio.odr = 0xFFFF;
+        // BRR is offset 0x14. Lower 16 bits reset ODR bits.
+        // Needs 4 bytes to flush the buffer (handled as 32-bit in the mock for complexity)
+        // Actually GpioPort handle_write_only_buffer for BRR also checks for byte mask.
+        gpio.write(0x14, 0x01).unwrap();
+        gpio.write(0x15, 0x00).unwrap();
+        gpio.write(0x16, 0x00).unwrap();
+        gpio.write(0x17, 0x00).unwrap();
+        assert_eq!(gpio.odr, 0xFFFE);
+    }
+}

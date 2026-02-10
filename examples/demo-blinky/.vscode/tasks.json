@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-demo-blinky",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "build",
+                "-p",
+                "demo-blinky",
+                "--target",
+                "thumbv7m-none-eabi",
+                "--release"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$rustc"
+            ]
+        }
+    ]
+}

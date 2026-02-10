@@ -344,6 +344,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "demo-blinky"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"

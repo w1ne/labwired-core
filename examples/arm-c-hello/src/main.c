@@ -29,7 +29,7 @@ void uart_puts(const char *s) {
 void main(void) {
     uart_puts("Hello from LabWired C Example!\n");
     uart_puts("This is running on a simulated ARM Cortex-M0.\n");
-    
+
     while (1) {
         // Spin
         for (int i = 0; i < 100000; i++) {

@@ -20,14 +20,14 @@ def receive_packet(s):
         char = s.recv(1)
         if char == b'$':
             break
-    
+
     packet_data = b""
     while True:
         char = s.recv(1)
         if char == b'#':
             break
         packet_data += char
-    
+
     checksum = s.recv(2)
     s.sendall(b"+") # Send ACK
     # print(f"RECV: ${packet_data.decode()}#{checksum.decode()}")
@@ -35,7 +35,7 @@ def receive_packet(s):
 
 def test_gdb():
     print("🚀 Starting GDB RSP Verification...")
-    
+
     # 1. Start DAP Server (which starts GDB server)
     # We assume it's already built.
     dap_process = subprocess.Popen(
@@ -45,34 +45,34 @@ def test_gdb():
         stderr=subprocess.PIPE,
         text=True
     )
-    
+
     # Initialize DAP session so machine is loaded
     init_req = json.dumps({"command": "initialize", "arguments": {"adapterID": "labwired"}, "seq": 1, "type": "request"})
     dap_process.stdin.write(f"Content-Length: {len(init_req)}\r\n\r\n{init_req}")
     dap_process.stdin.flush()
-    
+
     # Launch with C example
     launch_req = json.dumps({
-        "command": "launch", 
+        "command": "launch",
         "arguments": {
             "program": "/home/andrii/Projects/labwired/examples/arm-c-hello/target/firmware",
             "systemConfig": "/home/andrii/Projects/labwired/examples/arm-c-hello/system.yaml"
-        }, 
-        "seq": 2, 
+        },
+        "seq": 2,
         "type": "request"
     })
     dap_process.stdin.write(f"Content-Length: {len(launch_req)}\r\n\r\n{launch_req}")
     dap_process.stdin.flush()
-    
+
     time.sleep(2) # Wait for startup
-    
+
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect(("127.0.0.1:3333".split(':')[0], 3333))
         s.settimeout(5)
-        
+
         print("🔗 Connected to GDB Server")
-        
+
         # 1. qSupported
         send_packet(s, "qSupported:multiprocess+;swbreak+;hwbreak+;qRelocInsn+;fork-events+;vfork-events+;exec-events+;vContSupported+;no-resumed+")
         resp = receive_packet(s)
@@ -96,7 +96,7 @@ def test_gdb():
         resp = receive_packet(s)
         print(f"✍️ Memory write at 0x20000000: {resp}")
         if resp != "OK": raise Exception("Memory write failed")
-        
+
         send_packet(s, "m20000000,4")
         mem = receive_packet(s)
         print(f"🔍 Memory read back: {mem}")
@@ -108,7 +108,7 @@ def test_gdb():
         resp = receive_packet(s)
         print(f"✍️ Register R0 write: {resp}")
         if resp != "OK": raise Exception("Register write failed")
-        
+
         send_packet(s, "g")
         regs = receive_packet(s)
         if not regs.startswith("ddccbbaa"):
@@ -128,7 +128,7 @@ def test_gdb():
         if not resp.startswith("S"): raise Exception("Step (vCont) failed")
 
         print("\n🎉 ALL ENHANCED GDB RSP TESTS PASSED!")
-        
+
     except Exception as e:
         print(f"\n❌ GDB TEST FAILED: {e}")
         # exit(1) # Don't exit here so we can cleanup

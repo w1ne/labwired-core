@@ -228,15 +228,15 @@ impl LabwiredAdapter {
             // Capture state BEFORE execution
             let pc_before = machine.get_pc();
             let registers_before: Vec<u32> = (0..16).map(|i| machine.read_core_reg(i)).collect();
-            
+
             // Execute instruction
             let reason = machine
                 .step_single()
                 .map_err(|e| anyhow!("Step failed: {:?}", e))?;
-            
+
             // Capture state AFTER execution
             let registers_after: Vec<u32> = (0..16).map(|i| machine.read_core_reg(i)).collect();
-            
+
             // Calculate register delta (only changed registers)
             let mut register_delta = std::collections::HashMap::new();
             for i in 0..16 {
@@ -244,13 +244,13 @@ impl LabwiredAdapter {
                     register_delta.insert(i as u8, registers_after[i]);
                 }
             }
-            
+
             // Increment cycle count
             let cycle = self.cycle_count.fetch_add(1, Ordering::SeqCst);
-            
+
             // TODO: Resolve function name from symbols
             let function = None;
-            
+
             // Record trace
             let trace = InstructionTrace {
                 pc: pc_before,
@@ -260,10 +260,10 @@ impl LabwiredAdapter {
                 register_delta,
                 memory_writes: Vec::new(), // TODO: track memory writes
             };
-            
+
             let mut trace_buffer = self.trace_buffer.lock().unwrap();
             trace_buffer.record(trace);
-            
+
             Ok(reason)
         } else {
             Err(anyhow!("Machine not initialized"))

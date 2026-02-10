@@ -280,6 +280,12 @@ impl<C: Cpu> Machine<C> {
         }
         Ok(())
     }
+
+    pub fn peek_peripheral(&self, name: &str) -> Option<serde_json::Value> {
+        self.bus.peripherals.iter()
+            .find(|p| p.name == name)
+            .map(|p| p.dev.snapshot())
+    }
 }
 
 impl<C: Cpu> DebugControl for Machine<C> {

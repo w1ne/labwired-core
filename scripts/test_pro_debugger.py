@@ -11,7 +11,7 @@ class DapTestClient:
         self.responses = {}
         self.events = []
         self.lock = threading.Lock()
-        
+
         threading.Thread(target=self._read_stdout, daemon=True).start()
         threading.Thread(target=self._read_stderr, daemon=True).start()
 
@@ -43,14 +43,14 @@ class DapTestClient:
         with self.lock:
             req_seq = self.seq
             self.seq += 1
-        
+
         req = {"command": command, "seq": req_seq, "type": "request"}
         if args: req["arguments"] = args
-        
+
         body = json.dumps(req)
         self.p.stdin.write(f"Content-Length: {len(body)}\r\n\r\n{body}".encode('utf-8'))
         self.p.stdin.flush()
-        
+
         start = time.time()
         while time.time() - start < timeout:
             with self.lock:
@@ -74,7 +74,7 @@ def run_test():
     dap_path = "/home/andrii/Projects/labwired/target/debug/labwired-dap"
     print(f"🚀 Starting LabWired Debugger Professional Test Suite...")
     client = DapTestClient(dap_path)
-    
+
     # 1. Initialize
     print("📋 Testing Initialize (Capabilities)...", end=" ", flush=True)
     resp = client.request("initialize", {"adapterID": "labwired"})

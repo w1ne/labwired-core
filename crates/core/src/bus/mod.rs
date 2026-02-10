@@ -234,14 +234,16 @@ impl SystemBus {
             };
 
             let mut dev = dev;
+            // Stubbing out peripherals with external devices is deprecated.
+            // For now, we keep the original peripheral.
+            /*
             for ext in &_manifest.external_devices {
                 if ext.connection == p_cfg.id {
                     tracing::info!("Stubbing {} on {}", ext.id, p_cfg.id);
-                    // For now, if it's a stub, we replace it or wrap it?
-                    // Let's replace with StubPeripheral for demonstration
                     dev = Box::new(crate::peripherals::stub::StubPeripheral::new(0x42));
                 }
             }
+            */
 
             // Map peripheral window size + IRQ from descriptor when provided.
             // Defaults keep older descriptors working.

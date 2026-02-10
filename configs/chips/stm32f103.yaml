@@ -13,6 +13,22 @@ ram:
   base: 0x20000000
   size: "128KB"
 peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
@@ -26,6 +42,16 @@ peripherals:
     base_address: 0x40004400
     size: "1KB"
     irq: 38
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
   - id: "afio"
     type: "afio"
     base_address: 0x40010000

@@ -51,10 +51,10 @@ fn handle_client(mut stream: TcpStream, adapter: LabwiredAdapter) -> Result<()> 
                     let packet_start = i + 1;
                     let packet_end = i + end;
                     let packet = String::from_utf8_lossy(&data[packet_start..packet_end]);
-                    
+
                     // Acknowledge
                     stream.write_all(b"+")?;
-                    
+
                     let response = handle_packet(&packet, &adapter)?;
                     send_packet(&mut stream, &response)?;
                 }
@@ -73,7 +73,7 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
     if packet == "?" {
         return Ok("S05".to_string()); // Stopped with SIGTRAP
     }
-    
+
     if packet.starts_with("qSupported") {
         return Ok("PacketSize=1000;hwbreak+;swbreak+;vCont+;qXfer:features:read+".to_string());
     }
