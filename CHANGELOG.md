@@ -8,10 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **SVD Ingestor**: New tool (`crates/svd-ingestor`) to automatically generate `PeripheralDescriptor` YAMLs from CMSIS-SVD files.
-    - Supports nested clusters and register arrays (unrolling).
-    - Includes rigorous quality gates: E2E tests, Property-Based Fuzzing, and strict documentation.
-- **Strategic Horizon**: Integrated long-term vision into `docs/plan.md`, prioritized by revenue impact (Browser Wedge, Enterprise Safety, Digital Twin).
+- **Architecture Unification**: Native ingestion of **Strict IR** (JSON) in the simulation core.
+    - Bridged `labwired-ir` with `labwired-config` via `From` traits.
+    - Simulator can now load hardware models directly from SVD-derived JSON files.
+- **Asset Foundry Hardening**:
+    - Enhanced SVD transformation with flattened inheritance, register array unrolling, and cluster flattening.
+    - Verified against STM32F4, RP2040, and nRF52.
+- **Timing Hooks**: Declarative peripheral behavior for registers (SetBits, ClearBits, WriteValue) with periodic and event-based triggers.
+- **Timeline View**: Professional visualization of instruction trace data in the VS Code extension.
+- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/SUPPORTED_DEVICES.md`.
+- **Architecture Guide**: New comprehensive `core/docs/ARCHITECTURE.md`.
+- **SVD Ingestor**: New tool (`crates/svd-ingestor`) to generate `PeripheralDescriptor` YAMLs from SVD.
+- **Strategic Horizon**: Long-term vision integrated into `docs/plan.md`.
 
 ## [0.11.0] - 2026-02-08
 

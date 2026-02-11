@@ -1,16 +1,19 @@
-use std::process::Command;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
+use std::process::Command;
 
 #[test]
 fn test_asset_import_fixtures() {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    
-    // Determine workspace root. 
+
+    // Determine workspace root.
     // Tests run in `core/crates/cli`, so workspace root is `../../`
-    let workspace_root = std::env::current_dir().unwrap()
-        .parent().unwrap() // crates
-        .parent().unwrap() // core
+    let workspace_root = std::env::current_dir()
+        .unwrap()
+        .parent()
+        .unwrap() // crates
+        .parent()
+        .unwrap() // core
         .to_path_buf();
 
     let fixtures_dir = workspace_root.join("tests/fixtures");
@@ -36,7 +39,7 @@ fn test_asset_import_fixtures() {
 
     for svd_path in svd_files {
         println!("Testing SVD Import: {:?}", svd_path);
-        
+
         // Output file will be side-by-side with .json extension
         let output_path = svd_path.with_extension("test_output.json");
 
@@ -56,7 +59,11 @@ fn test_asset_import_fixtures() {
             .expect("Failed to execute labwired-cli");
 
         assert!(status.success(), "Failed to import {:?}", svd_path);
-        assert!(output_path.exists(), "Output JSON not created for {:?}", svd_path);
+        assert!(
+            output_path.exists(),
+            "Output JSON not created for {:?}",
+            svd_path
+        );
 
         // Basic clean up
         let _ = fs::remove_file(output_path);

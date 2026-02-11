@@ -68,8 +68,16 @@ pub struct SystemManifest {
 
 impl ChipDescriptor {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(&path)?;
-        serde_yaml::from_str(&content).context("Failed to parse Chip Descriptor")
+        let path = path.as_ref();
+        let content = std::fs::read_to_string(path)?;
+
+        if path.extension().is_some_and(|ext| ext == "json") {
+            let ir: labwired_ir::IrDevice = serde_json::from_str(&content)
+                .with_context(|| format!("Failed to parse Strict IR from {:?}", path))?;
+            Ok(Self::from(ir))
+        } else {
+            serde_yaml::from_str(&content).context("Failed to parse Chip Descriptor YAML")
+        }
     }
 }
 
@@ -196,6 +204,93 @@ impl PeripheralDescriptor {
 
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         serde_yaml::from_str(yaml).context("Failed to parse Peripheral Descriptor")
+    }
+}
+
+impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
+    fn from(ir: labwired_ir::IrPeripheral) -> Self {
+        let mut interrupts = std::collections::HashMap::new();
+        for int in ir.interrupts {
+            interrupts.insert(int.name, int.value);
+        }
+
+        Self {
+            peripheral: ir.name,
+            version: "ir-v1".to_string(),
+            registers: ir
+                .registers
+                .into_iter()
+                .map(|r| RegisterDescriptor {
+                    id: r.name,
+                    address_offset: r.offset,
+                    size: r.size as u8,
+                    access: match r.access {
+                        labwired_ir::IrAccess::ReadOnly => Access::ReadOnly,
+                        labwired_ir::IrAccess::WriteOnly => Access::WriteOnly,
+                        _ => Access::ReadWrite,
+                    },
+                    reset_value: r.reset_value as u32,
+                    fields: r
+                        .fields
+                        .into_iter()
+                        .map(|f| FieldDescriptor {
+                            name: f.name,
+                            bit_range: [(f.bit_offset + f.bit_width - 1) as u8, f.bit_offset as u8],
+                            description: f.description,
+                        })
+                        .collect(),
+                    side_effects: None, // IR doesn't explicitly model side effects yet
+                })
+                .collect(),
+            interrupts: if interrupts.is_empty() {
+                None
+            } else {
+                Some(interrupts)
+            },
+            timing: None,
+        }
+    }
+}
+
+impl From<labwired_ir::IrDevice> for ChipDescriptor {
+    fn from(ir: labwired_ir::IrDevice) -> Self {
+        let arch = match ir.arch.to_uppercase().as_str() {
+            "CM3" | "CM4" | "CM7" | "ARM" => Arch::Arm,
+            "RISCV" | "RV32" => Arch::RiscV,
+            _ => Arch::Arm, // Default to Arm for CMSIS-SVD
+        };
+
+        Self {
+            name: ir.name,
+            arch,
+            flash: MemoryRange {
+                base: 0,
+                size: "0".to_string(),
+            }, // IR doesn't carry memory map yet
+            ram: MemoryRange {
+                base: 0,
+                size: "0".to_string(),
+            },
+            peripherals: ir
+                .peripherals
+                .into_values()
+                .map(|p| {
+                    let ir_p_name = p.name.clone();
+                    let ir_p_base = p.base_address;
+                    PeripheralConfig {
+                        id: ir_p_name,
+                        r#type: "strict_ir_internal".to_string(),
+                        base_address: ir_p_base,
+                        size: None,
+                        irq: None,
+                        config: std::collections::HashMap::from([(
+                            "internal_ir_peripheral".to_string(),
+                            serde_yaml::to_value(p).unwrap(),
+                        )]),
+                    }
+                })
+                .collect(),
+        }
     }
 }
 

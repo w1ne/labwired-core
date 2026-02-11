@@ -93,7 +93,7 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
     if packet == "g" {
         // Read all registers
         let mut regs = String::new();
-        if let Ok(_) = adapter.get_register_names() {
+        if adapter.get_register_names().is_ok() {
             // ARM GDB expects 16 registers + PSR (optional)
             for i in 0..16 {
                 let val = adapter.get_register(i as u8).unwrap_or(0);
@@ -107,22 +107,25 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
         return Ok(regs);
     }
 
-    if packet.starts_with("m") {
+    if let Some(stripped) = packet.strip_prefix('m') {
         // Read memory: m addr,len
-        let parts: Vec<&str> = packet[1..].split(',').collect();
+        let parts: Vec<&str> = stripped.split(',').collect();
         if parts.len() == 2 {
             let addr = u64::from_str_radix(parts[0], 16).unwrap_or(0);
             let len = usize::from_str_radix(parts[1], 16).unwrap_or(0);
             if let Ok(data) = adapter.read_memory(addr, len) {
-                return Ok(data.iter().map(|b| format!("{:02x}", b)).collect::<String>());
+                return Ok(data
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect::<String>());
             }
         }
         return Ok("E01".to_string());
     }
 
-    if packet.starts_with("M") {
+    if let Some(stripped) = packet.strip_prefix('M') {
         // Write memory (hex): M addr,len:data
-        let parts: Vec<&str> = packet[1..].split(':').collect();
+        let parts: Vec<&str> = stripped.split(':').collect();
         if parts.len() == 2 {
             let addr_len: Vec<&str> = parts[0].split(',').collect();
             if addr_len.len() == 2 {
@@ -135,7 +138,7 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
                         data.push(b);
                     }
                 }
-                if let Ok(_) = adapter.write_memory(addr, &data) {
+                if adapter.write_memory(addr, &data).is_ok() {
                     return Ok("OK".to_string());
                 }
             }
@@ -155,9 +158,9 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
         return Ok("S05".to_string());
     }
 
-    if packet.starts_with("P") {
+    if let Some(stripped) = packet.strip_prefix('P') {
         // Write single register: P n=val
-        let parts: Vec<&str> = packet[1..].split('=').collect();
+        let parts: Vec<&str> = stripped.split('=').collect();
         if parts.len() == 2 {
             let n = u8::from_str_radix(parts[0], 16).unwrap_or(0);
             let val_hex = parts[1];
@@ -178,8 +181,8 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
         // Insert software breakpoint: Z0,addr,kind
         let parts: Vec<&str> = packet[3..].split(',').collect();
         if !parts.is_empty() {
-             let addr = u32::from_str_radix(parts[0], 16).unwrap_or(0);
-             let _ = adapter.add_breakpoint_addr(addr);
+            let addr = u32::from_str_radix(parts[0], 16).unwrap_or(0);
+            let _ = adapter.add_breakpoint_addr(addr);
         }
         return Ok("OK".to_string());
     }
@@ -188,8 +191,8 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
         // Remove software breakpoint: z0,addr,kind
         let parts: Vec<&str> = packet[3..].split(',').collect();
         if !parts.is_empty() {
-             let addr = u32::from_str_radix(parts[0], 16).unwrap_or(0);
-             let _ = adapter.remove_breakpoint_addr(addr);
+            let addr = u32::from_str_radix(parts[0], 16).unwrap_or(0);
+            let _ = adapter.remove_breakpoint_addr(addr);
         }
         return Ok("OK".to_string());
     }
@@ -198,7 +201,10 @@ fn handle_packet(packet: &str, adapter: &LabwiredAdapter) -> Result<String> {
 }
 
 fn send_packet(stream: &mut TcpStream, packet: &str) -> Result<()> {
-    let checksum = packet.as_bytes().iter().fold(0u8, |acc, &b| acc.wrapping_add(b));
+    let checksum = packet
+        .as_bytes()
+        .iter()
+        .fold(0u8, |acc, &b| acc.wrapping_add(b));
     let formatted = format!("${}#{:02x}", packet, checksum);
     stream.write_all(formatted.as_bytes())?;
     Ok(())
