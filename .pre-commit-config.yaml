@@ -12,7 +12,7 @@ repos:
     -   id: cargo-fmt
         name: cargo fmt
         description: Check formatting with cargo fmt
-        entry: cargo fmt --all -- --check
+        entry: cargo fmt --manifest-path core/Cargo.toml --all -- --check
         language: system
         types: [rust]
         pass_filenames: false
@@ -20,7 +20,7 @@ repos:
     -   id: cargo-clippy
         name: cargo clippy
         description: Run clippy on the workspace
-        entry: cargo clippy --workspace --exclude firmware --exclude firmware-ci-fixture -- -D warnings
+        entry: cargo clippy --manifest-path core/Cargo.toml --workspace --exclude firmware --exclude firmware-ci-fixture -- -D warnings
         language: system
         types: [rust]
         pass_filenames: false
@@ -28,7 +28,7 @@ repos:
     -   id: cargo-check
         name: cargo check
         description: Run cargo check on the workspace
-        entry: cargo check --workspace --exclude firmware --exclude firmware-ci-fixture
+        entry: cargo check --manifest-path core/Cargo.toml --workspace --exclude firmware --exclude firmware-ci-fixture
         language: system
         types: [rust]
         pass_filenames: false

@@ -223,6 +223,44 @@ impl SystemBus {
                         desc,
                     ))
                 }
+                "strict_ir" => {
+                    let descriptor_path = p_cfg
+                        .config
+                        .get("path")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "Field 'path' is required in 'config' for strict_ir peripheral '{}'",
+                                p_cfg.id
+                            )
+                        })?;
+
+                    let content = std::fs::read_to_string(descriptor_path)
+                        .with_context(|| format!("Failed to read IR file: {}", descriptor_path))?;
+                    let ir_peripheral: labwired_ir::IrPeripheral = serde_json::from_str(&content)
+                        .with_context(|| {
+                        format!("Failed to parse Strict IR from {}", descriptor_path)
+                    })?;
+
+                    let desc: labwired_config::PeripheralDescriptor = ir_peripheral.into();
+
+                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+                        desc,
+                    ))
+                }
+                "strict_ir_internal" => {
+                    let val = p_cfg.config.get("internal_ir_peripheral").ok_or_else(|| {
+                        anyhow::anyhow!("Missing internal_ir_peripheral config for converted IR")
+                    })?;
+                    // Convert yaml Value (which was serde_yaml::to_value(p)) back to IrPeripheral
+                    let ir_peripheral: labwired_ir::IrPeripheral =
+                        serde_yaml::from_value(val.clone())?;
+                    let desc: labwired_config::PeripheralDescriptor = ir_peripheral.into();
+
+                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+                        desc,
+                    ))
+                }
                 other => {
                     tracing::warn!(
                         "Unsupported peripheral type '{}' for id '{}'; skipping",
@@ -233,7 +271,7 @@ impl SystemBus {
                 }
             };
 
-            let mut dev = dev;
+            let dev = dev;
             // Stubbing out peripherals with external devices is deprecated.
             // For now, we keep the original peripheral.
             /*

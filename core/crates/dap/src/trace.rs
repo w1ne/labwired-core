@@ -1,5 +1,5 @@
-use std::collections::{VecDeque, HashMap};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
 
 /// Single instruction execution record
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +81,7 @@ impl TraceBuffer {
         self.instructions.push_back(trace);
 
         // Create checkpoint every 10K instructions
-        if self.current_cycle % 10_000 == 0 {
+        if self.current_cycle.is_multiple_of(10_000) {
             self.checkpoints.push(Checkpoint {
                 cycle: self.current_cycle,
                 trace_index: self.instructions.len() - 1,

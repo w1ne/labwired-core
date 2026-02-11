@@ -112,7 +112,6 @@ pub struct ImportSvdArgs {
     pub output: PathBuf,
 }
 
-
 #[derive(Parser, Debug)]
 pub struct MachineArgs {
     #[command(subcommand)]
@@ -428,8 +427,8 @@ fn run_import_svd(args: ImportSvdArgs) -> ExitCode {
     let device = match labwired_ir::IrDevice::from_svd(&svd) {
         Ok(d) => d,
         Err(e) => {
-             error!("Failed to convert to Strict IR: {}", e);
-             return ExitCode::from(EXIT_CONFIG_ERROR);
+            error!("Failed to convert to Strict IR: {}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
 
@@ -449,7 +448,6 @@ fn run_import_svd(args: ImportSvdArgs) -> ExitCode {
     info!("Successfully wrote Strict IR to {:?}", args.output);
     ExitCode::from(EXIT_PASS)
 }
-
 
 fn run_interactive(cli: Cli) -> ExitCode {
     info!("Starting LabWired Simulator");

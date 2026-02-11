@@ -9,8 +9,16 @@ impl IrDevice {
         let mut peripherals = HashMap::new();
         let mut interrupt_mapping = HashMap::new();
 
+        let arch = if let Some(cpu) = &svd.cpu {
+            cpu.name.clone()
+        } else {
+            "Unknown".to_string()
+        };
+
         // Map SVD peripherals by name for lookup
-        let svd_map: HashMap<String, &svd::Peripheral> = svd.peripherals.iter()
+        let svd_map: HashMap<String, &svd::Peripheral> = svd
+            .peripherals
+            .iter()
             .map(|p| (p.name.clone(), p))
             .collect();
 
@@ -21,21 +29,20 @@ impl IrDevice {
             recursion_stack: &mut Vec<String>,
         ) -> Result<IrPeripheral, String> {
             if recursion_stack.contains(&p.name) {
-                return Err(format!("Circular dependency in derivedFrom: {:?}", recursion_stack));
+                return Err(format!(
+                    "Circular dependency in derivedFrom: {:?}",
+                    recursion_stack
+                ));
             }
             recursion_stack.push(p.name.clone());
 
             // 1. Start with Base (Parent or Empty)
             let mut resolved = if let Some(parent_name) = &p.derived_from {
-                let parent_p = svd_map.get(parent_name)
-                    .ok_or_else(|| format!("Peripheral {} derives from unknown {}", p.name, parent_name))?;
+                let parent_p = svd_map.get(parent_name).ok_or_else(|| {
+                    format!("Peripheral {} derives from unknown {}", p.name, parent_name)
+                })?;
 
-                let mut parent_resolved = resolve_peripheral(parent_p, svd_map, recursion_stack)?;
-
-                // When deriving, the base address and name usually change to the derived one.
-                // But the registers are copied.
-                // We keep parent's registers and interrupts as a starting point.
-                parent_resolved
+                resolve_peripheral(parent_p, svd_map, recursion_stack)?
             } else {
                 IrPeripheral {
                     name: String::new(), // Will be overwritten
@@ -47,8 +54,8 @@ impl IrDevice {
             };
 
             // 2. Apply Local Overrides
-             // "The derivedFrom attribute specifies that the peripheral is a copy...
-             //  modified by the elements specified in this peripheral."
+            // "The derivedFrom attribute specifies that the peripheral is a copy...
+            //  modified by the elements specified in this peripheral."
 
             resolved.name = p.name.clone();
             resolved.base_address = p.base_address;
@@ -66,7 +73,11 @@ impl IrDevice {
             }
 
             for local_reg in local_registers {
-                if let Some(existing_idx) = resolved.registers.iter().position(|r| r.name == local_reg.name) {
+                if let Some(existing_idx) = resolved
+                    .registers
+                    .iter()
+                    .position(|r| r.name == local_reg.name)
+                {
                     // Redefine/Overwrite
                     // Note: SVD spec implies redefinition. With strict IR we just replace the struct.
                     // However, we must ensure offsets are correct relative to the NEW base address?
@@ -81,7 +92,7 @@ impl IrDevice {
 
             // 4. Merge Interrupts
             for i in &p.interrupt {
-                 let ir_intr = IrInterrupt {
+                let ir_intr = IrInterrupt {
                     name: i.name.clone(),
                     description: i.description.clone(),
                     value: i.value,
@@ -113,43 +124,10 @@ impl IrDevice {
 
         Ok(IrDevice {
             name: svd.name.clone(),
+            arch,
             description: Some(svd.description.clone()),
             peripherals,
             interrupt_mapping,
-        })
-    }
-
-}
-
-impl IrPeripheral {
-    fn from_svd(p: &svd::Peripheral) -> Result<Self, String> {
-        let mut registers = Vec::new();
-
-        if let Some(regs) = &p.registers {
-            for cluster_info in regs {
-                flatten_cluster(cluster_info, 0, "", &mut registers)?;
-            }
-        }
-
-        // Sort registers by offset for cleaner output/debugging
-        registers.sort_by_key(|r| r.offset);
-
-        // TODO: Handle derivedFrom at peripheral level if svd-parser doesn't fully resolve it.
-        // svd-parser 0.14 generally keeps the structure. If we need to copy registers from another peripheral,
-        // we'd need a second pass or access to the full device. For now assuming fully specified or pre-resolved.
-
-        let interrupts = p.interrupt.iter().map(|i| IrInterrupt {
-            name: i.name.clone(),
-            description: i.description.clone(),
-            value: i.value,
-        }).collect();
-
-        Ok(IrPeripheral {
-            name: p.name.clone(),
-            base_address: p.base_address,
-            description: p.description.clone(),
-            registers,
-            interrupts,
         })
     }
 }
@@ -178,7 +156,9 @@ fn flatten_cluster(
                     for i in 0..dim.dim {
                         let idx_str = i.to_string();
                         // simplistic placeholder replacement
-                        let name = full_name_pattern.replace("[%s]", &idx_str).replace("%s", &idx_str);
+                        let name = full_name_pattern
+                            .replace("[%s]", &idx_str)
+                            .replace("%s", &idx_str);
                         // If no placeholder, append index (common SVD quirk)
                         let final_name = if name == full_name_pattern {
                             format!("{}{}", name, i)
@@ -186,7 +166,8 @@ fn flatten_cluster(
                             name
                         };
 
-                        let abs_offset = current_offset + info.address_offset as u64 + (i as u64 * stride);
+                        let abs_offset =
+                            current_offset + info.address_offset as u64 + (i as u64 * stride);
                         out.push(convert_register(info, &final_name, abs_offset));
                     }
                 }
@@ -194,32 +175,31 @@ fn flatten_cluster(
         }
         RegisterCluster::Cluster(cluster) => {
             // Handle Cluster Arrays and Single Clusters
-             match cluster {
+            match cluster {
                 svd::Cluster::Single(info) => {
                     let new_prefix = format!("{}{}_", name_prefix, info.name);
                     let new_offset = current_offset + info.address_offset as u64;
                     for child in &info.children {
-                         flatten_cluster(child, new_offset, &new_prefix, out)?;
+                        flatten_cluster(child, new_offset, &new_prefix, out)?;
                     }
                 }
                 svd::Cluster::Array(info, dim) => {
-                     let stride = dim.dim_increment as u64;
-                     let prefix_pattern = format!("{}{}", name_prefix, info.name);
+                    let stride = dim.dim_increment as u64;
+                    let prefix_pattern = format!("{}{}", name_prefix, info.name);
 
-                     for i in 0..dim.dim {
-                         let idx_str = i.to_string();
-                         let name = prefix_pattern.replace("[%s]", &idx_str).replace("%s", &idx_str);
-                         let final_prefix = if name == prefix_pattern {
-                             format!("{}_", name) // SVD naming is messy, usually cluster arrays act as struct arrays
-                         } else {
-                             format!("{}_", name)
-                         };
+                    for i in 0..dim.dim {
+                        let idx_str = i.to_string();
+                        let name = prefix_pattern
+                            .replace("[%s]", &idx_str)
+                            .replace("%s", &idx_str);
+                        let final_prefix = format!("{}_", name);
 
-                         let new_offset = current_offset + info.address_offset as u64 + (i as u64 * stride);
-                         for child in &info.children {
-                             flatten_cluster(child, new_offset, &final_prefix, out)?;
-                         }
-                     }
+                        let new_offset =
+                            current_offset + info.address_offset as u64 + (i as u64 * stride);
+                        for child in &info.children {
+                            flatten_cluster(child, new_offset, &final_prefix, out)?;
+                        }
+                    }
                 }
             }
         }
@@ -269,7 +249,7 @@ fn map_access(access: Option<Access>) -> IrAccess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use svd_parser::svd::{self, RegisterCluster, Register};
+    use svd_parser::svd::{self, Register, RegisterCluster};
 
     fn create_mock_register(name: &str, offset: u32) -> Register {
         Register::Single(svd::RegisterInfo {
@@ -310,9 +290,9 @@ mod tests {
         let mut out = Vec::new();
         let reg = create_mock_register("CR", 0x00);
         let rc = RegisterCluster::Register(reg);
-        
+
         flatten_cluster(&rc, 0, "", &mut out).unwrap();
-        
+
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].name, "CR");
         assert_eq!(out[0].offset, 0x00);
@@ -340,9 +320,9 @@ mod tests {
             dim_increment: 0x4,
             dim_index: None,
             dim_name: None,
-            dim_array_index: None, 
+            dim_array_index: None,
         };
-        
+
         let rc = RegisterCluster::Register(Register::Array(info, dim));
         flatten_cluster(&rc, 0x1000, "PERIPH_", &mut out).unwrap();
 
@@ -354,23 +334,23 @@ mod tests {
         assert_eq!(out[2].name, "PERIPH_REG2");
         assert_eq!(out[2].offset, 0x1008); // 0x1000 + 8
     }
-    
+
     #[test]
     fn test_inheritance_resolution() {
         // Mock SVD structure
         // PARENT: [CR @ 0x00]
         // CHILD matches PARENT but adds [SR @ 0x04]
-        
+
         let mut parent = create_mock_peripheral("PARENT", 0x1000);
-        parent.registers = Some(vec![
-            RegisterCluster::Register(create_mock_register("CR", 0x00))
-        ]);
+        parent.registers = Some(vec![RegisterCluster::Register(create_mock_register(
+            "CR", 0x00,
+        ))]);
 
         let mut child = create_mock_peripheral("CHILD", 0x2000);
         child.derived_from = Some("PARENT".to_string());
-        child.registers = Some(vec![
-            RegisterCluster::Register(create_mock_register("SR", 0x04))
-        ]);
+        child.registers = Some(vec![RegisterCluster::Register(create_mock_register(
+            "SR", 0x04,
+        ))]);
 
         let device = svd::Device {
             name: "TEST".to_string(),
@@ -391,15 +371,23 @@ mod tests {
         };
 
         let ir = IrDevice::from_svd(&device).unwrap();
-        
+
         let child_ir = &ir.peripherals["CHILD"];
         assert_eq!(child_ir.base_address, 0x2000);
         assert_eq!(child_ir.registers.len(), 2);
-        
-        let cr = child_ir.registers.iter().find(|r| r.name == "CR").expect("CR not found in CHILD");
+
+        let cr = child_ir
+            .registers
+            .iter()
+            .find(|r| r.name == "CR")
+            .expect("CR not found in CHILD");
         assert_eq!(cr.offset, 0x00); // Relative offset preserved
-        
-        let sr = child_ir.registers.iter().find(|r| r.name == "SR").expect("SR not found in CHILD");
+
+        let sr = child_ir
+            .registers
+            .iter()
+            .find(|r| r.name == "SR")
+            .expect("SR not found in CHILD");
         assert_eq!(sr.offset, 0x04);
     }
 }

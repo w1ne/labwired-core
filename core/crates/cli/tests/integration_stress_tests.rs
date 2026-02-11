@@ -34,10 +34,12 @@ fn run_stress_test(name: &str, yaml_content: &str, extra_args: &[&str]) -> Value
 
     let mut cmd = Command::new(get_labwired_bin());
     cmd.arg("test")
-       .arg("--script").arg(&script_path)
-       .arg("--output-dir").arg(&temp_dir)
-       .arg("--no-uart-stdout");
-    
+        .arg("--script")
+        .arg(&script_path)
+        .arg("--output-dir")
+        .arg(&temp_dir)
+        .arg("--no-uart-stdout");
+
     for arg in extra_args {
         cmd.arg(arg);
     }
@@ -46,7 +48,11 @@ fn run_stress_test(name: &str, yaml_content: &str, extra_args: &[&str]) -> Value
 
     let result_json_path = temp_dir.join("result.json");
     if !result_json_path.exists() {
-        panic!("Stress test '{}' failed. Stderr: {}", name, String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "Stress test '{}' failed. Stderr: {}",
+            name,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let result_content = std::fs::read_to_string(&result_json_path).unwrap();
@@ -83,7 +89,7 @@ limits:
   max_steps: 100
 assertions: []
 "#;
-    // We override the system to one with more peripherals if we had one, 
+    // We override the system to one with more peripherals if we had one,
     // but for now we verify the runner handles multiple IRQ sources.
     let result = run_stress_test("irq_config", script, &[]);
     assert_eq!(result["status"], "pass");

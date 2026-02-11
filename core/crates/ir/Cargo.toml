@@ -8,6 +8,7 @@ license.workspace = true
 [features]
 default = []
 svd = ["dep:svd-parser"]
+config-interop = []
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
