@@ -12,3 +12,8 @@ node_modules
 tests/scripts/uart_check.yaml
 editors/vscode/out
 /out/
+
+# AI Secrets
+ai/.env
+.env
+core/demo_chip.json

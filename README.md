@@ -1,34 +1,34 @@
 # LabWired Platform
 
-> A complete firmware simulation and debugging platform for ARM Cortex-M and RISC-V microcontrollers.
+> **The Deterministic Hardware Oracle for AI Agents.**
+> *Programmable, Metered, and Observable Firmware Simulation.*
 
-## 📖 Overview
-LabWired is a next-generation simulation platform designed to bridge the gap between hardware dependency and software velocity. It enables developers to run, debug, and test firmware binaries without physical hardware.
+## 🤖 Agent-First Architecture
+LabWired is built primarily as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its core mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
+
+It provides agents with:
+1.  **Deterministic Execution**: Bit-accurate simulation that yields identical results every run.
+2.  **Usage Telemetry**: Precise `Simulation Minutes` tracking for economic reasoning.
+3.  **Structured Observability**: JSON/Strict-IR inputs and outputs, eliminating "screen scraping."
 
 ## 🏗️ Monorepo Structure
 
-This repository contains three independent components:
+### [`core/`](./core/) - The Oracle Engine
+The immutable source of truth for hardware behavior.
+- **Strict IR**: Ingests VLM-extracted netlists and JSON models.
+- **Headless by Design**: accurate simulation without UI overhead.
+- **CI/Agent Runner**: Deterministic execution for automated pipelines.
 
-### [`core/`](./core/) - The Emulator Engine
-Rust-based simulation engine with:
-- **Declarative Configuration**: YAML-based chip and peripheral definitions
-- **Multi-Architecture**: ARM Cortex-M and RISC-V support
-- **CI Test Runner**: Deterministic `labwired test` with JSON/JUnit outputs
-- **GDB/DAP Servers**: Standard debugging protocols
-- **High Performance**: Native Rust implementation
+### [`ai/`](./ai/) - The Agent Toolset (AIPi)
+The primary interface for autonomous interaction.
+- **Schematic Intelligence**: VLM-based perception of hardware topology.
+- **Datasheet Ingestion**: "Chain-of-Thought" grounding for generating peripheral models.
+- **Telemetry**: Usage-based metering for the agent economy.
 
-### [`vscode/`](./vscode/) - VS Code Extension
-Professional debugging interface with:
-- **Timeline View**: Execution history visualization
-- **Register Inspector**: Peripheral register viewer with bit-field expansion
-- **Memory View**: Hex/ASCII memory inspector
-- **DAP Integration**: Seamless connection to the emulator
-
-### [`ai/`](./ai/) - AI Asset Generation
-Tools for automated peripheral model generation:
-- **Datasheet Ingestion**: PDF → YAML conversion
-- **Schematic Analysis**: Component extraction from images
-- **Logic Synthesis**: Behavioral model generation
+### [`vscode/`](./vscode/) - Human Observer (Legacy/Debug)
+A secondary interface for human verification of agent outputs.
+- **Timeline View**: Visual confirmation of agent-driven execution.
+- **Register Inspector**: Manual spot-checking of peripheral state.
 
 ## 🚀 Quick Start
 

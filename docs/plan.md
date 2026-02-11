@@ -521,7 +521,7 @@ This section translates the business research roadmap (“The Strategic Horizon 
 ## Iteration 19: Professional Debugger Extension (Ozone-Class UX)
 **Objective**: Transform the VS Code extension into a professional-grade debugger matching Segger Ozone's capabilities, with simulation-specific advantages.
 
-**Rationale**: By providing an "Ozone-like" debugging experience natively in VS Code, LabWired becomes the preferred tool for embedded developers, eliminating the need for expensive commercial debuggers for simulation workflows.
+**Rationale**: By providing a high-end debugging experience natively in VS Code, LabWired becomes the preferred tool for embedded developers, eliminating the need for expensive commercial debuggers for simulation workflows. See [DEBUGGING_STRATEGY.md](file:///home/andrii/Projects/labwired/core/docs/DEBUGGING_STRATEGY.md) for technical details.
 
 ### Phase 1: Foundation & Connection (Sprint 1)
 **Goal**: establishing a reliable connection between VS Code and the LabWired DAP server.

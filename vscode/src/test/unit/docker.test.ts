@@ -7,11 +7,11 @@ class MockOutput implements ILogOutput {
     appendLine(value: string): void { }
 }
 
-describe('DockerManager', () => {
+suite('DockerManager', () => {
     const mockOutput = new MockOutput();
     const manager = new DockerManager(mockOutput);
 
-    it('should generate correct DAP arguments with mirror mount and port forwarding', () => {
+    test('should generate correct DAP arguments with mirror mount and port forwarding', () => {
         const image = 'my-image';
         const workspace = '/home/user/project';
         const args = manager.getDapArgs(image, workspace);
@@ -41,7 +41,7 @@ describe('DockerManager', () => {
         assert.strictEqual(args[args.length - 1], 'labwired-dap');
     });
 
-    it('should include extra docker arguments', () => {
+    test('should include extra docker arguments', () => {
         const image = 'my-image';
         const workspace = '/ws';
         const extra = ['--privileged', '--network=host'];

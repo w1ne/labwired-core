@@ -136,6 +136,46 @@
                 "command": "labwired.showTimeline",
                 "title": "LabWired: Show Timeline",
                 "category": "LabWired"
+            },
+            {
+                "command": "labwired.showGraphing",
+                "title": "LabWired: Show Logic Analyzer",
+                "category": "LabWired"
+            },
+            {
+                "command": "labwired.showMemoryInspector",
+                "title": "LabWired: Show Memory Inspector",
+                "category": "LabWired"
+            },
+            {
+                "command": "labwired.showTraceList",
+                "title": "LabWired: Show Instruction Trace",
+                "category": "LabWired"
+            },
+            {
+                "command": "labwired.showProfiling",
+                "title": "LabWired: Show Performance Profiler",
+                "category": "LabWired"
+            },
+            {
+                "command": "labwired.startSimulator",
+                "title": "Start Simulator",
+                "icon": "$(play)"
+            },
+            {
+                "command": "labwired.stopSimulator",
+                "title": "Stop Simulator",
+                "icon": "$(stop)"
+            },
+            {
+                "command": "labwired.restartSimulator",
+                "title": "Restart Simulator",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "labwired.configureProject",
+                "title": "Configure Project...",
+                "icon": "$(gear)"
             }
         ],
         "viewsContainers": {
@@ -154,6 +194,21 @@
                     "id": "labwired.dashboard",
                     "name": "Live Dashboard",
                     "icon": "$(circuit-board)"
+                },
+                {
+                    "id": "labwired.simulator",
+                    "name": "Simulator Management",
+                    "icon": "$(play-circle)"
+                },
+                {
+                    "id": "labwired.peripherals",
+                    "name": "Peripherals",
+                    "icon": "$(chip)"
+                },
+                {
+                    "id": "labwired.rtos_tasks",
+                    "name": "RTOS Tasks",
+                    "icon": "$(layers)"
                 }
             ]
         },

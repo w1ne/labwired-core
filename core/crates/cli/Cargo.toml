@@ -20,6 +20,7 @@ labwired-core = { path = "../core" }
 labwired-loader = { path = "../loader" }
 labwired-config = { path = "../config" }
 labwired-gdbstub = { path = "../gdbstub" }
+labwired-codegen = { path = "../codegen" }
 labwired-ir = { path = "../ir", features = ["svd"] }
 svd-parser = "0.14"
 anyhow = { workspace = true }

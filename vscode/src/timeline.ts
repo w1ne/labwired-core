@@ -6,6 +6,8 @@ interface TraceRecord {
     instruction: number;
     function?: string;
     registers: { [key: number]: number };
+    memory_writes?: { address: number, old_value: number, new_value: number }[];
+    stack_depth: number;
 }
 
 interface TraceResponse {
@@ -50,22 +52,16 @@ export class TimelinePanel {
             }
         });
 
-        // Handle panel disposal
         this.panel.onDidDispose(() => {
             this.panel = undefined;
         });
 
-        // Initial load
         await this.refresh();
     }
 
     private async refresh() {
-        // Send custom DAP request
         const session = vscode.debug.activeDebugSession;
-        if (!session) {
-            vscode.window.showWarningMessage('No active debug session. Start debugging first.');
-            return;
-        }
+        if (!session) return;
 
         try {
             const response: TraceResponse = await session.customRequest('readInstructionTrace', {
@@ -76,20 +72,22 @@ export class TimelinePanel {
             this.traces = response.traces;
             this.totalCycles = response.totalCycles;
 
-            // Send to webview
             this.panel?.webview.postMessage({
                 command: 'updateTraces',
                 traces: this.traces,
                 totalCycles: this.totalCycles,
             });
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to read instruction trace: ${error}`);
+            console.error(`Failed to read instruction trace: ${error}`);
         }
     }
 
     private async jumpToCycle(cycle: number) {
-        // TODO: Implement time-travel (restore state to specific cycle)
-        vscode.window.showInformationMessage(`Jump to cycle ${cycle} (time-travel not yet implemented)`);
+        const session = vscode.debug.activeDebugSession;
+        if (session) {
+            // We use a custom request but could also use 'goto' if cycle-to-address mapping is known
+            await session.customRequest('stepBack', { untilCycle: cycle });
+        }
     }
 
     private getWebviewContent(): string {
@@ -97,79 +95,42 @@ export class TimelinePanel {
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: var(--vscode-editor-background);
+            margin: 0; padding: 0; overflow: hidden;
+            background: var(--vscode-editor-background);
             color: var(--vscode-editor-foreground);
             font-family: var(--vscode-font-family);
         }
-
         #controls {
-            padding: 10px;
-            background-color: var(--vscode-editorWidget-background);
-            border-bottom: 1px solid var(--vscode-editorWidget-border);
-            display: flex;
-            gap: 10px;
-            align-items: center;
+            padding: 12px; background: rgba(30, 30, 30, 0.5);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--vscode-panel-border);
+            display: flex; gap: 15px; align-items: center;
         }
-
         button {
-            background-color: var(--vscode-button-background);
+            background: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
-            border: none;
-            padding: 6px 14px;
-            cursor: pointer;
-            border-radius: 2px;
+            border: none; padding: 6px 16px; cursor: pointer; border-radius: 4px;
+            transition: background 0.2s;
         }
-
-        button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-
-        #stats {
-            margin-left: auto;
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-
-        #timeline-container {
-            width: 100%;
-            height: calc(100vh - 50px);
-            position: relative;
-        }
-
-        #timeline {
-            width: 100%;
-            height: 100%;
-        }
-
+        button:hover { background: var(--vscode-button-hoverBackground); }
+        #timeline-container { width: 100%; height: calc(100vh - 60px); position: relative; }
+        #timeline { width: 100%; height: 100%; }
         #tooltip {
-            position: absolute;
-            background-color: var(--vscode-editorHoverWidget-background);
+            position: absolute; background: var(--vscode-editorHoverWidget-background);
             border: 1px solid var(--vscode-editorHoverWidget-border);
-            padding: 8px;
-            border-radius: 3px;
-            font-size: 12px;
-            pointer-events: none;
-            display: none;
-            z-index: 1000;
+            padding: 10px; border-radius: 6px; font-size: 12px;
+            pointer-events: none; display: none; z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
     </style>
 </head>
 <body>
     <div id="controls">
         <button id="refresh-btn">Refresh</button>
-        <button id="zoom-in-btn">Zoom In</button>
-        <button id="zoom-out-btn">Zoom Out</button>
-        <button id="reset-zoom-btn">Reset Zoom</button>
-        <div id="stats">
-            <span id="trace-count">0 instructions</span> |
-            <span id="cycle-count">0 cycles</span>
-        </div>
+        <button id="reset-zoom-btn">Reset View</button>
+        <span id="stats" style="font-size: 11px; opacity: 0.7"></span>
     </div>
     <div id="timeline-container">
         <canvas id="timeline"></canvas>
@@ -179,190 +140,118 @@ export class TimelinePanel {
     <script>
         const vscode = acquireVsCodeApi();
         const canvas = document.getElementById('timeline');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         const tooltip = document.getElementById('tooltip');
-        const traceCountEl = document.getElementById('trace-count');
-        const cycleCountEl = document.getElementById('cycle-count');
+        const stats = document.getElementById('stats');
 
         let traces = [];
-        let totalCycles = 0;
-        let zoomLevel = 1.0;
-        let panOffset = 0;
+        let zoomX = 10;
+        let panX = 0;
         let isDragging = false;
-        let dragStart = 0;
+        let dragStartX = 0;
 
-        // Resize canvas to fill container
         function resize() {
-            const container = document.getElementById('timeline-container');
-            canvas.width = container.clientWidth;
-            canvas.height = container.clientHeight;
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = (window.innerHeight - 60) * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
             render();
         }
         window.addEventListener('resize', resize);
         resize();
 
-        // Render timeline
         function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--vscode-editor-background');
+            ctx.fillRect(0, 0, w, h);
 
-            if (traces.length === 0) {
-                ctx.fillStyle = '#888';
-                ctx.font = '16px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('No trace data. Start debugging and step through code...', canvas.width / 2, canvas.height / 2);
-                return;
-            }
+            if (!traces.length) return;
 
-            const width = canvas.width;
-            const height = canvas.height;
-            const step = (width / traces.length) * zoomLevel;
+            const laneHeight = 20;
+            const baseY = h - 40;
 
-            // Draw instructions as vertical lines
-            ctx.strokeStyle = '#0078d4';
-            ctx.lineWidth = Math.max(1, step * 0.8);
+            // Draw Call Stack (Flame-graph style)
+            traces.forEach((t, i) => {
+                const x = (i * zoomX) + panX;
+                if (x < -zoomX || x > w) return;
 
-            traces.forEach((trace, i) => {
-                const x = (i * step) + panOffset;
+                const depth = t.stack_depth || 0;
+                const top = baseY - (depth * laneHeight);
 
-                // Only draw if visible
-                if (x < -step || x > width + step) return;
+                // Function block
+                ctx.fillStyle = '#1e88e5';
+                ctx.globalAlpha = 0.6;
+                ctx.fillRect(x, top, zoomX - 1, laneHeight);
 
-                const y = height / 2;
-                const lineHeight = 20;
-
-                // Color based on whether registers changed
-                const hasRegChanges = Object.keys(trace.registers).length > 0;
-                ctx.strokeStyle = hasRegChanges ? '#0078d4' : '#555';
-
-                ctx.beginPath();
-                ctx.moveTo(x, y - lineHeight);
-                ctx.lineTo(x, y + lineHeight);
-                ctx.stroke();
+                // Memory write indicator
+                if (t.memory_writes && t.memory_writes.length > 0) {
+                    ctx.fillStyle = '#ffb300';
+                    ctx.globalAlpha = 1.0;
+                    ctx.beginPath();
+                    ctx.arc(x + zoomX/2, top - 4, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             });
 
-            // Draw cycle markers
+            ctx.globalAlpha = 1.0;
+            // Cycle markers
             ctx.fillStyle = '#888';
-            ctx.font = '10px monospace';
-            ctx.textAlign = 'center';
-            const markerInterval = Math.max(1, Math.floor(traces.length / 10));
-            for (let i = 0; i < traces.length; i += markerInterval) {
-                const x = (i * step) + panOffset;
-                if (x >= 0 && x <= width) {
-                    ctx.fillText(\`\${traces[i].cycle}\`, x, 20);
+            ctx.font = '10px Inter, sans-serif';
+            for (let i = 0; i < traces.length; i += Math.ceil(100 / zoomX)) {
+                const x = (i * zoomX) + panX;
+                if (x >= 0 && x <= w) {
+                    ctx.fillText(traces[i].cycle, x, h - 5);
                 }
             }
         }
 
-        // Handle click to jump to cycle
-        canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left - panOffset;
-            const step = (canvas.width / traces.length) * zoomLevel;
-            const index = Math.floor(x / step);
+        canvas.addEventListener('mousedown', e => { isDragging = true; dragStartX = e.clientX - panX; });
+        window.addEventListener('mousemove', e => {
+            if (isDragging) { panX = e.clientX - dragStartX; render(); }
+            updateTooltip(e);
+        });
+        window.addEventListener('mouseup', () => isDragging = false);
 
-            if (index >= 0 && index < traces.length) {
-                vscode.postMessage({
-                    command: 'jumpToCycle',
-                    cycle: traces[index].cycle,
-                });
-            }
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const mouseX = e.clientX;
+            const cycleAtMouse = (mouseX - panX) / zoomX;
+            zoomX *= e.deltaY < 0 ? 1.2 : 0.8;
+            zoomX = Math.max(0.01, Math.min(500, zoomX));
+            panX = mouseX - (cycleAtMouse * zoomX);
+            render();
         });
 
-        // Handle mouse move for tooltip
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left - panOffset;
-            const step = (canvas.width / traces.length) * zoomLevel;
-            const index = Math.floor(x / step);
-
-            if (index >= 0 && index < traces.length) {
-                const trace = traces[index];
-                const regChanges = Object.entries(trace.registers)
-                    .map(([reg, val]) => \`R\${reg}=0x\${val.toString(16)}\`)
-                    .join(', ');
-
-                tooltip.innerHTML = \`
-                    <strong>Cycle:</strong> \${trace.cycle}<br>
-                    <strong>PC:</strong> 0x\${trace.pc.toString(16)}<br>
-                    \${trace.function ? \`<strong>Function:</strong> \${trace.function}<br>\` : ''}
-                    \${regChanges ? \`<strong>Changed:</strong> \${regChanges}\` : ''}
-                \`;
-                tooltip.style.left = e.clientX + 10 + 'px';
-                tooltip.style.top = e.clientY + 10 + 'px';
+        function updateTooltip(e) {
+            const x = e.clientX - panX;
+            const idx = Math.floor(x / zoomX);
+            if (idx >= 0 && idx < traces.length) {
+                const t = traces[idx];
                 tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.innerHTML = \`
+                    <div style="color: #64b5f6; font-weight: bold; margin-bottom: 4px">Cycle \${t.cycle}</div>
+                    <div>PC: 0x\${t.pc.toString(16)}</div>
+                    \${t.function ? \`<div>Func: \${t.function}</div>\` : ''}
+                    <div>Stack Depth: \${t.stack_depth}</div>
+                    \${t.memory_writes?.length ? \`<div style="color: #ffb300">Writes: \${t.memory_writes.length} bytes</div>\` : ''}
+                \`;
             } else {
                 tooltip.style.display = 'none';
             }
-        });
+        }
 
-        canvas.addEventListener('mouseleave', () => {
-            tooltip.style.display = 'none';
-        });
-
-        // Zoom controls
-        canvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-            zoomLevel *= zoomFactor;
-            zoomLevel = Math.max(0.1, Math.min(100, zoomLevel));
-            render();
-        });
-
-        // Pan controls
-        canvas.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            dragStart = e.offsetX - panOffset;
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                panOffset = e.offsetX - dragStart;
+        window.addEventListener('message', e => {
+            if (e.data.command === 'updateTraces') {
+                traces = e.data.traces;
+                stats.textContent = \`\${traces.length} instructions | \${e.data.totalCycles} cycles\`;
                 render();
             }
         });
 
-        canvas.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-            isDragging = false;
-        });
-
-        // Button handlers
-        document.getElementById('refresh-btn').addEventListener('click', () => {
-            vscode.postMessage({ command: 'refresh' });
-        });
-
-        document.getElementById('zoom-in-btn').addEventListener('click', () => {
-            zoomLevel *= 1.2;
-            render();
-        });
-
-        document.getElementById('zoom-out-btn').addEventListener('click', () => {
-            zoomLevel *= 0.8;
-            render();
-        });
-
-        document.getElementById('reset-zoom-btn').addEventListener('click', () => {
-            zoomLevel = 1.0;
-            panOffset = 0;
-            render();
-        });
-
-        // Receive messages from extension
-        window.addEventListener('message', (event) => {
-            const message = event.data;
-            if (message.command === 'updateTraces') {
-                traces = message.traces;
-                totalCycles = message.totalCycles;
-
-                traceCountEl.textContent = \`\${traces.length} instructions\`;
-                cycleCountEl.textContent = \`\${totalCycles} cycles\`;
-
-                render();
-            }
-        });
+        document.getElementById('refresh-btn').onclick = () => vscode.postMessage({ command: 'refresh' });
+        document.getElementById('reset-zoom-btn').onclick = () => { zoomX = 10; panX = 0; render(); };
     </script>
 </body>
 </html>`;

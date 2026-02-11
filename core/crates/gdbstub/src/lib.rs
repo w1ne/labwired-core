@@ -18,11 +18,17 @@ use std::net::{TcpListener, TcpStream};
 
 pub struct LabwiredTarget<C: Cpu> {
     pub machine: Machine<C>,
+    pub running: bool,
+    pub single_step: bool,
 }
 
 impl<C: Cpu> LabwiredTarget<C> {
     pub fn new(machine: Machine<C>) -> Self {
-        Self { machine }
+        Self {
+            machine,
+            running: false,
+            single_step: false,
+        }
     }
 }
 
@@ -117,7 +123,7 @@ impl SingleThreadBase for LabwiredTarget<RiscV> {
         for i in 0..32 {
             regs.x[i] = self.machine.read_core_reg(i as u8);
         }
-        regs.pc = self.machine.read_core_reg(32); // Assuming read_core_reg(32) is PC for RISC-V
+        regs.pc = self.machine.read_core_reg(32);
         Ok(())
     }
 
@@ -169,6 +175,8 @@ where
     LabwiredTarget<C>: Target<Arch: gdbstub::arch::Arch<Usize = u32>>,
 {
     fn resume(&mut self, _signal: Option<gdbstub::common::Signal>) -> Result<(), Self::Error> {
+        self.running = true;
+        self.single_step = false;
         Ok(())
     }
 
@@ -184,6 +192,8 @@ where
     LabwiredTarget<C>: Target<Arch: gdbstub::arch::Arch<Usize = u32>>,
 {
     fn step(&mut self, _signal: Option<gdbstub::common::Signal>) -> Result<(), Self::Error> {
+        self.running = true;
+        self.single_step = true;
         Ok(())
     }
 }
@@ -281,6 +291,12 @@ where
         use gdbstub::stub::run_blocking::Event;
         use std::io::Read;
 
+        if !target.running {
+            return Ok(Event::TargetStopped(BaseStopReason::Signal(
+                gdbstub::common::Signal::SIGTRAP,
+            )));
+        }
+
         loop {
             // Non-blocking peep at connection for interrupt
             let mut byte = [0];
@@ -301,22 +317,30 @@ where
             }
 
             // Run machine for a small chunk
-            match target.machine.run(Some(1000)) {
-                Ok(StopReason::Breakpoint(_)) => {
+            let result = if target.single_step {
+                target.machine.step_single()
+            } else {
+                target.machine.run(Some(1000))
+            };
+
+            match result {
+                Ok(StopReason::Breakpoint(_)) | Ok(StopReason::StepDone) => {
+                    target.running = false;
                     return Ok(Event::TargetStopped(BaseStopReason::Signal(
                         gdbstub::common::Signal::SIGTRAP,
-                    )))
-                }
-                Ok(StopReason::StepDone) => {
-                    return Ok(Event::TargetStopped(BaseStopReason::Signal(
-                        gdbstub::common::Signal::SIGTRAP,
-                    )))
+                    )));
                 }
                 Ok(_) => {
-                    // MaxSteps reached, continue loop and check for interrupt again
-                    continue;
+                    // MaxStepsReached
+                    if target.single_step {
+                        target.running = false;
+                        return Ok(Event::TargetStopped(BaseStopReason::Signal(
+                            gdbstub::common::Signal::SIGTRAP,
+                        )));
+                    }
                 }
                 Err(e) => {
+                    target.running = false;
                     tracing::error!("GDB Simulation Error: {}", e);
                     return Ok(Event::TargetStopped(BaseStopReason::Signal(
                         gdbstub::common::Signal::SIGSEGV,
@@ -405,8 +429,6 @@ mod tests {
         let mut target = LabwiredTarget::<CortexM>::new(machine);
 
         let data = [0xAA, 0xBB, 0xCC, 0xDD];
-        // Memory write/read test would ideally go to a peripheral but we just want to verify trait calls.
-        // Direct memory access via target.write_addrs should not panic if it fails gracefully.
         let _ = target.write_addrs(0x20000000, &data);
     }
 }

@@ -5,6 +5,5 @@
 // See the LICENSE file in the project root for full license information.
 
 pub mod adapter;
-pub mod gdb;
 pub mod server;
 pub mod trace;

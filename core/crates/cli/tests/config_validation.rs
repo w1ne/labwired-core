@@ -1,6 +1,6 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
-use labwired_core::{Bus, Cpu, Machine};
-use std::path::{Path, PathBuf};
+use labwired_config::{ChipDescriptor, SystemManifest};
+use std::path::PathBuf;
 
 #[test]
 fn test_chip_config_validation() {

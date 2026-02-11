@@ -1,8 +1,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
-use labwired_core::{Bus, Cpu, Machine};
+use labwired_core::Machine;
 use labwired_loader::load_elf;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::PathBuf;
 
 #[test]
 fn test_demo_blinky_gpio_toggle() {

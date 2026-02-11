@@ -53,10 +53,16 @@ class LabwiredDashboardProvider {
 						<div class="card">
 							<h3>MIPS</h3>
 							<div id="mips-value" class="value">0.00</div>
+							<div class="sparkline-container">
+								<canvas id="mips-sparkline" class="sparkline"></canvas>
+							</div>
 						</div>
 						<div class="card">
 							<h3>Cycles</h3>
 							<div id="cycles-value" class="value">0</div>
+							<div class="sparkline-container">
+								<canvas id="cycles-sparkline" class="sparkline"></canvas>
+							</div>
 						</div>
 						<div class="card">
 							<h3>PC</h3>
@@ -64,7 +70,7 @@ class LabwiredDashboardProvider {
 						</div>
 						<div class="card">
 							<h3>Status</h3>
-							<div id="status-text" class="value">Running</div>
+							<div id="status-text" class="value">Ready</div>
 						</div>
 					</div>
 

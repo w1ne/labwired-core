@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 
 #[test]
@@ -29,7 +28,7 @@ fn test_asset_import_fixtures() {
         for entry in fs::read_dir(&real_world_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "svd") {
+            if path.extension().is_some_and(|ext| ext == "svd") {
                 svd_files.push(path);
             }
         }

@@ -65,6 +65,8 @@ fn read_packet(stream: &mut TcpStream) -> String {
 
 #[test]
 fn test_gdb_rsp_basic_commands() {
+    let _ = tracing_subscriber::fmt::try_init();
+    println!("Starting GDB E2E test...");
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
     let firmware_path = workspace_root.join("tests/fixtures/uart-ok-thumbv7m.elf");
@@ -93,6 +95,7 @@ fn test_gdb_rsp_basic_commands() {
     thread::sleep(Duration::from_millis(100));
 
     // 2. Connect client
+    println!("Connecting to GDB server on port {}...", port);
     let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(1)))
@@ -101,10 +104,22 @@ fn test_gdb_rsp_basic_commands() {
     // 3. Send ACK for initial connect
     stream.write_all(b"+").unwrap();
 
-    // 4. Test Read R0 ($p0)
-    send_packet(&mut stream, "p0");
+    // 4. Test Read All Registers ($g)
+    println!("Sending g...");
+    send_packet(&mut stream, "g");
     let resp = read_packet(&mut stream);
-    assert!(!resp.contains("E"), "Failed to read R0. Got: {}", resp);
+    assert!(
+        !resp.contains("E"),
+        "Failed to read registers. Got: {}",
+        resp
+    );
+    // Register response ($g) might be RLE encoded.
+    // e.g. $00000000... or $0*...
+    assert!(
+        resp.starts_with("$") || resp.starts_with("+$"),
+        "Invalid GDB response: {}",
+        resp
+    );
 
     // 5. Test Single Step ($s)
     send_packet(&mut stream, "s");

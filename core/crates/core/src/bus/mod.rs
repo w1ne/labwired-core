@@ -27,6 +27,7 @@ pub struct SystemBus {
     pub ram: LinearMemory,
     pub peripherals: Vec<PeripheralEntry>,
     pub nvic: Option<Arc<NvicState>>,
+    pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +156,7 @@ impl SystemBus {
                 },
             ],
             nvic: None,
+            observers: Vec::new(),
         }
     }
 
@@ -182,6 +184,7 @@ impl SystemBus {
             ram: LinearMemory::new(ram_size as usize, chip.ram.base),
             peripherals: Vec::new(),
             nvic: None,
+            observers: Vec::new(),
         };
 
         for p_cfg in &chip.peripherals {
@@ -552,21 +555,36 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
-        if self.ram.write_u8(addr, value) {
-            return Ok(());
-        }
-        if self.flash.write_u8(addr, value) {
-            return Ok(());
-        }
+        let old_value = self.read_u8(addr).unwrap_or(0);
 
-        // Dynamic Peripherals
-        for p in &mut self.peripherals {
-            if addr >= p.base && addr < p.base + p.size {
-                return p.dev.write(addr - p.base, value);
+        let res = if self.ram.write_u8(addr, value) || self.flash.write_u8(addr, value) {
+            Ok(())
+        } else {
+            // Dynamic Peripherals
+            let mut found = false;
+            let mut p_res = Ok(());
+            for p in &mut self.peripherals {
+                if addr >= p.base && addr < p.base + p.size {
+                    p_res = p.dev.write(addr - p.base, value);
+                    found = true;
+                    break;
+                }
+            }
+            if found {
+                p_res
+            } else {
+                Err(SimulationError::MemoryViolation(addr))
+            }
+        };
+
+        if res.is_ok() {
+            // Trigger observers
+            for observer in &self.observers {
+                observer.on_memory_write(addr, old_value, value);
             }
         }
 
-        Err(SimulationError::MemoryViolation(addr))
+        res
     }
 
     fn tick_peripherals(&mut self) -> Vec<u32> {
@@ -635,5 +653,44 @@ mod tests {
         bus.write_u32(0x40001004, 0x12345678).unwrap();
         let count_val = bus.read_u32(0x40001004).unwrap();
         assert_eq!(count_val, 0x12345678);
+    }
+
+    #[test]
+    fn test_system_bus_memory_observer() {
+        use std::sync::Arc;
+        use std::sync::Mutex;
+
+        #[derive(Debug)]
+        struct MockObserver {
+            writes: Arc<Mutex<Vec<(u64, u8, u8)>>>,
+        }
+
+        impl crate::SimulationObserver for MockObserver {
+            fn on_memory_write(&self, addr: u64, old: u8, new: u8) {
+                self.writes.lock().unwrap().push((addr, old, new));
+            }
+        }
+
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let mut bus = SystemBus::new();
+        bus.observers.push(Arc::new(MockObserver {
+            writes: writes.clone(),
+        }));
+
+        // Write to RAM (e.g., 0x20000000)
+        bus.write_u8(0x20000000, 0xAA).unwrap();
+        {
+            let w = writes.lock().unwrap();
+            assert_eq!(w.len(), 1);
+            assert_eq!(w[0], (0x20000000, 0, 0xAA));
+        }
+
+        // Write to Peripheral (e.g., UART at 0x4000C000)
+        bus.write_u8(0x4000C000, 0xBB).unwrap();
+        {
+            let w = writes.lock().unwrap();
+            assert_eq!(w.len(), 2);
+            assert_eq!(w[1], (0x4000C000, 0xC0, 0xBB));
+        }
     }
 }
