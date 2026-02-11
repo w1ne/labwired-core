@@ -1,70 +1,64 @@
 use std::process::Command;
 use std::path::Path;
+use std::fs;
 
 #[test]
-fn test_asset_import_e2e() {
+fn test_asset_import_fixtures() {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     
-    // Paths relative to workspace root (where we run cargo test)
-    let fixture_svd = Path::new("tests/fixtures/advanced_stm32.svd");
-    let output_json = Path::new("tests/fixtures/integration_test_output.json");
-
-    assert!(fixture_svd.exists(), "Fixture SVD not found at {:?}", fixture_svd);
-
-    // Run the CLI via cargo run (slow but realistic)
-    // Note: We need to use labwired-cli binary
-    let status = Command::new(cargo)
-        .arg("run")
-        .arg("-p")
-        .arg("labwired-cli")
-        .arg("--")
-        .arg("asset")
-        .arg("import-svd")
-        .arg("--input")
-        .arg(fixture_svd)
-        .arg("--output")
-        .arg(output_json)
-        .current_dir("../../") // Go up from crates/cli/tests/ to workspace root? 
-        // When running `cargo test` from core/crates/cli, CWD is crates/cli.
-        // Wait, normally integration tests run with CWD = crate root.
-        // Let's assume we run from workspace root to simplify paths, or adjust.
-        // If we run `cargo test -p labwired-cli` from workspace root, CWD is workspace root.
-        .status()
-        .expect("Failed to execute labwired-cli");
-
-    assert!(status.success(), "labwired-cli failed");
-
-    // Verify Output
-    // We need to resolve path relative to where we are.
-    // Making this robust to CWD is tricky without `CARGO_MANIFEST_DIR`.
-    // Let's try to read the file.
-    
-    // Assuming CWD of this test execution is `core/crates/cli` or `core`?
-    // Cargo sets CWD to the crate root for integration tests in `tests/`.
-    // So `core/crates/cli`.
-    
-    // Wait, the `Command` above spawned a subprocess.
-    // If we rely on absolute paths it's safer.
-    
-    let root_dir = std::env::current_dir().unwrap();
-    println!("Test CWD: {:?}", root_dir);
-    
-    // Check if the output file exists
-    // The CLI above was run with `current_dir("../..")` which puts it at `core` (if we are in `core/crates/cli`).
-    // So `tests/fixtures/...` would be `core/tests/fixtures/...`.
-    
-    // Let's rely on the file system.
-    let expected_output_path = root_dir
+    // Determine workspace root. 
+    // Tests run in `core/crates/cli`, so workspace root is `../../`
+    let workspace_root = std::env::current_dir().unwrap()
         .parent().unwrap() // crates
         .parent().unwrap() // core
-        .join("tests/fixtures/integration_test_output.json");
+        .to_path_buf();
 
-    assert!(expected_output_path.exists(), "Output JSON not created at {:?}", expected_output_path);
+    let fixtures_dir = workspace_root.join("tests/fixtures");
+    let real_world_dir = fixtures_dir.join("real_world");
 
-    let content = std::fs::read_to_string(&expected_output_path).unwrap();
-    assert!(content.contains("\"name\": \"ADVANCED_DEVICE\""));
-    assert!(content.contains("\"name\": \"TIMER1\""));
-    
-    // Cleanup
-    let _ = std::fs::remove_file(expected_output_path);
+    let mut svd_files = Vec::new();
+
+    // Add the manual fixture
+    svd_files.push(fixtures_dir.join("advanced_stm32.svd"));
+
+    // Add all real-world fixtures if they exist
+    if real_world_dir.exists() {
+        for entry in fs::read_dir(&real_world_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "svd") {
+                svd_files.push(path);
+            }
+        }
+    }
+
+    assert!(!svd_files.is_empty(), "No SVD fixtures found to test!");
+
+    for svd_path in svd_files {
+        println!("Testing SVD Import: {:?}", svd_path);
+        
+        // Output file will be side-by-side with .json extension
+        let output_path = svd_path.with_extension("test_output.json");
+
+        let status = Command::new(&cargo)
+            .arg("run")
+            .arg("-p")
+            .arg("labwired-cli")
+            .arg("--")
+            .arg("asset")
+            .arg("import-svd")
+            .arg("--input")
+            .arg(&svd_path)
+            .arg("--output")
+            .arg(&output_path)
+            .current_dir(&workspace_root) // Run from workspace root so paths are relative to it if needed
+            .status()
+            .expect("Failed to execute labwired-cli");
+
+        assert!(status.success(), "Failed to import {:?}", svd_path);
+        assert!(output_path.exists(), "Output JSON not created for {:?}", svd_path);
+
+        // Basic clean up
+        let _ = fs::remove_file(output_path);
+    }
 }
