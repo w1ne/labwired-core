@@ -1,0 +1,777 @@
+name: ADXL345
+registers:
+- name: DEVID
+  offset: '0x00'
+  reset_value: '0xE5'
+  access: ReadOnly
+  fields:
+  - name: Device_ID
+    bit_range:
+    - 0
+    - 7
+    description: Fixed device ID code of 0xE5 (11100101 binary / 345 octal).
+- name: THRESH_TAP
+  offset: '0x1D'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_TAP
+    bit_range:
+    - 0
+    - 7
+    description: Tap threshold. The data format is unsigned, so the magnitude of the
+      tap event is compared with the value in THRESH_TAP. The scale factor is 62.5
+      mg/LSB (that is, 0xFF = +16 g). A value of 0 may result in undesirable behavior
+      if tap/double tap interrupts are enabled.
+- name: OFSX
+  offset: '0x1E'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: OFSX
+    bit_range:
+    - 0
+    - 7
+    description: X-axis offset adjustment in twos complement format with a scale factor
+      of 15.6 mg/LSB (0x7F = +2 g).
+- name: OFSY
+  offset: '0x1F'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: OFSY
+    bit_range:
+    - 0
+    - 7
+    description: Y-axis offset adjustment in twos complement format with a scale factor
+      of 15.6 mg/LSB (0x7F = +2 g)
+- name: OFSZ
+  offset: '0x20'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Z-axis offset
+    bit_range:
+    - 0
+    - 7
+    description: User-set offset adjustment in twos complement format with a scale
+      factor of 15.6 mg/LSB (0x7F = +2 g).
+- name: DUR
+  offset: '0x21'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: DUR
+    bit_range:
+    - 0
+    - 7
+    description: "Unsigned time value representing the maximum time that an event\
+      \ must be above the THRESH_TAP threshold to qualify as a tap event. The scale\
+      \ factor is 625 \u03BCs/LSB. A value of 0 disables the tap/double tap functions."
+- name: Latent
+  offset: '0x22'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Latent
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the wait time from the detection
+      of a tap event to the start of the time window during which a possible second
+      tap event can be detected. Scale factor is 1.25 ms/LSB. A value of 0 disables
+      the double tap function.
+- name: Window
+  offset: '0x23'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Window
+    bit_range:
+    - 0
+    - 7
+    description: 'Unsigned time value representing the amount of time after the expiration
+      of the latency time during which a second valid tap can begin. Scale factor:
+      1.25 ms/LSB. A value of 0 disables the double tap function.'
+- name: THRESH_ACT
+  offset: '0x24'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_ACT
+    bit_range:
+    - 0
+    - 7
+    description: Threshold value for detecting activity. Unsigned data format, scale
+      factor 62.5 mg/LSB. Magnitude of activity event compared to this value.
+- name: THRESH_INACT
+  offset: '0x25'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_INACT
+    bit_range:
+    - 0
+    - 7
+    description: Holds the threshold value for detecting inactivity. The data format
+      is unsigned, so the magnitude of the inactivity event is compared with the value
+      in the THRESH_INACT register. The scale factor is 62.5 mg/LSB. A value of 0
+      mg may result in undesirable behavior if the inactivity interrupt is enabled.
+- name: TIME_INACT
+  offset: '0x26'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: TIME_INACT
+    bit_range:
+    - 0
+    - 7
+    description: 'Unsigned 8-bit value representing the amount of time that acceleration
+      must be less than THRESH_INACT for inactivity detection. Scale factor: 1 sec/LSB.
+      Maximum value: 255 sec. Uses filtered output data.'
+- name: ACT_INACT_CTL
+  offset: '0x27'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: ACT_ACDC
+    bit_range:
+    - 7
+    - 7
+    description: ACT AC/DC bit. A setting of 0 selects dc-coupled operation, and a
+      setting of 1 enables ac-coupled operation.
+  - name: ACT_X_EN
+    bit_range:
+    - 6
+    - 6
+    description: ACT_X enable bit. A setting of 1 enables x-axis participation in
+      detecting activity. A setting of 0 excludes the x-axis from participation.
+  - name: ACT_Y_EN
+    bit_range:
+    - 5
+    - 5
+    description: ACT_Y enable bit. A setting of 1 enables y-axis participation in
+      detecting activity. A setting of 0 excludes the y-axis from participation.
+  - name: ACT_Z_EN
+    bit_range:
+    - 4
+    - 4
+    description: ACT_Z enable bit. A setting of 1 enables z-axis participation in
+      detecting activity. A setting of 0 excludes the z-axis from participation.
+  - name: INACT_ACDC
+    bit_range:
+    - 3
+    - 3
+    description: INACT AC/DC bit. A setting of 0 selects dc-coupled operation, and
+      a setting of 1 enables ac-coupled operation.
+  - name: INACT_X_EN
+    bit_range:
+    - 2
+    - 2
+    description: INACT_X enable bit. A setting of 1 enables x-axis participation in
+      detecting inactivity. A setting of 0 excludes the x-axis from participation.
+  - name: INACT_Y_EN
+    bit_range:
+    - 1
+    - 1
+    description: INACT_Y enable bit. A setting of 1 enables y-axis participation in
+      detecting inactivity. A setting of 0 excludes the y-axis from participation.
+  - name: INACT_Z_EN
+    bit_range:
+    - 0
+    - 0
+    description: INACT_Z enable bit. A setting of 1 enables z-axis participation in
+      detecting inactivity. A setting of 0 excludes the z-axis from participation.
+      If all axes are excluded, the function is disabled.
+- name: THRESH_FF
+  offset: '0x28'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_FF
+    bit_range:
+    - 0
+    - 7
+    description: 'Free-fall threshold value, unsigned format. The root-sum-square
+      (RSS) value of all axes is compared with this value. Scale factor is 62.5 mg/LSB.
+      Recommended values: 0x05 to 0x09 (300 mg to 600 mg). A value of 0 may result
+      in undesirable behavior if free-fall interrupt is enabled.'
+- name: TIME_FF
+  offset: '0x29'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: TIME_FF
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the minimum time that the RSS value
+      of all axes must be less than THRESH_FF to generate a free-fall interrupt. The
+      scale factor is 5 ms/LSB.
+- name: TAP_AXES
+  offset: '0x2A'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Suppress
+    bit_range:
+    - 3
+    - 3
+    description: Setting the suppress bit suppresses double tap detection if acceleration
+      greater than the value in THRESH_TAP is present between taps. See the Tap Detection
+      section for more details.
+  - name: TAP_X_enable
+    bit_range:
+    - 2
+    - 2
+    description: A setting of 1 in the TAP_X enable bit enables x-axis participation
+      in tap detection. A setting of 0 excludes the selected axis from participation
+      in tap detection.
+  - name: TAP_Y_enable
+    bit_range:
+    - 1
+    - 1
+    description: A setting of 1 in the TAP_Y enable bit enables y-axis participation
+      in tap detection. A setting of 0 excludes the selected axis from participation
+      in tap detection.
+  - name: TAP_Z_enable
+    bit_range:
+    - 0
+    - 0
+    description: A setting of 1 in the TAP_Z enable bit enables z-axis participation
+      in tap detection. A setting of 0 excludes the selected axis from participation
+      in tap detection.
+- name: ACT_TAP_STATUS
+  offset: '0x2B'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: TAP_Z_source
+    bit_range:
+    - 0
+    - 0
+    description: TAP Z source bit. Indicates Z-axis involvement in tap event (1 =
+      involved, 0 = not). Overwritten by new data.
+  - name: TAP_Y_source
+    bit_range:
+    - 1
+    - 1
+    description: TAP Y source bit. Indicates Y-axis involvement in tap event (1 =
+      involved, 0 = not). Overwritten by new data.
+  - name: TAP_X_source
+    bit_range:
+    - 2
+    - 2
+    description: TAP X source bit. Indicates X-axis involvement in tap event (1 =
+      involved, 0 = not). Overwritten by new data.
+  - name: Asleep
+    bit_range:
+    - 3
+    - 3
+    description: Asleep bit. 1 = part is asleep, 0 = part is not asleep (see POWER_CTL
+      for autosleep).
+  - name: ACT_Z_source
+    bit_range:
+    - 4
+    - 4
+    description: ACT Z source bit. Indicates Z-axis involvement in activity event
+      (1 = involved, 0 = not). Overwritten by new data.
+  - name: ACT_Y_source
+    bit_range:
+    - 5
+    - 5
+    description: ACT Y source bit. Indicates Y-axis involvement in activity event
+      (1 = involved, 0 = not). Overwritten by new data.
+  - name: ACT_X_source
+    bit_range:
+    - 6
+    - 6
+    description: ACT X source bit. Indicates X-axis involvement in activity event
+      (1 = involved, 0 = not). Overwritten by new data.
+  - name: Reserved
+    bit_range:
+    - 7
+    - 7
+    description: Always 0.
+- name: BW_RATE
+  offset: '0x2C'
+  reset_value: '0x0A'
+  access: ReadWrite
+  fields:
+  - name: Reserved
+    bit_range:
+    - 5
+    - 7
+    description: Reserved bits (fixed to 0).
+  - name: LOW_POWER
+    bit_range:
+    - 4
+    - 4
+    description: A setting of 0 in the LOW_POWER bit selects normal operation, and
+      a setting of 1 selects reduced power operation, which has somewhat higher noise
+      (see the Power Modes section for details).
+  - name: Rate
+    bit_range:
+    - 0
+    - 3
+    description: These bits select the device bandwidth and output data rate (see
+      Table 6 and Table 7 for details). The default value is 0x0A, which translates
+      to a 100 Hz output data rate. An output data rate should be selected that is
+      appropriate for the communication protocol and frequency selected. Selecting
+      too high of an output data rate with a low communication speed results in samples
+      being discarded.
+- name: POWER_CTL
+  offset: '0x2D'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: reserved
+    bit_range:
+    - 7
+    - 6
+    description: Reserved (must be 0)
+  - name: Link
+    bit_range:
+    - 5
+    - 5
+    description: 'Link bit: 1 links activity and inactivity functions (delays activity
+      until inactivity detected), 0 concurrent'
+  - name: AUTO_SLEEP
+    bit_range:
+    - 4
+    - 4
+    description: 'AUTO_SLEEP bit: If link=1, 1 enables switch to sleep on inactivity,
+      0 disables'
+  - name: Measure
+    bit_range:
+    - 3
+    - 3
+    description: 'Measure bit: 0=standby mode, 1=measurement mode'
+  - name: Sleep
+    bit_range:
+    - 2
+    - 2
+    description: 'Sleep bit: 0=normal operation, 1=sleep mode (suppresses DATA_READY,
+      low sampling)'
+  - name: Wakeup
+    bit_range:
+    - 0
+    - 1
+    description: 'Wakeup bits: Control frequency of readings in sleep mode (00=8Hz,
+      01=4Hz, 10=2Hz, 11=1Hz)'
+- name: INT_ENABLE
+  offset: '0x2E'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: DATA_READY
+    bit_range:
+    - 7
+    - 7
+    description: Data ready interrupt enable
+  - name: SINGLE_TAP
+    bit_range:
+    - 6
+    - 6
+    description: Single tap interrupt enable
+  - name: DOUBLE_TAP
+    bit_range:
+    - 5
+    - 5
+    description: Double tap interrupt enable
+  - name: Activity
+    bit_range:
+    - 4
+    - 4
+    description: Activity interrupt enable
+  - name: Inactivity
+    bit_range:
+    - 3
+    - 3
+    description: Inactivity interrupt enable
+  - name: FREE_FALL
+    bit_range:
+    - 2
+    - 2
+    description: Free-fall interrupt enable
+  - name: Watermark
+    bit_range:
+    - 1
+    - 1
+    description: Watermark interrupt enable
+  - name: Overrun
+    bit_range:
+    - 0
+    - 0
+    description: Overrun interrupt enable
+- name: INT_MAP
+  offset: '0x2F'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: DATA_READY
+    bit_range:
+    - 7
+    - 7
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+  - name: SINGLE_TAP
+    bit_range:
+    - 6
+    - 6
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+  - name: DOUBLE_TAP
+    bit_range:
+    - 5
+    - 5
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+  - name: Activity
+    bit_range:
+    - 4
+    - 4
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+  - name: Inactivity
+    bit_range:
+    - 3
+    - 3
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+  - name: FREE_FALL
+    bit_range:
+    - 2
+    - 2
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+  - name: Watermark
+    bit_range:
+    - 1
+    - 1
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+  - name: Overrun
+    bit_range:
+    - 0
+    - 0
+    description: '0: interrupt to INT1 pin, 1: interrupt to INT2 pin'
+- name: INT_SOURCE
+  offset: '0x30'
+  reset_value: '0x02'
+  access: ReadOnly
+  fields:
+  - name: DATA_READY
+    bit_range:
+    - 7
+    - 7
+    description: Set when new data is available
+  - name: SINGLE_TAP
+    bit_range:
+    - 6
+    - 6
+    description: Set when a single tap event occurs
+  - name: DOUBLE_TAP
+    bit_range:
+    - 5
+    - 5
+    description: Set when a double tap event occurs
+  - name: Activity
+    bit_range:
+    - 4
+    - 4
+    description: Set when activity greater than threshold is experienced
+  - name: Inactivity
+    bit_range:
+    - 3
+    - 3
+    description: Set when inactivity less than threshold for specified time
+  - name: FREE_FALL
+    bit_range:
+    - 2
+    - 2
+    description: Set when free-fall conditions are met
+  - name: Watermark
+    bit_range:
+    - 1
+    - 1
+    description: Set when FIFO samples equal specified value
+  - name: Overrun
+    bit_range:
+    - 0
+    - 0
+    description: Set when new data replaces unread data
+- name: DATA_FORMAT
+  offset: '0x31'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: SELF_TEST
+    bit_range:
+    - 7
+    - 7
+    description: A setting of 1 applies a self-test force to the sensor, causing a
+      shift in the output data. A value of 0 disables the self-test force.
+  - name: SPI
+    bit_range:
+    - 6
+    - 6
+    description: A value of 1 sets the device to 3-wire SPI mode, and a value of 0
+      sets the device to 4-wire SPI mode.
+  - name: INT_INVERT
+    bit_range:
+    - 5
+    - 5
+    description: A value of 0 sets the interrupts to active high, and a value of 1
+      sets the interrupts to active low.
+  - name: RESERVED
+    bit_range:
+    - 4
+    - 4
+    description: Reserved bit, fixed at 0.
+  - name: FULL_RES
+    bit_range:
+    - 3
+    - 3
+    description: When set to 1, the device is in full resolution mode (4 mg/LSB scale
+      factor). When 0, the device is in 10-bit mode.
+  - name: Justify
+    bit_range:
+    - 2
+    - 2
+    description: A setting of 1 selects left (MSB) justified mode, and a setting of
+      0 selects right justified mode with sign extension.
+  - name: Range
+    bit_range:
+    - 0
+    - 1
+    description: "Sets the g range: 00 = \xB12 g, 01 = \xB14 g, 10 = \xB18 g, 11 =\
+      \ \xB116 g."
+- name: DATAX0
+  offset: '0x32'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: X_Data_LSB
+    bit_range:
+    - 0
+    - 7
+    description: Least significant byte of the X-axis acceleration output data (twos
+      complement format)
+- name: DATAX1
+  offset: '0x33'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields: []
+- name: DATAY0
+  offset: '0x34'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: YDATA_LSB
+    bit_range:
+    - 0
+    - 7
+    description: Least significant byte of Y-axis acceleration data (two's complement
+      format, controlled by DATA_FORMAT register)
+- name: DATAY1
+  offset: '0x35'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields: []
+- name: DATAZ0
+  offset: '0x36'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: ZDATA0
+    bit_range:
+    - 0
+    - 7
+    description: Least significant byte of Z-axis acceleration output data (twos complement
+      format)
+- name: DATAZ1
+  offset: '0x37'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: DATA_Z[15:8]
+    bit_range:
+    - 0
+    - 7
+    description: Z-Axis Data MSB (twos complement format)
+- name: FIFO_CTL
+  offset: '0x38'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: FIFO_MODE
+    bit_range:
+    - 6
+    - 7
+    description: 'Sets the FIFO mode: 00 = Bypass (FIFO bypassed), 01 = FIFO (collects
+      up to 32 values then stops), 10 = Stream (holds last 32 values, overwrites old
+      data), 11 = Trigger (holds samples before trigger, then collects until full).'
+  - name: TRIGGER
+    bit_range:
+    - 5
+    - 5
+    description: 'Trigger interrupt select in trigger mode: 0 = INT1, 1 = INT2.'
+  - name: SAMPLES
+    bit_range:
+    - 0
+    - 4
+    description: 'Samples count (0 to 31). Function depends on FIFO mode: Bypass=none,
+      FIFO/Stream=watermark trigger level, Trigger=samples retained before trigger.
+      Value 0 sets watermark immediately.'
+- name: FIFO_STATUS
+  offset: '0x39'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: FIFO_TRIG
+    bit_range:
+    - 7
+    - 7
+    description: A 1 in the FIFO_TRIG bit corresponds to a trigger event occurring,
+      and a 0 means that a FIFO trigger event has not occurred.
+  - name: RESERVED
+    bit_range:
+    - 6
+    - 6
+    description: Reserved bit, always reads as 0.
+  - name: ENTRIES
+    bit_range:
+    - 0
+    - 5
+    description: These bits report how many data values are stored in FIFO.
+side_effects:
+- trigger:
+    event: write
+    register: DATA_FORMAT
+    field: SELF_TEST
+    value: '1'
+    description: Setting SELF_TEST bit to 1
+  action:
+    type: shift_output
+    target: DATAX0 DATAX1 DATAY0 DATAY1 DATAZ0 DATAZ1
+    description: Applies self-test force causing shift in x-, y-, z-axis output data
+- trigger:
+    event: write
+    register: POWER_CTL
+    field: Sleep
+    value: '1'
+    description: Setting Sleep bit to 1
+  action:
+    type: enter_mode
+    target: Global
+    description: Enters sleep mode, suppresses DATA_READY, stops transmission of data
+      to FIFO, low sampling rate
+- trigger:
+    event: write
+    register: POWER_CTL
+    field: Measure
+    value: '0'
+    description: Setting Measure bit to 0
+  action:
+    type: enter_mode
+    target: Global
+    description: Enters standby mode, minimum power consumption, no measurement
+- trigger:
+    event: write
+    register: POWER_CTL
+    field: Sleep
+    value: '1'
+    description: Setting Sleep bit to 1
+  action:
+    type: set_bit
+    target:
+      register: ACT_TAP_STATUS
+      field: Asleep
+    description: Sets Asleep bit to 1 indicating part is asleep
+- trigger:
+    event: write
+    register: FIFO_CTL
+    field: SAMPLES
+    value: '0'
+    description: Setting SAMPLES bits to 0
+  action:
+    type: set_bit
+    target:
+      register: INT_SOURCE
+      field: Watermark
+    description: Immediately sets Watermark bit regardless of FIFO mode
+- trigger:
+    event: write
+    register: FIFO_CTL
+    field: FIFO_MODE
+    value: '00'
+    description: Setting FIFO_MODE bits to 00 (bypass)
+  action:
+    type: clear
+    target: FIFO
+    description: Clears FIFO
+- trigger:
+    event: write
+    register: DUR
+    field: DUR
+    value: '0'
+    description: Setting DUR to 0
+  action:
+    type: disable
+    target: tap double_tap functions
+    description: Disables the tap/double tap functions
+- trigger:
+    event: write
+    register: Latent
+    field: Latent
+    value: '0'
+    description: Setting Latent to 0
+  action:
+    type: disable
+    target: double_tap function
+    description: Disables the double tap function
+- trigger:
+    event: write
+    register: Window
+    field: Window
+    value: '0'
+    description: Setting Window to 0
+  action:
+    type: disable
+    target: double_tap function
+    description: Disables the double tap function
+- trigger:
+    event: write
+    register: BW_RATE
+    field: LOW_POWER
+    value: '1'
+    description: Setting LOW_POWER bit to 1
+  action:
+    type: mode_change
+    target: Global
+    description: Selects reduced power operation with higher noise
+- trigger:
+    event: write
+    register: POWER_CTL
+    field: Link
+    value: '1'
+    description: Setting Link bit to 1 with activity and inactivity enabled
+  action:
+    type: link_functions
+    target: activity inactivity
+    description: Links activity and inactivity functions, delays activity until inactivity
+      detected
+- trigger:
+    event: write
+    register: POWER_CTL
+    field: AUTO_SLEEP
+    value: '1'
+    description: Setting AUTO_SLEEP bit to 1 with Link=1
+  action:
+    type: enable_autosleep
+    target: Global
+    description: Enables switch to sleep mode on inactivity detection
+- trigger:
+    event: write
+    register: INT_ENABLE
+    field: DATA_READY
+    value: '1'
+    description: Setting DATA_READY bit
+  action:
+    type: enable_interrupt_output
+    target: INT1 or INT2 pin
+    description: Enables interrupt output for DATA_READY (function always enabled)

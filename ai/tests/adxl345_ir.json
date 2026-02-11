@@ -1,0 +1,895 @@
+{
+  "name": "adxl345",
+  "arch": "Arm",
+  "description": "AI Generated Device for Codegen",
+  "peripherals": {
+    "adxl345": {
+      "name": "adxl345",
+      "base_address": 1073741824,
+      "description": "AI Generated Peripheral",
+      "registers": [
+        {
+          "name": "devid",
+          "offset": 0,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 229,
+          "fields": [
+            {
+              "name": "device_id",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Fixed device ID code of 0xE5 (11100101 binary / 345 octal)."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "thresh_tap",
+          "offset": 29,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "thresh_tap",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Tap threshold. The data format is unsigned, so the magnitude of the tap event is compared with the value in THRESH_TAP. The scale factor is 62.5 mg/LSB (that is, 0xFF = +16 g). A value of 0 may result in undesirable behavior if tap/double tap interrupts are enabled."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "ofsx",
+          "offset": 30,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "ofsx",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "X-axis offset adjustment in twos complement format with a scale factor of 15.6 mg/LSB (0x7F = +2 g)."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "ofsy",
+          "offset": 31,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "ofsy",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Y-axis offset adjustment in twos complement format with a scale factor of 15.6 mg/LSB (0x7F = +2 g)"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "ofsz",
+          "offset": 32,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "z_axis_offset",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "User-set offset adjustment in twos complement format with a scale factor of 15.6 mg/LSB (0x7F = +2 g)."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "dur",
+          "offset": 33,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "dur",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the maximum time that an event must be above the THRESH_TAP threshold to qualify as a tap event. The scale factor is 625 \u03bcs/LSB. A value of 0 disables the tap/double tap functions."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "latent",
+          "offset": 34,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "latent",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the wait time from the detection of a tap event to the start of the time window during which a possible second tap event can be detected. Scale factor is 1.25 ms/LSB. A value of 0 disables the double tap function."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "window",
+          "offset": 35,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "window",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the amount of time after the expiration of the latency time during which a second valid tap can begin. Scale factor: 1.25 ms/LSB. A value of 0 disables the double tap function."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "thresh_act",
+          "offset": 36,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "thresh_act",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Threshold value for detecting activity. Unsigned data format, scale factor 62.5 mg/LSB. Magnitude of activity event compared to this value."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "thresh_inact",
+          "offset": 37,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "thresh_inact",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Holds the threshold value for detecting inactivity. The data format is unsigned, so the magnitude of the inactivity event is compared with the value in the THRESH_INACT register. The scale factor is 62.5 mg/LSB. A value of 0 mg may result in undesirable behavior if the inactivity interrupt is enabled."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "time_inact",
+          "offset": 38,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "time_inact",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned 8-bit value representing the amount of time that acceleration must be less than THRESH_INACT for inactivity detection. Scale factor: 1 sec/LSB. Maximum value: 255 sec. Uses filtered output data."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "act_inact_ctl",
+          "offset": 39,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "act_acdc",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "ACT AC/DC bit. A setting of 0 selects dc-coupled operation, and a setting of 1 enables ac-coupled operation."
+            },
+            {
+              "name": "act_x_en",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "ACT_X enable bit. A setting of 1 enables x-axis participation in detecting activity. A setting of 0 excludes the x-axis from participation."
+            },
+            {
+              "name": "act_y_en",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "ACT_Y enable bit. A setting of 1 enables y-axis participation in detecting activity. A setting of 0 excludes the y-axis from participation."
+            },
+            {
+              "name": "act_z_en",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "ACT_Z enable bit. A setting of 1 enables z-axis participation in detecting activity. A setting of 0 excludes the z-axis from participation."
+            },
+            {
+              "name": "inact_acdc",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "INACT AC/DC bit. A setting of 0 selects dc-coupled operation, and a setting of 1 enables ac-coupled operation."
+            },
+            {
+              "name": "inact_x_en",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "INACT_X enable bit. A setting of 1 enables x-axis participation in detecting inactivity. A setting of 0 excludes the x-axis from participation."
+            },
+            {
+              "name": "inact_y_en",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "INACT_Y enable bit. A setting of 1 enables y-axis participation in detecting inactivity. A setting of 0 excludes the y-axis from participation."
+            },
+            {
+              "name": "inact_z_en",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "INACT_Z enable bit. A setting of 1 enables z-axis participation in detecting inactivity. A setting of 0 excludes the z-axis from participation. If all axes are excluded, the function is disabled."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "thresh_ff",
+          "offset": 40,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "thresh_ff",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Free-fall threshold value, unsigned format. The root-sum-square (RSS) value of all axes is compared with this value. Scale factor is 62.5 mg/LSB. Recommended values: 0x05 to 0x09 (300 mg to 600 mg). A value of 0 may result in undesirable behavior if free-fall interrupt is enabled."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "time_ff",
+          "offset": 41,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "time_ff",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the minimum time that the RSS value of all axes must be less than THRESH_FF to generate a free-fall interrupt. The scale factor is 5 ms/LSB."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "tap_axes",
+          "offset": 42,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "suppress",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "Setting the suppress bit suppresses double tap detection if acceleration greater than the value in THRESH_TAP is present between taps. See the Tap Detection section for more details."
+            },
+            {
+              "name": "tap_x_enable",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "A setting of 1 in the TAP_X enable bit enables x-axis participation in tap detection. A setting of 0 excludes the selected axis from participation in tap detection."
+            },
+            {
+              "name": "tap_y_enable",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "A setting of 1 in the TAP_Y enable bit enables y-axis participation in tap detection. A setting of 0 excludes the selected axis from participation in tap detection."
+            },
+            {
+              "name": "tap_z_enable",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "A setting of 1 in the TAP_Z enable bit enables z-axis participation in tap detection. A setting of 0 excludes the selected axis from participation in tap detection."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "act_tap_status",
+          "offset": 43,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "tap_z_source",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "TAP Z source bit. Indicates Z-axis involvement in tap event (1 = involved, 0 = not). Overwritten by new data."
+            },
+            {
+              "name": "tap_y_source",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "TAP Y source bit. Indicates Y-axis involvement in tap event (1 = involved, 0 = not). Overwritten by new data."
+            },
+            {
+              "name": "tap_x_source",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "TAP X source bit. Indicates X-axis involvement in tap event (1 = involved, 0 = not). Overwritten by new data."
+            },
+            {
+              "name": "asleep",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "Asleep bit. 1 = part is asleep, 0 = part is not asleep (see POWER_CTL for autosleep)."
+            },
+            {
+              "name": "act_z_source",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "ACT Z source bit. Indicates Z-axis involvement in activity event (1 = involved, 0 = not). Overwritten by new data."
+            },
+            {
+              "name": "act_y_source",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "ACT Y source bit. Indicates Y-axis involvement in activity event (1 = involved, 0 = not). Overwritten by new data."
+            },
+            {
+              "name": "act_x_source",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "ACT X source bit. Indicates X-axis involvement in activity event (1 = involved, 0 = not). Overwritten by new data."
+            },
+            {
+              "name": "reserved",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "Always 0."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "bw_rate",
+          "offset": 44,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 10,
+          "fields": [
+            {
+              "name": "reserved",
+              "bit_offset": 5,
+              "bit_width": 3,
+              "access": null,
+              "description": "Reserved bits (fixed to 0)."
+            },
+            {
+              "name": "low_power",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "A setting of 0 in the LOW_POWER bit selects normal operation, and a setting of 1 selects reduced power operation, which has somewhat higher noise (see the Power Modes section for details)."
+            },
+            {
+              "name": "rate",
+              "bit_offset": 0,
+              "bit_width": 4,
+              "access": null,
+              "description": "These bits select the device bandwidth and output data rate (see Table 6 and Table 7 for details). The default value is 0x0A, which translates to a 100 Hz output data rate. An output data rate should be selected that is appropriate for the communication protocol and frequency selected. Selecting too high of an output data rate with a low communication speed results in samples being discarded."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "power_ctl",
+          "offset": 45,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "reserved",
+              "bit_offset": 7,
+              "bit_width": 0,
+              "access": null,
+              "description": "Reserved (must be 0)"
+            },
+            {
+              "name": "link",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "Link bit: 1 links activity and inactivity functions (delays activity until inactivity detected), 0 concurrent"
+            },
+            {
+              "name": "auto_sleep",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "AUTO_SLEEP bit: If link=1, 1 enables switch to sleep on inactivity, 0 disables"
+            },
+            {
+              "name": "measure",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "Measure bit: 0=standby mode, 1=measurement mode"
+            },
+            {
+              "name": "sleep",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "Sleep bit: 0=normal operation, 1=sleep mode (suppresses DATA_READY, low sampling)"
+            },
+            {
+              "name": "wakeup",
+              "bit_offset": 0,
+              "bit_width": 2,
+              "access": null,
+              "description": "Wakeup bits: Control frequency of readings in sleep mode (00=8Hz, 01=4Hz, 10=2Hz, 11=1Hz)"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "int_enable",
+          "offset": 46,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "data_ready",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "Data ready interrupt enable"
+            },
+            {
+              "name": "single_tap",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "Single tap interrupt enable"
+            },
+            {
+              "name": "double_tap",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "Double tap interrupt enable"
+            },
+            {
+              "name": "activity",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "Activity interrupt enable"
+            },
+            {
+              "name": "inactivity",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "Inactivity interrupt enable"
+            },
+            {
+              "name": "free_fall",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "Free-fall interrupt enable"
+            },
+            {
+              "name": "watermark",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "Watermark interrupt enable"
+            },
+            {
+              "name": "overrun",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "Overrun interrupt enable"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "int_map",
+          "offset": 47,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "data_ready",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            },
+            {
+              "name": "single_tap",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            },
+            {
+              "name": "double_tap",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            },
+            {
+              "name": "activity",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            },
+            {
+              "name": "inactivity",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            },
+            {
+              "name": "free_fall",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            },
+            {
+              "name": "watermark",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            },
+            {
+              "name": "overrun",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "0: interrupt to INT1 pin, 1: interrupt to INT2 pin"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "int_source",
+          "offset": 48,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 2,
+          "fields": [
+            {
+              "name": "data_ready",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when new data is available"
+            },
+            {
+              "name": "single_tap",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when a single tap event occurs"
+            },
+            {
+              "name": "double_tap",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when a double tap event occurs"
+            },
+            {
+              "name": "activity",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when activity greater than threshold is experienced"
+            },
+            {
+              "name": "inactivity",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when inactivity less than threshold for specified time"
+            },
+            {
+              "name": "free_fall",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when free-fall conditions are met"
+            },
+            {
+              "name": "watermark",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when FIFO samples equal specified value"
+            },
+            {
+              "name": "overrun",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "Set when new data replaces unread data"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "data_format",
+          "offset": 49,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "self_test",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "A setting of 1 applies a self-test force to the sensor, causing a shift in the output data. A value of 0 disables the self-test force."
+            },
+            {
+              "name": "spi",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "A value of 1 sets the device to 3-wire SPI mode, and a value of 0 sets the device to 4-wire SPI mode."
+            },
+            {
+              "name": "int_invert",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "A value of 0 sets the interrupts to active high, and a value of 1 sets the interrupts to active low."
+            },
+            {
+              "name": "reserved",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "Reserved bit, fixed at 0."
+            },
+            {
+              "name": "full_res",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "When set to 1, the device is in full resolution mode (4 mg/LSB scale factor). When 0, the device is in 10-bit mode."
+            },
+            {
+              "name": "justify",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "A setting of 1 selects left (MSB) justified mode, and a setting of 0 selects right justified mode with sign extension."
+            },
+            {
+              "name": "range",
+              "bit_offset": 0,
+              "bit_width": 2,
+              "access": null,
+              "description": "Sets the g range: 00 = \u00b12 g, 01 = \u00b14 g, 10 = \u00b18 g, 11 = \u00b116 g."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "datax0",
+          "offset": 50,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "x_data_lsb",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Least significant byte of the X-axis acceleration output data (twos complement format)"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "datax1",
+          "offset": 51,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [],
+          "description": ""
+        },
+        {
+          "name": "datay0",
+          "offset": 52,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "ydata_lsb",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Least significant byte of Y-axis acceleration data (two's complement format, controlled by DATA_FORMAT register)"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "datay1",
+          "offset": 53,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [],
+          "description": ""
+        },
+        {
+          "name": "dataz0",
+          "offset": 54,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "zdata0",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Least significant byte of Z-axis acceleration output data (twos complement format)"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "dataz1",
+          "offset": 55,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "data_z_15_8_",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Z-Axis Data MSB (twos complement format)"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "fifo_ctl",
+          "offset": 56,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "fifo_mode",
+              "bit_offset": 6,
+              "bit_width": 2,
+              "access": null,
+              "description": "Sets the FIFO mode: 00 = Bypass (FIFO bypassed), 01 = FIFO (collects up to 32 values then stops), 10 = Stream (holds last 32 values, overwrites old data), 11 = Trigger (holds samples before trigger, then collects until full)."
+            },
+            {
+              "name": "trigger",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "Trigger interrupt select in trigger mode: 0 = INT1, 1 = INT2."
+            },
+            {
+              "name": "samples",
+              "bit_offset": 0,
+              "bit_width": 5,
+              "access": null,
+              "description": "Samples count (0 to 31). Function depends on FIFO mode: Bypass=none, FIFO/Stream=watermark trigger level, Trigger=samples retained before trigger. Value 0 sets watermark immediately."
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "fifo_status",
+          "offset": 57,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "fifo_trig",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "A 1 in the FIFO_TRIG bit corresponds to a trigger event occurring, and a 0 means that a FIFO trigger event has not occurred."
+            },
+            {
+              "name": "reserved",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "Reserved bit, always reads as 0."
+            },
+            {
+              "name": "entries",
+              "bit_offset": 0,
+              "bit_width": 6,
+              "access": null,
+              "description": "These bits report how many data values are stored in FIFO."
+            }
+          ],
+          "description": ""
+        }
+      ],
+      "interrupts": []
+    }
+  },
+  "interrupt_mapping": {}
+}

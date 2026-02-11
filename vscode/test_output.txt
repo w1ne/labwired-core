@@ -1,0 +1,35 @@
+
+> labwired-vscode@0.11.1 test
+> npm run compile && node ./out/test/runTest.js
+
+
+> labwired-vscode@0.11.1 compile
+> tsc -p ./
+
+- Resolving version...
+✔ Validated version: 1.109.2
+✔ Found existing install in /home/andrii/Projects/labwired/vscode/.vscode-test/vscode-linux-x64-1.109.2
+[2280046:0211/023607.387167:ERROR:media/gpu/vaapi/vaapi_wrapper.cc:1653] Installed VAAPI version is too old. min supported version: 1.17 installed version: 1.14
+[90m[main 2026-02-11T01:36:07.679Z][0m update#setState disabled
+[90m[main 2026-02-11T01:36:07.688Z][0m update#ctor - updates are disabled by the environment
+Creation of workbench contribution 'workbench.contrib.chatSetup' took 34ms.
+Started local extension host with pid 2280374.
+Loading development extension at /home/andrii/Projects/labwired/vscode
+MCP Registry configured: https://api.mcp.github.com
+Settings Sync: Account status changed from uninitialized to unavailable
+[0m[0m
+[0m  Extension Test Suite[0m
+  [32m  ✔[0m[90m Extension should be present[0m
+  [32m  ✔[0m[90m Configuration defaults[0m
+  [32m  ✔[0m[90m Commands should be registered[0m
+[0m  Providers Test Suite[0m
+  [32m  ✔[0m[90m PeripheralProvider should handle missing debug session[0m
+  [32m  ✔[0m[90m RTOSProvider should handle missing debug session[0m
+  [32m  ✔[0m[90m RTOSProvider should parse tasks from customRequest[0m
+  [32m  ✔[0m[90m PeripheralProvider should parse peripherals and registers[0m
+[0m  DockerManager[0m
+  [32m  ✔[0m[90m should generate correct DAP arguments with mirror mount and port forwarding[0m
+  [32m  ✔[0m[90m should include extra docker arguments[0m
+[92m [0m[32m 9 passing[0m[90m (99ms)[0m
+[90m[main 2026-02-11T01:36:13.765Z][0m Extension host with pid 2280374 exited with code: 0, signal: unknown.
+Exit code:   0

@@ -1,0 +1,133 @@
+{
+  "name": "lm75b_verified",
+  "arch": "Arm",
+  "description": "AI Generated Device for Codegen",
+  "peripherals": {
+    "lm75b_verified": {
+      "name": "lm75b_verified",
+      "base_address": 1073741824,
+      "description": "AI Generated Peripheral",
+      "registers": [
+        {
+          "name": "temp",
+          "offset": 0,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "d_10_0_",
+              "bit_offset": 5,
+              "bit_width": 11,
+              "access": null,
+              "description": "11-bit two's complement temperature data (D10 is sign bit in MSByte[7], D0 in LSByte[5]); resolution 0.125 \u00b0C/LSB"
+            },
+            {
+              "name": "unused",
+              "bit_offset": 0,
+              "bit_width": 5,
+              "access": null,
+              "description": "5 least significant bits of LSByte; always 0, should be ignored"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "conf",
+          "offset": 1,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "reserved",
+              "bit_offset": 5,
+              "bit_width": 3,
+              "access": null,
+              "description": "reserved for manufacturer\u2019s use; should be kept as zeroes for normal operation"
+            },
+            {
+              "name": "os_f_que_1_0_",
+              "bit_offset": 3,
+              "bit_width": 2,
+              "access": null,
+              "description": "OS fault queue programming 00* queue value = 1 01 queue value = 2 10 queue value = 4 11 queue value = 6"
+            },
+            {
+              "name": "os_pol",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "OS polarity selection 0* OS active LOW 1 OS active HIGH"
+            },
+            {
+              "name": "os_comp_int",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "OS operation mode selection 0* OS comparator 1 OS interrupt"
+            },
+            {
+              "name": "shutdown",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "device operation mode selection 0* normal 1 shutdown"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "thyst",
+          "offset": 2,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 19200,
+          "fields": [
+            {
+              "name": "thys",
+              "bit_offset": 8,
+              "bit_width": 8,
+              "access": null,
+              "description": "9-bit two's complement value storing the hysteresis Thys limit (D8[15] to D0[8]), resolution 0.5 \u00b0C"
+            },
+            {
+              "name": "reserved",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unused (X); always read as 0x00, should be ignored"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "tos",
+          "offset": 3,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 20480,
+          "fields": [
+            {
+              "name": "tth_ots",
+              "bit_offset": 7,
+              "bit_width": 9,
+              "access": null,
+              "description": "Overtemperature shutdown threshold (Tth(ots)); 9-bit two's complement value with 0.5 \u00b0C resolution"
+            },
+            {
+              "name": "reserved",
+              "bit_offset": 0,
+              "bit_width": 7,
+              "access": null,
+              "description": "Always read as 0 and should be ignored (7 LSBs of LSByte)"
+            }
+          ],
+          "description": ""
+        }
+      ],
+      "interrupts": []
+    }
+  },
+  "interrupt_mapping": {}
+}
