@@ -10,7 +10,7 @@ Deliver a standalone command-line tool (`labwired`) capable of loading an ELF bi
 
 **Core Deliverables**:
 1.  **Emulator Core**: Robust, deterministic simulation of STM32F103 (Cortex-M3) with UART/GPIO/Timers.
-2.  **VS Code Extension**: Basic DAP debugging (breakpoints, stepping, registers). Advanced HW features (peripheral viewers, timeline) deferred to v0.2+.
+2.  **VS Code Extension**: "Ozone-like" debugging experience (Timeline, Registers, Memory) connecting via DAP.
 3.  **Documentation**: Comprehensive guides for "Getting Started" and "VS Code Debugging".
 
 *Note: AI Peripheral Generation is a parallel research track and is NOT required for the v1.0 MVP.*
@@ -31,66 +31,6 @@ To ensure we hit our release window, the following are explicitly **excluded**:
 
 **Objective**: Ship working demonstrator: chip + sensor + VS Code debugging
 
-### Milestone 1: "Blinky Works"
-**Deliverable**: GPIO LED firmware running in emulator
-
-- [ ] Create demo firmware project (C)
-- [ ] Implement LED toggle using GPIO
-- [ ] Verify GPIO peripheral writes work
-- [ ] Run successfully in `labwired-cli`
-- [ ] Document example
-
-**Success**: LED state changes visible in logs
-
-### Milestone 2: "Sensor Connected"
-**Deliverable**: I2C temperature sensor integrated
-
-- [ ] Create YAML descriptor for TMP102 sensor
-- [ ] Implement sensor read handlers (mock 25°C)
-- [ ] Update `system.yaml` to wire sensor
-- [ ] Extend firmware to read sensor + toggle LED
-- [ ] Verify sensor data in logs
-
-**Success**: Firmware reads temperature from I2C
-
-### Milestone 3: "VS Code Debugs It"
-**Deliverable**: Basic debugging via DAP
-
-> **Strategy**: Use Cortex-Debug & Peripheral Viewer as reference for v0.2.0 features
-
-- [ ] Verify DAP server launches firmware
-- [ ] Verify breakpoints work
-- [ ] Verify stepping works
-- [ ] Verify CPU register inspection
-- [ ] Create `.vscode/launch.json` template
-- [ ] Document debugging workflow
-
-**Success**: User sets breakpoint, steps code, sees registers
-
-**v0.2.0 Roadmap**: Peripheral viewer, memory inspector (study reference implementations)
-
-### Milestone 4: "Case Study Published"
-**Deliverable**: Professional demo materials
-
-- [ ] Write case study: "Debugging STM32 Without Hardware"
-- [ ] Record demo GIF (optional)
-- [ ] Update `labwired-core/README.md`
-- [ ] Add to examples documentation
-
-**Success**: Compelling story for public announcement
-
-### Milestone 5: "Public Release"
-**Deliverable**: v0.1.0 on GitHub
-
-- [ ] Fresh clone test
-- [ ] End-to-end verification
-- [ ] Create GitHub release
-- [ ] Write release notes
-- [ ] Draft announcement
-
-**Success**: Anyone can clone and run demo
-
----
 
 
 
@@ -546,7 +486,7 @@ This section translates the business research roadmap (“The Strategic Horizon 
 - [ ] Users can see a list of active simulations and terminate them.
 - [ ] Output from the simulator is visible in VS Code.
 
-## Iteration 18: Full-Lifecycle IDE Demonstrator
+## Iteration 17: Full-Lifecycle IDE Demonstrator
 **Objective**: Provide a "Zero-to-Run" experience where the user can compile firmware and launch a matched simulator instance with a single click.
 
 ### Phase A: Build System Integration
@@ -567,7 +507,7 @@ This section translates the business research roadmap (“The Strategic Horizon 
 - [ ] Compilation errors are reported in the VS Code Problems tab.
 - [ ] The simulator instance correctly lifecycle-matches the VS Code session.
 
-## Iteration 17: Partner Ecosystem & Growth (Business Strategy)
+## Iteration 18: Partner Ecosystem & Growth (Business Strategy)
 **Objective**: Leverage the "Partner Programs" of major chip vendors and establish LabWired as a standard industry tool.
 
 ### Phase A: Accreditation & Partnerships
@@ -578,7 +518,7 @@ This section translates the business research roadmap (“The Strategic Horizon 
 ### Phase B: Community Growth (PLG)
 - [ ] **Viral Features**: "Share Snapshot" link generator for StackOverflow/Reddit support capability.
 
-## Iteration 18: Professional Debugger Extension (Ozone-Class UX)
+## Iteration 19: Professional Debugger Extension (Ozone-Class UX)
 **Objective**: Transform the VS Code extension into a professional-grade debugger matching Segger Ozone's capabilities, with simulation-specific advantages.
 
 **Rationale**: By providing an "Ozone-like" debugging experience natively in VS Code, LabWired becomes the preferred tool for embedded developers, eliminating the need for expensive commercial debuggers for simulation workflows.
