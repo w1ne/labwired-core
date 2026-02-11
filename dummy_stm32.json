@@ -1,0 +1,82 @@
+{
+  "name": "STM32F103",
+  "arch": "Unknown",
+  "description": "STM32F103xx",
+  "peripherals": {
+    "USART1": {
+      "name": "USART1",
+      "base_address": 1073821696,
+      "description": "Universal synchronous asynchronous receiver transmitter",
+      "registers": [
+        {
+          "name": "SR",
+          "offset": 0,
+          "size": 32,
+          "access": "ReadOnly",
+          "reset_value": 12582912,
+          "fields": [
+            {
+              "name": "TC",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": "ReadWrite",
+              "description": "Transmission complete"
+            },
+            {
+              "name": "TXE",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": "ReadOnly",
+              "description": "Transmit data register empty"
+            }
+          ],
+          "description": "Status register"
+        },
+        {
+          "name": "DR",
+          "offset": 4,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "DR",
+              "bit_offset": 0,
+              "bit_width": 9,
+              "access": "ReadWrite",
+              "description": "Data value"
+            }
+          ],
+          "description": "Data register"
+        },
+        {
+          "name": "CR",
+          "offset": 8,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "EIE",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": "ReadWrite",
+              "description": null
+            }
+          ],
+          "description": "Control register with side effects"
+        }
+      ],
+      "interrupts": [
+        {
+          "name": "USART1",
+          "description": null,
+          "value": 37
+        }
+      ]
+    }
+  },
+  "interrupt_mapping": {
+    "USART1": 37
+  }
+}

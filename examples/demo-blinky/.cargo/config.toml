@@ -4,22 +4,11 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-<<<<<<< HEAD
 # Linker configuration for ARM targets is handled in build.rs
 # of respective crates to avoid global interference.
 
-=======
-<<<<<<<< HEAD:core/.cargo/config.toml
-# Linker configuration for ARM targets is handled in build.rs
-# of respective crates to avoid global interference.
-========
->>>>>>> develop
 [build]
 target = "thumbv7m-none-eabi"
 
 [target.thumbv7m-none-eabi]
 rustflags = []
-<<<<<<< HEAD
-=======
->>>>>>>> develop:core/examples/demo-blinky/.cargo/config.toml
->>>>>>> develop
