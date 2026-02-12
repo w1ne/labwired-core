@@ -14,7 +14,7 @@ graph TD
         ELF[Firmware ELF] --> Loader
         Loader --> Machine
         RustModel --> Machine
-
+        
         Machine --> CPU[CPU (ARM/RISC-V)]
         Machine --> Bus[System Bus]
         Bus --> Memory
