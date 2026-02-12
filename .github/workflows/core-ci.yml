@@ -21,27 +21,30 @@ defaults:
 
 jobs:
   test:
-    name: Test Suite
+    name: Quality Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
 
       - name: Check Formatting
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
 
-      - name: Run Unit Tests
-        run: cargo test --lib
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
 
-      - name: Run Integration Tests (CLI)
-        run: cargo test -p labwired-cli --test asset_import
+      - name: Run Tests
+        run: cargo test
+
+      - name: Build
+        run: cargo build
 
   build:
     name: Build (Bridge)

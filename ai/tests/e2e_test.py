@@ -67,7 +67,7 @@ class E2ETest:
             print("Next steps:")
             print("  1. Review generated system.yaml")
             print("  2. Create firmware that uses the generated driver")
-            print("  3. Run: labwired sim run --system system.yaml --firmware app.elf")
+            print("  3. Run: labwired --system system.yaml --firmware app.elf")
             print()
 
             return 0

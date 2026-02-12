@@ -5,6 +5,7 @@ This directory contains **platform-level** documentation for the LabWired monore
 ## Platform Strategy & Planning
 
 - **[Implementation Plan](./plan.md)** - Overall platform roadmap and milestones
+- **[Demo Dry Run](./DEMO_DRY_RUN.md)** - Release-gate checklist and commands for external demos
 - **[Business Strategy](./spec/)** - Market analysis, business roadmaps, and strategic vision
 
 ## Component Documentation

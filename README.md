@@ -61,10 +61,10 @@ Use the deterministic runner mode to drive simulations from a YAML test script a
 
 ```bash
 cargo build --release -p labwired-cli
-./target/release/labwired test --script examples/ci/uart-ok.yaml --output-dir out/artifacts --no-uart-stdout
+./target/release/labwired test --script core/examples/ci/uart-ok.yaml --output-dir out/artifacts --no-uart-stdout
 ```
 
-See `docs/ci_test_runner.md` for schema, exit codes, and artifact formats.
+See `core/docs/ci_test_runner.md` for schema, exit codes, and artifact formats.
 
 ## 🔄 CI Integration
 
@@ -98,9 +98,9 @@ docker run --rm -v $PWD:/workspace ghcr.io/w1ne/labwired:latest \
 
 ### Resources
 
-- **[CI Integration Guide](docs/ci_integration.md)** - Complete setup instructions
-- **[Workflow Templates](examples/workflows/)** - Ready-to-use GitHub Actions & GitLab CI templates
-- **[Test Examples](examples/ci/)** - Sample test scripts
+- **[CI Integration Guide](core/docs/ci_integration.md)** - Complete setup instructions
+- **[Workflow Templates](core/examples/workflows/)** - Ready-to-use GitHub Actions & GitLab CI templates
+- **[Test Examples](core/examples/ci/)** - Sample test scripts
 
 ### Benefits
 
@@ -119,17 +119,18 @@ We follow **Gitflow** and enforce strict quality gates.
 - **Feature Branches**: `feature/xyz`.
 
 **Quality Gates:**
-- All PRs must pass CI (Format, Lint, Test, Audit).
+- All PRs must pass CI (Format, Lint, Test, Build).
 - Code coverage goal: >80%.
 
-See [Release & Merging Strategy](docs/release_strategy.md) for the full protocol.
+See [Release & Merging Strategy](core/docs/release_strategy.md) for the full protocol.
 
 ## 📄 Documentation
+- [Platform Docs Index](docs/README.md)
 - [Implementation Plan](docs/plan.md)
-- [Architecture](docs/architecture.md)
-- [Release Strategy](docs/release_strategy.md)
-- [CI Integration Guide](docs/ci_integration.md)
-- [Interactive Debugging](docs/debugging.md)
+- [Core Architecture](core/docs/architecture.md)
+- [Release Strategy](core/docs/release_strategy.md)
+- [CI Integration Guide](core/docs/ci_integration.md)
+- [Interactive Debugging](core/docs/debugging.md)
 
 
 ## ⚖️ License
