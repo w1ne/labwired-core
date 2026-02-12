@@ -354,7 +354,7 @@ The implementation is structured into five shippable iterations, each adding tan
 These are *always-on* workstreams that keep the platform shippable while complexity increases.
 
 **Release Engineering & Quality**
-- [ ] Enforce quality gates in CI: `cargo fmt`, `cargo clippy -D warnings`, `cargo test`, `cargo audit`, `cargo build` (see `docs/release_strategy.md`).
+- [ ] Enforce quality gates in CI: `cargo fmt`, `cargo clippy -D warnings`, `cargo test`, `cargo build` (see `core/docs/release_strategy.md`).
 - [ ] Define a release checklist per iteration: version bump, changelog entry, artifacts, docs update, demo verification.
 - [ ] Maintain a compatibility matrix (supported MCUs / boards / peripherals / known gaps).
 

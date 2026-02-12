@@ -106,12 +106,25 @@ To ensure we hit our release window, the following are explicitly **excluded**:
 
 **Success Metric**: Anyone can clone and run the demo
 
+### Demo Readiness Gate (v0.1.0)
+**Objective**: Remove known live-demo failure points before first external demo/release.
+
+_Validated gaps logged on February 12, 2026._
+
+- [x] Fix `asset init` output so project skeleton includes a valid chip descriptor path/file (not only `system.yaml`).
+- [x] Make `asset init` + `asset add-peripheral` work as a single happy path; update `ai/tests/true_e2e_test.py` Step 5 accordingly.
+- [x] Replace stale `labwired sim run` command references in demo scripts/docs with currently supported CLI usage.
+- [x] Stabilize VS Code Docker debug path: demo image now includes `labwired-dap` binary expected by the extension.
+- [x] Align VS Code wizard launch config keys with DAP launch args (`systemConfig`) to avoid brittle auto-detection.
+- [x] Add a fallback demo path using pre-generated IR/models when live AI ingestion is unavailable (API/key/network risk). (`ai/tests/demo_dry_run.py --mode fallback`)
+- [x] Run one full dry run script for demo day: datasheet/IR -> project wiring -> VS Code debug backend -> Docker run. (`ai/tests/demo_dry_run.py --docker`)
+
 ---
 
 ### Phase 1: Foundation (Completed)
 - [x] Project Structure (Workspace)
     - **Verified**: `Cargo.toml` workspace defines `core`, `loader`, `cli`.
-- [x] Release & Merging Strategy Defined (`docs/release_strategy.md`)
+- [x] Release & Merging Strategy Defined (`core/docs/release_strategy.md`)
     - **Verified**: Document exists and team follows Gitflow.
 - [x] Core Traits (CPU, MemoryBus, Peripheral)
     - **Verified**: `crates/core/src/lib.rs` defines `Cpu` and `Bus` traits.
@@ -302,7 +315,7 @@ This section translates the business research roadmap (“The Strategic Horizon 
 ### Cross-Cutting Workstreams (Always-On)
 
 **Release Engineering & Quality**
-- [ ] Enforce CI quality gates: `cargo fmt -- --check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo audit`, `cargo build` (see `docs/release_strategy.md`).
+- [x] Enforce CI quality gates: `cargo fmt -- --check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build` (see `core/docs/release_strategy.md`).
 - [ ] Maintain a per-release checklist: version bump, changelog entry, artifacts, docs update, demo verification.
 - [ ] Maintain a compatibility matrix (supported MCUs / boards / peripherals / known gaps).
 

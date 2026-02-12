@@ -21,31 +21,45 @@ defaults:
 
 jobs:
   test:
-    name: Test Suite
+    name: Quality Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          submodules: recursive
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
 
       - name: Check Formatting
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
 
-      - name: Run Unit Tests
-        run: cargo test --lib
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
 
-      - name: Run Integration Tests (CLI)
-        run: cargo test -p labwired-cli --test asset_import
+      - name: Install ARM target for fixture firmware
+        run: rustup target add thumbv7m-none-eabi
+
+      - name: Build Demo Firmware Fixture
+        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+
+      - name: Run Tests
+        run: cargo test
+
+      - name: Build
+        run: cargo build
 
   build:
-    name: Build (Bridge)
+    name: build
     needs: test
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - run: echo "Build check passed (bridged from test)"
