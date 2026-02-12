@@ -1,6 +1,6 @@
 # Multi-Device Verification Report
 
-**Date**: 2026-02-11  
+**Date**: 2026-02-11
 **Verification Method**: Automated testing with device-specific ground truth files
 
 ---
@@ -17,7 +17,7 @@
 
 ## ADXL345 Verification Results ✅
 
-**Complexity**: 30 registers, 50+ bitfields  
+**Complexity**: 30 registers, 50+ bitfields
 **Result**: **100% PASS** (0 errors)
 
 - ✅ All 30 registers verified
@@ -32,7 +32,7 @@
 
 ## LM75B Verification Results ✅
 
-**Complexity**: 4 registers, 5 bitfields  
+**Complexity**: 4 registers, 5 bitfields
 **Result**: **100% PASS** (0 errors after correction)
 
 **Errors Detected & Fixed:**

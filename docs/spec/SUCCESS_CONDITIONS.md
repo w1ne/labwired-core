@@ -5,7 +5,7 @@ This document defines the technical, market, and operational conditions required
 ## 1. Technical Conditions
 
 ### 1.1 The "Time-to-Model" Breakthrough
-Success is predicated on breaking the "Peripheral Modeling Bottleneck." 
+Success is predicated on breaking the "Peripheral Modeling Bottleneck."
 - **Required Condition**: New peripheral models must be generated from datasheets in **hours, not weeks**, using AI-driven synthesis (FlexEmu).
 - **Target**: Maintain an accuracy rate of >95% for AI-generated register state machines.
 
