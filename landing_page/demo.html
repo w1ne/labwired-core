@@ -1,0 +1,287 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <title>LabWired - Live Demo</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="style.css" />
+    <noscript>
+        <link rel="stylesheet" href="noscript.css" />
+    </noscript>
+    <style>
+        /* Specific styles for the demo process visualization */
+        .process-flow {
+            position: relative;
+            max-width: 800px;
+            margin: 4em auto;
+            padding: 0 20px;
+        }
+
+        .process-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4em;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.8s forwards;
+        }
+
+        .process-step:nth-child(1) {
+            animation-delay: 0.2s;
+        }
+
+        .process-step:nth-child(2) {
+            animation-delay: 0.6s;
+        }
+
+        .process-step:nth-child(3) {
+            animation-delay: 1.0s;
+        }
+
+        .process-step:nth-child(4) {
+            animation-delay: 1.4s;
+        }
+
+        .process-icon {
+            flex: 0 0 100px;
+            height: 100px;
+            background: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5em;
+            z-index: 2;
+            position: relative;
+        }
+
+        .process-content {
+            margin-left: 3em;
+            flex: 1;
+            background: #f8f9fa;
+            padding: 2em;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            position: relative;
+        }
+
+        /* Connecting Line */
+        .process-flow::before {
+            content: '';
+            position: absolute;
+            top: 50px;
+            bottom: 100px;
+            left: 70px;
+            /* Center of the 100px icon + 20px padding */
+            width: 2px;
+            background: #e0e0e0;
+            z-index: 1;
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* VS Code Mockup */
+        .vscode-window {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', monospace;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            font-size: 0.8em;
+            text-align: left;
+        }
+
+        .vscode-header {
+            background: #252526;
+            padding: 5px 10px;
+            font-size: 0.8em;
+            display: flex;
+            gap: 5px;
+        }
+
+        .vscode-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot-red {
+            background: #ff5f56;
+        }
+
+        .dot-yellow {
+            background: #ffbd2e;
+        }
+
+        .dot-green {
+            background: #27c93f;
+        }
+
+        .vscode-body {
+            padding: 15px;
+            line-height: 1.5;
+        }
+
+        .code-line {
+            display: block;
+        }
+
+        .kw {
+            color: #569cd6;
+        }
+
+        /* keyword */
+        .str {
+            color: #ce9178;
+        }
+
+        /* string */
+        .fn {
+            color: #dcdcaa;
+        }
+
+        /* function */
+        .comment {
+            color: #6a9955;
+        }
+
+        /* comment */
+    </style>
+</head>
+
+<body class="is-preload landing">
+    <div id="page-wrapper">
+
+        <!-- Header -->
+        <header id="header">
+            <h1 id="logo"><a href="index.html"><i class="fa-solid fa-microchip"></i> LABWIRED</a></h1>
+            <nav id="nav">
+                <ul>
+                    <li><a href="index.html#four">Features</a></li>
+                    <li><a href="index.html#footer">Docs</a></li>
+                    <li><a href="index.html#footer">Contact</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <!-- Main -->
+        <div id="main" class="wrapper style1">
+            <div class="container">
+                <header class="major">
+                    <h2>How It Works</h2>
+                    <p>From Datasheet to Digital Twin in 4 Steps</p>
+                </header>
+
+                <div class="process-flow">
+                    <!-- Step 1: Input -->
+                    <div class="process-step">
+                        <div class="process-icon">
+                            <i class="fa-solid fa-file-pdf"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>1. The Input</h3>
+                            <p>Simply upload your component datasheets (PDF) and schematic diagrams. No manual coding
+                                required.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Ingestion -->
+                    <div class="process-step">
+                        <div class="process-icon">
+                            <i class="fa-solid fa-microchip"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>2. Agentic Ingestion</h3>
+                            <p>Our VLM & LLM agents analyze the documents, extracting register maps, pin configs, and
+                                logic behavior.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Digital Twin -->
+                    <div class="process-step">
+                        <div class="process-icon">
+                            <i class="fa-brands fa-docker"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>3. Dockerized Twin</h3>
+                            <p>A completely encapsulated Docker container is generated, simulating the hardware
+                                component with bit-level accuracy.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Debugging -->
+                    <div class="process-step">
+                        <div class="process-icon">
+                            <i class="fa-solid fa-code"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>4. Build & Debug</h3>
+                            <p>Connect your agent to the simulation using standard protocols. Debug seamlessly in VS
+                                Code.</p>
+
+                            <!-- VS Code Mockup -->
+                            <div class="vscode-window" style="margin-top: 15px;">
+                                <div class="vscode-header">
+                                    <div class="vscode-dot dot-red"></div>
+                                    <div class="vscode-dot dot-yellow"></div>
+                                    <div class="vscode-dot dot-green"></div>
+                                </div>
+                                <div class="vscode-body">
+                                    <span class="code-line"><span class="comment">// Connecting to Digital
+                                            Twin...</span></span>
+                                    <span class="code-line"><span class="kw">let</span> device = <span
+                                            class="fn">Device::connect</span>(<span
+                                            class="str">"tcp://localhost:8080"</span>);</span>
+                                    <span class="code-line"><span class="kw">await</span> device.<span
+                                            class="fn">write_register</span>(0x1A, 0xFF);</span>
+                                    <span class="code-line"><span class="kw">let</span> status = <span
+                                            class="kw">await</span> device.<span class="fn">read_status</span>();</span>
+                                    <span class="code-line"><span class="fn">assert_eq!</span>(status, <span
+                                            class="str">"READY"</span>);</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="major">
+                    <ul class="actions special">
+                        <li><a href="index.html" class="button primary">Back to Home</a></li>
+                    </ul>
+                </footer>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer id="footer">
+            <ul class="icons">
+                <li><a href="#" class="icon brands alt fa-twitter"><span class="label">Twitter</span></a></li>
+                <li><a href="#" class="icon brands alt fa-facebook-f"><span class="label">Facebook</span></a></li>
+                <li><a href="#" class="icon brands alt fa-linkedin-in"><span class="label">LinkedIn</span></a></li>
+                <li><a href="#" class="icon brands alt fa-instagram"><span class="label">Instagram</span></a></li>
+                <li><a href="#" class="icon brands alt fa-github"><span class="label">GitHub</span></a></li>
+                <li><a href="#" class="icon solid alt fa-envelope"><span class="label">Email</span></a></li>
+            </ul>
+            <ul class="copyright">
+                <li>&copy; LabWired Inc. All rights reserved.</li>
+                <li><a href="https://labwired.com">LabWired.com</a></li>
+            </ul>
+        </footer>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE HTML>
+<!--
+	Landed by HTML5 UP (Adapted for LabWired)
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+
+<head>
+    <title>LabWired - Intelligent Hardware Connectivity</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="style.css" />
+    <noscript>
+        <link rel="stylesheet" href="noscript.css" />
+    </noscript>
+</head>
+
+<body class="is-preload landing">
+    <div id="page-wrapper">
+
+        <!-- Header -->
+        <header id="header">
+            <h1 id="logo"><a href="index.html"><i class="fa-solid fa-microchip"></i> LABWIRED</a></h1>
+            <nav id="nav">
+                <ul>
+                    <li><a href="#four">Features</a></li>
+                    <li><a href="#footer">Docs</a></li>
+                    <li><a href="#footer">Contact</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <!-- Banner -->
+        <section id="banner">
+            <div class="content">
+                <header>
+                    <h2>The Agentic Hardware<br />
+                        Simulation Platform</h2>
+                    <p>Simulate, debug, and control physical hardware<br />
+                        with autonomous agents.</p>
+                </header>
+                <span class="image fit main">
+                    <div class="css-graphic graphic-1"></div>
+                </span>
+            </div>
+            <a href="#four" class="goto-next scrolly">Next</a>
+        </section>
+
+        <!-- How It Works -->
+        <section id="how-it-works" class="wrapper style1 special fade-up">
+            <div class="container">
+                <header class="major">
+                    <h2>How It Works</h2>
+                    <p>From Datasheet to Digital Twin in 4 Steps</p>
+                </header>
+
+                <div class="process-flow">
+                    <!-- Step 1: Input -->
+                    <div class="process-step">
+                        <div class="process-icon icon major">
+                            <i class="fa-solid fa-file-pdf"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>1. The Input</h3>
+                            <p>Simply upload your component datasheets (PDF) and schematic diagrams. No manual coding
+                                required.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Ingestion -->
+                    <div class="process-step">
+                        <div class="process-icon icon major">
+                            <i class="fa-solid fa-microchip"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>2. Agentic Ingestion</h3>
+                            <p>Our VLM & LLM agents analyze the documents, extracting register maps, pin configs, and
+                                logic behavior.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Digital Twin -->
+                    <div class="process-step">
+                        <div class="process-icon icon major">
+                            <i class="fa-brands fa-docker"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>3. Dockerized Twin</h3>
+                            <p>A completely encapsulated Docker container is generated, simulating the hardware
+                                component with bit-level accuracy.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Debugging -->
+                    <div class="process-step">
+                        <div class="process-icon icon major">
+                            <i class="fa-solid fa-code"></i>
+                        </div>
+                        <div class="process-content">
+                            <h3>4. Build & Debug</h3>
+                            <p>Connect your agent to the simulation using standard protocols. Debug seamlessly in VS
+                                Code.</p>
+
+                            <!-- VS Code Mockup -->
+                            <div class="vscode-window">
+                                <div class="vscode-header">
+                                    <div class="vscode-dot dot-red"></div>
+                                    <div class="vscode-dot dot-yellow"></div>
+                                    <div class="vscode-dot dot-green"></div>
+                                </div>
+                                <div class="vscode-body">
+                                    <span class="code-line"><span class="comment">// Connecting to Digital
+                                            Twin...</span></span>
+                                    <span class="code-line"><span class="kw">let</span> device = <span
+                                            class="fn">Device::connect</span>(<span
+                                            class="str">"tcp://localhost:8080"</span>);</span>
+                                    <span class="code-line"><span class="kw">await</span> device.<span
+                                            class="fn">write_register</span>(0x1A, 0xFF);</span>
+                                    <span class="code-line"><span class="kw">let</span> status = <span
+                                            class="kw">await</span> device.<span class="fn">read_status</span>();</span>
+                                    <span class="code-line"><span class="fn">assert_eq!</span>(status, <span
+                                            class="str">"READY"</span>);</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Four (Features) -->
+        <section id="four" class="wrapper style1 special fade-up">
+            <div class="container">
+                <header class="major">
+                    <h2>Core Capabilities</h2>
+                    <p>Everything you need to build autonomous hardware agents.</p>
+                </header>
+                <div class="box alt">
+                    <div class="row gtr-uniform">
+                        <section class="col-4 col-6-medium col-12-xsmall">
+                            <span class="icon solid alt major fa-file-import"></span>
+                            <h3>Instant Digital Twins</h3>
+                            <p>Generate operational peripheral simulations directly from datasheets.</p>
+                        </section>
+                        <section class="col-4 col-6-medium col-12-xsmall">
+                            <span class="icon solid alt major fa-check-circle"></span>
+                            <h3>Hardware in CI/CD</h3>
+                            <p>Run full firmware validation suites on every commit without physical boards.</p>
+                        </section>
+                        <section class="col-4 col-6-medium col-12-xsmall">
+                            <span class="icon solid alt major fa-cogs"></span>
+                            <h3>Run Any Binary</h3>
+                            <p>Validate production executables (C, C++, Rust) against bit-accurate logic.</p>
+                        </section>
+                    </div>
+                </div>
+                <footer class="major">
+                    <ul class="actions special">
+                        <li><a href="#" class="button primary">Get Started</a></li>
+                        <li><a href="#" class="button">View Pricing</a></li>
+                    </ul>
+                </footer>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer id="footer">
+            <ul class="icons">
+                <li><a href="#" class="icon brands alt fa-twitter"><span class="label">Twitter</span></a></li>
+                <li><a href="#" class="icon brands alt fa-facebook-f"><span class="label">Facebook</span></a></li>
+                <li><a href="#" class="icon brands alt fa-linkedin-in"><span class="label">LinkedIn</span></a></li>
+                <li><a href="#" class="icon brands alt fa-instagram"><span class="label">Instagram</span></a></li>
+                <li><a href="#" class="icon brands alt fa-github"><span class="label">GitHub</span></a></li>
+                <li><a href="#" class="icon solid alt fa-envelope"><span class="label">Email</span></a></li>
+            </ul>
+            <ul class="copyright">
+                <li>&copy; LabWired Inc. All rights reserved.</li>
+                <li><a href="https://labwired.com">LabWired.com</a></li>
+            </ul>
+        </footer>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
+
+</body>
+
+</html>
