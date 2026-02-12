@@ -4,10 +4,13 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use addr2line::gimli::Reader;
 use anyhow::{anyhow, Context, Result};
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::Elf;
 use labwired_core::memory::ProgramImage;
+use object::ObjectSymbol;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -69,14 +72,35 @@ pub struct SourceLocation {
     pub function: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub enum DwarfLocation {
+    Register(u16),
+    Address(u64),
+    FrameRelative(i64),
+    Other(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalVariable {
+    pub name: String,
+    pub location: DwarfLocation,
+}
+
 pub struct SymbolProvider {
     #[allow(dead_code)]
     data: Arc<Vec<u8>>,
+    dwarf: addr2line::gimli::Dwarf<
+        addr2line::gimli::EndianReader<addr2line::gimli::RunTimeEndian, Arc<[u8]>>,
+    >,
     context: addr2line::Context<
         addr2line::gimli::EndianReader<addr2line::gimli::RunTimeEndian, Arc<[u8]>>,
     >,
     // Map of (file_name, line) -> address
-    line_map: std::collections::HashMap<(String, u32), u64>,
+    line_map: HashMap<(String, u32), u64>,
+    // Map of symbol_name -> address
+    symbol_map: HashMap<String, u64>,
+    // Test-only locals: PC -> list of locals
+    test_locals: HashMap<u64, Vec<LocalVariable>>,
 }
 
 impl SymbolProvider {
@@ -141,13 +165,27 @@ impl SymbolProvider {
             }
         }
 
-        let context =
-            addr2line::Context::from_dwarf(dwarf).context("Failed to create context from dwarf")?;
+        let mut symbol_map = std::collections::HashMap::new();
+        for sym in object.symbols() {
+            if let Ok(name) = sym.name() {
+                if sym.address() > 0 {
+                    symbol_map.insert(name.to_string(), sym.address());
+                }
+            }
+        }
+
+        let dwarf_for_context =
+            gimli::Dwarf::load(&load_section).context("Failed to load DWARF for context")?;
+        let context = addr2line::Context::from_dwarf(dwarf_for_context)
+            .context("Failed to create context from dwarf")?;
 
         Ok(Self {
             data,
+            dwarf,
             context,
             line_map,
+            symbol_map,
+            test_locals: HashMap::new(),
         })
     }
 
@@ -202,8 +240,164 @@ impl SymbolProvider {
                 }
             }
         }
-
         None
+    }
+
+    pub fn resolve_symbol(&self, name: &str) -> Option<u64> {
+        self.symbol_map.get(name).copied()
+    }
+
+    pub fn find_locals(&self, pc: u64) -> Vec<LocalVariable> {
+        let mut locals = Vec::new();
+
+        // Include test-only locals for PC 0 (default) or the specific PC
+        if let Some(tl) = self.test_locals.get(&0) {
+            locals.extend(tl.clone());
+        }
+        if pc != 0 {
+            if let Some(tl) = self.test_locals.get(&pc) {
+                locals.extend(tl.clone());
+            }
+        }
+
+        let mut units = self.dwarf.units();
+
+        while let Ok(Some(header)) = units.next() {
+            let unit = match self.dwarf.unit(header) {
+                Ok(u) => u,
+                Err(_) => continue,
+            };
+
+            let mut in_subprogram = false;
+            let mut subprogram_depth = 0;
+            let mut entries = unit.entries();
+
+            while let Ok(Some((depth, entry))) = entries.next_dfs() {
+                if !in_subprogram {
+                    if entry.tag() == addr2line::gimli::DW_TAG_subprogram {
+                        let mut low_pc = None;
+                        let mut high_pc = None;
+
+                        if let Some(addr2line::gimli::AttributeValue::Addr(addr)) = entry
+                            .attr_value(addr2line::gimli::DW_AT_low_pc)
+                            .ok()
+                            .flatten()
+                        {
+                            low_pc = Some(addr);
+                        }
+
+                        if let Some(attr) = entry
+                            .attr_value(addr2line::gimli::DW_AT_high_pc)
+                            .ok()
+                            .flatten()
+                        {
+                            match attr {
+                                addr2line::gimli::AttributeValue::Addr(addr) => {
+                                    high_pc = Some(addr)
+                                }
+                                addr2line::gimli::AttributeValue::Udata(size) => {
+                                    high_pc = low_pc.map(|l| l + size)
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if let (Some(low), Some(high)) = (low_pc, high_pc) {
+                            if pc >= low && pc < high {
+                                in_subprogram = true;
+                                subprogram_depth = depth;
+                            }
+                        }
+                    }
+                } else {
+                    if depth <= subprogram_depth {
+                        in_subprogram = false;
+                        continue;
+                    }
+
+                    if entry.tag() == addr2line::gimli::DW_TAG_variable
+                        || entry.tag() == addr2line::gimli::DW_TAG_formal_parameter
+                    {
+                        let name = entry
+                            .attr_value(addr2line::gimli::DW_AT_name)
+                            .ok()
+                            .flatten()
+                            .and_then(|attr| {
+                                let s = self.dwarf.attr_string(&unit, attr).ok()?;
+                                s.to_string_lossy().ok().map(|c| c.into_owned())
+                            });
+
+                        if let (Some(n), Some(addr2line::gimli::AttributeValue::Exprloc(expr))) = (
+                            name,
+                            entry
+                                .attr_value(addr2line::gimli::DW_AT_location)
+                                .ok()
+                                .flatten(),
+                        ) {
+                            let mut ops = expr.operations(unit.encoding());
+                            if let Ok(Some(op)) = ops.next() {
+                                match op {
+                                    addr2line::gimli::Operation::Register { register } => {
+                                        locals.push(LocalVariable {
+                                            name: n,
+                                            location: DwarfLocation::Register(register.0),
+                                        });
+                                    }
+                                    addr2line::gimli::Operation::FrameOffset { offset } => {
+                                        locals.push(LocalVariable {
+                                            name: n,
+                                            location: DwarfLocation::FrameRelative(offset),
+                                        });
+                                    }
+                                    _ => {
+                                        locals.push(LocalVariable {
+                                            name: n,
+                                            location: DwarfLocation::Other(format!("{:?}", op)),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        locals
+    }
+
+    /// Create an empty SymbolProvider for testing
+    pub fn new_empty() -> Self {
+        let data = Arc::new(Vec::new());
+
+        let load_section = |_id: gimli::SectionId| -> std::result::Result<
+            addr2line::gimli::EndianReader<gimli::RunTimeEndian, Arc<[u8]>>,
+            gimli::Error,
+        > {
+            let data = Arc::from(&[][..]);
+            Ok(gimli::EndianReader::new(data, gimli::RunTimeEndian::Little))
+        };
+
+        let dwarf = gimli::Dwarf::load(&load_section).unwrap();
+        let dwarf_for_context = gimli::Dwarf::load(&load_section).unwrap();
+        let context = addr2line::Context::from_dwarf(dwarf_for_context).unwrap();
+
+        Self {
+            data,
+            dwarf,
+            context,
+            line_map: HashMap::new(),
+            symbol_map: HashMap::new(),
+            test_locals: HashMap::new(),
+        }
+    }
+
+    /// Add a mock local variable for testing
+    pub fn add_test_local(&mut self, name: &str, location: DwarfLocation) {
+        // We use PC 0 as the default for test locals if not specified
+        self.test_locals.entry(0).or_default().push(LocalVariable {
+            name: name.to_string(),
+            location,
+        });
     }
 }
 
@@ -236,7 +430,11 @@ mod tests {
 
         // Debug info might map to main.rs or lib core/std if inlined, but line 26 is specific enough
         println!("Resolved file: {}", loc.file);
-        assert!(loc.file.ends_with("main.rs"), "Resolved file '{}' does not end with 'main.rs'", loc.file);
+        assert!(
+            loc.file.ends_with("main.rs"),
+            "Resolved file '{}' does not end with 'main.rs'",
+            loc.file
+        );
         assert_eq!(loc.line, Some(26));
     }
 }

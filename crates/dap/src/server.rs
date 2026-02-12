@@ -8,6 +8,7 @@ use crate::adapter::LabwiredAdapter;
 use anyhow::{anyhow, Result};
 // use dap::requests::Request;
 // use dap::responses::ResponseBody;
+use base64::Engine;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -15,7 +16,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub struct DapServer {
-    adapter: LabwiredAdapter,
+    pub adapter: LabwiredAdapter,
     running: Arc<Mutex<bool>>,
 }
 
@@ -45,6 +46,40 @@ struct DapEvent {
 struct OutputEventBody {
     category: String,
     output: String,
+}
+
+enum HandleResult {
+    Continue,
+    Shutdown,
+}
+
+#[derive(Serialize)]
+struct ProfileNode {
+    name: String,
+    value: u64,
+    children: std::collections::HashMap<String, ProfileNode>,
+}
+
+impl ProfileNode {
+    fn new(name: String) -> Self {
+        Self {
+            name,
+            value: 0,
+            children: std::collections::HashMap::new(),
+        }
+    }
+}
+
+fn profile_to_json(node: ProfileNode) -> Value {
+    let mut children: Vec<Value> = node.children.into_values().map(profile_to_json).collect();
+    // Sort by value descending
+    children.sort_by(|a, b| b["value"].as_u64().cmp(&a["value"].as_u64()));
+
+    json!({
+        "name": node.name,
+        "value": node.value,
+        "children": children
+    })
 }
 
 struct MessageSender<W: Write> {
@@ -140,7 +175,8 @@ impl DapServer {
                 match adapter_clone.continue_execution_chunk(10_000) {
                     Ok(reason) => {
                         match reason {
-                            labwired_core::StopReason::Breakpoint(_) | labwired_core::StopReason::ManualStop => {
+                            labwired_core::StopReason::Breakpoint(_)
+                            | labwired_core::StopReason::ManualStop => {
                                 {
                                     let mut r = running_clone.lock().unwrap();
                                     *r = false;
@@ -180,22 +216,14 @@ impl DapServer {
 
             // Telemetry polling
             if let Some(telemetry) = adapter_clone.get_telemetry() {
-                let _ = sender_clone.send_event("telemetry", Some(serde_json::to_value(telemetry).unwrap()));
+                let _ = sender_clone
+                    .send_event("telemetry", Some(serde_json::to_value(telemetry).unwrap()));
             }
 
             if !is_running {
                 std::thread::sleep(std::time::Duration::from_millis(50));
             } else {
                 std::thread::yield_now();
-            }
-        });
-
-        // Start GDB Server
-        let gdb_adapter = self.adapter.clone();
-        std::thread::spawn(move || {
-            let gdb = crate::gdb::GdbServer::new(gdb_adapter);
-            if let Err(e) = gdb.listen("127.0.0.1:3333") {
-                tracing::error!("GDB Server failed: {}", e);
             }
         });
 
@@ -233,97 +261,166 @@ impl DapServer {
             };
             tracing::info!("Received request: {}", request);
 
-            let command = request.get("command").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let command = request
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
             let req_seq = request.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
             let arguments = request.get("arguments");
 
             // Handle request
-            match command {
-                "initialize" => {
-                    sender.send_response(
-                        req_seq,
-                        "initialize",
-                        Some(json!({
-                            "supportsConfigurationDoneRequest": true,
-                            "supportsFunctionBreakpoints": true,
-                            "supportsConditionalBreakpoints": true,
-                            "supportsDisassembleRequest": true,
-                            "supportsReadMemoryRequest": true,
-                            "supportsSteppingGranularity": true,
-                            "supportsPauseRequest": true,
-                            "supportsRestartRequest": true,
-                            "supportsGotoTargetsRequest": true,
-                        })),
-                    )?;
-                    sender.send_event("initialized", None)?;
-                }
-                "launch" => {
-                    let program = arguments.and_then(|a| a.get("program")).and_then(|v| v.as_str());
-                    let system_config = arguments.and_then(|a| a.get("systemConfig")).and_then(|v| v.as_str());
+            match self.handle_request(req_seq, command, arguments, &sender) {
+                Ok(HandleResult::Shutdown) => return Ok(()),
+                Ok(HandleResult::Continue) => {}
+                Err(e) => tracing::error!("Error handling request {}: {}", command, e),
+            }
+        }
+    }
 
-                    tracing::info!("Launching: program={:?}, systemConfig={:?}", program, system_config);
+    fn handle_request<W: Write>(
+        &self,
+        req_seq: i64,
+        command: &str,
+        arguments: Option<&Value>,
+        sender: &MessageSender<W>,
+    ) -> Result<HandleResult> {
+        match command {
+            "initialize" => {
+                sender.send_response(
+                    req_seq,
+                    "initialize",
+                    Some(json!({
+                        "supportsConfigurationDoneRequest": true,
+                        "supportsFunctionBreakpoints": true,
+                        "supportsConditionalBreakpoints": true,
+                        "supportsDisassembleRequest": true,
+                        "supportsReadMemoryRequest": true,
+                        "supportsSteppingGranularity": true,
+                        "supportsPauseRequest": true,
+                        "supportsRestartRequest": true,
+                        "supportsGotoTargetsRequest": true,
+                        "supportsStepBack": true,
+                    })),
+                )?;
+                sender.send_event("initialized", None)?;
+            }
+            "launch" => {
+                let program = arguments
+                    .and_then(|a| a.get("program"))
+                    .and_then(|v| v.as_str());
+                let system_config = arguments
+                    .and_then(|a| a.get("systemConfig"))
+                    .and_then(|v| v.as_str());
 
-                    if let Some(p) = program {
-                        if let Err(e) = self.adapter.load_firmware(p.into(), system_config.map(|s| s.into())) {
-                            tracing::error!("Failed to load firmware: {}", e);
-                            sender.send_error_response(req_seq, "launch", &format!("Failed to load firmware: {}", e))?;
-                            continue;
-                        }
+                tracing::info!(
+                    "Launching: program={:?}, systemConfig={:?}",
+                    program,
+                    system_config
+                );
+
+                if let Some(p) = program {
+                    if let Err(e) = self
+                        .adapter
+                        .load_firmware(p.into(), system_config.map(|s| s.into()))
+                    {
+                        tracing::error!("Failed to load firmware: {}", e);
+                        sender.send_error_response(
+                            req_seq,
+                            "launch",
+                            &format!("Failed to load firmware: {}", e),
+                        )?;
+                        return Ok(HandleResult::Continue);
                     }
-                    sender.send_response(req_seq, "launch", None)?;
                 }
-                "disconnect" => {
-                    sender.send_response(req_seq, "disconnect", None)?;
-                    return Ok(());
+                sender.send_response(req_seq, "launch", None)?;
+            }
+            "disconnect" => {
+                sender.send_response(req_seq, "disconnect", None)?;
+                return Ok(HandleResult::Shutdown);
+            }
+            "setBreakpoints" => {
+                let args = arguments.unwrap();
+                let source = args.get("source").unwrap();
+                let path = source
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let lines = args
+                    .get("breakpoints")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|b| b.get("line").and_then(|v| v.as_i64()).unwrap_or(0))
+                            .collect::<Vec<i64>>()
+                    })
+                    .unwrap_or_default();
+
+                if let Err(e) = self
+                    .adapter
+                    .set_breakpoints(path.to_string(), lines.clone())
+                {
+                    tracing::error!("Failed to set breakpoints: {}", e);
                 }
-                "setBreakpoints" => {
-                    let args = arguments.unwrap();
-                    let source = args.get("source").unwrap();
-                    let path = source.get("path").and_then(|v| v.as_str()).unwrap_or_default();
-                    let lines = args.get("breakpoints").and_then(|v| v.as_array()).map(|arr| {
-                        arr.iter().map(|b| b.get("line").and_then(|v| v.as_i64()).unwrap_or(0)).collect::<Vec<i64>>()
-                    }).unwrap_or_default();
 
-                    if let Err(e) = self.adapter.set_breakpoints(path.to_string(), lines.clone()) {
-                        tracing::error!("Failed to set breakpoints: {}", e);
-                    }
+                let breakpoints: Vec<Value> = lines
+                    .into_iter()
+                    .map(|l| {
+                        json!({
+                            "verified": true,
+                            "line": l,
+                        })
+                    })
+                    .collect();
 
-                    let breakpoints: Vec<Value> = lines.into_iter().map(|l| json!({
-                        "verified": true,
-                        "line": l,
-                    })).collect();
-
-                    sender.send_response(req_seq, "setBreakpoints", Some(json!({ "breakpoints": breakpoints })))?;
-                }
-                "configurationDone" => {
-                    sender.send_response(req_seq, "configurationDone", None)?;
-                    sender.send_event("stopped", Some(json!({
+                sender.send_response(
+                    req_seq,
+                    "setBreakpoints",
+                    Some(json!({ "breakpoints": breakpoints })),
+                )?;
+            }
+            "configurationDone" => {
+                sender.send_response(req_seq, "configurationDone", None)?;
+                sender.send_event(
+                    "stopped",
+                    Some(json!({
                         "reason": "entry",
                         "threadId": 1,
                         "allThreadsStopped": true
-                    })))?;
-                }
-                "threads" => {
-                    sender.send_response(req_seq, "threads", Some(json!({
+                    })),
+                )?;
+            }
+            "threads" => {
+                sender.send_response(
+                    req_seq,
+                    "threads",
+                    Some(json!({
                         "threads": [{"id": 1, "name": "Core 0"}]
-                    })))?;
-                }
-                "stackTrace" => {
-                    let pc = self.adapter.get_pc().unwrap_or(0);
-                    let source_loc = self.adapter.lookup_source(pc as u64);
+                    })),
+                )?;
+            }
+            "stackTrace" => {
+                let pc = self.adapter.get_pc().unwrap_or(0);
+                let source_loc = self.adapter.lookup_source(pc as u64);
 
-                    let (source, line, name) = if let Some(loc) = source_loc {
-                        let source = json!({
-                            "name": std::path::Path::new(&loc.file).file_name().and_then(|n| n.to_str()).unwrap_or(&loc.file),
-                            "path": loc.file,
-                        });
-                        (Some(source), loc.line, loc.function.unwrap_or_else(|| "main".to_string()))
-                    } else {
-                        // If unknown, give it a name like "0x2af00 (No source)"
-                        (None, Some(0), format!("{:#x} (No debug symbols)", pc))
-                    };
+                let (source, line, name) = if let Some(loc) = source_loc {
+                    let source = json!({
+                        "name": std::path::Path::new(&loc.file).file_name().and_then(|n| n.to_str()).unwrap_or(&loc.file),
+                        "path": loc.file,
+                    });
+                    (
+                        Some(source),
+                        loc.line,
+                        loc.function.unwrap_or_else(|| "main".to_string()),
+                    )
+                } else {
+                    // If unknown, give it a name like "0x2af00 (No source)"
+                    (None, Some(0), format!("{:#x} (No debug symbols)", pc))
+                };
 
-                    sender.send_response(req_seq, "stackTrace", Some(json!({
+                sender.send_response(
+                    req_seq,
+                    "stackTrace",
+                    Some(json!({
                         "stackFrames": [{
                             "id": 1,
                             "name": name,
@@ -333,238 +430,696 @@ impl DapServer {
                             "instructionPointerReference": format!("{:#x}", pc),
                         }],
                         "totalFrames": 1
-                    })))?;
-                }
-                "scopes" => {
-                    let reg_count = self.adapter.get_register_names().map(|n| n.len()).unwrap_or(16);
-                    sender.send_response(req_seq, "scopes", Some(json!({
-                        "scopes": [{
-                            "name": "Registers",
-                            "variablesReference": 1,
-                            "namedVariables": reg_count,
-                            "expensive": false,
-                        }]
-                    })))?;
-                }
-                "variables" => {
-                    let var_ref = arguments.and_then(|a| a.get("variablesReference")).and_then(|v| v.as_i64()).unwrap_or(0);
-                    if var_ref == 1 {
-                        let mut variables = Vec::new();
-                        if let Ok(names) = self.adapter.get_register_names() {
-                            for (i, name) in names.into_iter().enumerate() {
-                                let val = self.adapter.get_register(i as u8).unwrap_or(0);
-                                variables.push(json!({
-                                    "name": name,
-                                    "value": format!("{:#x}", val),
-                                    "variablesReference": 0,
-                                    "type": "uint32",
-                                    "presentationHint": { "kind": "property", "attributes": ["readOnly"] }
-                                }));
+                    })),
+                )?;
+            }
+            "scopes" => {
+                let reg_count = self
+                    .adapter
+                    .get_register_names()
+                    .map(|n| n.len())
+                    .unwrap_or(16);
+                sender.send_response(
+                    req_seq,
+                    "scopes",
+                    Some(json!({
+                        "scopes": [
+                            {
+                                "name": "Registers",
+                                "variablesReference": 1,
+                                "namedVariables": reg_count,
+                                "expensive": false,
+                            },
+                            {
+                                "name": "Locals",
+                                "variablesReference": 100,
+                                "namedVariables": 0,
+                                "expensive": false,
                             }
-                        }
-                        sender.send_response(req_seq, "variables", Some(json!({ "variables": variables })))?;
-                    } else if var_ref == 0 {
-                        sender.send_response(req_seq, "variables", Some(json!({ "variables": [] })))?;
-                    } else {
-                        // For other references (e.g. memory groups), return empty for now
-                        sender.send_response(req_seq, "variables", Some(json!({ "variables": [] })))?;
-                    }
-                }
-                "disassemble" => {
-                    let args = arguments.unwrap();
-                    let addr_str = args.get("memoryReference").and_then(|v| v.as_str()).unwrap_or("0");
-                    let addr = if addr_str.starts_with("0x") {
-                        u64::from_str_radix(&addr_str[2..], 16).unwrap_or(0)
-                    } else {
-                        addr_str.parse().unwrap_or(0)
-                    };
-                    let instruction_count = args.get("instructionCount").and_then(|v| v.as_i64()).unwrap_or(10) as usize;
-                    let instruction_offset = args.get("instructionOffset").and_then(|v| v.as_i64()).unwrap_or(0);
-
-                    let start_addr = (addr as i64 + instruction_offset * 2) as u64; // Assuming 2-byte thumb instructions for simple offset
-
-                    let mut instructions = Vec::new();
-                    // Read data in chunks to disassemble
-                    if let Ok(data) = self.adapter.read_memory(start_addr, instruction_count * 4) {
-                        for i in 0..instruction_count {
-                            let curr_addr = start_addr + (i * 2) as u64;
-                            let idx = i * 2;
-                            if idx + 2 > data.len() { break; }
-
-                            let opcode = (data[idx] as u16) | ((data[idx+1] as u16) << 8);
-                            let instr = labwired_core::decoder::decode_thumb_16(opcode);
-
-                            // Better formatting for "Ozone-like" feel
-                            let instr_str = format!("{:?}", instr);
-                            let display_instr = instr_str.split_whitespace().next().unwrap_or("unknown").to_uppercase();
-                            let operands = instr_str.split_once(' ').map(|(_, rest)| rest).unwrap_or("");
-
-                            instructions.push(json!({
-                                "address": format!("{:#x}", curr_addr),
-                                "instruction": format!("{} {}", display_instr, operands),
-                                "instructionBytes": format!("{:02x}{:02x}", data[idx+1], data[idx]),
+                        ]
+                    })),
+                )?;
+            }
+            "variables" => {
+                let var_ref = arguments
+                    .and_then(|a| a.get("variablesReference"))
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                if var_ref == 1 {
+                    let mut variables = Vec::new();
+                    if let Ok(names) = self.adapter.get_register_names() {
+                        for (i, name) in names.into_iter().enumerate() {
+                            let val = self.adapter.get_register(i as u8).unwrap_or(0);
+                            variables.push(json!({
+                                "name": name,
+                                "value": format!("{:#x}", val),
+                                "variablesReference": 0,
+                                "type": "uint32",
+                                "presentationHint": { "kind": "property", "attributes": ["readOnly"] }
                             }));
                         }
                     }
-
-                    sender.send_response(req_seq, "disassemble", Some(json!({ "instructions": instructions })))?;
+                    sender.send_response(
+                        req_seq,
+                        "variables",
+                        Some(json!({ "variables": variables })),
+                    )?;
+                } else if var_ref == 100 {
+                    let pc = self.adapter.get_pc().unwrap_or(0);
+                    let locals = self.adapter.get_locals(pc);
+                    let mut variables = Vec::new();
+                    for local in locals {
+                        let val = match local.location {
+                            labwired_loader::DwarfLocation::Register(r) => {
+                                let val = self.adapter.get_register(r as u8).unwrap_or(0);
+                                format!("{:#x}", val)
+                            }
+                            labwired_loader::DwarfLocation::FrameRelative(offset) => {
+                                let sp = self.adapter.get_register(13).unwrap_or(0);
+                                let addr = (sp as i64 + offset) as u32;
+                                if let Ok(data) = self.adapter.read_memory(addr as u64, 4) {
+                                    let val = (data[0] as u32)
+                                        | ((data[1] as u32) << 8)
+                                        | ((data[2] as u32) << 16)
+                                        | ((data[3] as u32) << 24);
+                                    format!("{:#x}", val)
+                                } else {
+                                    "error".to_string()
+                                }
+                            }
+                            _ => "not available".to_string(),
+                        };
+                        variables.push(json!({
+                            "name": local.name,
+                            "value": val,
+                            "variablesReference": 0,
+                        }));
+                    }
+                    sender.send_response(
+                        req_seq,
+                        "variables",
+                        Some(json!({ "variables": variables })),
+                    )?;
+                } else if var_ref == 0 {
+                    sender.send_response(req_seq, "variables", Some(json!({ "variables": [] })))?;
+                } else {
+                    // For other references (e.g. memory groups), return empty for now
+                    sender.send_response(req_seq, "variables", Some(json!({ "variables": [] })))?;
                 }
-                "readMemory" => {
-                    let args = arguments.unwrap();
-                    let addr_str = args.get("memoryReference").and_then(|v| v.as_str()).unwrap_or("0");
-                    let addr = if addr_str.starts_with("0x") {
-                        u64::from_str_radix(&addr_str[2..], 16).unwrap_or(0)
-                    } else {
-                        addr_str.parse().unwrap_or(0)
-                    };
-                    let offset = args.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
-                    let count = args.get("count").and_then(|v| v.as_i64()).unwrap_or(64) as usize;
+            }
+            "evaluate" => {
+                let args = arguments.unwrap();
+                let expression = args
+                    .get("expression")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
 
-                    let final_addr = (addr as i64 + offset) as u64;
+                // Try to evaluate as a register first
+                let mut result_val = None;
+                if let Ok(names) = self.adapter.get_register_names() {
+                    for (i, name) in names.iter().enumerate() {
+                        if name.eq_ignore_ascii_case(expression) {
+                            let val = self.adapter.get_register(i as u8).unwrap_or(0);
+                            result_val = Some(format!("{:#x}", val));
+                            break;
+                        }
+                    }
+                }
 
-                    match self.adapter.read_memory(final_addr, count) {
-                        Ok(data) => {
-                            use base64::Engine;
-                            let encoded = base64::engine::general_purpose::STANDARD.encode(data);
-                            sender.send_response(req_seq, "readMemory", Some(json!({
+                // If not a register, try as a symbol
+                if result_val.is_none() {
+                    if let Some(addr) = self.adapter.resolve_symbol(expression) {
+                        if let Ok(data) = self.adapter.read_memory(addr, 4) {
+                            let val = (data[0] as u32)
+                                | ((data[1] as u32) << 8)
+                                | ((data[2] as u32) << 16)
+                                | ((data[3] as u32) << 24);
+                            result_val = Some(format!("{:#x}", val));
+                        }
+                    }
+                }
+
+                // If not a symbol, try as a local
+                if result_val.is_none() {
+                    let pc = self.adapter.get_pc().unwrap_or(0);
+                    let locals = self.adapter.get_locals(pc);
+                    for local in locals {
+                        if local.name == expression {
+                            result_val = match local.location {
+                                labwired_loader::DwarfLocation::Register(r) => {
+                                    let val = self.adapter.get_register(r as u8).unwrap_or(0);
+                                    Some(format!("{:#x}", val))
+                                }
+                                labwired_loader::DwarfLocation::FrameRelative(offset) => {
+                                    let sp = self.adapter.get_register(13).unwrap_or(0);
+                                    let addr = (sp as i64 + offset) as u32;
+                                    if let Ok(data) = self.adapter.read_memory(addr as u64, 4) {
+                                        let val = (data[0] as u32)
+                                            | ((data[1] as u32) << 8)
+                                            | ((data[2] as u32) << 16)
+                                            | ((data[3] as u32) << 24);
+                                        Some(format!("{:#x}", val))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            };
+                            if result_val.is_some() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if let Some(val) = result_val {
+                    sender.send_response(
+                        req_seq,
+                        "evaluate",
+                        Some(json!({
+                            "result": val,
+                            "variablesReference": 0,
+                            "type": "uint32"
+                        })),
+                    )?;
+                } else {
+                    sender.send_error_response(
+                        req_seq,
+                        "evaluate",
+                        &format!("Failed to evaluate expression: {}", expression),
+                    )?;
+                }
+            }
+            "disassemble" => {
+                let args = arguments.unwrap();
+                let addr_str = args
+                    .get("memoryReference")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0");
+                let addr = if let Some(stripped) = addr_str.strip_prefix("0x") {
+                    u64::from_str_radix(stripped, 16).unwrap_or(0)
+                } else {
+                    addr_str.parse().unwrap_or(0)
+                };
+                let instruction_count = args
+                    .get("instructionCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(10) as usize;
+                let instruction_offset = args
+                    .get("instructionOffset")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+
+                let start_addr = (addr as i64 + instruction_offset * 2) as u64; // Assuming 2-byte thumb instructions for simple offset
+
+                let mut instructions = Vec::new();
+                // Read data in chunks to disassemble
+                if let Ok(data) = self.adapter.read_memory(start_addr, instruction_count * 4) {
+                    for i in 0..instruction_count {
+                        let curr_addr = start_addr + (i * 2) as u64;
+                        let idx = i * 2;
+                        if idx + 2 > data.len() {
+                            break;
+                        }
+
+                        let opcode = (data[idx] as u16) | ((data[idx + 1] as u16) << 8);
+                        let instr = labwired_core::decoder::decode_thumb_16(opcode);
+
+                        // Better formatting for "Ozone-like" feel
+                        let instr_str = format!("{:?}", instr);
+                        let display_instr = instr_str
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("unknown")
+                            .to_uppercase();
+                        let operands = instr_str
+                            .split_once(' ')
+                            .map(|(_, rest)| rest)
+                            .unwrap_or("");
+
+                        instructions.push(json!({
+                            "address": format!("{:#x}", curr_addr),
+                            "instruction": format!("{} {}", display_instr, operands),
+                            "instructionBytes": format!("{:02x}{:02x}", data[idx+1], data[idx]),
+                        }));
+                    }
+                }
+
+                sender.send_response(
+                    req_seq,
+                    "disassemble",
+                    Some(json!({ "instructions": instructions })),
+                )?;
+            }
+            "readMemory" => {
+                let args = arguments.unwrap();
+                let addr_str = args
+                    .get("memoryReference")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0");
+                let addr = if let Some(stripped) = addr_str.strip_prefix("0x") {
+                    u64::from_str_radix(stripped, 16).unwrap_or(0)
+                } else {
+                    addr_str.parse().unwrap_or(0)
+                };
+                let offset = args.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+                let count = args.get("count").and_then(|v| v.as_i64()).unwrap_or(64) as usize;
+
+                let final_addr = (addr as i64 + offset) as u64;
+
+                match self.adapter.read_memory(final_addr, count) {
+                    Ok(data) => {
+                        let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+                        sender.send_response(
+                            req_seq,
+                            "readMemory",
+                            Some(json!({
                                 "address": format!("{:#x}", final_addr),
                                 "unreadableBytes": 0,
                                 "data": encoded,
-                            })))?;
-                        }
-                        Err(e) => {
-                            sender.send_error_response(req_seq, "readMemory", &format!("Read failed: {}", e))?;
-                        }
+                            })),
+                        )?;
+                    }
+                    Err(e) => {
+                        sender.send_error_response(
+                            req_seq,
+                            "readMemory",
+                            &format!("Read failed: {}", e),
+                        )?;
                     }
                 }
-                "continue" => {
-                    {
-                        let mut r = self.running.lock().unwrap();
-                        *r = true;
+            }
+            "writeMemory" => {
+                let args = arguments.unwrap();
+                let addr_str = args
+                    .get("memoryReference")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0");
+                let addr = if let Some(stripped) = addr_str.strip_prefix("0x") {
+                    u64::from_str_radix(stripped, 16).unwrap_or(0)
+                } else {
+                    addr_str.parse().unwrap_or(0)
+                };
+                let offset = args.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+                let data_str = args.get("data").and_then(|v| v.as_str()).unwrap_or("");
+
+                let data = base64::engine::general_purpose::STANDARD
+                    .decode(data_str)
+                    .map_err(|e| anyhow!("Base64 decode failed: {:?}", e))?;
+
+                let final_addr = (addr as i64 + offset) as u64;
+
+                match self.adapter.write_memory(final_addr, &data) {
+                    Ok(_) => {
+                        sender.send_response(
+                            req_seq,
+                            "writeMemory",
+                            Some(json!({
+                                "bytesWritten": data.len(),
+                            })),
+                        )?;
                     }
-                    sender.send_response(req_seq, "continue", Some(json!({ "allThreadsContinued": true })))?;
+                    Err(e) => {
+                        sender.send_error_response(
+                            req_seq,
+                            "writeMemory",
+                            &format!("Write failed: {}", e),
+                        )?;
+                    }
                 }
-                "pause" => {
-                    {
-                        let mut r = self.running.lock().unwrap();
-                        *r = false;
-                    }
-                    sender.send_response(req_seq, "pause", None)?;
-                    sender.send_event("stopped", Some(json!({
+            }
+            "continue" => {
+                {
+                    let mut r = self.running.lock().unwrap();
+                    *r = true;
+                }
+                sender.send_response(
+                    req_seq,
+                    "continue",
+                    Some(json!({ "allThreadsContinued": true })),
+                )?;
+            }
+            "pause" => {
+                {
+                    let mut r = self.running.lock().unwrap();
+                    *r = false;
+                }
+                sender.send_response(req_seq, "pause", None)?;
+                sender.send_event(
+                    "stopped",
+                    Some(json!({
                         "reason": "pause",
                         "threadId": 1,
                         "allThreadsStopped": true
-                    })))?;
-                }
-                "restart" => {
-                    if let Err(e) = self.adapter.reset() {
-                        sender.send_error_response(req_seq, "restart", &format!("Reset failed: {}", e))?;
-                    } else {
-                        sender.send_response(req_seq, "restart", None)?;
-                        sender.send_event("stopped", Some(json!({
+                    })),
+                )?;
+            }
+            "restart" => {
+                if let Err(e) = self.adapter.reset() {
+                    sender.send_error_response(
+                        req_seq,
+                        "restart",
+                        &format!("Reset failed: {}", e),
+                    )?;
+                } else {
+                    sender.send_response(req_seq, "restart", None)?;
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
                             "reason": "entry",
                             "threadId": 1,
                             "allThreadsStopped": true
-                        })))?;
-                    }
+                        })),
+                    )?;
                 }
-                "gotoTargets" => {
-                    // VS Code calls this to find where it can jump
-                    let args = arguments.unwrap();
-                    let line = args.get("line").and_then(|v| v.as_i64()).unwrap_or(0);
-                    let source = args.get("source").unwrap();
-                    let path = source.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+            }
+            "gotoTargets" => {
+                // VS Code calls this to find where it can jump
+                let args = arguments.unwrap();
+                let line = args.get("line").and_then(|v| v.as_i64()).unwrap_or(0);
+                let source = args.get("source").unwrap();
+                let path = source
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
 
-                    let mut targets = Vec::new();
-                    if let Some(target_addr) = self.adapter.lookup_source_reverse(path, line as u32) {
-                        targets.push(json!({
-                            "id": 1,
-                            "label": format!("Jump to line {}", line),
-                            "line": line,
-                            "column": 0,
-                            "instructionPointerReference": format!("{:#x}", target_addr),
-                        }));
-                    }
-
-                    sender.send_response(req_seq, "gotoTargets", Some(json!({ "targets": targets })))?;
+                let mut targets = Vec::new();
+                if let Some(target_addr) = self.adapter.lookup_source_reverse(path, line as u32) {
+                    targets.push(json!({
+                        "id": 1,
+                        "label": format!("Jump to line {}", line),
+                        "line": line,
+                        "column": 0,
+                        "instructionPointerReference": format!("{:#x}", target_addr),
+                    }));
                 }
-                "goto" => {
-                    let args = arguments.unwrap();
-                    let _target_id = args.get("targetId").and_then(|v| v.as_i64()).unwrap_or(0);
-                    // For now we only have one target id = 1 which means "the resolved instruction"
-                    // In a real implementation we'd lookup the target by ID.
 
-                    // VS Code usually sends instructionPointerReference if gotoTargets was used
-                    let addr_str = args.get("instructionPointerReference").and_then(|v| v.as_str());
-                    let addr = if let Some(a) = addr_str {
-                        if a.starts_with("0x") {
-                            u32::from_str_radix(&a[2..], 16).unwrap_or(0)
-                        } else {
-                            a.parse().unwrap_or(0)
-                        }
+                sender.send_response(
+                    req_seq,
+                    "gotoTargets",
+                    Some(json!({ "targets": targets })),
+                )?;
+            }
+            "goto" => {
+                let args = arguments.unwrap();
+                let _target_id = args.get("targetId").and_then(|v| v.as_i64()).unwrap_or(0);
+                // For now we only have one target id = 1 which means "the resolved instruction"
+                // In a real implementation we'd lookup the target by ID.
+
+                // VS Code usually sends instructionPointerReference if gotoTargets was used
+                let addr_str = args
+                    .get("instructionPointerReference")
+                    .and_then(|v| v.as_str());
+                let addr = if let Some(a) = addr_str {
+                    if let Some(stripped) = a.strip_prefix("0x") {
+                        u32::from_str_radix(stripped, 16).unwrap_or(0)
                     } else {
-                        0
-                    };
+                        a.parse().unwrap_or(0)
+                    }
+                } else {
+                    0
+                };
 
-                    if addr != 0 {
-                        let _ = self.adapter.set_pc(addr);
-                        sender.send_response(req_seq, "goto", None)?;
-                        sender.send_event("stopped", Some(json!({
+                if addr != 0 {
+                    let _ = self.adapter.set_pc(addr);
+                    sender.send_response(req_seq, "goto", None)?;
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
                             "reason": "goto",
                             "threadId": 1,
                             "allThreadsStopped": true
-                        })))?;
-                    } else {
-                        sender.send_error_response(req_seq, "goto", "Invalid target address")?;
-                    }
+                        })),
+                    )?;
+                } else {
+                    sender.send_error_response(req_seq, "goto", "Invalid target address")?;
                 }
-                "next" | "stepIn" => {
-                    let _ = self.adapter.step();
-                    sender.send_response(req_seq, "next", None)?;
-                    sender.send_event("stopped", Some(json!({
+            }
+            "next" | "stepIn" => {
+                let _ = self.adapter.step();
+                sender.send_response(req_seq, "next", None)?;
+                sender.send_event(
+                    "stopped",
+                    Some(json!({
                         "reason": "step",
                         "threadId": 1,
                         "allThreadsStopped": true
-                    })))?;
-                }
-                "readInstructionTrace" => {
-                    let (start_cycle, end_cycle) = if let Some(args) = arguments {
-                        let start = args.get("startCycle").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let end = args.get("endCycle").and_then(|v| v.as_u64()).unwrap_or(u64::MAX);
-                        (start, end)
-                    } else {
-                        (0, u64::MAX)
-                    };
+                    })),
+                )?;
+            }
+            "stepBack" => {
+                let _ = self.adapter.step_back();
+                sender.send_response(req_seq, "stepBack", None)?;
+                sender.send_event(
+                    "stopped",
+                    Some(json!({
+                        "reason": "step",
+                        "threadId": 1,
+                        "allThreadsStopped": true
+                    })),
+                )?;
+            }
+            "stepOut" => {
+                let _ = self.adapter.step_out();
+                sender.send_response(req_seq, "stepOut", None)?;
+                sender.send_event(
+                    "stopped",
+                    Some(json!({
+                        "reason": "step",
+                        "threadId": 1,
+                        "allThreadsStopped": true
+                    })),
+                )?;
+            }
+            "readInstructionTrace" => {
+                let (start_cycle, end_cycle) = if let Some(args) = arguments {
+                    let start = args.get("startCycle").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let end = args
+                        .get("endCycle")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(u64::MAX);
+                    (start, end)
+                } else {
+                    (0, u64::MAX)
+                };
 
-                    let traces = if start_cycle == 0 && end_cycle == u64::MAX {
-                        // Get all traces
-                        self.adapter.get_all_traces()
-                    } else {
-                        // Get specific range
-                        self.adapter.get_instruction_trace(start_cycle, end_cycle)
-                    };
+                let traces = if start_cycle == 0 && end_cycle == u64::MAX {
+                    // Get all traces
+                    self.adapter.get_all_traces()
+                } else {
+                    // Get specific range
+                    self.adapter.get_instruction_trace(start_cycle, end_cycle)
+                };
 
-                    // Convert traces to JSON
-                    let trace_records: Vec<Value> = traces.iter().map(|t| {
+                // Convert traces to JSON
+                let trace_records: Vec<Value> = traces
+                    .iter()
+                    .map(|t| {
                         json!({
                             "pc": t.pc,
                             "cycle": t.cycle,
                             "instruction": t.instruction,
                             "function": t.function,
                             "registers": t.register_delta,
+                            "memory_writes": t.memory_writes,
+                            "stack_depth": t.stack_depth,
+                            "mnemonic": t.mnemonic,
                         })
-                    }).collect();
+                    })
+                    .collect();
 
-                    sender.send_response(req_seq, "readInstructionTrace", Some(json!({
+                sender.send_response(
+                    req_seq,
+                    "readInstructionTrace",
+                    Some(json!({
                         "traces": trace_records,
                         "totalCycles": self.adapter.get_cycle_count(),
-                    })))?;
+                    })),
+                )?;
+            }
+            "readProfilingData" => {
+                let traces = self.adapter.get_all_traces();
+
+                let mut root = ProfileNode::new("root".to_string());
+                // We'll track the "active" path in the tree
+                let mut path: Vec<String> = Vec::new();
+
+                for t in traces {
+                    let func_name = t.function.unwrap_or_else(|| "unknown".to_string());
+
+                    // Simple heuristic: if stack depth changes, we navigate
+                    // In reality, stack depth is enough to know where we are in the tree
+                    // Let's build the path based on stack depth
+                    let depth = t.stack_depth as usize / 4; // Assuming 4-byte stack alignment
+
+                    if path.len() <= depth {
+                        while path.len() <= depth {
+                            path.push(func_name.clone());
+                        }
+                    } else {
+                        path.truncate(depth + 1);
+                        path[depth] = func_name;
+                    }
+
+                    // Traverse the tree to the current function and increment
+                    let mut curr = &mut root;
+                    for segment in &path {
+                        curr = curr
+                            .children
+                            .entry(segment.clone())
+                            .or_insert(ProfileNode::new(segment.clone()));
+                    }
+                    curr.value += 1;
+                    root.value += 1;
                 }
-                _ => {
-                    tracing::warn!("Unhandled command: {}", command);
-                    sender.send_response(req_seq, command, None)?;
-                }
+
+                sender.send_response(req_seq, "readProfilingData", Some(profile_to_json(root)))?;
+            }
+            "readPeripherals" => {
+                let peripherals = self.adapter.get_peripherals_json();
+                sender.send_response(req_seq, "readPeripherals", Some(peripherals))?;
+            }
+            "readRTOSState" => {
+                let state = self.adapter.get_rtos_state_json();
+                sender.send_response(req_seq, "readRTOSState", Some(state))?;
+            }
+            _ => {
+                tracing::warn!("Unhandled command: {}", command);
+                sender.send_response(req_seq, command, None)?;
             }
         }
+        Ok(HandleResult::Continue)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use labwired_core::DebugControl;
+    use serde_json::json;
+
+    #[test]
+    fn test_handle_initialize() -> Result<()> {
+        let server = DapServer::new();
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sender = MessageSender {
+            output: output.clone(),
+            seq: Arc::new(AtomicI64::new(1)),
+        };
+
+        server.handle_request(1, "initialize", None, &sender)?;
+
+        let out = output.lock().unwrap();
+        let out_str = String::from_utf8(out.clone())?;
+
+        // Check for both response and initialized event
+        assert!(out_str.contains("\"command\":\"initialize\""));
+        assert!(out_str.contains("\"event\":\"initialized\""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_scopes() -> Result<()> {
+        let server = DapServer::new();
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sender = MessageSender {
+            output: output.clone(),
+            seq: Arc::new(AtomicI64::new(1)),
+        };
+
+        server.handle_request(1, "scopes", None, &sender)?;
+
+        let out = output.lock().unwrap();
+        let out_str = String::from_utf8(out.clone())?;
+
+        assert!(out_str.contains("\"name\":\"Registers\""));
+        assert!(out_str.contains("\"variablesReference\":1"));
+        assert!(out_str.contains("\"name\":\"Locals\""));
+        assert!(out_str.contains("\"variablesReference\":100"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_variables_locals() -> Result<()> {
+        let server = DapServer::new();
+        let adapter = server.adapter.clone();
+
+        // Mock a CPU and SP
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut machine = labwired_core::Machine::new(cpu, bus);
+        machine.write_core_reg(13, 0x20001000);
+        machine
+            .write_memory(0x20000FFC, &[0x78, 0x56, 0x34, 0x12])
+            .unwrap();
+        *adapter.machine.lock().unwrap() = Some(Box::new(machine));
+
+        // Mock symbols/locals
+        let mut symbols = labwired_loader::SymbolProvider::new_empty();
+        symbols.add_test_local(
+            "my_local",
+            labwired_loader::DwarfLocation::FrameRelative(-4),
+        );
+        *adapter.symbols.lock().unwrap() = Some(symbols);
+
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sender = MessageSender {
+            output: output.clone(),
+            seq: Arc::new(AtomicI64::new(1)),
+        };
+
+        let args = json!({ "variablesReference": 100 });
+        server.handle_request(1, "variables", Some(&args), &sender)?;
+
+        let out = output.lock().unwrap();
+        let out_str = String::from_utf8(out.clone())?;
+
+        assert!(out_str.contains("\"name\":\"my_local\""));
+        assert!(out_str.contains("\"value\":\"0x12345678\""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_evaluate_fallback() -> Result<()> {
+        let server = DapServer::new();
+        let adapter = server.adapter.clone();
+
+        // Set up machine for register R0=0xAA and local my_var=0xBB
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut machine = labwired_core::Machine::new(cpu, bus);
+        machine.write_core_reg(0, 0xAA);
+        machine.write_core_reg(13, 0x20001000);
+        machine
+            .write_memory(0x20000FFC, &[0xBB, 0x00, 0x00, 0x00])
+            .unwrap();
+        *adapter.machine.lock().unwrap() = Some(Box::new(machine));
+
+        let mut symbols = labwired_loader::SymbolProvider::new_empty();
+        symbols.add_test_local("my_var", labwired_loader::DwarfLocation::FrameRelative(-4));
+        *adapter.symbols.lock().unwrap() = Some(symbols);
+
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sender = MessageSender {
+            output: output.clone(),
+            seq: Arc::new(AtomicI64::new(1)),
+        };
+
+        // 1. Evaluate register
+        server.handle_request(1, "evaluate", Some(&json!({"expression": "R0"})), &sender)?;
+        assert!(String::from_utf8(output.lock().unwrap().clone())?.contains("\"result\":\"0xaa\""));
+        output.lock().unwrap().clear();
+
+        // 2. Evaluate local
+        server.handle_request(
+            2,
+            "evaluate",
+            Some(&json!({"expression": "my_var"})),
+            &sender,
+        )?;
+        assert!(String::from_utf8(output.lock().unwrap().clone())?.contains("\"result\":\"0xbb\""));
+
+        Ok(())
     }
 }

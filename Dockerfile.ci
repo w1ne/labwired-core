@@ -21,8 +21,8 @@ WORKDIR /build
 # Copy all source code
 COPY . .
 
-# Build the CLI binary
-RUN cargo build --release -p labwired-cli --locked
+# Build runtime binaries used in CI and Docker debugging flows
+RUN cargo build --release -p labwired-cli -p labwired-dap --locked
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -35,11 +35,12 @@ RUN apt-get update && apt-get install -y \
 # Create non-root user for security
 RUN useradd -m -u 1000 -s /bin/bash labwired
 
-# Copy the binary from builder
+# Copy binaries from builder
 COPY --from=builder /build/target/release/labwired /usr/local/bin/labwired
+COPY --from=builder /build/target/release/labwired-dap /usr/local/bin/labwired-dap
 
 # Set ownership
-RUN chown labwired:labwired /usr/local/bin/labwired
+RUN chown labwired:labwired /usr/local/bin/labwired /usr/local/bin/labwired-dap
 
 # Switch to non-root user
 USER labwired

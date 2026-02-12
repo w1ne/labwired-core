@@ -14,10 +14,11 @@ members = [
     "crates/firmware-ci-fixture",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
+    "crates/ir",
     "crates/svd-ingestor",
     "examples/arm-cortex-m0",
     "examples/riscv-virt",
-    "examples/demo-blinky",
+    "examples/demo-blinky", "crates/codegen",
 ]
 exclude = ["crates/firmware-hal-test"]
 default-members = ["crates/cli", "crates/core", "crates/loader"]

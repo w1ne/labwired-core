@@ -90,6 +90,10 @@ impl GenericPeripheral {
         p
     }
 
+    pub fn get_descriptor(&self) -> &labwired_config::PeripheralDescriptor {
+        &self.descriptor
+    }
+
     fn check_triggers(&self, register_id: &str, is_write: bool, value: Option<u32>) {
         if let Some(timing) = &self.descriptor.timing {
             for hook in timing {
