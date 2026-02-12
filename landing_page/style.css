@@ -688,7 +688,7 @@ footer.major .actions li {
 
 /* Wrapper */
 .wrapper {
-    padding: 4em 0 2em 0;
+    padding: 4em 0 1em 0;
 }
 
 .wrapper.style1 {
@@ -821,7 +821,7 @@ footer.major .actions li {
 .process-step {
     display: flex;
     align-items: center;
-    margin-bottom: 4em;
+    margin-bottom: 2em;
     opacity: 0;
     transform: translateY(20px);
     transition: all 0.8s ease-out;
@@ -869,7 +869,7 @@ footer.major .actions li {
 }
 
 .process-content {
-    margin-left: 3em;
+    margin-left: 5em;
     flex: 1;
     background: #f8f9fa;
     padding: 2em;
@@ -879,29 +879,28 @@ footer.major .actions li {
     text-align: left;
 }
 
-/* Connecting Line with Arrows */
+/* Connecting Line with Subtle Arrows */
 .process-flow::before {
     content: '';
     position: absolute;
     top: 50px;
     bottom: 50px;
-    left: 70px;
-    width: 4px;
-    /* Thicker line */
-    background: #000000;
+    left: 71px;
+    width: 2px;
+    background: rgba(0, 0, 0, 0.1);
     z-index: 1;
 }
 
 .process-step::after {
-    content: '\f063';
-    /* fa-arrow-down */
+    content: '\f078';
+    /* fa-chevron-down */
     font-family: 'Font Awesome 6 Free';
     font-weight: 900;
     position: absolute;
-    left: 56px;
-    bottom: -35px;
-    font-size: 1.5rem;
-    color: #000000;
+    left: 65px;
+    bottom: -20px;
+    font-size: 0.8rem;
+    color: rgba(0, 0, 0, 0.2);
     z-index: 2;
 }
 
