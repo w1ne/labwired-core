@@ -4,13 +4,13 @@ This example demonstrates how to use the `labwired test` runner to verify a real
 
 ## 1. The Building Blocks
 
-### Chip Descriptor ([stm32f103.yaml](file:///home/andrii/Projects/labwired/configs/chips/stm32f103.yaml))
+### Chip Descriptor ([stm32f103.yaml](../../configs/chips/stm32f103.yaml))
 Defines the memory map and peripherals (DMA, EXTI, AFIO, UART).
 
-### System Manifest ([stm32f103-integrated-test.yaml](file:///home/andrii/Projects/labwired/configs/systems/stm32f103-integrated-test.yaml))
+### System Manifest ([stm32f103-integrated-test.yaml](../../configs/systems/stm32f103-integrated-test.yaml))
 Wires the chip into a specific system context. In this case, it just uses the raw chip.
 
-### Firmware ([main.rs](file:///home/andrii/Projects/labwired/crates/firmware/src/main.rs))
+### Firmware ([main.rs](../../crates/firmware/src/main.rs))
 A Rust `no_std` firmware that:
 - Performs 32-bit division.
 - Configures DMA1 Channel 1 for a memory-to-memory transfer.
@@ -19,7 +19,7 @@ A Rust `no_std` firmware that:
 
 ## 2. The Test Script
 
-The test script ([stm32f103_integrated_test.yaml](file:///home/andrii/Projects/labwired/examples/tests/stm32f103_integrated_test.yaml)) automates the simulation:
+The test script ([stm32f103_integrated_test.yaml](../../examples/tests/stm32f103_integrated_test.yaml)) automates the simulation:
 
 ```yaml
 schema_version: "1.0"

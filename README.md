@@ -52,10 +52,11 @@ See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
 
 ## Documentation
 
-- [Architecture](./docs/architecture.md)
-- [Implementation Plan](./docs/plan.md)
+- [Architecture Overview](./docs/architecture.md)
+- [Architecture Guide](./docs/architecture_guide.md)
 - [CI Integration Guide](./docs/ci_integration.md)
-- [GDB Integration](./docs/GDB_INTEGRATION.md)
+- [GDB Integration](./docs/gdb_integration.md)
+- [Release Strategy](./docs/release_strategy.md)
 - [VS Code Debugging](./docs/vscode_debugging.md)
 
 ## License

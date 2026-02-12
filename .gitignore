@@ -1,0 +1,28 @@
+# Build output
+/target/
+/*.rlib
+
+# Local release/test run outputs
+/final-release-verification/
+/release-demo/
+/release-ready-test/
+
+# Local debug/lint artifacts
+/gdb_test.log
+/clippy_output.txt
+/*_error.log
+
+# Generated root-level chip artifacts (keep source of truth under tests/configs)
+/advanced_stm32.json
+/advanced_stm32.rs
+/dummy_stm32.json
+/dummy_stm32.rs
+/nrf52832.json
+/nrf52832.rs
+/rp2040.json
+/rp2040.rs
+/stm32f401.json
+/stm32f401.rs
+/test_device.json
+/test_device.rs
+/demo_chip.rs
