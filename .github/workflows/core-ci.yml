@@ -42,8 +42,11 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Install ARM target for fixture firmware
+        run: rustup target add thumbv7m-none-eabi
+
       - name: Build Demo Firmware Fixture
-        run: cargo build -p demo-blinky --release
+        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
 
       - name: Run Tests
         run: cargo test
