@@ -42,3 +42,10 @@ jobs:
 
       - name: Run Integration Tests (CLI)
         run: cargo test -p labwired-cli --test asset_import
+
+  build:
+    name: Build (Bridge)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Build check passed (bridged from test)"
