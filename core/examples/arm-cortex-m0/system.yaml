@@ -1,3 +1,0 @@
-name: "arm-cortex-m0"
-chip: mcu.yaml
-external_devices: []

@@ -1,3 +1,0 @@
-name: "riscv-virt"
-chip: mcu.yaml
-external_devices: []

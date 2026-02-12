@@ -1,3 +1,0 @@
-name: "arm-c-hello"
-chip: mcu.yaml
-external_devices: []
