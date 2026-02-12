@@ -21,7 +21,7 @@ defaults:
     working-directory: ./vscode
 
 jobs:
-  build:
+  build_matrix:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -49,3 +49,9 @@ jobs:
 
       - name: Run Unit Tests (Docker Logic)
         run: ./node_modules/.bin/mocha out/test/unit/docker.test.js
+
+  build:
+    needs: build_matrix
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All build matrix jobs passed"
