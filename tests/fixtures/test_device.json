@@ -1,0 +1,34 @@
+{
+  "name": "STM32F103",
+  "description": "STM32F103xx",
+  "peripherals": {
+    "GPIOA": {
+      "name": "GPIOA",
+      "base_address": 1073809408,
+      "description": null,
+      "registers": [
+        {
+          "name": "CRL",
+          "offset": 0,
+          "size": 32,
+          "access": "ReadWrite",
+          "reset_value": 1145324612,
+          "fields": [
+            {
+              "name": "MODE0",
+              "bit_offset": 0,
+              "bit_width": 2,
+              "access": "ReadWrite",
+              "description": "Port x mode bits"
+            }
+          ],
+          "description": "Port configuration register low (GPIOx_CRL)"
+        }
+      ],
+      "clusters": []
+    }
+  },
+  "interrupt_mapping": {
+    "EXTI0": 6
+  }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "labwired-codegen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+labwired-ir = { path = "../ir" }
+quote = "1.0"
+proc-macro2 = "1.0"
+anyhow = "1.0"
+syn = { version = "2.0", features = ["full"] }
