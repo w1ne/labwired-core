@@ -1,0 +1,6 @@
+[submodule "vscode"]
+	path = vscode
+	url = /home/andrii/Projects/labwired-vscode
+[submodule "landing_page"]
+	path = landing_page
+	url = /home/andrii/Projects/labwired-landing
