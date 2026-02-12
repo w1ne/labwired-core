@@ -9,7 +9,7 @@ mod integration_tests {
     use crate::cpu::CortexM;
     use crate::decoder::arm::{self as decoder, Instruction};
     use crate::peripherals::nvic::NvicState;
-    use crate::{Bus, Cpu, Machine, Peripheral, SimResult};
+    use crate::{Bus, Cpu, DebugControl, Machine, Peripheral, SimResult, StopReason};
     use labwired_config::{Arch, ChipDescriptor, MemoryRange, PeripheralConfig, SystemManifest};
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
@@ -1299,5 +1299,45 @@ mod integration_tests {
         // Verify Access Control (COUNT is RO)
         p.write(0x04, 0x55).unwrap();
         assert_eq!(p.read(0x04).unwrap(), 0x00, "COUNT should be RO");
+    }
+
+    #[test]
+    fn test_breakpoint_sticky_step_over() {
+        let mut machine = create_machine();
+        let pc = 0x2000_0000;
+        machine.cpu.set_pc(pc);
+
+        // Write some NOPs (or MOV R0, R0)
+        // 0x4600 is MOV R0, R0 (Thumb)
+        machine.bus.write_u16(pc as u64, 0x4600).unwrap();
+        machine.bus.write_u16(pc as u64 + 2, 0x4600).unwrap();
+
+        // Add breakpoint at current PC
+        machine.add_breakpoint(pc);
+
+        // 1. Run should immediately stop at breakpoint
+        let res = machine.run(Some(10)).unwrap();
+        assert!(matches!(res, StopReason::Breakpoint(addr) if addr == pc));
+        assert_eq!(
+            machine.last_breakpoint,
+            Some(pc),
+            "Should record last hit breakpoint"
+        );
+
+        // 2. Run AGAIN should step OVER it and stop at MaxStepsReached (or next instruction)
+        let res = machine.run(Some(1)).unwrap();
+        assert!(
+            matches!(res, StopReason::MaxStepsReached),
+            "Should have stepped over and reached limit"
+        );
+        assert_eq!(
+            machine.last_breakpoint, None,
+            "Should clear last hit breakpoint after successful step"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            pc + 2,
+            "Should have executed one instruction (thumb)"
+        );
     }
 }
