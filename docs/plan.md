@@ -10,7 +10,7 @@ Deliver a standalone command-line tool (`labwired`) capable of loading an ELF bi
 
 **Core Deliverables**:
 1.  **Emulator Core**: Robust, deterministic simulation of STM32F103 (Cortex-M3) with UART/GPIO/Timers.
-2.  **VS Code Extension**: Basic DAP debugging (breakpoints, stepping, registers). Advanced HW features (peripheral viewers, timeline) deferred to v0.2+.
+2.  **VS Code Extension**: "Ozone-like" debugging experience (Timeline, Registers, Memory) connecting via DAP.
 3.  **Documentation**: Comprehensive guides for "Getting Started" and "VS Code Debugging".
 
 *Note: AI Peripheral Generation is a parallel research track and is NOT required for the v1.0 MVP.*
@@ -31,66 +31,6 @@ To ensure we hit our release window, the following are explicitly **excluded**:
 
 **Objective**: Ship working demonstrator: chip + sensor + VS Code debugging
 
-### Milestone 1: "Blinky Works"
-**Deliverable**: GPIO LED firmware running in emulator
-
-- [ ] Create demo firmware project (C)
-- [ ] Implement LED toggle using GPIO
-- [ ] Verify GPIO peripheral writes work
-- [ ] Run successfully in `labwired-cli`
-- [ ] Document example
-
-**Success**: LED state changes visible in logs
-
-### Milestone 2: "Sensor Connected"
-**Deliverable**: I2C temperature sensor integrated
-
-- [ ] Create YAML descriptor for TMP102 sensor
-- [ ] Implement sensor read handlers (mock 25°C)
-- [ ] Update `system.yaml` to wire sensor
-- [ ] Extend firmware to read sensor + toggle LED
-- [ ] Verify sensor data in logs
-
-**Success**: Firmware reads temperature from I2C
-
-### Milestone 3: "VS Code Debugs It"
-**Deliverable**: Basic debugging via DAP
-
-> **Strategy**: Use Cortex-Debug & Peripheral Viewer as reference for v0.2.0 features
-
-- [ ] Verify DAP server launches firmware
-- [ ] Verify breakpoints work
-- [ ] Verify stepping works
-- [ ] Verify CPU register inspection
-- [ ] Create `.vscode/launch.json` template
-- [ ] Document debugging workflow
-
-**Success**: User sets breakpoint, steps code, sees registers
-
-**v0.2.0 Roadmap**: Peripheral viewer, memory inspector (study reference implementations)
-
-### Milestone 4: "Case Study Published"
-**Deliverable**: Professional demo materials
-
-- [ ] Write case study: "Debugging STM32 Without Hardware"
-- [ ] Record demo GIF (optional)
-- [ ] Update `labwired-core/README.md`
-- [ ] Add to examples documentation
-
-**Success**: Compelling story for public announcement
-
-### Milestone 5: "Public Release"
-**Deliverable**: v0.1.0 on GitHub
-
-- [ ] Fresh clone test
-- [ ] End-to-end verification
-- [ ] Create GitHub release
-- [ ] Write release notes
-- [ ] Draft announcement
-
-**Success**: Anyone can clone and run demo
-
----
 
 
 
@@ -546,7 +486,7 @@ This section translates the business research roadmap (“The Strategic Horizon 
 - [ ] Users can see a list of active simulations and terminate them.
 - [ ] Output from the simulator is visible in VS Code.
 
-## Iteration 18: Full-Lifecycle IDE Demonstrator
+## Iteration 17: Full-Lifecycle IDE Demonstrator
 **Objective**: Provide a "Zero-to-Run" experience where the user can compile firmware and launch a matched simulator instance with a single click.
 
 ### Phase A: Build System Integration
@@ -567,7 +507,7 @@ This section translates the business research roadmap (“The Strategic Horizon 
 - [ ] Compilation errors are reported in the VS Code Problems tab.
 - [ ] The simulator instance correctly lifecycle-matches the VS Code session.
 
-## Iteration 17: Partner Ecosystem & Growth (Business Strategy)
+## Iteration 18: Partner Ecosystem & Growth (Business Strategy)
 **Objective**: Leverage the "Partner Programs" of major chip vendors and establish LabWired as a standard industry tool.
 
 ### Phase A: Accreditation & Partnerships
@@ -578,10 +518,10 @@ This section translates the business research roadmap (“The Strategic Horizon 
 ### Phase B: Community Growth (PLG)
 - [ ] **Viral Features**: "Share Snapshot" link generator for StackOverflow/Reddit support capability.
 
-## Iteration 18: Professional Debugger Extension (Ozone-Class UX)
+## Iteration 19: Professional Debugger Extension (Ozone-Class UX)
 **Objective**: Transform the VS Code extension into a professional-grade debugger matching Segger Ozone's capabilities, with simulation-specific advantages.
 
-**Rationale**: By providing an "Ozone-like" debugging experience natively in VS Code, LabWired becomes the preferred tool for embedded developers, eliminating the need for expensive commercial debuggers for simulation workflows.
+**Rationale**: By providing a high-end debugging experience natively in VS Code, LabWired becomes the preferred tool for embedded developers, eliminating the need for expensive commercial debuggers for simulation workflows. See [DEBUGGING_STRATEGY.md](file:///home/andrii/Projects/labwired/core/docs/DEBUGGING_STRATEGY.md) for technical details.
 
 ### Phase 1: Foundation & Connection (Sprint 1)
 **Goal**: establishing a reliable connection between VS Code and the LabWired DAP server.
@@ -673,35 +613,28 @@ This section translates the business research roadmap (“The Strategic Horizon 
 
 **Strategic Value**: This iteration positions LabWired as a complete professional debugging platform, not just a simulator. It creates a strong moat against competitors and enables premium pricing for enterprise customers who require advanced debugging workflows.
 
+## Iteration 20: Shipping Readiness (The Final Mile)
+**Objective**: Finalize the "Hardware Oracle" toolset for public consumption, ensuring all Agentic and Human interfaces are production-stable.
+
+### Phase 1: AIPi (Agent Interface) Hardening
+- [ ] **Diagnostic Signals**: Implement structured JSON error output for all simulation panics and verification failures.
+- [ ] **Trace Portability**: Solidify the instruction trace export (VCD) to be compatible with standard logic analyzer software.
+- [ ] **Metering API**: Expose simulation cycles/minutes as a first-class programmatic hook for account management.
+
+### Phase 2: Human Observer (UX) Polish
+- [ ] **Timeline Stability**: Ensure Zero-Lag scrubbing for 100k+ instruction history.
+- [ ] **Register Tree UI**: Finalize the SVD-to-Tree mapping for high-density peripherals.
+- [ ] **Commissioning Wizard**: A GUI/CLI hybrid for rapid "Zero-to-Run" system setup.
+
+### Phase 3: Documentation as a Tool
+- [ ] **The "Real HAL" Guide**: Step-by-step for integrating STM32Cube or `embassy-rs`.
+- [ ] **The "Digital Twin" Spec**: Formalize the `system.yaml` and `peripheral.yaml` schemas as stable v1.0 specifications.
+- [ ] **AIPi Reference**: Complete API docs for external agents to consume the toolset.
+
+### Success Criteria
+- [ ] **Zero-Touch Verify**: An agent can ingest a datasheet and get a functional simulation via CLI with 0 manual file edits.
+- [ ] **Ozone Parity**: The VS Code timeline offers professional-grade instruction-synchronized debugging.
+- [ ] **Stable Contract**: The YAML schemas are frozen for v1.0 release.
+
+---
 ## Strategic Horizon: Future Improvements
-
-These items represent the long-term vision for LabWired, designed to drive significant company revenue through market expansion, enterprise compliance, and technical differentiation.
-
-### 1. Enterprise Safety: ISO 26262 Tool Qualification (Phase III Revenue)
-**Objective**: Unlock high-margin automotive and medical contracts through regulatory compliance.
-- [ ] **Tool Qualification Kit (TQK)**: Automated validation suites and safety documentation.
-- [ ] **ASIL-D Conformance**: Architectural hardening for safety-critical firmware verification.
-- [ ] **Traceability Engine**: Linking simulation results directly to requirement IDs.
-
-### 2. Technical Superiority: High-Performance Co-Simulation
-**Objective**: Capture the high-complexity SoC and NPU verification market.
-- [ ] **Zero-Copy Shared Memory IPC**: <100ns latency bridge for Verilated RTL models.
-- [ ] **Edge AI (NPU) Emulation**: Bit-exact modeling of Arm Ethos-U85/U55 including Transformer support.
-- [ ] **Dynamic Level-of-Detail (LOD)**: Hot-swapping between functional and cycle-accurate models.
-
-### 3. The Digital Twin: Multi-Physics & Time-Travel
-**Objective**: Differentiate LabWired as a Cyber-Physical platform.
-- [ ] **FMI 3.0 Native Support**: Integration with physical plant models (Battery, Thermal, Motors).
-- [ ] **Distributed Time-Travel (D-TTD)**: Global snapshotting using Chandy-Lamport for multi-node fleets.
-- [ ] **Instruction-Level Energy Profiling (ILEM)**: "Virtual Wattmeter" for Green Coding compliance.
-
-### 4. Advanced Resilience: Security & Fault Injection
-**Objective**: Enable autonomous red-teaming and security certification.
-- [ ] **Virtual Fault Injection (VFI)**: Scriptable glitching (clock/voltage) for security bypass testing.
-- [ ] **Side-Channel Emulation**: Power/EM trace generation (HW/HD models) for CPA analysis.
-- [ ] **Rowhammer Simulation**: DRAM row-access modeling for memory vulnerability testing.
-
-### 5. Scaling & Performance: Actor-Based Concurrency
-**Objective**: Support fleet-scale simulation on modern heterogeneous hardware.
-- [ ] **Lock-Free Actor Model**: Decoupling components into independent message-passing actors.
-- [ ] **Linear Hardware Scaling**: Utilizing multi-core host machines without global locks.

@@ -5,13 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-02-11
+
+### Strategic Pivot: Agent-First Interface
+*   **AIPi (API for Agents) is now the primary delivery mechanism.**
+*   Human interfaces (VS Code, CLI) are reclassified as **Observer Tools** for verifying agent actions.
+
+### Added
+- **AI Toolset for Agents (AIPi)**:
+    - **Live Synthesis**: Unified ingestion pipeline (`labwired_ai.main`) to generate peripheral models from datasheets with "Chain-of-Thought" reasoning and grounding.
+    - **Schematic Intelligence**: New VLM-based `analyze-schematic` command to detect components and bus connections from images.
+    - **Usage Telemetry**: Implemented `Simulation Minutes` tracking for usage-based monetization in agentic workflows.
+    - **Agent Interface**: Formal specifications in `docs/AGENT_INTERFACE.md` for external agents to consume the toolset.
+    - **Testing**: Unified E2E test suite (`e2e_test.py`) proving the full "PDF-to-Driver" loop.
+
 ## [Unreleased]
 
 ### Added
-- **SVD Ingestor**: New tool (`crates/svd-ingestor`) to automatically generate `PeripheralDescriptor` YAMLs from CMSIS-SVD files.
-    - Supports nested clusters and register arrays (unrolling).
-    - Includes rigorous quality gates: E2E tests, Property-Based Fuzzing, and strict documentation.
-- **Strategic Horizon**: Integrated long-term vision into `docs/plan.md`, prioritized by revenue impact (Browser Wedge, Enterprise Safety, Digital Twin).
+- **Architecture Unification**: Native ingestion of **Strict IR** (JSON) in the simulation core.
+    - Bridged `labwired-ir` with `labwired-config` via `From` traits.
+    - Simulator can now load hardware models directly from SVD-derived JSON files.
+- **Asset Foundry Hardening**:
+    - Enhanced SVD transformation with flattened inheritance, register array unrolling, and cluster flattening.
+    - Verified against STM32F4, RP2040, and nRF52.
+- **Timing Hooks**: Declarative peripheral behavior for registers (SetBits, ClearBits, WriteValue) with periodic and event-based triggers.
+- **Timeline View**: Professional visualization of instruction trace data in the VS Code extension.
+- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/SUPPORTED_DEVICES.md`.
+- **Architecture Guide**: New comprehensive `core/docs/ARCHITECTURE.md`.
+- **SVD Ingestor**: New tool (`crates/svd-ingestor`) to generate `PeripheralDescriptor` YAMLs from SVD.
+- **Strategic Horizon**: Long-term vision integrated into `docs/plan.md`.
 
 ## [0.11.0] - 2026-02-08
 

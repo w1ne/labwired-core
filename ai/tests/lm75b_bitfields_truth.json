@@ -1,0 +1,36 @@
+{
+    "device": "LM75B",
+    "source": "NXP LM75B Datasheet - Table 6",
+    "bitfields": {
+        "Conf": {
+            "OS_F_QUE[1:0]": {
+                "bits": [
+                    3,
+                    4
+                ],
+                "description": "OS fault queue"
+            },
+            "OS_POL": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "OS polarity"
+            },
+            "OS_COMP_INT": {
+                "bits": [
+                    1,
+                    1
+                ],
+                "description": "OS operation mode"
+            },
+            "SHUTDOWN": {
+                "bits": [
+                    0,
+                    0
+                ],
+                "description": "Shutdown"
+            }
+        }
+    }
+}

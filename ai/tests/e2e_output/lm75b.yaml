@@ -1,0 +1,182 @@
+name: LM75B_Verified
+registers:
+- name: Temp
+  offset: '0x00'
+  reset_value: '0x0000'
+  access: ReadOnly
+  fields:
+  - name: D[10:0]
+    bit_range:
+    - 5
+    - 15
+    description: "11-bit two's complement temperature data (D10 is sign bit in MSByte[7],\
+      \ D0 in LSByte[5]); resolution 0.125 \xB0C/LSB"
+  - name: UNUSED
+    bit_range:
+    - 0
+    - 4
+    description: 5 least significant bits of LSByte; always 0, should be ignored
+- name: Conf
+  offset: '0x01'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: reserved
+    bit_range:
+    - 5
+    - 7
+    description: "reserved for manufacturer\u2019s use; should be kept as zeroes for\
+      \ normal operation"
+  - name: OS_F_QUE[1:0]
+    bit_range:
+    - 3
+    - 4
+    description: OS fault queue programming 00* queue value = 1 01 queue value = 2
+      10 queue value = 4 11 queue value = 6
+  - name: OS_POL
+    bit_range:
+    - 2
+    - 2
+    description: OS polarity selection 0* OS active LOW 1 OS active HIGH
+  - name: OS_COMP_INT
+    bit_range:
+    - 1
+    - 1
+    description: OS operation mode selection 0* OS comparator 1 OS interrupt
+  - name: SHUTDOWN
+    bit_range:
+    - 0
+    - 0
+    description: device operation mode selection 0* normal 1 shutdown
+- name: Thyst
+  offset: '0x02'
+  reset_value: '0x4B00'
+  access: ReadWrite
+  fields:
+  - name: Thys
+    bit_range:
+    - 8
+    - 15
+    description: "9-bit two's complement value storing the hysteresis Thys limit (D8[15]\
+      \ to D0[8]), resolution 0.5 \xB0C"
+  - name: reserved
+    bit_range:
+    - 0
+    - 7
+    description: Unused (X); always read as 0x00, should be ignored
+- name: Tos
+  offset: '0x03'
+  reset_value: '0x5000'
+  access: ReadWrite
+  fields:
+  - name: Tth_ots
+    bit_range:
+    - 7
+    - 15
+    description: "Overtemperature shutdown threshold (Tth(ots)); 9-bit two's complement\
+      \ value with 0.5 \xB0C resolution"
+  - name: reserved
+    bit_range:
+    - 0
+    - 6
+    description: Always read as 0 and should be ignored (7 LSBs of LSByte)
+side_effects:
+- trigger:
+    event: write
+    register: Conf
+    field: SHUTDOWN
+    value: '1'
+    description: Setting the SHUTDOWN bit (bit 0 of Configuration register)
+  action:
+    type: stop_conversion
+    target: Global
+    description: Stops temperature conversion
+- trigger:
+    event: write
+    register: Conf
+    field: SHUTDOWN
+    value: '1'
+    description: Putting the device into shutdown mode (in OS interrupt mode)
+  action:
+    type: reset_os
+    target: OS_output
+    description: Resets the OS output
+- trigger:
+    event: read
+    register: any
+    description: Reading any device register (in OS interrupt mode)
+  action:
+    type: reset_os
+    target: OS_output
+    description: Resets the OS output
+- trigger:
+    event: threshold_exceed
+    source_register: Temp
+    source_field: D[10:0]
+    target_register: Tos
+    target_field: Tth_ots
+    description: Temp exceeds Tth(ots) (fault queue met)
+  action:
+    type: activate_os
+    target: OS_output
+    description: OS output becomes active (comparator or first interrupt trip)
+- trigger:
+    event: threshold_below
+    source_register: Temp
+    source_field: D[10:0]
+    target_register: Thyst
+    target_field: Thys
+    description: Temp drops below Thys (fault queue met)
+  action:
+    type: deactivate_os
+    target: OS_output
+    description: OS output is reset (comparator mode)
+- trigger:
+    event: threshold_below
+    source_register: Temp
+    source_field: D[10:0]
+    target_register: Thyst
+    target_field: Thys
+    description: Temp drops below Thys after first Tth(ots) trip and reset (fault
+      queue met, interrupt mode)
+  action:
+    type: activate_os
+    target: OS_output
+    description: OS output becomes active (subsequent interrupt trip)
+- trigger:
+    event: write
+    register: Conf
+    field: OS_COMP_INT
+    value: '1'
+    description: Setting OS_COMP_INT bit
+  action:
+    type: select_mode
+    target: OS_output
+    description: Selects OS interrupt mode
+- trigger:
+    event: write
+    register: Conf
+    field: OS_POL
+    value: '1'
+    description: Setting OS_POL bit
+  action:
+    type: set_polarity
+    target: OS_output
+    description: Selects OS active HIGH
+- trigger:
+    event: write
+    register: Conf
+    field: OS_F_QUE[1:0]
+    description: Programming OS_F_QUE[1:0]
+  action:
+    type: set_fault_queue
+    target: internal
+    description: Sets OS fault queue value (00=1, 01=2, 10=4, 11=6)
+- trigger:
+    event: power_up
+    description: Device power-up
+  action:
+    type: set_defaults
+    target: registers
+    description: "Sets Conf=0x00 (normal/comp/low/queue=1), Tos=0x5000 (80\xB0C),\
+      \ Thyst=0x4B00 (75\xB0C); Temp invalid until first conversion (~100 ms)"

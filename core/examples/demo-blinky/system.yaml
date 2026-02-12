@@ -1,0 +1,10 @@
+# LabWired - Demo Blinky System Configuration
+name: "demo-blinky-board"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "temp_sensor"
+    type: "tmp102"
+    connection: "i2c1"
+    config:
+      descriptor: "../../configs/peripherals/tmp102.yaml"
+      i2c_address: 0x48

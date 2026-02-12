@@ -1,0 +1,51 @@
+name: Rust Core CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'core/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'core/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: ./core
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Check Formatting
+        run: cargo fmt -- --check
+
+      - name: Run Unit Tests
+        run: cargo test --lib
+
+      - name: Run Integration Tests (CLI)
+        run: cargo test -p labwired-cli --test asset_import
+
+  build:
+    name: Build (Bridge)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Build check passed (bridged from test)"

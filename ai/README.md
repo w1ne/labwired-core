@@ -1,17 +1,18 @@
-# LabWired AI: Peripheral Generation
+# LabWired AI: Toolset for Agents (AIPi)
 
-This directory contains the AI-powered tools for generating LabWired peripheral models from unstructured data (Schematics, Datasheets).
+This directory provides the **Programmable Toolset** used by agents to generate, verify, and emulate hardware peripherals from unstructured data.
 
 ## Structure
 
-*   `docs/` - Documentation and algorithm specifications.
-*   `src/` - Python source code (Planned).
-*   `scripts/` - Utility scripts.
+*   `docs/` - Algorithm specifications and [Agent Interface Guide](file:///home/andrii/Projects/labwired/docs/AGENT_INTERFACE.md).
+*   `labwired_ai/` - Core Python modules (LLM, Schematic Parsing, IR Conversion).
+*   `tests/` - E2E verification pipelines for agent-driven workflows.
 
-## Goals
+## Strategic Goal: The Agentic Moat
 
-1.  **Schematic Analysis**: Extract component netlists from images using VLMs.
-2.  **Datasheet Ingestion**: Convert PDF datasheets into structured register maps.
-3.  **Logic Synthesis**: Generate behavioral YAML models for simulation.
+LabWired solves the **Peripheral Modeling Bottleneck** by providing a high-fidelity API that agents use to:
+1.  **Extract**: Turn PDF datasheets into grounded Register Maps.
+2.  **Synthesize**: Generate Rust drivers and simulation behaviors.
+3.  **Verify**: Prove driver/firmware correctness in a bit-accurate ARM-native environment.
 
-See `docs/ai_peripheral_generation.md` for the detailed algorithm.
+See [AGENT_INTERFACE.md](file:///home/andrii/Projects/labwired/docs/AGENT_INTERFACE.md) for external agent integration patterns.

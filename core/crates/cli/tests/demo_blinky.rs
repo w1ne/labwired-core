@@ -1,8 +1,7 @@
-use labwired_core::{Machine, Cpu, Bus};
+use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::Machine;
 use labwired_loader::load_elf;
-use labwired_config::{SystemManifest, ChipDescriptor};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::PathBuf;
 
 #[test]
 fn test_demo_blinky_gpio_toggle() {
@@ -13,34 +12,31 @@ fn test_demo_blinky_gpio_toggle() {
     if !firmware_path.exists() {
         // Skip if not built, but ideally it should be built by pre-test task
         // For local development it's better to fail and inform
-        panic!("Firmware not found at {:?}. Run 'cargo build -p demo-blinky --release' first.", firmware_path);
+        panic!(
+            "Firmware not found at {:?}. Run 'cargo build -p demo-blinky --release' first.",
+            firmware_path
+        );
     }
 
-    let program = load_elf(&firmware_path)
-        .expect("Failed to load ELF");
+    let program = load_elf(&firmware_path).expect("Failed to load ELF");
 
     // Create machine with STM32F103 configuration
-    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../system.yaml");
+    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../system.yaml");
 
-    let manifest = SystemManifest::from_file(&system_path)
-        .expect("Failed to load system manifest");
+    let manifest = SystemManifest::from_file(&system_path).expect("Failed to load system manifest");
 
-    let chip_path = system_path
-        .parent()
-        .unwrap()
-        .join(&manifest.chip);
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
 
-    let chip = ChipDescriptor::from_file(&chip_path)
-        .expect("Failed to load chip descriptor");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("Failed to load chip descriptor");
 
-    let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest)
-        .expect("Failed to build bus");
+    let mut bus =
+        labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("Failed to build bus");
 
     let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
 
-    machine.load_firmware(&program)
+    machine
+        .load_firmware(&program)
         .expect("Failed to load firmware");
 
     // Run for enough cycles to see GPIO toggles
@@ -70,17 +66,28 @@ fn test_demo_blinky_gpio_toggle() {
 
     // PC13 is bit 13 (0x2000)
     // We expect at least one toggle
-    assert!(odr_values.len() > 1, "Expected at least one LED state change, but got sequence: {:?}", odr_values);
+    assert!(
+        odr_values.len() > 1,
+        "Expected at least one LED state change, but got sequence: {:?}",
+        odr_values
+    );
 
     // Verify that bit 13 actually changed
     let bit_13_states: Vec<bool> = odr_values.iter().map(|&v| (v & 0x2000) != 0).collect();
     let mut changes = 0;
-    for i in 0..bit_13_states.len()-1 {
-        if bit_13_states[i] != bit_13_states[i+1] {
+    for i in 0..bit_13_states.len() - 1 {
+        if bit_13_states[i] != bit_13_states[i + 1] {
             changes += 1;
         }
     }
 
-    assert!(changes >= 1, "PC13 (LED) did not toggle. ODR log: {:?}", odr_values);
-    println!("SUCCESS: Detected PC13 toggled {} times. ODR sequence: {:?}", changes, odr_values);
+    assert!(
+        changes >= 1,
+        "PC13 (LED) did not toggle. ODR log: {:?}",
+        odr_values
+    );
+    println!(
+        "SUCCESS: Detected PC13 toggled {} times. ODR sequence: {:?}",
+        changes, odr_values
+    );
 }

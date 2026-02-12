@@ -1,0 +1,464 @@
+{
+    "device": "ADXL345",
+    "source": "Analog Devices ADXL345 Datasheet - Table 19",
+    "bitfields": {
+        "DEVID": {
+            "Device_ID": {
+                "bits": [
+                    0,
+                    7
+                ],
+                "description": "Device ID"
+            }
+        },
+        "ACT_INACT_CTL": {
+            "ACT_ACDC": {
+                "bits": [
+                    7,
+                    7
+                ],
+                "description": "ACT AC/DC"
+            },
+            "ACT_X_EN": {
+                "bits": [
+                    6,
+                    6
+                ],
+                "description": "ACT X enable"
+            },
+            "ACT_Y_EN": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "ACT Y enable"
+            },
+            "ACT_Z_EN": {
+                "bits": [
+                    4,
+                    4
+                ],
+                "description": "ACT Z enable"
+            },
+            "INACT_ACDC": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "INACT AC/DC"
+            },
+            "INACT_X_EN": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "INACT X enable"
+            },
+            "INACT_Y_EN": {
+                "bits": [
+                    1,
+                    1
+                ],
+                "description": "INACT Y enable"
+            },
+            "INACT_Z_EN": {
+                "bits": [
+                    0,
+                    0
+                ],
+                "description": "INACT Z enable"
+            }
+        },
+        "TAP_AXES": {
+            "Suppress": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "Suppress bit"
+            },
+            "TAP_X_enable": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "TAP X enable"
+            },
+            "TAP_Y_enable": {
+                "bits": [
+                    1,
+                    1
+                ],
+                "description": "TAP Y enable"
+            },
+            "TAP_Z_enable": {
+                "bits": [
+                    0,
+                    0
+                ],
+                "description": "TAP Z enable"
+            }
+        },
+        "ACT_TAP_STATUS": {
+            "ACT_X_source": {
+                "bits": [
+                    6,
+                    6
+                ],
+                "description": "ACT X source"
+            },
+            "ACT_Y_source": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "ACT Y source"
+            },
+            "ACT_Z_source": {
+                "bits": [
+                    4,
+                    4
+                ],
+                "description": "ACT Z source"
+            },
+            "Asleep": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "Asleep"
+            },
+            "TAP_X_source": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "TAP X source"
+            },
+            "TAP_Y_source": {
+                "bits": [
+                    1,
+                    1
+                ],
+                "description": "TAP Y source"
+            },
+            "TAP_Z_source": {
+                "bits": [
+                    0,
+                    0
+                ],
+                "description": "TAP Z source"
+            }
+        },
+        "BW_RATE": {
+            "LOW_POWER": {
+                "bits": [
+                    4,
+                    4
+                ],
+                "description": "LOW_POWER bit"
+            },
+            "Rate": {
+                "bits": [
+                    0,
+                    3
+                ],
+                "description": "Rate bits"
+            }
+        },
+        "POWER_CTL": {
+            "Link": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "Link"
+            },
+            "AUTO_SLEEP": {
+                "bits": [
+                    4,
+                    4
+                ],
+                "description": "AUTO_SLEEP"
+            },
+            "Measure": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "Measure"
+            },
+            "Sleep": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "Sleep"
+            },
+            "Wakeup": {
+                "bits": [
+                    0,
+                    1
+                ],
+                "description": "Wakeup"
+            }
+        },
+        "INT_ENABLE": {
+            "DATA_READY": {
+                "bits": [
+                    7,
+                    7
+                ],
+                "description": "DATA_READY"
+            },
+            "SINGLE_TAP": {
+                "bits": [
+                    6,
+                    6
+                ],
+                "description": "SINGLE_TAP"
+            },
+            "DOUBLE_TAP": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "DOUBLE_TAP"
+            },
+            "Activity": {
+                "bits": [
+                    4,
+                    4
+                ],
+                "description": "Activity"
+            },
+            "Inactivity": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "Inactivity"
+            },
+            "FREE_FALL": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "FREE_FALL"
+            },
+            "Watermark": {
+                "bits": [
+                    1,
+                    1
+                ],
+                "description": "Watermark"
+            },
+            "Overrun": {
+                "bits": [
+                    0,
+                    0
+                ],
+                "description": "Overrun"
+            }
+        },
+        "INT_MAP": {
+            "DATA_READY": {
+                "bits": [
+                    7,
+                    7
+                ],
+                "description": "DATA_READY"
+            },
+            "SINGLE_TAP": {
+                "bits": [
+                    6,
+                    6
+                ],
+                "description": "SINGLE_TAP"
+            },
+            "DOUBLE_TAP": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "DOUBLE_TAP"
+            },
+            "Activity": {
+                "bits": [
+                    4,
+                    4
+                ],
+                "description": "Activity"
+            },
+            "Inactivity": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "Inactivity"
+            },
+            "FREE_FALL": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "FREE_FALL"
+            },
+            "Watermark": {
+                "bits": [
+                    1,
+                    1
+                ],
+                "description": "Watermark"
+            },
+            "Overrun": {
+                "bits": [
+                    0,
+                    0
+                ],
+                "description": "Overrun"
+            }
+        },
+        "INT_SOURCE": {
+            "DATA_READY": {
+                "bits": [
+                    7,
+                    7
+                ],
+                "description": "DATA_READY"
+            },
+            "SINGLE_TAP": {
+                "bits": [
+                    6,
+                    6
+                ],
+                "description": "SINGLE_TAP"
+            },
+            "DOUBLE_TAP": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "DOUBLE_TAP"
+            },
+            "Activity": {
+                "bits": [
+                    4,
+                    4
+                ],
+                "description": "Activity"
+            },
+            "Inactivity": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "Inactivity"
+            },
+            "FREE_FALL": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "FREE_FALL"
+            },
+            "Watermark": {
+                "bits": [
+                    1,
+                    1
+                ],
+                "description": "Watermark"
+            },
+            "Overrun": {
+                "bits": [
+                    0,
+                    0
+                ],
+                "description": "Overrun"
+            }
+        },
+        "DATA_FORMAT": {
+            "SELF_TEST": {
+                "bits": [
+                    7,
+                    7
+                ],
+                "description": "SELF_TEST"
+            },
+            "SPI": {
+                "bits": [
+                    6,
+                    6
+                ],
+                "description": "SPI"
+            },
+            "INT_INVERT": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "INT_INVERT"
+            },
+            "FULL_RES": {
+                "bits": [
+                    3,
+                    3
+                ],
+                "description": "FULL_RES"
+            },
+            "Justify": {
+                "bits": [
+                    2,
+                    2
+                ],
+                "description": "Justify"
+            },
+            "Range": {
+                "bits": [
+                    0,
+                    1
+                ],
+                "description": "Range"
+            }
+        },
+        "FIFO_CTL": {
+            "FIFO_MODE": {
+                "bits": [
+                    6,
+                    7
+                ],
+                "description": "FIFO mode"
+            },
+            "TRIGGER": {
+                "bits": [
+                    5,
+                    5
+                ],
+                "description": "Trigger"
+            },
+            "SAMPLES": {
+                "bits": [
+                    0,
+                    4
+                ],
+                "description": "Samples"
+            }
+        },
+        "FIFO_STATUS": {
+            "FIFO_TRIG": {
+                "bits": [
+                    7,
+                    7
+                ],
+                "description": "FIFO_TRIG"
+            },
+            "ENTRIES": {
+                "bits": [
+                    0,
+                    5
+                ],
+                "description": "Entries"
+            }
+        }
+    }
+}

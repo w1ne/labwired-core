@@ -1,26 +1,25 @@
-use std::collections::{VecDeque, HashMap};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
 
 /// Single instruction execution record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstructionTrace {
     /// Program counter
     pub pc: u32,
-
     /// Instruction bytes (2 or 4 bytes for Thumb-2)
     pub instruction: u32,
-
     /// Cycle count when this instruction executed
     pub cycle: u64,
-
     /// Function name (from debug symbols, if available)
     pub function: Option<String>,
-
-    /// Register changes (only registers that changed)
-    pub register_delta: HashMap<u8, u32>,
-
+    /// Register changes: ID -> (old_value, new_value)
+    pub register_delta: HashMap<u8, (u32, u32)>,
     /// Memory writes (address, old_value, new_value)
     pub memory_writes: Vec<MemoryWrite>,
+    /// Call stack depth (for timeline visualization)
+    pub stack_depth: u32,
+    /// Disassembled instruction mnemonic (server-side)
+    pub mnemonic: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +80,7 @@ impl TraceBuffer {
         self.instructions.push_back(trace);
 
         // Create checkpoint every 10K instructions
-        if self.current_cycle % 10_000 == 0 {
+        if self.current_cycle.is_multiple_of(10_000) {
             self.checkpoints.push(Checkpoint {
                 cycle: self.current_cycle,
                 trace_index: self.instructions.len() - 1,
@@ -116,6 +115,21 @@ impl TraceBuffer {
     pub fn is_empty(&self) -> bool {
         self.instructions.is_empty()
     }
+
+    /// Get current stack depth from the last trace
+    pub fn current_stack_depth(&self) -> u32 {
+        self.instructions.back().map(|t| t.stack_depth).unwrap_or(0)
+    }
+
+    /// Get the last recorded trace
+    pub fn last_trace(&self) -> Option<&InstructionTrace> {
+        self.instructions.back()
+    }
+
+    /// Remove the last recorded trace (for reverse stepping if needed)
+    pub fn pop_trace(&mut self) -> Option<InstructionTrace> {
+        self.instructions.pop_back()
+    }
 }
 
 #[cfg(test)]
@@ -134,6 +148,8 @@ mod tests {
                 function: None,
                 register_delta: HashMap::new(),
                 memory_writes: Vec::new(),
+                stack_depth: 0,
+                mnemonic: None,
             });
         }
 
@@ -153,6 +169,8 @@ mod tests {
                 function: None,
                 register_delta: HashMap::new(),
                 memory_writes: Vec::new(),
+                stack_depth: 0,
+                mnemonic: None,
             });
         }
 
@@ -177,6 +195,8 @@ mod tests {
                 function: None,
                 register_delta: HashMap::new(),
                 memory_writes: Vec::new(),
+                stack_depth: 0,
+                mnemonic: None,
             });
         }
 

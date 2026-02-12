@@ -18,10 +18,9 @@ const GPIOC_CRH: *mut u32 = (GPIOC_BASE + 0x04) as *mut u32;
 const GPIOC_ODR: *mut u32 = (GPIOC_BASE + 0x0C) as *mut u32;
 
 // I2C Registers
-const I2C1_CR1: *mut u32 = (I2C1_BASE + 0x00) as *mut u32;
+const I2C1_CR1: *mut u32 = I2C1_BASE as *mut u32;
 const I2C1_CR2: *mut u32 = (I2C1_BASE + 0x04) as *mut u32;
 const I2C1_DR: *mut u32 = (I2C1_BASE + 0x10) as *mut u32;
-const I2C1_SR1: *mut u32 = (I2C1_BASE + 0x14) as *mut u32;
 const I2C1_CCR: *mut u32 = (I2C1_BASE + 0x1C) as *mut u32;
 const I2C1_TRISE: *mut u32 = (I2C1_BASE + 0x20) as *mut u32;
 
@@ -29,10 +28,6 @@ const I2C1_TRISE: *mut u32 = (I2C1_BASE + 0x20) as *mut u32;
 const RCC_APB2ENR_IOPCEN: u32 = 1 << 4;
 const RCC_APB1ENR_I2C1EN: u32 = 1 << 21;
 const GPIO_ODR_ODR13: u32 = 1 << 13;
-
-// TMP102 I2C Address and Registers
-const TMP102_ADDR: u8 = 0x48;
-const TMP102_TEMP_REG: u8 = 0x00;
 
 #[entry]
 fn main() -> ! {

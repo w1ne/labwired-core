@@ -65,6 +65,7 @@ pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
     fn on_simulation_stop(&self) {}
     fn on_step_start(&self, _pc: u32, _opcode: u32) {}
     fn on_step_end(&self, _cycles: u32) {}
+    fn on_memory_write(&self, _addr: u64, _old: u8, _new: u8) {}
     fn on_peripheral_tick(&self, _name: &str, _cycles: u32) {}
 }
 
@@ -171,6 +172,11 @@ pub trait DebugControl {
     fn set_pc(&mut self, addr: u32);
     fn get_register_names(&self) -> Vec<String>;
     fn get_cycle_count(&self) -> u64;
+    fn get_peripherals(&self) -> Vec<(String, u64, u64)>;
+    fn get_peripheral_descriptor(
+        &self,
+        name: &str,
+    ) -> Option<labwired_config::PeripheralDescriptor>;
     fn reset(&mut self) -> SimResult<()>;
 }
 
@@ -189,6 +195,7 @@ pub struct Machine<C: Cpu> {
 
     // Debug state
     pub breakpoints: HashSet<u32>,
+    pub last_breakpoint: Option<u32>,
     pub total_cycles: u64,
 }
 
@@ -199,6 +206,7 @@ impl<C: Cpu> Machine<C> {
             bus,
             observers: Vec::new(),
             breakpoints: HashSet::new(),
+            last_breakpoint: None,
             total_cycles: 0,
         }
     }
@@ -282,7 +290,9 @@ impl<C: Cpu> Machine<C> {
     }
 
     pub fn peek_peripheral(&self, name: &str) -> Option<serde_json::Value> {
-        self.bus.peripherals.iter()
+        self.bus
+            .peripherals
+            .iter()
             .find(|p| p.name == name)
             .map(|p| p.dev.snapshot())
     }
@@ -306,16 +316,19 @@ impl<C: Cpu> DebugControl for Machine<C> {
         loop {
             // Check breakpoints BEFORE stepping
             let pc = self.cpu.get_pc();
-            // Note: breakpoints typically match the exact PC.
-            // Thumb instructions are at even addresses, usually.
-            // If the user sets a BP at an odd address (Thumb function pointer), we should mask it?
-            // Usually DAP clients send the symbol address.
-            // Let's assume exact match for now, but mask LSB.
             let pc_aligned = pc & !1;
 
             if self.breakpoints.contains(&pc_aligned) {
-                return Ok(StopReason::Breakpoint(pc));
+                // If we haven't already reported a stop at THIS specific address, stop now.
+                // This allows 'Continue' to move past a breakpoint we just hit.
+                if self.last_breakpoint != Some(pc_aligned) {
+                    self.last_breakpoint = Some(pc_aligned);
+                    return Ok(StopReason::Breakpoint(pc));
+                }
             }
+
+            // We are executing an instruction, so clear the "last hit" sticky BP
+            self.last_breakpoint = None;
 
             self.step()?;
             steps += 1;
@@ -371,6 +384,26 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
     fn get_cycle_count(&self) -> u64 {
         self.total_cycles
+    }
+
+    fn get_peripherals(&self) -> Vec<(String, u64, u64)> {
+        self.bus
+            .peripherals
+            .iter()
+            .map(|p| (p.name.clone(), p.base, p.size))
+            .collect()
+    }
+
+    fn get_peripheral_descriptor(
+        &self,
+        name: &str,
+    ) -> Option<labwired_config::PeripheralDescriptor> {
+        use crate::peripherals::declarative::GenericPeripheral;
+        let entry = self.bus.peripherals.iter().find(|p| p.name == name)?;
+        let gen_p = entry.dev.as_any()?.downcast_ref::<GenericPeripheral>()?;
+        // We need a way to get the descriptor from GenericPeripheral.
+        // It's private currently. Let's make it public or add a getter.
+        Some(gen_p.get_descriptor().clone())
     }
 
     fn reset(&mut self) -> SimResult<()> {

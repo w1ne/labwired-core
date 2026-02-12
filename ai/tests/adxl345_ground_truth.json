@@ -1,0 +1,187 @@
+{
+    "device": "ADXL345",
+    "datasheet_version": "Rev. G",
+    "source": "Analog Devices ADXL345 Datasheet",
+    "registers": [
+        {
+            "name": "DEVID",
+            "offset": "0x00",
+            "reset": "0xE5",
+            "access": "RO"
+        },
+        {
+            "name": "THRESH_TAP",
+            "offset": "0x1D",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "OFSX",
+            "offset": "0x1E",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "OFSY",
+            "offset": "0x1F",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "OFSZ",
+            "offset": "0x20",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "DUR",
+            "offset": "0x21",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "Latent",
+            "offset": "0x22",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "Window",
+            "offset": "0x23",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "THRESH_ACT",
+            "offset": "0x24",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "THRESH_INACT",
+            "offset": "0x25",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "TIME_INACT",
+            "offset": "0x26",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "ACT_INACT_CTL",
+            "offset": "0x27",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "THRESH_FF",
+            "offset": "0x28",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "TIME_FF",
+            "offset": "0x29",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "TAP_AXES",
+            "offset": "0x2A",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "ACT_TAP_STATUS",
+            "offset": "0x2B",
+            "reset": "0x00",
+            "access": "RO"
+        },
+        {
+            "name": "BW_RATE",
+            "offset": "0x2C",
+            "reset": "0x0A",
+            "access": "RW"
+        },
+        {
+            "name": "POWER_CTL",
+            "offset": "0x2D",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "INT_ENABLE",
+            "offset": "0x2E",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "INT_MAP",
+            "offset": "0x2F",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "INT_SOURCE",
+            "offset": "0x30",
+            "reset": "0x02",
+            "access": "RO"
+        },
+        {
+            "name": "DATA_FORMAT",
+            "offset": "0x31",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "DATAX0",
+            "offset": "0x32",
+            "reset": "0x00",
+            "access": "RO"
+        },
+        {
+            "name": "DATAX1",
+            "offset": "0x33",
+            "reset": "0x00",
+            "access": "RO"
+        },
+        {
+            "name": "DATAY0",
+            "offset": "0x34",
+            "reset": "0x00",
+            "access": "RO"
+        },
+        {
+            "name": "DATAY1",
+            "offset": "0x35",
+            "reset": "0x00",
+            "access": "RO"
+        },
+        {
+            "name": "DATAZ0",
+            "offset": "0x36",
+            "reset": "0x00",
+            "access": "RO"
+        },
+        {
+            "name": "DATAZ1",
+            "offset": "0x37",
+            "reset": "0x00",
+            "access": "RO"
+        },
+        {
+            "name": "FIFO_CTL",
+            "offset": "0x38",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "FIFO_STATUS",
+            "offset": "0x39",
+            "reset": "0x00",
+            "access": "RO"
+        }
+    ]
+}

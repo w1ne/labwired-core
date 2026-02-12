@@ -1,0 +1,6 @@
+[submodule "vscode"]
+	path = vscode
+	url = git@github.com:w1ne/labwired-vscode.git
+[submodule "landing_page"]
+	path = landing_page
+	url = git@github.com:w1ne/labwired-landing.git

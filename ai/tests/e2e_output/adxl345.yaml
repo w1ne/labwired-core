@@ -1,0 +1,1395 @@
+name: ADXL345
+registers:
+- name: DEVID
+  offset: '0x00'
+  reset_value: '0xE5'
+  access: ReadOnly
+  fields:
+  - name: Device_ID
+    bit_range:
+    - 0
+    - 7
+    description: Fixed device ID code of 0xE5 (11100101 binary, 345 octal).
+    evidence: "Register 0x00\u2014DEVID (Read Only) D7 D6 D5 D4 D3 D2 D1 D0 1 1 1\
+      \ 0 0 1 0 1. The DEVID register holds a fixed device ID code of 0xE5 (345 octal).\
+      \ Table 16: 0x00 DEVID R 11100101 Device ID."
+    reasoning: The entire register is read-only and fixed to 0xE5 with no subfields
+      or programmable bits defined. All bits contribute to the device identification
+      value. No reserved bits or special conditions noted.
+- name: THRESH_TAP
+  offset: '0x1D'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_TAP
+    bit_range:
+    - 0
+    - 7
+    description: 'Threshold value for tap interrupts. Unsigned data format. Scale
+      factor: 62.5 mg/LSB (0xFF = +16 g). A value of 0 may result in undesirable behavior
+      if tap/double tap interrupts are enabled.'
+    evidence: "Register 0x1D\u2014THRESH_TAP (Read/Write) The THRESH_TAP register\
+      \ is eight bits and holds the threshold value for tap interrupts. The data format\
+      \ is unsigned, so the magnitude of the tap event is compared with the value\
+      \ in THRESH_TAP. The scale factor is 62.5 mg/LSB (that is, 0xFF = +16 g). A\
+      \ value of 0 may result in undesirable behavior if tap/ double tap interrupts\
+      \ are enabled."
+    reasoning: No bitfield table or per-bit description provided. The register description
+      explicitly states it is an eight-bit unsigned threshold value, occupying the
+      entire register [7:0]. Register map confirms R/W access and 00000000 reset.
+- name: OFSX
+  offset: '0x1E'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: OFSX
+    bit_range:
+    - 0
+    - 7
+    description: X-axis offset adjustment in twos complement format with a scale factor
+      of 15.6 mg/LSB (0x7F = +2 g).
+    evidence: "Register 0x1E, Register 0x1F, Register 0x20\u2014OFSX, OFSY, OFSZ (Read/Write)\
+      \ The OFSX, OFSY, and OFSZ registers are each eight bits and offer user-set\
+      \ offset adjustments in twos complement format with a scale factor of 15.6 mg/LSB\
+      \ (that is, 0x7F = +2 g). Table 16: 0x1E 30 OFSX R/W 00000000 X-axis offset."
+    reasoning: The register is described as an 8-bit value fully dedicated to the
+      X-axis offset with no subdivision into separate fields, reserved bits, or special
+      controls. All bits [7:0] represent the signed offset value. Access is R/W per
+      register map and description. Reset is 00000000 (0x00).
+- name: OFSY
+  offset: '0x1F'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: OFSY
+    bit_range:
+    - 0
+    - 7
+    description: Y-axis offset adjustment in twos complement format with a scale factor
+      of 15.6 mg/LSB (0x7F = +2 g).
+    evidence: "Register 0x1E, Register 0x1F, Register 0x20\u2014OFSX, OFSY, OFSZ (Read/Write)\
+      \ The OFSX, OFSY, and OFSZ registers are each eight bits and offer user-set\
+      \ offset adjustments in twos complement format with a scale factor of 15.6 mg/LSB\
+      \ (that is, 0x7F = +2 g). Table 16: 0x1F 31 OFSY R/W 00000000 Y-axis offset."
+    reasoning: OFSY is an 8-bit register with no subfields or bit diagrams provided;
+      the entire register holds a single twos complement offset value for the Y-axis.
+      Access is R/W per register map and description. Reset is 00000000 (0x00).
+- name: OFSZ
+  offset: '0x20'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Z_OFFSET
+    bit_range:
+    - 0
+    - 7
+    description: Z-axis offset adjustment in twos complement format with a scale factor
+      of 15.6 mg/LSB (0x7F = +2 g).
+    evidence: "Register 0x1E, Register 0x1F, Register 0x20\u2014OFSX, OFSY, OFSZ (Read/Write)\
+      \ The OFSX, OFSY, and OFSZ registers are each eight bits and offer user-set\
+      \ offset adjustments in twos complement format with a scale factor of 15.6 mg/LSB\
+      \ (that is, 0x7F = +2 g). Table 16: 0x20 32 OFSZ R/W 00000000 Z-axis offset."
+    reasoning: The register is explicitly described as an eight-bit value dedicated
+      to Z-axis offset with no subdivision into individual bits or fields; the entire
+      8-bit register [0:7] functions as a single twos-complement offset value. Access
+      is R/W per register map and description. Reset is 00000000 (0x00).
+- name: DUR
+  offset: '0x21'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: DUR
+    bit_range:
+    - 0
+    - 7
+    description: "Unsigned time value representing the maximum time that an event\
+      \ must be above the THRESH_TAP threshold to qualify as a tap event. The scale\
+      \ factor is 625 \u03BCs/LSB. A value of 0 disables the tap/double tap functions."
+    evidence: "Register 0x21\u2014DUR (Read/Write) The DUR register is eight bits\
+      \ and contains an unsigned time value representing the maximum time that an\
+      \ event must be above the THRESH_TAP threshold to qualify as a tap event. The\
+      \ scale factor is 625 \u03BCs/LSB. A value of 0 disables the tap/double tap\
+      \ functions."
+    reasoning: No bitfield table provided; entire 8-bit register is a single unsigned
+      value for tap duration. Reset value 00000000 confirms all bits are part of this
+      field. Access is Read/Write per register map and description.
+- name: Latent
+  offset: '0x22'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: LATENT
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the wait time from the detection
+      of a tap event to the start of the time window (defined by the window register)
+      during which a possible second tap event can be detected. Scale factor is 1.25
+      ms/LSB. A value of 0 disables the double tap function.
+    evidence: "Register 0x22\u2014Latent (Read/Write) The latent register is eight\
+      \ bits and contains an unsigned time value representing the wait time from the\
+      \ detection of a tap event to the start of the time window (defined by the window\
+      \ register) during which a possible second tap event can be detected. The scale\
+      \ factor is 1.25 ms/LSB. A value of 0 disables the double tap function."
+    reasoning: The register is an 8-bit R/W field with reset value 00000000. No sub-bit
+      definitions, reserved bits, or special constraints (e.g., 'must be 1') are specified;
+      the entire register holds a single unsigned integer value for latency time,
+      occupying bits [0,7] (D0=LSB to D7=MSB).
+- name: Window
+  offset: '0x23'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Window
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the amount of time after the expiration
+      of the latency time (determined by the latent register) during which a second
+      valid tap can begin. The scale factor is 1.25 ms/LSB. A value of 0 disables
+      the double tap function.
+    evidence: "Register 0x23\u2014Window (Read/Write) The window register is eight\
+      \ bits and contains an unsigned time value representing the amount of time after\
+      \ the expiration of the latency time (determined by the latent register) during\
+      \ which a second valid tap can begin. The scale factor is 1.25 ms/LSB. A value\
+      \ of 0 disables the double tap function."
+    reasoning: The register is explicitly described as an 8-bit unsigned value with
+      no individual bit or subfield breakdown provided in the datasheet. The entire
+      register [7:0] functions as a single field for the window time value. Access
+      and reset from register map (R/W, 00000000).
+- name: THRESH_ACT
+  offset: '0x24'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_ACT
+    bit_range:
+    - 0
+    - 7
+    description: Threshold value for detecting activity. The data format is unsigned,
+      so the magnitude of the activity event is compared with the value in the THRESH_ACT
+      register. The scale factor is 62.5 mg/LSB. A value of 0 may result in undesirable
+      behavior if the activity interrupt is enabled.
+    evidence: "Register 0x24\u2014THRESH_ACT (Read/Write) The THRESH_ACT register\
+      \ is eight bits and holds the threshold value for detecting activity. The data\
+      \ format is unsigned, so the magnitude of the activity event is compared with\
+      \ the value in the THRESH_ACT register. The scale factor is 62.5 mg/LSB. A value\
+      \ of 0 may result in undesirable behavior if the activity interrupt is enabled."
+    reasoning: No bit diagram or subfield breakdown provided in the datasheet. The
+      register is explicitly described as an eight-bit value holding a single unsigned
+      threshold for activity detection, covering the entire register width [D0 to
+      D7]. Access is R/W per register map and description. Reset is 00000000 (0x00).
+- name: THRESH_INACT
+  offset: '0x25'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_INACT
+    bit_range:
+    - 0
+    - 7
+    description: Threshold value for detecting inactivity. The data format is unsigned,
+      so the magnitude of the inactivity event is compared with the value in the THRESH_INACT
+      register. The scale factor is 62.5 mg/LSB. A value of 0 mg may result in undesirable
+      behavior if the inactivity interrupt is enabled.
+    evidence: "Register 0x25\u2014THRESH_INACT (Read/Write) The THRESH_INACT register\
+      \ is eight bits and holds the threshold value for detecting inactivity. The\
+      \ data format is unsigned, so the magnitude of the inactivity event is compared\
+      \ with the value in the THRESH_INACT register. The scale factor is 62.5 mg/LSB.\
+      \ A value of 0 mg may result in undesirable behavior if the inactivity interrupt\
+      \ is enabled."
+    reasoning: No individual bit or subfield definitions are provided; the entire
+      8-bit register is described as holding a single unsigned threshold value. Register
+      map confirms R/W access and 00000000 reset value.
+- name: TIME_INACT
+  offset: '0x26'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: TIME_INACT
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the amount of time that acceleration
+      must be less than the value in the THRESH_INACT register for inactivity to be
+      declared. The scale factor is 1 sec/LSB. Uses filtered output data. A value
+      of 0 results in an interrupt when the output data is less than the value in
+      the THRESH_INACT register.
+    evidence: "Register 0x26\u2014TIME_INACT (Read/Write) The TIME_INACT register\
+      \ is eight bits and contains an unsigned time value representing the amount\
+      \ of time that acceleration must be less than the value in the THRESH_INACT\
+      \ register for inactivity to be declared. The scale factor is 1 sec/LSB. Unlike\
+      \ the other interrupt functions, which use unfiltered data (see the Threshold\
+      \ section), the inactivity function uses filtered output data. ... A value of\
+      \ 0 results in an interrupt when the output data is less than the value in the\
+      \ THRESH_INACT register."
+    reasoning: No individual bit diagram or subfields described; explicitly stated
+      as 'eight bits and contains an unsigned time value', indicating the entire 8-bit
+      register is a single field. Table 16 confirms R/W access and 00000000 reset.
+- name: ACT_INACT_CTL
+  offset: '0x27'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: ACT_ACDC
+    bit_range:
+    - 7
+    - 7
+    description: ACT AC/DC coupling selection. 0 selects DC-coupled operation. 1 enables
+      AC-coupled operation.
+    evidence: 'D7: ACT ac/dc ... A setting of 0 selects dc-coupled operation, and
+      a setting of 1 enables ac-coupled operation.'
+    reasoning: Explicitly mapped to D7 (bit 7) in the register bit diagram. Register
+      is Read/Write, so field inherits ReadWrite access. Reset value 0.
+  - name: ACT_X_EN
+    bit_range:
+    - 6
+    - 6
+    description: ACT_X enable. 1 enables X-axis participation in activity detection.
+      0 excludes X-axis.
+    evidence: 'D6: ACT_X enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity.'
+    reasoning: Explicitly mapped to D6 (bit 6) in the register bit diagram. Applies
+      to activity enable bits. Register is Read/Write, so field inherits ReadWrite
+      access. Reset value 0.
+  - name: ACT_Y_EN
+    bit_range:
+    - 5
+    - 5
+    description: ACT_Y enable. 1 enables Y-axis participation in activity detection.
+      0 excludes Y-axis.
+    evidence: 'D5: ACT_Y enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity.'
+    reasoning: Explicitly mapped to D5 (bit 5) in the register bit diagram. Applies
+      to activity enable bits. Register is Read/Write, so field inherits ReadWrite
+      access. Reset value 0.
+  - name: ACT_Z_EN
+    bit_range:
+    - 4
+    - 4
+    description: ACT_Z enable. 1 enables Z-axis participation in activity detection.
+      0 excludes Z-axis.
+    evidence: 'D4: ACT_Z enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity.'
+    reasoning: Explicitly mapped to D4 (bit 4) in the register bit diagram. Applies
+      to activity enable bits. Register is Read/Write, so field inherits ReadWrite
+      access. Reset value 0.
+  - name: INACT_ACDC
+    bit_range:
+    - 3
+    - 3
+    description: INACT AC/DC coupling selection. 0 selects DC-coupled operation. 1
+      enables AC-coupled operation.
+    evidence: 'D3: INACT ac/dc ... A setting of 0 selects dc-coupled operation, and
+      a setting of 1 enables ac-coupled operation.'
+    reasoning: Explicitly mapped to D3 (bit 3) in the register bit diagram. Register
+      is Read/Write, so field inherits ReadWrite access. Reset value 0.
+  - name: INACT_X_EN
+    bit_range:
+    - 2
+    - 2
+    description: INACT_X enable. 1 enables X-axis participation in inactivity detection.
+      0 excludes X-axis.
+    evidence: 'D2: INACT_X enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity.'
+    reasoning: Explicitly mapped to D2 (bit 2) in the register bit diagram. Applies
+      to inactivity enable bits. Register is Read/Write, so field inherits ReadWrite
+      access. Reset value 0.
+  - name: INACT_Y_EN
+    bit_range:
+    - 1
+    - 1
+    description: INACT_Y enable. 1 enables Y-axis participation in inactivity detection.
+      0 excludes Y-axis.
+    evidence: 'D1: INACT_Y enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity.'
+    reasoning: Explicitly mapped to D1 (bit 1) in the register bit diagram. Applies
+      to inactivity enable bits. Register is Read/Write, so field inherits ReadWrite
+      access. Reset value 0.
+  - name: INACT_Z_EN
+    bit_range:
+    - 0
+    - 0
+    description: INACT_Z enable. 1 enables Z-axis participation in inactivity detection.
+      0 excludes Z-axis.
+    evidence: 'D0: INACT_Z enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity. If all axes are excluded, the function
+      is disabled.'
+    reasoning: Explicitly mapped to D0 (bit 0) in the register bit diagram. Applies
+      to inactivity enable bits. Register is Read/Write, so field inherits ReadWrite
+      access. Reset value 0.
+- name: THRESH_FF
+  offset: '0x28'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_FF
+    bit_range:
+    - 0
+    - 7
+    description: Holds the threshold value, in unsigned format, for free-fall detection.
+      The root-sum-square (RSS) value of all axes is calculated and compared with
+      the value in THRESH_FF to determine if a free-fall event occurred. The scale
+      factor is 62.5 mg/LSB. A value of 0 mg may result in undesirable behavior if
+      the free-fall interrupt is enabled. Values between 300 mg and 600 mg (0x05 to
+      0x09) are recommended.
+    evidence: "Register 0x28\u2014THRESH_FF (Read/Write) The THRESH_FF register is\
+      \ eight bits and holds the threshold value, in unsigned format, for free-fall\
+      \ detection. The root-sum-square (RSS) value of all axes is calculated and compared\
+      \ with the value in THRESH_FF to determine if a free-fall event occurred. The\
+      \ scale factor is 62.5 m g/LSB. Note that a value of 0 mg  may result in undesirable\
+      \ behavior if the free-fall interrupt is enabled. Values between 300 mg and\
+      \ 600 mg (0x05 to 0x09) are recommended."
+    reasoning: The register is explicitly described as an eight-bit value holding
+      a single unsigned threshold with no mention of subfields, reserved bits, or
+      individual bit functions. Thus, Bits [0,7] represent the entire field. Access
+      type matches the 'Read/Write' designation in the register map and description.
+      Reset value is 00000000 (0x00) from Table 16.
+- name: TIME_FF
+  offset: '0x29'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: TIME_FF
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the minimum time that the RSS value
+      of all axes must be less than THRESH_FF to generate a free-fall interrupt. The
+      scale factor is 5 ms/LSB.
+    evidence: "Register 0x29\u2014TIME_FF (Read/Write) The TIME_FF register is eight\
+      \ bits and stores an unsigned time value representing the minimum time that\
+      \ the RSS value of all axes must be less than THRESH_FF to generate a free-fall\
+      \ interrupt. The scale factor is 5 ms/LSB. A value of 0 may result in undesirable\
+      \ behavior if the free-fall interrupt is enabled. Values between 100 ms and\
+      \ 350 ms (0x14 to 0x46) are recommended."
+    reasoning: The register is described as an 8-bit unsigned value with no individual
+      bit or subfield definitions provided. The entire register [7:0] functions as
+      a single scalar field holding the free-fall time value. Access is R/W per register
+      map. Reset value is 00000000 (0x00).
+- name: TAP_AXES
+  offset: '0x2A'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: RESERVED
+    bit_range:
+    - 4
+    - 7
+    description: Reserved bits.
+    evidence: 'D7 D6 D5 D4 shown as 0 0 0 0 in the register bit diagram: ''D7 D6 D5
+      D4 D3 D2 D1 D0 0 0 0 0 Suppress TAP_X enable TAP_Y enable TAP_Z enable''. No
+      functional description provided for these bits.'
+    reasoning: Bits D7 to D4 are explicitly shown as fixed 0 in the diagram and have
+      no associated description in the register definition. Reserved bits are typically
+      read as 0, must be written as 0 to ensure compatibility, and reset to 0 as per
+      the register map (00000000).
+  - name: SUPPRESS
+    bit_range:
+    - 3
+    - 3
+    description: Suppress bit. Setting the suppress bit suppresses double tap detection
+      if acceleration greater than the value in THRESH_TAP is present between taps.
+    evidence: '''Suppress Bit Setting the suppress bit suppresses double tap detection
+      if acceleration greater than the value in THRESH_TAP is present between taps.
+      See the Tap Detection section for more details.'' Positioned at D3 in the bit
+      diagram.'
+    reasoning: Explicitly labeled as 'Suppress' at D3 (bit 3) in the register bit
+      diagram. Access inherits from register (Read/Write). Reset to 0 per register
+      map.
+  - name: TAP_X_EN
+    bit_range:
+    - 2
+    - 2
+    description: TAP_X enable bit. A setting of 1 enables x-axis participation in
+      tap detection. A setting of 0 excludes the x-axis from participation in tap
+      detection.
+    evidence: '''TAP_x Enable Bits A setting of 1 in the TAP_X enable, TAP_Y enable,
+      or TAP_Z enable bit enables x-, y-, or z-axis participation in tap detection.
+      A setting of 0 excludes the selected axis from participation in tap detection.''
+      Labeled as ''TAP_X enable'' at D2.'
+    reasoning: Labeled as 'TAP_X enable' at D2 (bit 2) in the bit diagram. Part of
+      TAP_x enable bits description. Access Read/Write per register. Reset to 0.
+  - name: TAP_Y_EN
+    bit_range:
+    - 1
+    - 1
+    description: TAP_Y enable bit. A setting of 1 enables y-axis participation in
+      tap detection. A setting of 0 excludes the y-axis from participation in tap
+      detection.
+    evidence: '''TAP_x Enable Bits A setting of 1 in the TAP_X enable, TAP_Y enable,
+      or TAP_Z enable bit enables x-, y-, or z-axis participation in tap detection.
+      A setting of 0 excludes the selected axis from participation in tap detection.''
+      Labeled as ''TAP_Y enable'' at D1.'
+    reasoning: Labeled as 'TAP_Y enable' at D1 (bit 1) in the bit diagram. Part of
+      TAP_x enable bits description. Access Read/Write per register. Reset to 0.
+  - name: TAP_Z_EN
+    bit_range:
+    - 0
+    - 0
+    description: TAP_Z enable bit. A setting of 1 enables z-axis participation in
+      tap detection. A setting of 0 excludes the z-axis from participation in tap
+      detection.
+    evidence: '''TAP_x Enable Bits A setting of 1 in the TAP_X enable, TAP_Y enable,
+      or TAP_Z enable bit enables x-, y-, or z-axis participation in tap detection.
+      A setting of 0 excludes the selected axis from participation in tap detection.''
+      Labeled as ''TAP_Z enable'' at D0.'
+    reasoning: Labeled as 'TAP_Z enable' at D0 (bit 0) in the bit diagram. Part of
+      TAP_x enable bits description. Access Read/Write per register. Reset to 0.
+- name: ACT_TAP_STATUS
+  offset: '0x2B'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: RESERVED
+    bit_range:
+    - 7
+    - 7
+    description: Reserved bit, always reads as 0.
+    evidence: "D7 D6 D5 D4 D3 D2 D1 D0 \n0 ACT_X source ACT_Y source ACT_Z source\
+      \ Asleep TAP_X source TAP_Y source TAP_Z source"
+    reasoning: "Explicitly shown as '0' in the bit diagram for Register 0x2B\u2014\
+      ACT_TAP_STATUS (Read Only) on page 16 and not mentioned in the description.\
+      \ Reset value 00000000 confirms it is 0. Treated as reserved."
+  - name: ACT_X_SOURCE
+    bit_range:
+    - 6
+    - 6
+    description: Activity source for X-axis. A setting of 1 indicates the X-axis was
+      the first axis involved in an activity event; 0 indicates no involvement.
+    evidence: "ACT_x Source and TAP_x Source Bits \nThese bits indicate the first\
+      \ axis involved in a tap or activity event. A setting of 1 corresponds to involvement\
+      \ in the event, and a setting of 0 corresponds to no involvement."
+    reasoning: Bit position D6 directly from the register bit diagram on page 16.
+      Shared description for ACT_x sources applies to activity detection axes.
+  - name: ACT_Y_SOURCE
+    bit_range:
+    - 5
+    - 5
+    description: Activity source for Y-axis. A setting of 1 indicates the Y-axis was
+      the first axis involved in an activity event; 0 indicates no involvement.
+    evidence: "ACT_x Source and TAP_x Source Bits \nThese bits indicate the first\
+      \ axis involved in a tap or activity event. A setting of 1 corresponds to involvement\
+      \ in the event, and a setting of 0 corresponds to no involvement."
+    reasoning: Bit position D5 directly from the register bit diagram on page 16.
+      Shared description for ACT_x sources applies to activity detection axes.
+  - name: ACT_Z_SOURCE
+    bit_range:
+    - 4
+    - 4
+    description: Activity source for Z-axis. A setting of 1 indicates the Z-axis was
+      the first axis involved in an activity event; 0 indicates no involvement.
+    evidence: "ACT_x Source and TAP_x Source Bits \nThese bits indicate the first\
+      \ axis involved in a tap or activity event. A setting of 1 corresponds to involvement\
+      \ in the event, and a setting of 0 corresponds to no involvement."
+    reasoning: Bit position D4 directly from the register bit diagram on page 16.
+      Shared description for ACT_x sources applies to activity detection axes.
+  - name: ASLEEP
+    bit_range:
+    - 3
+    - 3
+    description: Asleep status bit. A setting of 1 indicates that the part is asleep;
+      0 indicates that the part is not asleep.
+    evidence: "Asleep Bit \nA setting of 1 in the asleep bit indicates that the part\
+      \ is asleep, and a setting of 0 indicates that the part is not asleep. See the\
+      \ Register 0x2D\u2014POWER_CTL (Read/Write) section for more information on\
+      \ autosleep mode."
+    reasoning: Bit position D3 directly from the register bit diagram on page 16.
+      Explicitly described separately from source bits.
+  - name: TAP_X_SOURCE
+    bit_range:
+    - 2
+    - 2
+    description: Tap source for X-axis. A setting of 1 indicates the X-axis was the
+      first axis involved in a tap or double tap event; 0 indicates no involvement.
+    evidence: "ACT_x Source and TAP_x Source Bits \nThese bits indicate the first\
+      \ axis involved in a tap or activity event. A setting of 1 corresponds to involvement\
+      \ in the event, and a setting of 0 corresponds to no involvement."
+    reasoning: Bit position D2 directly from the register bit diagram on page 16.
+      Shared description for TAP_x sources applies to tap/double tap detection axes.
+  - name: TAP_Y_SOURCE
+    bit_range:
+    - 1
+    - 1
+    description: Tap source for Y-axis. A setting of 1 indicates the Y-axis was the
+      first axis involved in a tap or double tap event; 0 indicates no involvement.
+    evidence: "ACT_x Source and TAP_x Source Bits \nThese bits indicate the first\
+      \ axis involved in a tap or activity event. A setting of 1 corresponds to involvement\
+      \ in the event, and a setting of 0 corresponds to no involvement."
+    reasoning: Bit position D1 directly from the register bit diagram on page 16.
+      Shared description for TAP_x sources applies to tap/double tap detection axes.
+  - name: TAP_Z_SOURCE
+    bit_range:
+    - 0
+    - 0
+    description: Tap source for Z-axis. A setting of 1 indicates the Z-axis was the
+      first axis involved in a tap or double tap event; 0 indicates no involvement.
+    evidence: "ACT_x Source and TAP_x Source Bits \nThese bits indicate the first\
+      \ axis involved in a tap or activity event. A setting of 1 corresponds to involvement\
+      \ in the event, and a setting of 0 corresponds to no involvement."
+    reasoning: Bit position D0 directly from the register bit diagram on page 16.
+      Shared description for TAP_x sources applies to tap/double tap detection axes.
+- name: BW_RATE
+  offset: '0x2C'
+  reset_value: '0x0A'
+  access: ReadWrite
+  fields:
+  - name: RESERVED
+    bit_range:
+    - 5
+    - 7
+    description: Reserved bits. Must be set to 0.
+    evidence: "D7 D6 D5 D4 D3 D2 D1 D0 \n 0 0 0 LOW_POWER Rate"
+    reasoning: Bits D7, D6, and D5 are fixed at 0 in the bit diagram and reset value
+      (00001010). No functional description is provided for these bits, indicating
+      they are reserved and should not be written to other values to ensure compatibility.
+  - name: LOW_POWER
+    bit_range:
+    - 4
+    - 4
+    description: LOW_POWER bit. A setting of 0 selects normal operation. A setting
+      of 1 selects reduced power operation, which has somewhat higher noise.
+    evidence: "LOW_POWER Bit \n A setting of 0 in the LOW_POWER bit selects normal\
+      \ operation, and a setting of 1 selects reduced power operation, which has somewhat\
+      \ higher noise (see the Power Modes section for details)."
+    reasoning: Explicitly labeled as D4 (LOW_POWER) in the bit diagram. Reset value
+      has 0 at bit 4.
+  - name: RATE
+    bit_range:
+    - 0
+    - 3
+    description: Rate bits. These bits select the device bandwidth and output data
+      rate. The default value is 0x0A (bits 1010), which translates to a 100 Hz output
+      data rate.
+    evidence: "Rate Bits \n These bits select the device bandwidth and output data\
+      \ rate (see Table 6 and Table 7 for details). The default value is 0x0A, which\
+      \ translates to a 100 Hz output data rate."
+    reasoning: Labeled as 'Rate' spanning D3 D2 D1 D0 in the bit diagram. Reset value
+      bits [3:0] = 1010 (0xA).
+- name: POWER_CTL
+  offset: '0x2D'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Reserved
+    bit_range:
+    - 6
+    - 7
+    description: Reserved bits. Must be written with 0.
+    evidence: "D7 D6 D5 D4 D3 D2 D1 D0 \n0 0 Link AUTO_SLEEP Measure Sleep Wakeup"
+    reasoning: Bits D7 and D6 are depicted as fixed '0' in the register bit diagram
+      and reset value is 00000000. No functional description provided, indicating
+      reserved (write 0 to preserve behavior).
+  - name: Link
+    bit_range:
+    - 5
+    - 5
+    description: 'A setting of 1 links activity and inactivity detection serially:
+      delays activity until inactivity detected, then inactivity after activity. 0
+      enables concurrent operation.'
+    evidence: "Link Bit \nA setting of 1 in the link bit with both the activity and\
+      \ inactivity \nfunctions enabled delays the start of the activity function until\
+      \ \ninactivity is detected. After activity is detected, inactivity detection\
+      \ \nbegins, preventing the detection of activity. This bit serially links \n\
+      the activity and inactivity functions. When this bit is set to 0, \nthe inactivity\
+      \ and activity functions are concurrent."
+    reasoning: 'Positioned at D5 in bit diagram: D7 D6 D5=D4 D3 D2 D1 D0 as 0 0 Link
+      AUTO_SLEEP Measure Sleep Wakeup.'
+  - name: AUTO_SLEEP
+    bit_range:
+    - 4
+    - 4
+    description: If Link=1, 1 enables auto-switch to sleep on inactivity detection;
+      0 disables.
+    evidence: "AUTO_SLEEP Bit \nIf the link bit is set, a setting of 1 in the AUTO_SLEEP\
+      \ bit sets \nthe ADXL345 to switch to sleep mode when inactivity is detected\
+      \ \n(that is, when acceleration has been below the THRESH_INACT \nvalue for\
+      \ at least the time indicated by TIME_INACT). A setting \nof 0 disables automatic\
+      \ switching to sleep mode."
+    reasoning: Positioned at D4 in bit diagram.
+  - name: Measure
+    bit_range:
+    - 3
+    - 3
+    description: 0=standby mode (low power); 1=measurement mode.
+    evidence: "Measure Bit \nA setting of 0 in the measure bit places the part into\
+      \ standby mode, \nand a setting of 1 places the part into measurement mode.\
+      \ The \nADXL345 powers up in standby mode with minimum power \nconsumption."
+    reasoning: Positioned at D3 in bit diagram.
+  - name: Sleep
+    bit_range:
+    - 2
+    - 2
+    description: 0=normal operation; 1=sleep mode (suppresses DATA_READY, stops FIFO
+      data, uses wakeup frequency; only activity detection active).
+    evidence: "Sleep Bit \nA setting of 0 in the sleep bit puts the part into the\
+      \ normal mode \nof operation, and a setting of 1 places the part into sleep\
+      \ mode. \nSleep mode suppresses DATA_READY , stops transmission of data \nto\
+      \ FIFO, and switches the sampling rate to one specified by the \nwakeup bits.\
+      \ In sleep mode, only the activity function can be used."
+    reasoning: Positioned at D2 in bit diagram.
+  - name: WAKEUP
+    bit_range:
+    - 1
+    - 0
+    description: 'Sets sleep mode sampling frequency: 00=8Hz, 01=4Hz, 10=2Hz, 11=1Hz
+      (see Table 17).'
+    evidence: "Wa ke up Bits \nThese bits control the frequency of readings in sleep\
+      \ mode as \ndescribed in Table 17. \nTable 17. Frequency of Readings in Sleep\
+      \ Mode \nSetting  \nD1 D0 Frequency (Hz) \n0 0 8 \n0 1 4 \n1 0 2 \n1 1 1"
+    reasoning: Positioned at D1 D0 in bit diagram as 'Wakeup'; multi-bit field controlling
+      frequency per table; reset 00.
+- name: INT_ENABLE
+  offset: '0x2E'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: DATA_READY
+    bit_range:
+    - 7
+    - 7
+    description: Enables DATA_READY interrupt. Setting to 1 enables interrupt generation
+      when new data is available. This bit enables only the interrupt output; the
+      function is always enabled.
+    evidence: D7 D6 D5 D4 DATA_READY SINGLE_TAP DOUBLE_TAP Activity ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts ... The DATA_READY, watermark, and overrun bits enable only the interrupt
+      output; the functions are always enabled.
+    reasoning: Bit D7 explicitly labeled DATA_READY in the register diagram. Access
+      is Read/Write as stated for the register. Reset value 0 from register map (00000000).
+  - name: SINGLE_TAP
+    bit_range:
+    - 6
+    - 6
+    description: Enables SINGLE_TAP interrupt. Setting to 1 enables interrupt generation
+      on single tap detection.
+    evidence: D7 D6 D5 D4 DATA_READY SINGLE_TAP DOUBLE_TAP Activity ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts.
+    reasoning: Bit D6 explicitly labeled SINGLE_TAP in the register diagram. Access
+      is Read/Write as stated for the register. Reset value 0 from register map (00000000).
+  - name: DOUBLE_TAP
+    bit_range:
+    - 5
+    - 5
+    description: Enables DOUBLE_TAP interrupt. Setting to 1 enables interrupt generation
+      on double tap detection.
+    evidence: D7 D6 D5 D4 DATA_READY SINGLE_TAP DOUBLE_TAP Activity ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts.
+    reasoning: Bit D5 explicitly labeled DOUBLE_TAP in the register diagram. Access
+      is Read/Write as stated for the register. Reset value 0 from register map (00000000).
+  - name: Activity
+    bit_range:
+    - 4
+    - 4
+    description: Enables Activity interrupt. Setting to 1 enables interrupt generation
+      on activity detection.
+    evidence: D7 D6 D5 D4 DATA_READY SINGLE_TAP DOUBLE_TAP Activity ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts.
+    reasoning: Bit D4 explicitly labeled Activity in the register diagram. Access
+      is Read/Write as stated for the register. Reset value 0 from register map (00000000).
+  - name: Inactivity
+    bit_range:
+    - 3
+    - 3
+    description: Enables Inactivity interrupt. Setting to 1 enables interrupt generation
+      on inactivity detection.
+    evidence: D3 D2 D1 D0 Inactivity FREE_FALL Watermark Overrun ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts.
+    reasoning: Bit D3 explicitly labeled Inactivity in the register diagram. Access
+      is Read/Write as stated for the register. Reset value 0 from register map (00000000).
+  - name: FREE_FALL
+    bit_range:
+    - 2
+    - 2
+    description: Enables FREE_FALL interrupt. Setting to 1 enables interrupt generation
+      on free-fall detection.
+    evidence: D3 D2 D1 D0 Inactivity FREE_FALL Watermark Overrun ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts.
+    reasoning: Bit D2 explicitly labeled FREE_FALL in the register diagram. Access
+      is Read/Write as stated for the register. Reset value 0 from register map (00000000).
+  - name: Watermark
+    bit_range:
+    - 1
+    - 1
+    description: Enables Watermark interrupt. Setting to 1 enables interrupt generation
+      when FIFO watermark is reached. This bit enables only the interrupt output;
+      the function is always enabled.
+    evidence: D3 D2 D1 D0 Inactivity FREE_FALL Watermark Overrun ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts ... The DATA_READY, watermark, and overrun bits enable only the interrupt
+      output; the functions are always enabled.
+    reasoning: Bit D1 explicitly labeled Watermark in the register diagram. Access
+      is Read/Write as stated for the register. Reset value 0 from register map (00000000).
+  - name: Overrun
+    bit_range:
+    - 0
+    - 0
+    description: Enables Overrun interrupt. Setting to 1 enables interrupt generation
+      when FIFO overrun occurs. This bit enables only the interrupt output; the function
+      is always enabled.
+    evidence: D3 D2 D1 D0 Inactivity FREE_FALL Watermark Overrun ... Setting bits
+      in this register to a value of 1 enables their respective functions to generate
+      interrupts ... The DATA_READY, watermark, and overrun bits enable only the interrupt
+      output; the functions are always enabled.
+    reasoning: Bit D0 explicitly labeled Overrun in the register diagram. Access is
+      Read/Write as stated for the register. Reset value 0 from register map (00000000).
+- name: INT_MAP
+  offset: '0x2F'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: DATA_READY
+    bit_range:
+    - 7
+    - 7
+    description: 'Interrupt mapping for DATA_READY: 0 sends interrupt to INT1 pin,
+      1 sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Any bits set to 0 in this register send their respective\
+      \ interrupts to the INT1 pin, whereas bits set to 1 send their respective interrupts\
+      \ to the INT2 pin."
+    reasoning: Explicitly labeled as D7 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for DATA_READY interrupt; access matches register
+      R/W.
+  - name: SINGLE_TAP
+    bit_range:
+    - 6
+    - 6
+    description: 'Interrupt mapping for SINGLE_TAP: 0 sends interrupt to INT1 pin,
+      1 sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Any bits set to 0 in this register send their respective\
+      \ interrupts to the INT1 pin, whereas bits set to 1 send their respective interrupts\
+      \ to the INT2 pin."
+    reasoning: Explicitly labeled as D6 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for SINGLE_TAP interrupt; access matches register
+      R/W.
+  - name: DOUBLE_TAP
+    bit_range:
+    - 5
+    - 5
+    description: 'Interrupt mapping for DOUBLE_TAP: 0 sends interrupt to INT1 pin,
+      1 sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Any bits set to 0 in this register send their respective\
+      \ interrupts to the INT1 pin, whereas bits set to 1 send their respective interrupts\
+      \ to the INT2 pin."
+    reasoning: Explicitly labeled as D5 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for DOUBLE_TAP interrupt; access matches register
+      R/W.
+  - name: Activity
+    bit_range:
+    - 4
+    - 4
+    description: 'Interrupt mapping for Activity: 0 sends interrupt to INT1 pin, 1
+      sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Any bits set to 0 in this register send their respective\
+      \ interrupts to the INT1 pin, whereas bits set to 1 send their respective interrupts\
+      \ to the INT2 pin."
+    reasoning: Explicitly labeled as D4 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for Activity interrupt; access matches register R/W.
+  - name: Inactivity
+    bit_range:
+    - 3
+    - 3
+    description: 'Interrupt mapping for Inactivity: 0 sends interrupt to INT1 pin,
+      1 sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) ... D3 D2 D1 D0 Inactivity\
+      \ FREE_FALL Watermark Overrun ... Any bits set to 0 in this register send their\
+      \ respective interrupts to the INT1 pin, whereas bits set to 1 send their respective\
+      \ interrupts to the INT2 pin."
+    reasoning: Explicitly labeled as D3 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for Inactivity interrupt; access matches register
+      R/W.
+  - name: FREE_FALL
+    bit_range:
+    - 2
+    - 2
+    description: 'Interrupt mapping for FREE_FALL: 0 sends interrupt to INT1 pin,
+      1 sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) ... D3 D2 D1 D0 Inactivity\
+      \ FREE_FALL Watermark Overrun ... Any bits set to 0 in this register send their\
+      \ respective interrupts to the INT1 pin, whereas bits set to 1 send their respective\
+      \ interrupts to the INT2 pin."
+    reasoning: Explicitly labeled as D2 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for FREE_FALL interrupt; access matches register R/W.
+  - name: Watermark
+    bit_range:
+    - 1
+    - 1
+    description: 'Interrupt mapping for Watermark: 0 sends interrupt to INT1 pin,
+      1 sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) ... D3 D2 D1 D0 Inactivity\
+      \ FREE_FALL Watermark Overrun ... Any bits set to 0 in this register send their\
+      \ respective interrupts to the INT1 pin, whereas bits set to 1 send their respective\
+      \ interrupts to the INT2 pin."
+    reasoning: Explicitly labeled as D1 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for Watermark interrupt; access matches register R/W.
+  - name: Overrun
+    bit_range:
+    - 0
+    - 0
+    description: 'Interrupt mapping for Overrun: 0 sends interrupt to INT1 pin, 1
+      sends to INT2 pin'
+    evidence: "Register 0x2F\u2014INT_MAP (Read/Write) ... D3 D2 D1 D0 Inactivity\
+      \ FREE_FALL Watermark Overrun ... Any bits set to 0 in this register send their\
+      \ respective interrupts to the INT1 pin, whereas bits set to 1 send their respective\
+      \ interrupts to the INT2 pin."
+    reasoning: Explicitly labeled as D0 in the bit diagram for INT_MAP; single-bit
+      field controlling mapping for Overrun interrupt; access matches register R/W.
+- name: INT_SOURCE
+  offset: '0x30'
+  reset_value: '0x02'
+  access: ReadOnly
+  fields:
+  - name: DATA_READY
+    bit_range:
+    - 7
+    - 7
+    description: Set to 1 when new data is available. Cleared by reading DATAX, DATAY,
+      DATAZ registers.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... The DATA_READY ... bits are always set if the corresponding events\
+      \ occur ... and are cleared by reading data from the DATAX, DATAY, and DATAZ\
+      \ registers."
+    reasoning: Directly mapped from bit diagram (D7); single-bit field as no multi-bit
+      grouping indicated.
+  - name: SINGLE_TAP
+    bit_range:
+    - 6
+    - 6
+    description: Set to 1 when a single tap event occurs. Cleared by reading INT_SOURCE
+      register.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... Other bits ... are cleared by reading the INT_SOURCE register."
+    reasoning: Directly mapped from bit diagram (D6); single-bit field as no multi-bit
+      grouping indicated.
+  - name: DOUBLE_TAP
+    bit_range:
+    - 5
+    - 5
+    description: Set to 1 when a double tap event occurs. Cleared by reading INT_SOURCE
+      register.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... Other bits ... are cleared by reading the INT_SOURCE register."
+    reasoning: Directly mapped from bit diagram (D5); single-bit field as no multi-bit
+      grouping indicated.
+  - name: Activity
+    bit_range:
+    - 4
+    - 4
+    description: Set to 1 when an activity event occurs. Cleared by reading INT_SOURCE
+      register.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D7 D6 D5 D4 DATA_READY SINGLE_TAP\
+      \ DOUBLE_TAP Activity ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... Other bits ... are cleared by reading the INT_SOURCE register."
+    reasoning: Directly mapped from bit diagram (D4); single-bit field as no multi-bit
+      grouping indicated.
+  - name: Inactivity
+    bit_range:
+    - 3
+    - 3
+    description: Set to 1 when an inactivity event occurs. Cleared by reading INT_SOURCE
+      register.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D3 D2 D1 D0 Inactivity FREE_FALL\
+      \ Watermark Overrun ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... Other bits ... are cleared by reading the INT_SOURCE register."
+    reasoning: Directly mapped from bit diagram (D3); single-bit field as no multi-bit
+      grouping indicated.
+  - name: FREE_FALL
+    bit_range:
+    - 2
+    - 2
+    description: Set to 1 when a free-fall event occurs. Cleared by reading INT_SOURCE
+      register.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D3 D2 D1 D0 Inactivity FREE_FALL\
+      \ Watermark Overrun ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... Other bits ... are cleared by reading the INT_SOURCE register."
+    reasoning: Directly mapped from bit diagram (D2); single-bit field as no multi-bit
+      grouping indicated.
+  - name: Watermark
+    bit_range:
+    - 1
+    - 1
+    description: Set to 1 when FIFO watermark level is reached. Cleared by reading
+      DATAX, DATAY, DATAZ registers.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D3 D2 D1 D0 Inactivity FREE_FALL\
+      \ Watermark Overrun ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... The DATA_READY, watermark, and overrun bits are always set if\
+      \ the corresponding events occur ... and are cleared by reading data from the\
+      \ DATAX, DATAY, and DATAZ registers."
+    reasoning: Directly mapped from bit diagram (D1); single-bit field as no multi-bit
+      grouping indicated. Matches reset value 00000010 where bit 1 is set.
+  - name: Overrun
+    bit_range:
+    - 0
+    - 0
+    description: Set to 1 when FIFO overrun occurs. Cleared by reading DATAX, DATAY,
+      DATAZ registers.
+    evidence: "Register 0x30\u2014INT_SOURCE (Read Only) D3 D2 D1 D0 Inactivity FREE_FALL\
+      \ Watermark Overrun ... Bits set to 1 ... indicate ... functions have triggered\
+      \ an event ... The DATA_READY, watermark, and overrun bits are always set if\
+      \ the corresponding events occur ... and are cleared by reading data from the\
+      \ DATAX, DATAY, and DATAZ registers."
+    reasoning: Directly mapped from bit diagram (D0); single-bit field as no multi-bit
+      grouping indicated.
+- name: DATA_FORMAT
+  offset: '0x31'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: SELF_TEST
+    bit_range:
+    - 7
+    - 7
+    description: A setting of 1 in the SELF_TEST bit applies a self-test force to
+      the sensor, causing a shift in the output data. A value of 0 disables the self-test
+      force.
+    evidence: "Register 0x31\u2014DATA_FORMAT (Read/Write) D7 D6 D5 D4 D3 D2 D1 D0\
+      \ SELF_TEST SPI INT_INVERT 0 FULL_RES Justify Range ... SELF_TEST Bit A setting\
+      \ of 1 in the SELF_TEST bit applies a self-test force..."
+    reasoning: Bit D7 position in the bitfield diagram on page 17. Register is Read/Write,
+      reset 00000000 implies 0.
+  - name: SPI
+    bit_range:
+    - 6
+    - 6
+    description: A value of 1 in the SPI bit sets the device to 3-wire SPI mode, and
+      a value of 0 sets the device to 4-wire SPI mode.
+    evidence: D7 D6 D5 D4 D3 D2 D1 D0 SELF_TEST SPI INT_INVERT 0 FULL_RES Justify
+      Range ... SPI Bit A value of 1 in the SPI bit sets the device to 3-wire SPI
+      mode...
+    reasoning: Bit D6 position in the bitfield diagram on page 17. Register is Read/Write,
+      reset 00000000 implies 0.
+  - name: INT_INVERT
+    bit_range:
+    - 5
+    - 5
+    description: A value of 0 in the INT_INVERT bit sets the interrupts to active
+      high, and a value of 1 sets the interrupts to active low.
+    evidence: D7 D6 D5 D4 D3 D2 D1 D0 SELF_TEST SPI INT_INVERT 0 FULL_RES Justify
+      Range ... INT_INVERT Bit A value of 0 in the INT_INVERT bit sets the interrupts
+      to active high...
+    reasoning: Bit D5 position in the bitfield diagram on page 17. Register is Read/Write,
+      reset 00000000 implies 0.
+  - name: RESERVED
+    bit_range:
+    - 4
+    - 4
+    description: Reserved bit that must be set to 0.
+    evidence: D7 D6 D5 D4 D3 D2 D1 D0 SELF_TEST SPI INT_INVERT 0 FULL_RES Justify
+      Range
+    reasoning: Labeled as fixed '0' in the bitfield diagram on page 17. Register reset
+      value 00000000 confirms 0. Treated as reserved (write 0 to preserve behavior)
+      since register is Read/Write.
+  - name: FULL_RES
+    bit_range:
+    - 3
+    - 3
+    description: When this bit is set to a value of 1, the device is in full resolution
+      mode, where the output resolution increases with the g range set by the range
+      bits to maintain a 4 mg/LSB scale factor. When the FULL_RES bit is set to 0,
+      the device is in 10-bit mode, and the range bits determine the maximum g range
+      and scale factor.
+    evidence: D7 D6 D5 D4 D3 D2 D1 D0 SELF_TEST SPI INT_INVERT 0 FULL_RES Justify
+      Range ... FULL_RES Bit When this bit is set to a value of 1, the device is in
+      full resolution mode...
+    reasoning: Bit D3 position in the bitfield diagram on page 17. Register is Read/Write,
+      reset 00000000 implies 0.
+  - name: JUSTIFY
+    bit_range:
+    - 2
+    - 2
+    description: A setting of 1 in the justify bit selects left (MSB) justified mode,
+      and a setting of 0 selects right justified mode with sign extension.
+    evidence: D7 D6 D5 D4 D3 D2 D1 D0 SELF_TEST SPI INT_INVERT 0 FULL_RES Justify
+      Range ... Justify Bit A setting of 1 in the justify bit selects left (MSB) justified
+      mode...
+    reasoning: Bit D2 position in the bitfield diagram on page 17. Register is Read/Write,
+      reset 00000000 implies 0.
+  - name: RANGE
+    bit_range:
+    - 0
+    - 1
+    description: "These bits set the g range as described in Table 18: 00=\xB12 g,\
+      \ 01=\xB14 g, 10=\xB18 g, 11=\xB116 g."
+    evidence: D7 D6 D5 D4 D3 D2 D1 D0 SELF_TEST SPI INT_INVERT 0 FULL_RES Justify
+      Range ... Range Bits These bits set the g range as described in Table 18.
+    reasoning: Bits D1:D0 (multi-bit field) positions in the bitfield diagram on page
+      17. Register is Read/Write, reset 00000000 implies 00.
+- name: DATAX0
+  offset: '0x32'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: X_AXIS_DATA_LSB
+    bit_range:
+    - 0
+    - 7
+    description: Least significant byte of X-axis acceleration output data in twos
+      complement format. Controlled by DATA_FORMAT register (Address 0x31).
+    evidence: 'Table 16 (Page 14): 0x32 DATAX0 R 00000000 X-Axis Data 0. Register
+      0x32 to Register 0x37 (Page 18): These six bytes... hold the output data for
+      each axis. Register 0x32 and Register 0x33 hold the output data for the x-axis...
+      DATAx0 as the least significant byte and DATAx1 as the most significant byte...
+      twos complement.'
+    reasoning: No individual bit definitions or subfields provided; entire 8-bit register
+      is dedicated to X-axis LSB data. Access is Read Only per register map. Reset
+      value 00000000 indicates power-on default of 0. Data format (resolution, range,
+      justify) set by DATA_FORMAT (0x31); reads return FIFO or current data depending
+      on mode.
+- name: DATAX1
+  offset: '0x33'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: X_MSB
+    bit_range:
+    - 0
+    - 7
+    description: Most significant byte of the X-axis acceleration output data in two's
+      complement format. Part of the 16-bit X-axis value with DATAX0 (0x32) as LSB.
+    evidence: "Register 0x32 to Register 0x37\u2014DATAX0, DATAX1, DATAY0, DATAY1,\
+      \ DATAZ0, DATAZ1 (Read Only). These six bytes... hold the output data for each\
+      \ axis. Register 0x32 and Register 0x33 hold the output data for the x-axis...\
+      \ The output data is twos complement, with DATAx0 as the least significant byte\
+      \ and DATAx1 as the most significant byte... The DATA_FORMAT register (Address\
+      \ 0x31) controls the format of the data. Table 16: 0x33 51 DATAX1 R 00000000\
+      \ X-Axis Data 1."
+    reasoning: No individual bit definitions provided; the entire 8-bit register is
+      dedicated to the MSB of X-axis data as a unified data field. Bit range [0,7]
+      covers the full register (Bit 0 LSB to Bit 7 MSB). ReadOnly access confirmed
+      by 'R' in register map and explicit '(Read Only)' description. Reset value 0x00
+      applies to all bits. DATA_FORMAT controls resolution, justification, range,
+      etc., but does not define subfields in DATAX1.
+- name: DATAY0
+  offset: '0x34'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: DATAY[7:0]
+    bit_range:
+    - 0
+    - 7
+    description: Least significant byte of Y-axis output data in two's complement
+      format. Part of 16-bit Y-axis acceleration value (DATAY0 = LSB, DATAY1 = MSB).
+      Data format controlled by DATA_FORMAT register (0x31).
+    evidence: "Register 0x32 to Register 0x37\u2014DATAX0, DATAX1, DATAY0, DATAY1,\
+      \ DATAZ0, DATAZ1 (Read Only)... Register 0x34 and Register 0x35 hold the output\
+      \ data for the y-axis... The output data is twos complement, with DATAx0 as\
+      \ the least significant byte and DATAx1 as the most significant byte, where\
+      \ x represent X, Y, or Z. The DATA_FORMAT register (Address 0x31) controls the\
+      \ format of the data."
+    reasoning: Table 16 lists DATAY0 at 0x34 as R 00000000. Description confirms it
+      is an 8-bit read-only data register holding Y-axis LSB with no subfields, reserved
+      bits, or special access; all bits [7:0] are Y-axis data bits. No ambiguities
+      as no 'reserved' or constraints mentioned.
+- name: DATAY1
+  offset: '0x35'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: Y_DATA_MSB
+    bit_range:
+    - 7
+    - 0
+    description: Most significant byte of Y-axis acceleration output data in twos
+      complement format. Part of 16-bit Y-axis value combined with DATAY0 (LSB at
+      0x34). Data format controlled by DATA_FORMAT register (0x31).
+    evidence: 'Table 16 (Page 14): 0x35 DATAY1 R 00000000 Y-Axis Data 1. Register
+      0x32 to Register 0x37 description (Page 18): ''Register 0x34 and Register 0x35
+      hold the output data for the y-axis... DATAx0 as the least significant byte
+      and DATAx1 as the most significant byte... twos complement''.'
+    reasoning: No individual bit definitions or sub-fields provided; entire 8-bit
+      register is the MSB of Y-axis data. Marked as Read Only (R) in register map.
+      Reset value 00000000 applies to all bits. Used for FIFO data reads as described
+      on Page 13.
+- name: DATAZ0
+  offset: '0x36'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: ZDATA
+    bit_range:
+    - 0
+    - 7
+    description: Least significant byte of Z-axis output data in twos complement format.
+      Format controlled by DATA_FORMAT register (0x31).
+    evidence: "Register 0x32 to Register 0x37\u2014DATAX0, DATAX1, DATAY0, DATAY1,\
+      \ DATAZ0, DATAZ1 (Read Only). These six bytes ... hold the output data for each\
+      \ axis. ... Register 0x36 and Register 0x37 hold the output data for the z-axis.\
+      \ The output data is twos complement, with DATAx0 as the least significant byte\
+      \ and DATAx1 as the most significant byte, where x represent X, Y, or Z. The\
+      \ DATA_FORMAT register (Address 0x31) controls the format of the data."
+    reasoning: Table 16 lists DATAZ0 at 0x36 as R (Read Only) with reset 00000000.
+      Description confirms all 8 bits are the LSB of 16-bit Z-axis data. No reserved
+      bits, subfields, or write access mentioned; entire register is read-only data.
+- name: DATAZ1
+  offset: '0x37'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: Z[15:8]
+    bit_range:
+    - 0
+    - 7
+    description: Most significant byte of the Z-axis acceleration output data in twos
+      complement format. Format controlled by DATA_FORMAT register (0x31).
+    evidence: "Register 0x32 to Register 0x37\u2014DATAX0, DATAX1, DATAY0, DATAY1,\
+      \ DATAZ0, DATAZ1 (Read Only). These six bytes... hold the output data for each\
+      \ axis... Register 0x36 and Register 0x37 hold the output data for the z-axis.\
+      \ The output data is twos complement, with DATAx0 as the least significant byte\
+      \ and DATAx1 as the most significant byte... The DATA_FORMAT register (Address\
+      \ 0x31) controls the format of the data."
+    reasoning: Table 16 lists DATAZ1 (0x37) as R 00000000 Z-Axis Data 1, confirming
+      read-only access and reset value. Description explicitly states DATAZ1 is the
+      MSB (Data 1) of 16-bit Z-axis data spanning DATAZ0 (0x36, LSB) and DATAZ1 (MSB).
+      No individual bit functions, reserved bits, or subfields defined; entire 8-bit
+      register is the data field. Bit positions [0,7] map to Z-axis bits 8 to 15 (D0=bit8,
+      D7=bit15) in little-endian byte order.
+- name: FIFO_CTL
+  offset: '0x38'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: FIFO_MODE
+    bit_range:
+    - 6
+    - 7
+    description: 'These bits set the FIFO mode: 00 = Bypass (FIFO is bypassed), 01
+      = FIFO (collects up to 32 values then stops, collects new data only when not
+      full), 10 = Stream (holds last 32 values, overwrites oldest when full), 11 =
+      Trigger (holds last data samples before trigger then collects until full).'
+    evidence: "Register 0x38\u2014FIFO_CTL (Read/Write) D7 D6 D5 D4 D3 D2 D1 D0 FIFO_MODE\
+      \ Trigger Samples ... Table 19. FIFO Modes Setting D7 D6 Mode Function 0 0 Bypass\
+      \ ... 0 1 FIFO ... 1 0 Stream ... 1 1 Trigger ..."
+    reasoning: D7 D6 explicitly labeled as FIFO_MODE Bits in register diagram and
+      referenced in Table 19 settings. Bit range [6,7] as D6 is LSB of field, D7 MSB.
+      R/W as per register access.
+  - name: TRIGGER
+    bit_range:
+    - 5
+    - 5
+    description: 'Trigger bit for trigger mode: 0 links trigger event to INT1, 1 links
+      to INT2.'
+    evidence: Trigger Bit A value of 0 in the trigger bit links the trigger event
+      of trigger mode to INT1, and a value of 1 links the trigger event to INT2. ...
+      (determined by the trigger bit in the FIFO_CTL register)
+    reasoning: Single bit labeled 'Trigger' in register diagram after FIFO_MODE (D7
+      D6), positioning it at D5. Confirmed by page 13 description of interrupt pin
+      selection. R/W as per register access.
+  - name: SAMPLES
+    bit_range:
+    - 0
+    - 4
+    description: 'Samples bits function depends on FIFO mode (Table 20): Bypass=none;
+      FIFO/Stream=number of entries for watermark interrupt; Trigger=number of samples
+      retained before trigger. Value 0 sets watermark immediately; undesirable in
+      trigger mode.'
+    evidence: Samples Bits The function of these bits depends on the FIFO mode selected
+      (see Table 20). ... Table 20. Samples Bits Functions FIFO Mode Samples Bits
+      Function Bypass None. FIFO Specifies how many FIFO entries ... Stream Specifies
+      how many ... Trigger Specifies how many FIFO samples ... Entering a value of
+      0 in the samples bits immediately sets the watermark ...
+    reasoning: Labeled 'Samples' spanning remaining D4-D0 (5 bits) in register diagram
+      after FIFO_MODE[7:6] and TRIGGER[5]. Bit count matches (32 max FIFO implies
+      up to 31 samples, fits 5 bits 0-31). R/W as per register access.
+- name: FIFO_STATUS
+  offset: '0x39'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: FIFO_TRIG
+    bit_range:
+    - 7
+    - 7
+    description: A 1 in the FIFO_TRIG bit corresponds to a trigger event occurring,
+      and a 0 means that a FIFO trigger event has not occurred.
+    evidence: "0x39\u2014FIFO_STATUS (Read Only) D7 D6 D5 D4 D3 D2 D1 D0 FIFO_TRIG\
+      \ 0 Entries FIFO_TRIG Bit A 1 in the FIFO_TRIG bit corresponds to a trigger\
+      \ event occurring, and a 0 means that a FIFO trigger event has not occurred."
+    reasoning: Explicitly labeled as D7 in the bit diagram for Register 0x39. Read-only
+      as per register map (type R).
+  - name: RSVD
+    bit_range:
+    - 6
+    - 6
+    description: Reserved bit, always reads as 0.
+    evidence: "0x39\u2014FIFO_STATUS (Read Only) D7 D6 D5 D4 D3 D2 D1 D0 FIFO_TRIG\
+      \ 0 Entries"
+    reasoning: Explicitly shown as '0' in the bit diagram (D6), not described as a
+      functional bit. Treated as reserved, ReadOnly, resets to 0 per register map
+      reset value 00000000.
+  - name: Entries
+    bit_range:
+    - 5
+    - 0
+    description: These bits report how many data values are stored in FIFO. FIFO stores
+      a maximum of 32 entries, which equates to a maximum of 33 entries available
+      at any given time because an additional entry is available at the output filter
+      of the device.
+    evidence: Entries Bits These bits report how many data values are stored in FIFO.
+      ... FIFO stores a maximum of 32 entries, which equates to a maximum of 33 entries
+      available at any given time...
+    reasoning: Explicitly labeled as 'Entries' spanning D5 to D0 in the bit diagram
+      (6 bits). Read-only as per register map (type R), resets to 000000 (0x00).
+side_effects:
+- trigger:
+    event: read
+    register: INT_SOURCE
+    description: Reading the INT_SOURCE register
+  action:
+    type: state_change
+    target: INT_SOURCE.SINGLE_TAP,INT_SOURCE.DOUBLE_TAP,INT_SOURCE.Activity,INT_SOURCE.Inactivity,INT_SOURCE.FREE_FALL
+    delay_cycles: 0
+    description: Clears the single tap, double tap, activity, inactivity, and free-fall
+      source bits
+  reasoning: The datasheet specifies that other bits (excluding DATA_READY, watermark,
+    and overrun) and corresponding interrupts are cleared specifically by reading
+    the INT_SOURCE register, a dynamic behavior not captured in static SVD definitions.
+  evidence: Other bits, and the corresponding interrupts, are cleared by reading the
+    INT_SOURCE register.
+- trigger:
+    event: read
+    register: DATAX0
+    description: Reading any of the data registers (DATAX0 to DATAZ1)
+  action:
+    type: state_change
+    target: INT_SOURCE.DATA_READY,INT_SOURCE.Watermark,INT_SOURCE.Overrun
+    delay_cycles: 0
+    description: Clears the DATA_READY, watermark, and overrun source bits
+  reasoning: Reading the output data registers clears these specific interrupt source
+    bits regardless of INT_ENABLE settings, representing a read-triggered reset side
+    effect missed by standard SVD files.
+  evidence: The DATA_READY, watermark, and overrun bits are always set if the corresponding
+    events occur ... and are cleared by reading data from the DATAX, DATAY, and DATAZ
+    registers.
+- trigger:
+    event: write
+    register: FIFO_CTL
+    field: SAMPLES
+    value: '0x00'
+    description: Writing 0 to the SAMPLES field
+  action:
+    type: state_change
+    target: INT_SOURCE.Watermark
+    delay_cycles: 0
+    description: Immediately sets the Watermark bit to 1
+  reasoning: Writing 0 to SAMPLES directly triggers the watermark status bit in INT_SOURCE
+    regardless of FIFO mode, a write-induced state change that SVD static definitions
+    cannot model.
+  evidence: Entering a value of 0 in the samples bits immediately sets the watermark
+    status bit in the INT_SOURCE register, regardless of which FIFO mode is selected.
+- trigger:
+    event: write
+    register: FIFO_CTL
+    field: FIFO_MODE
+    value: '0b00'
+    description: Setting FIFO_MODE to Bypass (00)
+  action:
+    type: state_change
+    target: FIFO_STATUS.Entries,FIFO_STATUS.FIFO_TRIG
+    delay_cycles: 0
+    description: Clears the FIFO buffer (sets Entries to 0 and resets FIFO_TRIG)
+  reasoning: Switching to bypass mode explicitly clears the FIFO contents, a mode-change
+    side effect critical for simulation accuracy and not represented in SVD field
+    descriptions.
+  evidence: Note that the FIFO data should be read first because placing the device
+    into bypass mode clears FIFO.
+- trigger:
+    event: write
+    register: DATA_FORMAT
+    field: SELF_TEST
+    value: '1'
+    description: Setting SELF_TEST to 1
+  action:
+    type: state_change
+    target: DATAX0,DATAX1,DATAY0,DATAY1,DATAZ0,DATAZ1
+    delay_cycles: 0
+    description: Applies electrostatic self-test force, shifting output data after
+      approximately 4 samples (output change per Tables 12-15 based on range)
+  reasoning: Enabling self-test causes a measurable shift in acceleration output data
+    after a brief settling period, a functional state change with timing dependency
+    that requires simulation beyond static register views.
+  evidence: A setting of 1 in the SELF_TEST bit applies a self-test force to the sensor,
+    causing a shift in the output data. ... The output needs some time (about four
+    samples) to settle after enabling self-test.
+- trigger:
+    event: write
+    register: POWER_CTL
+    field: Sleep
+    value: '1'
+    description: Setting Sleep bit to 1
+  action:
+    type: state_change
+    target: Global
+    delay_cycles: 0
+    description: 'Enters sleep mode: suppresses DATA_READY bit setting, stops data
+      transmission to FIFO, switches sampling rate to WAKEUP frequency, sets ACT_TAP_STATUS.ASLEEP=1,
+      activity detection remains active'
+  reasoning: Sleep mode induces multiple interconnected state changes across interrupts,
+    FIFO, sampling, and status registers, a complex side effect chain SVD ignores.
+  evidence: A setting of 1 in the sleep bit places the part into sleep mode. Sleep
+    mode suppresses DATA_READY, stops transmission of data to FIFO, and switches the
+    sampling rate to one specified by the wakeup bits. ... A setting of 1 in the asleep
+    bit indicates that the part is asleep.
+- trigger:
+    event: write
+    register: POWER_CTL
+    field: Link
+    value: '0'
+    description: Clearing Link bit to 0 (if previously 1)
+  action:
+    type: state_change
+    target: Global
+    delay_cycles: 0
+    description: May introduce additional noise in first few data samples if device
+      was asleep (unless preceded by Measure=0 then Measure=1 sequence)
+  reasoning: Clearing Link without proper standby-measure cycle causes transient noise
+    as a biasing side effect, especially if asleep, highlighting sequencing dependencies
+    missed by SVD.
+  evidence: When clearing the link bit, it is recommended that the part be placed
+    into standby mode and then set back to measurement mode ... otherwise, the first
+    few samples of data after the link bit is cleared may have additional noise, especially
+    if the device was asleep.
+- trigger:
+    event: read
+    registers: DATAX0 to DATAZ1
+    description: End of burst read of data registers (CS high or transition to 0x38)
+  action:
+    type: delay
+    target: FIFO_pop
+    delay_cycles: 5000
+    description: "Requires at least 5 \u03BCs delay before next FIFO read or FIFO_STATUS\
+      \ read to ensure complete FIFO pop into data registers"
+  reasoning: FIFO pop completion requires a precise timing delay after read completion,
+    a hardware timing constraint essential for accurate simulation that static SVD
+    overlooks.
+  evidence: "To ensure that the FIFO has completely popped ... there must be at least\
+    \ 5 \u03BCs between the end of reading the data registers and the start of a new\
+    \ read of the FIFO or a read of the FIFO_STATUS register."
+- trigger:
+    event: write
+    register: ACT_INACT_CTL
+    field: ACT_X_EN
+    value: '0'
+    description: Disabling ACT_X_EN (similarly for Y/Z and TAP axes)
+  action:
+    type: state_change
+    target: ACT_TAP_STATUS.ACT_X_SOURCE
+    delay_cycles: 0
+    description: Clears the corresponding source bit (e.g., ACT_X_SOURCE) on the next
+      activity or tap event
+  reasoning: Axis disable triggers delayed clearing of status source bits on subsequent
+    events, a conditional future state change propagating across events.
+  evidence: Disabling an axis from participation clears the corresponding source bit
+    when the next activity or tap/double tap event occurs.

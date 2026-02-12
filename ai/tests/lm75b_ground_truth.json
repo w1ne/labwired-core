@@ -1,0 +1,31 @@
+{
+    "device": "LM75B",
+    "datasheet_version": "Rev. 3.1",
+    "source": "NXP LM75B Datasheet",
+    "registers": [
+        {
+            "name": "Temp",
+            "offset": "0x00",
+            "reset": "0x0000",
+            "access": "RO"
+        },
+        {
+            "name": "Conf",
+            "offset": "0x01",
+            "reset": "0x00",
+            "access": "RW"
+        },
+        {
+            "name": "Thyst",
+            "offset": "0x02",
+            "reset": "0x4B00",
+            "access": "RW"
+        },
+        {
+            "name": "Tos",
+            "offset": "0x03",
+            "reset": "0x5000",
+            "access": "RW"
+        }
+    ]
+}

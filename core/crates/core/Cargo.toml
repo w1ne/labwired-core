@@ -19,3 +19,5 @@ bitflags = { workspace = true }
 labwired-config = { path = "../config" }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
+labwired-ir = { path = "../ir" }
+serde_yaml.workspace = true
