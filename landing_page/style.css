@@ -218,7 +218,7 @@ h6 {
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.25em;
-    margin: 0 0 1em 0;
+    margin: 0 0 1.25em 0;
     text-transform: none;
 }
 
@@ -431,6 +431,18 @@ footer.major .actions li {
     text-align: center;
 }
 
+header.major {
+    margin-bottom: 6em;
+}
+
+header.major h2 {
+    margin-bottom: 0.25em;
+}
+
+header.major p {
+    margin-bottom: 0;
+}
+
 .icon.major {
     background: #ffffff;
     border-radius: 12px;
@@ -439,7 +451,7 @@ footer.major .actions li {
     display: inline-block;
     height: 4em;
     line-height: 4em;
-    margin: 0 0 1.5em 0;
+    margin: 0 0 3em 0;
     text-align: center;
     width: 4em;
     color: #000000;
