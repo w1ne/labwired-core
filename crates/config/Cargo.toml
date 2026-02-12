@@ -17,3 +17,5 @@ serde_yaml.workspace = true
 human-size.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
+labwired-ir = { path = "../ir" }
+serde_json.workspace = true

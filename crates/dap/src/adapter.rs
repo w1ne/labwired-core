@@ -4,15 +4,15 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::trace::{InstructionTrace, TraceBuffer};
 use anyhow::{anyhow, Result};
 use labwired_core::{DebugControl, Machine};
 use labwired_loader::SymbolProvider;
 use serde::Serialize;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use crate::trace::{TraceBuffer, InstructionTrace};
 
 #[derive(Clone, Serialize)]
 pub struct TelemetryData {
@@ -30,6 +30,27 @@ pub struct LabwiredAdapter {
     pub last_telemetry: Arc<Mutex<(u64, Instant)>>, // cycles, time
     pub trace_buffer: Arc<Mutex<TraceBuffer>>,
     pub cycle_count: Arc<AtomicU64>,
+    mem_tracker: Arc<MemoryTracker>,
+}
+
+#[derive(Debug, Default)]
+struct MemoryTracker {
+    writes: Mutex<Vec<crate::trace::MemoryWrite>>,
+}
+
+impl labwired_core::SimulationObserver for MemoryTracker {
+    fn on_simulation_start(&self) {}
+    fn on_simulation_stop(&self) {}
+    fn on_step_start(&self, _pc: u32, _opcode: u32) {
+        self.writes.lock().unwrap().clear();
+    }
+    fn on_memory_write(&self, addr: u64, old: u8, new: u8) {
+        self.writes.lock().unwrap().push(crate::trace::MemoryWrite {
+            address: addr,
+            old_value: old,
+            new_value: new,
+        });
+    }
 }
 
 impl Default for LabwiredAdapter {
@@ -48,6 +69,7 @@ impl LabwiredAdapter {
             last_telemetry: Arc::new(Mutex::new((0, Instant::now()))),
             trace_buffer: Arc::new(Mutex::new(TraceBuffer::new(100_000))),
             cycle_count: Arc::new(AtomicU64::new(0)),
+            mem_tracker: Arc::new(MemoryTracker::default()),
         }
     }
 
@@ -120,6 +142,7 @@ impl LabwiredAdapter {
             labwired_core::Arch::Arm => {
                 let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
                 bus.attach_uart_tx_sink(self.uart_sink.clone(), false);
+                bus.observers.push(self.mem_tracker.clone()); // Attach memory tracker
                 let mut machine = Machine::new(cpu, bus);
                 machine
                     .load_firmware(&image)
@@ -129,6 +152,7 @@ impl LabwiredAdapter {
             labwired_core::Arch::RiscV => {
                 let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
                 bus.attach_uart_tx_sink(self.uart_sink.clone(), false);
+                bus.observers.push(self.mem_tracker.clone()); // Attach memory tracker
                 let mut machine = Machine::new(cpu, bus);
                 machine
                     .load_firmware(&image)
@@ -155,8 +179,25 @@ impl LabwiredAdapter {
         self.symbols.lock().unwrap().as_ref()?.lookup(addr)
     }
 
+    pub fn resolve_symbol(&self, name: &str) -> Option<u64> {
+        self.symbols.lock().unwrap().as_ref()?.resolve_symbol(name)
+    }
+
+    pub fn get_locals(&self, pc: u32) -> Vec<labwired_loader::LocalVariable> {
+        self.symbols
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|s| s.find_locals(pc as u64))
+            .unwrap_or_default()
+    }
+
     pub fn lookup_source_reverse(&self, path: &str, line: u32) -> Option<u64> {
-        self.symbols.lock().unwrap().as_ref()?.location_to_pc(path, line)
+        self.symbols
+            .lock()
+            .unwrap()
+            .as_ref()?
+            .location_to_pc(path, line)
     }
 
     pub fn get_pc(&self) -> Result<u32> {
@@ -200,7 +241,9 @@ impl LabwiredAdapter {
     pub fn reset(&self) -> Result<()> {
         let mut guard = self.machine.lock().unwrap();
         if let Some(machine) = guard.as_mut() {
-            machine.reset().map_err(|e| anyhow!("Reset failed: {:?}", e))
+            machine
+                .reset()
+                .map_err(|e| anyhow!("Reset failed: {:?}", e))
         } else {
             Err(anyhow!("Machine not initialized"))
         }
@@ -229,6 +272,12 @@ impl LabwiredAdapter {
             let pc_before = machine.get_pc();
             let registers_before: Vec<u32> = (0..16).map(|i| machine.read_core_reg(i)).collect();
 
+            // Read the instruction bytes at the current PC
+            let instr_bytes = machine
+                .read_memory(pc_before, 4)
+                .unwrap_or(vec![0, 0, 0, 0]);
+            let opcode = (instr_bytes[0] as u32) | ((instr_bytes[1] as u32) << 8);
+
             // Execute instruction
             let reason = machine
                 .step_single()
@@ -237,28 +286,50 @@ impl LabwiredAdapter {
             // Capture state AFTER execution
             let registers_after: Vec<u32> = (0..16).map(|i| machine.read_core_reg(i)).collect();
 
-            // Calculate register delta (only changed registers)
+            // Calculate register delta (only changed registers: ID -> (old, new))
             let mut register_delta = std::collections::HashMap::new();
             for i in 0..16 {
                 if registers_before[i] != registers_after[i] {
-                    register_delta.insert(i as u8, registers_after[i]);
+                    register_delta.insert(i as u8, (registers_before[i], registers_after[i]));
                 }
             }
+
+            // Capture memory writes recorded during the step
+            let memory_writes = {
+                let mut writes = self.mem_tracker.writes.lock().unwrap();
+                let captured = writes.clone();
+                writes.clear();
+                captured
+            };
 
             // Increment cycle count
             let cycle = self.cycle_count.fetch_add(1, Ordering::SeqCst);
 
-            // TODO: Resolve function name from symbols
-            let function = None;
+            // Disassemble mnemonic (for the trace log)
+            let mnemonic = {
+                let instr = labwired_core::decoder::decode_thumb_16(opcode as u16);
+                Some(format!("{:?}", instr))
+            };
+
+            // Resolve function name from symbols
+            let function = {
+                let symbol_guard = self.symbols.lock().unwrap();
+                symbol_guard
+                    .as_ref()
+                    .and_then(|s| s.lookup(pc_before as u64))
+                    .and_then(|loc| loc.function)
+            };
 
             // Record trace
             let trace = InstructionTrace {
                 pc: pc_before,
-                instruction: 0, // TODO: fetch actual instruction bytes
+                instruction: opcode,
                 cycle,
                 function,
                 register_delta,
-                memory_writes: Vec::new(), // TODO: track memory writes
+                memory_writes,
+                stack_depth: machine.read_core_reg(13),
+                mnemonic,
             };
 
             let mut trace_buffer = self.trace_buffer.lock().unwrap();
@@ -270,10 +341,85 @@ impl LabwiredAdapter {
         }
     }
 
+    pub fn get_peripherals_json(&self) -> serde_json::Value {
+        use serde_json::json;
+        let mut peripherals = Vec::new();
+        let machine_guard = self.machine.lock().unwrap();
+        if let Some(machine) = machine_guard.as_ref() {
+            for (name, base, size) in machine.get_peripherals() {
+                let mut registers = Vec::new();
+                if let Some(desc) = machine.get_peripheral_descriptor(&name) {
+                    for reg in desc.registers {
+                        let mut val = 0u32;
+                        if let Ok(data) = machine
+                            .read_memory((base + reg.address_offset) as u32, reg.size as usize / 8)
+                        {
+                            for (i, byte) in data.iter().enumerate() {
+                                val |= (*byte as u32) << (i * 8);
+                            }
+                        }
+
+                        let fields = reg
+                            .fields
+                            .iter()
+                            .map(|f| {
+                                let msb = f.bit_range[0];
+                                let lsb = f.bit_range[1];
+                                let bit_width = msb - lsb + 1;
+                                let mask = if bit_width >= 32 {
+                                    0xFFFFFFFFu32
+                                } else {
+                                    (1u32 << bit_width) - 1
+                                };
+                                let f_val = (val >> lsb) & mask;
+                                json!({
+                                    "name": f.name,
+                                    "bitOffset": lsb,
+                                    "bitWidth": bit_width,
+                                    "value": f_val,
+                                    "description": f.description
+                                })
+                            })
+                            .collect::<Vec<_>>();
+
+                        registers.push(json!({
+                            "name": reg.id,
+                            "offset": reg.address_offset,
+                            "size": reg.size,
+                            "value": val,
+                            "fields": fields
+                        }));
+                    }
+                }
+
+                peripherals.push(json!({
+                    "name": name,
+                    "base": base,
+                    "size": size,
+                    "registers": registers
+                }));
+            }
+        }
+        json!({ "peripherals": peripherals })
+    }
+
+    pub fn get_rtos_state_json(&self) -> serde_json::Value {
+        use serde_json::json;
+        // Mock RTOS state for now, but centralized here for testing
+        json!({
+            "tasks": [
+                { "name": "Idle", "state": "Running", "stackUsage": 11, "priority": 0 },
+                { "name": "MainTask", "state": "Ready", "stackUsage": 42, "priority": 1 },
+                { "name": "SensorPoller", "state": "Blocked", "stackUsage": 28, "priority": 2 },
+            ]
+        })
+    }
+
     /// Get instruction trace for a specific cycle range
     pub fn get_instruction_trace(&self, start_cycle: u64, end_cycle: u64) -> Vec<InstructionTrace> {
         let trace_buffer = self.trace_buffer.lock().unwrap();
-        trace_buffer.get_range(start_cycle, end_cycle)
+        trace_buffer
+            .get_range(start_cycle, end_cycle)
             .into_iter()
             .cloned()
             .collect()
@@ -288,6 +434,91 @@ impl LabwiredAdapter {
     /// Get current cycle count
     pub fn get_cycle_count(&self) -> u64 {
         self.cycle_count.load(Ordering::SeqCst)
+    }
+
+    pub fn step_back(&self) -> Result<labwired_core::StopReason> {
+        let mut guard = self.machine.lock().unwrap();
+        if let Some(machine) = guard.as_mut() {
+            let mut trace_buffer = self.trace_buffer.lock().unwrap();
+            if let Some(trace) = trace_buffer.pop_trace() {
+                // 1. Undo memory writes (in reverse order)
+                for write in trace.memory_writes.iter().rev() {
+                    machine
+                        .write_memory(write.address as u32, &[write.old_value])
+                        .map_err(|e| anyhow!("Failed to undo memory write: {:?}", e))?;
+                }
+
+                // 2. Undo register changes
+                for (reg_id, (old_val, _new_val)) in trace.register_delta {
+                    machine.write_core_reg(reg_id, old_val);
+                }
+
+                // 3. Revert PC
+                machine.set_pc(trace.pc);
+
+                // 4. Update cycle count
+                self.cycle_count.fetch_sub(1, Ordering::SeqCst);
+
+                Ok(labwired_core::StopReason::StepDone)
+            } else {
+                Err(anyhow!("No history available for reverse stepping"))
+            }
+        } else {
+            Err(anyhow!("Machine not initialized"))
+        }
+    }
+
+    pub fn step_out(&self) -> Result<labwired_core::StopReason> {
+        let mut guard = self.machine.lock().unwrap();
+        if let Some(machine) = guard.as_mut() {
+            // Record initial stack pointer (SP is R13 in ARM)
+            let initial_sp = machine.read_core_reg(13);
+
+            // Drop the lock before stepping to avoid deadlock
+            drop(guard);
+
+            // Continue stepping until SP >= initial_sp (function has returned)
+            // We use a maximum step count to prevent infinite loops
+            const MAX_STEPS: u32 = 100_000;
+            let mut steps = 0;
+
+            loop {
+                // Step once
+                let reason = self.step()?;
+                steps += 1;
+
+                // Check if we've exceeded max steps
+                if steps >= MAX_STEPS {
+                    return Err(anyhow!(
+                        "Step-out exceeded maximum steps (possible infinite loop)"
+                    ));
+                }
+
+                // Re-acquire lock to check SP
+                let guard = self.machine.lock().unwrap();
+                if let Some(machine) = guard.as_ref() {
+                    let current_sp = machine.read_core_reg(13);
+
+                    // If SP has increased (or stayed same), we've returned from the function
+                    // In ARM, SP grows downward, so returning means SP increases
+                    if current_sp >= initial_sp {
+                        return Ok(labwired_core::StopReason::StepDone);
+                    }
+                }
+                drop(guard);
+
+                // Check for other stop reasons (breakpoints, etc.)
+                match reason {
+                    labwired_core::StopReason::Breakpoint(_) => return Ok(reason),
+                    labwired_core::StopReason::MaxStepsReached => {
+                        return Err(anyhow!("Step-out reached max steps"));
+                    }
+                    _ => {} // Continue stepping
+                }
+            }
+        } else {
+            Err(anyhow!("Machine not initialized"))
+        }
     }
 
     pub fn continue_execution(&self) -> Result<labwired_core::StopReason> {
@@ -444,5 +675,182 @@ mod tests {
             "UART output should contain 'OK', got: '{}'",
             text
         );
+    }
+
+    #[test]
+    fn test_step_back_registers_and_memory() {
+        let adapter = LabwiredAdapter::new();
+        // Setup a simple machine manually for testing
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        bus.observers.push(adapter.mem_tracker.clone());
+
+        let mut machine = labwired_core::Machine::new(cpu, bus);
+        machine.set_pc(0x100);
+        machine.write_core_reg(0, 42);
+
+        *adapter.machine.lock().unwrap() = Some(Box::new(machine));
+
+        // 1. Perform a step that changes state
+        // We'll mock the trace recording since we can't easily run a "real" instruction here without firmware
+        let trace = crate::trace::InstructionTrace {
+            pc: 0x100,
+            instruction: 0xBF00, // NOP
+            cycle: 0,
+            function: None,
+            register_delta: {
+                let mut map = std::collections::HashMap::new();
+                map.insert(0, (42, 100)); // R0 changed from 42 to 100
+                map
+            },
+            memory_writes: vec![crate::trace::MemoryWrite {
+                address: 0x20000000,
+                old_value: 0xAA,
+                new_value: 0xBB,
+            }],
+            stack_depth: 0,
+            mnemonic: None,
+        };
+
+        adapter.trace_buffer.lock().unwrap().record(trace);
+
+        // Apply the "new" state to the machine to simulate forward progress
+        {
+            let mut guard = adapter.machine.lock().unwrap();
+            let m = guard.as_mut().unwrap();
+            m.write_core_reg(0, 100);
+            m.write_memory(0x20000000, &[0xBB]).unwrap();
+            m.set_pc(0x102);
+            adapter.cycle_count.fetch_add(1, Ordering::SeqCst);
+        }
+
+        // 2. Perform step_back
+        adapter.step_back().expect("Step back failed");
+
+        // 3. Verify state is restored
+        let m_guard = adapter.machine.lock().unwrap();
+        let m = m_guard.as_ref().unwrap();
+        assert_eq!(m.get_pc(), 0x100);
+        assert_eq!(m.read_core_reg(0), 42);
+        let mem = m.read_memory(0x20000000, 1).unwrap();
+        assert_eq!(mem[0], 0xAA);
+        assert_eq!(adapter.get_cycle_count(), 0);
+    }
+
+    #[test]
+    fn test_get_peripherals_json() {
+        let adapter = LabwiredAdapter::new();
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        let machine = labwired_core::Machine::new(cpu, bus);
+        *adapter.machine.lock().unwrap() = Some(Box::new(machine));
+
+        let json = adapter.get_peripherals_json();
+        let peripherals = json["peripherals"].as_array().unwrap();
+
+        // SystemBus::new() adds several peripherals (uart1, afio, gpioa, etc.)
+        assert!(peripherals.len() >= 5);
+
+        let uart1 = peripherals.iter().find(|p| p["name"] == "uart1").unwrap();
+        assert_eq!(uart1["base"], 0x4000_C000);
+
+        // uart1 is a mock, it has no declarative registers by default
+        // But the JSON structure should still be correct
+        assert!(uart1["registers"].is_array());
+    }
+
+    #[test]
+    fn test_get_rtos_state_json() {
+        let adapter = LabwiredAdapter::new();
+        let json = adapter.get_rtos_state_json();
+        let tasks = json["tasks"].as_array().unwrap();
+        assert_eq!(tasks.len(), 3);
+        assert_eq!(tasks[0]["name"], "Idle");
+        assert_eq!(tasks[0]["state"], "Running");
+    }
+
+    #[test]
+    fn test_reverse_step_stress_test() {
+        let adapter = LabwiredAdapter::new();
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        bus.observers.push(adapter.mem_tracker.clone());
+
+        let mut machine = labwired_core::Machine::new(cpu, bus);
+        machine.set_pc(0x100);
+        *adapter.machine.lock().unwrap() = Some(Box::new(machine));
+
+        // Let's capture the INITIAL state (snapshot)
+        let initial_registers: Vec<u32> = (0..16)
+            .map(|i| {
+                let guard = adapter.machine.lock().unwrap();
+                guard.as_ref().unwrap().read_core_reg(i as u8)
+            })
+            .collect();
+
+        // Simulate 100 random state transitions (mocked for speed/simplicity)
+        for i in 0..100 {
+            let trace = crate::trace::InstructionTrace {
+                pc: 0x100 + (i * 2),
+                instruction: 0xBF00,
+                cycle: i as u64,
+                function: None,
+                register_delta: {
+                    let mut map = std::collections::HashMap::new();
+                    map.insert(0, (i as u32, i as u32 + 1));
+                    map
+                },
+                memory_writes: vec![crate::trace::MemoryWrite {
+                    address: (0x20000000 + (i as u32 * 4)) as u64,
+                    old_value: 0,
+                    new_value: 0xFF,
+                }],
+                stack_depth: 0,
+                mnemonic: None,
+            };
+            adapter.trace_buffer.lock().unwrap().record(trace);
+
+            // Advance machine
+            let mut guard = adapter.machine.lock().unwrap();
+            let m = guard.as_mut().unwrap();
+            m.write_core_reg(0, i as u32 + 1);
+            m.write_memory(0x20000000 + (i as u32 * 4), &[0xFF])
+                .unwrap();
+            m.set_pc(0x100 + (i * 2) + 2);
+            adapter.cycle_count.fetch_add(1, Ordering::SeqCst);
+        }
+
+        // Now reverse all 100 steps
+        for _ in 0..100 {
+            adapter.step_back().unwrap();
+        }
+
+        // Verify state matches initial
+        let guard = adapter.machine.lock().unwrap();
+        let m = guard.as_ref().unwrap();
+        assert_eq!(m.get_pc(), 0x100);
+        for i in 0..16 {
+            assert_eq!(m.read_core_reg(i as u8), initial_registers[i]);
+        }
+        assert_eq!(adapter.get_cycle_count(), 0);
+    }
+
+    #[test]
+    fn test_write_memory() {
+        let adapter = LabwiredAdapter::new();
+        {
+            let mut bus = labwired_core::bus::SystemBus::new();
+            let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+            let machine = labwired_core::Machine::new(cpu, bus);
+            *adapter.machine.lock().unwrap() = Some(Box::new(machine));
+        }
+
+        let addr = 0x2000_1000;
+        let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
+
+        adapter.write_memory(addr, &data).unwrap();
+
+        let read_data = adapter.read_memory(addr, 4).unwrap();
+        assert_eq!(read_data, data);
     }
 }
