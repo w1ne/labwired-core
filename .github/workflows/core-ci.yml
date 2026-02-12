@@ -55,7 +55,7 @@ jobs:
         run: cargo build
 
   build:
-    name: Build (Bridge)
+    name: build
     needs: test
     runs-on: ubuntu-latest
     steps:
