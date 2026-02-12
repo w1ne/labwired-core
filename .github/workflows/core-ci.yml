@@ -59,4 +59,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - run: echo "Build check passed (bridged from test)"
