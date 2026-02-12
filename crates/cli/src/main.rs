@@ -15,6 +15,8 @@ use labwired_core::Cpu;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
+mod vcd_trace;
+
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
 
 const EXIT_PASS: u8 = 0;
@@ -73,6 +75,14 @@ struct Cli {
     #[arg(long)]
     gdb: Option<u16>,
 
+    /// Output errors and diagnostics as structured JSON for agent consumption
+    #[arg(long, global = true)]
+    json: bool,
+
+    /// Output VCD trace to file
+    #[arg(long, global = true)]
+    vcd: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -102,6 +112,12 @@ pub enum AssetCommands {
 
     /// Generate Rust code from Strict IR (JSON).
     Codegen(CodegenArgs),
+
+    /// Initialize a new project skeleton.
+    Init(InitArgs),
+
+    /// Add a peripheral to the current chip descriptor.
+    AddPeripheral(AddPeripheralArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -113,6 +129,40 @@ pub struct CodegenArgs {
     /// Path to the output Rust file
     #[arg(short, long)]
     pub output: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct InitArgs {
+    /// Path to the output directory
+    #[arg(short, long)]
+    pub output: PathBuf,
+
+    /// Chip name or path to chip descriptor
+    #[arg(short, long)]
+    pub chip: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct AddPeripheralArgs {
+    /// Path to the chip descriptor YAML to modify
+    #[arg(short, long)]
+    pub chip: PathBuf,
+
+    /// New peripheral ID
+    #[arg(short, long)]
+    pub id: String,
+
+    /// Peripheral type (e.g., "strict_ir")
+    #[arg(long, default_value = "strict_ir")]
+    pub r#type: String,
+
+    /// Base memory address
+    #[arg(short, long, value_parser = parse_u32_addr)]
+    pub base: u32,
+
+    /// Path to the IR descriptor (JSON)
+    #[arg(long)]
+    pub ir_path: PathBuf,
 }
 
 #[derive(Parser, Debug)]
@@ -417,7 +467,159 @@ fn run_asset(args: AssetArgs) -> ExitCode {
     match args.command {
         AssetCommands::ImportSvd(a) => run_import_svd(a),
         AssetCommands::Codegen(a) => run_codegen(a),
+        AssetCommands::Init(a) => run_asset_init(a),
+        AssetCommands::AddPeripheral(a) => run_asset_add_peripheral(a),
     }
+}
+
+fn run_asset_add_peripheral(args: AddPeripheralArgs) -> ExitCode {
+    info!("Adding peripheral '{}' to {:?}", args.id, args.chip);
+
+    let mut chip = match labwired_config::ChipDescriptor::from_file(&args.chip) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Failed to load chip descriptor: {}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    // Check if peripheral already exists
+    if chip.peripherals.iter().any(|p| p.id == args.id) {
+        error!("Peripheral '{}' already exists in {:?}", args.id, args.chip);
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    let mut config = std::collections::HashMap::new();
+    config.insert(
+        "path".to_string(),
+        serde_yaml::Value::String(args.ir_path.to_string_lossy().to_string()),
+    );
+
+    chip.peripherals.push(labwired_config::PeripheralConfig {
+        id: args.id,
+        r#type: args.r#type,
+        base_address: args.base as u64,
+        size: Some("4KB".to_string()),
+        irq: None,
+        config,
+    });
+
+    let yaml = match serde_yaml::to_string(&chip) {
+        Ok(y) => y,
+        Err(e) => {
+            error!("Failed to serialize chip descriptor: {}", e);
+            return ExitCode::from(EXIT_RUNTIME_ERROR);
+        }
+    };
+
+    if let Err(e) = std::fs::write(&args.chip, yaml) {
+        error!("Failed to write updated chip descriptor: {}", e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    info!("Successfully added peripheral to {:?}", args.chip);
+    ExitCode::from(EXIT_PASS)
+}
+
+fn resolve_chip_descriptor_path(chip: &str) -> Option<PathBuf> {
+    let input = PathBuf::from(chip);
+    if input.exists() {
+        return Some(input);
+    }
+
+    // If the input looks like a custom path and does not exist, do not guess.
+    if input.components().count() != 1 {
+        return None;
+    }
+
+    let names = if input.extension().is_some() {
+        vec![input]
+    } else {
+        vec![
+            PathBuf::from(format!("{}.yaml", chip)),
+            PathBuf::from(format!("{}.yml", chip)),
+        ]
+    };
+
+    let fallback_roots = [
+        PathBuf::from("configs/chips"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips"),
+    ];
+
+    for root in &fallback_roots {
+        for name in &names {
+            let candidate = root.join(name);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
+fn run_asset_init(args: InitArgs) -> ExitCode {
+    let output_dir = args.output;
+    if output_dir.exists() {
+        error!("Output directory already exists: {:?}", output_dir);
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    if let Err(e) = std::fs::create_dir_all(&output_dir) {
+        error!("Failed to create directory {:?}: {}", output_dir, e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    let chip_input = args.chip.unwrap_or_else(|| "stm32f103".to_string());
+    let chip_source = match resolve_chip_descriptor_path(&chip_input) {
+        Some(path) => path,
+        None => {
+            error!(
+                "Could not resolve chip descriptor '{}'. Pass a valid file path or a known chip in configs/chips.",
+                chip_input
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let chip_file_name = match chip_source.file_name() {
+        Some(name) => name.to_string_lossy().to_string(),
+        None => {
+            error!("Invalid chip descriptor path: {:?}", chip_source);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let chip_dest = output_dir.join(&chip_file_name);
+    if let Err(e) = std::fs::copy(&chip_source, &chip_dest) {
+        error!(
+            "Failed to copy chip descriptor from {:?} to {:?}: {}",
+            chip_source, chip_dest, e
+        );
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    let system_yaml = format!(
+        r#"# LabWired System Configuration
+name: "my-project"
+chip: "{}"
+external_devices: []
+"#,
+        chip_file_name
+    );
+
+    let system_path = output_dir.join("system.yaml");
+    if let Err(e) = std::fs::write(&system_path, system_yaml) {
+        error!("Failed to write system.yaml: {}", e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    info!("Initialized new project skeleton in {:?}", output_dir);
+    info!(
+        "Created system.yaml with chip: {} (copied from {:?})",
+        chip_file_name, chip_source
+    );
+    ExitCode::from(EXIT_PASS)
 }
 
 fn run_codegen(args: CodegenArgs) -> ExitCode {
@@ -703,6 +905,8 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
                 max_steps: args.max_steps.unwrap_or(config.max_steps),
                 gdb: None,
                 command: None,
+                json: false,
+                vcd: None,
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)
@@ -741,6 +945,8 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
                 max_steps: args.max_steps.unwrap_or(config.max_steps),
                 gdb: None,
                 command: None,
+                json: false,
+                vcd: None,
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)
@@ -761,6 +967,12 @@ fn run_interactive_arm(
     let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
     let mut machine = labwired_core::Machine::new(cpu, bus);
     machine.observers.push(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.observers.push(observer);
+    }
 
     if let Err(e) = machine.load_firmware(&program) {
         tracing::error!("Failed to load firmware into memory: {}", e);
@@ -810,7 +1022,7 @@ fn run_interactive_arm(
         );
     }
 
-    report_metrics(&machine.cpu, &metrics);
+    report_metrics(&cli, &machine.cpu, &metrics);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -823,6 +1035,12 @@ fn run_interactive_riscv(
     let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
     let mut machine = labwired_core::Machine::new(cpu, bus);
     machine.observers.push(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.observers.push(observer);
+    }
 
     if let Err(e) = machine.load_firmware(&program) {
         tracing::error!("Failed to load firmware into memory: {}", e);
@@ -867,7 +1085,7 @@ fn run_interactive_riscv(
         );
     }
 
-    report_metrics(&machine.cpu, &metrics);
+    report_metrics(&cli, &machine.cpu, &metrics);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -931,14 +1149,26 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
 }
 
 fn report_metrics<C: labwired_core::Cpu>(
+    cli: &Cli,
     cpu: &C,
     metrics: &labwired_core::metrics::PerformanceMetrics,
 ) {
-    info!("Simulation loop finished.");
-    info!("Final PC: {:#x}", cpu.get_pc());
-    info!("Total Instructions: {}", metrics.get_instructions());
-    info!("Total Cycles: {}", metrics.get_cycles());
-    info!("Average IPS: {:.2}", metrics.get_ips());
+    if cli.json {
+        let report = serde_json::json!({
+            "status": "finished",
+            "final_pc": cpu.get_pc(),
+            "total_instructions": metrics.get_instructions(),
+            "total_cycles": metrics.get_cycles(),
+            "average_ips": metrics.get_ips(),
+        });
+        println!("{}", serde_json::to_string(&report).unwrap());
+    } else {
+        info!("Simulation loop finished.");
+        info!("Final PC: {:#x}", cpu.get_pc());
+        info!("Total Instructions: {}", metrics.get_instructions());
+        info!("Total Cycles: {}", metrics.get_cycles());
+        info!("Average IPS: {:.2}", metrics.get_ips());
+    }
 }
 
 fn build_stop_reason_details(

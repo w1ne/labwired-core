@@ -240,10 +240,43 @@ impl SystemBus {
 
                     let content = std::fs::read_to_string(descriptor_path)
                         .with_context(|| format!("Failed to read IR file: {}", descriptor_path))?;
-                    let ir_peripheral: labwired_ir::IrPeripheral = serde_json::from_str(&content)
-                        .with_context(|| {
-                        format!("Failed to parse Strict IR from {}", descriptor_path)
-                    })?;
+                    let ir_peripheral = match serde_json::from_str::<labwired_ir::IrPeripheral>(
+                        &content,
+                    ) {
+                        Ok(peripheral) => peripheral,
+                        Err(peripheral_err) => {
+                            let device: labwired_ir::IrDevice = serde_json::from_str(&content)
+                                .with_context(|| {
+                                    format!(
+                                        "Failed to parse Strict IR from {} as IrPeripheral ({}) or IrDevice",
+                                        descriptor_path, peripheral_err
+                                    )
+                                })?;
+
+                            if let Some(peripheral) = device.peripherals.get(&p_cfg.id) {
+                                peripheral.clone()
+                            } else if device.peripherals.len() == 1 {
+                                device
+                                    .peripherals
+                                    .into_values()
+                                    .next()
+                                    .expect("len() checked above")
+                            } else {
+                                let available = device
+                                    .peripherals
+                                    .keys()
+                                    .cloned()
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                return Err(anyhow::anyhow!(
+                                    "Strict IR '{}' contains multiple peripherals [{}]; no match for id '{}'",
+                                    descriptor_path,
+                                    available,
+                                    p_cfg.id
+                                ));
+                            }
+                        }
+                    };
 
                     let desc: labwired_config::PeripheralDescriptor = ir_peripheral.into();
 
