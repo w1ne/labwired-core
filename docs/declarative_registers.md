@@ -49,4 +49,4 @@ registers:
 
 ## Getting Started
 
-See the [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for a step-by-step guide on creating your first declarative peripheral.
+See the [Peripheral Development Guide](./peripheral_development.md) for a step-by-step workflow to build your first declarative peripheral.

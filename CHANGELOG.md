@@ -16,10 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Verified against STM32F4, RP2040, and nRF52.
 - **Timing Hooks**: Declarative peripheral behavior for registers (SetBits, ClearBits, WriteValue) with periodic and event-based triggers.
 - **Timeline View**: Professional visualization of instruction trace data in the VS Code extension.
-- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/SUPPORTED_DEVICES.md`.
-- **Architecture Guide**: New comprehensive `core/docs/ARCHITECTURE.md`.
+- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/release_strategy.md`.
+- **Architecture Guide**: New comprehensive `core/docs/architecture_guide.md`.
 - **SVD Ingestor**: New tool (`crates/svd-ingestor`) to generate `PeripheralDescriptor` YAMLs from SVD.
-- **Strategic Horizon**: Long-term vision integrated into `docs/plan.md`.
+- **Strategic Horizon**: Long-term vision integrated into `docs/release_strategy.md`.
 
 ## [0.11.0] - 2026-02-08
 
@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Modeling**: Enabled peripheral definition via YAML descriptors using `labwired-config`.
     - **Simulation**: Implemented `GenericPeripheral` in `labwired-core` supporting dynamic MMR modeling, bitwise masking, and reset state.
     - **Integration**: Added support for `type: "declarative"` in chip descriptors, allowing zero-code peripheral additions.
-    - **Documentation**: New [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for declarative IP cores.
+    - **Documentation**: New [Peripheral Development Guide](./docs/peripheral_development.md) for declarative IP cores.
 - **ISA Extensions**:
     - **Misc Thumb-2**: Implemented `CLZ` (Count Leading Zeros), `RBIT` (Bit Reverse), `REV`, `REV16`, `REVSH` instructions.
     - **RISC-V Support**: Initial support for RV32I Base Integer Instruction Set with multi-arch GDB support.
@@ -60,8 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **GDB Remote Serial Protocol**: New `labwired-gdbstub` crate allowing connection from standard GDB clients.
     - **Interactive Debugging (DAP)**: `labwired-dap` server for VS Code integration with variable and register inspection.
 - **Documentation**:
-    - [Peripheral Development Guide](file:///home/andrii/Projects/labwired/docs/peripheral_development.md).
-    - [Getting Started with Real Firmware](file:///home/andrii/Projects/labwired/docs/getting_started_firmware.md) onboarding guide.
+    - [Peripheral Development Guide](./docs/peripheral_development.md).
+    - [Getting Started with Real Firmware](./docs/getting_started_firmware.md) onboarding guide.
 
 ## [0.9.0] - 2026-02-04
 

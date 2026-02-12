@@ -34,9 +34,11 @@ We welcome contributions! Please see our community guides:
 Full setup guide: [Getting Started](./docs/getting_started_firmware.md)
 
 ## Documentation
-- [Architecture](./docs/architecture.md)
-- [CI Integration](./docs/ci_integration.md)
-- [GDB Integration](./docs/GDB_INTEGRATION.md)
+- [Architecture Overview](./docs/architecture.md)
+- [Architecture Guide](./docs/architecture_guide.md)
+- [CI Integration Guide](./docs/ci_integration.md)
+- [GDB Integration](./docs/gdb_integration.md)
+- [Release Strategy](./docs/release_strategy.md)
 - [VS Code Debugging](./docs/vscode_debugging.md)
 
 ## License
