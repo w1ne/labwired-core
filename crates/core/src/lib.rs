@@ -36,6 +36,15 @@ pub enum SimulationError {
     DecodeError(u64),
 }
 
+impl SimulationError {
+    pub fn recovery_hint(&self) -> &'static str {
+        match self {
+            SimulationError::MemoryViolation(_) => "Check if the address is within valid memory regions defined in system.yaml.",
+            SimulationError::DecodeError(_) => "Ensure the program counter is pointing to valid code and the architecture matches (ARM vs RISC-V).",
+        }
+    }
+}
+
 pub type SimResult<T> = Result<T, SimulationError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

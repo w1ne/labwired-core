@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
+mod vcd_trace;
 
 const EXIT_PASS: u8 = 0;
 const EXIT_ASSERT_FAIL: u8 = 1;
@@ -23,6 +24,15 @@ const EXIT_CONFIG_ERROR: u8 = 2;
 const EXIT_RUNTIME_ERROR: u8 = 3;
 
 const RESULT_SCHEMA_VERSION: &str = "1.0";
+
+#[derive(Debug, Serialize)]
+struct DiagnosticReport {
+    error: String,
+    error_type: String,
+    recovery_hint: String,
+    pc: u32,
+    cycle: u64,
+}
 
 fn parse_u32_addr(s: &str) -> Result<u32, String> {
     let trimmed = s.trim();
@@ -72,6 +82,14 @@ struct Cli {
     /// Start a GDB server on the specified port
     #[arg(long)]
     gdb: Option<u16>,
+
+    /// Output errors and diagnostics as structured JSON for agent consumption
+    #[arg(long, global = true)]
+    json: bool,
+
+    /// Output VCD trace to file
+    #[arg(long, global = true)]
+    vcd: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -564,8 +582,11 @@ fn run_interactive(cli: Cli) -> ExitCode {
             }
         }
     } else {
-        // Default to Arm if no system config provided (backward compatibility)
-        labwired_config::Arch::Arm
+        // Default to ELF architecture if available, otherwise Arm
+        match program.arch {
+            labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
+            _ => labwired_config::Arch::Arm,
+        }
     };
 
     if program.arch != labwired_core::Arch::Unknown {
@@ -703,6 +724,8 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
                 max_steps: args.max_steps.unwrap_or(config.max_steps),
                 gdb: None,
                 command: None,
+                json: false,
+                vcd: None,
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)
@@ -741,6 +764,8 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
                 max_steps: args.max_steps.unwrap_or(config.max_steps),
                 gdb: None,
                 command: None,
+                json: false,
+                vcd: None,
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)
@@ -761,6 +786,16 @@ fn run_interactive_arm(
     let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
     let mut machine = labwired_core::Machine::new(cpu, bus);
     machine.observers.push(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        match vcd_trace::VcdObserver::new(vcd_path.clone()) {
+            Ok(vcd) => {
+                info!("Enabled VCD tracing to {:?}", vcd_path);
+                machine.observers.push(Arc::new(vcd));
+            },
+            Err(e) => error!("Failed to create VCD observer: {}", e),
+        }
+    }
 
     if let Err(e) = machine.load_firmware(&program) {
         tracing::error!("Failed to load firmware into memory: {}", e);
@@ -823,6 +858,16 @@ fn run_interactive_riscv(
     let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
     let mut machine = labwired_core::Machine::new(cpu, bus);
     machine.observers.push(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        match vcd_trace::VcdObserver::new(vcd_path.clone()) {
+            Ok(vcd) => {
+                info!("Enabled VCD tracing to {:?}", vcd_path);
+                machine.observers.push(Arc::new(vcd));
+            },
+            Err(e) => error!("Failed to create VCD observer: {}", e),
+        }
+    }
 
     if let Err(e) = machine.load_firmware(&program) {
         tracing::error!("Failed to load firmware into memory: {}", e);
@@ -910,14 +955,27 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                 }
             }
             Err(e) => {
-                info!("Simulation Error at step {}: {}", step, e);
+                let msg = e.to_string();
+                if cli.json {
+                    let report = DiagnosticReport {
+                        error: msg.clone(),
+                        error_type: format!("{:?}", e),
+                        recovery_hint: e.recovery_hint().to_string(),
+                        pc: machine.cpu.get_pc(),
+                        cycle: metrics.get_cycles(),
+                    };
+                    println!("{}", serde_json::to_string(&report).unwrap());
+                } else {
+                    info!("Simulation Error at step {}: {}", step, e);
+                }
+
                 stop_reason = match e {
                     labwired_core::SimulationError::MemoryViolation(_) => {
                         StopReason::MemoryViolation
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                 };
-                stop_message = Some(e.to_string());
+                stop_message = Some(msg);
                 break;
             }
         }
