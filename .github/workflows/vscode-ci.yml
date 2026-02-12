@@ -15,13 +15,13 @@ on:
       - 'vscode/**'
   workflow_dispatch:
 
-defaults:
 
-  run:
-    working-directory: ./vscode
 
 jobs:
   build_matrix:
+    defaults:
+      run:
+        working-directory: ./vscode
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
