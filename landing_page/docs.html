@@ -1,0 +1,151 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <title>Documentation - LabWired</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=Outfit:wght@700&family=Roboto+Mono&display=swap"
+        rel="stylesheet">
+    <noscript>
+        <link rel="stylesheet" href="assets/css/noscript.css" />
+    </noscript>
+</head>
+
+<body class="is-preload">
+    <div id="page-wrapper">
+
+        <!-- Header -->
+        <header id="header">
+            <h1 id="logo">
+                <i class="fas fa-microchip"></i>
+                <a href="index.html">LABWIRED</a>
+            </h1>
+            <nav id="nav">
+                <ul>
+                    <li><a href="index.html#four">Features</a></li>
+                    <li><a href="docs.html">Docs</a></li>
+                    <li><a href="https://cal.com/andriishylenko/30min" target="_blank">Book Demo</a></li>
+                    <li><a href="https://github.com/w1ne/labwired" class="icon brands fa-github"><span
+                                class="label">GitHub</span></a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <!-- Main -->
+        <div id="main" class="wrapper style1">
+            <div class="container">
+                <header class="major">
+                    <h2>Documentation</h2>
+                    <p>The programmable hardware back-end for the AI era.</p>
+                </header>
+
+                <!-- Content -->
+                <section id="content">
+                    <hr />
+
+                    <section id="getting-started">
+                        <h3>Getting Started</h3>
+                        <p>LabWired transforms physical hardware constraints into programmable AI-ready assets. Follow
+                            these three steps to build your first autonomous hardware agent.</p>
+                        <div class="row">
+                            <div class="col-4 col-12-medium">
+                                <h4>1. Ingest Datasheet</h4>
+                                <p>Use the LabWired AI tool to extract register maps and behavioral logic directly from
+                                    PDF datasheets.</p>
+                                <pre><code>labwired_ai.main ingest-datasheet firmware/manual.pdf</code></pre>
+                            </div>
+                            <div class="col-4 col-12-medium">
+                                <h4>2. Verify Model</h4>
+                                <p>Run the automated truth-checker to ensure the generated model matches physical
+                                    constraints.</p>
+                                <pre><code>python ai/tests/e2e_test.py --peripheral peripheral.yaml</code></pre>
+                            </div>
+                            <div class="col-4 col-12-medium">
+                                <h4>3. Run Emulation</h4>
+                                <p>Execute your firmware against the bit-accurate digital twin in a fully deterministic
+                                    environment.</p>
+                                <pre><code>labwired sim run --config system.yaml</code></pre>
+                            </div>
+                        </div>
+                    </section>
+
+                    <hr />
+
+                    <section id="architecture">
+                        <h3>Technical Architecture: AIPi Protocol</h3>
+                        <p>The <strong>Agentic Interface for Peripheral Ingestion (AIPi)</strong> is our core protocol.
+                            It allows LLMs and automated verifiers to operate hardware as a programmable service.</p>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>State</th>
+                                        <th>Action</th>
+                                        <th>Output Artifact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Ingested</strong></td>
+                                        <td>Logic extraction from PDF</td>
+                                        <td><code>peripheral.yaml</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Verified</strong></td>
+                                        <td>Cross-check vs constraints</td>
+                                        <td><code>verification_report.md</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Emulated</strong></td>
+                                        <td>Firmware execution</td>
+                                        <td><code>trace.vcd</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <hr />
+
+                    <section id="ai-generation">
+                        <h3>AI Generation & Grounding</h3>
+                        <p>Unlike standard SVD files, LabWired AI models include <strong>grounding metadata</strong>.
+                            This provides machine-readable evidence for every register and transition, eliminating
+                            hallucinations.</p>
+                        <blockquote>
+                            "LabWired is a deterministic back-end. If an agent provides an incorrect system definition,
+                            the simulation fails with a BusPanic. This enforces total reliability for autonomous
+                            agents."
+                        </blockquote>
+                    </section>
+
+                </section>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer id="footer">
+            <ul class="icons">
+                <li><a href="https://github.com/w1ne/labwired" class="icon brands alt fa-github"><span
+                            class="label">GitHub</span></a></li>
+                <li><a href="mailto:andrii@labwired.com" class="icon solid alt fa-envelope"><span
+                            class="label">Email</span></a></li>
+            </ul>
+            <ul class="copyright">
+                <li>&copy; LabWired Inc. All rights reserved.</li>
+                <li><a href="https://labwired.com">LabWired.com</a></li>
+            </ul>
+        </footer>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
+
+</body>
+
+</html>
