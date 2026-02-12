@@ -30,7 +30,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
     <fpuPresent>true</fpuPresent>
     <nvicPrioBits>4</nvicPrioBits>
     <vendorSystickConfig>false</vendorSystickConfig>
-  </cpu>
+  </cpu>  
   <addressUnitBits>8</addressUnitBits>
   <width>32</width>
   <size>0x20</size>
@@ -12976,7 +12976,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <offset>0x0</offset>
         <size>0x400</size>
         <usage>registers</usage>
-      </addressBlock>
+      </addressBlock>     
       <registers>
         <register>
           <name>CR1</name>
@@ -13604,12 +13604,12 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <offset>0x0</offset>
         <size>0x400</size>
         <usage>registers</usage>
-      </addressBlock>
+      </addressBlock> 
       <interrupt>
         <name>TIM2</name>
         <description>TIM2 global interrupt</description>
         <value>28</value>
-      </interrupt>
+      </interrupt>	  
       <registers>
         <register>
           <name>CR1</name>
@@ -17435,7 +17435,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <name>DMA2_Stream0</name>
         <description>DMA2 Stream0 global interrupt</description>
         <value>56</value>
-      </interrupt>
+      </interrupt>	
       <interrupt>
         <name>DMA2_Stream1</name>
         <description>DMA2 Stream1 global interrupt</description>
@@ -20113,7 +20113,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <name>DMA1_Stream0</name>
         <description>DMA1 Stream0 global interrupt</description>
         <value>11</value>
-      </interrupt>
+      </interrupt>	
       <interrupt>
         <name>DMA1_Stream1</name>
         <description>DMA1 Stream1 global interrupt</description>
@@ -20148,7 +20148,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <name>DMA1_Stream7</name>
         <description>DMA1 Stream7 global interrupt</description>
         <value>47</value>
-      </interrupt>
+      </interrupt>  
     </peripheral>
     <peripheral>
       <name>GPIOH</name>
@@ -20159,7 +20159,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <offset>0x0</offset>
         <size>0x400</size>
         <usage>registers</usage>
-      </addressBlock>
+      </addressBlock>     
       <registers>
         <register>
           <name>MODER</name>
@@ -21412,7 +21412,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
     </peripheral>
     <peripheral derivedFrom="GPIOH">
       <name>GPIOD</name>
-      <baseAddress>0X40020C00</baseAddress>
+      <baseAddress>0X40020C00</baseAddress>      
     </peripheral>
     <peripheral derivedFrom="GPIOH">
       <name>GPIOC</name>
@@ -23945,7 +23945,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <offset>0x0</offset>
         <size>0x400</size>
         <usage>registers</usage>
-      </addressBlock>
+      </addressBlock> 
       <interrupt>
         <name>I2C3_EV</name>
         <description>I2C3 event interrupt</description>
@@ -23955,7 +23955,7 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <name>I2C3_ER</name>
         <description>I2C3 error interrupt</description>
         <value>73</value>
-      </interrupt>
+      </interrupt>	  
       <registers>
         <register>
           <name>CR1</name>
@@ -24871,6 +24871,6 @@ xs:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
         <description>SPI4 global interrupt</description>
         <value>84</value>
       </interrupt>
-    </peripheral>
+    </peripheral>    
   </peripherals>
 </device>
