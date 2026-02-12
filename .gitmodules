@@ -4,3 +4,6 @@
 [submodule "landing_page"]
 	path = landing_page
 	url = git@github.com:w1ne/labwired-landing.git
+[submodule "core"]
+	path = core
+	url = /home/andrii/Projects/libwired-core
