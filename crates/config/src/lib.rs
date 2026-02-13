@@ -56,6 +56,37 @@ pub struct ExternalDevice {
     pub config: HashMap<String, serde_yaml::Value>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardIoKind {
+    Led,
+    Button,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardIoSignal {
+    #[default]
+    Output,
+    Input,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BoardIoBinding {
+    pub id: String,
+    pub kind: BoardIoKind,
+    pub peripheral: String,
+    pub pin: u8,
+    #[serde(default)]
+    pub signal: BoardIoSignal,
+    #[serde(default = "default_true")]
+    pub active_high: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SystemManifest {
     pub name: String,
@@ -64,6 +95,8 @@ pub struct SystemManifest {
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
     pub external_devices: Vec<ExternalDevice>,
+    #[serde(default)]
+    pub board_io: Vec<BoardIoBinding>,
 }
 
 impl ChipDescriptor {
@@ -239,7 +272,25 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
                             description: f.description,
                         })
                         .collect(),
-                    side_effects: None, // IR doesn't explicitly model side effects yet
+                    side_effects: r.side_effects.map(|se| SideEffectsDescriptor {
+                        read_action: se.read_action.and_then(|s| match s.as_str() {
+                            "clear" => Some(ReadAction::Clear),
+                            "none" => Some(ReadAction::None),
+                            _ => None,
+                        }),
+                        write_action: se.write_action.and_then(|s| match s.as_str() {
+                            "one_to_clear" | "oneToClear" | "w1c" => {
+                                Some(WriteAction::WriteOneToClear)
+                            }
+                            "zero_to_clear" | "zeroToClear" | "w0c" => {
+                                Some(WriteAction::WriteZeroToClear)
+                            }
+                            "none" => Some(WriteAction::None),
+                            _ => None,
+                        }),
+                        on_read: None,
+                        on_write: None,
+                    }),
                 })
                 .collect(),
             interrupts: if interrupts.is_empty() {
@@ -247,7 +298,33 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
             } else {
                 Some(interrupts)
             },
-            timing: None,
+            timing: if ir.timing.is_empty() {
+                None
+            } else {
+                let mut timing = Vec::new();
+                for t in ir.timing {
+                    // Try to convert JSON trigger/action to enums
+                    let trigger: Result<TimingTrigger, _> = serde_json::from_value(t.trigger);
+                    let action: Result<TimingAction, _> = serde_json::from_value(t.action);
+
+                    if let (Ok(trig), Ok(act)) = (trigger, action) {
+                        timing.push(TimingDescriptor {
+                            id: t.id,
+                            trigger: trig,
+                            delay_cycles: t.delay_cycles,
+                            action: act,
+                            interrupt: t.interrupt,
+                        });
+                    } else {
+                        tracing::warn!("Failed to convert IR timing hook '{}' to config", t.id);
+                    }
+                }
+                if timing.is_empty() {
+                    None
+                } else {
+                    Some(timing)
+                }
+            },
         }
     }
 }

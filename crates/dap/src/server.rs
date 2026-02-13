@@ -14,10 +14,12 @@ use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 pub struct DapServer {
     pub adapter: LabwiredAdapter,
     running: Arc<Mutex<bool>>,
+    stop_on_entry: Arc<Mutex<bool>>,
 }
 
 #[derive(Serialize)]
@@ -144,6 +146,7 @@ impl DapServer {
         Self {
             adapter: LabwiredAdapter::new(),
             running: Arc::new(Mutex::new(false)),
+            stop_on_entry: Arc::new(Mutex::new(true)),
         }
     }
 
@@ -164,24 +167,28 @@ impl DapServer {
         };
         let running_clone = self.running.clone();
 
-        std::thread::spawn(move || loop {
-            let is_running = {
-                let r = running_clone.lock().unwrap();
-                *r
-            };
+        std::thread::spawn(move || {
+            let mut last_telemetry_sent = Instant::now()
+                .checked_sub(Duration::from_millis(500))
+                .unwrap_or_else(Instant::now);
+            loop {
+                let is_running = {
+                    let r = running_clone.lock().unwrap();
+                    *r
+                };
 
-            if is_running {
-                // Run a chunk
-                match adapter_clone.continue_execution_chunk(10_000) {
-                    Ok(reason) => {
-                        match reason {
-                            labwired_core::StopReason::Breakpoint(_)
-                            | labwired_core::StopReason::ManualStop => {
-                                {
-                                    let mut r = running_clone.lock().unwrap();
-                                    *r = false;
-                                }
-                                let _ = sender_clone.send_event("stopped", Some(json!({
+                if is_running {
+                    // Run a chunk
+                    match adapter_clone.continue_execution_chunk(50_000) {
+                        Ok(reason) => {
+                            match reason {
+                                labwired_core::StopReason::Breakpoint(_)
+                                | labwired_core::StopReason::ManualStop => {
+                                    {
+                                        let mut r = running_clone.lock().unwrap();
+                                        *r = false;
+                                    }
+                                    let _ = sender_clone.send_event("stopped", Some(json!({
                                     "reason": match reason {
                                         labwired_core::StopReason::Breakpoint(_) => "breakpoint",
                                         _ => "pause",
@@ -189,41 +196,53 @@ impl DapServer {
                                     "threadId": 1,
                                     "allThreadsStopped": true
                                 })));
+                                }
+                                _ => {} // Continue running
                             }
-                            _ => {} // Continue running
+                        }
+                        Err(e) => {
+                            let mut r = running_clone.lock().unwrap();
+                            *r = false;
+                            tracing::error!("Execution error: {}", e);
                         }
                     }
-                    Err(e) => {
-                        let mut r = running_clone.lock().unwrap();
-                        *r = false;
-                        tracing::error!("Execution error: {}", e);
-                    }
                 }
-            }
 
-            // UART polling
-            let data = adapter_clone.poll_uart();
-            if !data.is_empty() {
-                let text = String::from_utf8_lossy(&data).to_string();
-                let _ = sender_clone.send_event(
-                    "output",
-                    Some(json!({
-                        "category": "stdout",
-                        "output": text,
-                    })),
-                );
-            }
+                // UART polling
+                let data = adapter_clone.poll_uart();
+                if !data.is_empty() {
+                    let text = String::from_utf8_lossy(&data).to_string();
+                    let _ = sender_clone.send_event(
+                        "output",
+                        Some(json!({
+                            "category": "stdout",
+                            "output": text,
+                        })),
+                    );
+                }
 
-            // Telemetry polling
-            if let Some(telemetry) = adapter_clone.get_telemetry() {
-                let _ = sender_clone
-                    .send_event("telemetry", Some(serde_json::to_value(telemetry).unwrap()));
-            }
+                // Telemetry polling
+                let telemetry_interval = if is_running {
+                    Duration::from_millis(100)
+                } else {
+                    Duration::from_millis(400)
+                };
 
-            if !is_running {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            } else {
-                std::thread::yield_now();
+                if last_telemetry_sent.elapsed() >= telemetry_interval {
+                    if let Some(telemetry) = adapter_clone.get_telemetry() {
+                        let _ = sender_clone.send_event(
+                            "telemetry",
+                            Some(serde_json::to_value(telemetry).unwrap()),
+                        );
+                    }
+                    last_telemetry_sent = Instant::now();
+                }
+
+                if !is_running {
+                    std::thread::sleep(Duration::from_millis(50));
+                } else {
+                    std::thread::yield_now();
+                }
             }
         });
 
@@ -311,12 +330,18 @@ impl DapServer {
                 let system_config = arguments
                     .and_then(|a| a.get("systemConfig"))
                     .and_then(|v| v.as_str());
+                let stop_on_entry = arguments
+                    .and_then(|a| a.get("stopOnEntry"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
 
                 tracing::info!(
-                    "Launching: program={:?}, systemConfig={:?}",
+                    "Launching: program={:?}, systemConfig={:?}, stopOnEntry={}",
                     program,
-                    system_config
+                    system_config,
+                    stop_on_entry
                 );
+                *self.stop_on_entry.lock().unwrap() = stop_on_entry;
 
                 if let Some(p) = program {
                     if let Err(e) = self
@@ -380,14 +405,29 @@ impl DapServer {
             }
             "configurationDone" => {
                 sender.send_response(req_seq, "configurationDone", None)?;
-                sender.send_event(
-                    "stopped",
-                    Some(json!({
-                        "reason": "entry",
-                        "threadId": 1,
-                        "allThreadsStopped": true
-                    })),
-                )?;
+                let stop_on_entry = *self.stop_on_entry.lock().unwrap();
+                if stop_on_entry {
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "entry",
+                            "threadId": 1,
+                            "allThreadsStopped": true
+                        })),
+                    )?;
+                } else {
+                    {
+                        let mut r = self.running.lock().unwrap();
+                        *r = true;
+                    }
+                    sender.send_event(
+                        "continued",
+                        Some(json!({
+                            "threadId": 1,
+                            "allThreadsContinued": true
+                        })),
+                    )?;
+                }
             }
             "threads" => {
                 sender.send_response(

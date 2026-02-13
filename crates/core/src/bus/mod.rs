@@ -5,11 +5,16 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::memory::LinearMemory;
+use crate::peripherals::gpio::GpioRegisterLayout;
 use crate::peripherals::nvic::NvicState;
+use crate::peripherals::rcc::RccRegisterLayout;
 use crate::peripherals::uart::Uart;
+use crate::peripherals::uart::UartRegisterLayout;
 use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
 use anyhow::Context;
-use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
+use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -43,6 +48,55 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
+    fn profile_name<'a>(p_cfg: &'a PeripheralConfig) -> anyhow::Result<Option<&'a str>> {
+        if let Some(value) = p_cfg.config.get("profile") {
+            return value.as_str().map(Some).ok_or_else(|| {
+                anyhow::anyhow!("Peripheral '{}' config.profile must be a string", p_cfg.id)
+            });
+        }
+        if let Some(value) = p_cfg.config.get("register_layout") {
+            return value.as_str().map(Some).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Peripheral '{}' config.register_layout must be a string",
+                    p_cfg.id
+                )
+            });
+        }
+        Ok(None)
+    }
+
+    fn parse_profile_or_default<T>(
+        p_cfg: &PeripheralConfig,
+        peripheral_kind: &str,
+    ) -> anyhow::Result<T>
+    where
+        T: FromStr<Err = String> + Default,
+    {
+        let Some(profile_name) = Self::profile_name(p_cfg)? else {
+            return Ok(T::default());
+        };
+        T::from_str(profile_name).map_err(|e| {
+            anyhow::anyhow!(
+                "Peripheral '{}' has invalid {} profile '{}': {}",
+                p_cfg.id,
+                peripheral_kind,
+                profile_name,
+                e
+            )
+        })
+    }
+
+    fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
+        let raw = PathBuf::from(descriptor_path);
+        if raw.is_absolute() || raw.exists() {
+            return raw;
+        }
+
+        let chip_path = Path::new(&manifest.chip);
+        let chip_dir = chip_path.parent().unwrap_or_else(|| Path::new("."));
+        chip_dir.join(descriptor_path)
+    }
+
     pub fn new() -> Self {
         // Default initialization for tests
         Self {
@@ -175,7 +229,7 @@ impl SystemBus {
         }
     }
 
-    pub fn from_config(chip: &ChipDescriptor, _manifest: &SystemManifest) -> anyhow::Result<Self> {
+    pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         let flash_size = parse_size(&chip.flash.size)?;
         let ram_size = parse_size(&chip.ram.size)?;
 
@@ -189,10 +243,19 @@ impl SystemBus {
 
         for p_cfg in &chip.peripherals {
             let dev: Box<dyn Peripheral> = match p_cfg.r#type.as_str() {
-                "uart" => Box::new(crate::peripherals::uart::Uart::new()),
+                "uart" => {
+                    let layout: UartRegisterLayout = Self::parse_profile_or_default(p_cfg, "UART")?;
+                    Box::new(crate::peripherals::uart::Uart::new_with_layout(layout))
+                }
                 "systick" => Box::new(crate::peripherals::systick::Systick::new()),
-                "gpio" => Box::new(crate::peripherals::gpio::GpioPort::new()),
-                "rcc" => Box::new(crate::peripherals::rcc::Rcc::new()),
+                "gpio" => {
+                    let layout: GpioRegisterLayout = Self::parse_profile_or_default(p_cfg, "GPIO")?;
+                    Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
+                }
+                "rcc" => {
+                    let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;
+                    Box::new(crate::peripherals::rcc::Rcc::new_with_layout(layout))
+                }
                 "timer" => Box::new(crate::peripherals::timer::Timer::new()),
                 "i2c" => Box::new(crate::peripherals::i2c::I2c::new()),
                 "spi" => Box::new(crate::peripherals::spi::Spi::new()),
@@ -212,13 +275,14 @@ impl SystemBus {
                             )
                         })?;
 
-                    // Resolve path relative to the chip descriptor if needed?
-                    // For now, let's assume it's relative to the CWD or we should handle it like manifest.chip
-                    let desc = labwired_config::PeripheralDescriptor::from_file(descriptor_path)
+                    let resolved_path = Self::resolve_peripheral_path(manifest, descriptor_path);
+                    let desc = labwired_config::PeripheralDescriptor::from_file(&resolved_path)
                         .with_context(|| {
                             format!(
-                                "Failed to load declarative descriptor for '{}' from '{}'",
-                                p_cfg.id, descriptor_path
+                                "Failed to load declarative descriptor for '{}' from '{}' (resolved to '{}')",
+                                p_cfg.id,
+                                descriptor_path,
+                                resolved_path.display()
                             )
                         })?;
 
@@ -238,8 +302,14 @@ impl SystemBus {
                             )
                         })?;
 
-                    let content = std::fs::read_to_string(descriptor_path)
-                        .with_context(|| format!("Failed to read IR file: {}", descriptor_path))?;
+                    let resolved_path = Self::resolve_peripheral_path(manifest, descriptor_path);
+                    let content = std::fs::read_to_string(&resolved_path).with_context(|| {
+                        format!(
+                            "Failed to read IR file '{}' (resolved to '{}')",
+                            descriptor_path,
+                            resolved_path.display()
+                        )
+                    })?;
                     let ir_peripheral = match serde_json::from_str::<labwired_ir::IrPeripheral>(
                         &content,
                     ) {
@@ -249,7 +319,8 @@ impl SystemBus {
                                 .with_context(|| {
                                     format!(
                                         "Failed to parse Strict IR from {} as IrPeripheral ({}) or IrDevice",
-                                        descriptor_path, peripheral_err
+                                        resolved_path.display(),
+                                        peripheral_err
                                     )
                                 })?;
 
@@ -270,7 +341,7 @@ impl SystemBus {
                                     .join(", ");
                                 return Err(anyhow::anyhow!(
                                     "Strict IR '{}' contains multiple peripherals [{}]; no match for id '{}'",
-                                    descriptor_path,
+                                    resolved_path.display(),
                                     available,
                                     p_cfg.id
                                 ));
@@ -391,14 +462,11 @@ impl SystemBus {
         Ok(())
     }
 
-    pub fn tick_peripherals_with_costs(
-        &mut self,
-    ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
+    fn tick_peripherals_phase1(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
         let mut interrupts = Vec::new();
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
 
-        // 1. Collect IRQs and DMA requests from peripherals and pend them in NVIC
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
             let res = p.dev.tick();
             if res.cycles > 0 {
@@ -408,7 +476,6 @@ impl SystemBus {
                 });
             }
 
-            // Collect DMA requests
             if !res.dma_requests.is_empty() {
                 dma_requests.extend(res.dma_requests);
             }
@@ -423,11 +490,9 @@ impl SystemBus {
                                 nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
                             }
                         } else {
-                            // No NVIC, pend legacy style
                             interrupts.push(irq);
                         }
                     } else {
-                        // Core exceptions bypass NVIC ISPR/ISER
                         interrupts.push(irq);
                     }
                 }
@@ -450,7 +515,10 @@ impl SystemBus {
             }
         }
 
-        // 2. Scan NVIC for all Pending & Enabled interrupts
+        (interrupts, costs, dma_requests)
+    }
+
+    fn collect_enabled_nvic_interrupts(&self, interrupts: &mut Vec<u32>) {
         if let Some(nvic) = &self.nvic {
             for idx in 0..8 {
                 let mask =
@@ -459,72 +527,25 @@ impl SystemBus {
                     for bit in 0..32 {
                         if (mask & (1 << bit)) != 0 {
                             let irq = 16 + (idx as u32 * 32) + bit;
-                            tracing::info!("Bus: NVIC Signaling Pending IRQ {}", irq);
                             interrupts.push(irq);
                         }
                     }
                 }
             }
         }
+    }
+
+    pub fn tick_peripherals_with_costs(
+        &mut self,
+    ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
+        let (mut interrupts, costs, dma_requests) = self.tick_peripherals_phase1();
+        self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs, dma_requests)
     }
 
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
-        let mut pending_dma = Vec::new();
-        let mut interrupts = Vec::new();
-        let mut costs = Vec::new();
-
-        // Use a temporary swap or just loop indexed to avoid borrow overlap if needed,
-        // but for now let's use the two-phase approach.
-
-        // Phase 1: Tick peripherals and collect IRQs/DMA
-        for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
-            let res = p.dev.tick();
-            if res.cycles > 0 {
-                costs.push(PeripheralTickCost {
-                    index: peripheral_index,
-                    cycles: res.cycles,
-                });
-            }
-            if !res.dma_requests.is_empty() {
-                pending_dma.extend(res.dma_requests);
-            }
-
-            if res.irq {
-                if let Some(irq) = p.irq {
-                    if irq >= 16 {
-                        if let Some(nvic) = &self.nvic {
-                            let idx = ((irq - 16) / 32) as usize;
-                            let bit = (irq - 16) % 32;
-                            if idx < 8 {
-                                nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
-                            }
-                        } else {
-                            interrupts.push(irq);
-                        }
-                    } else {
-                        interrupts.push(irq);
-                    }
-                }
-            }
-
-            for irq in res.explicit_irqs {
-                if let Some(nvic) = &self.nvic {
-                    if irq >= 16 {
-                        let idx = ((irq - 16) / 32) as usize;
-                        let bit = (irq - 16) % 32;
-                        if idx < 8 {
-                            nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
-                        }
-                    } else {
-                        interrupts.push(irq);
-                    }
-                } else {
-                    interrupts.push(irq);
-                }
-            }
-        }
+        let (mut interrupts, costs, pending_dma) = self.tick_peripherals_phase1();
 
         // Phase 2: Execute DMA requests (this now has access to self.flash/ram via write_u8)
         for req in pending_dma {
@@ -549,20 +570,7 @@ impl SystemBus {
         // Phase 2.5: EXTI Logic Removed - moved to Exti peripheral via explicit_irqs.
 
         // Phase 3: Scan NVIC
-        if let Some(nvic) = &self.nvic {
-            for idx in 0..8 {
-                let mask =
-                    nvic.iser[idx].load(Ordering::SeqCst) & nvic.ispr[idx].load(Ordering::SeqCst);
-                if mask != 0 {
-                    for bit in 0..32 {
-                        if (mask & (1 << bit)) != 0 {
-                            let irq = 16 + (idx as u32 * 32) + bit;
-                            interrupts.push(irq);
-                        }
-                    }
-                }
-            }
-        }
+        self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs)
     }
@@ -576,6 +584,16 @@ impl crate::Bus for SystemBus {
         if let Some(val) = self.flash.read_u8(addr) {
             return Ok(val);
         }
+        // Cortex-M boot alias: address 0x0000_0000 mirrors flash start on many STM32 parts.
+        // This lets reset-vector fetch work when flash is configured at 0x0800_0000.
+        if self.flash.base_addr != 0 {
+            let alias_end = self.flash.data.len() as u64;
+            if addr < alias_end {
+                if let Some(val) = self.flash.read_u8(self.flash.base_addr + addr) {
+                    return Ok(val);
+                }
+            }
+        }
 
         // Dynamic Peripherals
         for p in &self.peripherals {
@@ -588,9 +606,34 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
-        let old_value = self.read_u8(addr).unwrap_or(0);
+        let flash_alias_old = if self.flash.base_addr != 0 && addr < self.flash.data.len() as u64 {
+            self.flash.read_u8(self.flash.base_addr + addr)
+        } else {
+            None
+        };
 
-        let res = if self.ram.write_u8(addr, value) || self.flash.write_u8(addr, value) {
+        // Avoid calling `read_u8` here since peripheral reads may carry side effects.
+        let old_value = self
+            .ram
+            .read_u8(addr)
+            .or_else(|| self.flash.read_u8(addr))
+            .or(flash_alias_old)
+            .or_else(|| {
+                self.peripherals
+                    .iter()
+                    .find(|p| addr >= p.base && addr < p.base + p.size)
+                    .and_then(|p| p.dev.peek(addr - p.base))
+            })
+            .unwrap_or(0);
+
+        let flash_alias_write = self.flash.base_addr != 0
+            && addr < self.flash.data.len() as u64
+            && self.flash.write_u8(self.flash.base_addr + addr, value);
+
+        let res = if self.ram.write_u8(addr, value)
+            || self.flash.write_u8(addr, value)
+            || flash_alias_write
+        {
             Ok(())
         } else {
             // Dynamic Peripherals
@@ -689,6 +732,32 @@ mod tests {
     }
 
     #[test]
+    fn test_system_bus_resolves_descriptor_path_relative_to_chip_file() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip_path = root.join("tests/fixtures/test_chip_declarative.yaml");
+        let manifest_path = root.join("tests/fixtures/test_system_declarative.yaml");
+
+        let mut chip = ChipDescriptor::from_file(&chip_path).unwrap();
+        let mut manifest = SystemManifest::from_file(&manifest_path).unwrap();
+
+        // Simulate a descriptor path that is relative to chip.yaml location.
+        if let Some(path) = chip.peripherals[0].config.get_mut("path") {
+            *path = serde_yaml::Value::String("test_timer_descriptor.yaml".to_string());
+        }
+        manifest.chip = chip_path.to_string_lossy().into_owned();
+
+        let bus =
+            SystemBus::from_config(&chip, &manifest).expect("Failed to create bus from config");
+
+        let found = bus
+            .peripherals
+            .iter()
+            .find(|p| p.name == "TIMER1")
+            .expect("TIMER1 not found");
+        assert_eq!(found.base, 0x40001000);
+    }
+
+    #[test]
     fn test_system_bus_memory_observer() {
         use std::sync::Arc;
         use std::sync::Mutex;
@@ -725,5 +794,27 @@ mod tests {
             assert_eq!(w.len(), 2);
             assert_eq!(w[1], (0x4000C000, 0xC0, 0xBB));
         }
+    }
+
+    #[test]
+    fn test_flash_boot_alias_read_and_write() {
+        let mut bus = SystemBus {
+            flash: LinearMemory::new(256, 0x0800_0000),
+            ram: LinearMemory::new(256, 0x2000_0000),
+            peripherals: Vec::new(),
+            nvic: None,
+            observers: Vec::new(),
+        };
+
+        bus.flash.write_u8(0x0800_0000, 0x12);
+        bus.flash.write_u8(0x0800_0001, 0x34);
+
+        // Read through aliased 0x0000_0000 boot window.
+        assert_eq!(bus.read_u8(0x0000_0000).unwrap(), 0x12);
+        assert_eq!(bus.read_u8(0x0000_0001).unwrap(), 0x34);
+
+        // Write through alias and verify backing flash changed.
+        bus.write_u8(0x0000_0001, 0xAB).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0001), Some(0xAB));
     }
 }

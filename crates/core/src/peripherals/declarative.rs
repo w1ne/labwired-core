@@ -256,6 +256,20 @@ impl Peripheral for GenericPeripheral {
         Ok(())
     }
 
+    fn peek(&self, offset: u64) -> Option<u8> {
+        for reg in &self.descriptor.registers {
+            let reg_start = reg.address_offset;
+            let reg_end = reg_start + (reg.size as u64 / 8);
+            if offset >= reg_start && offset < reg_end {
+                if reg.access == labwired_config::Access::WriteOnly {
+                    return Some(0);
+                }
+                return self.data.borrow().get(offset as usize).copied();
+            }
+        }
+        Some(0)
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
         let mut result = PeripheralTickResult::default();
         let mut events = self.inflight_events.borrow_mut();

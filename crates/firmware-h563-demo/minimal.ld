@@ -7,17 +7,17 @@
 
 MEMORY
 {
-  FLASH : ORIGIN = 0x00000000, LENGTH = 128K
-  RAM : ORIGIN = 0x20000000, LENGTH = 16K
+  FLASH : ORIGIN = 0x08000000, LENGTH = 2M
+  RAM : ORIGIN = 0x20000000, LENGTH = 640K
 }
 
 ENTRY(Reset)
 
 SECTIONS
 {
-  .vector_table 0x00000000 :
+  .vector_table 0x08000000 :
   {
-    LONG(0x20004000); /* Initial SP */
+    LONG(0x200A0000); /* Initial SP for 640KB SRAM */
     LONG(Reset + 1);  /* Reset Handler (Thumb) */
   } > FLASH
 
