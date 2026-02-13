@@ -7,17 +7,12 @@
 use crate::SimResult;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RccRegisterLayout {
+    #[default]
     Stm32F1,
     Stm32V2,
-}
-
-impl Default for RccRegisterLayout {
-    fn default() -> Self {
-        Self::Stm32F1
-    }
 }
 
 impl FromStr for RccRegisterLayout {
