@@ -1,0 +1,13 @@
+# LabWired - NUCLEO-H563ZI IO smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-h563-io-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 256
+assertions:
+  - uart_contains: "H563-IO"
+  - uart_contains: "PB0=1 PF4=1 PG4=1"
+  - uart_contains: "PB0=0 PF4=0 PG4=0"
+  - uart_contains: "BTN13=0"
+  - expected_stop_reason: max_steps

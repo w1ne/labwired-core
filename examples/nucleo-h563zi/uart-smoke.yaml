@@ -1,0 +1,10 @@
+# LabWired - NUCLEO-H563ZI UART smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-h563-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 64
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

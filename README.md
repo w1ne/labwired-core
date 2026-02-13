@@ -1,45 +1,67 @@
-# LabWired Core
+# LabWired Core - Firmware Simulation Engine
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![LabWired Core CI](https://github.com/w1ne/labwired-core/actions/workflows/ci.yml/badge.svg)](https://github.com/w1ne/labwired-core/actions/workflows/ci.yml)
-
-High-performance, declarative firmware simulator for ARM Cortex-M and RISC-V microcontrollers.
+> High-performance, declarative firmware simulator for ARM Cortex-M and RISC-V microcontrollers.
 
 ## Highlights
-- **v0.1.0 Ready**: [Blinky + I2C Sensor Demo](examples/demo-blinky/README.md)
+
+- **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/demo-blinky/README.md)
+- **NUCLEO-H563ZI Showcase**: [Human Demo Example](examples/nucleo-h563zi/README.md)
+- **NUCLEO-H563ZI Runbook**: [Reproducible Validation Steps](examples/nucleo-h563zi/VALIDATION.md)
 - **Case Study**: [Debugging STM32 Without Hardware](docs/case_study_stm32.md)
-- **Roadmap**: [Future of LabWired](ROADMAP.md)
 
 ## Features
-- **Multi-Architecture**: ARM Cortex-M (M0, M3, M4) and RISC-V (RV32I) support.
-- **Declarative Hardware**: Define chips and peripherals using YAML (No Rust coding required for basic IP).
-- **CI Test Runner**: Headless `labwired test` with JSON/JUnit reports for continuous verification.
-- **IDE Integration**: GDB and Debug Adapter Protocol (DAP) support for VS Code integration.
-- **High Performance**: Native Rust implementation achieving hundreds of thousands of IPS.
 
-## Community & Governance
-We welcome contributions! Please see our community guides:
-- [Contributing](CONTRIBUTING.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Security Policy](SECURITY.md)
+- **Multi-Architecture**: ARM Cortex-M (M0, M3, M4) and RISC-V (RV32I) support
+- **Declarative Configuration**: YAML-based chip and peripheral definitions
+- **CI Test Runner**: Deterministic `labwired test` with JSON/JUnit outputs
+- **Debug Protocols**: GDB Remote Serial Protocol and Debug Adapter Protocol (DAP)
+- **High Performance**: Native Rust implementation with cycle-accurate simulation
+- **HAL Compatible**: Run binaries built with standard HALs (stm32f1xx-hal, etc.)
 
 ## Quick Start
-1. **Prerequisites**: [Rust 1.75+](https://rustup.rs/) and target support:
-   ```bash
-   rustup target add thumbv6m-none-eabi thumbv7m-none-eabi riscv32i-unknown-none-elf
-   ```
-2. **Build**: `cargo build --release`
-3. **Run**: `cargo run -p labwired-cli -- --firmware <path/to/elf> --system system.yaml`
 
-Full setup guide: [Getting Started](./docs/getting_started_firmware.md)
+### Prerequisites
+- Rust 1.75+ ([Install](https://rustup.rs/))
+- ARM/RISC-V targets:
+  ```bash
+  rustup target add thumbv6m-none-eabi thumbv7m-none-eabi riscv32i-unknown-none-elf
+  ```
+
+### Building
+```bash
+cargo build --release
+```
+
+### Running a Simulation
+```bash
+cargo run -p labwired-cli -- --firmware path/to/firmware.elf --system system.yaml
+```
+
+### Testing
+```bash
+cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+```
+
+## CI Integration
+
+Use `labwired test` for deterministic CI testing:
+
+```bash
+labwired test --script tests/uart-ok.yaml --output-dir results
+```
+
+See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
 
 ## Documentation
+
 - [Architecture Overview](./docs/architecture.md)
 - [Architecture Guide](./docs/architecture_guide.md)
+- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md) (config-first)
 - [CI Integration Guide](./docs/ci_integration.md)
 - [GDB Integration](./docs/gdb_integration.md)
 - [Release Strategy](./docs/release_strategy.md)
 - [VS Code Debugging](./docs/vscode_debugging.md)
 
 ## License
+
 MIT

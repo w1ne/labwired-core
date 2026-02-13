@@ -1986,11 +1986,12 @@ fn write_config_error_outputs(
 fn build_bus(system_path: Option<PathBuf>) -> anyhow::Result<labwired_core::bus::SystemBus> {
     let bus = if let Some(sys_path) = system_path {
         info!("Loading system manifest: {:?}", sys_path);
-        let manifest = labwired_config::SystemManifest::from_file(&sys_path)?;
+        let mut manifest = labwired_config::SystemManifest::from_file(&sys_path)?;
         let chip_path = sys_path
             .parent()
             .unwrap_or_else(|| std::path::Path::new("."))
             .join(&manifest.chip);
+        manifest.chip = chip_path.to_string_lossy().into_owned();
         info!("Loading chip descriptor: {:?}", chip_path);
         let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
         labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
