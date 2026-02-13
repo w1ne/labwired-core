@@ -5,6 +5,8 @@
 ## Highlights
 
 - **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/demo-blinky/README.md)
+- **NUCLEO-H563ZI Showcase**: [Human Demo Example](examples/nucleo-h563zi/README.md)
+- **NUCLEO-H563ZI Runbook**: [Reproducible Validation Steps](examples/nucleo-h563zi/VALIDATION.md)
 - **Case Study**: [Debugging STM32 Without Hardware](docs/case_study_stm32.md)
 
 ## Features
@@ -54,6 +56,7 @@ See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
 
 - [Architecture Overview](./docs/architecture.md)
 - [Architecture Guide](./docs/architecture_guide.md)
+- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md)
 - [CI Integration Guide](./docs/ci_integration.md)
 - [GDB Integration](./docs/gdb_integration.md)
 - [Release Strategy](./docs/release_strategy.md)

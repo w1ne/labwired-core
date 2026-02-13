@@ -411,9 +411,7 @@ impl SystemBus {
         Ok(())
     }
 
-    fn tick_peripherals_phase1(
-        &mut self,
-    ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
+    fn tick_peripherals_phase1(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
         let mut interrupts = Vec::new();
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
@@ -535,6 +533,16 @@ impl crate::Bus for SystemBus {
         if let Some(val) = self.flash.read_u8(addr) {
             return Ok(val);
         }
+        // Cortex-M boot alias: address 0x0000_0000 mirrors flash start on many STM32 parts.
+        // This lets reset-vector fetch work when flash is configured at 0x0800_0000.
+        if self.flash.base_addr != 0 {
+            let alias_end = self.flash.data.len() as u64;
+            if addr < alias_end {
+                if let Some(val) = self.flash.read_u8(self.flash.base_addr + addr) {
+                    return Ok(val);
+                }
+            }
+        }
 
         // Dynamic Peripherals
         for p in &self.peripherals {
@@ -547,11 +555,18 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+        let flash_alias_old = if self.flash.base_addr != 0 && addr < self.flash.data.len() as u64 {
+            self.flash.read_u8(self.flash.base_addr + addr)
+        } else {
+            None
+        };
+
         // Avoid calling `read_u8` here since peripheral reads may carry side effects.
         let old_value = self
             .ram
             .read_u8(addr)
             .or_else(|| self.flash.read_u8(addr))
+            .or(flash_alias_old)
             .or_else(|| {
                 self.peripherals
                     .iter()
@@ -560,7 +575,14 @@ impl crate::Bus for SystemBus {
             })
             .unwrap_or(0);
 
-        let res = if self.ram.write_u8(addr, value) || self.flash.write_u8(addr, value) {
+        let flash_alias_write = self.flash.base_addr != 0
+            && addr < self.flash.data.len() as u64
+            && self.flash.write_u8(self.flash.base_addr + addr, value);
+
+        let res = if self.ram.write_u8(addr, value)
+            || self.flash.write_u8(addr, value)
+            || flash_alias_write
+        {
             Ok(())
         } else {
             // Dynamic Peripherals
@@ -721,5 +743,27 @@ mod tests {
             assert_eq!(w.len(), 2);
             assert_eq!(w[1], (0x4000C000, 0xC0, 0xBB));
         }
+    }
+
+    #[test]
+    fn test_flash_boot_alias_read_and_write() {
+        let mut bus = SystemBus {
+            flash: LinearMemory::new(256, 0x0800_0000),
+            ram: LinearMemory::new(256, 0x2000_0000),
+            peripherals: Vec::new(),
+            nvic: None,
+            observers: Vec::new(),
+        };
+
+        bus.flash.write_u8(0x0800_0000, 0x12);
+        bus.flash.write_u8(0x0800_0001, 0x34);
+
+        // Read through aliased 0x0000_0000 boot window.
+        assert_eq!(bus.read_u8(0x0000_0000).unwrap(), 0x12);
+        assert_eq!(bus.read_u8(0x0000_0001).unwrap(), 0x34);
+
+        // Write through alias and verify backing flash changed.
+        bus.write_u8(0x0000_0001, 0xAB).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0001), Some(0xAB));
     }
 }

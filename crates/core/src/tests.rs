@@ -413,6 +413,7 @@ mod integration_tests {
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            board_io: Vec::new(),
         };
 
         let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -479,6 +480,7 @@ mod integration_tests {
             chip: "test-chip-2".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            board_io: Vec::new(),
         };
 
         let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -527,6 +529,7 @@ mod integration_tests {
             chip: "test-chip-3".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            board_io: Vec::new(),
         };
 
         let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();

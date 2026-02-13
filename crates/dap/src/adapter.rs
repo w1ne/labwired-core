@@ -9,17 +9,41 @@ use anyhow::{anyhow, Result};
 use labwired_core::{DebugControl, Machine};
 use labwired_loader::SymbolProvider;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+
+const GPIO_IDR_OFFSET: u64 = 0x08;
+const GPIO_ODR_OFFSET: u64 = 0x0C;
 
 #[derive(Clone, Serialize)]
 pub struct TelemetryData {
     pub pc: u32,
     pub cycles: u64,
     pub mips: f64,
-    pub registers: std::collections::HashMap<String, u32>,
+    pub registers: HashMap<String, u32>,
+    #[serde(default)]
+    pub board_io: Vec<BoardIoState>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct BoardIoState {
+    pub id: String,
+    pub kind: String,
+    pub signal: String,
+    pub active: bool,
+}
+
+#[derive(Clone)]
+struct ResolvedBoardIoBinding {
+    id: String,
+    kind: labwired_config::BoardIoKind,
+    signal: labwired_config::BoardIoSignal,
+    active_high: bool,
+    register_addr: u64,
+    pin_mask: u32,
 }
 
 #[derive(Clone)]
@@ -30,6 +54,7 @@ pub struct LabwiredAdapter {
     pub last_telemetry: Arc<Mutex<(u64, Instant)>>, // cycles, time
     pub trace_buffer: Arc<Mutex<TraceBuffer>>,
     pub cycle_count: Arc<AtomicU64>,
+    board_io_bindings: Arc<Mutex<Vec<ResolvedBoardIoBinding>>>,
     mem_tracker: Arc<MemoryTracker>,
 }
 
@@ -69,6 +94,7 @@ impl LabwiredAdapter {
             last_telemetry: Arc::new(Mutex::new((0, Instant::now()))),
             trace_buffer: Arc::new(Mutex::new(TraceBuffer::new(100_000))),
             cycle_count: Arc::new(AtomicU64::new(0)),
+            board_io_bindings: Arc::new(Mutex::new(Vec::new())),
             mem_tracker: Arc::new(MemoryTracker::default()),
         }
     }
@@ -94,18 +120,35 @@ impl LabwiredAdapter {
 
         *last_guard = (cycles, now);
 
-        let mut registers = std::collections::HashMap::new();
+        let mut registers = HashMap::new();
         let names = machine.get_register_names();
         for (i, name) in names.iter().enumerate().take(16) {
             let val = machine.read_core_reg(i as u8);
             registers.insert(name.clone(), val);
         }
 
+        let board_io = {
+            let bindings = self.board_io_bindings.lock().unwrap();
+            bindings
+                .iter()
+                .filter_map(|binding| {
+                    let active = self.read_board_io_state(machine.as_ref(), binding)?;
+                    Some(BoardIoState {
+                        id: binding.id.clone(),
+                        kind: board_io_kind_str(binding.kind).to_string(),
+                        signal: board_io_signal_str(binding.signal).to_string(),
+                        active,
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
+
         Some(TelemetryData {
             pc,
             cycles,
             mips,
             registers,
+            board_io,
         })
     }
 
@@ -114,8 +157,10 @@ impl LabwiredAdapter {
         firmware_path: PathBuf,
         system_path: Option<PathBuf>,
     ) -> Result<()> {
+        self.board_io_bindings.lock().unwrap().clear();
         let image = labwired_loader::load_elf(&firmware_path)?;
 
+        let mut resolved_board_io_bindings = Vec::new();
         let mut bus = if let Some(sys_path) = &system_path {
             let manifest = labwired_config::SystemManifest::from_file(sys_path)?;
             let chip_path = sys_path
@@ -123,10 +168,12 @@ impl LabwiredAdapter {
                 .unwrap_or_else(|| std::path::Path::new("."))
                 .join(&manifest.chip);
             let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
+            resolved_board_io_bindings = resolve_board_io_bindings(&chip, &manifest);
             labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
         } else {
             labwired_core::bus::SystemBus::new()
         };
+        *self.board_io_bindings.lock().unwrap() = resolved_board_io_bindings;
 
         let arch = match image.arch {
             labwired_core::Arch::Arm => labwired_core::Arch::Arm,
@@ -173,6 +220,20 @@ impl LabwiredAdapter {
         }
 
         Ok(())
+    }
+
+    fn read_board_io_state(
+        &self,
+        machine: &dyn DebugControl,
+        binding: &ResolvedBoardIoBinding,
+    ) -> Option<bool> {
+        let register_value = read_u32_le(machine, binding.register_addr)?;
+        let pin_is_set = (register_value & binding.pin_mask) != 0;
+        Some(if binding.active_high {
+            pin_is_set
+        } else {
+            !pin_is_set
+        })
     }
 
     pub fn lookup_source(&self, addr: u64) -> Option<labwired_loader::SourceLocation> {
@@ -607,6 +668,77 @@ impl LabwiredAdapter {
             Err(anyhow!("Machine not initialized"))
         }
     }
+}
+
+fn read_u32_le(machine: &dyn DebugControl, addr: u64) -> Option<u32> {
+    let bytes = machine.read_memory(addr as u32, 4).ok()?;
+    if bytes.len() < 4 {
+        return None;
+    }
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn board_io_kind_str(kind: labwired_config::BoardIoKind) -> &'static str {
+    match kind {
+        labwired_config::BoardIoKind::Led => "led",
+        labwired_config::BoardIoKind::Button => "button",
+    }
+}
+
+fn board_io_signal_str(signal: labwired_config::BoardIoSignal) -> &'static str {
+    match signal {
+        labwired_config::BoardIoSignal::Output => "output",
+        labwired_config::BoardIoSignal::Input => "input",
+    }
+}
+
+fn resolve_board_io_bindings(
+    chip: &labwired_config::ChipDescriptor,
+    manifest: &labwired_config::SystemManifest,
+) -> Vec<ResolvedBoardIoBinding> {
+    let peripheral_bases: HashMap<String, u64> = chip
+        .peripherals
+        .iter()
+        .map(|p| (p.id.to_ascii_lowercase(), p.base_address))
+        .collect();
+
+    let mut resolved = Vec::new();
+    for binding in &manifest.board_io {
+        if binding.pin > 31 {
+            tracing::warn!(
+                "Skipping board_io binding '{}' with invalid pin {}",
+                binding.id,
+                binding.pin
+            );
+            continue;
+        }
+
+        let peripheral_key = binding.peripheral.to_ascii_lowercase();
+        let Some(base_addr) = peripheral_bases.get(&peripheral_key).copied() else {
+            tracing::warn!(
+                "Skipping board_io binding '{}' because peripheral '{}' was not found",
+                binding.id,
+                binding.peripheral
+            );
+            continue;
+        };
+
+        let register_offset = match binding.signal {
+            labwired_config::BoardIoSignal::Input => GPIO_IDR_OFFSET,
+            labwired_config::BoardIoSignal::Output => GPIO_ODR_OFFSET,
+        };
+
+        resolved.push(ResolvedBoardIoBinding {
+            id: binding.id.clone(),
+            kind: binding.kind,
+            signal: binding.signal,
+            active_high: binding.active_high,
+            register_addr: base_addr + register_offset,
+            pin_mask: 1u32 << binding.pin,
+        });
+    }
+
+    resolved
 }
 
 #[cfg(test)]

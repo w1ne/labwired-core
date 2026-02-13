@@ -1,0 +1,61 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Source references:
+# - STM32H563xx memory map and IRQ values:
+#   https://github.com/STMicroelectronics/cmsis-device-h5/blob/main/Include/stm32h563xx.h
+# - NUCLEO-H563ZI board BSP mapping (LEDs, COM port):
+#   https://github.com/STMicroelectronics/stm32h5xx-nucleo-bsp/blob/main/stm32h5xx_nucleo.h
+
+name: "stm32h563zi"
+arch: "arm"
+flash:
+  base: 0x08000000
+  size: "2MB"
+ram:
+  base: 0x20000000
+  size: "640KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    size: "1KB"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x42020800
+    size: "1KB"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x42020C00
+    size: "1KB"
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x42021000
+    size: "1KB"
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x42021400
+    size: "1KB"
+  - id: "gpiog"
+    type: "gpio"
+    base_address: 0x42021800
+    size: "1KB"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "uart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 60
