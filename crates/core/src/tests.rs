@@ -231,6 +231,55 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_write_does_not_probe_peripheral_read_path() {
+        #[derive(Debug)]
+        struct ReadSideEffectPeripheral {
+            reg: AtomicU8,
+            reads: Arc<AtomicU64>,
+        }
+
+        impl Peripheral for ReadSideEffectPeripheral {
+            fn read(&self, _offset: u64) -> SimResult<u8> {
+                self.reads.fetch_add(1, Ordering::SeqCst);
+                Ok(self.reg.swap(0, Ordering::SeqCst))
+            }
+
+            fn write(&mut self, _offset: u64, value: u8) -> SimResult<()> {
+                self.reg.store(value, Ordering::SeqCst);
+                Ok(())
+            }
+
+            fn peek(&self, _offset: u64) -> Option<u8> {
+                Some(self.reg.load(Ordering::SeqCst))
+            }
+        }
+
+        let base = 0x5000_2000;
+        let reads = Arc::new(AtomicU64::new(0));
+
+        let mut bus = crate::bus::SystemBus::new();
+        bus.peripherals.push(crate::bus::PeripheralEntry {
+            name: "read_side_effect".to_string(),
+            base,
+            size: 0x10,
+            irq: None,
+            dev: Box::new(ReadSideEffectPeripheral {
+                reg: AtomicU8::new(0xF0),
+                reads: reads.clone(),
+            }),
+        });
+
+        bus.write_u8(base, 0xAA).unwrap();
+
+        assert_eq!(
+            reads.load(Ordering::SeqCst),
+            0,
+            "write path should not invoke peripheral read()"
+        );
+        assert_eq!(bus.read_u8(base).unwrap(), 0xAA);
+    }
+
+    #[test]
     fn test_tick_peripheral_sets_nvic_pending() {
         let mut bus = crate::bus::SystemBus::new();
         let nvic_state = Arc::new(NvicState::default());

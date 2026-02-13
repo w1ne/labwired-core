@@ -94,6 +94,11 @@ pub trait Cpu: Send {
 pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
+    /// Side-effect-free value probe used for debug/observer bookkeeping.
+    /// Implementations should return `None` when such probing is not supported.
+    fn peek(&self, _offset: u64) -> Option<u8> {
+        None
+    }
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }

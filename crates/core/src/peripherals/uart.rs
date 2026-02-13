@@ -64,6 +64,14 @@ impl crate::Peripheral for Uart {
         Ok(())
     }
 
+    fn peek(&self, offset: u64) -> Option<u8> {
+        match offset {
+            0x00 => Some(0xC0), // SR: TXE=1, TC=1 (Ready)
+            0x04 => Some(0x00), // DR
+            _ => Some(0),
+        }
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

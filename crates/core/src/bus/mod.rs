@@ -588,7 +588,18 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
-        let old_value = self.read_u8(addr).unwrap_or(0);
+        // Avoid calling `read_u8` here since peripheral reads may carry side effects.
+        let old_value = self
+            .ram
+            .read_u8(addr)
+            .or_else(|| self.flash.read_u8(addr))
+            .or_else(|| {
+                self.peripherals
+                    .iter()
+                    .find(|p| addr >= p.base && addr < p.base + p.size)
+                    .and_then(|p| p.dev.peek(addr - p.base))
+            })
+            .unwrap_or(0);
 
         let res = if self.ram.write_u8(addr, value) || self.flash.write_u8(addr, value) {
             Ok(())
