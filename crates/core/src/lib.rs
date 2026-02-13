@@ -252,7 +252,7 @@ impl<C: Cpu> Machine<C> {
 
     pub fn step(&mut self) -> SimResult<()> {
         self.total_cycles += 1; // Base instruction cycle
-        let res = self.cpu.step(&mut self.bus, &self.observers);
+        self.cpu.step(&mut self.bus, &self.observers)?;
 
         // Propagate peripherals
         let (interrupts, costs) = self.bus.tick_peripherals_fully();
@@ -269,7 +269,7 @@ impl<C: Cpu> Machine<C> {
             tracing::debug!("Exception {} Pend", irq);
         }
 
-        res
+        Ok(())
     }
 
     pub fn snapshot(&self) -> snapshot::MachineSnapshot {

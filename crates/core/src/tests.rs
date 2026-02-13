@@ -321,6 +321,61 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_machine_step_error_does_not_tick_peripherals() {
+        #[derive(Debug)]
+        struct TickCounterPeripheral {
+            tick_count: Arc<AtomicU64>,
+        }
+
+        impl Peripheral for TickCounterPeripheral {
+            fn read(&self, _offset: u64) -> SimResult<u8> {
+                Ok(0)
+            }
+
+            fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+                Ok(())
+            }
+
+            fn tick(&mut self) -> crate::PeripheralTickResult {
+                self.tick_count.fetch_add(1, Ordering::SeqCst);
+                crate::PeripheralTickResult {
+                    irq: true,
+                    cycles: 1,
+                    dma_requests: Vec::new(),
+                    explicit_irqs: Vec::new(),
+                }
+            }
+        }
+
+        let mut machine = create_machine();
+        let tick_count = Arc::new(AtomicU64::new(0));
+
+        machine.bus.peripherals.push(crate::bus::PeripheralEntry {
+            name: "tick_counter".to_string(),
+            base: 0x5000_4000,
+            size: 0x10,
+            irq: Some(16),
+            dev: Box::new(TickCounterPeripheral {
+                tick_count: tick_count.clone(),
+            }),
+        });
+
+        // Force instruction fetch to fail with a memory violation.
+        machine.cpu.pc = 0xDEAD_BEEF;
+        let step = machine.step();
+
+        assert!(
+            matches!(step, Err(crate::SimulationError::MemoryViolation(_))),
+            "expected memory violation on fetch"
+        );
+        assert_eq!(
+            tick_count.load(Ordering::SeqCst),
+            0,
+            "peripherals should not tick when CPU step fails"
+        );
+    }
+
+    #[test]
     fn test_from_config_skips_unsupported_peripherals() {
         let chip = ChipDescriptor {
             name: "test-chip".to_string(),
