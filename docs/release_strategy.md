@@ -1,7 +1,7 @@
 # LabWired Release & Merging Strategy
 
 ## 1. Branching Model: Gitflow
-We follow the **Gitflow** branching strategy to manage releases and features efficiently. For more detailed rules and workflows, see the [Git Flow Guide](file:///home/andrii/Projects/labwired/docs/development/git_flow.md).
+We follow the **Gitflow** branching strategy to manage releases and features efficiently. For more detailed rules and workflows, see the [Git Flow Guide](./development/git_flow.md).
 - **`main`**: The production-ready state. Only merge from `release/*` or `hotfix/*`. Tags are created here.
 - **`develop`**: The integration branch for the next release. Features merge here.
 - **`feature/*`**: Individual work items. Created from `develop`, merged back to `develop`.
