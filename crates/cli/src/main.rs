@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
 mod vcd_trace;
+mod asset_validation;
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
 
@@ -118,6 +119,12 @@ pub enum AssetCommands {
 
     /// Add a peripheral to the current chip descriptor.
     AddPeripheral(AddPeripheralArgs),
+
+    /// Validate a System Manifest and its referenced Chip.
+    Validate(asset_validation::ValidateArgs),
+
+    /// List available chip descriptors.
+    ListChips(asset_validation::ListChipsArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -469,6 +476,8 @@ fn run_asset(args: AssetArgs) -> ExitCode {
         AssetCommands::Codegen(a) => run_codegen(a),
         AssetCommands::Init(a) => run_asset_init(a),
         AssetCommands::AddPeripheral(a) => run_asset_add_peripheral(a),
+        AssetCommands::Validate(a) => asset_validation::run_validate(a),
+        AssetCommands::ListChips(a) => asset_validation::run_list_chips(a),
     }
 }
 
