@@ -391,14 +391,13 @@ impl SystemBus {
         Ok(())
     }
 
-    pub fn tick_peripherals_with_costs(
+    fn tick_peripherals_phase1(
         &mut self,
     ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
         let mut interrupts = Vec::new();
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
 
-        // 1. Collect IRQs and DMA requests from peripherals and pend them in NVIC
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
             let res = p.dev.tick();
             if res.cycles > 0 {
@@ -408,7 +407,6 @@ impl SystemBus {
                 });
             }
 
-            // Collect DMA requests
             if !res.dma_requests.is_empty() {
                 dma_requests.extend(res.dma_requests);
             }
@@ -423,11 +421,9 @@ impl SystemBus {
                                 nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
                             }
                         } else {
-                            // No NVIC, pend legacy style
                             interrupts.push(irq);
                         }
                     } else {
-                        // Core exceptions bypass NVIC ISPR/ISER
                         interrupts.push(irq);
                     }
                 }
@@ -450,7 +446,10 @@ impl SystemBus {
             }
         }
 
-        // 2. Scan NVIC for all Pending & Enabled interrupts
+        (interrupts, costs, dma_requests)
+    }
+
+    fn collect_enabled_nvic_interrupts(&self, interrupts: &mut Vec<u32>) {
         if let Some(nvic) = &self.nvic {
             for idx in 0..8 {
                 let mask =
@@ -459,72 +458,25 @@ impl SystemBus {
                     for bit in 0..32 {
                         if (mask & (1 << bit)) != 0 {
                             let irq = 16 + (idx as u32 * 32) + bit;
-                            tracing::info!("Bus: NVIC Signaling Pending IRQ {}", irq);
                             interrupts.push(irq);
                         }
                     }
                 }
             }
         }
+    }
+
+    pub fn tick_peripherals_with_costs(
+        &mut self,
+    ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
+        let (mut interrupts, costs, dma_requests) = self.tick_peripherals_phase1();
+        self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs, dma_requests)
     }
 
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
-        let mut pending_dma = Vec::new();
-        let mut interrupts = Vec::new();
-        let mut costs = Vec::new();
-
-        // Use a temporary swap or just loop indexed to avoid borrow overlap if needed,
-        // but for now let's use the two-phase approach.
-
-        // Phase 1: Tick peripherals and collect IRQs/DMA
-        for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
-            let res = p.dev.tick();
-            if res.cycles > 0 {
-                costs.push(PeripheralTickCost {
-                    index: peripheral_index,
-                    cycles: res.cycles,
-                });
-            }
-            if !res.dma_requests.is_empty() {
-                pending_dma.extend(res.dma_requests);
-            }
-
-            if res.irq {
-                if let Some(irq) = p.irq {
-                    if irq >= 16 {
-                        if let Some(nvic) = &self.nvic {
-                            let idx = ((irq - 16) / 32) as usize;
-                            let bit = (irq - 16) % 32;
-                            if idx < 8 {
-                                nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
-                            }
-                        } else {
-                            interrupts.push(irq);
-                        }
-                    } else {
-                        interrupts.push(irq);
-                    }
-                }
-            }
-
-            for irq in res.explicit_irqs {
-                if let Some(nvic) = &self.nvic {
-                    if irq >= 16 {
-                        let idx = ((irq - 16) / 32) as usize;
-                        let bit = (irq - 16) % 32;
-                        if idx < 8 {
-                            nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
-                        }
-                    } else {
-                        interrupts.push(irq);
-                    }
-                } else {
-                    interrupts.push(irq);
-                }
-            }
-        }
+        let (mut interrupts, costs, pending_dma) = self.tick_peripherals_phase1();
 
         // Phase 2: Execute DMA requests (this now has access to self.flash/ram via write_u8)
         for req in pending_dma {
@@ -549,20 +501,7 @@ impl SystemBus {
         // Phase 2.5: EXTI Logic Removed - moved to Exti peripheral via explicit_irqs.
 
         // Phase 3: Scan NVIC
-        if let Some(nvic) = &self.nvic {
-            for idx in 0..8 {
-                let mask =
-                    nvic.iser[idx].load(Ordering::SeqCst) & nvic.ispr[idx].load(Ordering::SeqCst);
-                if mask != 0 {
-                    for bit in 0..32 {
-                        if (mask & (1 << bit)) != 0 {
-                            let irq = 16 + (idx as u32 * 32) + bit;
-                            interrupts.push(irq);
-                        }
-                    }
-                }
-            }
-        }
+        self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs)
     }
