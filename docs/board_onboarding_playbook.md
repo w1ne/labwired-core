@@ -99,6 +99,22 @@ Before modeling a board, confirm currently supported peripheral `type` values in
 
 If the board has many unsupported blocks, pick a minimal subset that can boot and demonstrate value (typically `rcc + gpio + uart + systick`).
 
+## Universal Peripheral Config Structure
+
+Use a single config key for built-in peripheral variants:
+
+- `config.profile`: profile selector for modeled register map/behavior
+
+Current built-in profile-enabled peripherals:
+
+- `gpio`: `stm32f1`, `stm32v2`
+- `uart`: `stm32f1`, `stm32v2`
+- `rcc`: `stm32f1`, `stm32v2`
+
+Backward compatibility:
+
+- `config.register_layout` is still accepted as a legacy alias for `config.profile`.
+
 ## Required Source Material
 
 Use primary vendor sources:

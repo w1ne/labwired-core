@@ -23,34 +23,50 @@ peripherals:
     type: "rcc"
     base_address: 0x44020C00
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpioa"
     type: "gpio"
     base_address: 0x42020000
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpiob"
     type: "gpio"
     base_address: 0x42020400
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpioc"
     type: "gpio"
     base_address: 0x42020800
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpiod"
     type: "gpio"
     base_address: 0x42020C00
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpioe"
     type: "gpio"
     base_address: 0x42021000
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpiof"
     type: "gpio"
     base_address: 0x42021400
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpiog"
     type: "gpio"
     base_address: 0x42021800
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
@@ -59,3 +75,5 @@ peripherals:
     base_address: 0x40004800
     size: "1KB"
     irq: 60
+    config:
+      profile: "stm32v2"

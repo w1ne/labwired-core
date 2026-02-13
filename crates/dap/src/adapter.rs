@@ -11,12 +11,15 @@ use labwired_loader::SymbolProvider;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-const GPIO_IDR_OFFSET: u64 = 0x08;
-const GPIO_ODR_OFFSET: u64 = 0x0C;
+const GPIO_F1_IDR_OFFSET: u64 = 0x08;
+const GPIO_F1_ODR_OFFSET: u64 = 0x0C;
+const GPIO_V2_IDR_OFFSET: u64 = 0x10;
+const GPIO_V2_ODR_OFFSET: u64 = 0x14;
 
 #[derive(Clone, Serialize)]
 pub struct TelemetryData {
@@ -44,6 +47,12 @@ struct ResolvedBoardIoBinding {
     active_high: bool,
     register_addr: u64,
     pin_mask: u32,
+}
+
+#[derive(Clone, Copy)]
+struct GpioOffsets {
+    idr_offset: u64,
+    odr_offset: u64,
 }
 
 #[derive(Clone)]
@@ -692,14 +701,79 @@ fn board_io_signal_str(signal: labwired_config::BoardIoSignal) -> &'static str {
     }
 }
 
+fn profile_name(peripheral: &labwired_config::PeripheralConfig) -> Option<&str> {
+    if let Some(value) = peripheral.config.get("profile") {
+        if let Some(name) = value.as_str() {
+            return Some(name);
+        }
+        tracing::warn!(
+            "Peripheral '{}' has non-string profile; ignoring profile override",
+            peripheral.id
+        );
+        return None;
+    }
+
+    if let Some(value) = peripheral.config.get("register_layout") {
+        if let Some(name) = value.as_str() {
+            return Some(name);
+        }
+        tracing::warn!(
+            "Peripheral '{}' has non-string register_layout; ignoring layout override",
+            peripheral.id
+        );
+    }
+    None
+}
+
+fn gpio_offsets_for_peripheral(
+    peripheral: &labwired_config::PeripheralConfig,
+) -> Option<GpioOffsets> {
+    if peripheral.r#type != "gpio" {
+        return None;
+    }
+
+    let default_offsets = GpioOffsets {
+        idr_offset: GPIO_F1_IDR_OFFSET,
+        odr_offset: GPIO_F1_ODR_OFFSET,
+    };
+
+    let Some(layout_name) = profile_name(peripheral) else {
+        return Some(default_offsets);
+    };
+
+    let layout = match labwired_core::peripherals::gpio::GpioRegisterLayout::from_str(layout_name) {
+        Ok(layout) => layout,
+        Err(err) => {
+            tracing::warn!(
+                "GPIO peripheral '{}' has invalid profile '{}': {}; defaulting to stm32f1 offsets",
+                peripheral.id,
+                layout_name,
+                err
+            );
+            return Some(default_offsets);
+        }
+    };
+
+    match layout {
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Stm32F1 => Some(default_offsets),
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Stm32V2 => Some(GpioOffsets {
+            idr_offset: GPIO_V2_IDR_OFFSET,
+            odr_offset: GPIO_V2_ODR_OFFSET,
+        }),
+    }
+}
+
 fn resolve_board_io_bindings(
     chip: &labwired_config::ChipDescriptor,
     manifest: &labwired_config::SystemManifest,
 ) -> Vec<ResolvedBoardIoBinding> {
-    let peripheral_bases: HashMap<String, u64> = chip
+    let peripheral_gpio_windows: HashMap<String, (u64, GpioOffsets)> = chip
         .peripherals
         .iter()
-        .map(|p| (p.id.to_ascii_lowercase(), p.base_address))
+        .filter_map(|p| {
+            let offsets = gpio_offsets_for_peripheral(p)?;
+            Some((p.id.to_ascii_lowercase(), (p.base_address, offsets)))
+        })
         .collect();
 
     let mut resolved = Vec::new();
@@ -714,9 +788,10 @@ fn resolve_board_io_bindings(
         }
 
         let peripheral_key = binding.peripheral.to_ascii_lowercase();
-        let Some(base_addr) = peripheral_bases.get(&peripheral_key).copied() else {
+        let Some((base_addr, gpio_offsets)) = peripheral_gpio_windows.get(&peripheral_key).copied()
+        else {
             tracing::warn!(
-                "Skipping board_io binding '{}' because peripheral '{}' was not found",
+                "Skipping board_io binding '{}' because GPIO peripheral '{}' was not found",
                 binding.id,
                 binding.peripheral
             );
@@ -724,8 +799,8 @@ fn resolve_board_io_bindings(
         };
 
         let register_offset = match binding.signal {
-            labwired_config::BoardIoSignal::Input => GPIO_IDR_OFFSET,
-            labwired_config::BoardIoSignal::Output => GPIO_ODR_OFFSET,
+            labwired_config::BoardIoSignal::Input => gpio_offsets.idr_offset,
+            labwired_config::BoardIoSignal::Output => gpio_offsets.odr_offset,
         };
 
         resolved.push(ResolvedBoardIoBinding {
@@ -744,7 +819,152 @@ fn resolve_board_io_bindings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_resolve_board_io_bindings_uses_default_gpio_offsets() {
+        let chip = labwired_config::ChipDescriptor {
+            name: "test".to_string(),
+            arch: labwired_config::Arch::Arm,
+            flash: labwired_config::MemoryRange {
+                base: 0x0800_0000,
+                size: "128KB".to_string(),
+            },
+            ram: labwired_config::MemoryRange {
+                base: 0x2000_0000,
+                size: "32KB".to_string(),
+            },
+            peripherals: vec![labwired_config::PeripheralConfig {
+                id: "gpioa".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4001_0800,
+                size: None,
+                irq: None,
+                config: HashMap::new(),
+            }],
+        };
+
+        let manifest = labwired_config::SystemManifest {
+            name: "test-system".to_string(),
+            chip: "test-chip".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: vec![labwired_config::BoardIoBinding {
+                id: "led".to_string(),
+                kind: labwired_config::BoardIoKind::Led,
+                peripheral: "gpioa".to_string(),
+                pin: 5,
+                signal: labwired_config::BoardIoSignal::Output,
+                active_high: true,
+            }],
+        };
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].register_addr, 0x4001_0800 + GPIO_F1_ODR_OFFSET);
+    }
+
+    #[test]
+    fn test_resolve_board_io_bindings_uses_stm32v2_gpio_offsets() {
+        let mut gpio_config = HashMap::new();
+        gpio_config.insert("profile".to_string(), "stm32v2".into());
+        let chip = labwired_config::ChipDescriptor {
+            name: "test".to_string(),
+            arch: labwired_config::Arch::Arm,
+            flash: labwired_config::MemoryRange {
+                base: 0x0800_0000,
+                size: "128KB".to_string(),
+            },
+            ram: labwired_config::MemoryRange {
+                base: 0x2000_0000,
+                size: "32KB".to_string(),
+            },
+            peripherals: vec![labwired_config::PeripheralConfig {
+                id: "gpiob".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4202_0400,
+                size: None,
+                irq: None,
+                config: gpio_config,
+            }],
+        };
+
+        let manifest = labwired_config::SystemManifest {
+            name: "test-system".to_string(),
+            chip: "test-chip".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: vec![
+                labwired_config::BoardIoBinding {
+                    id: "led".to_string(),
+                    kind: labwired_config::BoardIoKind::Led,
+                    peripheral: "gpiob".to_string(),
+                    pin: 0,
+                    signal: labwired_config::BoardIoSignal::Output,
+                    active_high: true,
+                },
+                labwired_config::BoardIoBinding {
+                    id: "button".to_string(),
+                    kind: labwired_config::BoardIoKind::Button,
+                    peripheral: "gpiob".to_string(),
+                    pin: 13,
+                    signal: labwired_config::BoardIoSignal::Input,
+                    active_high: true,
+                },
+            ],
+        };
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 2);
+        assert_eq!(resolved[0].register_addr, 0x4202_0400 + GPIO_V2_ODR_OFFSET);
+        assert_eq!(resolved[1].register_addr, 0x4202_0400 + GPIO_V2_IDR_OFFSET);
+    }
+
+    #[test]
+    fn test_resolve_board_io_bindings_register_layout_alias_still_supported() {
+        let mut gpio_config = HashMap::new();
+        gpio_config.insert("register_layout".to_string(), "stm32v2".into());
+        let chip = labwired_config::ChipDescriptor {
+            name: "test".to_string(),
+            arch: labwired_config::Arch::Arm,
+            flash: labwired_config::MemoryRange {
+                base: 0x0800_0000,
+                size: "128KB".to_string(),
+            },
+            ram: labwired_config::MemoryRange {
+                base: 0x2000_0000,
+                size: "32KB".to_string(),
+            },
+            peripherals: vec![labwired_config::PeripheralConfig {
+                id: "gpiob".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4202_0400,
+                size: None,
+                irq: None,
+                config: gpio_config,
+            }],
+        };
+
+        let manifest = labwired_config::SystemManifest {
+            name: "test-system".to_string(),
+            chip: "test-chip".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: vec![labwired_config::BoardIoBinding {
+                id: "led".to_string(),
+                kind: labwired_config::BoardIoKind::Led,
+                peripheral: "gpiob".to_string(),
+                pin: 0,
+                signal: labwired_config::BoardIoSignal::Output,
+                active_high: true,
+            }],
+        };
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].register_addr, 0x4202_0400 + GPIO_V2_ODR_OFFSET);
+    }
 
     #[test]
     fn test_adapter_breakpoints() {

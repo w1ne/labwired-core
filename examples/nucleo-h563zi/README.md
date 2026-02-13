@@ -20,6 +20,15 @@ For a presentation-ready narrative, see `../../../docs/NUCLEO_H563ZI_DEMO.md`.
 
 Run from `core/`.
 
+### VS Code (out-of-box demo run)
+
+1. Open `core/examples/nucleo-h563zi` as the workspace folder.
+2. Run `LabWired: Run in LabWired` (or click `Run in LabWired` in the status bar).
+
+The example root `Makefile` builds `firmware-h563-io-demo` and writes `target/firmware`,
+which is the firmware path the extension launches.
+`Run in LabWired` now starts execution immediately and UART text appears in the `LabWired` output panel.
+
 ### 1) Emulator capability check (recommended first)
 
 ```bash
@@ -34,6 +43,8 @@ No generated artifacts are written into the repo by default.
 ```bash
 examples/nucleo-h563zi/scripts/run_blink_uart_dual.sh --port /dev/ttyACM0
 ```
+
+This prints emulator UART evidence first, then live UART from the real board.
 
 ### 3) Video-ready full flow (concise output)
 
@@ -70,6 +81,7 @@ Real board checks:
 
 - `VALIDATION.md`: step-by-step reproducible runbook
 - `system.yaml`: local system profile used by emulator runs
+- `Makefile`: VS Code `Run in LabWired` bridge for this example folder
 - `board_firmware/`: native C firmware for real-board blink+UART
 - `scripts/run_full_example.sh`: one-command emulator showcase
 - `scripts/run_blink_uart_dual.sh`: one-command emulator + hardware blink demo

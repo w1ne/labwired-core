@@ -8,7 +8,7 @@
 #![allow(clippy::empty_loop)]
 
 // NUCLEO-H563ZI virtual COM (COM1) maps to USART3 in BSP.
-const USART3_TX_PTR: *mut u8 = 0x4000_4800 as *mut u8;
+const USART3_TDR_PTR: *mut u8 = (0x4000_4800 + 0x28) as *mut u8;
 
 // GPIO base addresses from `stm32h563xx.h` (non-secure aliases used by our config).
 const GPIOB_BASE: u32 = 0x4202_0400;
@@ -16,11 +16,11 @@ const GPIOC_BASE: u32 = 0x4202_0800;
 const GPIOF_BASE: u32 = 0x4202_1400;
 const GPIOG_BASE: u32 = 0x4202_1800;
 
-// Current LabWired GPIO model uses STM32F1-style register offsets.
-const GPIO_CRL: u32 = 0x00;
-const GPIO_CRH: u32 = 0x04;
-const GPIO_IDR: u32 = 0x08;
-const GPIO_ODR: u32 = 0x0C;
+// STM32H5-style GPIO offsets.
+const GPIO_MODER: u32 = 0x00;
+const GPIO_IDR: u32 = 0x10;
+const GPIO_BSRR: u32 = 0x18;
+const GPIO_BRR: u32 = 0x28;
 
 #[no_mangle]
 pub extern "C" fn Reset() -> ! {
@@ -39,7 +39,7 @@ fn read_u32(addr: u32) -> u32 {
 
 fn uart_write_byte(ch: u8) {
     unsafe {
-        core::ptr::write_volatile(USART3_TX_PTR, ch);
+        core::ptr::write_volatile(USART3_TDR_PTR, ch);
     }
 }
 
@@ -57,22 +57,12 @@ fn uart_write_bit(v: u32) {
     }
 }
 
-fn gpio_config_pin_output_pushpull_50mhz(base: u32, pin: u32) {
-    // STM32F1 nibble format: MODE[1:0]=11 (50 MHz), CNF[1:0]=00 (PP output).
-    let cfg: u32 = 0x3;
-    if pin < 8 {
-        let shift = pin * 4;
-        let mut reg = read_u32(base + GPIO_CRL);
-        reg &= !(0xF << shift);
-        reg |= cfg << shift;
-        write_u32(base + GPIO_CRL, reg);
-    } else {
-        let shift = (pin - 8) * 4;
-        let mut reg = read_u32(base + GPIO_CRH);
-        reg &= !(0xF << shift);
-        reg |= cfg << shift;
-        write_u32(base + GPIO_CRH, reg);
-    }
+fn gpio_config_pin_output(base: u32, pin: u32) {
+    let shift = pin * 2;
+    let mut moder = read_u32(base + GPIO_MODER);
+    moder &= !(0x3 << shift);
+    moder |= 0x1 << shift; // 01: general purpose output mode
+    write_u32(base + GPIO_MODER, moder);
 }
 
 fn set_led_state(on: bool) {
@@ -80,23 +70,15 @@ fn set_led_state(on: bool) {
     // LED1: PB0, LED2: PF4, LED3: PG4
     let (mask_b, mask_f, mask_g) = (1u32 << 0, 1u32 << 4, 1u32 << 4);
 
-    let mut odr_b = read_u32(GPIOB_BASE + GPIO_ODR);
-    let mut odr_f = read_u32(GPIOF_BASE + GPIO_ODR);
-    let mut odr_g = read_u32(GPIOG_BASE + GPIO_ODR);
-
     if on {
-        odr_b |= mask_b;
-        odr_f |= mask_f;
-        odr_g |= mask_g;
+        write_u32(GPIOB_BASE + GPIO_BSRR, mask_b);
+        write_u32(GPIOF_BASE + GPIO_BSRR, mask_f);
+        write_u32(GPIOG_BASE + GPIO_BSRR, mask_g);
     } else {
-        odr_b &= !mask_b;
-        odr_f &= !mask_f;
-        odr_g &= !mask_g;
+        write_u32(GPIOB_BASE + GPIO_BRR, mask_b);
+        write_u32(GPIOF_BASE + GPIO_BRR, mask_f);
+        write_u32(GPIOG_BASE + GPIO_BRR, mask_g);
     }
-
-    write_u32(GPIOB_BASE + GPIO_ODR, odr_b);
-    write_u32(GPIOF_BASE + GPIO_ODR, odr_f);
-    write_u32(GPIOG_BASE + GPIO_ODR, odr_g);
 }
 
 fn sample_button_pc13() -> u32 {
@@ -126,9 +108,9 @@ fn report_io_state(led_on: bool) {
 fn main() -> ! {
     uart_write_str("H563-IO\n");
 
-    gpio_config_pin_output_pushpull_50mhz(GPIOB_BASE, 0);
-    gpio_config_pin_output_pushpull_50mhz(GPIOF_BASE, 4);
-    gpio_config_pin_output_pushpull_50mhz(GPIOG_BASE, 4);
+    gpio_config_pin_output(GPIOB_BASE, 0);
+    gpio_config_pin_output(GPIOF_BASE, 4);
+    gpio_config_pin_output(GPIOG_BASE, 4);
 
     set_led_state(true);
     report_io_state(true);

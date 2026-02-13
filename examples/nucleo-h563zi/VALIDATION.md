@@ -21,7 +21,18 @@ Pass criteria:
 3. IO smoke contains LED on/off lines for `PB0/PF4/PG4`
 4. full-chip smoke contains `RCC=1 SYSTICK=1 UART=1` and `ALL=1`
 
-## B) Blink+UART in Emulator + Real Board
+## B) VS Code One-Click Run
+
+1. Open `core/examples/nucleo-h563zi` in VS Code.
+2. Run `LabWired: Run in LabWired`.
+
+Pass criteria:
+1. build succeeds from example-root `Makefile`
+2. `target/firmware` is created under `core/examples/nucleo-h563zi`
+3. simulator starts with the built ELF
+4. `LabWired` output panel contains emulator UART lines like `H563-IO`
+
+## C) Blink+UART in Emulator + Real Board
 
 ```bash
 examples/nucleo-h563zi/scripts/run_blink_uart_dual.sh --port /dev/ttyACM0
@@ -34,8 +45,11 @@ Pass criteria:
    - `H563-BLINK-UART`
    - at least one `BLINK ... PB0=1 ...`
    - at least one `BLINK ... PB0=0 ...`
+4. terminal shows both:
+   - emulator UART lines (`H563-IO`, `PB0=...`)
+   - live hardware UART lines during capture window
 
-## C) Hardware-Only Run
+## D) Hardware-Only Run
 
 ```bash
 examples/nucleo-h563zi/scripts/run_blink_uart_hardware.sh --port /dev/ttyACM0
@@ -47,14 +61,14 @@ Optional serial autodetect:
 examples/nucleo-h563zi/scripts/run_blink_uart_hardware.sh
 ```
 
-## D) Presentation Flow (3-5 Minutes)
+## E) Presentation Flow (3-5 Minutes)
 
 1. Run `run_full_example.sh` and show deterministic emulator pass.
 2. Run `run_blink_uart_hardware.sh --port /dev/ttyACM0` with board visible.
 3. Point to UART lines and physical LED blinking as proof of parity.
 4. Close with `docs/NUCLEO_H563ZI_DEMO.md` for capability summary.
 
-## E) Recording Flow (Concise Terminal Output)
+## F) Recording Flow (Concise Terminal Output)
 
 ```bash
 examples/nucleo-h563zi/scripts/run_video_demo.sh --mode all --port /dev/ttyACM0 --keep-artifacts

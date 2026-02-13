@@ -84,8 +84,8 @@ cleanup() {
 trap cleanup EXIT
 
 echo
-echo "==> Capturing UART for ${UART_TIMEOUT}s"
-timeout "$UART_TIMEOUT" cat "$UART_PORT" >"$LOG_FILE" 2>/dev/null &
+echo "==> Capturing UART for ${UART_TIMEOUT}s (live)"
+timeout "$UART_TIMEOUT" stdbuf -oL cat "$UART_PORT" 2>/dev/null | tee "$LOG_FILE" &
 CAT_PID=$!
 
 sleep 0.2
@@ -105,8 +105,7 @@ CAT_PID=""
 trap - EXIT
 
 echo
-echo "==> UART output"
-cat "$LOG_FILE"
+echo "==> UART capture complete"
 
 if ! grep -q "H563-BLINK-UART" "$LOG_FILE"; then
   echo "error: UART banner not found" >&2

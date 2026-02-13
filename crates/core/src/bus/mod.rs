@@ -5,12 +5,16 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::memory::LinearMemory;
+use crate::peripherals::gpio::GpioRegisterLayout;
 use crate::peripherals::nvic::NvicState;
+use crate::peripherals::rcc::RccRegisterLayout;
 use crate::peripherals::uart::Uart;
+use crate::peripherals::uart::UartRegisterLayout;
 use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
 use anyhow::Context;
-use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
+use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -44,6 +48,44 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
+    fn profile_name<'a>(p_cfg: &'a PeripheralConfig) -> anyhow::Result<Option<&'a str>> {
+        if let Some(value) = p_cfg.config.get("profile") {
+            return value.as_str().map(Some).ok_or_else(|| {
+                anyhow::anyhow!("Peripheral '{}' config.profile must be a string", p_cfg.id)
+            });
+        }
+        if let Some(value) = p_cfg.config.get("register_layout") {
+            return value.as_str().map(Some).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Peripheral '{}' config.register_layout must be a string",
+                    p_cfg.id
+                )
+            });
+        }
+        Ok(None)
+    }
+
+    fn parse_profile_or_default<T>(
+        p_cfg: &PeripheralConfig,
+        peripheral_kind: &str,
+    ) -> anyhow::Result<T>
+    where
+        T: FromStr<Err = String> + Default,
+    {
+        let Some(profile_name) = Self::profile_name(p_cfg)? else {
+            return Ok(T::default());
+        };
+        T::from_str(profile_name).map_err(|e| {
+            anyhow::anyhow!(
+                "Peripheral '{}' has invalid {} profile '{}': {}",
+                p_cfg.id,
+                peripheral_kind,
+                profile_name,
+                e
+            )
+        })
+    }
+
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
         let raw = PathBuf::from(descriptor_path);
         if raw.is_absolute() || raw.exists() {
@@ -201,10 +243,19 @@ impl SystemBus {
 
         for p_cfg in &chip.peripherals {
             let dev: Box<dyn Peripheral> = match p_cfg.r#type.as_str() {
-                "uart" => Box::new(crate::peripherals::uart::Uart::new()),
+                "uart" => {
+                    let layout: UartRegisterLayout = Self::parse_profile_or_default(p_cfg, "UART")?;
+                    Box::new(crate::peripherals::uart::Uart::new_with_layout(layout))
+                }
                 "systick" => Box::new(crate::peripherals::systick::Systick::new()),
-                "gpio" => Box::new(crate::peripherals::gpio::GpioPort::new()),
-                "rcc" => Box::new(crate::peripherals::rcc::Rcc::new()),
+                "gpio" => {
+                    let layout: GpioRegisterLayout = Self::parse_profile_or_default(p_cfg, "GPIO")?;
+                    Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
+                }
+                "rcc" => {
+                    let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;
+                    Box::new(crate::peripherals::rcc::Rcc::new_with_layout(layout))
+                }
                 "timer" => Box::new(crate::peripherals::timer::Timer::new()),
                 "i2c" => Box::new(crate::peripherals::i2c::I2c::new()),
                 "spi" => Box::new(crate::peripherals::spi::Spi::new()),

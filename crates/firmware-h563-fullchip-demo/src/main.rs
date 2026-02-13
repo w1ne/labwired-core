@@ -8,7 +8,7 @@
 #![allow(clippy::empty_loop)]
 
 const USART3_BASE: u32 = 0x4000_4800;
-const USART3_TX_PTR: *mut u8 = USART3_BASE as *mut u8;
+const USART3_TDR_PTR: *mut u8 = (USART3_BASE + 0x28) as *mut u8;
 
 const RCC_BASE: u32 = 0x4402_0C00;
 const SYSTICK_BASE: u32 = 0xE000_E010;
@@ -21,16 +21,15 @@ const GPIOE_BASE: u32 = 0x4202_1000;
 const GPIOF_BASE: u32 = 0x4202_1400;
 const GPIOG_BASE: u32 = 0x4202_1800;
 
-// Current LabWired model uses STM32F1-style GPIO offsets.
-const GPIO_CRL: u32 = 0x00;
-const GPIO_CRH: u32 = 0x04;
-const GPIO_IDR: u32 = 0x08;
-const GPIO_ODR: u32 = 0x0C;
-const GPIO_BSRR: u32 = 0x10;
-const GPIO_BRR: u32 = 0x14;
+// STM32H5-style GPIO offsets.
+const GPIO_MODER: u32 = 0x00;
+const GPIO_IDR: u32 = 0x10;
+const GPIO_ODR: u32 = 0x14;
+const GPIO_BSRR: u32 = 0x18;
+const GPIO_BRR: u32 = 0x28;
 
-const RCC_APB2ENR: u32 = 0x18;
-const RCC_APB1ENR: u32 = 0x1C;
+const RCC_APB2ENR: u32 = 0xA4;
+const RCC_APB1ENR: u32 = 0x9C; // APB1LENR
 
 const STK_CSR: u32 = 0x00;
 const STK_RVR: u32 = 0x04;
@@ -48,9 +47,13 @@ fn write_u32(addr: u32, value: u32) {
     }
 }
 
+fn read_u32(addr: u32) -> u32 {
+    unsafe { core::ptr::read_volatile(addr as *const u32) }
+}
+
 fn uart_write_byte(ch: u8) {
     unsafe {
-        core::ptr::write_volatile(USART3_TX_PTR, ch);
+        core::ptr::write_volatile(USART3_TDR_PTR, ch);
     }
 }
 
@@ -61,17 +64,11 @@ fn uart_write_str(s: &str) {
 }
 
 fn config_gpio_output(base: u32, pin: u32) {
-    // STM32F1 nibble format: MODE=11 (50 MHz), CNF=00 (push-pull output).
-    let cfg_nibble = 0x3u32;
-    if pin < 8 {
-        let shift = pin * 4;
-        let reg = cfg_nibble << shift;
-        write_u32(base + GPIO_CRL, reg);
-    } else {
-        let shift = (pin - 8) * 4;
-        let reg = cfg_nibble << shift;
-        write_u32(base + GPIO_CRH, reg);
-    }
+    let shift = pin * 2;
+    let mut moder = read_u32(base + GPIO_MODER);
+    moder &= !(0x3 << shift);
+    moder |= 0x1 << shift; // 01: general purpose output mode
+    write_u32(base + GPIO_MODER, moder);
 }
 
 fn touch_gpio_port(base: u32, pin: u32) {

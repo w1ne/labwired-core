@@ -56,7 +56,7 @@ See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
 
 - [Architecture Overview](./docs/architecture.md)
 - [Architecture Guide](./docs/architecture_guide.md)
-- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md)
+- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md) (config-first)
 - [CI Integration Guide](./docs/ci_integration.md)
 - [GDB Integration](./docs/gdb_integration.md)
 - [Release Strategy](./docs/release_strategy.md)

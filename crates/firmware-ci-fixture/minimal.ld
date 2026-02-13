@@ -11,6 +11,8 @@ MEMORY
   RAM : ORIGIN = 0x20000000, LENGTH = 16K
 }
 
+ENTRY(Reset)
+
 SECTIONS
 {
   .vector_table 0x00000000 :

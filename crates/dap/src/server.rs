@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 pub struct DapServer {
     pub adapter: LabwiredAdapter,
     running: Arc<Mutex<bool>>,
+    stop_on_entry: Arc<Mutex<bool>>,
 }
 
 #[derive(Serialize)]
@@ -145,6 +146,7 @@ impl DapServer {
         Self {
             adapter: LabwiredAdapter::new(),
             running: Arc::new(Mutex::new(false)),
+            stop_on_entry: Arc::new(Mutex::new(true)),
         }
     }
 
@@ -328,12 +330,18 @@ impl DapServer {
                 let system_config = arguments
                     .and_then(|a| a.get("systemConfig"))
                     .and_then(|v| v.as_str());
+                let stop_on_entry = arguments
+                    .and_then(|a| a.get("stopOnEntry"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
 
                 tracing::info!(
-                    "Launching: program={:?}, systemConfig={:?}",
+                    "Launching: program={:?}, systemConfig={:?}, stopOnEntry={}",
                     program,
-                    system_config
+                    system_config,
+                    stop_on_entry
                 );
+                *self.stop_on_entry.lock().unwrap() = stop_on_entry;
 
                 if let Some(p) = program {
                     if let Err(e) = self
@@ -397,14 +405,29 @@ impl DapServer {
             }
             "configurationDone" => {
                 sender.send_response(req_seq, "configurationDone", None)?;
-                sender.send_event(
-                    "stopped",
-                    Some(json!({
-                        "reason": "entry",
-                        "threadId": 1,
-                        "allThreadsStopped": true
-                    })),
-                )?;
+                let stop_on_entry = *self.stop_on_entry.lock().unwrap();
+                if stop_on_entry {
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "entry",
+                            "threadId": 1,
+                            "allThreadsStopped": true
+                        })),
+                    )?;
+                } else {
+                    {
+                        let mut r = self.running.lock().unwrap();
+                        *r = true;
+                    }
+                    sender.send_event(
+                        "continued",
+                        Some(json!({
+                            "threadId": 1,
+                            "allThreadsContinued": true
+                        })),
+                    )?;
+                }
             }
             "threads" => {
                 sender.send_response(

@@ -13,7 +13,7 @@ mod integration_tests {
     use labwired_config::{Arch, ChipDescriptor, MemoryRange, PeripheralConfig, SystemManifest};
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     fn create_machine() -> VariableMachine {
         // Placeholder name collision? No.
@@ -540,6 +540,200 @@ mod integration_tests {
         assert_eq!(uart1.base, 0x4000_C000);
         assert_eq!(uart1.size, 1024);
         assert_eq!(uart1.irq, Some(37));
+    }
+
+    #[test]
+    fn test_from_config_gpio_profile_stm32v2() {
+        let mut gpio_config = HashMap::new();
+        gpio_config.insert(
+            "profile".to_string(),
+            serde_yaml::Value::String("stm32v2".to_string()),
+        );
+
+        let chip = ChipDescriptor {
+            name: "test-chip-gpio-v2".to_string(),
+            arch: Arch::Arm,
+            flash: MemoryRange {
+                base: 0x0,
+                size: "128KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "gpioa".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4001_0800,
+                size: None,
+                irq: None,
+                config: gpio_config,
+            }],
+        };
+
+        let manifest = SystemManifest {
+            name: "test-system-gpio-v2".to_string(),
+            chip: "test-chip-gpio-v2".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let base = 0x4001_0800;
+
+        // MODER @ 0x00: set pin 0 to output mode.
+        bus.write_u32(base, 0x0000_0001).unwrap();
+        assert_eq!(bus.read_u32(base).unwrap() & 0x3, 0x1);
+
+        // ODR @ 0x14 and BSRR @ 0x18 should use STM32v2 offsets.
+        bus.write_u32(base + 0x14, 0x0000_0002).unwrap();
+        assert_eq!(bus.read_u32(base + 0x14).unwrap() & 0xFFFF, 0x0002);
+
+        bus.write_u32(base + 0x18, 0x0001_0000).unwrap(); // reset pin 0
+        bus.write_u32(base + 0x18, 0x0000_0001).unwrap(); // set pin 0
+        assert_eq!(bus.read_u32(base + 0x14).unwrap() & 0x0001, 0x0001);
+    }
+
+    #[test]
+    fn test_from_config_uart_profile_stm32v2() {
+        let mut uart_config = HashMap::new();
+        uart_config.insert(
+            "profile".to_string(),
+            serde_yaml::Value::String("stm32v2".to_string()),
+        );
+
+        let chip = ChipDescriptor {
+            name: "test-chip-uart-v2".to_string(),
+            arch: Arch::Arm,
+            flash: MemoryRange {
+                base: 0x0,
+                size: "128KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "uart3".to_string(),
+                r#type: "uart".to_string(),
+                base_address: 0x4000_4800,
+                size: None,
+                irq: None,
+                config: uart_config,
+            }],
+        };
+
+        let manifest = SystemManifest {
+            name: "test-system-uart-v2".to_string(),
+            chip: "test-chip-uart-v2".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        bus.attach_uart_tx_sink(sink.clone(), false);
+
+        let base = 0x4000_4800;
+        bus.write_u8(base + 0x04, b'X').unwrap(); // legacy DR offset should not TX in v2 mode
+        bus.write_u8(base + 0x28, b'Y').unwrap(); // TDR
+        assert_eq!(bus.read_u8(base + 0x1C).unwrap(), 0xC0); // ISR ready flags
+
+        let data = sink.lock().unwrap().clone();
+        assert_eq!(data, vec![b'Y']);
+    }
+
+    #[test]
+    fn test_from_config_rcc_profile_stm32v2() {
+        let mut rcc_config = HashMap::new();
+        rcc_config.insert(
+            "profile".to_string(),
+            serde_yaml::Value::String("stm32v2".to_string()),
+        );
+
+        let chip = ChipDescriptor {
+            name: "test-chip-rcc-v2".to_string(),
+            arch: Arch::Arm,
+            flash: MemoryRange {
+                base: 0x0,
+                size: "128KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "rcc".to_string(),
+                r#type: "rcc".to_string(),
+                base_address: 0x4402_0C00,
+                size: None,
+                irq: None,
+                config: rcc_config,
+            }],
+        };
+
+        let manifest = SystemManifest {
+            name: "test-system-rcc-v2".to_string(),
+            chip: "test-chip-rcc-v2".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let base = 0x4402_0C00;
+
+        bus.write_u32(base + 0xA4, 0xA5A5_0001).unwrap();
+        bus.write_u32(base + 0x9C, 0x5A5A_0002).unwrap();
+
+        assert_eq!(bus.read_u32(base + 0xA4).unwrap(), 0xA5A5_0001);
+        assert_eq!(bus.read_u32(base + 0x9C).unwrap(), 0x5A5A_0002);
+        assert_eq!(bus.read_u32(base + 0x18).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_from_config_profile_register_layout_alias_still_supported() {
+        let mut gpio_config = HashMap::new();
+        gpio_config.insert(
+            "register_layout".to_string(),
+            serde_yaml::Value::String("stm32v2".to_string()),
+        );
+
+        let chip = ChipDescriptor {
+            name: "test-chip-gpio-v2-alias".to_string(),
+            arch: Arch::Arm,
+            flash: MemoryRange {
+                base: 0x0,
+                size: "128KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "gpioa".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4001_0800,
+                size: None,
+                irq: None,
+                config: gpio_config,
+            }],
+        };
+
+        let manifest = SystemManifest {
+            name: "test-system-gpio-v2-alias".to_string(),
+            chip: "test-chip-gpio-v2-alias".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let base = 0x4001_0800;
+        bus.write_u32(base + 0x14, 0x0000_0002).unwrap();
+        assert_eq!(bus.read_u32(base + 0x14).unwrap() & 0xFFFF, 0x0002);
     }
 
     #[test]
