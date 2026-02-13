@@ -6,6 +6,7 @@
 
 use crate::bus::{PeripheralEntry, SystemBus};
 use crate::cpu::CortexM;
+use crate::peripherals::dwt::Dwt;
 use crate::peripherals::nvic::{Nvic, NvicState};
 use crate::peripherals::scb::Scb;
 use std::sync::atomic::AtomicU32;
@@ -63,6 +64,30 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             dev: Box::new(nvic),
         });
     }
+
+    // Ensure DWT exists
+    let dwt = Dwt::new();
+    if let Some(p) = bus
+        .peripherals
+        .iter_mut()
+        .find(|p| p.name == "dwt" || p.base == 0xE000_1000)
+    {
+        p.name = "dwt".to_string();
+        p.base = 0xE000_1000;
+        p.size = 0x40; // minimal size
+        p.irq = None;
+        p.dev = Box::new(dwt);
+    } else {
+        bus.peripherals.push(PeripheralEntry {
+            name: "dwt".to_string(),
+            base: 0xE000_1000,
+            size: 0x40,
+            irq: None,
+            dev: Box::new(dwt),
+        });
+    }
+
+    bus.refresh_peripheral_index();
 
     (cpu, nvic_state)
 }

@@ -78,6 +78,7 @@ fn test_dap_e2e_launch_and_uart() {
 
     // Cleanup
     let _ = child.kill();
+    let _ = child.wait();
     eprintln!("E2E Test Passed!");
 }
 
@@ -115,20 +116,19 @@ fn send_dap_message(stdin: &mut dyn Write, message: &str) {
 
 fn read_dap_message(reader: &mut BufReader<std::process::ChildStdout>) -> String {
     let mut line = String::new();
-    let mut content_length = 0;
 
     // 1. Find Content-Length header
-    loop {
+    let content_length = loop {
         line.clear();
         if reader.read_line(&mut line).unwrap() == 0 {
             panic!("Unexpected EOF while reading DAP message");
         }
         let trimmed = line.trim();
         if let Some(rest) = trimmed.strip_prefix("Content-Length: ") {
-            content_length = rest.trim().parse().expect("Invalid Content-Length");
-            break;
+            let parsed: usize = rest.trim().parse().expect("Invalid Content-Length");
+            break parsed;
         }
-    }
+    };
 
     // 2. Read until the double newline (end of headers)
     loop {
@@ -142,6 +142,5 @@ fn read_dap_message(reader: &mut BufReader<std::process::ChildStdout>) -> String
     // 3. Read the body
     let mut body = vec![0u8; content_length];
     reader.read_exact(&mut body).unwrap();
-    let body_str = String::from_utf8(body).unwrap();
-    body_str
+    String::from_utf8(body).unwrap()
 }

@@ -2,7 +2,7 @@
 // These tests verify the core stepping behavior that step-out and step-back rely on
 
 use labwired_core::cpu::CortexM;
-use labwired_core::{Bus, Cpu, DebugControl, Machine};
+use labwired_core::{DebugControl, Machine};
 
 /// Helper to create a simple test machine with ARM code in RAM
 fn create_test_machine(code: &[u16]) -> Machine<CortexM> {

@@ -94,6 +94,17 @@ impl Default for LabwiredAdapter {
 }
 
 impl LabwiredAdapter {
+    fn resolve_arch(arch: labwired_core::Arch) -> Result<labwired_core::Arch> {
+        match arch {
+            labwired_core::Arch::Arm => Ok(labwired_core::Arch::Arm),
+            labwired_core::Arch::RiscV => Ok(labwired_core::Arch::RiscV),
+            other => Err(anyhow!(
+                "Unsupported or unknown firmware architecture: {:?}",
+                other
+            )),
+        }
+    }
+
     pub fn new() -> Self {
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
         Self {
@@ -129,7 +140,7 @@ impl LabwiredAdapter {
 
         *last_guard = (cycles, now);
 
-        let mut registers = HashMap::new();
+        let mut registers = HashMap::with_capacity(16);
         let names = machine.get_register_names();
         for (i, name) in names.iter().enumerate().take(16) {
             let val = machine.read_core_reg(i as u8);
@@ -184,15 +195,7 @@ impl LabwiredAdapter {
         };
         *self.board_io_bindings.lock().unwrap() = resolved_board_io_bindings;
 
-        let arch = match image.arch {
-            labwired_core::Arch::Arm => labwired_core::Arch::Arm,
-            labwired_core::Arch::RiscV => labwired_core::Arch::RiscV,
-            _ => {
-                // Fallback or guess from system config?
-                // For now, assume Arm if unclear
-                labwired_core::Arch::Arm
-            }
-        };
+        let arch = Self::resolve_arch(image.arch)?;
 
         match arch {
             labwired_core::Arch::Arm => {
@@ -330,9 +333,7 @@ impl LabwiredAdapter {
 
     pub fn poll_uart(&self) -> Vec<u8> {
         let mut sink = self.uart_sink.lock().unwrap();
-        let out = sink.clone();
-        sink.clear();
-        out
+        std::mem::take(&mut *sink)
     }
 
     pub fn step(&self) -> Result<labwired_core::StopReason> {
@@ -1141,7 +1142,7 @@ mod tests {
             .collect();
 
         // Simulate 100 random state transitions (mocked for speed/simplicity)
-        for i in 0..100 {
+        for i in 0u32..100 {
             let trace = crate::trace::InstructionTrace {
                 pc: 0x100 + (i * 2),
                 instruction: 0xBF00,
@@ -1149,11 +1150,11 @@ mod tests {
                 function: None,
                 register_delta: {
                     let mut map = std::collections::HashMap::new();
-                    map.insert(0, (i as u32, i as u32 + 1));
+                    map.insert(0, (i, i + 1));
                     map
                 },
                 memory_writes: vec![crate::trace::MemoryWrite {
-                    address: (0x20000000 + (i as u32 * 4)) as u64,
+                    address: (0x20000000 + (i * 4)) as u64,
                     old_value: 0,
                     new_value: 0xFF,
                 }],
@@ -1165,9 +1166,8 @@ mod tests {
             // Advance machine
             let mut guard = adapter.machine.lock().unwrap();
             let m = guard.as_mut().unwrap();
-            m.write_core_reg(0, i as u32 + 1);
-            m.write_memory(0x20000000 + (i as u32 * 4), &[0xFF])
-                .unwrap();
+            m.write_core_reg(0, i + 1);
+            m.write_memory(0x20000000 + (i * 4), &[0xFF]).unwrap();
             m.set_pc(0x100 + (i * 2) + 2);
             adapter.cycle_count.fetch_add(1, Ordering::SeqCst);
         }
@@ -1181,8 +1181,8 @@ mod tests {
         let guard = adapter.machine.lock().unwrap();
         let m = guard.as_ref().unwrap();
         assert_eq!(m.get_pc(), 0x100);
-        for i in 0..16 {
-            assert_eq!(m.read_core_reg(i as u8), initial_registers[i]);
+        for (i, expected) in initial_registers.iter().enumerate().take(16) {
+            assert_eq!(m.read_core_reg(i as u8), *expected);
         }
         assert_eq!(adapter.get_cycle_count(), 0);
     }
@@ -1204,5 +1204,14 @@ mod tests {
 
         let read_data = adapter.read_memory(addr, 4).unwrap();
         assert_eq!(read_data, data);
+    }
+
+    #[test]
+    fn test_resolve_arch_rejects_unknown() {
+        let err = LabwiredAdapter::resolve_arch(labwired_core::Arch::Unknown)
+            .expect_err("Unknown architecture should be rejected");
+        assert!(err
+            .to_string()
+            .contains("Unsupported or unknown firmware architecture"));
     }
 }

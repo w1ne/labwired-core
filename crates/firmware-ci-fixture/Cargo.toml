@@ -18,9 +18,3 @@ name = "firmware-ci-fixture"
 path = "src/main.rs"
 test = false
 bench = false
-
-[profile.release]
-codegen-units = 1
-debug = true
-lto = true
-opt-level = "s"
