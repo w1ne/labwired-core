@@ -13,6 +13,7 @@ use crate::peripherals::uart::UartRegisterLayout;
 use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
@@ -33,6 +34,15 @@ pub struct SystemBus {
     pub peripherals: Vec<PeripheralEntry>,
     pub nvic: Option<Arc<NvicState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
+    peripheral_ranges: Vec<PeripheralRange>,
+    peripheral_hint: Cell<Option<usize>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PeripheralRange {
+    start: u64,
+    end: u64,
+    index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,7 +58,7 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
-    fn profile_name<'a>(p_cfg: &'a PeripheralConfig) -> anyhow::Result<Option<&'a str>> {
+    fn profile_name(p_cfg: &PeripheralConfig) -> anyhow::Result<Option<&str>> {
         if let Some(value) = p_cfg.config.get("profile") {
             return value.as_str().map(Some).ok_or_else(|| {
                 anyhow::anyhow!("Peripheral '{}' config.profile must be a string", p_cfg.id)
@@ -88,18 +98,88 @@ impl SystemBus {
 
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
         let raw = PathBuf::from(descriptor_path);
-        if raw.is_absolute() || raw.exists() {
+        if raw.is_absolute() {
             return raw;
         }
 
         let chip_path = Path::new(&manifest.chip);
         let chip_dir = chip_path.parent().unwrap_or_else(|| Path::new("."));
-        chip_dir.join(descriptor_path)
+        let chip_relative = chip_dir.join(descriptor_path);
+        if chip_relative.exists() {
+            chip_relative
+        } else {
+            raw
+        }
+    }
+
+    fn is_peripheral_addr(p: &PeripheralEntry, addr: u64) -> bool {
+        addr >= p.base && addr < p.base + p.size
+    }
+
+    fn rebuild_peripheral_ranges(&mut self) {
+        self.peripheral_ranges = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .map(|(index, p)| PeripheralRange {
+                start: p.base,
+                end: p.base.saturating_add(p.size),
+                index,
+            })
+            .collect();
+        self.peripheral_ranges.sort_by_key(|r| r.start);
+        self.peripheral_hint.set(None);
+    }
+
+    pub fn refresh_peripheral_index(&mut self) {
+        self.rebuild_peripheral_ranges();
+    }
+
+    fn find_peripheral_index(&self, addr: u64) -> Option<usize> {
+        if let Some(idx) = self.peripheral_hint.get() {
+            if let Some(p) = self.peripherals.get(idx) {
+                if Self::is_peripheral_addr(p, addr) {
+                    return Some(idx);
+                }
+            }
+        }
+
+        let mut idx = if self.peripheral_ranges.len() == self.peripherals.len() {
+            let pos = self
+                .peripheral_ranges
+                .partition_point(|range| range.start <= addr);
+            if pos == 0 {
+                None
+            } else {
+                let candidate = self.peripheral_ranges[pos - 1];
+                if addr < candidate.end {
+                    Some(candidate.index)
+                } else {
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let needs_fallback = match idx.and_then(|i| self.peripherals.get(i)) {
+            Some(p) => !Self::is_peripheral_addr(p, addr),
+            None => true,
+        };
+        if needs_fallback {
+            idx = self
+                .peripherals
+                .iter()
+                .position(|p| Self::is_peripheral_addr(p, addr));
+        }
+
+        self.peripheral_hint.set(idx);
+        idx
     }
 
     pub fn new() -> Self {
         // Default initialization for tests
-        Self {
+        let mut bus = Self {
             flash: LinearMemory::new(1024 * 1024, 0x0),
             ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
             peripherals: vec![
@@ -211,7 +291,11 @@ impl SystemBus {
             ],
             nvic: None,
             observers: Vec::new(),
-        }
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
     }
 
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
@@ -239,6 +323,8 @@ impl SystemBus {
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
         };
 
         for p_cfg in &chip.peripherals {
@@ -415,6 +501,7 @@ impl SystemBus {
             });
         }
 
+        bus.rebuild_peripheral_ranges();
         Ok(bus)
     }
 
@@ -596,10 +683,9 @@ impl crate::Bus for SystemBus {
         }
 
         // Dynamic Peripherals
-        for p in &self.peripherals {
-            if addr >= p.base && addr < p.base + p.size {
-                return p.dev.read(addr - p.base);
-            }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &self.peripherals[idx];
+            return p.dev.read(addr - p.base);
         }
 
         Err(SimulationError::MemoryViolation(addr))
@@ -619,10 +705,10 @@ impl crate::Bus for SystemBus {
             .or_else(|| self.flash.read_u8(addr))
             .or(flash_alias_old)
             .or_else(|| {
-                self.peripherals
-                    .iter()
-                    .find(|p| addr >= p.base && addr < p.base + p.size)
-                    .and_then(|p| p.dev.peek(addr - p.base))
+                self.find_peripheral_index(addr).and_then(|idx| {
+                    let p = &self.peripherals[idx];
+                    p.dev.peek(addr - p.base)
+                })
             })
             .unwrap_or(0);
 
@@ -637,17 +723,9 @@ impl crate::Bus for SystemBus {
             Ok(())
         } else {
             // Dynamic Peripherals
-            let mut found = false;
-            let mut p_res = Ok(());
-            for p in &mut self.peripherals {
-                if addr >= p.base && addr < p.base + p.size {
-                    p_res = p.dev.write(addr - p.base, value);
-                    found = true;
-                    break;
-                }
-            }
-            if found {
-                p_res
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                let p = &mut self.peripherals[idx];
+                p.dev.write(addr - p.base, value)
             } else {
                 Err(SimulationError::MemoryViolation(addr))
             }
@@ -804,6 +882,8 @@ mod tests {
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -816,5 +896,40 @@ mod tests {
         // Write through alias and verify backing flash changed.
         bus.write_u8(0x0000_0001, 0xAB).unwrap();
         assert_eq!(bus.flash.read_u8(0x0800_0001), Some(0xAB));
+    }
+
+    #[test]
+    fn test_peripheral_range_index_lookup() {
+        let mut bus = SystemBus {
+            flash: LinearMemory::new(256, 0x0800_0000),
+            ram: LinearMemory::new(256, 0x2000_0000),
+            peripherals: vec![
+                PeripheralEntry {
+                    name: "high".to_string(),
+                    base: 0x5000_0000,
+                    size: 0x1000,
+                    irq: None,
+                    dev: Box::new(crate::peripherals::uart::Uart::new()),
+                },
+                PeripheralEntry {
+                    name: "low".to_string(),
+                    base: 0x4000_0000,
+                    size: 0x1000,
+                    irq: None,
+                    dev: Box::new(crate::peripherals::uart::Uart::new()),
+                },
+            ],
+            nvic: None,
+            observers: Vec::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+        };
+
+        bus.rebuild_peripheral_ranges();
+        let low_idx = bus.find_peripheral_index(0x4000_0004);
+        let high_idx = bus.find_peripheral_index(0x5000_0004);
+
+        assert_eq!(low_idx, Some(1));
+        assert_eq!(high_idx, Some(0));
     }
 }

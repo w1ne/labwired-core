@@ -9,17 +9,12 @@ use std::io::{self, Write};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UartRegisterLayout {
+    #[default]
     Stm32F1,
     Stm32V2,
-}
-
-impl Default for UartRegisterLayout {
-    fn default() -> Self {
-        Self::Stm32F1
-    }
 }
 
 impl FromStr for UartRegisterLayout {

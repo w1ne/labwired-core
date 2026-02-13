@@ -52,3 +52,28 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 lto = true
+
+[profile.release.package.firmware-ci-fixture]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-h563-demo]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-h563-io-demo]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-h563-fullchip-demo]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.riscv-ci-fixture]
+codegen-units = 1
+debug = true
+opt-level = "s"
