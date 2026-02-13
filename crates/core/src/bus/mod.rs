@@ -10,6 +10,7 @@ use crate::peripherals::uart::Uart;
 use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -43,6 +44,17 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
+    fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
+        let raw = PathBuf::from(descriptor_path);
+        if raw.is_absolute() || raw.exists() {
+            return raw;
+        }
+
+        let chip_path = Path::new(&manifest.chip);
+        let chip_dir = chip_path.parent().unwrap_or_else(|| Path::new("."));
+        chip_dir.join(descriptor_path)
+    }
+
     pub fn new() -> Self {
         // Default initialization for tests
         Self {
@@ -175,7 +187,7 @@ impl SystemBus {
         }
     }
 
-    pub fn from_config(chip: &ChipDescriptor, _manifest: &SystemManifest) -> anyhow::Result<Self> {
+    pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         let flash_size = parse_size(&chip.flash.size)?;
         let ram_size = parse_size(&chip.ram.size)?;
 
@@ -212,13 +224,14 @@ impl SystemBus {
                             )
                         })?;
 
-                    // Resolve path relative to the chip descriptor if needed?
-                    // For now, let's assume it's relative to the CWD or we should handle it like manifest.chip
-                    let desc = labwired_config::PeripheralDescriptor::from_file(descriptor_path)
+                    let resolved_path = Self::resolve_peripheral_path(manifest, descriptor_path);
+                    let desc = labwired_config::PeripheralDescriptor::from_file(&resolved_path)
                         .with_context(|| {
                             format!(
-                                "Failed to load declarative descriptor for '{}' from '{}'",
-                                p_cfg.id, descriptor_path
+                                "Failed to load declarative descriptor for '{}' from '{}' (resolved to '{}')",
+                                p_cfg.id,
+                                descriptor_path,
+                                resolved_path.display()
                             )
                         })?;
 
@@ -238,8 +251,14 @@ impl SystemBus {
                             )
                         })?;
 
-                    let content = std::fs::read_to_string(descriptor_path)
-                        .with_context(|| format!("Failed to read IR file: {}", descriptor_path))?;
+                    let resolved_path = Self::resolve_peripheral_path(manifest, descriptor_path);
+                    let content = std::fs::read_to_string(&resolved_path).with_context(|| {
+                        format!(
+                            "Failed to read IR file '{}' (resolved to '{}')",
+                            descriptor_path,
+                            resolved_path.display()
+                        )
+                    })?;
                     let ir_peripheral = match serde_json::from_str::<labwired_ir::IrPeripheral>(
                         &content,
                     ) {
@@ -249,7 +268,8 @@ impl SystemBus {
                                 .with_context(|| {
                                     format!(
                                         "Failed to parse Strict IR from {} as IrPeripheral ({}) or IrDevice",
-                                        descriptor_path, peripheral_err
+                                        resolved_path.display(),
+                                        peripheral_err
                                     )
                                 })?;
 
@@ -270,7 +290,7 @@ impl SystemBus {
                                     .join(", ");
                                 return Err(anyhow::anyhow!(
                                     "Strict IR '{}' contains multiple peripherals [{}]; no match for id '{}'",
-                                    descriptor_path,
+                                    resolved_path.display(),
                                     available,
                                     p_cfg.id
                                 ));
@@ -636,6 +656,32 @@ mod tests {
         bus.write_u32(0x40001004, 0x12345678).unwrap();
         let count_val = bus.read_u32(0x40001004).unwrap();
         assert_eq!(count_val, 0x12345678);
+    }
+
+    #[test]
+    fn test_system_bus_resolves_descriptor_path_relative_to_chip_file() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip_path = root.join("tests/fixtures/test_chip_declarative.yaml");
+        let manifest_path = root.join("tests/fixtures/test_system_declarative.yaml");
+
+        let mut chip = ChipDescriptor::from_file(&chip_path).unwrap();
+        let mut manifest = SystemManifest::from_file(&manifest_path).unwrap();
+
+        // Simulate a descriptor path that is relative to chip.yaml location.
+        if let Some(path) = chip.peripherals[0].config.get_mut("path") {
+            *path = serde_yaml::Value::String("test_timer_descriptor.yaml".to_string());
+        }
+        manifest.chip = chip_path.to_string_lossy().into_owned();
+
+        let bus =
+            SystemBus::from_config(&chip, &manifest).expect("Failed to create bus from config");
+
+        let found = bus
+            .peripherals
+            .iter()
+            .find(|p| p.name == "TIMER1")
+            .expect("TIMER1 not found");
+        assert_eq!(found.base, 0x40001000);
     }
 
     #[test]
