@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
 mod asset_validation;
+mod size_limited_writer;
 mod vcd_trace;
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
@@ -255,6 +256,10 @@ struct TestArgs {
     /// Number of steps with no PC change to detect stuck state (default: None)
     #[arg(long, alias = "no-progress")]
     detect_stuck: Option<u64>,
+
+    /// Override max VCD file size limit (bytes)
+    #[arg(long)]
+    max_vcd_bytes: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1268,6 +1273,7 @@ fn build_stop_reason_details(
     uart_bytes: u64,
     stuck_steps: u64,
     duration: std::time::Duration,
+    vcd_bytes: u64,
 ) -> StopReasonDetails {
     let (triggered_limit, observed) = match stop_reason {
         StopReason::MaxSteps => (
@@ -1320,6 +1326,16 @@ fn build_stop_reason_details(
                 value: duration.as_millis().min(u128::from(u64::MAX)) as u64,
             }),
         ),
+        StopReason::MaxVcdBytes => (
+            limits.max_vcd_bytes.map(|v| NamedU64 {
+                name: "max_vcd_bytes".to_string(),
+                value: v,
+            }),
+            Some(NamedU64 {
+                name: "vcd_bytes".to_string(),
+                value: vcd_bytes,
+            }),
+        ),
         StopReason::MemoryViolation
         | StopReason::DecodeError
         | StopReason::Halt
@@ -1353,6 +1369,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         script_max_uart_bytes,
         script_no_progress_steps,
         script_wall_time_ms,
+        script_max_vcd_bytes,
         assertions,
     ) = match loaded {
         LoadedTestScript::V1_0(script) => (
@@ -1363,6 +1380,7 @@ fn run_test(args: TestArgs) -> ExitCode {
             script.limits.max_uart_bytes,
             script.limits.no_progress_steps,
             script.limits.wall_time_ms,
+            script.limits.max_vcd_bytes,
             script.assertions,
         ),
         LoadedTestScript::LegacyV1(script) => {
@@ -1377,6 +1395,7 @@ fn run_test(args: TestArgs) -> ExitCode {
                 None,
                 None,
                 script.wall_time_ms,
+                None,
                 script.assertions,
             )
         }
@@ -1385,6 +1404,7 @@ fn run_test(args: TestArgs) -> ExitCode {
     let max_steps = args.max_steps.unwrap_or(script_max_steps);
     let max_cycles = args.max_cycles.or(script_max_cycles);
     let max_uart_bytes = args.max_uart_bytes.or(script_max_uart_bytes);
+    let max_vcd_bytes = args.max_vcd_bytes.or(script_max_vcd_bytes);
     let detect_stuck = args.detect_stuck.or(script_no_progress_steps);
     let resolved_limits = TestLimits {
         max_steps,
@@ -1392,6 +1412,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         max_uart_bytes,
         no_progress_steps: detect_stuck,
         wall_time_ms: script_wall_time_ms,
+        max_vcd_bytes,
     };
 
     // Guard against accidentally huge runs from CI misconfiguration.
@@ -1606,6 +1627,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         0,
         0,
         std::time::Duration::from_secs(0),
+        0, // vcd_bytes
     );
     write_outputs(
         args,
@@ -1770,6 +1792,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         uart_bytes,
         stuck_counter,
         duration,
+        0, // vcd_bytes - will be updated below
     );
     write_outputs(
         args,
@@ -1967,6 +1990,7 @@ fn write_config_error_outputs(
         0,
         0,
         std::time::Duration::from_secs(0),
+        0, // vcd_bytes
     );
 
     let result = TestResult {

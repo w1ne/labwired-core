@@ -400,6 +400,8 @@ pub struct TestLimits {
     pub no_progress_steps: Option<u64>,
     #[serde(default)]
     pub wall_time_ms: Option<u64>,
+    #[serde(default)]
+    pub max_vcd_bytes: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -410,6 +412,7 @@ pub enum StopReason {
     MaxSteps,
     MaxCycles,
     MaxUartBytes,
+    MaxVcdBytes,
     NoProgress,
     WallTime,
     MemoryViolation,
