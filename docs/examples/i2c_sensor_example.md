@@ -47,7 +47,7 @@ uint32_t read_temperature() {
 When running the simulation, you can verify the sensor state using snapshots:
 
 ```bash
-labwired run -f my_firmware.elf --snapshot snapshot.json
+labwired --firmware my_firmware.elf --snapshot snapshot.json
 ```
 
 The resulting `snapshot.json` will contain:

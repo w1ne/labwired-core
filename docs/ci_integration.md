@@ -25,7 +25,7 @@ This guide shows you how to integrate LabWired firmware testing into your contin
 
    assertions:
      - uart_contains: "Tests passed"
-     - expected_stop_reason: breakpoint
+     - expected_stop_reason: halt
    ```
 
 3. **Update the workflow** to build your firmware:
@@ -162,7 +162,7 @@ limits:
 assertions:
   - uart_contains: "OK"       # UART must contain this string
   - uart_regex: "Test \\d+"   # UART must match regex
-  - expected_stop_reason: breakpoint  # How should it stop?
+  - expected_stop_reason: halt  # How should it stop?
 ```
 
 ### Common Patterns
@@ -183,7 +183,7 @@ limits:
 assertions:
   - uart_contains: "Running 10 tests"
   - uart_contains: "test result: ok"
-  - expected_stop_reason: breakpoint
+  - expected_stop_reason: halt
 limits:
   wall_time_ms: 10000
 ```
@@ -282,9 +282,9 @@ All test runs produce three artifacts:
    ```json
    {
      "status": "pass",
-     "instructions_executed": 45231,
-     "cycles_executed": 45231,
-     "stop_reason": "breakpoint",
+     "instructions": 45231,
+     "cycles": 45231,
+     "stop_reason": "halt",
      "firmware_hash": "abc123...",
      "assertions": [...]
    }
@@ -303,7 +303,7 @@ All test runs produce three artifacts:
    ```xml
    <testsuite name="firmware-tests" tests="2" failures="0">
      <testcase name="uart_contains: OK" />
-     <testcase name="expected_stop_reason: breakpoint" />
+     <testcase name="expected_stop_reason: halt" />
    </testsuite>
    ```
 

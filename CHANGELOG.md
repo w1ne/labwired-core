@@ -16,10 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Verified against STM32F4, RP2040, and nRF52.
 - **Timing Hooks**: Declarative peripheral behavior for registers (SetBits, ClearBits, WriteValue) with periodic and event-based triggers.
 - **Timeline View**: Professional visualization of instruction trace data in the VS Code extension.
-- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/release_strategy.md`.
+- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `../docs/SUPPORTED_DEVICES.md`.
 - **Architecture Guide**: New comprehensive `core/docs/architecture_guide.md`.
 - **SVD Ingestor**: New tool (`crates/svd-ingestor`) to generate `PeripheralDescriptor` YAMLs from SVD.
-- **Strategic Horizon**: Long-term vision integrated into `docs/release_strategy.md`.
+- **Strategic Horizon**: Long-term vision integrated into `../docs/plan.md`.
 
 ## [0.11.0] - 2026-02-08
 

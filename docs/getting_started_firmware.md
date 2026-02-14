@@ -6,9 +6,11 @@ This guide helps you bring your own ARM Cortex-M firmware to the LabWired simula
 
 Ensure your firmware is compiled for an ARM Cortex-M target (e.g., `thumbv7m-none-eabi`). LabWired requires an **ELF binary** with valid section headers.
 
-## 2. Configuration (chip.yaml)
+## 2. Configuration (`chip.yaml` + `system.yaml`)
 
-LabWired uses YAML descriptors to define the memory map of your target MCU.
+LabWired uses:
+1. A chip descriptor for MCU memory/peripherals.
+2. A system manifest that references the chip descriptor.
 
 ```yaml
 # config/chips/my_chip.yaml
@@ -25,18 +27,24 @@ peripherals:
     base_address: 0x40013800
 ```
 
+```yaml
+# config/systems/my_board.yaml
+name: "my-board"
+chip: "../chips/my_chip.yaml"
+```
+
 ## 3. Loading Firmware
 
-Run the simulator pointing to your firmware and chip descriptor:
+Run the simulator pointing to your firmware and system manifest:
 
 ```bash
-labwired run --config config/chips/my_chip.yaml -f build/firmware.elf
+labwired --firmware build/firmware.elf --system config/systems/my_board.yaml
 ```
 
 The loader will:
 1. Parse the ELF entry point.
 2. Load segments into the simulated Flash and RAM.
-3. Automatically set the Stack Pointer (SP) and Program Counter (PC) from the vector table at `0x08000000`.
+3. Automatically set the Stack Pointer (SP) and Program Counter (PC) from the vector table at the mapped flash base.
 
 ## 4. Troubleshooting Common Issues
 
