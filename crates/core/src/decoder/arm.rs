@@ -88,6 +88,10 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // AND Rd, Rm
+    Bic {
+        rd: u8,
+        rm: u8,
+    }, // BIC Rd, Rm
     Orr {
         rd: u8,
         rm: u8,
@@ -285,6 +289,12 @@ pub enum Instruction {
         shift_type: u8,
         set_flags: bool,
     },
+    ShiftReg32 {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        shift_type: u8,
+    }, // LSL/LSR/ASR/ROR (register)
 
     Unknown(u16),
     // Intermediate state for 32-bit instruction (First half)
@@ -362,6 +372,7 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
             0xA => Instruction::CmpReg { rn: rd, rm }, // CMP (register) T1
             0xC => Instruction::Orr { rd, rm },        // ORR
             0xD => Instruction::Mul { rd, rn: rm },    // MUL
+            0xE => Instruction::Bic { rd, rm },        // BIC
             0xF => Instruction::Mvn { rd, rm },        // MVN
             _ => Instruction::Unknown(opcode),
         };
@@ -625,7 +636,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
 
     // Data Processing (Reg) - For LSL, LSR, ASR, ROR, etc
     // 1110 1010 ... (EA..)
-    if (h1 & 0xFF00) == 0xEA00 && (h2 & 0x8000) == 0 {
+    if (h1 & 0xFE00) == 0xEA00 && (h2 & 0x8000) == 0 {
         let op = ((h1 >> 5) & 0xF) as u8;
         let s = ((h1 >> 4) & 0x1) != 0;
         let rn = (h1 & 0xF) as u8;
@@ -645,6 +656,21 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             imm5,
             shift_type,
             set_flags: s,
+        };
+    }
+
+    // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
+    // Example seen in H563 firmware path: FA01 F202
+    if (h1 & 0xFFE0) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let shift_type = ((h2 >> 4) & 0x3) as u8;
+        return Instruction::ShiftReg32 {
+            rd,
+            rn,
+            rm,
+            shift_type,
         };
     }
 
@@ -900,6 +926,37 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_shift_reg32_lsl() {
+        // LSL.W R2, R1, R2
+        assert_eq!(
+            decode_thumb_32(0xFA01, 0xF202),
+            Instruction::ShiftReg32 {
+                rd: 2,
+                rn: 1,
+                rm: 2,
+                shift_type: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_dataproc32_eb_prefix() {
+        // Pattern seen in H563 path.
+        assert_eq!(
+            decode_thumb_32(0xEB00, 0x1010),
+            Instruction::DataProc32 {
+                op: 8,
+                rn: 0,
+                rd: 0,
+                rm: 0,
+                imm5: 4,
+                shift_type: 1,
+                set_flags: false
+            }
+        );
+    }
+
+    #[test]
     fn test_decode_mov_cmp_add_sub_imm8() {
         // MOV R0, #42 -> 0x202A
         assert_eq!(
@@ -1001,6 +1058,8 @@ mod tests {
         assert_eq!(decode_thumb_16(0x431A), Instruction::Orr { rd: 2, rm: 3 });
         // EOR R4, R5 -> 0x406C (0100 00 0001 101 100)
         assert_eq!(decode_thumb_16(0x406C), Instruction::Eor { rd: 4, rm: 5 });
+        // BIC R1, R2 -> 0x4391 (0100 00 1110 010 001)
+        assert_eq!(decode_thumb_16(0x4391), Instruction::Bic { rd: 1, rm: 2 });
         // MVN R6, R7 -> 0x43FE (0100 00 1111 111 110)
         assert_eq!(decode_thumb_16(0x43FE), Instruction::Mvn { rd: 6, rm: 7 });
     }

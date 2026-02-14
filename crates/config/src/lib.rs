@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Default schema version for YAML configs
+fn default_schema_version() -> String {
+    "1.0".to_string()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Arch {
@@ -40,6 +45,8 @@ pub struct PeripheralConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
     pub name: String,
     pub arch: Arch, // Parsed from string
     pub flash: MemoryRange,
@@ -89,6 +96,8 @@ pub struct BoardIoBinding {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SystemManifest {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
     pub name: String,
     pub chip: String, // Reference to chip name or file path
     #[serde(default)]
@@ -338,6 +347,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
         };
 
         Self {
+            schema_version: default_schema_version(),
             name: ir.name,
             arch,
             flash: MemoryRange {

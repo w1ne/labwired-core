@@ -105,6 +105,15 @@ fn report_io_state(led_on: bool) {
     uart_write_str("\n");
 }
 
+fn delay(mut ticks: u32) {
+    while ticks != 0 {
+        unsafe {
+            core::arch::asm!("nop");
+        }
+        ticks -= 1;
+    }
+}
+
 fn main() -> ! {
     uart_write_str("H563-IO\n");
 
@@ -118,7 +127,15 @@ fn main() -> ! {
     set_led_state(false);
     report_io_state(false);
 
-    loop {}
+    loop {
+        set_led_state(true);
+        report_io_state(true);
+        delay(123_457);
+
+        set_led_state(false);
+        report_io_state(false);
+        delay(210_113);
+    }
 }
 
 #[panic_handler]

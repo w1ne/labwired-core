@@ -5,6 +5,9 @@
 // See the LICENSE file in the project root for full license information.
 
 #[cfg(test)]
+mod test_cycles;
+
+#[cfg(test)]
 mod integration_tests {
     use crate::cpu::CortexM;
     use crate::decoder::arm::{self as decoder, Instruction};

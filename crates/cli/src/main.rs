@@ -15,8 +15,8 @@ use labwired_core::Cpu;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
-mod vcd_trace;
 mod asset_validation;
+mod vcd_trace;
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
 
@@ -366,6 +366,37 @@ struct InteractiveSnapshotInputs<'a> {
     stop_reason: StopReason,
     message: Option<String>,
 }
+
+/// Unified error response for agent consumption
+#[derive(Debug, Serialize)]
+struct ErrorResponse {
+    error_type: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<serde_json::Value>,
+    exit_code: u8,
+}
+
+/// Emit an error message, respecting the --json flag for structured output
+fn emit_error(json_mode: bool, error_type: &str, message: String, details: Option<serde_json::Value>, exit_code: u8) {
+    if json_mode {
+        let response = ErrorResponse {
+            error_type: error_type.to_string(),
+            message: message.clone(),
+            details,
+            exit_code,
+        };
+        if let Ok(json) = serde_json::to_string_pretty(&response) {
+            println!("{}", json);
+        } else {
+            // Fallback if JSON serialization fails
+            eprintln!("{{\"error_type\":\"{}\",\"message\":\"{}\",\"exit_code\":{}}}", error_type, message.replace('"', "\\\""), exit_code);
+        }
+    } else {
+        error!("{}", message);
+    }
+}
+
 
 fn write_interactive_snapshot<C: labwired_core::Cpu>(
     path: &Path,
@@ -727,27 +758,52 @@ fn run_interactive(cli: Cli) -> ExitCode {
     info!("Starting LabWired Simulator");
 
     let Some(firmware) = &cli.firmware else {
-        tracing::error!("Missing required --firmware argument");
+        emit_error(
+            cli.json,
+            "ConfigError",
+            "Missing required --firmware argument".to_string(),
+            None,
+            EXIT_CONFIG_ERROR,
+        );
         return ExitCode::from(EXIT_CONFIG_ERROR);
     };
 
+
     let system_path = cli.system.clone();
-    let bus = match build_bus(system_path.clone()) {
+    let bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
         Ok(bus) => bus,
         Err(e) => {
-            tracing::error!("{:#}", e);
+            emit_error(
+                cli.json,
+                "ConfigError",
+                format!("{:#}", e),
+                Some(serde_json::json!({
+                    "system_path": system_path.as_ref().map(|p| p.display().to_string()),
+                })),
+                EXIT_CONFIG_ERROR,
+            );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
 
     info!("Loading firmware: {:?}", firmware);
     let program = match labwired_loader::load_elf(firmware) {
         Ok(program) => program,
         Err(e) => {
-            tracing::error!("{:#}", e);
+            emit_error(
+                cli.json,
+                "LoadError",
+                format!("{:#}", e),
+                Some(serde_json::json!({
+                    "firmware_path": firmware.display().to_string(),
+                })),
+                EXIT_CONFIG_ERROR,
+            );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
 
     info!("Firmware Loaded Successfully!");
     info!("Entry Point: {:#x}", program.entry_point);
@@ -764,13 +820,29 @@ fn run_interactive(cli: Cli) -> ExitCode {
                 match labwired_config::ChipDescriptor::from_file(&chip_path) {
                     Ok(c) => c.arch,
                     Err(e) => {
-                        tracing::error!("Failed to parse chip descriptor: {:#}", e);
+                        emit_error(
+                            cli.json,
+                            "ConfigError",
+                            format!("Failed to parse chip descriptor: {:#}", e),
+                            Some(serde_json::json!({
+                                "chip_path": chip_path.display().to_string(),
+                            })),
+                            EXIT_CONFIG_ERROR,
+                        );
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
                 }
             }
             Err(e) => {
-                tracing::error!("Failed to parse system manifest: {:#}", e);
+                emit_error(
+                    cli.json,
+                    "ConfigError",
+                    format!("Failed to parse system manifest: {:#}", e),
+                    Some(serde_json::json!({
+                        "system_path": sys_path.display().to_string(),
+                    })),
+                    EXIT_CONFIG_ERROR,
+                );
                 return ExitCode::from(EXIT_CONFIG_ERROR);
             }
         }
@@ -800,7 +872,15 @@ fn run_interactive(cli: Cli) -> ExitCode {
         labwired_config::Arch::Arm => run_interactive_arm(cli, bus, program, metrics),
         labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
         _ => {
-            error!("Unsupported architecture: {:?}", cpu_arch);
+            emit_error(
+                cli.json,
+                "ConfigError",
+                format!("Unsupported architecture: {:?}", cpu_arch),
+                Some(serde_json::json!({
+                    "architecture": format!("{:?}", cpu_arch),
+                })),
+                EXIT_CONFIG_ERROR,
+            );
             ExitCode::from(EXIT_CONFIG_ERROR)
         }
     }
@@ -845,7 +925,7 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
     };
 
     // Reconstruct bus
-    let mut bus = match build_bus(config.system.clone()) {
+    let mut bus = match labwired_core::system::builder::build_system_bus(config.system.as_deref()) {
         Ok(bus) => bus,
         Err(e) => {
             error!("Failed to reconstruct bus: {:#}", e);
@@ -1383,7 +1463,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         }
     };
 
-    let mut bus = match build_bus(system_path.clone()) {
+    let mut bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
         Ok(bus) => bus,
         Err(e) => {
             let msg = format!("{:#}", e);
@@ -1992,25 +2072,7 @@ fn write_config_error_outputs(
     }
 }
 
-fn build_bus(system_path: Option<PathBuf>) -> anyhow::Result<labwired_core::bus::SystemBus> {
-    let bus = if let Some(sys_path) = system_path {
-        info!("Loading system manifest: {:?}", sys_path);
-        let mut manifest = labwired_config::SystemManifest::from_file(&sys_path)?;
-        let chip_path = sys_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join(&manifest.chip);
-        manifest.chip = chip_path.to_string_lossy().into_owned();
-        info!("Loading chip descriptor: {:?}", chip_path);
-        let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
-        labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
-    } else {
-        info!("Using default hardware configuration");
-        labwired_core::bus::SystemBus::new()
-    };
 
-    Ok(bus)
-}
 
 fn resolve_script_path(script_path: &Path, value: &str) -> PathBuf {
     let p = PathBuf::from(value);

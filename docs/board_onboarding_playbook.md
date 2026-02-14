@@ -57,11 +57,13 @@ Actions:
 1. Run tests.
 2. Build smoke firmware.
 3. Run simulator with example-local `system.yaml`.
+4. Run code-driven unsupported-instruction audit.
 
 Exit criteria:
 - PC/SP initialize correctly
 - UART smoke output observed
 - test suite changes pass
+- unsupported-instruction report artifacts generated
 
 ### Phase 5: Handoff Report
 
@@ -184,6 +186,11 @@ cargo run -q -p labwired-cli -- \
   --firmware target/thumbv7m-none-eabi/release/firmware-h563-demo \
   --system configs/systems/nucleo-h563zi-demo.yaml \
   --max-steps 32
+./scripts/unsupported_instruction_audit.sh \
+  --firmware target/thumbv7m-none-eabi/release/firmware-h563-demo \
+  --system configs/systems/nucleo-h563zi-demo.yaml \
+  --max-steps 200000 \
+  --out-dir out/unsupported-audit/nucleo-h563zi
 ```
 
 Expected outcome:
@@ -191,6 +198,7 @@ Expected outcome:
 - simulator starts successfully
 - PC initializes to flash region (`0x08000000` range)
 - UART output contains `OK`
+- unsupported-instruction report exists at `out/unsupported-audit/<board>/report.md`
 
 ## Common Failure Modes
 

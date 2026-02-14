@@ -454,6 +454,11 @@ impl Cpu for CortexM {
                 self.write_reg(rd, res);
                 self.update_nz(res);
             }
+            Instruction::Bic { rd, rm } => {
+                let res = self.read_reg(rd) & !self.read_reg(rm);
+                self.write_reg(rd, res);
+                self.update_nz(res);
+            }
             Instruction::Orr { rd, rm } => {
                 let res = self.read_reg(rd) | self.read_reg(rm);
                 self.write_reg(rd, res);
@@ -529,6 +534,55 @@ impl Cpu for CortexM {
                 };
                 self.write_reg(rd, res);
                 self.update_nz(res);
+            }
+            Instruction::ShiftReg32 {
+                rd,
+                rn,
+                rm,
+                shift_type,
+            } => {
+                let value = self.read_reg(rn);
+                let shift = self.read_reg(rm) & 0xFF;
+                let result = match shift_type {
+                    0 => {
+                        if shift >= 32 {
+                            0
+                        } else {
+                            value.wrapping_shl(shift)
+                        }
+                    }
+                    1 => {
+                        if shift == 0 {
+                            value
+                        } else if shift >= 32 {
+                            0
+                        } else {
+                            value.wrapping_shr(shift)
+                        }
+                    }
+                    2 => {
+                        if shift == 0 {
+                            value
+                        } else if shift >= 32 {
+                            if (value & 0x8000_0000) != 0 {
+                                0xFFFF_FFFF
+                            } else {
+                                0
+                            }
+                        } else {
+                            ((value as i32) >> shift) as u32
+                        }
+                    }
+                    3 => {
+                        if shift == 0 {
+                            value
+                        } else {
+                            value.rotate_right(shift % 32)
+                        }
+                    }
+                    _ => value,
+                };
+                self.write_reg(rd, result);
             }
             Instruction::Rsbs { rd, rn } => {
                 let op1 = self.read_reg(rn);
@@ -952,6 +1006,56 @@ impl Cpu for CortexM {
                             if set_flags {
                                 self.update_nz(result);
                             }
+                            pc_increment = 4;
+                        }
+                        Instruction::ShiftReg32 {
+                            rd,
+                            rn,
+                            rm,
+                            shift_type,
+                        } => {
+                            let value = self.read_reg(rn);
+                            let shift = self.read_reg(rm) & 0xFF;
+                            let result = match shift_type {
+                                0 => {
+                                    if shift >= 32 {
+                                        0
+                                    } else {
+                                        value.wrapping_shl(shift)
+                                    }
+                                }
+                                1 => {
+                                    if shift == 0 {
+                                        value
+                                    } else if shift >= 32 {
+                                        0
+                                    } else {
+                                        value.wrapping_shr(shift)
+                                    }
+                                }
+                                2 => {
+                                    if shift == 0 {
+                                        value
+                                    } else if shift >= 32 {
+                                        if (value & 0x8000_0000) != 0 {
+                                            0xFFFF_FFFF
+                                        } else {
+                                            0
+                                        }
+                                    } else {
+                                        ((value as i32) >> shift) as u32
+                                    }
+                                }
+                                3 => {
+                                    if shift == 0 {
+                                        value
+                                    } else {
+                                        value.rotate_right(shift % 32)
+                                    }
+                                }
+                                _ => value,
+                            };
+                            self.write_reg(rd, result);
                             pc_increment = 4;
                         }
                         _ => {
