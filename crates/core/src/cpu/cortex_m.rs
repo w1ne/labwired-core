@@ -535,6 +535,43 @@ impl Cpu for CortexM {
                 self.write_reg(rd, res);
                 self.update_nz(res);
             }
+            Instruction::Adc { rd, rm } => {
+                let op1 = self.read_reg(rd);
+                let op2 = self.read_reg(rm);
+                let carry_in = (self.xpsr >> 29) & 1;
+                let (res, c, v) = adc_with_flags(op1, op2, carry_in);
+                self.write_reg(rd, res);
+                self.update_nzcv(res, c, v);
+            }
+            Instruction::Sbc { rd, rm } => {
+                let op1 = self.read_reg(rd);
+                let op2 = self.read_reg(rm);
+                let carry_in = (self.xpsr >> 29) & 1;
+                let (res, c, v) = sbc_with_flags(op1, op2, carry_in);
+                self.write_reg(rd, res);
+                self.update_nzcv(res, c, v);
+            }
+            Instruction::Ror { rd, rm } => {
+                let val = self.read_reg(rd);
+                let shift = self.read_reg(rm) & 0xFF;
+                let res = if shift == 0 {
+                    val
+                } else {
+                    val.rotate_right(shift % 32)
+                };
+                self.write_reg(rd, res);
+                self.update_nz(res);
+            }
+            Instruction::Tst { rn, rm } => {
+                let res = self.read_reg(rn) & self.read_reg(rm);
+                self.update_nz(res);
+            }
+            Instruction::Cmn { rn, rm } => {
+                let op1 = self.read_reg(rn);
+                let op2 = self.read_reg(rm);
+                let (res, c, v) = add_with_flags(op1, op2);
+                self.update_nzcv(res, c, v);
+            }
             Instruction::ShiftReg32 {
                 rd,
                 rn,
@@ -666,6 +703,14 @@ impl Cpu for CortexM {
                     self.write_reg(rt, val as u32);
                 } else {
                     tracing::error!("Bus Read Fault (LDRB) at {:#x}", addr);
+                }
+            }
+            Instruction::LdrbReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                if let Ok(val) = bus.read_u8(addr as u64) {
+                    self.write_reg(rt, val as u32);
+                } else {
+                    tracing::error!("Bus Read Fault (LDRB reg) at {:#x}", addr);
                 }
             }
             Instruction::StrbImm { rt, rn, imm } => {
@@ -1439,26 +1484,6 @@ impl Cpu for CortexM {
     }
 }
 
-fn add_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
-    let (res, overflow1) = op1.overflowing_add(op2);
-    let carry = overflow1;
-    let neg_op1 = (op1 as i32) < 0;
-    let neg_op2 = (op2 as i32) < 0;
-    let neg_res = (res as i32) < 0;
-    let overflow = (neg_op1 == neg_op2) && (neg_res != neg_op1);
-    (res, carry, overflow)
-}
-
-fn sub_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
-    let (res, borrow) = op1.overflowing_sub(op2);
-    let carry = !borrow;
-    let neg_op1 = (op1 as i32) < 0;
-    let neg_op2 = (op2 as i32) < 0;
-    let neg_res = (res as i32) < 0;
-    let overflow = (neg_op1 != neg_op2) && (neg_res != neg_op1);
-    (res, carry, overflow)
-}
-
 // Thumb expand immediate - implements ARM's modified immediate constant expansion
 fn thumb_expand_imm(imm12: u32) -> u32 {
     let i = (imm12 >> 11) & 1;
@@ -1483,4 +1508,61 @@ fn thumb_expand_imm(imm12: u32) -> u32 {
         let n = (i << 4) | (imm3 << 1) | (imm8 >> 7);
         val.rotate_right(n)
     }
+}
+
+fn add_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
+    let (res, overflow1) = op1.overflowing_add(op2);
+    let carry = overflow1;
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    let overflow = (neg_op1 == neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
+}
+
+fn adc_with_flags(op1: u32, op2: u32, carry_in: u32) -> (u32, bool, bool) {
+    let (res1, c1) = op1.overflowing_add(op2);
+    let (res, c2) = res1.overflowing_add(carry_in);
+    let carry = c1 || c2;
+    
+    // Overflow: operands have same sign AND result has different sign
+    // Effectively (op1 + op2 + carry) overflowed signed range.
+    // Approximate check:
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    // Overflow if inputs same sign, output different
+    // Note: Carry_in 0 or 1 usually doesn't change sign logic much, but rigorous check:
+    // Sign of (op1 + op2 + carry). It's simpler to rely on basic sign logic or specific algo.
+    // ARM ref: Overflow = (op1<31> == op2<31>) && (res<31> != op1<31>)
+    // Wait, carry_in effectively adds small value.
+    // If op1=MAX, op2=1, c=0 -> overflow pos to neg.
+    // Standard V flag logic:
+    let overflow = (neg_op1 == neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
+}
+
+fn sub_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
+    let (res, borrow) = op1.overflowing_sub(op2);
+    let carry = !borrow;
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    let overflow = (neg_op1 != neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
+}
+
+fn sbc_with_flags(op1: u32, op2: u32, carry_in: u32) -> (u32, bool, bool) {
+    // SBC: op1 - op2 - NOT(carry) = op1 - op2 - (1 - carry)
+    let borrow_in = 1 - carry_in;
+    let (res1, b1) = op1.overflowing_sub(op2);
+    let (res, b2) = res1.overflowing_sub(borrow_in);
+    let borrow = b1 || b2;
+    let carry = !borrow;
+    
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    let overflow = (neg_op1 != neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
 }

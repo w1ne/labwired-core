@@ -381,6 +381,7 @@ mod integration_tests {
     #[test]
     fn test_from_config_skips_unsupported_peripherals() {
         let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test-chip".to_string(),
             arch: Arch::Arm,
             flash: MemoryRange {
@@ -412,6 +413,7 @@ mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
@@ -448,6 +450,7 @@ mod integration_tests {
     #[test]
     fn test_from_config_defaults_size_irq_and_base() {
         let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test-chip-2".to_string(),
             arch: Arch::Arm,
             flash: MemoryRange {
@@ -479,6 +482,7 @@ mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system-2".to_string(),
             chip: "test-chip-2".to_string(),
             memory_overrides: HashMap::new(),
@@ -507,6 +511,7 @@ mod integration_tests {
     #[test]
     fn test_from_config_honors_size_and_irq() {
         let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test-chip-3".to_string(),
             arch: Arch::Arm,
             flash: MemoryRange {
@@ -528,6 +533,7 @@ mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system-3".to_string(),
             chip: "test-chip-3".to_string(),
             memory_overrides: HashMap::new(),
@@ -554,6 +560,7 @@ mod integration_tests {
         );
 
         let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test-chip-gpio-v2".to_string(),
             arch: Arch::Arm,
             flash: MemoryRange {
@@ -575,6 +582,7 @@ mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2".to_string(),
             chip: "test-chip-gpio-v2".to_string(),
             memory_overrides: HashMap::new(),
@@ -607,6 +615,7 @@ mod integration_tests {
         );
 
         let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test-chip-uart-v2".to_string(),
             arch: Arch::Arm,
             flash: MemoryRange {
@@ -628,6 +637,7 @@ mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system-uart-v2".to_string(),
             chip: "test-chip-uart-v2".to_string(),
             memory_overrides: HashMap::new(),
@@ -657,6 +667,7 @@ mod integration_tests {
         );
 
         let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test-chip-rcc-v2".to_string(),
             arch: Arch::Arm,
             flash: MemoryRange {
@@ -678,6 +689,7 @@ mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system-rcc-v2".to_string(),
             chip: "test-chip-rcc-v2".to_string(),
             memory_overrides: HashMap::new(),
@@ -705,6 +717,7 @@ mod integration_tests {
         );
 
         let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test-chip-gpio-v2-alias".to_string(),
             arch: Arch::Arm,
             flash: MemoryRange {
@@ -726,6 +739,7 @@ mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2-alias".to_string(),
             chip: "test-chip-gpio-v2-alias".to_string(),
             memory_overrides: HashMap::new(),

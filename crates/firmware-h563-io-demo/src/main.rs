@@ -124,17 +124,14 @@ fn main() -> ! {
     set_led_state(true);
     report_io_state(true);
 
-    set_led_state(false);
-    report_io_state(false);
-
     loop {
         set_led_state(true);
         report_io_state(true);
-        delay(123_457);
+        delay(100);
 
         set_led_state(false);
         report_io_state(false);
-        delay(210_113);
+        delay(100);
     }
 }
 

@@ -1979,6 +1979,7 @@ fn write_config_error_outputs(
         max_uart_bytes: None,
         no_progress_steps: None,
         wall_time_ms: None,
+        max_vcd_bytes: None,
     });
 
     let stop_reason = StopReason::ConfigError;

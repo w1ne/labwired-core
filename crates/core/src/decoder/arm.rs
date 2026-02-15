@@ -58,6 +58,14 @@ pub enum Instruction {
         rn: u8,
         rm: u8,
     }, // CMP Rn, Rm
+    Cmn {
+        rn: u8,
+        rm: u8,
+    }, // CMN Rn, Rm
+    Tst {
+        rn: u8,
+        rm: u8,
+    }, // TST Rn, Rm
     MovReg {
         rd: u8,
         rm: u8,
@@ -121,6 +129,18 @@ pub enum Instruction {
         rm: u8,
         imm: u8,
     }, // ASR Rd, Rm, #imm5
+    Adc {
+        rd: u8,
+        rm: u8,
+    }, // ADC Rd, Rm
+    Sbc {
+        rd: u8,
+        rm: u8,
+    }, // SBC Rd, Rm
+    Ror {
+        rd: u8,
+        rm: u8,
+    }, // ROR Rd, Rm
 
     // Memory
     LdrImm {
@@ -142,6 +162,11 @@ pub enum Instruction {
         rn: u8,
         imm: u8,
     }, // LDRB Rt, [Rn, #imm]
+    LdrbReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRB Rt, [Rn, Rm]
     StrbImm {
         rt: u8,
         rn: u8,
@@ -367,9 +392,13 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         return match op_alu {
             0x0 => Instruction::And { rd, rm },        // AND
             0x1 => Instruction::Eor { rd, rm },        // EOR
-            0x5 => Instruction::AsrReg { rd, rm },     // ASR (register)
+            0x5 => Instruction::Adc { rd, rm },        // ADC
+            0x6 => Instruction::Sbc { rd, rm },        // SBC
+            0x7 => Instruction::Ror { rd, rm },        // ROR
+            0x8 => Instruction::Tst { rn: rd, rm },    // TST
             0x9 => Instruction::Rsbs { rd, rn: rm },   // RSBS Rd, Rn, #0
             0xA => Instruction::CmpReg { rn: rd, rm }, // CMP (register) T1
+            0xB => Instruction::Cmn { rn: rd, rm },    // CMN
             0xC => Instruction::Orr { rd, rm },        // ORR
             0xD => Instruction::Mul { rd, rn: rm },    // MUL
             0xE => Instruction::Bic { rd, rm },        // BIC
@@ -471,6 +500,14 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         let rn = ((opcode >> 3) & 0x7) as u8;
         let rt = (opcode & 0x7) as u8;
         return Instruction::LdrReg { rt, rn, rm };
+    }
+
+    // 4.2 LDRB (register) (T1): 0101 110 mmm nnn ttt
+    if (opcode & 0xFE00) == 0x5C00 {
+        let rm = ((opcode >> 6) & 0x7) as u8;
+        let rn = ((opcode >> 3) & 0x7) as u8;
+        let rt = (opcode & 0x7) as u8;
+        return Instruction::LdrbReg { rt, rn, rm };
     }
 
     // 4.2 PUSH/POP
