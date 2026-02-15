@@ -1,0 +1,86 @@
+site_name: LabWired Core
+site_url: https://w1ne.github.io/labwired-core/
+repo_url: https://github.com/w1ne/labwired-core
+repo_name: w1ne/labwired-core
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+
+nav:
+  - Home: README.md
+  - Getting Started:
+    - Firmware: getting_started_firmware.md
+    - Board Onboarding: board_onboarding_playbook.md
+    - Examples:
+      - Blinky & I2C: examples/i2c_sensor_example.md
+      - DMA & EXTI: examples/dma_exti_example.md
+      - Integrated Test: examples/integrated_test_walkthrough.md
+  - Architecture:
+    - Overview: architecture.md
+    - Guide: architecture_guide.md
+    - Design:
+      - Modular Components: design/modular_components.md
+      - Multi-Arch: design/multi_arch_refactor.md
+      - System Descriptors: design/system_descriptors.md
+  - Development:
+    - Peripheral Dev: peripheral_development.md
+    - Declarative Registers: declarative_registers.md
+    - Schema Compatibility: schema_compatibility.md
+    - CI Test Runner: ci_test_runner.md
+    - Git Flow: development/git_flow.md
+  - Integration:
+    - CI Integration: ci_integration.md
+    - GDB Integration: gdb_integration.md
+    - VS Code Debugging: vscode_debugging.md
+  - Operations:
+    - Release Strategy: release_strategy.md
+    - Advanced Peripherals: advanced_peripherals.md
+    - Case Study (STM32): case_study_stm32.md
+    - Debugging: debugging.md
