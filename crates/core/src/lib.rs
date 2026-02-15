@@ -183,6 +183,10 @@ pub trait DebugControl {
         name: &str,
     ) -> Option<labwired_config::PeripheralDescriptor>;
     fn reset(&mut self) -> SimResult<()>;
+
+    // State Management
+    fn snapshot(&self) -> snapshot::MachineSnapshot;
+    fn restore(&mut self, snapshot: &snapshot::MachineSnapshot) -> SimResult<()>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -413,5 +417,13 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
     fn reset(&mut self) -> SimResult<()> {
         self.cpu.reset(&mut self.bus)
+    }
+
+    fn snapshot(&self) -> snapshot::MachineSnapshot {
+        self.snapshot()
+    }
+
+    fn restore(&mut self, snapshot: &snapshot::MachineSnapshot) -> SimResult<()> {
+        self.apply_snapshot(snapshot.clone())
     }
 }
