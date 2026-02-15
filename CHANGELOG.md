@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-02-15
+
 ### Added
+- **Documentation Overhaul**:
+    - **New Site Structure**: Migrated to MkDocs with Material theme for a premium, searchable experience.
+    - **Diataxis Framework**: Reorganized content into Tutorials, How-To, Reference, and Explanation.
+    - **New Guides**: [`troubleshooting.md`](./docs/troubleshooting.md), [`cli_reference.md`](./docs/cli_reference.md), [`configuration_reference.md`](./docs/configuration_reference.md).
+    - **Process Docs**: Added [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) and [`board_onboarding_playbook.md`](./docs/board_onboarding_playbook.md).
 - **Architecture Unification**: Native ingestion of **Strict IR** (JSON) in the simulation core.
     - Bridged `labwired-ir` with `labwired-config` via `From` traits.
     - Simulator can now load hardware models directly from SVD-derived JSON files.
