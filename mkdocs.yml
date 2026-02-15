@@ -54,33 +54,32 @@ plugins:
   - search
 
 nav:
-  - Home: README.md
-  - Getting Started:
-    - Firmware: getting_started_firmware.md
+  - Home: index.md
+  
+  - Tutorials:
+    - Running Firmware: getting_started_firmware.md
+    - Simulating Sensors (I2C): examples/i2c_sensor_example.md
+    - Mastering DMA & Interrupts: examples/dma_exti_example.md
+    
+  - How-To Guides:
     - Board Onboarding: board_onboarding_playbook.md
-    - Examples:
-      - Blinky & I2C: examples/i2c_sensor_example.md
-      - DMA & EXTI: examples/dma_exti_example.md
-      - Integrated Test: examples/integrated_test_walkthrough.md
-  - Architecture:
-    - Overview: architecture.md
-    - Guide: architecture_guide.md
-    - Design:
-      - Modular Components: design/modular_components.md
-      - Multi-Arch: design/multi_arch_refactor.md
-      - System Descriptors: design/system_descriptors.md
-  - Development:
-    - Peripheral Dev: peripheral_development.md
+    - CI/CD Integration: ci_integration.md
+    - Developing Peripherals: peripheral_development.md
+    - Debugging with VS Code: vscode_debugging.md
+    - Troubleshooting: troubleshooting.md
+    
+  - Reference:
+    - Configuration (YAML): configuration_reference.md
     - Declarative Registers: declarative_registers.md
-    - Schema Compatibility: schema_compatibility.md
-    - CI Test Runner: ci_test_runner.md
-    - Git Flow: development/git_flow.md
-  - Integration:
-    - CI Integration: ci_integration.md
-    - GDB Integration: gdb_integration.md
-    - VS Code Debugging: vscode_debugging.md
-  - Operations:
-    - Release Strategy: release_strategy.md
-    - Advanced Peripherals: advanced_peripherals.md
+    - CLI Commands: cli_reference.md
+    - Test Script Schema: ci_test_runner.md
+    
+  - Explanation:
+    - Architecture Overview: architecture.md
+    - Debugging Architecture (DAP/GDB): debugging.md
+    - System Design: advanced_peripherals.md
     - Case Study (STM32): case_study_stm32.md
-    - Debugging: debugging.md
+
+  - Development:
+    - Git Flow: development/git_flow.md
+    - Release Strategy: release_strategy.md

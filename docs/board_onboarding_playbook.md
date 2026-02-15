@@ -1,246 +1,100 @@
-# Board Onboarding Playbook (Agent Runbook)
+# Board Onboarding Playbook
 
-This runbook documents how to add a new board target to the LabWired core engine in a way that is reliable for future agents.
+This guide documents the procedure for adding new board targets to LabWired. It is designed for contributors and agents to ensure consistent, high-quality board support.
 
-## Standard Procedure (Typical Onboarding Task)
+## 1. Prerequisites
 
-Use this as the default flow for every new board onboarding request.
+Before starting, acquire the following primary sources:
+1.  **MCU Reference Manual** (e.g., STM32H5 Reference Manual).
+2.  **Datasheet** (for memory map boundaries).
+3.  **Board User Manual** (for LED/Button GPIO mapping).
+4.  **CMSIS Device Headers** (optional but helpful for IRQ numbers).
 
-### Phase 0: Source Grounding
+## 2. Fit Assessment
 
-Inputs:
-- board/MCU name from user
+Verify that LabWired supports the critical peripherals required for a minimal "smoke test" (boot + UART output).
 
-Actions:
-1. Gather primary sources (CMSIS device header + board BSP header).
-2. Capture source URLs in working notes.
+**Supported Peripherals:**
+- `rcc` (Reset and Clock Control) - Essential for boot.
+- `gpio` (General Purpose I/O) - Essential for pin muxing.
+- `uart` (Universal Asynchronous Receiver-Transmitter) - Essential for debug output.
+- `systick` (System Tick Timer) - Essential for RTOS/HAL timekeeping.
 
-Exit criteria:
-- base addresses, IRQs, and board COM/LED mapping are traceable to primary docs.
+**If the board requires complex peripherals (USB, Ethernet) for basic operation, it may not be a good candidate for initial onboarding.**
 
-### Phase 1: Engine Fit and Scope
+## 3. Implementation Steps
 
-Actions:
-1. Compare target needs against currently supported peripheral `type` values.
-2. Select minimal bring-up scope when full silicon coverage is not feasible.
+### Step 1: Chip Descriptor (`core/configs/chips/`)
 
-Exit criteria:
-- explicit list of modeled vs deferred peripherals.
+Create a YAML file defining the MCU's memory map and internal peripherals.
 
-### Phase 2: Configuration and Firmware Implementation
+**Example: `stm32h563.yaml`**
+```yaml
+name: "STM32H563"
+flash:
+  base: 0x08000000
+  size: "2MB"
+ram:
+  base: 0x20000000
+  size: "640KB"
 
-Actions:
-1. Add chip descriptor (`core/configs/chips/<chip>.yaml`).
-2. Add system manifest (`core/configs/systems/<board>.yaml`).
-3. Add/adapt smoke firmware crate for deterministic UART output.
-4. Add/adjust engine tests if runtime behavior changed.
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x44020C00
+    
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    irq: 55
+```
+*Source of Truth: MCU Reference Manual (Memory Map section).*
 
-Exit criteria:
-- code builds and configuration loads.
+### Step 2: System Manifest (`core/configs/systems/`)
 
-### Phase 3: Example Folder Documentation Pack
+Create a YAML file instantiating the chip and defining board-level connections.
 
-Create `core/examples/<board>/` with:
+**Example: `nucleo-h563zi.yaml`**
+```yaml
+name: "NUCLEO-H563ZI"
+chip: "../chips/stm32h563.yaml"
 
-1. `system.yaml`
-2. `README.md`
-3. `REQUIRED_DOCS.md`
-4. `EXTERNAL_COMPONENTS.md`
-5. `VALIDATION.md`
+# Define board-level connections (e.g., Virtual COM Port)
+connectors:
+  - type: "uart"
+    peripheral: "usart3"
+    endpoint: "host_console"
+```
+*Source of Truth: Board User Manual (Schematics/Connector definition).*
 
-Exit criteria:
-- docs are complete and commands are executable as written.
+### Step 3: Smoke Firmware
 
-### Phase 4: Validation
+Create a minimal Rust/C firmware to verify execution.
+- **Goal**: Initialize UART and print "OK".
+- **Constraints**: No external dependencies if possible (minimize HAL complexity).
 
-Actions:
-1. Run tests.
-2. Build smoke firmware.
-3. Run simulator with example-local `system.yaml`.
-4. Run code-driven unsupported-instruction audit.
+## 4. Validation
 
-Exit criteria:
-- PC/SP initialize correctly
-- UART smoke output observed
-- test suite changes pass
-- unsupported-instruction report artifacts generated
-
-### Phase 5: Handoff Report
-
-Include:
-1. files changed
-2. exact commands run
-3. key runtime output evidence
-4. source links used
-
-## Goal
-
-Given a real MCU board (example: NUCLEO-H563ZI), produce:
-
-1. A chip descriptor in `core/configs/chips/`
-2. A board/system manifest in `core/configs/systems/`
-3. A minimal firmware smoke test that proves reset + UART path works
-4. A deterministic validation command sequence
-
-## Engine Reality Check (Do This First)
-
-Before modeling a board, confirm currently supported peripheral `type` values in `SystemBus::from_config`:
-
-- `uart`
-- `systick`
-- `gpio`
-- `rcc`
-- `timer`
-- `i2c`
-- `spi`
-- `exti`
-- `afio`
-- `dma`
-- `adc`
-- `declarative` / `strict_ir`
-
-If the board has many unsupported blocks, pick a minimal subset that can boot and demonstrate value (typically `rcc + gpio + uart + systick`).
-
-## Universal Peripheral Config Structure
-
-Use a single config key for built-in peripheral variants:
-
-- `config.profile`: profile selector for modeled register map/behavior
-
-Current built-in profile-enabled peripherals:
-
-- `gpio`: `stm32f1`, `stm32v2`
-- `uart`: `stm32f1`, `stm32v2`
-- `rcc`: `stm32f1`, `stm32v2`
-
-Backward compatibility:
-
-- `config.register_layout` is still accepted as a legacy alias for `config.profile`.
-
-## Required Source Material
-
-Use primary vendor sources:
-
-1. MCU CMSIS device header for memory map and IRQ numbers
-2. Board BSP header for LED/UART/button pin mapping
-3. Board/MCU product pages for traceability
-
-For STM32H563ZI demo:
-
-- MCU header: `stm32h563xx.h` (`cmsis-device-h5`)
-- Board BSP: `stm32h5xx_nucleo.h` (`stm32h5xx-nucleo-bsp`)
-
-## Implementation Steps
-
-### 1) Create chip descriptor
-
-Add `core/configs/chips/<chip>.yaml` with:
-
-- `flash.base` and `flash.size`
-- `ram.base` and `ram.size`
-- only supported peripherals with correct base addresses/IRQs
-
-H563 example file: `core/configs/chips/stm32h563.yaml`
-
-### 2) Create board/system manifest
-
-Add `core/configs/systems/<board>.yaml` pointing at the chip descriptor.
-
-H563 example file: `core/configs/systems/nucleo-h563zi-demo.yaml`
-
-### 3) Ensure reset vector fetch works
-
-Important: Cortex-M reset reads vectors from address `0x00000000`.
-If flash is at `0x08000000`, engine must support boot aliasing or firmware must be linked at `0x00000000`.
-
-For H563, boot alias support was implemented in:
-
-- `core/crates/core/src/bus/mod.rs`
-
-This maps reads/writes from `0x00000000..flash_size` to `flash.base`.
-
-### 4) Add minimal firmware smoke target
-
-Create a tiny `no_std` firmware that:
-
-1. has a valid vector table
-2. writes `OK\n` to the mapped UART TX register
-3. loops forever
-
-H563 example crate:
-
-- `core/crates/firmware-h563-demo/`
-
-### 5) Register crate in workspace
-
-Add the new demo crate path in `core/Cargo.toml` `[workspace].members`.
-
-## Validation Commands
-
-Run from `core/`:
+Run the standardized onboarding test suite.
 
 ```bash
-cargo test -p labwired-core test_flash_boot_alias_read_and_write -- --nocapture
-cargo build -p firmware-h563-demo --release --target thumbv7m-none-eabi
-cargo run -q -p labwired-cli -- \
-  --firmware target/thumbv7m-none-eabi/release/firmware-h563-demo \
-  --system configs/systems/nucleo-h563zi-demo.yaml \
-  --max-steps 32
-./scripts/unsupported_instruction_audit.sh \
-  --firmware target/thumbv7m-none-eabi/release/firmware-h563-demo \
-  --system configs/systems/nucleo-h563zi-demo.yaml \
-  --max-steps 200000 \
-  --out-dir out/unsupported-audit/nucleo-h563zi
+# 1. Build Smoke Firmware
+cargo build --release --target thumbv7m-none-eabi -p smoke-firmware
+
+# 2. Run Simulation with Audit
+labwired --firmware target/thumbv7m-none-eabi/release/smoke-firmware \
+         --system configs/systems/nucleo-h563zi.yaml \
+         --audit-unsupported
 ```
 
-Expected outcome:
+**Success Criteria:**
+1.  **Boot**: PC initializes to Reset Vector.
+2.  **UART**: "OK" printed to stdout.
+3.  **Audit**: No critical "Unmapped Peripheral" errors (warnings are acceptable for unused blocks).
 
-- simulator starts successfully
-- PC initializes to flash region (`0x08000000` range)
-- UART output contains `OK`
-- unsupported-instruction report exists at `out/unsupported-audit/<board>/report.md`
+## 5. Documentation
 
-## Common Failure Modes
-
-1. PC stays at `0x00000000` or faults immediately.
-Cause: reset vectors are not reachable at `0x00000000`.
-Fix: add boot alias handling or link vector table at `0x00000000`.
-
-2. Simulator loads but no UART output appears.
-Cause: wrong UART base address/instance for board COM port.
-Fix: verify BSP mapping (`COM1_UART`, TX/RX pin macros) and chip base address.
-
-3. Memory violations right after reset.
-Cause: incorrect `flash.base`, `ram.base`, or RAM size.
-Fix: re-check CMSIS header base/size constants.
-
-4. Build succeeds but firmware never reaches user code.
-Cause: invalid minimal linker script/vector table.
-Fix: verify initial SP is in RAM range and reset handler uses Thumb bit (`Reset + 1`).
-
-## Agent Decision Rules
-
-When onboarding a new board, follow these rules:
-
-1. Prefer correctness over coverage: model fewer peripherals accurately.
-2. Use vendor headers as source of truth for addresses and IRQs.
-3. Always include a deterministic smoke firmware and command log.
-4. Add at least one unit test for any engine behavior change.
-5. Document assumptions and known gaps directly in the chip YAML comments.
-
-## Handoff Checklist
-
-Before finishing, ensure these are all done:
-
-1. `core/configs/chips/<chip>.yaml` added and commented with source references.
-2. `core/configs/systems/<board>.yaml` added.
-3. Demo firmware crate added (or existing fixture adapted).
-4. Engine tests updated if runtime behavior changed.
-5. `core/examples/<board>/` documentation pack exists and is complete.
-6. Commands and observed output included in final response.
-
-## Known Gaps for H563 Demo
-
-- Peripheral behavior is still generic (not H5 register-accurate yet).
-- Board-level LED/button electrical behavior is not modeled.
-- This is a bring-up profile for demo/agent workflow, not final silicon-fidelity.
+Create a folder in `core/examples/<board>/` containing:
+1.  `README.md`: Board specific instructions.
+2.  `system.yaml`: A local copy of the system manifest for easy reproduction.
+3.  `smoke.rs` (or reference): The source code used for validation.
