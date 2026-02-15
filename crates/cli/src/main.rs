@@ -1748,6 +1748,20 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
             TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
             TestAssertion::ExpectedStopReason(a) => a.expected_stop_reason == stop_reason,
+            TestAssertion::MemoryValue(a) => {
+                // Read 32-bit value from memory
+                match machine.bus.read_u32(a.memory_value.address) {
+                    Ok(val) => {
+                        let mask = a.memory_value.mask.unwrap_or(0xFFFFFFFF) as u32;
+                        let expected = a.memory_value.expected_value as u32;
+                        (val & mask) == (expected & mask)
+                    }
+                    Err(e) => {
+                        error!("Memory assertion failed to read address {:#x}: {}", a.memory_value.address, e);
+                        false
+                    }
+                }
+            }
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -2300,6 +2314,7 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
         TestAssertion::ExpectedStopReason(a) => {
             format!("expected_stop_reason: {:?}", a.expected_stop_reason)
         }
+        TestAssertion::MemoryValue(a) => format!("memory_value: @{:#x}={:#x}", a.memory_value.address, a.memory_value.expected_value),
     };
 
     if s.len() <= MAX_LEN {

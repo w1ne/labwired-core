@@ -439,11 +439,27 @@ pub struct StopReasonAssertion {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryValueDetails {
+    pub address: u64,
+    pub expected_value: u64,
+    #[serde(default)]
+    pub mask: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryValueAssertion {
+    pub memory_value: MemoryValueDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
     UartContains(UartContainsAssertion),
     UartRegex(UartRegexAssertion),
     ExpectedStopReason(StopReasonAssertion),
+    MemoryValue(MemoryValueAssertion),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

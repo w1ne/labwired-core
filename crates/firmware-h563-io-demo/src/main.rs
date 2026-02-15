@@ -126,12 +126,14 @@ fn main() -> ! {
 
     loop {
         set_led_state(true);
+        uart_write_str("S1-ON\n");
         report_io_state(true);
-        delay(100);
+        delay(1000);
 
         set_led_state(false);
+        uart_write_str("S2-OFF\n");
         report_io_state(false);
-        delay(100);
+        delay(1000);
     }
 }
 
