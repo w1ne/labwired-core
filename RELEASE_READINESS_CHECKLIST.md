@@ -23,7 +23,7 @@
 - [ ] **Feature Flags**: Verified default features build correctly.
 
 ## 3. Artifacts & Packaging
-- [ ] **Version Bump**: `Cargo.toml` updated to `0.12.0`.
+- [x] **Version Bump**: `Cargo.toml` updated to `0.12.0`.
 - [ ] **Changelog**: `CHANGELOG.md` updated with "Documentation Overhaul" and other v0.12.0 features.
 - [ ] **Binaries**: `labwired` CLI builds in release mode (`cargo build --release`).
 
