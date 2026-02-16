@@ -53,9 +53,7 @@ jobs:
         run: npm run compile
 
       - name: Run Tests (Linux)
-        uses: coactions/setup-xvfb@v1
-        with:
-          run: unset ELECTRON_RUN_AS_NODE && cd vscode && npm test
+        run: xvfb-run --auto-servernum bash -lc 'cd vscode && ELECTRON_RUN_AS_NODE= npm test'
 
       - name: Run Unit Tests (Docker Logic)
         run: ./node_modules/.bin/mocha out/test/unit/docker.test.js

@@ -49,9 +49,7 @@ jobs:
 
       - name: Run Tests (Linux)
         if: runner.os == 'Linux'
-        uses: coactions/setup-xvfb@v1
-        with:
-          run: unset ELECTRON_RUN_AS_NODE && cd vscode && npm test
+        run: xvfb-run --auto-servernum bash -lc 'cd vscode && ELECTRON_RUN_AS_NODE= npm test'
 
       - name: Run Tests (Non-Linux)
         if: runner.os != 'Linux'
