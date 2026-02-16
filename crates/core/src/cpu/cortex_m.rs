@@ -380,9 +380,6 @@ impl Cpu for CortexM {
             | Instruction::Ubfx { .. }
             | Instruction::Clz { .. }
             | Instruction::Rbit { .. }
-            | Instruction::Rev { .. }
-            | Instruction::Rev16 { .. }
-            | Instruction::RevSh { .. }
             | Instruction::DataProc32 { .. }
             | Instruction::DataProcImm32 { .. }
             | Instruction::ShiftReg32 { .. }
@@ -608,6 +605,21 @@ impl Cpu for CortexM {
                 self.write_reg(rd, res);
                 self.update_nz(res);
             }
+            Instruction::Rev { rd, rm } => {
+                let val = self.read_reg(rm);
+                self.write_reg(rd, val.swap_bytes());
+            }
+            Instruction::Rev16 { rd, rm } => {
+                let val = self.read_reg(rm);
+                let low = ((val & 0xFF) << 8) | ((val >> 8) & 0xFF);
+                let high = ((val & 0x00FF0000) << 8) | ((val & 0xFF000000) >> 8);
+                self.write_reg(rd, high | low);
+            }
+            Instruction::RevSh { rd, rm } => {
+                let val = self.read_reg(rm);
+                let low = ((val & 0xFF) << 8) | ((val >> 8) & 0xFF);
+                self.write_reg(rd, (low as i16) as u32);
+            }
             Instruction::Tst { rn, rm } => {
                 let res = self.read_reg(rn) & self.read_reg(rm);
                 self.update_nz(res);
@@ -617,55 +629,6 @@ impl Cpu for CortexM {
                 let op2 = self.read_reg(rm);
                 let (res, c, v) = add_with_flags(op1, op2);
                 self.update_nzcv(res, c, v);
-            }
-            Instruction::ShiftReg32 {
-                rd,
-                rn,
-                rm,
-                shift_type,
-            } => {
-                let value = self.read_reg(rn);
-                let shift = self.read_reg(rm) & 0xFF;
-                let result = match shift_type {
-                    0 => {
-                        if shift >= 32 {
-                            0
-                        } else {
-                            value.wrapping_shl(shift)
-                        }
-                    }
-                    1 => {
-                        if shift == 0 {
-                            value
-                        } else if shift >= 32 {
-                            0
-                        } else {
-                            value.wrapping_shr(shift)
-                        }
-                    }
-                    2 => {
-                        if shift == 0 {
-                            value
-                        } else if shift >= 32 {
-                            if (value & 0x8000_0000) != 0 {
-                                0xFFFF_FFFF
-                            } else {
-                                0
-                            }
-                        } else {
-                            ((value as i32) >> shift) as u32
-                        }
-                    }
-                    3 => {
-                        if shift == 0 {
-                            value
-                        } else {
-                            value.rotate_right(shift % 32)
-                        }
-                    }
-                    _ => value,
-                };
-                self.write_reg(rd, result);
             }
             Instruction::Rsbs { rd, rn } => {
                 let op1 = self.read_reg(rn);

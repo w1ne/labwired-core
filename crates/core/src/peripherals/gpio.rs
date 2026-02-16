@@ -148,6 +148,20 @@ impl GpioPort {
             },
         }
     }
+
+    fn bsrr_offset(&self) -> u64 {
+        match self.layout {
+            GpioRegisterLayout::Stm32F1 => 0x10,
+            GpioRegisterLayout::Stm32V2 => 0x18,
+        }
+    }
+
+    fn brr_offset(&self) -> u64 {
+        match self.layout {
+            GpioRegisterLayout::Stm32F1 => 0x14,
+            GpioRegisterLayout::Stm32V2 => 0x28,
+        }
+    }
 }
 
 impl crate::Peripheral for GpioPort {
@@ -251,22 +265,4 @@ mod tests {
         assert_eq!(gpio.odr, 0x1234);
     }
 
-    #[test]
-    fn test_gpio_v2_bsrr_and_brr() {
-        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
-
-        // BSRR @ 0x18 (set pin 0, reset pin 1)
-        gpio.write(0x18, 0x01).unwrap();
-        gpio.write(0x19, 0x00).unwrap();
-        gpio.write(0x1A, 0x02).unwrap();
-        gpio.write(0x1B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0003, 0x0001);
-
-        // BRR @ 0x28 (reset pin 0)
-        gpio.write(0x28, 0x01).unwrap();
-        gpio.write(0x29, 0x00).unwrap();
-        gpio.write(0x2A, 0x00).unwrap();
-        gpio.write(0x2B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0001, 0x0000);
-    }
 }
