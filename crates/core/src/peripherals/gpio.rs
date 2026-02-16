@@ -90,6 +90,8 @@ impl GpioPort {
             GpioRegisterLayout::Stm32F1 => 0x14,
             GpioRegisterLayout::Stm32V2 => 0x28,
         }
+
+        port
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -267,11 +269,8 @@ mod tests {
     fn test_gpio_bsrr_set() {
         let mut gpio = GpioPort::new();
         // BSRR is 32-bit, offset 0x10. Writing to lower 16 bits sets ODR bits.
-        // We write 4 bytes to trigger handle_write_only_buffer
+        // Direct partial writes are now supported.
         gpio.write(0x10, 0x01).unwrap();
-        gpio.write(0x11, 0x00).unwrap();
-        gpio.write(0x12, 0x00).unwrap();
-        gpio.write(0x13, 0x00).unwrap();
         assert_eq!(gpio.odr, 0x0001);
     }
 
@@ -280,25 +279,59 @@ mod tests {
         let mut gpio = GpioPort::new();
         gpio.odr = 0xFFFF;
         // BSRR upper 16 bits reset ODR bits.
-        gpio.write(0x10, 0x00).unwrap();
-        gpio.write(0x11, 0x00).unwrap();
         gpio.write(0x12, 0x01).unwrap();
-        gpio.write(0x13, 0x00).unwrap();
         assert_eq!(gpio.odr, 0xFFFE);
     }
 
     #[test]
-    fn test_gpio_brr() {
-        let mut gpio = GpioPort::new();
-        gpio.odr = 0xFFFF;
-        // BRR is offset 0x14. Lower 16 bits reset ODR bits.
-        // Needs 4 bytes to flush the buffer (handled as 32-bit in the mock for complexity)
-        // Actually GpioPort handle_write_only_buffer for BRR also checks for byte mask.
-        gpio.write(0x14, 0x01).unwrap();
-        gpio.write(0x15, 0x00).unwrap();
-        gpio.write(0x16, 0x00).unwrap();
-        gpio.write(0x17, 0x00).unwrap();
-        assert_eq!(gpio.odr, 0xFFFE);
+    fn test_gpio_v2_bsrr_and_brr() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+
+        // BSRR @ 0x18 (set pin 0)
+        gpio.write(0x18, 0x01).unwrap();
+        assert_eq!(gpio.odr & 0x0001, 0x0001);
+
+        // BSRR @ 0x1A (reset pin 1)
+        gpio.write(0x1A, 0x02).unwrap();
+        assert_eq!(gpio.odr & 0x0002, 0x0000);
+
+        // BRR @ 0x28 (reset pin 0)
+        gpio.write(0x28, 0x01).unwrap();
+        assert_eq!(gpio.odr & 0x0001, 0x0000);
+    }
+
+    #[test]
+    fn test_gpio_v2_moder_and_odr() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+
+        // MODER @ 0x00
+        gpio.write(0x00, 0xAA).unwrap();
+        gpio.write(0x01, 0x55).unwrap();
+        assert_eq!(gpio.moder & 0xFFFF, 0x55AA);
+
+        // ODR @ 0x14
+        gpio.write(0x14, 0x34).unwrap();
+        gpio.write(0x15, 0x12).unwrap();
+        assert_eq!(gpio.odr, 0x1234);
+    }
+
+    #[test]
+    fn test_gpio_v2_bsrr_and_brr() {
+        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+
+        // BSRR @ 0x18 (set pin 0, reset pin 1)
+        gpio.write(0x18, 0x01).unwrap();
+        gpio.write(0x19, 0x00).unwrap();
+        gpio.write(0x1A, 0x02).unwrap();
+        gpio.write(0x1B, 0x00).unwrap();
+        assert_eq!(gpio.odr & 0x0003, 0x0001);
+
+        // BRR @ 0x28 (reset pin 0)
+        gpio.write(0x28, 0x01).unwrap();
+        gpio.write(0x29, 0x00).unwrap();
+        gpio.write(0x2A, 0x00).unwrap();
+        gpio.write(0x2B, 0x00).unwrap();
+        assert_eq!(gpio.odr & 0x0001, 0x0000);
     }
 
     #[test]

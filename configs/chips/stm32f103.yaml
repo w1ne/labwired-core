@@ -7,7 +7,7 @@
 name: "stm32f103c8"
 arch: "arm"
 flash:
-  base: 0x00000000
+  base: 0x08000000
   size: "1MB"
 ram:
   base: 0x20000000

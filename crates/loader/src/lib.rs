@@ -220,22 +220,182 @@ impl SymbolProvider {
     }
 
     pub fn location_to_pc(&self, file_path: &str, line: u32) -> Option<u64> {
-        let requested_path = std::path::Path::new(file_path);
-        let requested_file = requested_path.file_name()?.to_str()?;
+        self.location_to_pc_nearest(file_path, line)
+            .map(|(addr, _line)| addr)
+    }
 
-        // Try exact match first
-        if let Some(addr) = self.line_map.get(&(file_path.to_string(), line)) {
-            return Some(*addr);
+    pub fn location_to_pc_nearest(&self, file_path: &str, line: u32) -> Option<(u64, u32)> {
+        let requested_file = std::path::Path::new(file_path).file_name()?.to_str()?;
+        let requested_norm = normalize_path_for_match(file_path);
+
+        // Collect candidates with same basename and a path specificity score.
+        let mut candidates: Vec<(u32, u64, usize)> = Vec::new();
+        for ((candidate_path, candidate_line), addr) in &self.line_map {
+            let Some(candidate_file) = std::path::Path::new(candidate_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+            else {
+                continue;
+            };
+            if candidate_file != requested_file {
+                continue;
+            }
+
+            let score =
+                path_match_score(&requested_norm, &normalize_path_for_match(candidate_path));
+            candidates.push((*candidate_line, *addr, score));
+        }
+        if candidates.is_empty() {
+            return None;
         }
 
-        // Try base name match if full path doesn't match
-        for ((f, l), addr) in &self.line_map {
-            if *l == line {
-                // Normalize paths: check if requested path is a suffix of the stored path or vice versa
-                let current_path = std::path::Path::new(f);
-                if let Some(current_file) = current_path.file_name().and_then(|n| n.to_str()) {
-                    if current_file == requested_file {
-                        return Some(*addr);
+        // Prefer the most specific path match first.
+        let best_score = candidates
+            .iter()
+            .map(|(_, _, score)| *score)
+            .max()
+            .unwrap_or(0);
+        candidates.retain(|(_, _, score)| *score == best_score);
+
+        // Prefer exact line, then nearest following line, then nearest previous line.
+        if let Some((l, addr, _)) = candidates.iter().find(|(l, _, _)| *l == line) {
+            return Some((*addr, *l));
+        }
+
+        let mut after: Vec<(u32, u64)> = candidates
+            .iter()
+            .filter(|(l, _, _)| *l > line)
+            .map(|(l, addr, _)| (*l, *addr))
+            .collect();
+        after.sort_by_key(|(l, _)| *l);
+        if let Some((l, addr)) = after.first() {
+            return Some((*addr, *l));
+        }
+
+        let mut before: Vec<(u32, u64)> = candidates
+            .iter()
+            .filter(|(l, _, _)| *l < line)
+            .map(|(l, addr, _)| (*l, *addr))
+            .collect();
+        before.sort_by_key(|(l, _)| *l);
+        before.last().map(|(l, addr)| (*addr, *l))
+    }
+
+    pub fn resolve_symbol(&self, name: &str) -> Option<u64> {
+        self.symbol_map.get(name).copied()
+    }
+
+    pub fn find_locals(&self, pc: u64) -> Vec<LocalVariable> {
+        let mut locals = Vec::new();
+
+        // Include test-only locals for PC 0 (default) or the specific PC
+        if let Some(tl) = self.test_locals.get(&0) {
+            locals.extend(tl.clone());
+        }
+        if pc != 0 {
+            if let Some(tl) = self.test_locals.get(&pc) {
+                locals.extend(tl.clone());
+            }
+        }
+
+        let mut units = self.dwarf.units();
+
+        while let Ok(Some(header)) = units.next() {
+            let unit = match self.dwarf.unit(header) {
+                Ok(u) => u,
+                Err(_) => continue,
+            };
+
+            let mut in_subprogram = false;
+            let mut subprogram_depth = 0;
+            let mut entries = unit.entries();
+
+            while let Ok(Some((depth, entry))) = entries.next_dfs() {
+                if !in_subprogram {
+                    if entry.tag() == addr2line::gimli::DW_TAG_subprogram {
+                        let mut low_pc = None;
+                        let mut high_pc = None;
+
+                        if let Some(addr2line::gimli::AttributeValue::Addr(addr)) = entry
+                            .attr_value(addr2line::gimli::DW_AT_low_pc)
+                            .ok()
+                            .flatten()
+                        {
+                            low_pc = Some(addr);
+                        }
+
+                        if let Some(attr) = entry
+                            .attr_value(addr2line::gimli::DW_AT_high_pc)
+                            .ok()
+                            .flatten()
+                        {
+                            match attr {
+                                addr2line::gimli::AttributeValue::Addr(addr) => {
+                                    high_pc = Some(addr)
+                                }
+                                addr2line::gimli::AttributeValue::Udata(size) => {
+                                    high_pc = low_pc.map(|l| l + size)
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if let (Some(low), Some(high)) = (low_pc, high_pc) {
+                            if pc >= low && pc < high {
+                                in_subprogram = true;
+                                subprogram_depth = depth;
+                            }
+                        }
+                    }
+                } else {
+                    if depth <= subprogram_depth {
+                        in_subprogram = false;
+                        continue;
+                    }
+
+                    if entry.tag() == addr2line::gimli::DW_TAG_variable
+                        || entry.tag() == addr2line::gimli::DW_TAG_formal_parameter
+                    {
+                        let name = entry
+                            .attr_value(addr2line::gimli::DW_AT_name)
+                            .ok()
+                            .flatten()
+                            .and_then(|attr| {
+                                let s = self.dwarf.attr_string(&unit, attr).ok()?;
+                                s.to_string_lossy().ok().map(|c| c.into_owned())
+                            });
+
+                        if let (Some(n), Some(addr2line::gimli::AttributeValue::Exprloc(expr))) = (
+                            name,
+                            entry
+                                .attr_value(addr2line::gimli::DW_AT_location)
+                                .ok()
+                                .flatten(),
+                        ) {
+                            let mut ops = expr.operations(unit.encoding());
+                            if let Ok(Some(op)) = ops.next() {
+                                match op {
+                                    addr2line::gimli::Operation::Register { register } => {
+                                        locals.push(LocalVariable {
+                                            name: n,
+                                            location: DwarfLocation::Register(register.0),
+                                        });
+                                    }
+                                    addr2line::gimli::Operation::FrameOffset { offset } => {
+                                        locals.push(LocalVariable {
+                                            name: n,
+                                            location: DwarfLocation::FrameRelative(offset),
+                                        });
+                                    }
+                                    _ => {
+                                        locals.push(LocalVariable {
+                                            name: n,
+                                            location: DwarfLocation::Other(format!("{:?}", op)),
+                                        });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -436,5 +596,27 @@ mod tests {
             loc.file
         );
         assert_eq!(loc.line, Some(26));
+    }
+
+    #[test]
+    fn test_location_to_pc_nearest_prefers_same_file_and_next_line() {
+        let mut provider = SymbolProvider::new_empty();
+        provider.line_map.insert(
+            ("crates/firmware-h563-io-demo/src/main.rs".to_string(), 117),
+            0x0800_00A8,
+        );
+        provider.line_map.insert(
+            ("crates/firmware-h563-io-demo/src/main.rs".to_string(), 125),
+            0x0800_00FC,
+        );
+        provider
+            .line_map
+            .insert(("main.rs".to_string(), 117), 0xDEAD_BEEF);
+
+        let resolved = provider.location_to_pc_nearest(
+            "/home/andrii/Projects/labwired/core/crates/firmware-h563-io-demo/src/main.rs",
+            120,
+        );
+        assert_eq!(resolved, Some((0x0800_00FC, 125)));
     }
 }
