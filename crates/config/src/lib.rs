@@ -26,9 +26,12 @@ where
         IntOrString::String(s) => {
             let s = s.trim();
             if let Some(stripped) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-                u64::from_str_radix(&stripped.replace('_', ""), 16).map_err(serde::de::Error::custom)
+                u64::from_str_radix(&stripped.replace('_', ""), 16)
+                    .map_err(serde::de::Error::custom)
             } else {
-                s.replace('_', "").parse::<u64>().map_err(serde::de::Error::custom)
+                s.replace('_', "")
+                    .parse::<u64>()
+                    .map_err(serde::de::Error::custom)
             }
         }
     }

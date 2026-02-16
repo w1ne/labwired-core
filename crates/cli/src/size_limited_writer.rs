@@ -12,7 +12,6 @@ pub struct SizeLimitedWriter<W: Write> {
     limit_exceeded: bool,
 }
 
-
 #[allow(dead_code)]
 impl<W: Write> SizeLimitedWriter<W> {
     pub fn new(inner: W, max_bytes: u64) -> Self {
