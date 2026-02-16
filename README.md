@@ -11,6 +11,14 @@
 | Coverage Gate | ![Coverage](https://github.com/w1ne/labwired/actions/workflows/core-coverage.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-coverage.yml) |
 | Unsupported Audit | ![Unsupported Audit](https://github.com/w1ne/labwired/actions/workflows/core-unsupported-audit.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-unsupported-audit.yml) |
 
+### Board Model Dashboard
+
+| Board Model | Status | Verification Coverage | Workflow |
+|---|---|---|---|
+| `ci-fixture-uart1` (ARM Cortex-M) | ![ARM Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main) | smoke + max UART + no-progress | [ARM Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml) |
+| `ci-fixture-riscv-uart1` (RISC-V) | ![RISC-V Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main) | smoke | [RISC-V Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml) |
+| `nucleo-h563zi` | ![H563 Board](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main) | io-smoke + fullchip-smoke | [NUCLEO-H563ZI CI](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml) |
+
 ## 🤖 Agent-First Architecture
 LabWired is built primarily as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its core mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
 

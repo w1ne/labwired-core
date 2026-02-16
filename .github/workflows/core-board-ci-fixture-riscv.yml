@@ -1,0 +1,54 @@
+name: Core Board Model - CI Fixture RISC-V
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "core/**"
+      - ".github/workflows/core-board-ci-fixture-riscv.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "core/**"
+      - ".github/workflows/core-board-ci-fixture-riscv.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: ./core
+
+jobs:
+  ci-fixture-riscv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install RISC-V target
+        run: rustup target add riscv32i-unknown-none-elf
+
+      - name: Build RISC-V fixture firmware
+        run: cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf
+
+      - name: Run RISC-V smoke checks
+        run: cargo run -q -p labwired-cli -- test --script examples/ci/riscv-uart-ok.yaml --output-dir out/boards/ci-fixture-riscv/smoke --no-uart-stdout
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-ci-fixture-riscv
+          path: core/out/boards/ci-fixture-riscv/

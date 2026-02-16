@@ -1,0 +1,58 @@
+name: Core Board Model - NUCLEO-H563ZI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "core/**"
+      - ".github/workflows/core-board-nucleo-h563zi.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "core/**"
+      - ".github/workflows/core-board-nucleo-h563zi.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: ./core
+
+jobs:
+  nucleo-h563zi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install ARM target
+        run: rustup target add thumbv7m-none-eabi
+
+      - name: Build NUCLEO-H563ZI firmware fixtures
+        run: |
+          cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
+          cargo build -p firmware-h563-fullchip-demo --release --target thumbv7m-none-eabi
+
+      - name: Run NUCLEO-H563ZI smoke checks
+        run: |
+          cargo run -q -p labwired-cli -- test --script examples/nucleo-h563zi/io-smoke.yaml --output-dir out/boards/nucleo-h563zi/io-smoke --no-uart-stdout
+          cargo run -q -p labwired-cli -- test --script examples/nucleo-h563zi/fullchip-smoke.yaml --output-dir out/boards/nucleo-h563zi/fullchip-smoke --no-uart-stdout
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-nucleo-h563zi
+          path: core/out/boards/nucleo-h563zi/
