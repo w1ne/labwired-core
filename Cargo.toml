@@ -27,7 +27,7 @@ exclude = ["crates/firmware-hal-test"]
 default-members = ["crates/cli", "crates/core", "crates/loader"]
 
 [workspace.package]
-version = "0.12.0"
+version = "0.12.1"
 edition = "2021"
 authors = ["LabWired Team"]
 license = "MIT"

@@ -1,5 +1,8 @@
 # LabWired Release & Merging Strategy
 
+This document defines release policy and branch governance.
+Release execution authority is `core/RELEASE_PROCESS.md`.
+
 ## 1. Branching Model: Gitflow
 We follow the **Gitflow** branching strategy to manage releases and features efficiently. For more detailed rules and workflows, see the [Git Flow Guide](./development/git_flow.md).
 - **`main`**: The production-ready state. Only merge from `release/*` or `hotfix/*`. Tags are created here.
@@ -16,7 +19,7 @@ We follow the **Gitflow** branching strategy to manage releases and features eff
 - **History**: Use "Squash and Merge" for feature branches to keep history clean. Use "Merge Commit" for releases to preserve the valid history.
 
 ## 2. Quality Gates
-Every PR and commit to `develop`/`main` must pass the following automated gates. **Developers MUST run these locally before opening a PR.**
+Every PR and commit to `develop`/`main` must pass automated gates. Developers should run matching checks locally before opening a PR.
 
 ### Automated Checks (CI)
 | Check | Command | Failure Condition |
@@ -32,55 +35,26 @@ Every PR and commit to `develop`/`main` must pass the following automated gates.
 - **Tool**: `cargo-tarpaulin`.
 - **Enforcement**: CI will generate a coverage report. Significant drops in coverage should block the PR.
 
-### 3.2. Release Notes Format (Verbatim)
-When preparing a release, the following verbatim format MUST be used for the GitHub Release notes:
+## 3. Release Policy
 
-**Title**: `Release vX.Y.Z: <Short Summary of Key Changes>`
+### 3.1. Release Notes Format
+Release notes must use the shared template at:
 
-**Body Structure**:
-```markdown
-Features:
-- <Feature 1 description>
-- <Feature 2 description>
+- `.github/RELEASE_TEMPLATE.md`
 
-Improvements:
-- <Improvement 1 description>
-- <Improvement 2 description>
+Do not publish a release with missing template sections (scope, validation evidence, CI links, known issues, breaking changes).
 
-Fixes: (Optional)
-- <Fix 1 description>
-```
+### 3.2. Steps to Release
+Use `core/RELEASE_PROCESS.md` as the execution runbook for monorepo release gates.
 
-*Example:*
-> **Release v0.9.0: Variable PD Types and Integration Testing**
->
-> Features:
-> - Variable PD types (1_V and 2_V) with dynamic length changes (2-32 bytes)
-> - Integration testing infrastructure (test_device_connection.py, test_integration.sh)
->
-> Improvements:
-> - Enhanced Virtual Master with set_pd_length() method
-> - Comprehensive test suites for all M-sequence types
+Minimum mandatory gates include:
 
-### 3.3. Steps to Release
-1.  **Freeze**: Create a `release/vX.Y.Z` branch from `develop`.
-2.  **Bump**: Update version numbers in `Cargo.toml` (workspace and crates).
-3.  **Changelog**: Update `CHANGELOG.md` with features and fixes.
-4.  **Verify**: Run the full regression suite, lints, and formatting check locally:
-    - Host: `cargo test --workspace --exclude firmware`
-    - Firmware: `cargo build -p firmware --target thumbv7m-none-eabi`
-    - Lints: `cargo clippy --workspace --exclude firmware -- -D warnings`
-    - Format: `cargo fmt --all -- --check`
-5.  **Draft Release**: Create a GitHub Release draft using the **Verbatim** format above.
-6.  **Merge**:
-    - Merge `release/vX.Y.Z` into `main`.
-    - Tag `main` with `vX.Y.Z`.
-    - Merge `release/vX.Y.Z` back into `develop`.
-7.  **Publish**:
-    -   Merge `release/vX.Y.Z` into `main` and push the `vX.Y.Z` tag.
-    -   Ensure CI validation workflows are green (`.github/workflows/core-ci.yml` and `.github/workflows/vscode-ci.yml`).
-    -   Publish release artifacts (CLI binaries, docs, and extension package) using the current manual publishing process.
-    -   If/when a dedicated release workflow is added, document it here and make it part of the required gates.
+1. Full workspace validation (`cargo test --workspace`, `cargo build --workspace`).
+2. Unsupported instruction audit with fail-on-unsupported.
+3. Cross-component compatibility baseline checks, even for scoped releases.
+4. Runtime smoke tests for CI fixtures and impacted board examples.
+5. Green required CI workflows before tagging.
+6. GitHub release draft created from `.github/RELEASE_TEMPLATE.md`.
 
 ## 4. Coding Standards documentation
 - **Style**: Follow standard Rust style (`rustfmt`).

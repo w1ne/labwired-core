@@ -400,128 +400,6 @@ impl SymbolProvider {
                 }
             }
         }
-        None
-    }
-
-    pub fn resolve_symbol(&self, name: &str) -> Option<u64> {
-        self.symbol_map.get(name).copied()
-    }
-
-    pub fn find_locals(&self, pc: u64) -> Vec<LocalVariable> {
-        let mut locals = Vec::new();
-
-        // Include test-only locals for PC 0 (default) or the specific PC
-        if let Some(tl) = self.test_locals.get(&0) {
-            locals.extend(tl.clone());
-        }
-        if pc != 0 {
-            if let Some(tl) = self.test_locals.get(&pc) {
-                locals.extend(tl.clone());
-            }
-        }
-
-        let mut units = self.dwarf.units();
-
-        while let Ok(Some(header)) = units.next() {
-            let unit = match self.dwarf.unit(header) {
-                Ok(u) => u,
-                Err(_) => continue,
-            };
-
-            let mut in_subprogram = false;
-            let mut subprogram_depth = 0;
-            let mut entries = unit.entries();
-
-            while let Ok(Some((depth, entry))) = entries.next_dfs() {
-                if !in_subprogram {
-                    if entry.tag() == addr2line::gimli::DW_TAG_subprogram {
-                        let mut low_pc = None;
-                        let mut high_pc = None;
-
-                        if let Some(addr2line::gimli::AttributeValue::Addr(addr)) = entry
-                            .attr_value(addr2line::gimli::DW_AT_low_pc)
-                            .ok()
-                            .flatten()
-                        {
-                            low_pc = Some(addr);
-                        }
-
-                        if let Some(attr) = entry
-                            .attr_value(addr2line::gimli::DW_AT_high_pc)
-                            .ok()
-                            .flatten()
-                        {
-                            match attr {
-                                addr2line::gimli::AttributeValue::Addr(addr) => {
-                                    high_pc = Some(addr)
-                                }
-                                addr2line::gimli::AttributeValue::Udata(size) => {
-                                    high_pc = low_pc.map(|l| l + size)
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        if let (Some(low), Some(high)) = (low_pc, high_pc) {
-                            if pc >= low && pc < high {
-                                in_subprogram = true;
-                                subprogram_depth = depth;
-                            }
-                        }
-                    }
-                } else {
-                    if depth <= subprogram_depth {
-                        in_subprogram = false;
-                        continue;
-                    }
-
-                    if entry.tag() == addr2line::gimli::DW_TAG_variable
-                        || entry.tag() == addr2line::gimli::DW_TAG_formal_parameter
-                    {
-                        let name = entry
-                            .attr_value(addr2line::gimli::DW_AT_name)
-                            .ok()
-                            .flatten()
-                            .and_then(|attr| {
-                                let s = self.dwarf.attr_string(&unit, attr).ok()?;
-                                s.to_string_lossy().ok().map(|c| c.into_owned())
-                            });
-
-                        if let (Some(n), Some(addr2line::gimli::AttributeValue::Exprloc(expr))) = (
-                            name,
-                            entry
-                                .attr_value(addr2line::gimli::DW_AT_location)
-                                .ok()
-                                .flatten(),
-                        ) {
-                            let mut ops = expr.operations(unit.encoding());
-                            if let Ok(Some(op)) = ops.next() {
-                                match op {
-                                    addr2line::gimli::Operation::Register { register } => {
-                                        locals.push(LocalVariable {
-                                            name: n,
-                                            location: DwarfLocation::Register(register.0),
-                                        });
-                                    }
-                                    addr2line::gimli::Operation::FrameOffset { offset } => {
-                                        locals.push(LocalVariable {
-                                            name: n,
-                                            location: DwarfLocation::FrameRelative(offset),
-                                        });
-                                    }
-                                    _ => {
-                                        locals.push(LocalVariable {
-                                            name: n,
-                                            location: DwarfLocation::Other(format!("{:?}", op)),
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
         locals
     }
 
@@ -559,6 +437,31 @@ impl SymbolProvider {
             location,
         });
     }
+}
+
+fn normalize_path_for_match(path: &str) -> String {
+    path.replace('\\', "/")
+        .to_lowercase()
+        .trim_start_matches("./")
+        .to_string()
+}
+
+fn path_match_score(requested: &str, candidate: &str) -> usize {
+    if requested == candidate {
+        return 100;
+    }
+    let req_parts: Vec<&str> = requested.split('/').collect();
+    let cand_parts: Vec<&str> = candidate.split('/').collect();
+
+    let mut score = 0;
+    for (r, c) in req_parts.iter().rev().zip(cand_parts.iter().rev()) {
+        if r == c {
+            score += 1;
+        } else {
+            break;
+        }
+    }
+    score
 }
 
 #[cfg(test)]
