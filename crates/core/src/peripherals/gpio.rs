@@ -233,7 +233,6 @@ mod tests {
         assert_eq!(gpio.odr, 0xFFFE);
     }
 
-
     #[test]
     fn test_gpio_v2_moder_and_odr() {
         let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
