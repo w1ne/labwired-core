@@ -1,14 +1,18 @@
-name: Core Integration CI
+name: Rust Core CI
 
 on:
   push:
     branches:
       - main
       - develop
+    paths:
+      - 'core/**'
   pull_request:
     branches:
       - main
       - develop
+    paths:
+      - 'core/**'
   workflow_dispatch:
 
 defaults:
@@ -16,8 +20,8 @@ defaults:
     working-directory: ./core
 
 jobs:
-  integration-smoke:
-    name: core-integration-smoke
+  integrity:
+    name: Core Integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,8 +36,28 @@ jobs:
         with:
           workspaces: core
 
-      - name: Build CLI
-        run: cargo build -p labwired-cli
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
 
-      - name: Run integration smoke
-        run: cargo run -q -p labwired-cli -- test --script examples/ci/dummy-max-uart-bytes.yaml --output-dir out/integration-smoke --no-uart-stdout
+      - name: Run Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run Workspace Tests
+        run: cargo test --workspace
+
+  build:
+    name: Build Workspace
+    needs: integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: Build Workspace
+        run: cargo build --workspace
