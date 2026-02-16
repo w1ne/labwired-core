@@ -54,6 +54,7 @@ plugins:
   - search
 
 nav:
+  - Main Website: https://labwired.com
   - Home: index.md
   
   - Tutorials:
