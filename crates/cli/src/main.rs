@@ -375,7 +375,13 @@ struct ErrorResponse {
 }
 
 /// Emit an error message, respecting the --json flag for structured output
-fn emit_error(json_mode: bool, error_type: &str, message: String, details: Option<serde_json::Value>, exit_code: u8) {
+fn emit_error(
+    json_mode: bool,
+    error_type: &str,
+    message: String,
+    details: Option<serde_json::Value>,
+    exit_code: u8,
+) {
     if json_mode {
         let response = ErrorResponse {
             error_type: error_type.to_string(),
@@ -387,13 +393,17 @@ fn emit_error(json_mode: bool, error_type: &str, message: String, details: Optio
             println!("{}", json);
         } else {
             // Fallback if JSON serialization fails
-            eprintln!("{{\"error_type\":\"{}\",\"message\":\"{}\",\"exit_code\":{}}}", error_type, message.replace('"', "\\\""), exit_code);
+            eprintln!(
+                "{{\"error_type\":\"{}\",\"message\":\"{}\",\"exit_code\":{}}}",
+                error_type,
+                message.replace('"', "\\\""),
+                exit_code
+            );
         }
     } else {
         error!("{}", message);
     }
 }
-
 
 fn write_interactive_snapshot<C: labwired_core::Cpu>(
     path: &Path,
@@ -763,7 +773,6 @@ fn run_interactive(cli: Cli) -> ExitCode {
         return ExitCode::from(EXIT_CONFIG_ERROR);
     };
 
-
     let system_path = cli.system.clone();
     let bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
         Ok(bus) => bus,
@@ -781,7 +790,6 @@ fn run_interactive(cli: Cli) -> ExitCode {
         }
     };
 
-
     info!("Loading firmware: {:?}", firmware);
     let program = match labwired_loader::load_elf(firmware) {
         Ok(program) => program,
@@ -798,7 +806,6 @@ fn run_interactive(cli: Cli) -> ExitCode {
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
-
 
     info!("Firmware Loaded Successfully!");
     info!("Entry Point: {:#x}", program.entry_point);
@@ -1255,6 +1262,7 @@ fn report_metrics<C: labwired_core::Cpu>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_stop_reason_details(
     stop_reason: &StopReason,
     limits: &TestLimits,
@@ -1747,7 +1755,10 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         (val & mask) == (expected & mask)
                     }
                     Err(e) => {
-                        error!("Memory assertion failed to read address {:#x}: {}", a.memory_value.address, e);
+                        error!(
+                            "Memory assertion failed to read address {:#x}: {}",
+                            a.memory_value.address, e
+                        );
                         false
                     }
                 }
@@ -2101,25 +2112,6 @@ fn write_config_error_outputs(
     }
 }
 
-fn build_bus(system_path: Option<PathBuf>) -> anyhow::Result<labwired_core::bus::SystemBus> {
-    let bus = if let Some(sys_path) = system_path {
-        info!("Loading system manifest: {:?}", sys_path);
-        let mut manifest = labwired_config::SystemManifest::from_file(&sys_path)?;
-        let chip_path = sys_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join(&manifest.chip);
-        manifest.chip = chip_path.to_string_lossy().into_owned();
-        info!("Loading chip descriptor: {:?}", chip_path);
-        let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
-        labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
-    } else {
-        info!("Using default hardware configuration");
-        labwired_core::bus::SystemBus::new()
-    };
-
-    Ok(bus)
-}
 fn resolve_script_path(script_path: &Path, value: &str) -> PathBuf {
     let p = PathBuf::from(value);
     if p.is_absolute() {
@@ -2321,7 +2313,10 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
         TestAssertion::ExpectedStopReason(a) => {
             format!("expected_stop_reason: {:?}", a.expected_stop_reason)
         }
-        TestAssertion::MemoryValue(a) => format!("memory_value: @{:#x}={:#x}", a.memory_value.address, a.memory_value.expected_value),
+        TestAssertion::MemoryValue(a) => format!(
+            "memory_value: @{:#x}={:#x}",
+            a.memory_value.address, a.memory_value.expected_value
+        ),
     };
 
     if s.len() <= MAX_LEN {

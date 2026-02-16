@@ -437,7 +437,6 @@ impl SymbolProvider {
             location,
         });
     }
-
 }
 
 fn normalize_path_for_match(path: &str) -> String {

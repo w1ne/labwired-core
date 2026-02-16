@@ -1,6 +1,6 @@
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::fs;
 
 #[test]
 fn test_strict_board_onboarding() -> anyhow::Result<()> {
@@ -22,10 +22,10 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
     for entry in fs::read_dir(&chips_dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
             let file_stem = path.file_stem().unwrap().to_str().unwrap();
-            
+
             // Skip CI fixtures or base templates if any (usually start with _)
             if file_stem.starts_with('_') || file_stem.starts_with("ci-fixture") {
                 continue;
@@ -39,45 +39,43 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
             // This is tricky because "nucleo-h563zi" != "stm32h563".
             // We need a way to map chip -> board/example.
             // For now, we search for *any* example directory that uses this chip?
-            // Or simpler: strictly require a test config at `examples/<board>/io-smoke.yaml` 
+            // Or simpler: strictly require a test config at `examples/<board>/io-smoke.yaml`
             // where strict mapping isn't easy without metadata.
-            
+
             // Heuristic: Search for a `system.yaml` or `io-smoke.yaml` that references this chip.
-            // But that's slow. 
+            // But that's slow.
             // Alternative: The plan implies checking if *supported* boards are broken.
             // Let's look for known example paths.
-            
+
             let example_dir = find_example_for_chip(project_root, file_stem);
-            
+
             if let Some(dir) = example_dir {
                 println!("  Found example directory: {:?}", dir);
-                
+
                 // 1. Build the firmware
                 let cargo_toml = dir.join("Cargo.toml");
                 let makefile = dir.join("Makefile");
-                
+
                 if cargo_toml.exists() {
                     println!("  Building firmware via Cargo in {:?}", dir);
                     let build_status = Command::new("cargo")
                         .current_dir(&dir)
                         .args(&["build", "--release"])
                         .status();
-                        
+
                     if build_status.is_err() || !build_status.unwrap().success() {
-                         println!("  [FAIL] Cargo build failed for {}", file_stem);
-                         failed_boards.push(format!("{} (cargo build failed)", file_stem));
-                         continue;
+                        println!("  [FAIL] Cargo build failed for {}", file_stem);
+                        failed_boards.push(format!("{} (cargo build failed)", file_stem));
+                        continue;
                     }
                 } else if makefile.exists() {
                     println!("  Building firmware via Makefile in {:?}", dir);
-                    let build_status = Command::new("make")
-                        .current_dir(&dir)
-                        .status();
-                        
+                    let build_status = Command::new("make").current_dir(&dir).status();
+
                     if build_status.is_err() || !build_status.unwrap().success() {
-                         println!("  [FAIL] Makefile build failed for {}", file_stem);
-                         failed_boards.push(format!("{} (makefile build failed)", file_stem));
-                         continue;
+                        println!("  [FAIL] Makefile build failed for {}", file_stem);
+                        failed_boards.push(format!("{} (makefile build failed)", file_stem));
+                        continue;
                     }
                 }
 
@@ -86,7 +84,7 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                 for test_entry in fs::read_dir(&dir)? {
                     let test_entry = test_entry?;
                     let test_path = test_entry.path();
-                    
+
                     if test_path.extension().and_then(|s| s.to_str()) == Some("yaml") {
                         let content = fs::read_to_string(&test_path)?;
                         if content.contains("schema_version: \"1.0\"") {
@@ -97,10 +95,15 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                             let status = Command::new("cargo")
                                 .current_dir(project_root)
                                 .args(&[
-                                    "run", "-q", "-p", "labwired-cli", "--", 
-                                    "test", 
-                                    "--script", test_path.to_str().unwrap(),
-                                    "--no-uart-stdout"
+                                    "run",
+                                    "-q",
+                                    "-p",
+                                    "labwired-cli",
+                                    "--",
+                                    "test",
+                                    "--script",
+                                    test_path.to_str().unwrap(),
+                                    "--no-uart-stdout",
                                 ])
                                 .status()?;
 
@@ -113,12 +116,11 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                         }
                     }
                 }
-                
-                if !found_test {
-                     println!("  [FAIL] No valid smoke tests found in {:?}", dir);
-                     failed_boards.push(format!("{} (no smoke tests)", file_stem));
-                }
 
+                if !found_test {
+                    println!("  [FAIL] No valid smoke tests found in {:?}", dir);
+                    failed_boards.push(format!("{} (no smoke tests)", file_stem));
+                }
             } else {
                 println!("  [WARN] No example directory found matching chip '{}'. Skipping strict check.", file_stem);
             }
@@ -126,7 +128,10 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
     }
 
     if !failed_boards.is_empty() {
-        return Err(anyhow::anyhow!("Strict Board Onboarding Failed for: {:?}", failed_boards));
+        return Err(anyhow::anyhow!(
+            "Strict Board Onboarding Failed for: {:?}",
+            failed_boards
+        ));
     }
 
     Ok(())
@@ -137,12 +142,14 @@ fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<Path
     // stm32h563 -> nucleo-h563zi
     // stm32f401 -> nucleo-f401re (hypothetical)
     // stm32f103 -> bluepill (hypothetical)
-    
+
     // Better: Grep all examples/**/system.yaml for "chip: .*<chip_name>"
     // This is robust.
-    
+
     let examples = root.join("examples");
-    if !examples.exists() { return None; }
+    if !examples.exists() {
+        return None;
+    }
 
     for entry in fs::read_dir(examples).ok()? {
         let entry = entry.ok()?;
@@ -150,8 +157,10 @@ fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<Path
             let system_yaml = entry.path().join("system.yaml");
             if system_yaml.exists() {
                 let content = fs::read_to_string(&system_yaml).ok()?;
-                if content.contains(&format!("chips/{}.yaml", chip_name)) || content.contains(&format!("chips/{}", chip_name)) {
-                     return Some(entry.path());
+                if content.contains(&format!("chips/{}.yaml", chip_name))
+                    || content.contains(&format!("chips/{}", chip_name))
+                {
+                    return Some(entry.path());
                 }
             }
         }
