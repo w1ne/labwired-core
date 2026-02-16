@@ -25,7 +25,6 @@
 ## Highlights
 
 - **🚀 [Demos & Examples](../DEMOS.md)** - Central portal for all LabWired demos.
-- **🤖 [Agentic Hardware Fix Demo](../ai/tests/autonomous_fix_demo.py)** - Simulated autonomous refinement loop for peripheral model correction.
 - **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/demo-blinky/README.md)
 - **NUCLEO-H563ZI Showcase**: [Human Demo Example](examples/nucleo-h563zi/README.md)
 - **Case Study**: [Debugging STM32 Without Hardware](docs/case_study_stm32.md)
