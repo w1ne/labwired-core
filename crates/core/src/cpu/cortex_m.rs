@@ -581,6 +581,27 @@ impl Cpu for CortexM {
                 self.write_reg(rd, res);
                 self.update_nz(res);
             }
+            Instruction::LslReg { rd, rm } => {
+                let val = self.read_reg(rd);
+                let shift = self.read_reg(rm) & 0xFF;
+                let res = if shift >= 32 { 0 } else { val.wrapping_shl(shift as u32) };
+                self.write_reg(rd, res);
+                self.update_nz(res);
+            }
+            Instruction::LsrReg { rd, rm } => {
+                let val = self.read_reg(rd);
+                let shift = self.read_reg(rm) & 0xFF;
+                let res = if shift >= 32 { 0 } else { val.wrapping_shr(shift as u32) };
+                self.write_reg(rd, res);
+                self.update_nz(res);
+            }
+            Instruction::RorReg { rd, rm } => {
+                let val = self.read_reg(rd);
+                let shift = self.read_reg(rm) & 0x1F;
+                let res = val.rotate_right(shift as u32);
+                self.write_reg(rd, res);
+                self.update_nz(res);
+            }
             Instruction::Adc { rd, rm } => {
                 let op1 = self.read_reg(rd);
                 let op2 = self.read_reg(rm);
@@ -618,55 +639,6 @@ impl Cpu for CortexM {
                 let (res, c, v) = add_with_flags(op1, op2);
                 self.update_nzcv(res, c, v);
             }
-            Instruction::ShiftReg32 {
-                rd,
-                rn,
-                rm,
-                shift_type,
-            } => {
-                let value = self.read_reg(rn);
-                let shift = self.read_reg(rm) & 0xFF;
-                let result = match shift_type {
-                    0 => {
-                        if shift >= 32 {
-                            0
-                        } else {
-                            value.wrapping_shl(shift)
-                        }
-                    }
-                    1 => {
-                        if shift == 0 {
-                            value
-                        } else if shift >= 32 {
-                            0
-                        } else {
-                            value.wrapping_shr(shift)
-                        }
-                    }
-                    2 => {
-                        if shift == 0 {
-                            value
-                        } else if shift >= 32 {
-                            if (value & 0x8000_0000) != 0 {
-                                0xFFFF_FFFF
-                            } else {
-                                0
-                            }
-                        } else {
-                            ((value as i32) >> shift) as u32
-                        }
-                    }
-                    3 => {
-                        if shift == 0 {
-                            value
-                        } else {
-                            value.rotate_right(shift % 32)
-                        }
-                    }
-                    _ => value,
-                };
-                self.write_reg(rd, result);
-            }
             Instruction::Rsbs { rd, rn } => {
                 let op1 = self.read_reg(rn);
                 let (res, c, v) = sub_with_flags(0, op1);
@@ -701,6 +673,13 @@ impl Cpu for CortexM {
                     self.write_reg(rt, val);
                 } else {
                     tracing::error!("Bus Read Fault (LDR reg) at {:#x}", addr);
+                }
+            }
+            Instruction::StrReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                let val = self.read_reg(rt);
+                if bus.write_u32(addr as u64, val).is_err() {
+                    tracing::error!("Bus Write Fault (STR reg) at {:#x}", addr);
                 }
             }
 
@@ -762,6 +741,48 @@ impl Cpu for CortexM {
                     self.write_reg(rt, val as u32);
                 } else {
                     tracing::error!("Bus Read Fault (LDRB reg) at {:#x}", addr);
+                }
+            }
+            Instruction::StrbReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                let val = (self.read_reg(rt) & 0xFF) as u8;
+                if bus.write_u8(addr as u64, val).is_err() {
+                    tracing::error!("Bus Write Fault (STRB reg) at {:#x}", addr);
+                }
+            }
+            Instruction::LdrsbReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                if let Ok(val) = bus.read_u8(addr as u64) {
+                    // Sign extend 8-bit to 32-bit
+                    let extended = (val as i8 as i32) as u32;
+                    self.write_reg(rt, extended);
+                } else {
+                    tracing::error!("Bus Read Fault (LDRSB reg) at {:#x}", addr);
+                }
+            }
+            Instruction::LdrshReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                if let Ok(val) = bus.read_u16(addr as u64) {
+                    // Sign extend 16-bit to 32-bit
+                    let extended = (val as i16 as i32) as u32;
+                    self.write_reg(rt, extended);
+                } else {
+                    tracing::error!("Bus Read Fault (LDRSH reg) at {:#x}", addr);
+                }
+            }
+            Instruction::LdrhReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                if let Ok(val) = bus.read_u16(addr as u64) {
+                    self.write_reg(rt, val as u32);
+                } else {
+                    tracing::error!("Bus Read Fault (LDRH reg) at {:#x}", addr);
+                }
+            }
+            Instruction::StrhReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                let val = (self.read_reg(rt) & 0xFFFF) as u16;
+                if bus.write_u16(addr as u64, val).is_err() {
+                    tracing::error!("Bus Write Fault (STRH reg) at {:#x}", addr);
                 }
             }
             Instruction::StrbImm { rt, rn, imm } => {

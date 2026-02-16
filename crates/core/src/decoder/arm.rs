@@ -182,11 +182,41 @@ pub enum Instruction {
         rn: u8,
         imm: u8,
     }, // STRB Rt, [Rn, #imm]
+    StrReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // STR Rt, [Rn, Rm]
+    StrbReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // STRB Rt, [Rn, Rm]
+    StrhReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // STRH Rt, [Rn, Rm]
     LdrhImm {
         rt: u8,
         rn: u8,
         imm: u8,
     }, // LDRH Rt, [Rn, #imm] (imm is *2)
+    LdrhReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRH Rt, [Rn, Rm]
+    LdrsbReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRSB Rt, [Rn, Rm]
+    LdrshReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRSH Rt, [Rn, Rm]
     StrhImm {
         rt: u8,
         rn: u8,
@@ -258,6 +288,18 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // ASR Rd, Rm
+    LslReg {
+        rd: u8,
+        rm: u8,
+    }, // LSL Rd, Rm
+    LsrReg {
+        rd: u8,
+        rm: u8,
+    }, // LSR Rd, Rm
+    RorReg {
+        rd: u8,
+        rm: u8,
+    }, // ROR Rd, Rm
     LdrReg {
         rt: u8,
         rn: u8,
@@ -414,9 +456,12 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         return match op_alu {
             0x0 => Instruction::And { rd, rm },        // AND
             0x1 => Instruction::Eor { rd, rm },        // EOR
+            0x2 => Instruction::LslReg { rd, rm },     // LSL
+            0x3 => Instruction::LsrReg { rd, rm },     // LSR
+            0x4 => Instruction::AsrReg { rd, rm },     // ASR
             0x5 => Instruction::Adc { rd, rm },        // ADC
             0x6 => Instruction::Sbc { rd, rm },        // SBC
-            0x7 => Instruction::Ror { rd, rm },        // ROR
+            0x7 => Instruction::RorReg { rd, rm },     // ROR
             0x8 => Instruction::Tst { rn: rd, rm },    // TST
             0x9 => Instruction::Rsbs { rd, rn: rm },   // RSBS Rd, Rn, #0
             0xA => Instruction::CmpReg { rn: rd, rm }, // CMP (register) T1
@@ -516,20 +561,24 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         return Instruction::LdrLit { rt, imm: imm8 << 2 };
     }
 
-    // 4.2 LDR (register) (T1): 0101 100 mmm nnn ttt
-    if (opcode & 0xFE00) == 0x5800 {
+    // 4.2 Load/Store (register) (T1): 0101 op op op mmm nnn ttt
+    if (opcode & 0xF200) == 0x5000 {
+        let op = (opcode >> 9) & 0x7;
         let rm = ((opcode >> 6) & 0x7) as u8;
         let rn = ((opcode >> 3) & 0x7) as u8;
         let rt = (opcode & 0x7) as u8;
-        return Instruction::LdrReg { rt, rn, rm };
-    }
 
-    // 4.2 LDRB (register) (T1): 0101 110 mmm nnn ttt
-    if (opcode & 0xFE00) == 0x5C00 {
-        let rm = ((opcode >> 6) & 0x7) as u8;
-        let rn = ((opcode >> 3) & 0x7) as u8;
-        let rt = (opcode & 0x7) as u8;
-        return Instruction::LdrbReg { rt, rn, rm };
+        return match op {
+            0 => Instruction::StrReg { rt, rn, rm },   // STR (register) T1 - 0x50xx
+            1 => Instruction::StrhReg { rt, rn, rm },  // STRH (register) T1 - 0x52xx
+            2 => Instruction::StrbReg { rt, rn, rm },  // STRB (register) T1 - 0x54xx
+            3 => Instruction::LdrsbReg { rt, rn, rm }, // LDRSB (register) T1 - 0x56xx
+            4 => Instruction::LdrReg { rt, rn, rm },   // LDR (register) T1 - 0x58xx
+            5 => Instruction::LdrhReg { rt, rn, rm },  // LDRH (register) T1 - 0x5Axx
+            6 => Instruction::LdrbReg { rt, rn, rm },  // LDRB (register) T1 - 0x5Cxx
+            7 => Instruction::LdrshReg { rt, rn, rm }, // LDRSH (register) T1 - 0x5Exx
+            _ => unreachable!(),
+        };
     }
 
     // 4.2 PUSH/POP

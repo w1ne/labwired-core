@@ -632,7 +632,7 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "labwired-cli"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-codegen"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "labwired-ir",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-config"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "human-size",
@@ -679,7 +679,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-core"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -694,7 +694,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-dap"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-gdbstub"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "gdbstub",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-ir"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -736,7 +736,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-loader"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "addr2line",
  "anyhow",

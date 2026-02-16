@@ -2118,7 +2118,8 @@ fn build_bus(system_path: Option<PathBuf>) -> anyhow::Result<labwired_core::bus:
         labwired_core::bus::SystemBus::new()
     };
 
-
+    Ok(bus)
+}
 fn resolve_script_path(script_path: &Path, value: &str) -> PathBuf {
     let p = PathBuf::from(value);
     if p.is_absolute() {

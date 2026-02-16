@@ -39,6 +39,15 @@ pub struct BoardIoState {
     pub active: bool,
 }
 
+#[derive(Debug, Serialize)]
+pub struct BreakpointResolution {
+    pub requested_line: i64,
+    pub verified: bool,
+    pub resolved_line: Option<u32>,
+    pub address: Option<u32>,
+    pub message: Option<String>,
+}
+
 #[derive(Clone)]
 struct ResolvedBoardIoBinding {
     id: String,
@@ -882,6 +891,7 @@ mod tests {
     #[test]
     fn test_resolve_board_io_bindings_uses_default_gpio_offsets() {
         let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             flash: labwired_config::MemoryRange {
@@ -903,6 +913,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
@@ -927,6 +938,7 @@ mod tests {
         let mut gpio_config = HashMap::new();
         gpio_config.insert("profile".to_string(), "stm32v2".into());
         let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             flash: labwired_config::MemoryRange {
@@ -948,6 +960,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
@@ -983,6 +996,7 @@ mod tests {
         let mut gpio_config = HashMap::new();
         gpio_config.insert("register_layout".to_string(), "stm32v2".into());
         let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             flash: labwired_config::MemoryRange {
@@ -1004,6 +1018,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),

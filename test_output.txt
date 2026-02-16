@@ -1,0 +1,42 @@
+warning: unreachable pattern
+   --> crates/core/src/cpu/cortex_m.rs:642:13
+    |
+377 | /             Instruction::Bfi { .. }
+378 | |             | Instruction::Bfc { .. }
+379 | |             | Instruction::Sbfx { .. }
+380 | |             | Instruction::Ubfx { .. }
+...   |
+391 | |             | Instruction::LdrImm32 { .. }
+392 | |             | Instruction::StrImm32 { .. } => {
+    | |__________________________________________- matches all the relevant values
+...
+642 | /             Instruction::ShiftReg32 {
+643 | |                 rd,
+644 | |                 rn,
+645 | |                 rm,
+646 | |                 shift_type,
+647 | |             } => {
+    | |_____________^ no value can reach this
+    |
+    = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: `labwired-core` (lib) generated 1 warning
+warning: function `build_bus` is never used
+    --> crates/cli/src/main.rs:2104:4
+     |
+2104 | fn build_bus(system_path: Option<...
+     |    ^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `labwired-cli` (bin "labwired") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `target/debug/labwired test --script examples/nucleo-h563zi/io-smoke.yaml`
+[2m2026-02-16T17:41:09.827637Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading system manifest: "examples/nucleo-h563zi/./system.yaml"
+[2m2026-02-16T17:41:09.827926Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: "examples/nucleo-h563zi/../../configs/chips/stm32h563.yaml"
+[2m2026-02-16T17:41:09.828529Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000009
+[2m2026-02-16T17:41:09.828591Z[0m [32m INFO[0m [2mlabwired_core::cpu::cortex_m[0m[2m:[0m CPU STEP 0: PC=0x800000a
+H563-IO
+S1-ON
+PB0=1 PF4=1 PG4=1 BTN13=[2m2026-02-16T17:41:09.829104Z[0m [31mERROR[0m [2mlabwired[0m[2m:[0m Assertion failed: UartContains(UartContainsAssertion { uart_contains: "PB0=0 PF4=0 PG4=0" }) (captured len=38)
+[2m2026-02-16T17:41:09.829120Z[0m [31mERROR[0m [2mlabwired[0m[2m:[0m Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BTN13=0" }) (captured len=38)
