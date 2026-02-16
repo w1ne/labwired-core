@@ -51,58 +51,72 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
             
             if let Some(dir) = example_dir {
                 println!("  Found example directory: {:?}", dir);
-                let smoke_test = dir.join("io-smoke.yaml");
                 
-                if !smoke_test.exists() {
-                     println!("  [FAIL] Missing io-smoke.yaml in {:?}", dir);
-                     failed_boards.push(format!("{} (missing io-smoke.yaml)", file_stem));
-                     continue;
-                }
-
-                // 1.5 Build the firmware
-                // We need to know which package to build.
-                // Heuristic: Check if there's a Cargo.toml in the example dir.
-                // If so, build that package.
+                // 1. Build the firmware
                 let cargo_toml = dir.join("Cargo.toml");
+                let makefile = dir.join("Makefile");
+                
                 if cargo_toml.exists() {
-                    println!("  Building firmware in {:?}", dir);
-                    // We assume the package name matches the directory name or is the only package in that manifest?
-                    // Simpler: just run `cargo build --release` inside that directory?
-                    // But we are in workspace root.
-                    // Let's rely on workspace members.
-                    // Try to guess package name from Cargo.toml?
-                    // Or just run `cargo build --release --manifest-path <path>`
-                    
-                    // Change current directory to the example directory so it picks up .cargo/config.toml
+                    println!("  Building firmware via Cargo in {:?}", dir);
                     let build_status = Command::new("cargo")
-                        .current_dir(dir)
+                        .current_dir(&dir)
                         .args(&["build", "--release"])
                         .status();
                         
                     if build_status.is_err() || !build_status.unwrap().success() {
-                         println!("  [FAIL] Firmware build failed for {}", file_stem);
-                         failed_boards.push(format!("{} (firmware build failed)", file_stem));
+                         println!("  [FAIL] Cargo build failed for {}", file_stem);
+                         failed_boards.push(format!("{} (cargo build failed)", file_stem));
+                         continue;
+                    }
+                } else if makefile.exists() {
+                    println!("  Building firmware via Makefile in {:?}", dir);
+                    let build_status = Command::new("make")
+                        .current_dir(&dir)
+                        .status();
+                        
+                    if build_status.is_err() || !build_status.unwrap().success() {
+                         println!("  [FAIL] Makefile build failed for {}", file_stem);
+                         failed_boards.push(format!("{} (makefile build failed)", file_stem));
                          continue;
                     }
                 }
 
-                // 2. Run the smoke test in Emulator mode
-                // cargo run -p labwired-cli -- test --script <path> ...
-                let status = Command::new("cargo")
-                    .current_dir(project_root)
-                    .args(&[
-                        "run", "-q", "-p", "labwired-cli", "--", 
-                        "test", 
-                        "--script", smoke_test.to_str().unwrap(),
-                        "--no-uart-stdout" // Keep stdout clean
-                    ])
-                    .status()?;
+                // 2. Discover and run all smoke tests (*.yaml with schema_version: "1.0")
+                let mut found_test = false;
+                for test_entry in fs::read_dir(&dir)? {
+                    let test_entry = test_entry?;
+                    let test_path = test_entry.path();
+                    
+                    if test_path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                        let content = fs::read_to_string(&test_path)?;
+                        if content.contains("schema_version: \"1.0\"") {
+                            found_test = true;
+                            let test_name = test_path.file_name().unwrap().to_str().unwrap();
+                            println!("  Running smoke test: {}", test_name);
 
-                if !status.success() {
-                    println!("  [FAIL] io-smoke test failed for {}", file_stem);
-                     failed_boards.push(format!("{} (smoke test failed)", file_stem));
-                } else {
-                    println!("  [PASS] {} is strictly onboarded.", file_stem);
+                            let status = Command::new("cargo")
+                                .current_dir(project_root)
+                                .args(&[
+                                    "run", "-q", "-p", "labwired-cli", "--", 
+                                    "test", 
+                                    "--script", test_path.to_str().unwrap(),
+                                    "--no-uart-stdout"
+                                ])
+                                .status()?;
+
+                            if !status.success() {
+                                println!("  [FAIL] {} failed for {}", test_name, file_stem);
+                                failed_boards.push(format!("{} ({} failed)", file_stem, test_name));
+                            } else {
+                                println!("  [PASS] {} passed for {}", test_name, file_stem);
+                            }
+                        }
+                    }
+                }
+                
+                if !found_test {
+                     println!("  [FAIL] No valid smoke tests found in {:?}", dir);
+                     failed_boards.push(format!("{} (no smoke tests)", file_stem));
                 }
 
             } else {

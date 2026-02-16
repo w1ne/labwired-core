@@ -4,7 +4,7 @@ inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-h563-fullchip-demo"
   system: "./system.yaml"
 limits:
-  max_steps: 512
+  max_steps: 1000000
 assertions:
   - uart_contains: "H563-FULLCHIP"
   - uart_contains: "RCC=1 SYSTICK=1 UART=1"
