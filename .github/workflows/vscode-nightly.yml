@@ -1,6 +1,8 @@
 name: VS Code Extension Nightly
 
 on:
+  schedule:
+    - cron: '10 4 * * *'
   workflow_dispatch:
 
 jobs:
@@ -42,12 +44,14 @@ jobs:
         run: rustup target add thumbv7m-none-eabi
 
       - name: Build Demo Firmware Fixture
-        run: cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi
+        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
         working-directory: ./core
 
       - name: Run Tests (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum bash -lc 'ELECTRON_RUN_AS_NODE= npm test'
+        uses: coactions/setup-xvfb@v1
+        with:
+          run: unset ELECTRON_RUN_AS_NODE && cd vscode && npm test
 
       - name: Run Tests (Non-Linux)
         if: runner.os != 'Linux'

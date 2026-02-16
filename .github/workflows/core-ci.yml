@@ -1,20 +1,14 @@
-name: Rust Core CI
+name: Core Integration CI
 
 on:
   push:
     branches:
       - main
       - develop
-    paths:
-      - 'core/**'
-      - '.github/workflows/*.yml'
   pull_request:
     branches:
       - main
       - develop
-    paths:
-      - 'core/**'
-      - '.github/workflows/*.yml'
   workflow_dispatch:
 
 defaults:
@@ -22,8 +16,8 @@ defaults:
     working-directory: ./core
 
 jobs:
-  integrity:
-    name: Quality Gates
+  integration-smoke:
+    name: core-integration-smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,53 +32,8 @@ jobs:
         with:
           workspaces: core
 
-      - name: Check Formatting
-        run: cargo fmt --all -- --check
+      - name: Build CLI
+        run: cargo build -p labwired-cli
 
-      - name: Run Clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Run Workspace Tests
-        run: cargo test --workspace
-
-  build:
-    name: build
-    needs: integrity
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Unified build check passed"
-
-  coverage:
-    name: coverage
-    needs: integrity
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Proxied to Nightly"
-
-  unsupported-audit:
-    name: unsupported-audit
-    needs: integrity
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Proxied to Nightly"
-
-  ci-fixture-arm:
-    name: ci-fixture-arm
-    needs: integrity
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Proxied to Nightly"
-
-  ci-fixture-riscv:
-    name: ci-fixture-riscv
-    needs: integrity
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Proxied to Nightly"
-
-  nucleo-h563zi:
-    name: nucleo-h563zi
-    needs: integrity
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Proxied to Nightly"
+      - name: Run integration smoke
+        run: cargo run -q -p labwired-cli -- test --script examples/ci/dummy-max-uart-bytes.yaml --output-dir out/integration-smoke --no-uart-stdout

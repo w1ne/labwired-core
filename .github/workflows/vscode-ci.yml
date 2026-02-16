@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
     paths:
       - 'vscode/**'
       - 'core/**'
@@ -11,6 +12,7 @@ on:
   pull_request:
     branches:
       - main
+      - develop
     paths:
       - 'vscode/**'
       - 'core/**'
@@ -44,11 +46,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build LabWired (DAP)
-        run: cargo build -p labwired-dap
+        run: cargo build -p labwired-dap --release
         working-directory: ./core
 
       - name: Compile
         run: npm run compile
+
+      - name: Run Tests (Linux)
+        uses: coactions/setup-xvfb@v1
+        with:
+          run: unset ELECTRON_RUN_AS_NODE && cd vscode && npm test
 
       - name: Run Unit Tests (Docker Logic)
         run: ./node_modules/.bin/mocha out/test/unit/docker.test.js
