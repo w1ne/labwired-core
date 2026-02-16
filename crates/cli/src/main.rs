@@ -783,6 +783,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
         return ExitCode::from(EXIT_CONFIG_ERROR);
     };
 
+
     let system_path = cli.system.clone();
     let bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
         Ok(bus) => bus,
@@ -800,6 +801,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
         }
     };
 
+
     info!("Loading firmware: {:?}", firmware);
     let program = match labwired_loader::load_elf(firmware) {
         Ok(program) => program,
@@ -816,6 +818,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
 
     info!("Firmware Loaded Successfully!");
     info!("Entry Point: {:#x}", program.entry_point);
