@@ -344,7 +344,7 @@ name: LabWired CI Test
 on:
   pull_request:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main" ]
 
 jobs:
   labwired-test:
