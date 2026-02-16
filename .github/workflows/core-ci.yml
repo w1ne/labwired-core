@@ -39,13 +39,13 @@ jobs:
           workspaces: core
 
       - name: Check Formatting
-        run: cargo fmt --all -- --check || true
+        run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        run: cargo clippy --all-targets -- -D warnings || true
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Run Workspace Tests
-        run: cargo test --workspace || true
+        run: cargo test --workspace
 
   build:
     name: build
