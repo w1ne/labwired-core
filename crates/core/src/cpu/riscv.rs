@@ -98,8 +98,7 @@ impl RiscV {
 
 impl Cpu for RiscV {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
-        self.pc = 0x8000_0000; // Typical RISC-V Reset Vector (varies by platform)
-                               // x0..x31 are 0 by Default
+        self.pc = 0; 
         Ok(())
     }
 
