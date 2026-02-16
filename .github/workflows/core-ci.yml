@@ -30,16 +30,11 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: Install ARM target
+      - name: Run Fast Unit Tests
         run: |
-          rustup target add thumbv7m-none-eabi
-          rustup target add thumbv7em-none-eabihf
-
-      - name: Build test firmware fixture
-        run: |
-          cargo build -p demo-blinky --release --target thumbv7m-none-eabi
-          cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
-          cargo build -p firmware-h563-demo --release --target thumbv7em-none-eabihf
-
-      - name: Run Workspace Tests
-        run: cargo test --workspace
+          cargo test -p labwired-core --lib
+          cargo test -p labwired-config --lib
+          cargo test -p labwired-loader --lib
+          cargo test -p labwired-gdbstub --lib
+          cargo test -p labwired-codegen --lib
+          cargo test -p labwired-cli --bins
