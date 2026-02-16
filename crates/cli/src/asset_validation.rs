@@ -191,7 +191,7 @@ fn validate_system(path: &PathBuf) -> ExitCode {
                     device.id, conn, valid_targets
                 ),
                 Some(format!("Use one of the available peripheral IDs: {:?}", valid_targets)),
-                Some(format!("external_devices[].connection")),
+                Some("external_devices[].connection".to_string()),
             );
         }
     }
@@ -294,7 +294,7 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
             result.add_error(
                 "DUPLICATE_PERIPHERAL_ID",
                 format!("Duplicate peripheral ID '{}' detected", p.id),
-                Some(format!("Ensure each peripheral has a unique ID")),
+                Some("Ensure each peripheral has a unique ID".to_string()),
                 Some(format!("peripherals[{}].id", idx)),
             );
         }

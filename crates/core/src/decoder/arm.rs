@@ -157,6 +157,16 @@ pub enum Instruction {
         rt: u8,
         imm: u16,
     }, // LDR Rt, [PC, #imm]
+    LdrImm32 {
+        rt: u8,
+        rn: u8,
+        imm12: u16,
+    },
+    StrImm32 {
+        rt: u8,
+        rn: u8,
+        imm12: u16,
+    },
     LdrbImm {
         rt: u8,
         rn: u8,
@@ -314,12 +324,24 @@ pub enum Instruction {
         shift_type: u8,
         set_flags: bool,
     },
+    DataProcImm32 {
+        op: u8,
+        rn: u8,
+        rd: u8,
+        imm12: u32,
+        set_flags: bool,
+    },
     ShiftReg32 {
         rd: u8,
         rn: u8,
         rm: u8,
         shift_type: u8,
     }, // LSL/LSR/ASR/ROR (register)
+
+    It {
+        cond: u8,
+        mask: u8,
+    }, // IT <cond> <mask...ish>
 
     Unknown(u16),
     // Intermediate state for 32-bit instruction (First half)
@@ -620,6 +642,11 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
 
         // HINT/IT (T1): 1011 1111 ...
         if (opcode & 0xFF00) == 0xBF00 {
+            let cond = ((opcode >> 4) & 0xF) as u8;
+            let mask = (opcode & 0xF) as u8;
+            if mask != 0 {
+                return Instruction::It { cond, mask };
+            }
             return Instruction::Nop;
         }
     }
@@ -667,9 +694,26 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // First Halfword: 1110 1... or 1111 ...
 
     // Data processing (modified immediate) / Plain binary immediate
-    // F000-F0FF (approx)
+    // 1111 0 <i1> 0 <op> <S> <Rn> 0 <imm3> <Rd> <imm8>
+    if (h1 & 0xFB00) == 0xF000 && (h2 & 0x8000) == 0 && (h2 & 0x0700) != 0x0700 {
+        let op = ((h1 >> 5) & 0xF) as u8;
+        let s = (h1 & 0x0010) != 0;
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
 
-    // ... (Existing Bitfield/Misc logic) ...
+        let i = (h1 >> 10) & 1;
+        let imm3 = (h2 >> 12) & 7;
+        let imm8 = h2 & 0xFF;
+        let imm12 = (i << 11) | (imm3 << 8) | imm8;
+
+        return Instruction::DataProcImm32 {
+            op,
+            rn,
+            rd,
+            imm12: imm12 as u32,
+            set_flags: s,
+        };
+    }
 
     // Data Processing (Reg) - For LSL, LSR, ASR, ROR, etc
     // 1110 1010 ... (EA..)
@@ -694,6 +738,28 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             shift_type,
             set_flags: s,
         };
+    }
+
+    // MOVW: 1111 0 i 10 0100 imm4 0 imm3 rd imm8 -> F24..
+    if (h1 & 0xFBF0) == 0xF240 {
+        let i = (h1 >> 10) & 1;
+        let imm4 = (h1 & 0xF) as u16;
+        let imm3 = ((h2 >> 12) & 7) as u16;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u16;
+        let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+        return Instruction::Movw { rd, imm: imm16 };
+    }
+
+    // MOVT: 1111 0 i 10 1100 imm4 0 imm3 rd imm8 -> F2C..
+    if (h1 & 0xFBF0) == 0xF2C0 {
+        let i = (h1 >> 10) & 1;
+        let imm4 = (h1 & 0xF) as u16;
+        let imm3 = ((h2 >> 12) & 7) as u16;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u16;
+        let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+        return Instruction::Movt { rd, imm: imm16 };
     }
 
     // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
@@ -736,6 +802,33 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 }
             }
         }
+    }
+
+    // ADR.W (T3): 1111 0 i 10 1010 .... F2A..
+    if (h1 & 0xFBF0) == 0xF2A0 {
+        let i = (h1 >> 10) & 1;
+        let imm4 = (h1 & 0xF) as u16;
+        let imm3 = ((h2 >> 12) & 7) as u16;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u16;
+        let imm12 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+        return Instruction::Adr { rd, imm: imm12 };
+    }
+
+    // LDR.W (immediate) (T3): 1111 1000 1101 ... -> F8D..
+    if (h1 & 0xFFF0) == 0xF8D0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm12 = (h2 & 0xFFF) as u16;
+        return Instruction::LdrImm32 { rt, rn, imm12 };
+    }
+
+    // STR.W (immediate) (T3): 1111 1000 1100 ... -> F8C..
+    if (h1 & 0xFFF0) == 0xF8C0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm12 = (h2 & 0xFFF) as u16;
+        return Instruction::StrImm32 { rt, rn, imm12 };
     }
 
     // SBFX / UBFX
@@ -782,7 +875,31 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
-    Instruction::Unknown(h1) // Placeholder to make it compile with existing Unknown(u16)
+    // UXTB.W (Thumb-2): 1111 1010 0100 1111 1111 <rd> 1000 <rm> -> FA4F ...
+    // My log said FA23 F404 (LSR) and FA2E F303 (LSR). 
+    // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
+    // Encodings: 1111 1010 0... (FA0x to FA7x)
+    if (h1 & 0xFF80) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let shift_type = ((h2 >> 4) & 0x3) as u8;
+        return Instruction::ShiftReg32 {
+            rd,
+            rn,
+            rm,
+            shift_type,
+        };
+    }
+
+    // UXTB.W etc (Miscellaneous)
+    if (h1 & 0xFFC0) == 0xFA40 {
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        return Instruction::Uxtb { rd, rm };
+    }
+
+    Instruction::Unknown(h1)
 }
 
 #[cfg(test)]
