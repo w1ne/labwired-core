@@ -608,20 +608,76 @@ impl LabwiredAdapter {
         }
     }
 
-    pub fn set_breakpoints(&self, path: String, lines: Vec<i64>) -> Result<()> {
+    pub fn set_breakpoints(
+        &self,
+        path: String,
+        lines: Vec<i64>,
+    ) -> Result<Vec<BreakpointResolution>> {
+        let mut resolutions = Vec::with_capacity(lines.len());
         let mut addresses = Vec::new();
 
         let syms_guard = self.symbols.lock().unwrap();
-        if let Some(syms) = syms_guard.as_ref() {
-            for line in lines {
-                if let Some(addr) = syms.location_to_pc(&path, line as u32) {
-                    let addr: u64 = addr;
-                    addresses.push(addr as u32);
+        let syms = syms_guard.as_ref();
+
+        for requested_line in lines {
+            if requested_line <= 0 {
+                resolutions.push(BreakpointResolution {
+                    requested_line,
+                    verified: false,
+                    resolved_line: None,
+                    address: None,
+                    message: Some("Invalid line number".to_string()),
+                });
+                continue;
+            }
+
+            if let Some(syms) = syms {
+                if let Some((addr, resolved_line)) =
+                    syms.location_to_pc_nearest(&path, requested_line as u32)
+                {
+                    let addr32 = addr as u32;
+                    addresses.push(addr32);
+                    resolutions.push(BreakpointResolution {
+                        requested_line,
+                        verified: true,
+                        resolved_line: Some(resolved_line),
+                        address: Some(addr32),
+                        message: if resolved_line != requested_line as u32 {
+                            Some(format!(
+                                "Mapped to nearest executable line {}",
+                                resolved_line
+                            ))
+                        } else {
+                            None
+                        },
+                    });
                 } else {
-                    tracing::warn!("Could not resolve breakpoint at {}:{}", path, line);
+                    tracing::warn!(
+                        "Could not resolve breakpoint at {}:{}",
+                        path,
+                        requested_line
+                    );
+                    resolutions.push(BreakpointResolution {
+                        requested_line,
+                        verified: false,
+                        resolved_line: None,
+                        address: None,
+                        message: Some("No executable location for this line".to_string()),
+                    });
                 }
+            } else {
+                resolutions.push(BreakpointResolution {
+                    requested_line,
+                    verified: false,
+                    resolved_line: None,
+                    address: None,
+                    message: Some("Debug symbols unavailable".to_string()),
+                });
             }
         }
+
+        addresses.sort_unstable();
+        addresses.dedup();
 
         let mut machine_guard = self.machine.lock().unwrap();
         if let Some(machine) = machine_guard.as_mut() {
@@ -632,7 +688,7 @@ impl LabwiredAdapter {
             }
         }
 
-        Ok(())
+        Ok(resolutions)
     }
 
     pub fn add_breakpoint_addr(&self, addr: u32) -> Result<()> {
@@ -980,7 +1036,7 @@ mod tests {
             .expect("Failed to load firmware");
 
         // Set breakpoint at main.rs:11
-        adapter
+        let _ = adapter
             .set_breakpoints("main.rs".to_string(), vec![11])
             .expect("Failed to set breakpoints");
     }

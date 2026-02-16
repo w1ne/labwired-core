@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Default schema version for YAML configs
+fn default_schema_version() -> String {
+    "1.0".to_string()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Arch {
@@ -40,6 +45,8 @@ pub struct PeripheralConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
     pub name: String,
     pub arch: Arch, // Parsed from string
     pub flash: MemoryRange,
@@ -89,6 +96,8 @@ pub struct BoardIoBinding {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SystemManifest {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
     pub name: String,
     pub chip: String, // Reference to chip name or file path
     #[serde(default)]
@@ -390,6 +399,8 @@ pub struct TestLimits {
     pub no_progress_steps: Option<u64>,
     #[serde(default)]
     pub wall_time_ms: Option<u64>,
+    #[serde(default)]
+    pub max_vcd_bytes: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -400,6 +411,7 @@ pub enum StopReason {
     MaxSteps,
     MaxCycles,
     MaxUartBytes,
+    MaxVcdBytes,
     NoProgress,
     WallTime,
     MemoryViolation,
@@ -426,11 +438,27 @@ pub struct StopReasonAssertion {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryValueDetails {
+    pub address: u64,
+    pub expected_value: u64,
+    #[serde(default)]
+    pub mask: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryValueAssertion {
+    pub memory_value: MemoryValueDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
     UartContains(UartContainsAssertion),
     UartRegex(UartRegexAssertion),
     ExpectedStopReason(StopReasonAssertion),
+    MemoryValue(MemoryValueAssertion),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

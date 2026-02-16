@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-02-16
+
+### Fixed
+- **Critical Instruction Regression**: Fixed `io-smoke` failure by implementing proper **Thumb-2 `IT` (If-Then) block** support in the `CortexM` core.
+- **Instruction Coverage**: Expanded modular decoder and executor for `MOVW`, `MOVT`, `LDR.W`, `STR.W`, and `UXTB.W`.
+- **Structural Stability**: Refactored CPU `step` loop for improved variable scoping and exception handling consistency.
+
 ### Added
 - **Architecture Unification**: Native ingestion of **Strict IR** (JSON) in the simulation core.
     - Bridged `labwired-ir` with `labwired-config` via `From` traits.
