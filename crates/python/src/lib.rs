@@ -95,7 +95,6 @@ struct Machine {
     inner: Arc<Mutex<Box<dyn DebugControl + Send>>>,
 }
 
-
 #[allow(non_local_definitions)]
 #[pymethods]
 impl Machine {

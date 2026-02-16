@@ -73,6 +73,7 @@ nav:
     - Declarative Registers: declarative_registers.md
     - CLI Commands: cli_reference.md
     - Test Script Schema: ci_test_runner.md
+    - Hardware Support Matrix: SUPPORTED_DEVICES.md
     
   - Operations:
     - Release Strategy: release_strategy.md
