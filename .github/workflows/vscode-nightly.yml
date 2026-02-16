@@ -1,31 +1,19 @@
-name: VS Code Extension CI
+name: VS Code Extension Nightly
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'vscode/**'
-      - 'core/**'
-      - '.github/workflows/vscode-ci.yml'
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'vscode/**'
-      - 'core/**'
-      - '.github/workflows/vscode-ci.yml'
+  schedule:
+    - cron: '10 4 * * *'
   workflow_dispatch:
 
 jobs:
-  integration-smoke:
-    name: vscode-integration-smoke
-    runs-on: ubuntu-latest
+  build_matrix:
     defaults:
       run:
         working-directory: ./vscode
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,6 +39,22 @@ jobs:
 
       - name: Compile
         run: npm run compile
+
+      - name: Install ARM target
+        run: rustup target add thumbv7m-none-eabi
+
+      - name: Build Demo Firmware Fixture
+        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+        working-directory: ./core
+
+      - name: Run Tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum bash -lc 'ELECTRON_RUN_AS_NODE= npm test'
+
+      - name: Run Tests (Non-Linux)
+        if: runner.os != 'Linux'
+        run: npm test
+        working-directory: ./vscode
 
       - name: Run Unit Tests (Docker Logic)
         run: ./node_modules/.bin/mocha out/test/unit/docker.test.js

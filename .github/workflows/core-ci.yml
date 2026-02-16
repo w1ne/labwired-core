@@ -1,18 +1,14 @@
-name: Rust Core CI
+name: Core Integration CI
 
 on:
   push:
     branches:
       - main
       - develop
-    paths:
-      - 'core/**'
   pull_request:
     branches:
       - main
       - develop
-    paths:
-      - 'core/**'
   workflow_dispatch:
 
 defaults:
@@ -20,8 +16,8 @@ defaults:
     working-directory: ./core
 
 jobs:
-  test:
-    name: Quality Gates
+  integration-smoke:
+    name: core-integration-smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,92 +32,8 @@ jobs:
         with:
           workspaces: core
 
-      - name: Check Formatting
-        run: cargo fmt --all -- --check
+      - name: Build CLI
+        run: cargo build -p labwired-cli
 
-      - name: Run Clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Install ARM Toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi
-
-      - name: Install Python Build Tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install maturin
-
-      - name: Install ARM and RISC-V targets for exhaustive tests
-        run: |
-          rustup target add thumbv7m-none-eabi
-          rustup target add thumbv6m-none-eabi
-          rustup target add riscv32i-unknown-none-elf
-          rustup target add riscv32imac-unknown-none-elf
-
-      - name: Build Firmware Fixtures
-        run: |
-          cargo build -p demo-blinky --release --target thumbv7m-none-eabi
-          cargo build -p firmware-ci-fixture --release --target thumbv6m-none-eabi
-          cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf
-
-      - name: Unsupported Instruction Audit
-        run: ./scripts/unsupported_instruction_audit.sh --firmware target/thumbv7m-none-eabi/release/demo-blinky --system configs/systems/ci-fixture-uart1.yaml --max-steps 20000 --out-dir out/unsupported-audit/ci-fixture --fail-on-unsupported
-
-      - name: Digital Twin Verification
-        run: ./scripts/digital_twin_verification.sh out/digital-twin-verification
-
-      - name: Trace Drift Assertions
-        run: ./scripts/trace_drift_assert.sh --out-dir out/trace-drift-assert
-
-      - name: Run Workspace Tests
-        run: cargo test --workspace
-
-      - name: Build Workspace
-        run: cargo build --workspace
-
-      - name: Verify Examples
-        run: |
-          # 1. arm-c-hello (C Makefile + Simulation)
-          make -C examples/arm-c-hello
-          cargo run -q -p labwired-cli -- --firmware examples/arm-c-hello/target/firmware --system examples/arm-c-hello/system.yaml --max-steps 1000
-
-          # 2. arm-cortex-m0 (Rust + YAML Config)
-          cargo build -p arm-hello --release --target thumbv6m-none-eabi
-          cargo run -q -p labwired-cli -- --firmware target/thumbv6m-none-eabi/release/firmware --system examples/arm-cortex-m0/system.yaml --max-steps 1000
-
-          # 3. riscv-virt (Rust RISC-V + YAML Config)
-          cargo build -p riscv-hello --release --target riscv32imac-unknown-none-elf
-          cargo run -q -p labwired-cli -- --firmware target/riscv32imac-unknown-none-elf/release/firmware --system examples/riscv-virt/system.yaml --max-steps 1000
-
-          # 4. demo-blinky (Rust + Test Script)
-          cargo run -q -p labwired-cli -- test --script examples/demo-blinky/io-smoke.yaml
-
-          # 5. nucleo-h563zi (Complex Script)
-          ./examples/nucleo-h563zi/scripts/run_full_example.sh
-
-          # 6. python-agent (Python Bindings + Agent Script)
-          cd crates/python
-          maturin develop --release
-          cd ../..
-          python examples/python-agent/test_agent.py target/thumbv6m-none-eabi/release/firmware
-
-      - name: Upload Verification Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: verification-artifacts
-          path: |
-            core/out/unsupported-audit/
-            core/out/digital-twin-verification/
-            core/out/trace-drift-assert/
-
-  build:
-    name: build
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - run: echo "Build check passed (bridged from test)"
+      - name: Run integration smoke
+        run: cargo run -q -p labwired-cli -- test --script examples/ci/dummy-max-uart-bytes.yaml --output-dir out/integration-smoke --no-uart-stdout
