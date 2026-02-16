@@ -141,32 +141,33 @@ def extract_behavior(text: str, context: Optional[Dict] = None) -> List[Dict[str
     Context (Known Registers and Fields):
     {context_blob}
 
-    Task: Deeply analyze the datasheet text to synthesize simulation behaviors.
+    Task: Deeply analyze the datasheet text to synthesize simulation behaviors (Timing Hooks).
 
-    Step 1: Look for phrases like 'setting X start Y', 'clearing A stops B', 'interrupt is triggered when', 'read action resets'.
-    Step 2: Map these to concrete Triggers (Read/Write to specific fields) and Actions (State changes, Interrupts, Delays).
-    Step 3: Extract timing information (in cycles or microseconds) if mentioned.
-    Step 4: Provide reasoning for each behavior to justify its inclusion in the simulation.
+    Step 1: Look for phrases like 'setting X starts Y', 'clearing A stops B', 'interrupt is triggered when', 'read action resets'.
+    Step 2: Map these to concrete Triggers and Actions supported by the LabWired Simulator:
+       - Triggers:
+         * {{"write": {{"register": "NAME", "value": 0x??, "mask": 0x??}}}}
+         * {{"read": {{"register": "NAME"}}}}
+         * {{"periodic": {{"period_cycles": N}}}}
+       - Actions:
+         * {{"set_bits": {{"register": "NAME", "bits": 0x??}}}}
+         * {{"clear_bits": {{"register": "NAME", "bits": 0x??}}}}
+         * {{"write_value": {{"register": "NAME", "value": 0x??}}}}
+
+    Step 3: Extract timing information (`delay_cycles`) if mentioned (default to 0).
+    Step 4: Identify associated Interrupt name if the action triggers an IRQ.
 
     Text:
     {text}
 
-    Respond ONLY with a JSON list of objects:
+    Respond ONLY with a JSON list of TimingDescriptor objects:
     [
         {{
-            "trigger": {{
-                "event": "write",
-                "register": "NAME",
-                "field": "NAME",
-                "value": "1",
-                "description": "Setting shutdown bit"
-            }},
-            "action": {{
-                "type": "state_change",
-                "target": "Global",
-                "delay_cycles": 0,
-                "description": "Functional action description"
-            }},
+            "id": "unique_behavior_id",
+            "trigger": {{ "write": {{ "register": "NAME", "value": 1 }} }},
+            "delay_cycles": 100,
+            "action": {{ "set_bits": {{ "register": "STATUS", "bits": 1 }} }},
+            "interrupt": "IRQ_NAME_IF_ANY",
             "reasoning": "Causal logic found in text",
             "evidence": "Sentence from datasheet"
         }}

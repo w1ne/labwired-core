@@ -47,9 +47,14 @@ cargo run -p labwired-cli -- --firmware path/to/firmware.elf --system system.yam
 ### Development Setup
 See [`DEVELOPMENT.md`](./DEVELOPMENT.md) for complete setup instructions for all three components.
 
-## 📚 Documentation
-
+## 📚 Documentation & Demos
+- **🚀 [Demos & Examples](./DEMOS.md)** - Start here to see LabWired in action.
 - **[Core Emulator](./core/README.md)** - Detailed emulator documentation
+- **[Agent Instructions](./AGENTS.md)** - Repository-level instructions for coding agents
+- **[Board Onboarding Playbook](./core/docs/board_onboarding_playbook.md)** - Config-first workflow for adding new board targets
+- **[Postmortems](./docs/postmortems/README.md)** - Incident analysis and prevention records
+- **[NUCLEO-H563ZI Example](./core/examples/nucleo-h563zi/README.md)** - Human-run capability showcase (emulator + real board)
+- **[NUCLEO-H563ZI Demo Story](./docs/NUCLEO_H563ZI_DEMO.md)** - Marketing/demo narrative and live talk track
 - **[VS Code Extension](./vscode/README.md)** - Extension features and usage
 - **[AI Tools](./ai/README.md)** - Asset generation tools
 - **[Development Guide](./DEVELOPMENT.md)** - Contributing and building
@@ -125,12 +130,12 @@ We follow **Gitflow** and enforce strict quality gates.
 See [Release & Merging Strategy](core/docs/release_strategy.md) for the full protocol.
 
 ## 📄 Documentation
-- [Platform Docs Index](docs/README.md)
-- [Implementation Plan](docs/plan.md)
-- [Core Architecture](core/docs/architecture.md)
-- [Release Strategy](core/docs/release_strategy.md)
-- [CI Integration Guide](core/docs/ci_integration.md)
-- [Interactive Debugging](core/docs/debugging.md)
+- [Platform Docs Index](https://labwired.com/docs.html)
+- [Implementation Plan](https://labwired.com/docs/plan.md)
+- [Core Architecture](https://labwired.com/docs/explanation/architecture/)
+- [Release Strategy](https://labwired.com/docs/development/release_strategy/)
+- [CI Integration Guide](https://labwired.com/docs/how-to-guides/ci-cd-integration/)
+- [Interactive Debugging](https://labwired.com/docs/explanation/debugging-architecture-dap-gdb/)
 
 
 ## ⚖️ License

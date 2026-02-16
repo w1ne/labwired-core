@@ -8,6 +8,7 @@ Use this before every external demo to validate the critical path:
 4. Local simulator run
 5. DAP backend smoke test (VS Code debug backend)
 6. Docker runtime + `labwired-dap` availability
+7. VS Code UI smoke pass (breakpoint/step/registers/memory, local + Docker)
 
 ## Fallback Mode (No Live AI Required)
 
@@ -34,4 +35,4 @@ python3 ai/tests/demo_dry_run.py \
 
 - Default chip for dry-run is `ci-fixture-cortex-m3-uart1` because it is stable with fixture firmware.
 - The script writes outputs to `ai/tests/demo_dry_run_output/`.
-- For VS Code-specific UI checks (breakpoints/panels), run a quick manual pass after this script.
+- Complete the manual UI gate after this script: `docs/VS_CODE_UI_DEMO_CHECKLIST.md`.

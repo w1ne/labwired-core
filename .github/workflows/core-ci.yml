@@ -42,17 +42,30 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: Install ARM target for fixture firmware
-        run: rustup target add thumbv7m-none-eabi
+      - name: Install ARM and RISC-V targets for exhaustive tests
+        run: |
+          rustup target add thumbv7m-none-eabi
+          rustup target add thumbv6m-none-eabi
+          rustup target add riscv32imac-unknown-none-elf
 
       - name: Build Demo Firmware Fixture
         run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
 
-      - name: Run Tests
-        run: cargo test
+      - name: Unsupported Instruction Audit
+        run: ./scripts/unsupported_instruction_audit.sh --firmware target/thumbv7m-none-eabi/release/demo-blinky --system configs/systems/ci-fixture-uart1.yaml --max-steps 20000 --out-dir out/unsupported-audit/ci-fixture --fail-on-unsupported
 
-      - name: Build
-        run: cargo build
+      - name: Run Workspace Tests
+        run: cargo test --workspace
+
+      - name: Build Workspace
+        run: cargo build --workspace
+
+      - name: Upload Unsupported Audit Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsupported-instruction-audit
+          path: core/out/unsupported-audit/
 
   build:
     name: build

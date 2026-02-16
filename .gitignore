@@ -17,3 +17,4 @@ editors/vscode/out
 ai/.env
 .env
 core/demo_chip.json
+__pycache__/

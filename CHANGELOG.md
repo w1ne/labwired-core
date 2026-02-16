@@ -5,21 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.12.0] - 2026-02-11
-
-### Strategic Pivot: Agent-First Interface
-*   **AIPi (API for Agents) is now the primary delivery mechanism.**
-*   Human interfaces (VS Code, CLI) are reclassified as **Observer Tools** for verifying agent actions.
-
-### Added
-- **AI Toolset for Agents (AIPi)**:
-    - **Live Synthesis**: Unified ingestion pipeline (`labwired_ai.main`) to generate peripheral models from datasheets with "Chain-of-Thought" reasoning and grounding.
-    - **Schematic Intelligence**: New VLM-based `analyze-schematic` command to detect components and bus connections from images.
-    - **Usage Telemetry**: Implemented `Simulation Minutes` tracking for usage-based monetization in agentic workflows.
-    - **Agent Interface**: Formal specifications in `docs/AGENT_INTERFACE.md` for external agents to consume the toolset.
-    - **Testing**: Unified E2E test suite (`e2e_test.py`) proving the full "PDF-to-Driver" loop.
-
 ## [Unreleased]
+
+## [0.12.1] - 2026-02-16
+
+### Fixed
+- **Workspace Compilation**: Resolved regressions in `labwired-loader`, `labwired-cli`, and `labwired-dap` preventing clean builds.
+- **ISA Mapping**: Fixed Thumb-1 register shift and load/store regressions that broke `stm32h563` smoke tests.
+- **DAP Synchronization**: Aligned `labwired-dap` with workspace version and fixed protocol initialization errors.
+- **Performance**: Resolved `Prefix32` overhead by fusing 32-bit instruction fetch and execute into a single step.
+
+## [0.12.0] - 2026-02-11
 
 ### Added
 - **Architecture Unification**: Native ingestion of **Strict IR** (JSON) in the simulation core.
@@ -31,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Timing Hooks**: Declarative peripheral behavior for registers (SetBits, ClearBits, WriteValue) with periodic and event-based triggers.
 - **Timeline View**: Professional visualization of instruction trace data in the VS Code extension.
 - **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/SUPPORTED_DEVICES.md`.
-- **Architecture Guide**: New comprehensive `core/docs/ARCHITECTURE.md`.
+- **Architecture Guide**: New comprehensive `core/docs/architecture_guide.md`.
 - **SVD Ingestor**: New tool (`crates/svd-ingestor`) to generate `PeripheralDescriptor` YAMLs from SVD.
 - **Strategic Horizon**: Long-term vision integrated into `docs/plan.md`.
 
@@ -42,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Modeling**: Enabled peripheral definition via YAML descriptors using `labwired-config`.
     - **Simulation**: Implemented `GenericPeripheral` in `labwired-core` supporting dynamic MMR modeling, bitwise masking, and reset state.
     - **Integration**: Added support for `type: "declarative"` in chip descriptors, allowing zero-code peripheral additions.
-    - **Documentation**: New [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for declarative IP cores.
+    - **Documentation**: New [Peripheral Development Guide](core/docs/peripheral_development.md) for declarative IP cores.
 - **ISA Extensions**:
     - **Misc Thumb-2**: Implemented `CLZ` (Count Leading Zeros), `RBIT` (Bit Reverse), `REV`, `REV16`, `REVSH` instructions.
     - **RISC-V Support**: Initial support for RV32I Base Integer Instruction Set with multi-arch GDB support.
@@ -74,8 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **GDB Remote Serial Protocol**: New `labwired-gdbstub` crate allowing connection from standard GDB clients.
     - **Interactive Debugging (DAP)**: `labwired-dap` server for VS Code integration with variable and register inspection.
 - **Documentation**:
-    - [Peripheral Development Guide](file:///home/andrii/Projects/labwired/docs/peripheral_development.md).
-    - [Getting Started with Real Firmware](file:///home/andrii/Projects/labwired/docs/getting_started_firmware.md) onboarding guide.
+    - [Peripheral Development Guide](core/docs/peripheral_development.md).
+    - [Getting Started with Real Firmware](core/docs/getting_started_firmware.md) onboarding guide.
 
 ## [0.9.0] - 2026-02-04
 

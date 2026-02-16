@@ -66,17 +66,34 @@ def convert(input_path, output_path):
             "access": map_access(r.get('access', 'ReadWrite')),
             "reset_value": parse_hex(r.get('reset_value', '0x00')),
             "fields": fields,
+            "side_effects": r.get('side_effects'),
             "description": r.get('description', '')
         })
 
     peripheral_name = sanitize_ident(data.get('name', 'SENSOR'))
+
+    # Map AI behaviors (side_effects list in YAML) to timing hooks
+    timing_hooks = []
+    for t in data.get('side_effects', []):
+        # Strip AI-only reasoning/evidence fields for the IR
+        hook = {
+            "id": t.get("id", "behavior"),
+            "trigger": t.get("trigger"),
+            "delay_cycles": int(t.get("delay_cycles", 0)),
+            "action": t.get("action"),
+            "interrupt": t.get("interrupt")
+        }
+        timing_hooks.append(hook)
+
     peripheral = {
         "name": peripheral_name,
         "base_address": 0x40000000, # Arbitrary base address for codegen
         "description": "AI Generated Peripheral",
         "registers": registers,
-        "interrupts": []
+        "interrupts": [],
+        "timing": timing_hooks
     }
+
 
     peripherals[peripheral_name] = peripheral
 

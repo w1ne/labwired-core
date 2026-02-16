@@ -1,0 +1,23 @@
+schema_version: '1.0'
+name: ci-fixture-cortex-m3-uart1
+arch: arm
+flash:
+  base: 0
+  size: 128KB
+ram:
+  base: 536870912
+  size: 128KB
+peripherals:
+- id: uart1
+  type: uart
+  base_address: 1073790976
+  size: 1KB
+  irq: null
+  config: {}
+- id: LM75B
+  type: strict_ir
+  base_address: 1073745920
+  size: 4KB
+  irq: null
+  config:
+    path: /home/andrii/Projects/labwired/ai/tests/demo_dry_run_output/lm75b_ir.json

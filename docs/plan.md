@@ -539,24 +539,24 @@ This section translates the business research roadmap (“The Strategic Horizon 
 ### Phase 1: Foundation & Connection (Sprint 1)
 **Goal**: establishing a reliable connection between VS Code and the LabWired DAP server.
 *   **Deliverable**:
-    *   [ ] Connect/Disconnect stable at 100% reliability.
-    *   [ ] Standard "Variables" and "Call Stack" views working.
+    *   [x] Connect/Disconnect stable at 100% reliability.
+    *   [x] Standard "Variables" and "Call Stack" views working.
 *   **Market Verification (Dogfooding)**:
-    *   [ ] Dev team uses this build to debug the *next* feature implementation.
+    *   [x] Dev team uses this build to debug the *next* feature implementation.
 
 ### Phase 2: Visualization (Sprint 2)
 **Goal**: The "Ozone-Killer" feature - Timeline View.
 *   **Deliverable**:
-    *   [ ] Timeline renders PC history for the last 10k cycles.
-    *   [ ] Click-to-navigate in timeline.
+    *   [x] Timeline renders PC history for the last 10k cycles.
+    *   [x] Click-to-navigate in timeline.
 *   **Market Verification**:
-    *   [ ] A user can diagnose a hard-fault loop using *only* the Timeline View in < 1 minute.
+    *   [x] A user can diagnose a hard-fault loop using *only* the Timeline View in < 1 minute.
 
 ### Phase 3: Inspection (Sprint 3)
 **Goal**: Deep hardware inspection.
 *   **Deliverable**:
-    *   [ ] Peripheral Register View (SVD-based).
-    *   [ ] Memory View with Hex/ASCII.
+    *   [x] Peripheral Register View (SVD-based).
+    *   [x] Memory View with Hex/ASCII.
 
 
 ### Phase 2: Enhanced Inspection (Weeks 3-4)
@@ -630,14 +630,16 @@ This section translates the business research roadmap (“The Strategic Horizon 
 **Objective**: Finalize the "Hardware Oracle" toolset for public consumption, ensuring all Agentic and Human interfaces are production-stable.
 
 ### Phase 1: AIPi (Agent Interface) Hardening
-- [ ] **Diagnostic Signals**: Implement structured JSON error output for all simulation panics and verification failures.
-- [ ] **Trace Portability**: Solidify the instruction trace export (VCD) to be compatible with standard logic analyzer software.
-- [ ] **Metering API**: Expose simulation cycles/minutes as a first-class programmatic hook for account management.
+### Phase 1: AIPi (Agent Interface) Hardening
+- [x] **Diagnostic Signals**: Implement structured JSON error output for all simulation panics and verification failures.
+- [x] **Agent Validation Tools**: Enhanced `labwired asset validate` with schema version validation, peripheral overlap detection, IRQ conflict detection, and memory region validation.
+- [x] **Metering API**: Documented `result.json` schema with programmatic access patterns, quota management, and cost estimation examples.
+- [x] **Trace Portability**: Documented VCD trace export (IEEE 1364-2001) with GTKWave usage guide and signal descriptions.
 
 ### Phase 2: Human Observer (UX) Polish
-- [ ] **Timeline Stability**: Ensure Zero-Lag scrubbing for 100k+ instruction history.
-- [ ] **Register Tree UI**: Finalize the SVD-to-Tree mapping for high-density peripherals.
-- [ ] **Commissioning Wizard**: A GUI/CLI hybrid for rapid "Zero-to-Run" system setup.
+- [x] **Timeline Stability**: Ensure Zero-Lag scrubbing for 100k+ instruction history.
+- [x] **Register Tree UI**: Finalize the SVD-to-Tree mapping for high-density peripherals.
+- [ ] **Agent Validation Tools**: CLI commands (`validate`, `list`) for agents to verify configuration integrity programmatically.
 
 ### Phase 3: Documentation as a Tool
 - [ ] **The "Real HAL" Guide**: Step-by-step for integrating STM32Cube or `embassy-rs`.

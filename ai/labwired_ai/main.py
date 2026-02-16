@@ -19,9 +19,12 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
+# Force flush on every log
+for handler in logging.root.handlers:
+    handler.flush = sys.stdout.flush
 logger = logging.getLogger(__name__)
 
-def main():
+def main(args_list=None):
     tracker = UsageTracker()
     parser = argparse.ArgumentParser(description="LabWired AI: Asset Foundry Tools")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -43,7 +46,7 @@ def main():
     ingest_parser.add_argument("--name", required=True, help="Peripheral name")
     ingest_parser.add_argument("--output", help="Output YAML file")
 
-    args = parser.parse_args()
+    args = parser.parse_args(args_list)
 
     try:
         if args.command == "extract-text":
