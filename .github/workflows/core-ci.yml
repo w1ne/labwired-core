@@ -42,6 +42,16 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Install ARM Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Install Python Build Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin
+
       - name: Install ARM and RISC-V targets for exhaustive tests
         run: |
           rustup target add thumbv7m-none-eabi
@@ -59,6 +69,32 @@ jobs:
 
       - name: Build Workspace
         run: cargo build --workspace
+
+      - name: Verify Examples
+        run: |
+          # 1. arm-c-hello (C Makefile + Simulation)
+          make -C examples/arm-c-hello
+          cargo run -q -p labwired-cli -- --firmware examples/arm-c-hello/target/firmware --system examples/arm-c-hello/system.yaml --max-steps 1000
+
+          # 2. arm-cortex-m0 (Rust + YAML Config)
+          cargo build -p arm-hello --release --target thumbv6m-none-eabi
+          cargo run -q -p labwired-cli -- --firmware target/thumbv6m-none-eabi/release/firmware --system examples/arm-cortex-m0/system.yaml --max-steps 1000
+
+          # 3. riscv-virt (Rust RISC-V + YAML Config)
+          cargo build -p riscv-hello --release --target riscv32imac-unknown-none-elf
+          cargo run -q -p labwired-cli -- --firmware target/riscv32imac-unknown-none-elf/release/firmware --system examples/riscv-virt/system.yaml --max-steps 1000
+
+          # 4. demo-blinky (Rust + Test Script)
+          cargo run -q -p labwired-cli -- test --script examples/demo-blinky/io-smoke.yaml
+
+          # 5. nucleo-h563zi (Complex Script)
+          ./examples/nucleo-h563zi/scripts/run_full_example.sh
+
+          # 6. python-agent (Python Bindings + Agent Script)
+          cd crates/python
+          maturin develop --release
+          cd ../..
+          python examples/python-agent/test_agent.py target/thumbv6m-none-eabi/release/firmware
 
       - name: Upload Unsupported Audit Artifacts
         if: always()
