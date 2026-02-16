@@ -3,6 +3,14 @@
 > **The Deterministic Hardware Oracle for AI Agents.**
 > *Programmable, Metered, and Observable Firmware Simulation.*
 
+## CI Dashboard
+
+| Indicator | Status | Link |
+|---|---|---|
+| Core CI | ![Core CI](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml) |
+| Coverage Gate | ![Coverage](https://github.com/w1ne/labwired/actions/workflows/core-coverage.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-coverage.yml) |
+| Unsupported Audit | ![Unsupported Audit](https://github.com/w1ne/labwired/actions/workflows/core-unsupported-audit.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-unsupported-audit.yml) |
+
 ## 🤖 Agent-First Architecture
 LabWired is built primarily as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its core mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
 

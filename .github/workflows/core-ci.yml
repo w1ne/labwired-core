@@ -71,6 +71,9 @@ jobs:
       - name: Digital Twin Verification
         run: ./scripts/digital_twin_verification.sh out/digital-twin-verification
 
+      - name: Trace Drift Assertions
+        run: ./scripts/trace_drift_assert.sh --out-dir out/trace-drift-assert
+
       - name: Run Workspace Tests
         run: cargo test --workspace
 
@@ -111,6 +114,7 @@ jobs:
           path: |
             core/out/unsupported-audit/
             core/out/digital-twin-verification/
+            core/out/trace-drift-assert/
 
   build:
     name: build
