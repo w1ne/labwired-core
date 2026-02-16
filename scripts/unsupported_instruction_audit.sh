@@ -18,6 +18,7 @@ Outputs:
   - simulator.log
   - simulator.clean.log
   - run.json
+  - metrics.json
   - report.md
   - unknown_thumb16_raw.txt
   - unknown_thumb16_summary.tsv
@@ -127,6 +128,7 @@ RAW_LOG="$OUT_DIR_ABS/simulator.log"
 CLEAN_LOG="$OUT_DIR_ABS/simulator.clean.log"
 RUN_JSON="$OUT_DIR_ABS/run.json"
 REPORT_MD="$OUT_DIR_ABS/report.md"
+METRICS_JSON="$OUT_DIR_ABS/metrics.json"
 
 U16_RAW="$OUT_DIR_ABS/unknown_thumb16_raw.txt"
 U16_SUMMARY="$OUT_DIR_ABS/unknown_thumb16_summary.tsv"
@@ -214,6 +216,62 @@ U32_TOTAL="$(count_lines "$U32_RAW")"
 RV_TOTAL="$(count_lines "$RV_RAW")"
 UNSUPPORTED_TOTAL=$((U16_TOTAL + U32_TOTAL + RV_TOTAL))
 
+# Parse executed instruction count from the final JSON line in run.json
+INSTRUCTIONS_EXECUTED="$(python3 - "$RUN_JSON" <<'PY'
+import json
+import pathlib
+import sys
+
+p = pathlib.Path(sys.argv[1])
+count = 0
+for line in p.read_text().splitlines():
+    line = line.strip()
+    if not line.startswith("{") or "total_instructions" not in line:
+        continue
+    try:
+        data = json.loads(line)
+    except Exception:
+        continue
+    if isinstance(data, dict) and "total_instructions" in data:
+        try:
+            count = int(data["total_instructions"])
+        except Exception:
+            pass
+print(count)
+PY
+)"
+
+if ! [[ "$INSTRUCTIONS_EXECUTED" =~ ^[0-9]+$ ]]; then
+  INSTRUCTIONS_EXECUTED=0
+fi
+
+SUPPORTED_INSTRUCTIONS=$((INSTRUCTIONS_EXECUTED - UNSUPPORTED_TOTAL))
+if (( SUPPORTED_INSTRUCTIONS < 0 )); then
+  SUPPORTED_INSTRUCTIONS=0
+fi
+
+if (( INSTRUCTIONS_EXECUTED > 0 )); then
+  SUPPORT_PERCENT="$(awk -v s="$SUPPORTED_INSTRUCTIONS" -v t="$INSTRUCTIONS_EXECUTED" 'BEGIN { printf "%.4f", (s*100.0)/t }')"
+else
+  SUPPORT_PERCENT="0.0000"
+fi
+
+cat >"$METRICS_JSON" <<EOF
+{
+  "firmware": "$FIRMWARE_ABS",
+  "system": "${SYSTEM_ABS:-}",
+  "max_steps": $MAX_STEPS,
+  "sim_exit_code": $SIM_EXIT,
+  "instructions_executed": $INSTRUCTIONS_EXECUTED,
+  "unsupported_total": $UNSUPPORTED_TOTAL,
+  "supported_instructions": $SUPPORTED_INSTRUCTIONS,
+  "instruction_support_percent": $SUPPORT_PERCENT,
+  "unknown_thumb16_total": $U16_TOTAL,
+  "unhandled_thumb32_total": $U32_TOTAL,
+  "unknown_riscv_total": $RV_TOTAL
+}
+EOF
+
 {
   echo "# Unsupported Instruction Audit Report"
   echo
@@ -225,7 +283,10 @@ UNSUPPORTED_TOTAL=$((U16_TOTAL + U32_TOTAL + RV_TOTAL))
   fi
   echo "- Max steps: \`$MAX_STEPS\`"
   echo "- Simulator exit code: \`$SIM_EXIT\`"
+  echo "- Instructions executed: \`$INSTRUCTIONS_EXECUTED\`"
   echo "- Unsupported observations (total): \`$UNSUPPORTED_TOTAL\`"
+  echo "- Supported instructions: \`$SUPPORTED_INSTRUCTIONS\`"
+  echo "- Instruction support coverage: \`$SUPPORT_PERCENT%\`"
   echo
   echo "## Unknown Thumb16 Instructions"
   if [[ -s "$U16_SUMMARY" ]]; then
