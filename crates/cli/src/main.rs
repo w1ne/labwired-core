@@ -15,8 +15,6 @@ use labwired_core::Cpu;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
-mod asset_validation;
-mod size_limited_writer;
 mod vcd_trace;
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
@@ -120,12 +118,6 @@ pub enum AssetCommands {
 
     /// Add a peripheral to the current chip descriptor.
     AddPeripheral(AddPeripheralArgs),
-
-    /// Validate a System Manifest and its referenced Chip.
-    Validate(asset_validation::ValidateArgs),
-
-    /// List available chip descriptors.
-    ListChips(asset_validation::ListChipsArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -383,7 +375,13 @@ struct ErrorResponse {
 }
 
 /// Emit an error message, respecting the --json flag for structured output
-fn emit_error(json_mode: bool, error_type: &str, message: String, details: Option<serde_json::Value>, exit_code: u8) {
+fn emit_error(
+    json_mode: bool,
+    error_type: &str,
+    message: String,
+    details: Option<serde_json::Value>,
+    exit_code: u8,
+) {
     if json_mode {
         let response = ErrorResponse {
             error_type: error_type.to_string(),
@@ -395,13 +393,17 @@ fn emit_error(json_mode: bool, error_type: &str, message: String, details: Optio
             println!("{}", json);
         } else {
             // Fallback if JSON serialization fails
-            eprintln!("{{\"error_type\":\"{}\",\"message\":\"{}\",\"exit_code\":{}}}", error_type, message.replace('"', "\\\""), exit_code);
+            eprintln!(
+                "{{\"error_type\":\"{}\",\"message\":\"{}\",\"exit_code\":{}}}",
+                error_type,
+                message.replace('"', "\\\""),
+                exit_code
+            );
         }
     } else {
         error!("{}", message);
     }
 }
-
 
 fn write_interactive_snapshot<C: labwired_core::Cpu>(
     path: &Path,
@@ -512,8 +514,6 @@ fn run_asset(args: AssetArgs) -> ExitCode {
         AssetCommands::Codegen(a) => run_codegen(a),
         AssetCommands::Init(a) => run_asset_init(a),
         AssetCommands::AddPeripheral(a) => run_asset_add_peripheral(a),
-        AssetCommands::Validate(a) => asset_validation::run_validate(a),
-        AssetCommands::ListChips(a) => asset_validation::run_list_chips(a),
     }
 }
 
@@ -1265,6 +1265,7 @@ fn report_metrics<C: labwired_core::Cpu>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_stop_reason_details(
     stop_reason: &StopReason,
     limits: &TestLimits,
@@ -1757,7 +1758,10 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         (val & mask) == (expected & mask)
                     }
                     Err(e) => {
-                        error!("Memory assertion failed to read address {:#x}: {}", a.memory_value.address, e);
+                        error!(
+                            "Memory assertion failed to read address {:#x}: {}",
+                            a.memory_value.address, e
+                        );
                         false
                     }
                 }
@@ -2111,8 +2115,6 @@ fn write_config_error_outputs(
     }
 }
 
-
-
 fn resolve_script_path(script_path: &Path, value: &str) -> PathBuf {
     let p = PathBuf::from(value);
     if p.is_absolute() {
@@ -2314,7 +2316,10 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
         TestAssertion::ExpectedStopReason(a) => {
             format!("expected_stop_reason: {:?}", a.expected_stop_reason)
         }
-        TestAssertion::MemoryValue(a) => format!("memory_value: @{:#x}={:#x}", a.memory_value.address, a.memory_value.expected_value),
+        TestAssertion::MemoryValue(a) => format!(
+            "memory_value: @{:#x}={:#x}",
+            a.memory_value.address, a.memory_value.expected_value
+        ),
     };
 
     if s.len() <= MAX_LEN {

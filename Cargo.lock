@@ -625,15 +625,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indoc"
-version = "2.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79cf5c93f93228cf8efb3ba362535fb11199ac548a09ce117c9b1adc3030d706"
-dependencies = [
- "rustversion",
-]
-
-[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -647,7 +638,7 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "labwired-cli"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -669,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-codegen"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "labwired-ir",
@@ -680,7 +671,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-config"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "human-size",
@@ -694,7 +685,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-core"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -709,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-dap"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -727,7 +718,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-gdbstub"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "gdbstub",
@@ -741,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-ir"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -751,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-loader"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -1335,12 +1326,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
-name = "scopeguard"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
 name = "scroll"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1539,12 +1524,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "target-lexicon"
-version = "0.12.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
-
-[[package]]
 name = "tempfile"
 version = "3.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1682,12 +1661,6 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
-
-[[package]]
-name = "unindent"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3"
 
 [[package]]
 name = "unsafe-libyaml"
@@ -1832,7 +1805,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea61de684c3ea68cb082b7a88508a8b27fcc8b797d738bfc99a82facf1d752dc"
 dependencies = [
  "anyhow",
- "heck 0.5.0",
+ "heck",
  "wit-parser",
 ]
 
@@ -1843,7 +1816,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7c566e0f4b284dd6561c786d9cb0142da491f46a9fbed79ea69cdad5db17f21"
 dependencies = [
  "anyhow",
- "heck 0.5.0",
+ "heck",
  "indexmap",
  "prettyplease",
  "syn",

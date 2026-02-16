@@ -1,24 +1,14 @@
-2026-02-13T23:49:24.268998Z  INFO labwired: Starting LabWired Simulator
-2026-02-13T23:49:24.269096Z  INFO labwired_core::system::builder: Loading system manifest: "/home/andrii/Projects/labwired/core/configs/systems/ci-fixture-uart1.yaml"
-2026-02-13T23:49:24.269369Z  INFO labwired_core::system::builder: Loading chip descriptor: "/home/andrii/Projects/labwired/core/configs/systems/../chips/ci-fixture-cortex-m3-uart1.yaml"
-2026-02-13T23:49:24.269656Z  INFO labwired: Loading firmware: "/home/andrii/Projects/labwired/core/target/thumbv7m-none-eabi/release/demo-blinky"
-2026-02-13T23:49:24.269982Z  INFO labwired_loader: ELF Entry Point: 0x401
-2026-02-13T23:49:24.270031Z  INFO labwired: Firmware Loaded Successfully!
-2026-02-13T23:49:24.270041Z  INFO labwired: Entry Point: 0x401
-2026-02-13T23:49:24.270261Z  INFO labwired: Starting Simulation (ARM Cortex-M)...
-2026-02-13T23:49:24.270272Z  INFO labwired: Initial PC: 0x401, SP: 0x20020000
-2026-02-13T23:49:24.270277Z  INFO labwired: Running for 20000 steps...
-2026-02-13T23:49:24.270285Z  INFO labwired_core::cpu::cortex_m: CPU STEP 0: PC=0x401
-2026-02-13T23:49:24.270351Z ERROR labwired_core::cpu::cortex_m: Bus Read Fault at 0x40021018
-2026-02-13T23:49:24.270364Z ERROR labwired_core::cpu::cortex_m: Bus Write Fault at 0x40021018
-2026-02-13T23:49:24.270370Z ERROR labwired_core::cpu::cortex_m: Bus Read Fault at 0x4002101c
-2026-02-13T23:49:24.270376Z ERROR labwired_core::cpu::cortex_m: Bus Write Fault at 0x4002101c
-2026-02-13T23:49:24.270387Z ERROR labwired_core::cpu::cortex_m: Bus Write Fault at 0x40005400
-2026-02-13T23:49:24.270392Z ERROR labwired_core::cpu::cortex_m: Bus Write Fault at 0x40005404
-2026-02-13T23:49:24.270399Z ERROR labwired_core::cpu::cortex_m: Bus Write Fault at 0x4000541c
-2026-02-13T23:49:24.270405Z ERROR labwired_core::cpu::cortex_m: Bus Write Fault at 0x40005420
-2026-02-13T23:49:24.270411Z ERROR labwired_core::cpu::cortex_m: Bus Write Fault at 0x40005400
-2026-02-13T23:49:24.270417Z ERROR labwired_core::cpu::cortex_m: Bus Read Fault at 0x40005410
-2026-02-13T23:49:24.270423Z ERROR labwired_core::cpu::cortex_m: Bus Read Fault at 0x40005410
-2026-02-13T23:49:24.282113Z  INFO labwired: Progress: 10000 steps, current IPS: 829278.91
-{"average_ips":885870.6684633896,"final_pc":1222,"status":"finished","total_cycles":24009,"total_instructions":20000}
+[2m2026-02-16T18:38:17.239191Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Starting LabWired Simulator
+[2m2026-02-16T18:38:17.239322Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading system manifest: "/home/andrii/Projects/labwired/core/configs/systems/ci-fixture-uart1.yaml"
+[2m2026-02-16T18:38:17.239567Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: "/home/andrii/Projects/labwired/core/configs/systems/../chips/ci-fixture-cortex-m3-uart1.yaml"
+[2m2026-02-16T18:38:17.239835Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired/core/target/thumbv7m-none-eabi/release/demo-blinky"
+[2m2026-02-16T18:38:17.239946Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000401
+[2m2026-02-16T18:38:17.239984Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Firmware Loaded Successfully!
+[2m2026-02-16T18:38:17.239996Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Entry Point: 0x8000401
+[2m2026-02-16T18:38:17.240176Z[0m [33m WARN[0m [2mlabwired_core[0m[2m:[0m Failed to load segment at 0x8000000 - outside of memory map
+[2m2026-02-16T18:38:17.240189Z[0m [33m WARN[0m [2mlabwired_core[0m[2m:[0m Failed to load segment at 0x8000400 - outside of memory map
+[2m2026-02-16T18:38:17.240198Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
+[2m2026-02-16T18:38:17.240203Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Initial PC: 0x8000401, SP: 0x0
+[2m2026-02-16T18:38:17.240209Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Running for 20000 steps...
+[2m2026-02-16T18:38:17.240217Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Simulation Error at step 0: Memory access violation at 0x8000400
+{"average_ips":0.0,"final_pc":134218753,"status":"finished","total_cycles":0,"total_instructions":0}

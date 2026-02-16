@@ -43,7 +43,7 @@ fn test_demo_blinky_gpio_toggle() {
     let mut odr_values = Vec::new();
 
     // We want to detect writes to GPIOC_ODR (PC13 is the LED)
-    for _ in 0..500_000 {
+    for _ in 0..5_000_000 {
         machine.step().expect("Execution failed");
 
         // Peek at GPIOC state

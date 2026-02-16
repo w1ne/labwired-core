@@ -441,23 +441,27 @@ impl SymbolProvider {
 
 fn normalize_path_for_match(path: &str) -> String {
     path.replace('\\', "/")
+        .to_lowercase()
+        .trim_start_matches("./")
+        .to_string()
 }
 
-fn path_match_score(requested_norm: &str, candidate_norm: &str) -> usize {
-    if requested_norm == candidate_norm {
-        return 10_000;
+fn path_match_score(requested: &str, candidate: &str) -> usize {
+    if requested == candidate {
+        return 100;
     }
+    let req_parts: Vec<&str> = requested.split('/').collect();
+    let cand_parts: Vec<&str> = candidate.split('/').collect();
 
-    // Absolute IDE paths commonly end with relative DWARF paths.
-    if requested_norm.ends_with(candidate_norm) {
-        return 1_000 + candidate_norm.len();
+    let mut score = 0;
+    for (r, c) in req_parts.iter().rev().zip(cand_parts.iter().rev()) {
+        if r == c {
+            score += 1;
+        } else {
+            break;
+        }
     }
-    if candidate_norm.ends_with(requested_norm) {
-        return 900 + requested_norm.len();
-    }
-
-    // Basename-only match fallback (weak, but better than no breakpoint).
-    100
+    score
 }
 
 #[cfg(test)]

@@ -22,6 +22,14 @@ This release introduces...
 - **Documentation**: Overhauled documentation structure...
 - **Performance**: Optimized...
 
+## 📚 Documentation Updates by Component
+
+<!-- Required: list docs updates for each in-scope component or explicitly say no docs changes with reason -->
+- **core**: <files or "No docs changes (reason)">
+- **vscode**: <files or "No docs changes (reason)">
+- **ai**: <files or "No docs changes (reason)">
+- **docs (root)**: <files or "No docs changes (reason)">
+
 ## 📦 Dependency Updates
 
 <!-- Key dependency upgrades -->

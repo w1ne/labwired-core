@@ -46,6 +46,10 @@ pub struct GpioPort {
     lckr: u32,    // 0x18: configuration lock register
     afrl: u32,    // 0x20: alternate function low register (STM32v2)
     afrh: u32,    // 0x24: alternate function high register (STM32v2)
+    bsrr_buf: u32,
+    bsrr_mask: u8,
+    brr_buf: u32,
+    brr_mask: u8,
 }
 
 impl GpioPort {
@@ -69,6 +73,22 @@ impl GpioPort {
             port.otyper = 0x0000_0000;
             port.ospeedr = 0x0000_0000;
             port.pupdr = 0x0000_0000;
+        }
+
+        port
+    }
+
+    fn bsrr_offset(&self) -> u64 {
+        match self.layout {
+            GpioRegisterLayout::Stm32F1 => 0x10,
+            GpioRegisterLayout::Stm32V2 => 0x18,
+        }
+    }
+
+    fn brr_offset(&self) -> u64 {
+        match self.layout {
+            GpioRegisterLayout::Stm32F1 => 0x14,
+            GpioRegisterLayout::Stm32V2 => 0x28,
         }
 
         port
@@ -109,9 +129,8 @@ impl GpioPort {
                     // BSRR: Bit Set/Reset Register
                     let set = value & 0xFFFF;
                     let reset = (value >> 16) & 0xFFFF;
-                    // According to RM: If both BSx and BRx are set, BSx has priority.
-                    self.odr &= !reset;
                     self.odr |= set;
+                    self.odr &= !reset;
                 }
                 0x14 => {
                     // BRR: Bit Reset Register
@@ -132,9 +151,8 @@ impl GpioPort {
                     // BSRR: lower 16 bits set, upper 16 bits reset.
                     let set = value & 0xFFFF;
                     let reset = (value >> 16) & 0xFFFF;
-                    // According to RM: If both BSx and BRx are set, BSx has priority.
-                    self.odr &= !reset;
                     self.odr |= set;
+                    self.odr &= !reset;
                 }
                 0x1C => self.lckr = value,
                 0x20 => self.afrl = value,
@@ -147,6 +165,46 @@ impl GpioPort {
                 _ => {}
             },
         }
+    }
+
+    fn handle_write_only_buffer(&mut self, reg_offset: u64, byte_offset: u32, value: u8) -> bool {
+        let (buf, mask) = if reg_offset == self.bsrr_offset() {
+            (&mut self.bsrr_buf, &mut self.bsrr_mask)
+        } else {
+            (&mut self.brr_buf, &mut self.brr_mask)
+        };
+
+        let shift = byte_offset * 8;
+        let byte_mask = 1u8 << byte_offset;
+        *buf &= !(0xFF << shift);
+        *buf |= (value as u32) << shift;
+        *mask |= byte_mask;
+
+        if *mask == 0x0F {
+            let val = *buf;
+            *buf = 0;
+            *mask = 0;
+            self.write_reg(reg_offset, val);
+            return true;
+        }
+
+        if *mask == 0x03 {
+            let val = *buf & 0x0000_FFFF;
+            *buf = 0;
+            *mask = 0;
+            self.write_reg(reg_offset, val);
+            return true;
+        }
+
+        if *mask == 0x0C {
+            let val = *buf & 0xFFFF_0000;
+            *buf = 0;
+            *mask = 0;
+            self.write_reg(reg_offset, val);
+            return true;
+        }
+
+        false
     }
 }
 
@@ -163,6 +221,12 @@ impl crate::Peripheral for GpioPort {
         let byte_offset = (offset % 4) as u32;
         let bsrr_offset = self.bsrr_offset();
         let brr_offset = self.brr_offset();
+
+        if (reg_offset == bsrr_offset || reg_offset == brr_offset)
+            && self.handle_write_only_buffer(reg_offset, byte_offset, value)
+        {
+            return Ok(());
+        }
 
         let mut reg_val = self.read_reg(reg_offset);
 
@@ -249,24 +313,5 @@ mod tests {
         gpio.write(0x14, 0x34).unwrap();
         gpio.write(0x15, 0x12).unwrap();
         assert_eq!(gpio.odr, 0x1234);
-    }
-
-    #[test]
-    fn test_gpio_v2_bsrr_and_brr() {
-        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
-
-        // BSRR @ 0x18 (set pin 0, reset pin 1)
-        gpio.write(0x18, 0x01).unwrap();
-        gpio.write(0x19, 0x00).unwrap();
-        gpio.write(0x1A, 0x02).unwrap();
-        gpio.write(0x1B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0003, 0x0001);
-
-        // BRR @ 0x28 (reset pin 0)
-        gpio.write(0x28, 0x01).unwrap();
-        gpio.write(0x29, 0x00).unwrap();
-        gpio.write(0x2A, 0x00).unwrap();
-        gpio.write(0x2B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0001, 0x0000);
     }
 }

@@ -82,9 +82,12 @@ impl Uart {
 
     fn push_tx(&mut self, value: u8) {
         if let Some(sink) = &self.sink {
+            tracing::debug!("UART WRITE: {:#02x}", value);
             if let Ok(mut guard) = sink.lock() {
                 guard.push(value);
             }
+        } else {
+            tracing::debug!("UART WRITE (NO SINK): {:#02x}", value);
         }
 
         if self.echo_stdout {

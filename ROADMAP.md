@@ -2,8 +2,7 @@
 
 This roadmap outlines the planned evolution of LabWired Core as we move towards a production-ready ecosystem for professional firmware simulation.
 
-## 🟢 v0.12.0: Foundation & Documentation (Current)
-- **Documentation Overhaul**: Complete restructuring with MkDocs/Material, new guides, and process docs.
+## 🟢 v0.1.0: Foundation (Current)
 - **Multi-Architecture**: Initial ARM Cortex-M and RISC-V RV32I support.
 - **Declarative Peripherals**: YAML-based chip and system definitions.
 - **CI Test Runner**: Deterministic headless execution with JSON/JUnit reports.

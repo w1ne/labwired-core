@@ -46,6 +46,4 @@ The declarative system consists of three phases:
 
 ## 3. Workflow
 
-1.  **Generation**: Use `svd-to-yaml` to generate the initial descriptor from vendor SVD files.
-2.  **Refinement**: Manually add `side_effects` to registers that require custom logic (e.g., triggering a state machine transition).
-3.  **Implementation**: Implement the corresponding hook functions in Rust.
+See the [Peripheral Development Guide](./peripheral_development.md) for a step-by-step workflow to build your first declarative peripheral.

@@ -31,21 +31,21 @@ pub struct TelemetryData {
     pub board_io: Vec<BoardIoState>,
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct BreakpointResolution {
-    pub requested_line: i64,
-    pub verified: bool,
-    pub resolved_line: Option<u32>,
-    pub address: Option<u32>,
-    pub message: Option<String>,
-}
-
 #[derive(Clone, Serialize)]
 pub struct BoardIoState {
     pub id: String,
     pub kind: String,
     pub signal: String,
     pub active: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BreakpointResolution {
+    pub requested_line: i64,
+    pub verified: bool,
+    pub resolved_line: Option<u32>,
+    pub address: Option<u32>,
+    pub message: Option<String>,
 }
 
 #[derive(Clone)]
@@ -419,49 +419,6 @@ impl LabwiredAdapter {
         } else {
             Err(anyhow!("Machine not initialized"))
         }
-    }
-
-    pub fn step_over_source_line(
-        &self,
-        max_instructions: u32,
-    ) -> Result<labwired_core::StopReason> {
-        let start_pc = self.get_pc()?;
-        let start_loc = self.lookup_source(start_pc as u64);
-
-        // If we don't have source mapping, fall back to single-instruction stepping.
-        let Some(start_loc) = start_loc else {
-            return self.step();
-        };
-
-        let max_instructions = max_instructions.max(1);
-        let mut last_reason = labwired_core::StopReason::StepDone;
-
-        for _ in 0..max_instructions {
-            let reason = self.step()?;
-            last_reason = reason.clone();
-
-            match reason {
-                labwired_core::StopReason::Breakpoint(_)
-                | labwired_core::StopReason::ManualStop
-                | labwired_core::StopReason::MaxStepsReached => return Ok(reason),
-                _ => {}
-            }
-
-            let pc = self.get_pc()?;
-            let Some(curr_loc) = self.lookup_source(pc as u64) else {
-                if pc != start_pc {
-                    return Ok(reason);
-                }
-                continue;
-            };
-
-            let changed_line = curr_loc.file != start_loc.file || curr_loc.line != start_loc.line;
-            if changed_line {
-                return Ok(reason);
-            }
-        }
-
-        Ok(last_reason)
     }
 
     pub fn get_peripherals_json(&self) -> serde_json::Value {

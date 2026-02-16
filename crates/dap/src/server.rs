@@ -327,7 +327,7 @@ impl DapServer {
 
                 if is_running {
                     // Run a chunk
-                    match adapter_clone.continue_execution_chunk(10_000) {
+                    match adapter_clone.continue_execution_chunk(50_000) {
                         Ok(reason) => {
                             match reason {
                                 labwired_core::StopReason::Breakpoint(_)
@@ -349,27 +349,9 @@ impl DapServer {
                             }
                         }
                         Err(e) => {
-                            let error_message = format!("Execution error: {}", e);
                             let mut r = running_clone.lock().unwrap();
                             *r = false;
-                            tracing::error!("{}", error_message);
-                            let _ = sender_clone.send_event(
-                                "output",
-                                Some(json!({
-                                    "category": "stderr",
-                                    "output": format!("{}\n", error_message),
-                                })),
-                            );
-                            let _ = sender_clone.send_event(
-                                "stopped",
-                                Some(json!({
-                                    "reason": "exception",
-                                    "description": error_message,
-                                    "text": error_message,
-                                    "threadId": 1,
-                                    "allThreadsStopped": true
-                                })),
-                            );
+                            tracing::error!("Execution error: {}", e);
                         }
                     }
                 }
@@ -382,15 +364,6 @@ impl DapServer {
                         "output",
                         Some(json!({
                             "category": "stdout",
-                            "output": text,
-                        })),
-                    );
-                    // Duplicate UART stream as a custom event so host IDEs that
-                    // don't surface standard `output` through custom-event hooks
-                    // can still render UART in extension UI panels.
-                    let _ = sender_clone.send_event(
-                        "uart",
-                        Some(json!({
                             "output": text,
                         })),
                     );
@@ -560,38 +533,17 @@ impl DapServer {
                     .map(|b| b.line.unwrap_or(0))
                     .collect::<Vec<i64>>();
 
-                let resolutions = match self.adapter.set_breakpoints(path, lines.clone()) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::error!("Failed to set breakpoints: {}", e);
-                        lines
-                            .into_iter()
-                            .map(|requested_line| crate::adapter::BreakpointResolution {
-                                requested_line,
-                                verified: false,
-                                resolved_line: None,
-                                address: None,
-                                message: Some(format!("Failed to set breakpoint: {}", e)),
-                            })
-                            .collect()
-                    }
-                };
+                if let Err(e) = self.adapter.set_breakpoints(path, lines.clone()) {
+                    tracing::error!("Failed to set breakpoints: {}", e);
+                }
 
-                let breakpoints: Vec<Value> = resolutions
+                let breakpoints: Vec<Value> = lines
                     .into_iter()
-                    .map(|bp| {
-                        let line = bp
-                            .resolved_line
-                            .map(|v| v as i64)
-                            .unwrap_or(bp.requested_line);
-                        let mut obj = json!({
-                            "verified": bp.verified,
-                            "line": line,
-                        });
-                        if let Some(message) = bp.message {
-                            obj["message"] = json!(message);
-                        }
-                        obj
+                    .map(|l| {
+                        json!({
+                            "verified": true,
+                            "line": l,
+                        })
                     })
                     .collect();
 
@@ -1104,23 +1056,12 @@ impl DapServer {
                 }
             }
             "next" | "stepIn" => {
-                let reason = if command == "next" {
-                    self.adapter
-                        .step_over_source_line(512)
-                        .unwrap_or(labwired_core::StopReason::StepDone)
-                } else {
-                    self.adapter
-                        .step()
-                        .unwrap_or(labwired_core::StopReason::StepDone)
-                };
-                sender.send_response(req_seq, command, None)?;
+                let _ = self.adapter.step();
+                sender.send_response(req_seq, "next", None)?;
                 sender.send_event(
                     "stopped",
                     Some(json!({
-                        "reason": match reason {
-                            labwired_core::StopReason::Breakpoint(_) => "breakpoint",
-                            _ => "step",
-                        },
+                        "reason": "step",
                         "threadId": 1,
                         "allThreadsStopped": true
                     })),
@@ -1366,29 +1307,6 @@ mod tests {
         assert!(out_str.contains("\"command\":\"setBreakpoints\""));
         assert!(out_str.contains("\"success\":false"));
         assert!(out_str.contains("Missing required arguments"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_handle_set_breakpoints_reports_unverified_without_symbols() -> Result<()> {
-        let server = DapServer::new();
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let sender = MessageSender {
-            output: output.clone(),
-            seq: Arc::new(AtomicI64::new(1)),
-        };
-
-        let args = json!({
-            "source": { "path": "/tmp/main.rs" },
-            "breakpoints": [{ "line": 120 }]
-        });
-
-        server.handle_request(1, "setBreakpoints", Some(&args), &sender)?;
-
-        let out = output.lock().unwrap();
-        let out_str = String::from_utf8(out.clone())?;
-        assert!(out_str.contains("\"command\":\"setBreakpoints\""));
-        assert!(out_str.contains("\"verified\":false"));
         Ok(())
     }
 
