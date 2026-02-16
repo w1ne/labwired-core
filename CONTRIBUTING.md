@@ -25,7 +25,7 @@ First off, thank you for considering contributing to LabWired! It's people like 
 - Write clear, concise commit messages.
 
 ## Pull Request Process
-1. Create a branch from `develop`.
+1. Create a branch from `main`.
 2. Ensure the CI suite passes.
 3. Update relevant documentation.
 4. Your PR will be reviewed by the maintainers.
