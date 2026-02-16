@@ -3,14 +3,11 @@
 > **The Deterministic Hardware Oracle for AI Agents.**
 > *Programmable, Metered, and Observable Firmware Simulation.*
 
-## CI/CD Status
-> [!WARNING]
-> **Branch Protection Temporarily Disabled**: Due to transient GitHub Actions billing/spending limit issues (Feb 2026), branch protection on `main` has been temporarily lowered to allow critical HIL showcase integration. This will be restored once the infrastructure billing is resolved.
-
-- **Main Build**: [![Build Status](https://github.com/w1ne/labwired/actions/workflows/main.yml/badge.svg)](https://github.com/w1ne/labwired/actions/workflows/main.yml)
+## CI Dashboard
 
 | Indicator | Status | Link |
 |---|---|---|
+| Core Integration | ![Core Integration](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml) |
 | VS Code Integration | ![VS Code Integration](https://github.com/w1ne/labwired/actions/workflows/vscode-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/vscode-ci.yml) |
 | VS Code Nightly | ![VS Code Nightly](https://github.com/w1ne/labwired/actions/workflows/vscode-nightly.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/vscode-nightly.yml) |
 
@@ -138,10 +135,11 @@ docker run --rm -v $PWD:/workspace ghcr.io/w1ne/labwired:latest \
 
 
 ## 🤝 Development Workflow
-We follow **Trunk-Based Development** and enforce strict quality gates.
+We follow **Gitflow** and enforce strict quality gates.
 
-- **Main Branch**: `main` (Primary branch for active development and releases).
-- **Feature Branches**: `feature/xyz` (Merged via PR to `main`).
+- **Main Branch**: `main` (Production tags only).
+- **Development**: `develop` (Feature integration).
+- **Feature Branches**: `feature/xyz`.
 
 **Quality Gates:**
 - Root PRs must pass lean integration gates.
