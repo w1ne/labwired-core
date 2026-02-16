@@ -80,6 +80,21 @@ Pass criteria:
 3. `PASS: fullchip-smoke`
 4. Hardware phase prints `Hardware blink+UART check passed.`
 
+## G) Unsupported-Instruction Audit (Code-Driven)
+
+```bash
+./scripts/unsupported_instruction_audit.sh \
+  --firmware target/thumbv7m-none-eabi/release/firmware-h563-io-demo \
+  --system configs/systems/nucleo-h563zi-demo.yaml \
+  --max-steps 200000 \
+  --out-dir out/unsupported-audit/nucleo-h563zi
+```
+
+Pass criteria:
+1. script exits with code `0`
+2. `out/unsupported-audit/nucleo-h563zi/report.md` exists
+3. unsupported counts are reviewed and tracked (or zero)
+
 ## Troubleshooting
 
 1. `openocd` transport errors: use defaults from script (`stlink-dap` + `dapdirect_swd`).

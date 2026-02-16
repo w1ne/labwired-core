@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-02-16
+
+### Fixed
+- **Critical Instruction Regression**: Fixed `io-smoke` failure by implementing proper **Thumb-2 `IT` (If-Then) block** support in the `CortexM` core.
+- **Instruction Coverage**: Expanded modular decoder and executor for `MOVW`, `MOVT`, `LDR.W`, `STR.W`, and `UXTB.W`.
+- **Structural Stability**: Refactored CPU `step` loop for improved variable scoping and exception handling consistency.
+
 ### Added
+- **Documentation Overhaul**:
+    - **New Site Structure**: Migrated to MkDocs with Material theme for a premium, searchable experience.
+    - **Diataxis Framework**: Reorganized content into Tutorials, How-To, Reference, and Explanation.
+    - **New Guides**: [`troubleshooting.md`](./docs/troubleshooting.md), [`cli_reference.md`](./docs/cli_reference.md), [`configuration_reference.md`](./docs/configuration_reference.md).
+    - **Process Docs**: Added [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) and [`board_onboarding_playbook.md`](./docs/board_onboarding_playbook.md).
 - **Architecture Unification**: Native ingestion of **Strict IR** (JSON) in the simulation core.
     - Bridged `labwired-ir` with `labwired-config` via `From` traits.
     - Simulator can now load hardware models directly from SVD-derived JSON files.
@@ -16,10 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Verified against STM32F4, RP2040, and nRF52.
 - **Timing Hooks**: Declarative peripheral behavior for registers (SetBits, ClearBits, WriteValue) with periodic and event-based triggers.
 - **Timeline View**: Professional visualization of instruction trace data in the VS Code extension.
-- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/release_strategy.md`.
+- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `../docs/SUPPORTED_DEVICES.md`.
 - **Architecture Guide**: New comprehensive `core/docs/architecture_guide.md`.
 - **SVD Ingestor**: New tool (`crates/svd-ingestor`) to generate `PeripheralDescriptor` YAMLs from SVD.
-- **Strategic Horizon**: Long-term vision integrated into `docs/release_strategy.md`.
+- **Strategic Horizon**: Long-term vision integrated into `../docs/plan.md`.
 
 ## [0.11.0] - 2026-02-08
 

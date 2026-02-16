@@ -1,53 +1,71 @@
-# Example: DMA and EXTI Interaction
+# Example: DMA and Interrupt Logic
 
-This example demonstrates how to set up a DMA transfer and trigger an external interrupt in LabWired.
+LabWired models Direct Memory Access (DMA) and External Interrupts (EXTI) using a deterministic two-phase execution cycle. This ensures that concurrent hardware events (like memory transfers and IRQ assertion) occur in a predictable order relative to CPU instruction execution.
 
 ## 1. DMA Memory-to-Memory Transfer
 
-The `DMA1` controller supports memory-to-memory transfers by setting the `MEM2MEM` bit in the `CCR` register.
+The DMA controller processes transfer requests at the end of the CPU instruction cycle.
+
+### Configuration
+To initiate a memory-to-memory transfer, the firmware must configure the DMA channel with the `MEM2MEM` bit set.
 
 ```rust
-// Pseudocode for configuring DMA1 Channel 1 for MEM2MEM
-let dma1_base = 0x4002_0000;
-let ch1_ccr = dma1_base + 0x08;
-let ch1_cndtr = dma1_base + 0x0C;
-let ch1_cpar = dma1_base + 0x10;
-let ch1_cmar = dma1_base + 0x14;
-
-// 1. Set source and destination addresses
-write32(ch1_cpar, src_addr);
-write32(ch1_cmar, dest_addr);
-
-// 2. Set number of bytes to transfer
-write32(ch1_cndtr, 10);
-
-// 3. Enable DMA channel with MEM2MEM, MINC, PINC, and TCIE
-write32(ch1_ccr, (1 << 14) | (1 << 7) | (1 << 6) | (1 << 1) | (1 << 0));
+// DMA1 Channel 1 Configuration
+fn configure_dma_transfer(src: u32, dest: u32, len: u16) {
+    let dma = unsafe { &*DMA1::ptr() };
+    
+    // 1. Source and Destination Addresses
+    dma.ch1.cpar.write(|w| unsafe { w.bits(src) });
+    dma.ch1.cmar.write(|w| unsafe { w.bits(dest) });
+    
+    // 2. Transfer Length
+    dma.ch1.cndtr.write(|w| unsafe { w.bits(len as u32) });
+    
+    // 3. Control Register (Enable, Mem2Mem, Increment Ptrs)
+    dma.ch1.ccr.write(|w| w
+        .mem2mem().set_bit() 
+        .pl().very_high()
+        .minc().enabled()
+        .pinc().enabled()
+        .en().enabled()
+    );
+}
 ```
 
-## 2. EXTI External Interrupt
+### Execution Model
+1.  **Request Phase**: When `CCR.EN` is set, the DMA controller registers a pending request internally. It does *not* immediately modify memory.
+2.  **Bus Arbitration**: At the end of the current CPU cycle, the `SystemBus` polls the DMA controller.
+3.  **Transfer Phase**: The bus executes the memory copy operation (read from source, write to destination).
 
-The `EXTI` controller maps external signals (from GPIO or other sources) to NVIC interrupts.
+## 2. External Interrupts (EXTI)
 
-```rust
-// Pseudocode for triggering EXTI Line 0 (mapped to NVIC IRQ 6)
-let exti_base = 0x4001_0400;
-let exti_imr = exti_base + 0x00;
-let exti_swier = exti_base + 0x10;
+External signals are routed through the EXTI controller to the Nested Vectored Interrupt Controller (NVIC).
 
-// 1. Unmask EXTI Line 0
-write32(exti_imr, 1 << 0);
+### Stimulus Configuration
+To verify interrupt logic, use a test script to assert a GPIO pin state.
 
-// 2. Trigger software interrupt on Line 0
-write32(exti_swier, 1 << 0);
+**System Manifest (`system.yaml`):**
+```yaml
+chip: "../chips/stm32f103.yaml"
+inputs:
+  - id: "user_button"
+    pin: "PA0"
+    mode: "PushPull"
 ```
 
-### Interrupt Mapping
-In LabWired's STM32F103 model:
-- `EXTI0` -> NVIC IRQ 6
-- `EXTI1` -> NVIC IRQ 7
-- `EXTI2` -> NVIC IRQ 8
-- `EXTI3` -> NVIC IRQ 9
-- `EXTI4` -> NVIC IRQ 10
-- `EXTI9_5` -> NVIC IRQ 23
-- `EXTI15_10` -> NVIC IRQ 40
+**Test Script (`test_interrupts.yaml`):**
+```yaml
+steps:
+  - run: 100ms
+  - set_pin: 
+      pin: "PA0"
+      state: "high"
+  - run: 1us
+  - assert_interrupt: "EXTI0"
+```
+
+### Signal Propagation
+1.  **GPIO**: The pin state change is detected by the GPIO peripheral.
+2.  **AFIO**: The signal is routed to the corresponding EXTI line (e.g., PA0 -> EXTI0) based on the AFIO_EXTICR configuration.
+3.  **EXTI**: The controller detects the rising/falling edge and sets the Pending Register (PR) bit.
+4.  **NVIC**: The interrupt is forwarded to the NVIC. If the priority acts, the CPU vectors to the ISR on the next instruction fetch.

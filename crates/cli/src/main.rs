@@ -15,6 +15,8 @@ use labwired_core::Cpu;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
+mod asset_validation;
+mod size_limited_writer;
 mod vcd_trace;
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
@@ -118,6 +120,12 @@ pub enum AssetCommands {
 
     /// Add a peripheral to the current chip descriptor.
     AddPeripheral(AddPeripheralArgs),
+
+    /// Validate a System Manifest and its referenced Chip.
+    Validate(asset_validation::ValidateArgs),
+
+    /// List available chip descriptors.
+    ListChips(asset_validation::ListChipsArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -248,6 +256,10 @@ struct TestArgs {
     /// Number of steps with no PC change to detect stuck state (default: None)
     #[arg(long, alias = "no-progress")]
     detect_stuck: Option<u64>,
+
+    /// Override max VCD file size limit (bytes)
+    #[arg(long)]
+    max_vcd_bytes: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -360,6 +372,37 @@ struct InteractiveSnapshotInputs<'a> {
     message: Option<String>,
 }
 
+/// Unified error response for agent consumption
+#[derive(Debug, Serialize)]
+struct ErrorResponse {
+    error_type: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<serde_json::Value>,
+    exit_code: u8,
+}
+
+/// Emit an error message, respecting the --json flag for structured output
+fn emit_error(json_mode: bool, error_type: &str, message: String, details: Option<serde_json::Value>, exit_code: u8) {
+    if json_mode {
+        let response = ErrorResponse {
+            error_type: error_type.to_string(),
+            message: message.clone(),
+            details,
+            exit_code,
+        };
+        if let Ok(json) = serde_json::to_string_pretty(&response) {
+            println!("{}", json);
+        } else {
+            // Fallback if JSON serialization fails
+            eprintln!("{{\"error_type\":\"{}\",\"message\":\"{}\",\"exit_code\":{}}}", error_type, message.replace('"', "\\\""), exit_code);
+        }
+    } else {
+        error!("{}", message);
+    }
+}
+
+
 fn write_interactive_snapshot<C: labwired_core::Cpu>(
     path: &Path,
     metrics: &labwired_core::metrics::PerformanceMetrics,
@@ -469,6 +512,8 @@ fn run_asset(args: AssetArgs) -> ExitCode {
         AssetCommands::Codegen(a) => run_codegen(a),
         AssetCommands::Init(a) => run_asset_init(a),
         AssetCommands::AddPeripheral(a) => run_asset_add_peripheral(a),
+        AssetCommands::Validate(a) => asset_validation::run_validate(a),
+        AssetCommands::ListChips(a) => asset_validation::run_list_chips(a),
     }
 }
 
@@ -718,27 +763,52 @@ fn run_interactive(cli: Cli) -> ExitCode {
     info!("Starting LabWired Simulator");
 
     let Some(firmware) = &cli.firmware else {
-        tracing::error!("Missing required --firmware argument");
+        emit_error(
+            cli.json,
+            "ConfigError",
+            "Missing required --firmware argument".to_string(),
+            None,
+            EXIT_CONFIG_ERROR,
+        );
         return ExitCode::from(EXIT_CONFIG_ERROR);
     };
 
+
     let system_path = cli.system.clone();
-    let bus = match build_bus(system_path.clone()) {
+    let bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
         Ok(bus) => bus,
         Err(e) => {
-            tracing::error!("{:#}", e);
+            emit_error(
+                cli.json,
+                "ConfigError",
+                format!("{:#}", e),
+                Some(serde_json::json!({
+                    "system_path": system_path.as_ref().map(|p| p.display().to_string()),
+                })),
+                EXIT_CONFIG_ERROR,
+            );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
 
     info!("Loading firmware: {:?}", firmware);
     let program = match labwired_loader::load_elf(firmware) {
         Ok(program) => program,
         Err(e) => {
-            tracing::error!("{:#}", e);
+            emit_error(
+                cli.json,
+                "LoadError",
+                format!("{:#}", e),
+                Some(serde_json::json!({
+                    "firmware_path": firmware.display().to_string(),
+                })),
+                EXIT_CONFIG_ERROR,
+            );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
 
     info!("Firmware Loaded Successfully!");
     info!("Entry Point: {:#x}", program.entry_point);
@@ -755,13 +825,29 @@ fn run_interactive(cli: Cli) -> ExitCode {
                 match labwired_config::ChipDescriptor::from_file(&chip_path) {
                     Ok(c) => c.arch,
                     Err(e) => {
-                        tracing::error!("Failed to parse chip descriptor: {:#}", e);
+                        emit_error(
+                            cli.json,
+                            "ConfigError",
+                            format!("Failed to parse chip descriptor: {:#}", e),
+                            Some(serde_json::json!({
+                                "chip_path": chip_path.display().to_string(),
+                            })),
+                            EXIT_CONFIG_ERROR,
+                        );
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
                 }
             }
             Err(e) => {
-                tracing::error!("Failed to parse system manifest: {:#}", e);
+                emit_error(
+                    cli.json,
+                    "ConfigError",
+                    format!("Failed to parse system manifest: {:#}", e),
+                    Some(serde_json::json!({
+                        "system_path": sys_path.display().to_string(),
+                    })),
+                    EXIT_CONFIG_ERROR,
+                );
                 return ExitCode::from(EXIT_CONFIG_ERROR);
             }
         }
@@ -791,7 +877,15 @@ fn run_interactive(cli: Cli) -> ExitCode {
         labwired_config::Arch::Arm => run_interactive_arm(cli, bus, program, metrics),
         labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
         _ => {
-            error!("Unsupported architecture: {:?}", cpu_arch);
+            emit_error(
+                cli.json,
+                "ConfigError",
+                format!("Unsupported architecture: {:?}", cpu_arch),
+                Some(serde_json::json!({
+                    "architecture": format!("{:?}", cpu_arch),
+                })),
+                EXIT_CONFIG_ERROR,
+            );
             ExitCode::from(EXIT_CONFIG_ERROR)
         }
     }
@@ -836,7 +930,7 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
     };
 
     // Reconstruct bus
-    let mut bus = match build_bus(config.system.clone()) {
+    let mut bus = match labwired_core::system::builder::build_system_bus(config.system.as_deref()) {
         Ok(bus) => bus,
         Err(e) => {
             error!("Failed to reconstruct bus: {:#}", e);
@@ -1179,6 +1273,7 @@ fn build_stop_reason_details(
     uart_bytes: u64,
     stuck_steps: u64,
     duration: std::time::Duration,
+    vcd_bytes: u64,
 ) -> StopReasonDetails {
     let (triggered_limit, observed) = match stop_reason {
         StopReason::MaxSteps => (
@@ -1231,6 +1326,16 @@ fn build_stop_reason_details(
                 value: duration.as_millis().min(u128::from(u64::MAX)) as u64,
             }),
         ),
+        StopReason::MaxVcdBytes => (
+            limits.max_vcd_bytes.map(|v| NamedU64 {
+                name: "max_vcd_bytes".to_string(),
+                value: v,
+            }),
+            Some(NamedU64 {
+                name: "vcd_bytes".to_string(),
+                value: vcd_bytes,
+            }),
+        ),
         StopReason::MemoryViolation
         | StopReason::DecodeError
         | StopReason::Halt
@@ -1264,6 +1369,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         script_max_uart_bytes,
         script_no_progress_steps,
         script_wall_time_ms,
+        script_max_vcd_bytes,
         assertions,
     ) = match loaded {
         LoadedTestScript::V1_0(script) => (
@@ -1274,6 +1380,7 @@ fn run_test(args: TestArgs) -> ExitCode {
             script.limits.max_uart_bytes,
             script.limits.no_progress_steps,
             script.limits.wall_time_ms,
+            script.limits.max_vcd_bytes,
             script.assertions,
         ),
         LoadedTestScript::LegacyV1(script) => {
@@ -1288,6 +1395,7 @@ fn run_test(args: TestArgs) -> ExitCode {
                 None,
                 None,
                 script.wall_time_ms,
+                None,
                 script.assertions,
             )
         }
@@ -1296,6 +1404,7 @@ fn run_test(args: TestArgs) -> ExitCode {
     let max_steps = args.max_steps.unwrap_or(script_max_steps);
     let max_cycles = args.max_cycles.or(script_max_cycles);
     let max_uart_bytes = args.max_uart_bytes.or(script_max_uart_bytes);
+    let max_vcd_bytes = args.max_vcd_bytes.or(script_max_vcd_bytes);
     let detect_stuck = args.detect_stuck.or(script_no_progress_steps);
     let resolved_limits = TestLimits {
         max_steps,
@@ -1303,6 +1412,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         max_uart_bytes,
         no_progress_steps: detect_stuck,
         wall_time_ms: script_wall_time_ms,
+        max_vcd_bytes,
     };
 
     // Guard against accidentally huge runs from CI misconfiguration.
@@ -1374,7 +1484,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         }
     };
 
-    let mut bus = match build_bus(system_path.clone()) {
+    let mut bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
         Ok(bus) => bus,
         Err(e) => {
             let msg = format!("{:#}", e);
@@ -1517,6 +1627,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         0,
         0,
         std::time::Duration::from_secs(0),
+        0, // vcd_bytes
     );
     write_outputs(
         args,
@@ -1637,6 +1748,20 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
             TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
             TestAssertion::ExpectedStopReason(a) => a.expected_stop_reason == stop_reason,
+            TestAssertion::MemoryValue(a) => {
+                // Read 32-bit value from memory
+                match machine.bus.read_u32(a.memory_value.address) {
+                    Ok(val) => {
+                        let mask = a.memory_value.mask.unwrap_or(0xFFFFFFFF) as u32;
+                        let expected = a.memory_value.expected_value as u32;
+                        (val & mask) == (expected & mask)
+                    }
+                    Err(e) => {
+                        error!("Memory assertion failed to read address {:#x}: {}", a.memory_value.address, e);
+                        false
+                    }
+                }
+            }
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -1681,6 +1806,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         uart_bytes,
         stuck_counter,
         duration,
+        0, // vcd_bytes - will be updated below
     );
     write_outputs(
         args,
@@ -1867,6 +1993,7 @@ fn write_config_error_outputs(
         max_uart_bytes: None,
         no_progress_steps: None,
         wall_time_ms: None,
+        max_vcd_bytes: None,
     });
 
     let stop_reason = StopReason::ConfigError;
@@ -1878,6 +2005,7 @@ fn write_config_error_outputs(
         0,
         0,
         std::time::Duration::from_secs(0),
+        0, // vcd_bytes
     );
 
     let result = TestResult {
@@ -1983,25 +2111,7 @@ fn write_config_error_outputs(
     }
 }
 
-fn build_bus(system_path: Option<PathBuf>) -> anyhow::Result<labwired_core::bus::SystemBus> {
-    let bus = if let Some(sys_path) = system_path {
-        info!("Loading system manifest: {:?}", sys_path);
-        let mut manifest = labwired_config::SystemManifest::from_file(&sys_path)?;
-        let chip_path = sys_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join(&manifest.chip);
-        manifest.chip = chip_path.to_string_lossy().into_owned();
-        info!("Loading chip descriptor: {:?}", chip_path);
-        let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
-        labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
-    } else {
-        info!("Using default hardware configuration");
-        labwired_core::bus::SystemBus::new()
-    };
 
-    Ok(bus)
-}
 
 fn resolve_script_path(script_path: &Path, value: &str) -> PathBuf {
     let p = PathBuf::from(value);
@@ -2204,6 +2314,7 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
         TestAssertion::ExpectedStopReason(a) => {
             format!("expected_stop_reason: {:?}", a.expected_stop_reason)
         }
+        TestAssertion::MemoryValue(a) => format!("memory_value: @{:#x}={:#x}", a.memory_value.address, a.memory_value.expected_value),
     };
 
     if s.len() <= MAX_LEN {

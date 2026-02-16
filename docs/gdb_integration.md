@@ -1,82 +1,59 @@
-# GDB Integration Guide
+# GDB Integration (RSP)
 
-LabWired features a built-in **GDB Remote Serial Protocol (RSP)** server that allows you to connect professional debugging tools (GDB, Ozone, Cortex-Debug) directly to the simulation.
+LabWired implements the GDB Remote Serial Protocol (RSP), allowing standard GDB clients (`arm-none-eabi-gdb`, `gdb-multiarch`) to connect for interactive debugging.
 
-## 🔗 Connecting to GDB Server
+## 1. Server Configuration
 
-By default, the GDB server starts automatically when you launch a simulation session via the DAP server (e.g., in VS Code).
+The GDB server is embedded within the `labwired-cli`. It listens on TCP port `3333` by default.
 
-- **Default Address**: `localhost:3333`
-- **Protocol**: GDB Remote Serial Protocol (RSP)
+### Starting the Server manually
+```bash
+labwired --gdb --port 3333 --firmware firmware.elf --system system.yaml
+```
 
-### 🐚 Using Command Line GDB
+## 2. Connecting with GDB
 
-1.  Start your simulation (e.g., via VS Code extension).
-2.  In a terminal, run your cross-compiler GDB:
-    ```bash
-    arm-none-eabi-gdb target/firmware
-    ```
-3.  Connect to the LabWired target:
-    ```gdb
-    (gdb) target remote localhost:3333
-    ```
-4.  You can now use standard GDB commands:
-    - `i r`: Info registers
-    - `x/16wx 0x0`: Examine memory
-    - `b main`: Set breakpoint
-    - `c`: Continue
-    - `s`: Step
+Launch your cross-architecture GDB client and connect to the remote target.
 
----
+```bash
+arm-none-eabi-gdb target/firmware.elf
+```
 
-## 💻 Visual Studio Code (Cortex-Debug)
+Inside GDB:
+```gdb
+(gdb) target remote localhost:3333
+(gdb) load            # Optional: Reloads sections if modified
+(gdb) break main
+(gdb) continue
+```
 
-For a superior debugging experience with peripheral views and disassembly, we recommend using the **Cortex-Debug** extension.
+## 3. Supported Commands
 
-### Configuration (`launch.json`)
+The RSP implementation supports the following subsets:
 
-Add the following to your `.vscode/launch.json`:
+| Command | Description | Notes |
+| :--- | :--- | :--- |
+| `g` / `G` | Read/Write All Registers | Full context switch support |
+| `P` | Write Single Register | PC modification supported |
+| `m` / `M` | Read/Write Memory | Used for variable inspection |
+| `Z0` / `z0` | Software Breakpoints | Uses BKPT instruction injection |
+| `vCont` | Continue / Step | Supports single-stepping |
+| `qSupported` | Feature Negotiation | XML target description |
+
+## 4. IDE Integration (Cortex-Debug)
+
+For VS Code users preferring the GDB workflow (e.g., for extensive peripheral viewing via SVD), configured `launch.json` as follows:
 
 ```json
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "type": "cortex-debug",
-            "request": "launch",
-            "name": "LabWired (Cortex-Debug)",
-            "servertype": "external",
-            "gdbTarget": "localhost:3333",
-            "executable": "${workspaceRoot}/examples/arm-c-hello/target/firmware",
-            "cwd": "${workspaceRoot}",
-            "runToEntryPoint": "main",
-            "armToolchainPath": "/usr/bin"
-        }
-    ]
+    "type": "cortex-debug",
+    "request": "launch",
+    "servertype": "external",
+    "gdbTarget": "localhost:3333",
+    "executable": "${workspaceFolder}/target/firmware.elf",
+    "runToEntryPoint": "main",
+    "svdFile": "${workspaceFolder}/STM32F103.svd"
 }
 ```
 
----
-
-## 🧪 Automated Testing
-
-We provide a verification script to test the GDB interface stability:
-
-```bash
-python3 scripts/test_gdb_rsp.py
-```
-
-This script is also part of our **CI Pipeline**, ensuring that the GDB interface remains robust across all releases.
-
----
-
-## 🛠️ Supported Packets
-
-LabWired supports the core set of RSP packets required for professional debugging:
-- `g`/`G`: Read/Write all registers
-- `P`: Write single register
-- `m`/`M`: Read/Write memory (hex)
-- `Z0`/`z0`: Insert/Remove software breakpoints
-- `vCont`: Resumption and stepping
-- `qSupported`: Capability negotiation
-- `Ctrl-C`: Break/Interrupt simulation
+**Note**: You must start the LabWired GDB server manually or via a pre-launch task before starting the debug session.

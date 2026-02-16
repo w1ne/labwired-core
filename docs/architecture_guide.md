@@ -55,7 +55,7 @@ To satisfy Rust's borrow checker and ensure determinism:
 2.  **Resolution Phase**: The Bus processes these requests, modifying memory or triggering CPU exceptions.
 
 ## 3. Peripheral Modeling
-We prioritize **Tier 1 Devices** for deep support (see `docs/release_strategy.md`):
+We prioritize **Tier 1 Devices** for deep support (see `../../docs/SUPPORTED_DEVICES.md`):
 *   **STM32F4** (Cortex-M4)
 *   **RP2040** (Dual Cortex-M0+)
 *   **nRF52** (Cortex-M4F)

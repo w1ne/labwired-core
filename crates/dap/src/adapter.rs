@@ -31,6 +31,15 @@ pub struct TelemetryData {
     pub board_io: Vec<BoardIoState>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct BreakpointResolution {
+    pub requested_line: i64,
+    pub verified: bool,
+    pub resolved_line: Option<u32>,
+    pub address: Option<u32>,
+    pub message: Option<String>,
+}
+
 #[derive(Clone, Serialize)]
 pub struct BoardIoState {
     pub id: String,
@@ -412,6 +421,49 @@ impl LabwiredAdapter {
         }
     }
 
+    pub fn step_over_source_line(
+        &self,
+        max_instructions: u32,
+    ) -> Result<labwired_core::StopReason> {
+        let start_pc = self.get_pc()?;
+        let start_loc = self.lookup_source(start_pc as u64);
+
+        // If we don't have source mapping, fall back to single-instruction stepping.
+        let Some(start_loc) = start_loc else {
+            return self.step();
+        };
+
+        let max_instructions = max_instructions.max(1);
+        let mut last_reason = labwired_core::StopReason::StepDone;
+
+        for _ in 0..max_instructions {
+            let reason = self.step()?;
+            last_reason = reason.clone();
+
+            match reason {
+                labwired_core::StopReason::Breakpoint(_)
+                | labwired_core::StopReason::ManualStop
+                | labwired_core::StopReason::MaxStepsReached => return Ok(reason),
+                _ => {}
+            }
+
+            let pc = self.get_pc()?;
+            let Some(curr_loc) = self.lookup_source(pc as u64) else {
+                if pc != start_pc {
+                    return Ok(reason);
+                }
+                continue;
+            };
+
+            let changed_line = curr_loc.file != start_loc.file || curr_loc.line != start_loc.line;
+            if changed_line {
+                return Ok(reason);
+            }
+        }
+
+        Ok(last_reason)
+    }
+
     pub fn get_peripherals_json(&self) -> serde_json::Value {
         use serde_json::json;
         let mut peripherals = Vec::new();
@@ -608,20 +660,76 @@ impl LabwiredAdapter {
         }
     }
 
-    pub fn set_breakpoints(&self, path: String, lines: Vec<i64>) -> Result<()> {
+    pub fn set_breakpoints(
+        &self,
+        path: String,
+        lines: Vec<i64>,
+    ) -> Result<Vec<BreakpointResolution>> {
+        let mut resolutions = Vec::with_capacity(lines.len());
         let mut addresses = Vec::new();
 
         let syms_guard = self.symbols.lock().unwrap();
-        if let Some(syms) = syms_guard.as_ref() {
-            for line in lines {
-                if let Some(addr) = syms.location_to_pc(&path, line as u32) {
-                    let addr: u64 = addr;
-                    addresses.push(addr as u32);
+        let syms = syms_guard.as_ref();
+
+        for requested_line in lines {
+            if requested_line <= 0 {
+                resolutions.push(BreakpointResolution {
+                    requested_line,
+                    verified: false,
+                    resolved_line: None,
+                    address: None,
+                    message: Some("Invalid line number".to_string()),
+                });
+                continue;
+            }
+
+            if let Some(syms) = syms {
+                if let Some((addr, resolved_line)) =
+                    syms.location_to_pc_nearest(&path, requested_line as u32)
+                {
+                    let addr32 = addr as u32;
+                    addresses.push(addr32);
+                    resolutions.push(BreakpointResolution {
+                        requested_line,
+                        verified: true,
+                        resolved_line: Some(resolved_line),
+                        address: Some(addr32),
+                        message: if resolved_line != requested_line as u32 {
+                            Some(format!(
+                                "Mapped to nearest executable line {}",
+                                resolved_line
+                            ))
+                        } else {
+                            None
+                        },
+                    });
                 } else {
-                    tracing::warn!("Could not resolve breakpoint at {}:{}", path, line);
+                    tracing::warn!(
+                        "Could not resolve breakpoint at {}:{}",
+                        path,
+                        requested_line
+                    );
+                    resolutions.push(BreakpointResolution {
+                        requested_line,
+                        verified: false,
+                        resolved_line: None,
+                        address: None,
+                        message: Some("No executable location for this line".to_string()),
+                    });
                 }
+            } else {
+                resolutions.push(BreakpointResolution {
+                    requested_line,
+                    verified: false,
+                    resolved_line: None,
+                    address: None,
+                    message: Some("Debug symbols unavailable".to_string()),
+                });
             }
         }
+
+        addresses.sort_unstable();
+        addresses.dedup();
 
         let mut machine_guard = self.machine.lock().unwrap();
         if let Some(machine) = machine_guard.as_mut() {
@@ -632,7 +740,7 @@ impl LabwiredAdapter {
             }
         }
 
-        Ok(())
+        Ok(resolutions)
     }
 
     pub fn add_breakpoint_addr(&self, addr: u32) -> Result<()> {
@@ -826,6 +934,7 @@ mod tests {
     #[test]
     fn test_resolve_board_io_bindings_uses_default_gpio_offsets() {
         let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             flash: labwired_config::MemoryRange {
@@ -847,6 +956,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
@@ -871,6 +981,7 @@ mod tests {
         let mut gpio_config = HashMap::new();
         gpio_config.insert("profile".to_string(), "stm32v2".into());
         let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             flash: labwired_config::MemoryRange {
@@ -892,6 +1003,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
@@ -927,6 +1039,7 @@ mod tests {
         let mut gpio_config = HashMap::new();
         gpio_config.insert("register_layout".to_string(), "stm32v2".into());
         let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             flash: labwired_config::MemoryRange {
@@ -948,6 +1061,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
@@ -980,7 +1094,7 @@ mod tests {
             .expect("Failed to load firmware");
 
         // Set breakpoint at main.rs:11
-        adapter
+        let _ = adapter
             .set_breakpoints("main.rs".to_string(), vec![11])
             .expect("Failed to set breakpoints");
     }

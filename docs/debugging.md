@@ -1,18 +1,27 @@
-# Interactive Debugging with LabWired
+# Debugging (DAP)
 
-LabWired supports interactive debugging using the **Debug Adapter Protocol (DAP)**. This allows you to use standard IDEs like **Visual Studio Code** to step through firmware, set breakpoints, and inspect the CPU state.
+LabWired implements a native **Debug Adapter Protocol (DAP)** server, enabling direct integration with IDEs like VS Code without intermediate GDB processes.
 
-## 🚀 Quick Start (VS Code)
+## 1. Architecture
 
-### 1. Prerequisites
-- **LabWired DAP Server**: Build the server using `cargo build -p labwired-dap`.
-- **LabWired VS Code Extension**:
-  - Navigate to `vscode`.
-  - Run `npm install && npm run compile`.
-  - Open the `vscode` folder in a new VS Code window and press `F5` to launch the extension.
+The DAP server operates as a sidecar process or an internal thread within the simulation runner.
 
-### 2. Configuration
-Create a `.vscode/launch.json` file in your firmware project:
+- **Protocol**: JSON-RPC over Standard Input/Output (stdio) or TCP.
+- **Capabilities**:
+    - `launch`: Starts a new simulation instance.
+    - `attach`: Connects to a running simulation.
+    - `setBreakpoints`: Supports source-level and instruction-level breakpoints.
+    - `threads`: Exposes the CPU core as a single thread.
+    - `stackTrace`: Unwinds the stack frame based on the current PC and SP.
+    - `scopes` / `variables`: Inspects registers and local variables.
+
+## 2. VS Code Integration
+
+The `labwired-vscode` extension bundles the DAP client.
+
+### Launch Configuration (`launch.json`)
+
+To debug a firmware image, define a generic DAP launch configuration:
 
 ```json
 {
@@ -23,32 +32,50 @@ Create a `.vscode/launch.json` file in your firmware project:
             "request": "launch",
             "name": "Debug Firmware",
             "program": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/firmware",
-            "stopOnEntry": true
+            "args": ["--system", "config/system.yaml"],
+            "stopOnEntry": true,
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
 ```
 
-### 3. Debugging Features
-- **Source-Level Debugging**: If your ELF file contains DWARF debug information, LabWired will automatically map instruction addresses back to your C or Rust source code.
-- **Breakpoints**: Set breakpoints directly in your source code.
-- **Stepping**: Use the standard Step Over, Step Into, and Continue commands.
-- **Register Inspection**: View the current values of CPU registers in the **Variables** view:
-  - **ARM**: R0-R15 (including SP, LR, and PC).
-  - **RISC-V**: x0-x31 and PC.
+### Configuration Options
+- **program**: Path to the ELF binary with debug symbols (DWARF).
+- **args**: Command-line arguments passed to the LabWired CLI.
+- **stopOnEntry**: If `true`, the simulator halts at the Reset Vector.
+- **cwd**: Current working directory for the simulation process.
 
-## 🛠 Advanced Usage
+## 3. Telemetry Extensions
 
-### Manual DAP Launch
-You can run the DAP server manually for non-VS Code integrations or debugging the server itself:
-```bash
-labwired-dap --log-file debug.log
+The LabWired DAP implementation extends the protocol to support real-time telemetry.
+
+### Custom Events
+The server emits a `telemetry` event every 100ms containing performance metrics.
+
+**Payload Schema:**
+```json
+{
+  "type": "event",
+  "event": "telemetry",
+  "body": {
+    "cycles": 120500,
+    "mips": 12.5,
+    "pc": "0x080001a4"
+  }
+}
 ```
-The server communicates via stdin/stdout using the DAP JSON-RPC protocol.
 
-### Symbol Resolution
-LabWired uses the `addr2line` and `gimli` crates to resolve symbols. Ensure your firmware is compiled with debug symbols (e.g., `debug = true` in `Cargo.toml` profiles or `-g` in GCC).
+This allows the VS Code extension to render a live "Dashboard" view without polling the debug interface, minimizing protocol overhead.
 
-## 📝 Troubleshooting
-- **No Source Code appearing**: Ensure the `program` path in `launch.json` points to an ELF with debug symbols.
-- **"Unknown Instruction" during debug**: This usually means the firmware hit a Thumb-2 instruction or FPU operation not yet implemented in the core engine.
+## 4. Troubleshooting
+
+### "Unknown Request" Errors
+If the debug console shows protocol errors:
+1.  Verify the `labwired-cli` version matches the extension version.
+2.  Enable verbose logging in `launch.json`: `"trace": true`.
+
+### Source Mapping Issues
+If breakpoints cannot be set:
+1.  Ensure the ELF was compiled with `debug = true`.
+2.  Verify the `program` path matches the binary being displayed in the editor.
