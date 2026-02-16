@@ -5,9 +5,9 @@ This document outlines the standardized process for releasing new versions of La
 ## 1. Preparation Phase
 
 ### git & Codebase
-- [ ] **Checkout `develop`** and ensure it is up-to-date:
+- [ ] **Checkout `main`** and ensure it is up-to-date:
   ```bash
-  git checkout develop && git pull
+  git checkout main && git pull
   ```
 - [ ] **Run Regression Tests**:
   ```bash
@@ -73,10 +73,4 @@ This document outlines the standardized process for releasing new versions of La
 - [ ] **Upload Assets**: Attach the binary (and signature if available) to the GitHub Release.
 
 ## 4. Post-Release
-- [ ] **Merge Back to Develop**:
-  ```bash
-  git checkout develop
-  git merge main
-  git push origin develop
-  ```
 - [ ] **Announce**: Share the release notes on relevant channels (Discord, Twitter, Internal).
