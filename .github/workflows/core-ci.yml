@@ -30,5 +30,16 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Install ARM target
+        run: |
+          rustup target add thumbv7m-none-eabi
+          rustup target add thumbv7em-none-eabihf
+
+      - name: Build test firmware fixture
+        run: |
+          cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+          cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
+          cargo build -p firmware-h563-demo --release --target thumbv7em-none-eabihf
+
       - name: Run Workspace Tests
         run: cargo test --workspace
