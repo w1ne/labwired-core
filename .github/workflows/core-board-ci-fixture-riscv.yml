@@ -46,6 +46,28 @@ jobs:
       - name: Run RISC-V smoke checks
         run: cargo run -q -p labwired-cli -- test --script examples/ci/riscv-uart-ok.yaml --output-dir out/boards/ci-fixture-riscv/smoke --no-uart-stdout
 
+      - name: Measure instruction support coverage
+        run: |
+          ./scripts/unsupported_instruction_audit.sh \
+            --firmware target/riscv32i-unknown-none-elf/release/riscv-ci-fixture \
+            --system configs/systems/ci-fixture-riscv-uart1.yaml \
+            --max-steps 5000 \
+            --out-dir out/boards/ci-fixture-riscv/unsupported-audit \
+            --fail-on-unsupported
+
+      - name: Publish board metrics summary
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          p = Path("out/boards/ci-fixture-riscv/unsupported-audit/metrics.json")
+          m = json.loads(p.read_text())
+          print("### CI Fixture RISC-V Instruction Support\n")
+          print(f"- Instructions executed: `{m['instructions_executed']}`")
+          print(f"- Unsupported observations: `{m['unsupported_total']}`")
+          print(f"- Instruction support coverage: `{m['instruction_support_percent']}%`")
+          PY
+
       - name: Upload board artifacts
         if: always()
         uses: actions/upload-artifact@v4

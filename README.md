@@ -13,11 +13,11 @@
 
 ### Board Model Dashboard
 
-| Board Model | Status | Verification Coverage | Workflow |
-|---|---|---|---|
-| `ci-fixture-uart1` (ARM Cortex-M) | ![ARM Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main) | smoke + max UART + no-progress | [ARM Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml) |
-| `ci-fixture-riscv-uart1` (RISC-V) | ![RISC-V Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main) | smoke | [RISC-V Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml) |
-| `nucleo-h563zi` | ![H563 Board](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main) | io-smoke + fullchip-smoke | [NUCLEO-H563ZI CI](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml) |
+| Board Model | Status | Verification Coverage | Instruction Support % (runtime) | Workflow |
+|---|---|---|---|---|
+| `ci-fixture-uart1` (ARM Cortex-M) | ![ARM Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main) | smoke + max UART + no-progress | published in workflow summary/artifacts | [ARM Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml) |
+| `ci-fixture-riscv-uart1` (RISC-V) | ![RISC-V Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main) | smoke | published in workflow summary/artifacts | [RISC-V Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml) |
+| `nucleo-h563zi` | ![H563 Board](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main) | io-smoke + fullchip-smoke | published in workflow summary/artifacts | [NUCLEO-H563ZI CI](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml) |
 
 ## 🤖 Agent-First Architecture
 LabWired is built primarily as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its core mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
