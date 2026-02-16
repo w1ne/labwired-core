@@ -1,0 +1,59 @@
+name: Core Board Model - CI Fixture ARM
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  ci-fixture-arm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ARM target
+        run: rustup target add thumbv6m-none-eabi
+
+      - name: Build ARM fixture firmware
+        run: cargo build -p firmware-ci-fixture --release --target thumbv6m-none-eabi
+
+      - name: Run ARM smoke and fault-path checks
+        run: |
+          cargo run -q -p labwired-cli -- test --script examples/ci/uart-ok.yaml --output-dir out/boards/ci-fixture-arm/smoke --no-uart-stdout
+          cargo run -q -p labwired-cli -- test --script examples/ci/dummy-max-uart-bytes.yaml --output-dir out/boards/ci-fixture-arm/max-uart --no-uart-stdout
+          cargo run -q -p labwired-cli -- test --script examples/ci/dummy-no-progress.yaml --output-dir out/boards/ci-fixture-arm/no-progress --no-uart-stdout
+
+      - name: Measure instruction support coverage
+        run: |
+          ./scripts/unsupported_instruction_audit.sh \
+            --firmware target/thumbv6m-none-eabi/release/firmware-ci-fixture \
+            --system configs/systems/ci-fixture-uart1.yaml \
+            --max-steps 5000 \
+            --out-dir out/boards/ci-fixture-arm/unsupported-audit \
+            --fail-on-unsupported
+
+      - name: Publish board metrics summary
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          p = Path("out/boards/ci-fixture-arm/unsupported-audit/metrics.json")
+          m = json.loads(p.read_text())
+          print("### CI Fixture ARM Instruction Support\n")
+          print(f"- Instructions executed: `{m['instructions_executed']}`")
+          print(f"- Unsupported observations: `{m['unsupported_total']}`")
+          print(f"- Instruction support coverage: `{m['instruction_support_percent']}%`")
+          PY
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-ci-fixture-arm
+          path: out/boards/ci-fixture-arm/
