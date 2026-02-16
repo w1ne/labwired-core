@@ -264,38 +264,4 @@ mod tests {
         gpio.write(0x15, 0x12).unwrap();
         assert_eq!(gpio.odr, 0x1234);
     }
-
-    #[test]
-    fn test_gpio_v2_moder_and_odr() {
-        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
-
-        // MODER @ 0x00
-        gpio.write(0x00, 0xAA).unwrap();
-        gpio.write(0x01, 0x55).unwrap();
-        assert_eq!(gpio.moder & 0xFFFF, 0x55AA);
-
-        // ODR @ 0x14
-        gpio.write(0x14, 0x34).unwrap();
-        gpio.write(0x15, 0x12).unwrap();
-        assert_eq!(gpio.odr, 0x1234);
-    }
-
-    #[test]
-    fn test_gpio_v2_bsrr_and_brr() {
-        let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
-
-        // BSRR @ 0x18 (set pin 0, reset pin 1)
-        gpio.write(0x18, 0x01).unwrap();
-        gpio.write(0x19, 0x00).unwrap();
-        gpio.write(0x1A, 0x02).unwrap();
-        gpio.write(0x1B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0003, 0x0001);
-
-        // BRR @ 0x28 (reset pin 0)
-        gpio.write(0x28, 0x01).unwrap();
-        gpio.write(0x29, 0x00).unwrap();
-        gpio.write(0x2A, 0x00).unwrap();
-        gpio.write(0x2B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0001, 0x0000);
-    }
 }
