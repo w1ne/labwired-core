@@ -3,7 +3,7 @@
 
 > High-performance, declarative firmware simulator for ARM Cortex-M and RISC-V microcontrollers.
 
-[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://w1ne.github.io/labwired-core/)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://labwired.com/docs/)
 
 ## Highlights
 
