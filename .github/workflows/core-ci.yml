@@ -7,12 +7,14 @@ on:
       - develop
     paths:
       - 'core/**'
+      - '.github/workflows/*.yml'
   pull_request:
     branches:
       - main
       - develop
     paths:
       - 'core/**'
+      - '.github/workflows/*.yml'
   workflow_dispatch:
 
 defaults:
