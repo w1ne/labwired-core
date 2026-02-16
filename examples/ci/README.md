@@ -14,4 +14,7 @@ Expected outcomes:
 - `dummy-max-steps.yaml`: exit code `0` (passes; asserts `expected_stop_reason: max_steps`)
 - `dummy-max-cycles.yaml`: exit code `0` (passes; asserts `expected_stop_reason: max_cycles`)
 - `dummy-wall-time.yaml`: exit code `0` (passes; asserts `expected_stop_reason: wall_time`)
+- `dummy-max-uart-bytes.yaml`: exit code `0` (passes; asserts `expected_stop_reason: max_uart_bytes`)
+- `dummy-no-progress.yaml`: exit code `0` (passes; asserts `expected_stop_reason: no_progress`)
+- `dummy-memory-violation.yaml`: exit code `0` (passes; asserts `expected_stop_reason: memory_violation`)
 - `dummy-fail-uart.yaml`: exit code `1` (fails; asserts UART contains a string that isn’t emitted)
