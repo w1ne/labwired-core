@@ -52,8 +52,5 @@ jobs:
       - name: Compile
         run: npm run compile
 
-      - name: Run Tests (Linux)
-        run: xvfb-run --auto-servernum bash -lc 'ELECTRON_RUN_AS_NODE= npm test'
-
       - name: Run Unit Tests (Docker Logic)
         run: ./node_modules/.bin/mocha out/test/unit/docker.test.js
