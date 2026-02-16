@@ -1,0 +1,60 @@
+name: Core Coverage
+
+on:
+  schedule:
+    - cron: "20 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install coverage tooling
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked
+
+      - name: Run coverage
+        run: |
+          mkdir -p out/coverage
+          cargo llvm-cov -p labwired-core -p labwired-cli --summary-only --json > out/coverage/llvm-cov.json
+
+      - name: Enforce minimum line coverage
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          threshold = 60.0
+          p = pathlib.Path("out/coverage/llvm-cov.json")
+          data = json.loads(p.read_text())
+          nodes = data.get("data", [])
+          if not nodes:
+              print("No coverage data found", file=sys.stderr)
+              sys.exit(1)
+          totals = nodes[0].get("totals", {})
+          lines = totals.get("lines", {})
+          pct = float(lines.get("percent", 0.0))
+          print(f"Line coverage: {pct:.2f}% (threshold: {threshold:.2f}%)")
+          if pct < threshold:
+              sys.exit(1)
+          pathlib.Path("out/coverage/summary.txt").write_text(
+              f"line_coverage_percent={pct:.2f}\nthreshold={threshold:.2f}\n"
+          )
+          PY
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-coverage
+          path: out/coverage/

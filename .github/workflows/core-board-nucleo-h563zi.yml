@@ -1,0 +1,60 @@
+name: Core Board Model - NUCLEO-H563ZI
+
+on:
+  schedule:
+    - cron: "40 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  nucleo-h563zi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ARM target
+        run: rustup target add thumbv7m-none-eabi
+
+      - name: Build NUCLEO-H563ZI firmware fixtures
+        run: |
+          cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
+          cargo build -p firmware-h563-fullchip-demo --release --target thumbv7m-none-eabi
+
+      - name: Run NUCLEO-H563ZI smoke checks
+        run: |
+          cargo run -q -p labwired-cli -- test --script examples/nucleo-h563zi/io-smoke.yaml --output-dir out/boards/nucleo-h563zi/io-smoke --no-uart-stdout
+          cargo run -q -p labwired-cli -- test --script examples/nucleo-h563zi/fullchip-smoke.yaml --output-dir out/boards/nucleo-h563zi/fullchip-smoke --no-uart-stdout
+
+      - name: Measure instruction support coverage
+        run: |
+          ./scripts/unsupported_instruction_audit.sh \
+            --firmware target/thumbv7m-none-eabi/release/firmware-h563-io-demo \
+            --system configs/systems/nucleo-h563zi-demo.yaml \
+            --max-steps 20000 \
+            --out-dir out/boards/nucleo-h563zi/unsupported-audit \
+            --fail-on-unsupported
+
+      - name: Publish board metrics summary
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          p = Path("out/boards/nucleo-h563zi/unsupported-audit/metrics.json")
+          m = json.loads(p.read_text())
+          print("### NUCLEO-H563ZI Instruction Support\n")
+          print(f"- Instructions executed: `{m['instructions_executed']}`")
+          print(f"- Unsupported observations: `{m['unsupported_total']}`")
+          print(f"- Instruction support coverage: `{m['instruction_support_percent']}%`")
+          PY
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-nucleo-h563zi
+          path: out/boards/nucleo-h563zi/
