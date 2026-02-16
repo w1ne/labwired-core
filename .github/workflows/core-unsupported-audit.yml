@@ -1,0 +1,34 @@
+name: Core Unsupported Audit
+
+on:
+  schedule:
+    - cron: "40 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  unsupported-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ARM target
+        run: rustup target add thumbv7m-none-eabi
+
+      - name: Build audit firmware fixture
+        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+
+      - name: Run unsupported instruction audit
+        run: ./scripts/unsupported_instruction_audit.sh --firmware target/thumbv7m-none-eabi/release/demo-blinky --system configs/systems/ci-fixture-uart1.yaml --max-steps 20000 --out-dir out/unsupported-audit/ci-fixture --fail-on-unsupported
+
+      - name: Upload unsupported audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-unsupported-audit
+          path: out/unsupported-audit/
