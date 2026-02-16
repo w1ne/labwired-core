@@ -76,7 +76,7 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                     // Change current directory to the example directory so it picks up .cargo/config.toml
                     let build_status = Command::new("cargo")
                         .current_dir(dir)
-                        .args(&["build", "--release"])
+                        .args(["build", "--release"])
                         .status();
 
                     if build_status.is_err() || !build_status.unwrap().success() {
@@ -90,7 +90,7 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                 // cargo run -p labwired-cli -- test --script <path> ...
                 let status = Command::new("cargo")
                     .current_dir(project_root)
-                    .args(&[
+                    .args([
                         "run",
                         "-q",
                         "-p",

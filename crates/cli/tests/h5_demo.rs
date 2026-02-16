@@ -38,10 +38,8 @@ fn test_h5_demo_uart_output() {
     let manifest = SystemManifest::from_file(&system_path).expect("Failed to load system manifest");
 
     let chip_path = system_path.parent().unwrap().join(&manifest.chip);
-    let chip = ChipDescriptor::from_file(&chip_path).expect(&format!(
-        "Failed to load chip descriptor at {:?}",
-        chip_path
-    ));
+    let chip = ChipDescriptor::from_file(&chip_path)
+        .unwrap_or_else(|_| panic!("Failed to load chip descriptor at {:?}", chip_path));
 
     let mut bus =
         labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("Failed to build bus");

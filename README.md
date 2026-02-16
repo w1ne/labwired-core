@@ -5,6 +5,23 @@
 
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://labwired.com/docs/)
 
+## CI Dashboard
+
+| Indicator | Status | Link |
+|---|---|---|
+| Core Integrity (PR Gate) | ![Core Integrity](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml) |
+| Coverage Gate (Scheduled/Manual) | ![Coverage](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml) |
+| Unsupported Audit (Scheduled/Manual) | ![Unsupported Audit](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml) |
+| Nightly Validation (Scheduled/Manual) | ![Nightly](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml) |
+
+### Board Model Dashboard
+
+| Board Model | Status | Verification Coverage | Instruction Support % (runtime) | Workflow |
+|---|---|---|---|---|
+| `ci-fixture-uart1` (ARM Cortex-M) | ![ARM Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main) | smoke + max UART + no-progress | published in workflow summary/artifacts | [ARM Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml) |
+| `ci-fixture-riscv-uart1` (RISC-V) | ![RISC-V Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main) | smoke | published in workflow summary/artifacts | [RISC-V Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml) |
+| `nucleo-h563zi` | ![H563 Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main) | io-smoke + fullchip-smoke | published in workflow summary/artifacts | [NUCLEO-H563ZI CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml) |
+
 ## Highlights
 
 - **🚀 [Demos & Examples](../DEMOS.md)** - Central portal for all LabWired demos.
