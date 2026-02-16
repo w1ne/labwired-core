@@ -54,11 +54,23 @@ jobs:
       - name: Compile
         run: npm run compile
 
-      - name: Run Headless Test
+      - name: Install ARM target
+        run: rustup target add thumbv7m-none-eabi
+
+      - name: Build Demo Firmware Fixture
+        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+        working-directory: ./core
+
+      - name: Run Tests (Linux)
         if: runner.os == 'Linux'
         uses: coactions/setup-xvfb@v1
         with:
-          run: unset ELECTRON_RUN_AS_NODE && cd vscode && npm test
+            run: unset ELECTRON_RUN_AS_NODE && cd vscode && npm test
+
+      - name: Run Tests (Non-Linux)
+        if: runner.os != 'Linux'
+        run: npm test
+        working-directory: ./vscode
 
       - name: Run Unit Tests (Docker Logic)
         run: ./node_modules/.bin/mocha out/test/unit/docker.test.js
