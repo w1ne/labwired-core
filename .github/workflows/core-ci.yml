@@ -38,6 +38,7 @@ jobs:
       - name: Build test firmware fixture
         run: |
           cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+          cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-h563-demo --release --target thumbv7em-none-eabihf
 
       - name: Run Workspace Tests
