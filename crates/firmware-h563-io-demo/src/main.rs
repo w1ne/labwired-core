@@ -14,7 +14,6 @@ const GPIOG_BASE: u32 = 0x4202_1800;
 
 const GPIO_MODER: u32 = 0x00;
 const GPIO_IDR: u32 = 0x10;
-const GPIO_ODR: u32 = 0x14;
 const GPIO_BSRR: u32 = 0x18;
 const GPIO_BRR: u32 = 0x28;
 
@@ -107,12 +106,20 @@ fn main() -> ! {
         set_led_state(true);
         uart_write_str("S1-ON\n");
         report_io_state();
-        for _ in 0..100_000 { unsafe { core::arch::asm!("nop"); } }
+        for _ in 0..100_000 {
+            unsafe {
+                core::arch::asm!("nop");
+            }
+        }
 
         set_led_state(false);
         uart_write_str("S2-OFF\n");
         report_io_state();
-        for _ in 0..100_000 { unsafe { core::arch::asm!("nop"); } }
+        for _ in 0..100_000 {
+            unsafe {
+                core::arch::asm!("nop");
+            }
+        }
     }
 }
 

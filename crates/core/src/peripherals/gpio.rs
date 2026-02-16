@@ -264,5 +264,4 @@ mod tests {
         gpio.write(0x15, 0x12).unwrap();
         assert_eq!(gpio.odr, 0x1234);
     }
-
 }

@@ -54,7 +54,8 @@ impl<W: Write> Write for SizeLimitedWriter<W> {
         let to_write = buf.len().min(remaining as usize);
 
         let written = self.inner.write(&buf[..to_write])?;
-        self.bytes_written.fetch_add(written as u64, Ordering::Relaxed);
+        self.bytes_written
+            .fetch_add(written as u64, Ordering::Relaxed);
 
         if self.bytes_written.load(Ordering::Relaxed) >= self.max_bytes {
             self.limit_exceeded = true;

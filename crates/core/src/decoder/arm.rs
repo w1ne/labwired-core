@@ -876,7 +876,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     }
 
     // UXTB.W (Thumb-2): 1111 1010 0100 1111 1111 <rd> 1000 <rm> -> FA4F ...
-    // My log said FA23 F404 (LSR) and FA2E F303 (LSR). 
+    // My log said FA23 F404 (LSR) and FA2E F303 (LSR).
     // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
     // Encodings: 1111 1010 0... (FA0x to FA7x)
     if (h1 & 0xFF80) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
