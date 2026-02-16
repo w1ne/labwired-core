@@ -347,6 +347,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
         };
 
         Self {
+            schema_version: default_schema_version(),
             name: ir.name,
             arch,
             flash: MemoryRange {
