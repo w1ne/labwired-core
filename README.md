@@ -18,9 +18,9 @@
 
 | Board Model | Status | Verification Coverage | Instruction Support % (runtime) | Workflow |
 |---|---|---|---|---|
-| `ci-fixture-uart1` (ARM Cortex-M) | ![ARM Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main) | smoke + max UART + no-progress | reported in workflow step summary and artifacts | [ARM Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml) |
-| `ci-fixture-riscv-uart1` (RISC-V) | ![RISC-V Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main) | smoke | reported in workflow step summary and artifacts | [RISC-V Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml) |
-| `nucleo-h563zi` | ![H563 Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main) | io-smoke + fullchip-smoke | reported in workflow step summary and artifacts | [NUCLEO-H563ZI CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml) |
+| `ci-fixture-uart1` (ARM Cortex-M) | ![ARM Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main) | smoke + max UART + no-progress | published in workflow summary/artifacts | [ARM Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml) |
+| `ci-fixture-riscv-uart1` (RISC-V) | ![RISC-V Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main) | smoke | published in workflow summary/artifacts | [RISC-V Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml) |
+| `nucleo-h563zi` | ![H563 Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main) | io-smoke + fullchip-smoke | published in workflow summary/artifacts | [NUCLEO-H563ZI CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml) |
 
 ## Highlights
 
