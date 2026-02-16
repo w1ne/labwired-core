@@ -1,0 +1,15 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/uart-ok-thumbv7m.elf"
+  system: "../../configs/systems/ci-fixture-uart1.yaml"
+limits:
+  max_steps: 100000
+  max_uart_bytes: 2
+assertions:
+  - expected_stop_reason: max_uart_bytes
