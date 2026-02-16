@@ -74,12 +74,16 @@ nav:
     - CLI Commands: cli_reference.md
     - Test Script Schema: ci_test_runner.md
     
+  - Operations:
+    - Release Strategy: release_strategy.md
+    - Verification Audit: verification_audit.md
+    - Supported Devices: supported_devices.md
+    - Safety & Guardrails: safety.md
+    - Demos: demos.md
+    - Advanced Peripherals: advanced_peripherals.md
+    - Case Study (STM32): case_study_stm32.md
+    - Debugging: debugging.md
+    - Git Flow: development/git_flow.md
+    
   - Explanation:
     - Architecture Overview: architecture.md
-    - Debugging Architecture (DAP/GDB): debugging.md
-    - System Design: advanced_peripherals.md
-    - Case Study (STM32): case_study_stm32.md
-
-  - Development:
-    - Git Flow: development/git_flow.md
-    - Release Strategy: release_strategy.md
