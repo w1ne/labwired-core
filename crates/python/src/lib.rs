@@ -1,10 +1,10 @@
-use labwired_config;
+#![allow(non_local_definitions)]
+
 use labwired_core::{
     bus::SystemBus,
     system::{cortex_m, riscv},
     Arch, DebugControl, SimulationError, StopReason,
 };
-use labwired_loader;
 use pyo3::prelude::*;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -95,6 +95,8 @@ struct Machine {
     inner: Arc<Mutex<Box<dyn DebugControl + Send>>>,
 }
 
+
+#[allow(non_local_definitions)]
 #[pymethods]
 impl Machine {
     #[new]

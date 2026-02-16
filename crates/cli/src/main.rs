@@ -1272,6 +1272,7 @@ fn report_metrics<C: labwired_core::Cpu>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_stop_reason_details(
     stop_reason: &StopReason,
     limits: &TestLimits,

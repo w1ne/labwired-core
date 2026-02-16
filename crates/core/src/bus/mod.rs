@@ -686,7 +686,7 @@ impl crate::Bus for SystemBus {
         if let Some(idx) = self.find_peripheral_index(addr) {
             let p = &self.peripherals[idx];
             let res = p.dev.read(addr - p.base);
-            if (addr >= 0x42020000 && addr < 0x42021c00) || addr == 0x21d0000 {
+            if (0x42020000..0x42021c00).contains(&addr) || addr == 0x21d0000 {
                 tracing::info!(
                     "Bus Read GPIO/Suspicious: addr {:#x} -> {} + {:#x}, result {:?}",
                     addr,
@@ -740,7 +740,7 @@ impl crate::Bus for SystemBus {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 let p = &mut self.peripherals[idx];
                 let res = p.dev.write(addr - p.base, value);
-                if (addr >= 0x42020000 && addr < 0x42021c00) || addr == 0x21d0000 {
+                if (0x42020000..0x42021c00).contains(&addr) || addr == 0x21d0000 {
                     tracing::info!("Bus Write GPIO/Suspicious: addr {:#x} -> {} + {:#x}, val {:#x}, result {:?}", addr, p.name, addr - p.base, value, res);
                 }
                 res

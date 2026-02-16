@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 /// A wrapper around a `Write` implementation that tracks the number of bytes written.
 /// When the byte count exceeds a threshold, further writes are no-ops.
+#[allow(dead_code)]
 pub struct SizeLimitedWriter<W: Write> {
     inner: W,
     bytes_written: Arc<AtomicU64>,
@@ -11,6 +12,8 @@ pub struct SizeLimitedWriter<W: Write> {
     limit_exceeded: bool,
 }
 
+
+#[allow(dead_code)]
 impl<W: Write> SizeLimitedWriter<W> {
     pub fn new(inner: W, max_bytes: u64) -> Self {
         Self {

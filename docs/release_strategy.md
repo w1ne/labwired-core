@@ -1,13 +1,11 @@
 # LabWired Release & Merging Strategy
 
-## 1. Branching Model: Gitflow
-We follow the **Gitflow** branching strategy to manage releases and features efficiently. For more detailed rules and workflows, see the [Git Flow Guide](./development/git_flow.md).
-- **`main`**: The production-ready state. Only merge from `release/*` or `hotfix/*`. Tags are created here.
-- **`develop`**: The integration branch for the next release. Features merge here.
-- **`feature/*`**: Individual work items. Created from `develop`, merged back to `develop`.
+## 1. Branching Model: Trunk-Based Development
+We use **trunk-based development** on the `main` branch with short-lived feature branches.
+- **`main`**: The primary development branch. All work happens here via feature branches and PRs. Tags are created here for releases.
+- **`feature/*`**: Short-lived branches for individual work items. Created from `main`, merged back to `main` via PR.
     - Naming convention: `feature/short-description` or `feature/issue-id-description`.
-- **`release/*`**: Preparation for a new production release. Created from `develop`, merged to `main` AND `develop`.
-- **`hotfix/*`**: Critical bug fixes for production. Created from `main`, merged to `main` AND `develop`.
+- **`hotfix/*`**: Critical bug fixes. Created from `main`, merged back to `main` via PR.
 
 ### Merging Rules
 - **Pull Requests (PRs)** are mandatory for all merges.
@@ -16,7 +14,7 @@ We follow the **Gitflow** branching strategy to manage releases and features eff
 - **History**: Use "Squash and Merge" for feature branches to keep history clean. Use "Merge Commit" for releases to preserve the valid history.
 
 ## 2. Quality Gates
-Every PR and commit to `develop`/`main` must pass the following automated gates. **Developers MUST run these locally before opening a PR.**
+Every PR and commit to `main` must pass the following automated gates. **Developers MUST run these locally before opening a PR.**
 
 ### Automated Checks (CI)
 | Check | Command | Failure Condition |
@@ -63,7 +61,7 @@ Fixes: (Optional)
 > - Comprehensive test suites for all M-sequence types
 
 ### 3.3. Steps to Release
-1.  **Freeze**: Create a `release/vX.Y.Z` branch from `develop`.
+1.  **Prepare**: Create a release preparation branch from `main` (optional, can also work directly on `main`).
 2.  **Bump**: Update version numbers in `Cargo.toml` (workspace and crates).
 3.  **Changelog**: Update `CHANGELOG.md` with features and fixes.
 4.  **Verify**: Run the full regression suite, lints, and formatting check locally:
@@ -72,12 +70,11 @@ Fixes: (Optional)
     - Lints: `cargo clippy --workspace --exclude firmware -- -D warnings`
     - Format: `cargo fmt --all -- --check`
 5.  **Draft Release**: Create a GitHub Release draft using the **Verbatim** format above.
-6.  **Merge**:
-    - Merge `release/vX.Y.Z` into `main`.
+6.  **Merge & Tag**:
+    - Merge changes to `main` via PR.
     - Tag `main` with `vX.Y.Z`.
-    - Merge `release/vX.Y.Z` back into `develop`.
 7.  **Publish**:
-    -   Merge `release/vX.Y.Z` into `main` and push the `vX.Y.Z` tag.
+    -   Push the `vX.Y.Z` tag to trigger release workflows.
     -   Ensure CI validation workflows are green (`.github/workflows/core-ci.yml` and `.github/workflows/vscode-ci.yml`).
     -   Publish release artifacts (CLI binaries, docs, and extension package) using the current manual publishing process.
     -   If/when a dedicated release workflow is added, document it here and make it part of the required gates.

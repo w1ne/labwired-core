@@ -28,11 +28,12 @@ pub struct ListChipsArgs {
     pub format: String,
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 enum Severity {
     Error,
     Warning,
+    #[allow(dead_code)]
     Info,
 }
 
