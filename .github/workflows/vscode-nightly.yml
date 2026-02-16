@@ -49,7 +49,7 @@ jobs:
 
       - name: Run Tests (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum bash -lc 'cd vscode && ELECTRON_RUN_AS_NODE= npm test'
+        run: xvfb-run --auto-servernum bash -lc 'ELECTRON_RUN_AS_NODE= npm test'
 
       - name: Run Tests (Non-Linux)
         if: runner.os != 'Linux'
