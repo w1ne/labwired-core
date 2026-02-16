@@ -1,0 +1,10 @@
+# LabWired - NUCLEO-H563ZI IO smoke test (FIXED PATHS)
+schema_version: "1.0"
+inputs:
+  firmware: "/home/andrii/Projects/labwired/core/target/thumbv7m-none-eabi/release/firmware-h563-io-demo"
+  system: "/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/system.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "H563-IO"
+  - expected_stop_reason: max_steps

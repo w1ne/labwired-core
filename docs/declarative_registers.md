@@ -1,13 +1,10 @@
-# Declarative Register Maps
+# Declarative Register Definitions
 
-One of LabWired's core goals is to break the "peripheral modeling bottleneck." Instead of writing manual Rust code for every peripheral, LabWired uses declarative YAML specifications to define register maps and behaviors.
+LabWired uses declarative YAML specifications to define the register interface of peripherals. This system decouples the hardware description from the implementation logic, ensuring consistent behavior across all simulated devices.
 
-> [!NOTE]
-> This feature is fully implemented as of v0.11.0.
+## 1. Specification Schema
 
-## YAML Schema
-
-The schema allows defining registers, their bitfields, and side effects (e.g., clear-on-read):
+The schema defines the register map, access permissions, and side-effects.
 
 ```yaml
 peripheral: "SPI"
@@ -22,9 +19,7 @@ registers:
       - name: "SPE"
         bit_range: [6, 6]
         description: "SPI Enable"
-      - name: "MSTR"
-        bit_range: [2, 2]
-        description: "Master Selection"
+        access: "R/W"
 
   - id: "DR"
     address_offset: 0x0C
@@ -35,18 +30,22 @@ registers:
       on_write: "start_tx"
 ```
 
-## Architecture
+### Key Components
+- **id**: Unique identifier for the register.
+- **address_offset**: Byte offset from the peripheral base address.
+- **access**: Access permissions (`R`, `W`, `R/W`). Violations trigger a BusFault.
+- **side_effects**: Hooks that invoke custom Rust logic when the register is accessed.
 
-1. **Parser**: The `labwired-config` crate reads these YAML files into a structured `PeripheralDescriptor` IR.
-2. **Generic Peripheral**: A implementation of the `Peripheral` trait in `labwired-core` (`GenericPeripheral`) that uses the descriptor to manage register access.
-3. **Logic Hooks**: Support for attaching custom Rust logic (e.g., "start_tx") to specific register offsets defined in the YAML via `SideEffects`.
+## 2. Implementation Architecture
 
-## Benefits
+The declarative system consists of three phases:
 
-- **Consistency**: All peripherals share the same basic MMIO logic (matching addresses, bit masking).
-- **Correctness**: Reset values and access permissions are enforced by the generic engine.
-- **Speed**: New peripherals can be "modeled" in minutes by copying data from a silicon vendor's SVD file.
+1.  **Parsing**: The `labwired-config` crate deserializes the YAML into a `PeripheralDescriptor` intermediate representation (IR).
+2.  **Runtime**: The `GenericPeripheral` implementation in `labwired-core` uses this descriptor to serve `read()` and `write()` requests. It handles bounds checking, access permissions, and bit masking automatically.
+3.  **Hooks**: The `GenericPeripheral` delegates to a `HookHandler` trait when a side-effect (e.g., `on_write: "start_tx"`) is triggered.
 
-## Getting Started
+## 3. Workflow
 
-See the [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for a step-by-step guide on creating your first declarative peripheral.
+1.  **Generation**: Use `svd-to-yaml` to generate the initial descriptor from vendor SVD files.
+2.  **Refinement**: Manually add `side_effects` to registers that require custom logic (e.g., triggering a state machine transition).
+3.  **Implementation**: Implement the corresponding hook functions in Rust.

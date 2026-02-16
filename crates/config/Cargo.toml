@@ -19,3 +19,4 @@ anyhow.workspace = true
 thiserror.workspace = true
 labwired-ir = { path = "../ir" }
 serde_json.workspace = true
+tracing.workspace = true

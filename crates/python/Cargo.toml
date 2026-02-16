@@ -1,0 +1,17 @@
+[package]
+name = "labwired-python"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "labwired"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+labwired-core = { path = "../core" }
+labwired-loader = { path = "../loader" }
+labwired-config = { path = "../config" }
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

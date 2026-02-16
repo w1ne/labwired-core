@@ -1,9 +1,6 @@
-use labwired_core::cpu::CortexM;
-use labwired_core::{Bus, Cpu, DebugControl, Machine};
+use labwired_core::{DebugControl, Machine};
 use labwired_dap::server::DapServer;
 use serde_json::json;
-use std::io::{BufRead, BufReader, Write};
-use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_dap_evaluate_register() {

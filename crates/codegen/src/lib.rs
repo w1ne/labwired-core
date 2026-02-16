@@ -196,8 +196,10 @@ mod tests {
                         description: Some("Word length".to_string()),
                     },
                 ],
+                side_effects: None,
             }],
             interrupts: vec![],
+            timing: vec![],
         };
 
         let result = PeripheralGenerator::generate(&peripheral).unwrap();
@@ -248,8 +250,10 @@ mod tests {
                         description: None,
                     },
                 ],
+                side_effects: None,
             }],
             interrupts: vec![],
+            timing: vec![],
         };
 
         let result = PeripheralGenerator::generate(&peripheral).unwrap();
@@ -295,8 +299,10 @@ mod tests {
                         description: None,
                     },
                 ],
+                side_effects: None,
             }],
             interrupts: vec![],
+            timing: vec![],
         };
 
         let result = PeripheralGenerator::generate(&peripheral).unwrap();
@@ -321,8 +327,10 @@ mod tests {
                 reset_value: 0,
                 description: None,
                 fields: vec![],
+                side_effects: None,
             }],
             interrupts: vec![],
+            timing: vec![],
         };
 
         let result = PeripheralGenerator::generate(&peripheral).unwrap();

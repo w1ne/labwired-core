@@ -2,7 +2,7 @@
 // These tests verify the core stepping behavior that step-out and step-back rely on
 
 use labwired_core::cpu::CortexM;
-use labwired_core::{Bus, Cpu, DebugControl, Machine};
+use labwired_core::{DebugControl, Machine};
 
 /// Helper to create a simple test machine with ARM code in RAM
 fn create_test_machine(code: &[u16]) -> Machine<CortexM> {
@@ -77,11 +77,11 @@ fn test_multiple_steps() {
 #[test]
 fn test_memory_write_and_read() {
     // Test that memory writes work correctly
-    // MOVS R0, #0x20      -> 0x2014 (R0 = 0x20)
+    // MOVS R0, #0x20      -> 0x2020 (R0 = 0x20)
     // LSLS R0, R0, #24    -> 0x0600 (R0 = 0x20000000)
     // MOVS R1, #0x42      -> 0x2142 (R1 = 0x42)
     // STRB R1, [R0]       -> 0x7001 (Store byte R1 to [R0])
-    let code = vec![0x2014, 0x0600, 0x2142, 0x7001];
+    let code = vec![0x2020, 0x0600, 0x2142, 0x7001];
 
     let mut machine = create_test_machine(&code);
 
@@ -91,11 +91,11 @@ fn test_memory_write_and_read() {
     machine.step_single().unwrap(); // MOVS R1, #0x42
 
     // Verify R0 and R1 are set correctly
-    // 0x20 << 24 = 0x14000000 (not 0x20000000)
+    // 0x20 << 24 = 0x20000000
     assert_eq!(
         machine.read_core_reg(0),
-        0x14000000,
-        "R0 should be 0x14000000"
+        0x20000000,
+        "R0 should be 0x20000000"
     );
     assert_eq!(machine.read_core_reg(1), 0x42, "R1 should be 0x42");
 
@@ -115,14 +115,14 @@ fn test_memory_write_and_read() {
 #[test]
 fn test_stack_operations() {
     // Test PUSH and POP operations for step-out logic
-    // MOVS R0, #0x20      -> 0x2014
+    // MOVS R0, #0x20      -> 0x2020
     // LSLS R0, R0, #24    -> 0x0600 (R0 = 0x20000000)
-    // ADDS R0, #0xFF      -> 0x30FF (R0 = 0x200000FF - initial SP)
+    // ADDS R0, #0xFC      -> 0x30FC (R0 = 0x200000FC - initial aligned SP)
     // MOV SP, R0          -> 0x4685 (SP = R0)
     // MOVS R1, #0x42      -> 0x2142
     // PUSH {R1}           -> 0xB402
     // POP {R2}            -> 0xBC04
-    let code = vec![0x2014, 0x0600, 0x30FF, 0x4685, 0x2142, 0xB402, 0xBC04];
+    let code = vec![0x2020, 0x0600, 0x30FC, 0x4685, 0x2142, 0xB402, 0xBC04];
 
     let mut machine = create_test_machine(&code);
 
@@ -133,10 +133,10 @@ fn test_stack_operations() {
     machine.step_single().unwrap(); // MOV SP, R0
 
     let sp_initial = machine.read_core_reg(13);
-    // 0x20 << 24 + 0xFF = 0x140000FF
+    // 0x20 << 24 + 0xFC = 0x200000FC
     assert_eq!(
-        sp_initial, 0x140000FF,
-        "SP should be initialized to 0x140000FF"
+        sp_initial, 0x200000FC,
+        "SP should be initialized to 0x200000FC"
     );
 
     // Set R1 and push it
@@ -162,14 +162,14 @@ fn test_stack_operations() {
 fn test_function_call_stack_depth() {
     // Simulate a simple function call pattern
     // This tests the foundation for step-out logic
-    // MOVS R0, #0x20      -> 0x2014
+    // MOVS R0, #0x20      -> 0x2020
     // LSLS R0, R0, #24    -> 0x0600
-    // ADDS R0, #0xFF      -> 0x30FF
+    // ADDS R0, #0xFC      -> 0x30FC
     // MOV SP, R0          -> 0x4685 (Set up SP)
     // PUSH {LR}           -> 0xB500 (Function entry)
     // MOVS R0, #1         -> 0x2001 (Function body)
     // POP {PC}            -> 0xBD00 (Function return)
-    let code = vec![0x2014, 0x0600, 0x30FF, 0x4685, 0xB500, 0x2001, 0xBD00];
+    let code = vec![0x2020, 0x0600, 0x30FC, 0x4685, 0xB500, 0x2001, 0xBD00];
 
     let mut machine = create_test_machine(&code);
 

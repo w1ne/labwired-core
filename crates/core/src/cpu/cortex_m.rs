@@ -34,6 +34,7 @@ pub struct CortexM {
     pub pending_exceptions: u32, // Bitmask
     pub primask: bool,           // Interrupt mask (true = disabled)
     pub vtor: Arc<AtomicU32>,    // Shared Vector Table Offset Register
+    pub it_state: u8,            // Thumb IT block state
 }
 
 impl CortexM {
@@ -96,6 +97,25 @@ impl CortexM {
             15 => self.pc = val,
             16 => self.xpsr = val,
             _ => {}
+        }
+    }
+
+    fn expand_imm_thumb(imm12: u32) -> u32 {
+        let i_imm3 = (imm12 >> 8) & 0xF;
+        let abcdefgh = imm12 & 0xFF;
+
+        if (i_imm3 & 0xC) == 0 {
+            match i_imm3 {
+                0 => abcdefgh,
+                1 => (abcdefgh << 16) | abcdefgh,
+                2 => (abcdefgh << 24) | (abcdefgh << 8),
+                3 => (abcdefgh << 24) | (abcdefgh << 16) | (abcdefgh << 8) | abcdefgh,
+                _ => abcdefgh,
+            }
+        } else {
+            let unrotated = 0x80 | abcdefgh;
+            let rotation = (imm12 >> 7) & 0x1F;
+            unrotated.rotate_right(rotation)
         }
     }
 
@@ -322,24 +342,38 @@ impl Cpu for CortexM {
 
         // Decode
         let instruction = decode_thumb_16(opcode);
-
-        let count = STEP_COUNT.fetch_add(1, Ordering::SeqCst);
-        if count.is_multiple_of(100000) {
-            tracing::info!("CPU STEP {}: PC={:#x}", count, self.pc);
-        }
-
-        tracing::debug!(
-            "PC={:#x}, Opcode={:#04x}, Instr={:?}",
-            self.pc,
-            opcode,
-            instruction
-        );
-
-        // Execute
-        let mut pc_increment = 2; // Default for 16-bit instruction
+        let mut pc_increment = 2;
         let mut cycles = 1;
 
-        match instruction {
+        let mut execute = true;
+        let mut it_block_instruction = false;
+
+        if self.it_state != 0 {
+            it_block_instruction = true;
+            let cond = self.it_state >> 4;
+            execute = self.check_condition(cond);
+        }
+
+        if let Instruction::Prefix32(_) = instruction {
+            pc_increment = 4;
+            cycles = 2; // Default for 32-bit
+        }
+
+        if execute {
+            let count = STEP_COUNT.fetch_add(1, Ordering::SeqCst);
+            if count.is_multiple_of(100000) {
+                tracing::info!("CPU STEP {}: PC={:#x}", count, self.pc);
+            }
+
+            tracing::debug!(
+                "PC={:#x}, Opcode={:#04x}, Instr={:?}",
+                self.pc,
+                opcode,
+                instruction
+            );
+
+            // Execute
+            match instruction {
             Instruction::Bfi { .. }
             | Instruction::Bfc { .. }
             | Instruction::Sbfx { .. }
@@ -350,8 +384,12 @@ impl Cpu for CortexM {
             | Instruction::Rev16 { .. }
             | Instruction::RevSh { .. }
             | Instruction::DataProc32 { .. }
+            | Instruction::DataProcImm32 { .. }
+            | Instruction::ShiftReg32 { .. }
             | Instruction::Movw { .. }
-            | Instruction::Movt { .. } => {
+            | Instruction::Movt { .. }
+            | Instruction::LdrImm32 { .. }
+            | Instruction::StrImm32 { .. } => {
                 unreachable!(
                     "32-bit instruction {:?} should be handled via Prefix32",
                     instruction
@@ -428,6 +466,16 @@ impl Cpu for CortexM {
                 let sp = self.read_reg(13).wrapping_sub(imm as u32);
                 self.write_reg(13, sp);
             }
+
+            Instruction::Uxtb { rd, rm } => {
+                let val = self.read_reg(rm);
+                self.write_reg(rd, val & 0xFF);
+            }
+
+            Instruction::It { cond, mask } => {
+                self.it_state = (cond << 4) | mask;
+                it_block_instruction = false; // The IT instruction itself doesn't count towards the block's instructions
+            }
             Instruction::AddRegHigh { rd, rm } => {
                 let val1 = self.read_reg(rd);
                 let val2 = self.read_reg(rm);
@@ -451,6 +499,11 @@ impl Cpu for CortexM {
             // Logic
             Instruction::And { rd, rm } => {
                 let res = self.read_reg(rd) & self.read_reg(rm);
+                self.write_reg(rd, res);
+                self.update_nz(res);
+            }
+            Instruction::Bic { rd, rm } => {
+                let res = self.read_reg(rd) & !self.read_reg(rm);
                 self.write_reg(rd, res);
                 self.update_nz(res);
             }
@@ -514,8 +567,6 @@ impl Cpu for CortexM {
                 }) as u32;
                 self.write_reg(rd, res);
                 self.update_nz(res);
-                self.write_reg(rd, res);
-                self.update_nz(res);
             }
             Instruction::AsrReg { rd, rm } => {
                 let val = self.read_reg(rd) as i32;
@@ -530,6 +581,92 @@ impl Cpu for CortexM {
                 self.write_reg(rd, res);
                 self.update_nz(res);
             }
+            Instruction::Adc { rd, rm } => {
+                let op1 = self.read_reg(rd);
+                let op2 = self.read_reg(rm);
+                let carry_in = (self.xpsr >> 29) & 1;
+                let (res, c, v) = adc_with_flags(op1, op2, carry_in);
+                self.write_reg(rd, res);
+                self.update_nzcv(res, c, v);
+            }
+            Instruction::Sbc { rd, rm } => {
+                let op1 = self.read_reg(rd);
+                let op2 = self.read_reg(rm);
+                let carry_in = (self.xpsr >> 29) & 1;
+                let (res, c, v) = sbc_with_flags(op1, op2, carry_in);
+                self.write_reg(rd, res);
+                self.update_nzcv(res, c, v);
+            }
+            Instruction::Ror { rd, rm } => {
+                let val = self.read_reg(rd);
+                let shift = self.read_reg(rm) & 0xFF;
+                let res = if shift == 0 {
+                    val
+                } else {
+                    val.rotate_right(shift % 32)
+                };
+                self.write_reg(rd, res);
+                self.update_nz(res);
+            }
+            Instruction::Tst { rn, rm } => {
+                let res = self.read_reg(rn) & self.read_reg(rm);
+                self.update_nz(res);
+            }
+            Instruction::Cmn { rn, rm } => {
+                let op1 = self.read_reg(rn);
+                let op2 = self.read_reg(rm);
+                let (res, c, v) = add_with_flags(op1, op2);
+                self.update_nzcv(res, c, v);
+            }
+            Instruction::ShiftReg32 {
+                rd,
+                rn,
+                rm,
+                shift_type,
+            } => {
+                let value = self.read_reg(rn);
+                let shift = self.read_reg(rm) & 0xFF;
+                let result = match shift_type {
+                    0 => {
+                        if shift >= 32 {
+                            0
+                        } else {
+                            value.wrapping_shl(shift)
+                        }
+                    }
+                    1 => {
+                        if shift == 0 {
+                            value
+                        } else if shift >= 32 {
+                            0
+                        } else {
+                            value.wrapping_shr(shift)
+                        }
+                    }
+                    2 => {
+                        if shift == 0 {
+                            value
+                        } else if shift >= 32 {
+                            if (value & 0x8000_0000) != 0 {
+                                0xFFFF_FFFF
+                            } else {
+                                0
+                            }
+                        } else {
+                            ((value as i32) >> shift) as u32
+                        }
+                    }
+                    3 => {
+                        if shift == 0 {
+                            value
+                        } else {
+                            value.rotate_right(shift % 32)
+                        }
+                    }
+                    _ => value,
+                };
+                self.write_reg(rd, result);
+            }
             Instruction::Rsbs { rd, rn } => {
                 let op1 = self.read_reg(rn);
                 let (res, c, v) = sub_with_flags(0, op1);
@@ -543,8 +680,11 @@ impl Cpu for CortexM {
                 let addr = base.wrapping_add(imm as u32);
                 if let Ok(val) = bus.read_u32(addr as u64) {
                     self.write_reg(rt, val);
+                    if val == 0x021d0000 {
+                         tracing::info!("LDR Literal/Imm SUSPICIOUS: R{} loaded with {:#x} from {:#x} (PC={:#x})", rt, val, addr, self.pc);
+                    }
                 } else {
-                    tracing::error!("Bus Read Fault at {:#x}", addr);
+                    tracing::error!("Bus Read Fault at {:#x} (PC={:#x}, Opcode={:#04x})", addr, self.pc, opcode);
                 }
             }
             Instruction::StrImm { rt, rn, imm } => {
@@ -552,7 +692,7 @@ impl Cpu for CortexM {
                 let addr = base.wrapping_add(imm as u32);
                 let val = self.read_reg(rt);
                 if bus.write_u32(addr as u64, val).is_err() {
-                    tracing::error!("Bus Write Fault at {:#x}", addr);
+                    tracing::error!("Bus Write Fault at {:#x} (PC={:#x}, Opcode={:#04x})", addr, self.pc, opcode);
                 }
             }
             Instruction::LdrReg { rt, rn, rm } => {
@@ -570,6 +710,9 @@ impl Cpu for CortexM {
                 let addr = pc_val.wrapping_add(imm as u32);
                 if let Ok(val) = bus.read_u32(addr as u64) {
                     self.write_reg(rt, val);
+                    if val == 0x021d0000 {
+                         tracing::info!("LDR Lit SUSPICIOUS: R{} loaded with {:#x} from {:#x} (PC={:#x})", rt, val, addr, self.pc);
+                    }
                 } else {
                     tracing::error!("Bus Read Fault (LdrLit) at {:#x}", addr);
                 }
@@ -579,6 +722,9 @@ impl Cpu for CortexM {
                 let addr = self.sp.wrapping_add(imm as u32);
                 if let Ok(val) = bus.read_u32(addr as u64) {
                     self.write_reg(rt, val);
+                    if val == 0x021d0000 {
+                         tracing::info!("LDR Sp SUSPICIOUS: R{} loaded with {:#x} from {:#x} (PC={:#x})", rt, val, addr, self.pc);
+                    }
                 } else {
                     tracing::error!("Bus Read Fault (LdrSp) at {:#x}", addr);
                 }
@@ -599,10 +745,6 @@ impl Cpu for CortexM {
                 let res = pc_val.wrapping_add(imm as u32);
                 self.write_reg(rd, res);
             }
-            Instruction::Uxtb { rd, rm } => {
-                let val = self.read_reg(rm) & 0xFF;
-                self.write_reg(rd, val);
-            }
 
             // Memory Operations (Byte)
             Instruction::LdrbImm { rt, rn, imm } => {
@@ -611,7 +753,15 @@ impl Cpu for CortexM {
                 if let Ok(val) = bus.read_u8(addr as u64) {
                     self.write_reg(rt, val as u32);
                 } else {
-                    tracing::error!("Bus Read Fault (LDRB) at {:#x}", addr);
+                    tracing::error!("Bus Read Fault (LDRB) at {:#x} (PC={:#x}, Opcode={:#04x})", addr, self.pc, opcode);
+                }
+            }
+            Instruction::LdrbReg { rt, rn, rm } => {
+                let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                if let Ok(val) = bus.read_u8(addr as u64) {
+                    self.write_reg(rt, val as u32);
+                } else {
+                    tracing::error!("Bus Read Fault (LDRB reg) at {:#x}", addr);
                 }
             }
             Instruction::StrbImm { rt, rn, imm } => {
@@ -619,7 +769,7 @@ impl Cpu for CortexM {
                 let addr = base.wrapping_add(imm as u32);
                 let val = (self.read_reg(rt) & 0xFF) as u8;
                 if bus.write_u8(addr as u64, val).is_err() {
-                    tracing::error!("Bus Write Fault (STRB) at {:#x}", addr);
+                    tracing::error!("Bus Write Fault (STRB) at {:#x} (PC={:#x}, Opcode={:#04x})", addr, self.pc, opcode);
                 }
             }
             Instruction::LdrhImm { rt, rn, imm } => {
@@ -784,8 +934,6 @@ impl Cpu for CortexM {
                     // Use the new modular decoder
                     let instruction32 = crate::decoder::arm::decode_thumb_32(h1, h2);
 
-                    tracing::debug!(" decoded 32-bit: {:?}", instruction32);
-
                     match instruction32 {
                         Instruction::Bfi { rd, rn, lsb, width } => {
                             let src = self.read_reg(rn);
@@ -885,23 +1033,18 @@ impl Cpu for CortexM {
                             shift_type,
                             set_flags,
                         } => {
-                            let op1 = self.read_reg(rn);
                             let mut op2 = self.read_reg(rm);
 
                             // Apply shift to op2
                             match shift_type {
-                                0 => op2 <<= imm5,                                  // LSL
-                                1 => op2 = if imm5 == 0 { 0 } else { op2 >> imm5 }, // LSR
+                                0 => op2 = op2.wrapping_shl(imm5 as u32), // LSL
+                                1 => op2 = if imm5 == 0 { 0 } else { op2.wrapping_shr(imm5 as u32) }, // LSR
                                 2 => {
                                     // ASR
                                     op2 = if imm5 == 0 {
-                                        if (op2 & 0x80000000) != 0 {
-                                            0xFFFFFFFF
-                                        } else {
-                                            0
-                                        }
+                                        if (op2 & 0x80000000) != 0 { 0xFFFFFFFF } else { 0 }
                                     } else {
-                                        ((op2 as i32) >> imm5) as u32
+                                        ((op2 as i32) >> (imm5 as u32)) as u32
                                     };
                                 }
                                 3 => {
@@ -912,46 +1055,166 @@ impl Cpu for CortexM {
                                 _ => {}
                             }
 
-                            let mut result = 0u32;
-                            match op {
-                                0x0 => {
-                                    result = op1 & op2;
-                                    self.write_reg(rd, result);
-                                } // AND
-                                0x1 => {
-                                    result = op1 & !op2;
-                                    self.write_reg(rd, result);
-                                } // BIC
-                                0x2 => {
-                                    // ORR / MOV
-                                    result = if rn == 0xF { op2 } else { op1 | op2 };
-                                    self.write_reg(rd, result);
-                                }
-                                0x3 => {
-                                    // ORN / MVN
-                                    result = if rn == 0xF { !op2 } else { op1 | !op2 };
-                                    self.write_reg(rd, result);
-                                }
-                                0x4 => {
-                                    result = op1 ^ op2;
-                                    self.write_reg(rd, result);
-                                } // EOR
-                                0x8 => {
-                                    result = op1.wrapping_add(op2);
-                                    self.write_reg(rd, result);
-                                } // ADD
-                                0xD => {
-                                    result = op1.wrapping_sub(op2);
-                                    self.write_reg(rd, result);
-                                } // SUB
+                            let op1 = self.read_reg(rn);
+                            let result = match op {
+                                0x0 => op1 & op2,   // AND
+                                0x1 => op1 & !op2,  // BIC
+                                0x2 => if rn == 0xF { op2 } else { op1 | op2 }, // ORR / MOV
+                                0x3 => if rn == 0xF { !op2 } else { op1 | !op2 }, // ORN / MVN
+                                0x4 => op1 ^ op2,   // EOR
+                                0x8 => op1.wrapping_add(op2), // ADD
+                                0xD => op1.wrapping_sub(op2), // SUB
                                 _ => {
                                     tracing::warn!("Unknown DataProc32 op {:#x}", op);
+                                    op2
                                 }
-                            }
+                            };
 
+                            if rd != 15 {
+                                self.write_reg(rd, result);
+                            }
                             if set_flags {
                                 self.update_nz(result);
                             }
+                            pc_increment = 4;
+                        }
+                        Instruction::DataProcImm32 {
+                            op,
+                            rn,
+                            rd,
+                            imm12,
+                            set_flags,
+                        } => {
+                            let imm = Self::expand_imm_thumb(imm12);
+                            let op1 = self.read_reg(rn);
+
+                            let result = match op {
+                                0x0 => op1 & imm,  // AND
+                                0x1 => op1 & !imm, // BIC
+                                0x2 => {
+                                    if rn == 0xF {
+                                        imm
+                                    } else {
+                                        op1 | imm
+                                    }
+                                } // ORR / MOV
+                                0x3 => {
+                                    if rn == 0xF {
+                                        !imm
+                                    } else {
+                                        op1 | !imm
+                                    }
+                                } // ORN / MVN
+                                0x4 => op1 ^ imm,  // EOR
+                                0x8 => op1.wrapping_add(imm), // ADD
+                                0xA => { // ADC
+                                    let c = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
+                                    op1.wrapping_add(imm).wrapping_add(c)
+                                }
+                                0xB => { // SBC
+                                    let c = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
+                                    op1.wrapping_sub(imm).wrapping_sub(1 - c)
+                                }
+                                0xD => op1.wrapping_sub(imm), // SUB
+                                0xE => imm.wrapping_sub(op1), // RSB
+                                _ => {
+                                    tracing::warn!("Unknown DataProcImm32 op {:#x}", op);
+                                    imm
+                                }
+                            };
+
+                            if rd != 15 {
+                                self.write_reg(rd, result);
+                            }
+                            if set_flags {
+                                self.update_nz(result);
+                            }
+                            pc_increment = 4;
+                        }
+                        Instruction::Movw { rd, imm } => {
+                            self.write_reg(rd, imm as u32);
+                            pc_increment = 4;
+                        }
+                        Instruction::Movt { rd, imm } => {
+                            let old_val = self.read_reg(rd);
+                            let new_val = (old_val & 0x0000FFFF) | ((imm as u32) << 16);
+                            self.write_reg(rd, new_val);
+                            pc_increment = 4;
+                        }
+                        Instruction::Bl { offset } => {
+                            // In Thumb-2, BL always sets bit 0 of LR to 1 (Thumb state)
+                            self.lr = (self.pc.wrapping_add(4)) | 1;
+                            self.pc = (self.pc as i32 + 4 + offset) as u32;
+                            pc_increment = 0;
+                        }
+                        Instruction::LdrImm32 { rt, rn, imm12 } => {
+                            let base = self.read_reg(rn);
+                            let addr = base.wrapping_add(imm12 as u32);
+                            if let Ok(val) = bus.read_u32(addr as u64) {
+                                self.write_reg(rt, val);
+                            }
+                            pc_increment = 4;
+                        }
+                        Instruction::StrImm32 { rt, rn, imm12 } => {
+                            let base = self.read_reg(rn);
+                            let addr = base.wrapping_add(imm12 as u32);
+                            let val = self.read_reg(rt);
+                            let _ = bus.write_u32(addr as u64, val);
+                            pc_increment = 4;
+                        }
+                        Instruction::Uxtb { rd, rm } => {
+                            let val = self.read_reg(rm);
+                            self.write_reg(rd, val & 0xFF);
+                            pc_increment = 4;
+                        }
+                        Instruction::ShiftReg32 {
+                            rd,
+                            rn,
+                            rm,
+                            shift_type,
+                        } => {
+                            let value = self.read_reg(rn);
+                            let shift = self.read_reg(rm) & 0xFF;
+                            let result = match shift_type {
+                                0 => {
+                                    if shift >= 32 {
+                                        0
+                                    } else {
+                                        value.wrapping_shl(shift)
+                                    }
+                                }
+                                1 => {
+                                    if shift == 0 {
+                                        value
+                                    } else if shift >= 32 {
+                                        0
+                                    } else {
+                                        value.wrapping_shr(shift)
+                                    }
+                                }
+                                2 => {
+                                    if shift == 0 {
+                                        value
+                                    } else if shift >= 32 {
+                                        if (value & 0x8000_0000) != 0 {
+                                            0xFFFF_FFFF
+                                        } else {
+                                            0
+                                        }
+                                    } else {
+                                        ((value as i32) >> shift) as u32
+                                    }
+                                }
+                                3 => {
+                                    if shift == 0 {
+                                        value
+                                    } else {
+                                        value.rotate_right(shift % 32)
+                                    }
+                                }
+                                _ => value,
+                            };
+                            self.write_reg(rd, result);
                             pc_increment = 4;
                         }
                         _ => {
@@ -1319,9 +1582,21 @@ impl Cpu for CortexM {
                 }
             }
 
-            Instruction::Unknown(op) => {
-                tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
-                pc_increment = 2; // Skip 16-bit
+                Instruction::Unknown(op) => {
+                    tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
+                    pc_increment = 2; // Skip 16-bit
+                }
+            }
+        }
+
+        if it_block_instruction && self.it_state != 0 {
+            // ITSTATEUpdate()
+            if (self.it_state & 0x7) == 0 {
+                self.it_state = 0;
+            } else {
+                let cond = self.it_state & 0xF0;
+                let mask = (self.it_state & 0x07) << 1;
+                self.it_state = cond | mask;
             }
         }
 
@@ -1333,26 +1608,6 @@ impl Cpu for CortexM {
 
         Ok(())
     }
-}
-
-fn add_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
-    let (res, overflow1) = op1.overflowing_add(op2);
-    let carry = overflow1;
-    let neg_op1 = (op1 as i32) < 0;
-    let neg_op2 = (op2 as i32) < 0;
-    let neg_res = (res as i32) < 0;
-    let overflow = (neg_op1 == neg_op2) && (neg_res != neg_op1);
-    (res, carry, overflow)
-}
-
-fn sub_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
-    let (res, borrow) = op1.overflowing_sub(op2);
-    let carry = !borrow;
-    let neg_op1 = (op1 as i32) < 0;
-    let neg_op2 = (op2 as i32) < 0;
-    let neg_res = (res as i32) < 0;
-    let overflow = (neg_op1 != neg_op2) && (neg_res != neg_op1);
-    (res, carry, overflow)
 }
 
 // Thumb expand immediate - implements ARM's modified immediate constant expansion
@@ -1379,4 +1634,61 @@ fn thumb_expand_imm(imm12: u32) -> u32 {
         let n = (i << 4) | (imm3 << 1) | (imm8 >> 7);
         val.rotate_right(n)
     }
+}
+
+fn add_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
+    let (res, overflow1) = op1.overflowing_add(op2);
+    let carry = overflow1;
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    let overflow = (neg_op1 == neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
+}
+
+fn adc_with_flags(op1: u32, op2: u32, carry_in: u32) -> (u32, bool, bool) {
+    let (res1, c1) = op1.overflowing_add(op2);
+    let (res, c2) = res1.overflowing_add(carry_in);
+    let carry = c1 || c2;
+    
+    // Overflow: operands have same sign AND result has different sign
+    // Effectively (op1 + op2 + carry) overflowed signed range.
+    // Approximate check:
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    // Overflow if inputs same sign, output different
+    // Note: Carry_in 0 or 1 usually doesn't change sign logic much, but rigorous check:
+    // Sign of (op1 + op2 + carry). It's simpler to rely on basic sign logic or specific algo.
+    // ARM ref: Overflow = (op1<31> == op2<31>) && (res<31> != op1<31>)
+    // Wait, carry_in effectively adds small value.
+    // If op1=MAX, op2=1, c=0 -> overflow pos to neg.
+    // Standard V flag logic:
+    let overflow = (neg_op1 == neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
+}
+
+fn sub_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
+    let (res, borrow) = op1.overflowing_sub(op2);
+    let carry = !borrow;
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    let overflow = (neg_op1 != neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
+}
+
+fn sbc_with_flags(op1: u32, op2: u32, carry_in: u32) -> (u32, bool, bool) {
+    // SBC: op1 - op2 - NOT(carry) = op1 - op2 - (1 - carry)
+    let borrow_in = 1 - carry_in;
+    let (res1, b1) = op1.overflowing_sub(op2);
+    let (res, b2) = res1.overflowing_sub(borrow_in);
+    let borrow = b1 || b2;
+    let carry = !borrow;
+    
+    let neg_op1 = (op1 as i32) < 0;
+    let neg_op2 = (op2 as i32) < 0;
+    let neg_res = (res as i32) < 0;
+    let overflow = (neg_op1 != neg_op2) && (neg_res != neg_op1);
+    (res, carry, overflow)
 }

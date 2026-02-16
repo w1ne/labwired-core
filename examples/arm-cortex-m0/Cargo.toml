@@ -9,3 +9,5 @@ panic-halt = "0.2.0"
 [[bin]]
 name = "firmware"
 path = "src/main.rs"
+test = false
+bench = false

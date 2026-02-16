@@ -1,0 +1,85 @@
+site_name: LabWired Core
+site_url: https://w1ne.github.io/labwired-core/
+repo_url: https://github.com/w1ne/labwired-core
+repo_name: w1ne/labwired-core
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  
+  - Tutorials:
+    - Running Firmware: getting_started_firmware.md
+    - Simulating Sensors (I2C): examples/i2c_sensor_example.md
+    - Mastering DMA & Interrupts: examples/dma_exti_example.md
+    
+  - How-To Guides:
+    - Board Onboarding: board_onboarding_playbook.md
+    - CI/CD Integration: ci_integration.md
+    - Developing Peripherals: peripheral_development.md
+    - Debugging with VS Code: vscode_debugging.md
+    - Troubleshooting: troubleshooting.md
+    
+  - Reference:
+    - Configuration (YAML): configuration_reference.md
+    - Declarative Registers: declarative_registers.md
+    - CLI Commands: cli_reference.md
+    - Test Script Schema: ci_test_runner.md
+    
+  - Explanation:
+    - Architecture Overview: architecture.md
+    - Debugging Architecture (DAP/GDB): debugging.md
+    - System Design: advanced_peripherals.md
+    - Case Study (STM32): case_study_stm32.md
+
+  - Development:
+    - Git Flow: development/git_flow.md
+    - Release Strategy: release_strategy.md

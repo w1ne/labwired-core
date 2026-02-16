@@ -1,0 +1,29 @@
+# LabWired - NUCLEO-H563ZI Example System Configuration
+name: "nucleo-h563zi-example"
+chip: "../../configs/chips/stm32h563.yaml"
+external_devices: []
+board_io:
+  - id: "led_green_pb0"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led_orange_pf4"
+    kind: "led"
+    peripheral: "gpiof"
+    pin: 4
+    signal: "output"
+    active_high: true
+  - id: "led_red_pg4"
+    kind: "led"
+    peripheral: "gpiog"
+    pin: 4
+    signal: "output"
+    active_high: true
+  - id: "button_blue_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true

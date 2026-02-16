@@ -107,6 +107,24 @@ All templates collect test artifacts including:
 
 These artifacts are automatically uploaded and available in your CI dashboard.
 
+## Unsupported-Instruction Audit Job
+
+For decoder/executor coverage, add a code-driven audit step:
+
+```bash
+./scripts/unsupported_instruction_audit.sh \
+  --firmware target/thumbv7m-none-eabi/release/<firmware-crate> \
+  --system configs/systems/<board>.yaml \
+  --max-steps 200000 \
+  --out-dir out/unsupported-audit/<board> \
+  --fail-on-unsupported
+```
+
+Recommended artifacts:
+
+- `out/unsupported-audit/<board>/report.md`
+- `out/unsupported-audit/<board>/*_summary.tsv`
+
 ## Hardware-in-the-Loop Replacement
 
 ### Before (Physical Hardware)

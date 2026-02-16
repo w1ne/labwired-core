@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Default schema version for YAML configs
+fn default_schema_version() -> String {
+    "1.0".to_string()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Arch {
@@ -40,6 +45,8 @@ pub struct PeripheralConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
     pub name: String,
     pub arch: Arch, // Parsed from string
     pub flash: MemoryRange,
@@ -56,14 +63,49 @@ pub struct ExternalDevice {
     pub config: HashMap<String, serde_yaml::Value>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardIoKind {
+    Led,
+    Button,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardIoSignal {
+    #[default]
+    Output,
+    Input,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BoardIoBinding {
+    pub id: String,
+    pub kind: BoardIoKind,
+    pub peripheral: String,
+    pub pin: u8,
+    #[serde(default)]
+    pub signal: BoardIoSignal,
+    #[serde(default = "default_true")]
+    pub active_high: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SystemManifest {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
     pub name: String,
     pub chip: String, // Reference to chip name or file path
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
     pub external_devices: Vec<ExternalDevice>,
+    #[serde(default)]
+    pub board_io: Vec<BoardIoBinding>,
 }
 
 impl ChipDescriptor {
@@ -239,7 +281,25 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
                             description: f.description,
                         })
                         .collect(),
-                    side_effects: None, // IR doesn't explicitly model side effects yet
+                    side_effects: r.side_effects.map(|se| SideEffectsDescriptor {
+                        read_action: se.read_action.and_then(|s| match s.as_str() {
+                            "clear" => Some(ReadAction::Clear),
+                            "none" => Some(ReadAction::None),
+                            _ => None,
+                        }),
+                        write_action: se.write_action.and_then(|s| match s.as_str() {
+                            "one_to_clear" | "oneToClear" | "w1c" => {
+                                Some(WriteAction::WriteOneToClear)
+                            }
+                            "zero_to_clear" | "zeroToClear" | "w0c" => {
+                                Some(WriteAction::WriteZeroToClear)
+                            }
+                            "none" => Some(WriteAction::None),
+                            _ => None,
+                        }),
+                        on_read: None,
+                        on_write: None,
+                    }),
                 })
                 .collect(),
             interrupts: if interrupts.is_empty() {
@@ -247,7 +307,33 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
             } else {
                 Some(interrupts)
             },
-            timing: None,
+            timing: if ir.timing.is_empty() {
+                None
+            } else {
+                let mut timing = Vec::new();
+                for t in ir.timing {
+                    // Try to convert JSON trigger/action to enums
+                    let trigger: Result<TimingTrigger, _> = serde_json::from_value(t.trigger);
+                    let action: Result<TimingAction, _> = serde_json::from_value(t.action);
+
+                    if let (Ok(trig), Ok(act)) = (trigger, action) {
+                        timing.push(TimingDescriptor {
+                            id: t.id,
+                            trigger: trig,
+                            delay_cycles: t.delay_cycles,
+                            action: act,
+                            interrupt: t.interrupt,
+                        });
+                    } else {
+                        tracing::warn!("Failed to convert IR timing hook '{}' to config", t.id);
+                    }
+                }
+                if timing.is_empty() {
+                    None
+                } else {
+                    Some(timing)
+                }
+            },
         }
     }
 }
@@ -261,6 +347,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
         };
 
         Self {
+            schema_version: default_schema_version(),
             name: ir.name,
             arch,
             flash: MemoryRange {
@@ -313,6 +400,8 @@ pub struct TestLimits {
     pub no_progress_steps: Option<u64>,
     #[serde(default)]
     pub wall_time_ms: Option<u64>,
+    #[serde(default)]
+    pub max_vcd_bytes: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -323,6 +412,7 @@ pub enum StopReason {
     MaxSteps,
     MaxCycles,
     MaxUartBytes,
+    MaxVcdBytes,
     NoProgress,
     WallTime,
     MemoryViolation,
@@ -349,11 +439,27 @@ pub struct StopReasonAssertion {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryValueDetails {
+    pub address: u64,
+    pub expected_value: u64,
+    #[serde(default)]
+    pub mask: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryValueAssertion {
+    pub memory_value: MemoryValueDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
     UartContains(UartContainsAssertion),
     UartRegex(UartRegexAssertion),
     ExpectedStopReason(StopReasonAssertion),
+    MemoryValue(MemoryValueAssertion),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

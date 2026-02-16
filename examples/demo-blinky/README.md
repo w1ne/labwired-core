@@ -1,5 +1,7 @@
 # Demo Blinky - GPIO LED Toggle
 
+> Part of the [LabWired Demos](../../../DEMOS.md) suite.
+
 Simple firmware demonstrating GPIO control on STM32F103.
 
 ## Features

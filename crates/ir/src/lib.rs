@@ -56,6 +56,10 @@ pub struct IrPeripheral {
     /// List of interrupts localized to this peripheral block (if any).
     #[serde(default)]
     pub interrupts: Vec<IrInterrupt>,
+
+    /// Behavioral timing hooks (e.g., "setting bit starts timer").
+    #[serde(default)]
+    pub timing: Vec<IrTiming>,
 }
 
 /// A 32-bit (or similar) storage unit within a peripheral.
@@ -79,8 +83,36 @@ pub struct IrRegister {
     /// The bit-fields contained in this register.
     pub fields: Vec<IrField>,
 
+    /// Hardware side-effects (e.g., clear on read, write-1-to-clear).
+    #[serde(default)]
+    pub side_effects: Option<IrSideEffects>,
+
     /// Optional description.
     pub description: Option<String>,
+}
+
+/// Defines hardware side-effects for a register.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrSideEffects {
+    /// Action taken when the register is read.
+    pub read_action: Option<String>,
+    /// Action taken when the register is written.
+    pub write_action: Option<String>,
+}
+
+/// A behavioral hook that connects a register trigger to a simulation action.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrTiming {
+    /// Unique identifier for the behavior.
+    pub id: String,
+    /// What causes this behavior to trigger.
+    pub trigger: serde_json::Value,
+    /// Delay in simulation cycles before the action occurs.
+    pub delay_cycles: u64,
+    /// What happens when the behavior triggers.
+    pub action: serde_json::Value,
+    /// Optional interrupt name to fire.
+    pub interrupt: Option<String>,
 }
 
 /// A named bit-range within a register with specific behavior.

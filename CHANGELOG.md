@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-02-16
+
+### Fixed
+- **Critical Instruction Regression**: Fixed `io-smoke` failure by implementing proper **Thumb-2 `IT` (If-Then) block** support in the `CortexM` core.
+- **Instruction Coverage**: Expanded modular decoder and executor for `MOVW`, `MOVT`, `LDR.W`, `STR.W`, and `UXTB.W`.
+- **Structural Stability**: Refactored CPU `step` loop for improved variable scoping and exception handling consistency.
+
 ### Added
+- **Documentation Overhaul**:
+    - **New Site Structure**: Migrated to MkDocs with Material theme for a premium, searchable experience.
+    - **Diataxis Framework**: Reorganized content into Tutorials, How-To, Reference, and Explanation.
+    - **New Guides**: [`troubleshooting.md`](./docs/troubleshooting.md), [`cli_reference.md`](./docs/cli_reference.md), [`configuration_reference.md`](./docs/configuration_reference.md).
+    - **Process Docs**: Added [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) and [`board_onboarding_playbook.md`](./docs/board_onboarding_playbook.md).
 - **Architecture Unification**: Native ingestion of **Strict IR** (JSON) in the simulation core.
     - Bridged `labwired-ir` with `labwired-config` via `From` traits.
     - Simulator can now load hardware models directly from SVD-derived JSON files.
@@ -16,10 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Verified against STM32F4, RP2040, and nRF52.
 - **Timing Hooks**: Declarative peripheral behavior for registers (SetBits, ClearBits, WriteValue) with periodic and event-based triggers.
 - **Timeline View**: Professional visualization of instruction trace data in the VS Code extension.
-- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `docs/SUPPORTED_DEVICES.md`.
-- **Architecture Guide**: New comprehensive `core/docs/ARCHITECTURE.md`.
+- **Support Strategy**: Defined **Tier 1 Device Support** (STM32F4, RP2040, nRF52) in `../docs/SUPPORTED_DEVICES.md`.
+- **Architecture Guide**: New comprehensive `core/docs/architecture_guide.md`.
 - **SVD Ingestor**: New tool (`crates/svd-ingestor`) to generate `PeripheralDescriptor` YAMLs from SVD.
-- **Strategic Horizon**: Long-term vision integrated into `docs/plan.md`.
+- **Strategic Horizon**: Long-term vision integrated into `../docs/plan.md`.
 
 ## [0.11.0] - 2026-02-08
 
@@ -28,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Modeling**: Enabled peripheral definition via YAML descriptors using `labwired-config`.
     - **Simulation**: Implemented `GenericPeripheral` in `labwired-core` supporting dynamic MMR modeling, bitwise masking, and reset state.
     - **Integration**: Added support for `type: "declarative"` in chip descriptors, allowing zero-code peripheral additions.
-    - **Documentation**: New [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for declarative IP cores.
+    - **Documentation**: New [Peripheral Development Guide](./docs/peripheral_development.md) for declarative IP cores.
 - **ISA Extensions**:
     - **Misc Thumb-2**: Implemented `CLZ` (Count Leading Zeros), `RBIT` (Bit Reverse), `REV`, `REV16`, `REVSH` instructions.
     - **RISC-V Support**: Initial support for RV32I Base Integer Instruction Set with multi-arch GDB support.
@@ -60,8 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **GDB Remote Serial Protocol**: New `labwired-gdbstub` crate allowing connection from standard GDB clients.
     - **Interactive Debugging (DAP)**: `labwired-dap` server for VS Code integration with variable and register inspection.
 - **Documentation**:
-    - [Peripheral Development Guide](file:///home/andrii/Projects/labwired/docs/peripheral_development.md).
-    - [Getting Started with Real Firmware](file:///home/andrii/Projects/labwired/docs/getting_started_firmware.md) onboarding guide.
+    - [Peripheral Development Guide](./docs/peripheral_development.md).
+    - [Getting Started with Real Firmware](./docs/getting_started_firmware.md) onboarding guide.
 
 ## [0.9.0] - 2026-02-04
 

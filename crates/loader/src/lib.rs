@@ -220,27 +220,65 @@ impl SymbolProvider {
     }
 
     pub fn location_to_pc(&self, file_path: &str, line: u32) -> Option<u64> {
-        let requested_path = std::path::Path::new(file_path);
-        let requested_file = requested_path.file_name()?.to_str()?;
+        self.location_to_pc_nearest(file_path, line)
+            .map(|(addr, _line)| addr)
+    }
 
-        // Try exact match first
-        if let Some(addr) = self.line_map.get(&(file_path.to_string(), line)) {
-            return Some(*addr);
-        }
+    pub fn location_to_pc_nearest(&self, file_path: &str, line: u32) -> Option<(u64, u32)> {
+        let requested_file = std::path::Path::new(file_path).file_name()?.to_str()?;
+        let requested_norm = normalize_path_for_match(file_path);
 
-        // Try base name match if full path doesn't match
-        for ((f, l), addr) in &self.line_map {
-            if *l == line {
-                // Normalize paths: check if requested path is a suffix of the stored path or vice versa
-                let current_path = std::path::Path::new(f);
-                if let Some(current_file) = current_path.file_name().and_then(|n| n.to_str()) {
-                    if current_file == requested_file {
-                        return Some(*addr);
-                    }
-                }
+        // Collect candidates with same basename and a path specificity score.
+        let mut candidates: Vec<(u32, u64, usize)> = Vec::new();
+        for ((candidate_path, candidate_line), addr) in &self.line_map {
+            let Some(candidate_file) = std::path::Path::new(candidate_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+            else {
+                continue;
+            };
+            if candidate_file != requested_file {
+                continue;
             }
+
+            let score =
+                path_match_score(&requested_norm, &normalize_path_for_match(candidate_path));
+            candidates.push((*candidate_line, *addr, score));
         }
-        None
+        if candidates.is_empty() {
+            return None;
+        }
+
+        // Prefer the most specific path match first.
+        let best_score = candidates
+            .iter()
+            .map(|(_, _, score)| *score)
+            .max()
+            .unwrap_or(0);
+        candidates.retain(|(_, _, score)| *score == best_score);
+
+        // Prefer exact line, then nearest following line, then nearest previous line.
+        if let Some((l, addr, _)) = candidates.iter().find(|(l, _, _)| *l == line) {
+            return Some((*addr, *l));
+        }
+
+        let mut after: Vec<(u32, u64)> = candidates
+            .iter()
+            .filter(|(l, _, _)| *l > line)
+            .map(|(l, addr, _)| (*l, *addr))
+            .collect();
+        after.sort_by_key(|(l, _)| *l);
+        if let Some((l, addr)) = after.first() {
+            return Some((*addr, *l));
+        }
+
+        let mut before: Vec<(u32, u64)> = candidates
+            .iter()
+            .filter(|(l, _, _)| *l < line)
+            .map(|(l, addr, _)| (*l, *addr))
+            .collect();
+        before.sort_by_key(|(l, _)| *l);
+        before.last().map(|(l, addr)| (*addr, *l))
     }
 
     pub fn resolve_symbol(&self, name: &str) -> Option<u64> {
@@ -401,6 +439,27 @@ impl SymbolProvider {
     }
 }
 
+fn normalize_path_for_match(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+fn path_match_score(requested_norm: &str, candidate_norm: &str) -> usize {
+    if requested_norm == candidate_norm {
+        return 10_000;
+    }
+
+    // Absolute IDE paths commonly end with relative DWARF paths.
+    if requested_norm.ends_with(candidate_norm) {
+        return 1_000 + candidate_norm.len();
+    }
+    if candidate_norm.ends_with(requested_norm) {
+        return 900 + requested_norm.len();
+    }
+
+    // Basename-only match fallback (weak, but better than no breakpoint).
+    100
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -436,5 +495,27 @@ mod tests {
             loc.file
         );
         assert_eq!(loc.line, Some(26));
+    }
+
+    #[test]
+    fn test_location_to_pc_nearest_prefers_same_file_and_next_line() {
+        let mut provider = SymbolProvider::new_empty();
+        provider.line_map.insert(
+            ("crates/firmware-h563-io-demo/src/main.rs".to_string(), 117),
+            0x0800_00A8,
+        );
+        provider.line_map.insert(
+            ("crates/firmware-h563-io-demo/src/main.rs".to_string(), 125),
+            0x0800_00FC,
+        );
+        provider
+            .line_map
+            .insert(("main.rs".to_string(), 117), 0xDEAD_BEEF);
+
+        let resolved = provider.location_to_pc_nearest(
+            "/home/andrii/Projects/labwired/core/crates/firmware-h563-io-demo/src/main.rs",
+            120,
+        );
+        assert_eq!(resolved, Some((0x0800_00FC, 125)));
     }
 }

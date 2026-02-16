@@ -9,17 +9,59 @@ use anyhow::{anyhow, Result};
 use labwired_core::{DebugControl, Machine};
 use labwired_loader::SymbolProvider;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+
+const GPIO_F1_IDR_OFFSET: u64 = 0x08;
+const GPIO_F1_ODR_OFFSET: u64 = 0x0C;
+const GPIO_V2_IDR_OFFSET: u64 = 0x10;
+const GPIO_V2_ODR_OFFSET: u64 = 0x14;
 
 #[derive(Clone, Serialize)]
 pub struct TelemetryData {
     pub pc: u32,
     pub cycles: u64,
     pub mips: f64,
-    pub registers: std::collections::HashMap<String, u32>,
+    pub registers: HashMap<String, u32>,
+    #[serde(default)]
+    pub board_io: Vec<BoardIoState>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct BreakpointResolution {
+    pub requested_line: i64,
+    pub verified: bool,
+    pub resolved_line: Option<u32>,
+    pub address: Option<u32>,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct BoardIoState {
+    pub id: String,
+    pub kind: String,
+    pub signal: String,
+    pub active: bool,
+}
+
+#[derive(Clone)]
+struct ResolvedBoardIoBinding {
+    id: String,
+    kind: labwired_config::BoardIoKind,
+    signal: labwired_config::BoardIoSignal,
+    active_high: bool,
+    register_addr: u64,
+    pin_mask: u32,
+}
+
+#[derive(Clone, Copy)]
+struct GpioOffsets {
+    idr_offset: u64,
+    odr_offset: u64,
 }
 
 #[derive(Clone)]
@@ -30,6 +72,7 @@ pub struct LabwiredAdapter {
     pub last_telemetry: Arc<Mutex<(u64, Instant)>>, // cycles, time
     pub trace_buffer: Arc<Mutex<TraceBuffer>>,
     pub cycle_count: Arc<AtomicU64>,
+    board_io_bindings: Arc<Mutex<Vec<ResolvedBoardIoBinding>>>,
     mem_tracker: Arc<MemoryTracker>,
 }
 
@@ -60,6 +103,17 @@ impl Default for LabwiredAdapter {
 }
 
 impl LabwiredAdapter {
+    fn resolve_arch(arch: labwired_core::Arch) -> Result<labwired_core::Arch> {
+        match arch {
+            labwired_core::Arch::Arm => Ok(labwired_core::Arch::Arm),
+            labwired_core::Arch::RiscV => Ok(labwired_core::Arch::RiscV),
+            other => Err(anyhow!(
+                "Unsupported or unknown firmware architecture: {:?}",
+                other
+            )),
+        }
+    }
+
     pub fn new() -> Self {
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
         Self {
@@ -69,6 +123,7 @@ impl LabwiredAdapter {
             last_telemetry: Arc::new(Mutex::new((0, Instant::now()))),
             trace_buffer: Arc::new(Mutex::new(TraceBuffer::new(100_000))),
             cycle_count: Arc::new(AtomicU64::new(0)),
+            board_io_bindings: Arc::new(Mutex::new(Vec::new())),
             mem_tracker: Arc::new(MemoryTracker::default()),
         }
     }
@@ -94,18 +149,35 @@ impl LabwiredAdapter {
 
         *last_guard = (cycles, now);
 
-        let mut registers = std::collections::HashMap::new();
+        let mut registers = HashMap::with_capacity(16);
         let names = machine.get_register_names();
         for (i, name) in names.iter().enumerate().take(16) {
             let val = machine.read_core_reg(i as u8);
             registers.insert(name.clone(), val);
         }
 
+        let board_io = {
+            let bindings = self.board_io_bindings.lock().unwrap();
+            bindings
+                .iter()
+                .filter_map(|binding| {
+                    let active = self.read_board_io_state(machine.as_ref(), binding)?;
+                    Some(BoardIoState {
+                        id: binding.id.clone(),
+                        kind: board_io_kind_str(binding.kind).to_string(),
+                        signal: board_io_signal_str(binding.signal).to_string(),
+                        active,
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
+
         Some(TelemetryData {
             pc,
             cycles,
             mips,
             registers,
+            board_io,
         })
     }
 
@@ -114,8 +186,10 @@ impl LabwiredAdapter {
         firmware_path: PathBuf,
         system_path: Option<PathBuf>,
     ) -> Result<()> {
+        self.board_io_bindings.lock().unwrap().clear();
         let image = labwired_loader::load_elf(&firmware_path)?;
 
+        let mut resolved_board_io_bindings = Vec::new();
         let mut bus = if let Some(sys_path) = &system_path {
             let manifest = labwired_config::SystemManifest::from_file(sys_path)?;
             let chip_path = sys_path
@@ -123,20 +197,14 @@ impl LabwiredAdapter {
                 .unwrap_or_else(|| std::path::Path::new("."))
                 .join(&manifest.chip);
             let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
+            resolved_board_io_bindings = resolve_board_io_bindings(&chip, &manifest);
             labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
         } else {
             labwired_core::bus::SystemBus::new()
         };
+        *self.board_io_bindings.lock().unwrap() = resolved_board_io_bindings;
 
-        let arch = match image.arch {
-            labwired_core::Arch::Arm => labwired_core::Arch::Arm,
-            labwired_core::Arch::RiscV => labwired_core::Arch::RiscV,
-            _ => {
-                // Fallback or guess from system config?
-                // For now, assume Arm if unclear
-                labwired_core::Arch::Arm
-            }
-        };
+        let arch = Self::resolve_arch(image.arch)?;
 
         match arch {
             labwired_core::Arch::Arm => {
@@ -173,6 +241,20 @@ impl LabwiredAdapter {
         }
 
         Ok(())
+    }
+
+    fn read_board_io_state(
+        &self,
+        machine: &dyn DebugControl,
+        binding: &ResolvedBoardIoBinding,
+    ) -> Option<bool> {
+        let register_value = read_u32_le(machine, binding.register_addr)?;
+        let pin_is_set = (register_value & binding.pin_mask) != 0;
+        Some(if binding.active_high {
+            pin_is_set
+        } else {
+            !pin_is_set
+        })
     }
 
     pub fn lookup_source(&self, addr: u64) -> Option<labwired_loader::SourceLocation> {
@@ -260,9 +342,7 @@ impl LabwiredAdapter {
 
     pub fn poll_uart(&self) -> Vec<u8> {
         let mut sink = self.uart_sink.lock().unwrap();
-        let out = sink.clone();
-        sink.clear();
-        out
+        std::mem::take(&mut *sink)
     }
 
     pub fn step(&self) -> Result<labwired_core::StopReason> {
@@ -339,6 +419,49 @@ impl LabwiredAdapter {
         } else {
             Err(anyhow!("Machine not initialized"))
         }
+    }
+
+    pub fn step_over_source_line(
+        &self,
+        max_instructions: u32,
+    ) -> Result<labwired_core::StopReason> {
+        let start_pc = self.get_pc()?;
+        let start_loc = self.lookup_source(start_pc as u64);
+
+        // If we don't have source mapping, fall back to single-instruction stepping.
+        let Some(start_loc) = start_loc else {
+            return self.step();
+        };
+
+        let max_instructions = max_instructions.max(1);
+        let mut last_reason = labwired_core::StopReason::StepDone;
+
+        for _ in 0..max_instructions {
+            let reason = self.step()?;
+            last_reason = reason.clone();
+
+            match reason {
+                labwired_core::StopReason::Breakpoint(_)
+                | labwired_core::StopReason::ManualStop
+                | labwired_core::StopReason::MaxStepsReached => return Ok(reason),
+                _ => {}
+            }
+
+            let pc = self.get_pc()?;
+            let Some(curr_loc) = self.lookup_source(pc as u64) else {
+                if pc != start_pc {
+                    return Ok(reason);
+                }
+                continue;
+            };
+
+            let changed_line = curr_loc.file != start_loc.file || curr_loc.line != start_loc.line;
+            if changed_line {
+                return Ok(reason);
+            }
+        }
+
+        Ok(last_reason)
     }
 
     pub fn get_peripherals_json(&self) -> serde_json::Value {
@@ -537,20 +660,76 @@ impl LabwiredAdapter {
         }
     }
 
-    pub fn set_breakpoints(&self, path: String, lines: Vec<i64>) -> Result<()> {
+    pub fn set_breakpoints(
+        &self,
+        path: String,
+        lines: Vec<i64>,
+    ) -> Result<Vec<BreakpointResolution>> {
+        let mut resolutions = Vec::with_capacity(lines.len());
         let mut addresses = Vec::new();
 
         let syms_guard = self.symbols.lock().unwrap();
-        if let Some(syms) = syms_guard.as_ref() {
-            for line in lines {
-                if let Some(addr) = syms.location_to_pc(&path, line as u32) {
-                    let addr: u64 = addr;
-                    addresses.push(addr as u32);
+        let syms = syms_guard.as_ref();
+
+        for requested_line in lines {
+            if requested_line <= 0 {
+                resolutions.push(BreakpointResolution {
+                    requested_line,
+                    verified: false,
+                    resolved_line: None,
+                    address: None,
+                    message: Some("Invalid line number".to_string()),
+                });
+                continue;
+            }
+
+            if let Some(syms) = syms {
+                if let Some((addr, resolved_line)) =
+                    syms.location_to_pc_nearest(&path, requested_line as u32)
+                {
+                    let addr32 = addr as u32;
+                    addresses.push(addr32);
+                    resolutions.push(BreakpointResolution {
+                        requested_line,
+                        verified: true,
+                        resolved_line: Some(resolved_line),
+                        address: Some(addr32),
+                        message: if resolved_line != requested_line as u32 {
+                            Some(format!(
+                                "Mapped to nearest executable line {}",
+                                resolved_line
+                            ))
+                        } else {
+                            None
+                        },
+                    });
                 } else {
-                    tracing::warn!("Could not resolve breakpoint at {}:{}", path, line);
+                    tracing::warn!(
+                        "Could not resolve breakpoint at {}:{}",
+                        path,
+                        requested_line
+                    );
+                    resolutions.push(BreakpointResolution {
+                        requested_line,
+                        verified: false,
+                        resolved_line: None,
+                        address: None,
+                        message: Some("No executable location for this line".to_string()),
+                    });
                 }
+            } else {
+                resolutions.push(BreakpointResolution {
+                    requested_line,
+                    verified: false,
+                    resolved_line: None,
+                    address: None,
+                    message: Some("Debug symbols unavailable".to_string()),
+                });
             }
         }
+
+        addresses.sort_unstable();
+        addresses.dedup();
 
         let mut machine_guard = self.machine.lock().unwrap();
         if let Some(machine) = machine_guard.as_mut() {
@@ -561,7 +740,7 @@ impl LabwiredAdapter {
             }
         }
 
-        Ok(())
+        Ok(resolutions)
     }
 
     pub fn add_breakpoint_addr(&self, addr: u32) -> Result<()> {
@@ -609,10 +788,298 @@ impl LabwiredAdapter {
     }
 }
 
+fn read_u32_le(machine: &dyn DebugControl, addr: u64) -> Option<u32> {
+    let bytes = machine.read_memory(addr as u32, 4).ok()?;
+    if bytes.len() < 4 {
+        return None;
+    }
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn board_io_kind_str(kind: labwired_config::BoardIoKind) -> &'static str {
+    match kind {
+        labwired_config::BoardIoKind::Led => "led",
+        labwired_config::BoardIoKind::Button => "button",
+    }
+}
+
+fn board_io_signal_str(signal: labwired_config::BoardIoSignal) -> &'static str {
+    match signal {
+        labwired_config::BoardIoSignal::Output => "output",
+        labwired_config::BoardIoSignal::Input => "input",
+    }
+}
+
+fn profile_name(peripheral: &labwired_config::PeripheralConfig) -> Option<&str> {
+    if let Some(value) = peripheral.config.get("profile") {
+        if let Some(name) = value.as_str() {
+            return Some(name);
+        }
+        tracing::warn!(
+            "Peripheral '{}' has non-string profile; ignoring profile override",
+            peripheral.id
+        );
+        return None;
+    }
+
+    if let Some(value) = peripheral.config.get("register_layout") {
+        if let Some(name) = value.as_str() {
+            return Some(name);
+        }
+        tracing::warn!(
+            "Peripheral '{}' has non-string register_layout; ignoring layout override",
+            peripheral.id
+        );
+    }
+    None
+}
+
+fn gpio_offsets_for_peripheral(
+    peripheral: &labwired_config::PeripheralConfig,
+) -> Option<GpioOffsets> {
+    if peripheral.r#type != "gpio" {
+        return None;
+    }
+
+    let default_offsets = GpioOffsets {
+        idr_offset: GPIO_F1_IDR_OFFSET,
+        odr_offset: GPIO_F1_ODR_OFFSET,
+    };
+
+    let Some(layout_name) = profile_name(peripheral) else {
+        return Some(default_offsets);
+    };
+
+    let layout = match labwired_core::peripherals::gpio::GpioRegisterLayout::from_str(layout_name) {
+        Ok(layout) => layout,
+        Err(err) => {
+            tracing::warn!(
+                "GPIO peripheral '{}' has invalid profile '{}': {}; defaulting to stm32f1 offsets",
+                peripheral.id,
+                layout_name,
+                err
+            );
+            return Some(default_offsets);
+        }
+    };
+
+    match layout {
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Stm32F1 => Some(default_offsets),
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Stm32V2 => Some(GpioOffsets {
+            idr_offset: GPIO_V2_IDR_OFFSET,
+            odr_offset: GPIO_V2_ODR_OFFSET,
+        }),
+    }
+}
+
+fn resolve_board_io_bindings(
+    chip: &labwired_config::ChipDescriptor,
+    manifest: &labwired_config::SystemManifest,
+) -> Vec<ResolvedBoardIoBinding> {
+    let peripheral_gpio_windows: HashMap<String, (u64, GpioOffsets)> = chip
+        .peripherals
+        .iter()
+        .filter_map(|p| {
+            let offsets = gpio_offsets_for_peripheral(p)?;
+            Some((p.id.to_ascii_lowercase(), (p.base_address, offsets)))
+        })
+        .collect();
+
+    let mut resolved = Vec::new();
+    for binding in &manifest.board_io {
+        if binding.pin > 31 {
+            tracing::warn!(
+                "Skipping board_io binding '{}' with invalid pin {}",
+                binding.id,
+                binding.pin
+            );
+            continue;
+        }
+
+        let peripheral_key = binding.peripheral.to_ascii_lowercase();
+        let Some((base_addr, gpio_offsets)) = peripheral_gpio_windows.get(&peripheral_key).copied()
+        else {
+            tracing::warn!(
+                "Skipping board_io binding '{}' because GPIO peripheral '{}' was not found",
+                binding.id,
+                binding.peripheral
+            );
+            continue;
+        };
+
+        let register_offset = match binding.signal {
+            labwired_config::BoardIoSignal::Input => gpio_offsets.idr_offset,
+            labwired_config::BoardIoSignal::Output => gpio_offsets.odr_offset,
+        };
+
+        resolved.push(ResolvedBoardIoBinding {
+            id: binding.id.clone(),
+            kind: binding.kind,
+            signal: binding.signal,
+            active_high: binding.active_high,
+            register_addr: base_addr + register_offset,
+            pin_mask: 1u32 << binding.pin,
+        });
+    }
+
+    resolved
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_resolve_board_io_bindings_uses_default_gpio_offsets() {
+        let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "test".to_string(),
+            arch: labwired_config::Arch::Arm,
+            flash: labwired_config::MemoryRange {
+                base: 0x0800_0000,
+                size: "128KB".to_string(),
+            },
+            ram: labwired_config::MemoryRange {
+                base: 0x2000_0000,
+                size: "32KB".to_string(),
+            },
+            peripherals: vec![labwired_config::PeripheralConfig {
+                id: "gpioa".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4001_0800,
+                size: None,
+                irq: None,
+                config: HashMap::new(),
+            }],
+        };
+
+        let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "test-system".to_string(),
+            chip: "test-chip".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: vec![labwired_config::BoardIoBinding {
+                id: "led".to_string(),
+                kind: labwired_config::BoardIoKind::Led,
+                peripheral: "gpioa".to_string(),
+                pin: 5,
+                signal: labwired_config::BoardIoSignal::Output,
+                active_high: true,
+            }],
+        };
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].register_addr, 0x4001_0800 + GPIO_F1_ODR_OFFSET);
+    }
+
+    #[test]
+    fn test_resolve_board_io_bindings_uses_stm32v2_gpio_offsets() {
+        let mut gpio_config = HashMap::new();
+        gpio_config.insert("profile".to_string(), "stm32v2".into());
+        let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "test".to_string(),
+            arch: labwired_config::Arch::Arm,
+            flash: labwired_config::MemoryRange {
+                base: 0x0800_0000,
+                size: "128KB".to_string(),
+            },
+            ram: labwired_config::MemoryRange {
+                base: 0x2000_0000,
+                size: "32KB".to_string(),
+            },
+            peripherals: vec![labwired_config::PeripheralConfig {
+                id: "gpiob".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4202_0400,
+                size: None,
+                irq: None,
+                config: gpio_config,
+            }],
+        };
+
+        let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "test-system".to_string(),
+            chip: "test-chip".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: vec![
+                labwired_config::BoardIoBinding {
+                    id: "led".to_string(),
+                    kind: labwired_config::BoardIoKind::Led,
+                    peripheral: "gpiob".to_string(),
+                    pin: 0,
+                    signal: labwired_config::BoardIoSignal::Output,
+                    active_high: true,
+                },
+                labwired_config::BoardIoBinding {
+                    id: "button".to_string(),
+                    kind: labwired_config::BoardIoKind::Button,
+                    peripheral: "gpiob".to_string(),
+                    pin: 13,
+                    signal: labwired_config::BoardIoSignal::Input,
+                    active_high: true,
+                },
+            ],
+        };
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 2);
+        assert_eq!(resolved[0].register_addr, 0x4202_0400 + GPIO_V2_ODR_OFFSET);
+        assert_eq!(resolved[1].register_addr, 0x4202_0400 + GPIO_V2_IDR_OFFSET);
+    }
+
+    #[test]
+    fn test_resolve_board_io_bindings_register_layout_alias_still_supported() {
+        let mut gpio_config = HashMap::new();
+        gpio_config.insert("register_layout".to_string(), "stm32v2".into());
+        let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "test".to_string(),
+            arch: labwired_config::Arch::Arm,
+            flash: labwired_config::MemoryRange {
+                base: 0x0800_0000,
+                size: "128KB".to_string(),
+            },
+            ram: labwired_config::MemoryRange {
+                base: 0x2000_0000,
+                size: "32KB".to_string(),
+            },
+            peripherals: vec![labwired_config::PeripheralConfig {
+                id: "gpiob".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4202_0400,
+                size: None,
+                irq: None,
+                config: gpio_config,
+            }],
+        };
+
+        let manifest = labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "test-system".to_string(),
+            chip: "test-chip".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: vec![labwired_config::BoardIoBinding {
+                id: "led".to_string(),
+                kind: labwired_config::BoardIoKind::Led,
+                peripheral: "gpiob".to_string(),
+                pin: 0,
+                signal: labwired_config::BoardIoSignal::Output,
+                active_high: true,
+            }],
+        };
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].register_addr, 0x4202_0400 + GPIO_V2_ODR_OFFSET);
+    }
 
     #[test]
     fn test_adapter_breakpoints() {
@@ -627,7 +1094,7 @@ mod tests {
             .expect("Failed to load firmware");
 
         // Set breakpoint at main.rs:11
-        adapter
+        let _ = adapter
             .set_breakpoints("main.rs".to_string(), vec![11])
             .expect("Failed to set breakpoints");
     }
@@ -789,7 +1256,7 @@ mod tests {
             .collect();
 
         // Simulate 100 random state transitions (mocked for speed/simplicity)
-        for i in 0..100 {
+        for i in 0u32..100 {
             let trace = crate::trace::InstructionTrace {
                 pc: 0x100 + (i * 2),
                 instruction: 0xBF00,
@@ -797,11 +1264,11 @@ mod tests {
                 function: None,
                 register_delta: {
                     let mut map = std::collections::HashMap::new();
-                    map.insert(0, (i as u32, i as u32 + 1));
+                    map.insert(0, (i, i + 1));
                     map
                 },
                 memory_writes: vec![crate::trace::MemoryWrite {
-                    address: (0x20000000 + (i as u32 * 4)) as u64,
+                    address: (0x20000000 + (i * 4)) as u64,
                     old_value: 0,
                     new_value: 0xFF,
                 }],
@@ -813,9 +1280,8 @@ mod tests {
             // Advance machine
             let mut guard = adapter.machine.lock().unwrap();
             let m = guard.as_mut().unwrap();
-            m.write_core_reg(0, i as u32 + 1);
-            m.write_memory(0x20000000 + (i as u32 * 4), &[0xFF])
-                .unwrap();
+            m.write_core_reg(0, i + 1);
+            m.write_memory(0x20000000 + (i * 4), &[0xFF]).unwrap();
             m.set_pc(0x100 + (i * 2) + 2);
             adapter.cycle_count.fetch_add(1, Ordering::SeqCst);
         }
@@ -829,8 +1295,8 @@ mod tests {
         let guard = adapter.machine.lock().unwrap();
         let m = guard.as_ref().unwrap();
         assert_eq!(m.get_pc(), 0x100);
-        for i in 0..16 {
-            assert_eq!(m.read_core_reg(i as u8), initial_registers[i]);
+        for (i, expected) in initial_registers.iter().enumerate().take(16) {
+            assert_eq!(m.read_core_reg(i as u8), *expected);
         }
         assert_eq!(adapter.get_cycle_count(), 0);
     }
@@ -852,5 +1318,14 @@ mod tests {
 
         let read_data = adapter.read_memory(addr, 4).unwrap();
         assert_eq!(read_data, data);
+    }
+
+    #[test]
+    fn test_resolve_arch_rejects_unknown() {
+        let err = LabwiredAdapter::resolve_arch(labwired_core::Arch::Unknown)
+            .expect_err("Unknown architecture should be rejected");
+        assert!(err
+            .to_string()
+            .contains("Unsupported or unknown firmware architecture"));
     }
 }

@@ -58,6 +58,14 @@ pub enum Instruction {
         rn: u8,
         rm: u8,
     }, // CMP Rn, Rm
+    Cmn {
+        rn: u8,
+        rm: u8,
+    }, // CMN Rn, Rm
+    Tst {
+        rn: u8,
+        rm: u8,
+    }, // TST Rn, Rm
     MovReg {
         rd: u8,
         rm: u8,
@@ -88,6 +96,10 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // AND Rd, Rm
+    Bic {
+        rd: u8,
+        rm: u8,
+    }, // BIC Rd, Rm
     Orr {
         rd: u8,
         rm: u8,
@@ -117,6 +129,18 @@ pub enum Instruction {
         rm: u8,
         imm: u8,
     }, // ASR Rd, Rm, #imm5
+    Adc {
+        rd: u8,
+        rm: u8,
+    }, // ADC Rd, Rm
+    Sbc {
+        rd: u8,
+        rm: u8,
+    }, // SBC Rd, Rm
+    Ror {
+        rd: u8,
+        rm: u8,
+    }, // ROR Rd, Rm
 
     // Memory
     LdrImm {
@@ -133,11 +157,26 @@ pub enum Instruction {
         rt: u8,
         imm: u16,
     }, // LDR Rt, [PC, #imm]
+    LdrImm32 {
+        rt: u8,
+        rn: u8,
+        imm12: u16,
+    },
+    StrImm32 {
+        rt: u8,
+        rn: u8,
+        imm12: u16,
+    },
     LdrbImm {
         rt: u8,
         rn: u8,
         imm: u8,
     }, // LDRB Rt, [Rn, #imm]
+    LdrbReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRB Rt, [Rn, Rm]
     StrbImm {
         rt: u8,
         rn: u8,
@@ -285,6 +324,24 @@ pub enum Instruction {
         shift_type: u8,
         set_flags: bool,
     },
+    DataProcImm32 {
+        op: u8,
+        rn: u8,
+        rd: u8,
+        imm12: u32,
+        set_flags: bool,
+    },
+    ShiftReg32 {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        shift_type: u8,
+    }, // LSL/LSR/ASR/ROR (register)
+
+    It {
+        cond: u8,
+        mask: u8,
+    }, // IT <cond> <mask...ish>
 
     Unknown(u16),
     // Intermediate state for 32-bit instruction (First half)
@@ -357,11 +414,16 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         return match op_alu {
             0x0 => Instruction::And { rd, rm },        // AND
             0x1 => Instruction::Eor { rd, rm },        // EOR
-            0x5 => Instruction::AsrReg { rd, rm },     // ASR (register)
+            0x5 => Instruction::Adc { rd, rm },        // ADC
+            0x6 => Instruction::Sbc { rd, rm },        // SBC
+            0x7 => Instruction::Ror { rd, rm },        // ROR
+            0x8 => Instruction::Tst { rn: rd, rm },    // TST
             0x9 => Instruction::Rsbs { rd, rn: rm },   // RSBS Rd, Rn, #0
             0xA => Instruction::CmpReg { rn: rd, rm }, // CMP (register) T1
+            0xB => Instruction::Cmn { rn: rd, rm },    // CMN
             0xC => Instruction::Orr { rd, rm },        // ORR
             0xD => Instruction::Mul { rd, rn: rm },    // MUL
+            0xE => Instruction::Bic { rd, rm },        // BIC
             0xF => Instruction::Mvn { rd, rm },        // MVN
             _ => Instruction::Unknown(opcode),
         };
@@ -460,6 +522,14 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         let rn = ((opcode >> 3) & 0x7) as u8;
         let rt = (opcode & 0x7) as u8;
         return Instruction::LdrReg { rt, rn, rm };
+    }
+
+    // 4.2 LDRB (register) (T1): 0101 110 mmm nnn ttt
+    if (opcode & 0xFE00) == 0x5C00 {
+        let rm = ((opcode >> 6) & 0x7) as u8;
+        let rn = ((opcode >> 3) & 0x7) as u8;
+        let rt = (opcode & 0x7) as u8;
+        return Instruction::LdrbReg { rt, rn, rm };
     }
 
     // 4.2 PUSH/POP
@@ -572,6 +642,11 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
 
         // HINT/IT (T1): 1011 1111 ...
         if (opcode & 0xFF00) == 0xBF00 {
+            let cond = ((opcode >> 4) & 0xF) as u8;
+            let mask = (opcode & 0xF) as u8;
+            if mask != 0 {
+                return Instruction::It { cond, mask };
+            }
             return Instruction::Nop;
         }
     }
@@ -619,13 +694,30 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // First Halfword: 1110 1... or 1111 ...
 
     // Data processing (modified immediate) / Plain binary immediate
-    // F000-F0FF (approx)
+    // 1111 0 <i1> 0 <op> <S> <Rn> 0 <imm3> <Rd> <imm8>
+    if (h1 & 0xFB00) == 0xF000 && (h2 & 0x8000) == 0 && (h2 & 0x0700) != 0x0700 {
+        let op = ((h1 >> 5) & 0xF) as u8;
+        let s = (h1 & 0x0010) != 0;
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
 
-    // ... (Existing Bitfield/Misc logic) ...
+        let i = (h1 >> 10) & 1;
+        let imm3 = (h2 >> 12) & 7;
+        let imm8 = h2 & 0xFF;
+        let imm12 = (i << 11) | (imm3 << 8) | imm8;
+
+        return Instruction::DataProcImm32 {
+            op,
+            rn,
+            rd,
+            imm12: imm12 as u32,
+            set_flags: s,
+        };
+    }
 
     // Data Processing (Reg) - For LSL, LSR, ASR, ROR, etc
     // 1110 1010 ... (EA..)
-    if (h1 & 0xFF00) == 0xEA00 && (h2 & 0x8000) == 0 {
+    if (h1 & 0xFE00) == 0xEA00 && (h2 & 0x8000) == 0 {
         let op = ((h1 >> 5) & 0xF) as u8;
         let s = ((h1 >> 4) & 0x1) != 0;
         let rn = (h1 & 0xF) as u8;
@@ -645,6 +737,43 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             imm5,
             shift_type,
             set_flags: s,
+        };
+    }
+
+    // MOVW: 1111 0 i 10 0100 imm4 0 imm3 rd imm8 -> F24..
+    if (h1 & 0xFBF0) == 0xF240 {
+        let i = (h1 >> 10) & 1;
+        let imm4 = (h1 & 0xF) as u16;
+        let imm3 = ((h2 >> 12) & 7) as u16;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u16;
+        let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+        return Instruction::Movw { rd, imm: imm16 };
+    }
+
+    // MOVT: 1111 0 i 10 1100 imm4 0 imm3 rd imm8 -> F2C..
+    if (h1 & 0xFBF0) == 0xF2C0 {
+        let i = (h1 >> 10) & 1;
+        let imm4 = (h1 & 0xF) as u16;
+        let imm3 = ((h2 >> 12) & 7) as u16;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u16;
+        let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+        return Instruction::Movt { rd, imm: imm16 };
+    }
+
+    // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
+    // Example seen in H563 firmware path: FA01 F202
+    if (h1 & 0xFFE0) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let shift_type = ((h2 >> 4) & 0x3) as u8;
+        return Instruction::ShiftReg32 {
+            rd,
+            rn,
+            rm,
+            shift_type,
         };
     }
 
@@ -673,6 +802,33 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 }
             }
         }
+    }
+
+    // ADR.W (T3): 1111 0 i 10 1010 .... F2A..
+    if (h1 & 0xFBF0) == 0xF2A0 {
+        let i = (h1 >> 10) & 1;
+        let imm4 = (h1 & 0xF) as u16;
+        let imm3 = ((h2 >> 12) & 7) as u16;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u16;
+        let imm12 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
+        return Instruction::Adr { rd, imm: imm12 };
+    }
+
+    // LDR.W (immediate) (T3): 1111 1000 1101 ... -> F8D..
+    if (h1 & 0xFFF0) == 0xF8D0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm12 = (h2 & 0xFFF) as u16;
+        return Instruction::LdrImm32 { rt, rn, imm12 };
+    }
+
+    // STR.W (immediate) (T3): 1111 1000 1100 ... -> F8C..
+    if (h1 & 0xFFF0) == 0xF8C0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let imm12 = (h2 & 0xFFF) as u16;
+        return Instruction::StrImm32 { rt, rn, imm12 };
     }
 
     // SBFX / UBFX
@@ -719,7 +875,31 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
-    Instruction::Unknown(h1) // Placeholder to make it compile with existing Unknown(u16)
+    // UXTB.W (Thumb-2): 1111 1010 0100 1111 1111 <rd> 1000 <rm> -> FA4F ...
+    // My log said FA23 F404 (LSR) and FA2E F303 (LSR). 
+    // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
+    // Encodings: 1111 1010 0... (FA0x to FA7x)
+    if (h1 & 0xFF80) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let shift_type = ((h2 >> 4) & 0x3) as u8;
+        return Instruction::ShiftReg32 {
+            rd,
+            rn,
+            rm,
+            shift_type,
+        };
+    }
+
+    // UXTB.W etc (Miscellaneous)
+    if (h1 & 0xFFC0) == 0xFA40 {
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        return Instruction::Uxtb { rd, rm };
+    }
+
+    Instruction::Unknown(h1)
 }
 
 #[cfg(test)]
@@ -900,6 +1080,37 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_shift_reg32_lsl() {
+        // LSL.W R2, R1, R2
+        assert_eq!(
+            decode_thumb_32(0xFA01, 0xF202),
+            Instruction::ShiftReg32 {
+                rd: 2,
+                rn: 1,
+                rm: 2,
+                shift_type: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_dataproc32_eb_prefix() {
+        // Pattern seen in H563 path.
+        assert_eq!(
+            decode_thumb_32(0xEB00, 0x1010),
+            Instruction::DataProc32 {
+                op: 8,
+                rn: 0,
+                rd: 0,
+                rm: 0,
+                imm5: 4,
+                shift_type: 1,
+                set_flags: false
+            }
+        );
+    }
+
+    #[test]
     fn test_decode_mov_cmp_add_sub_imm8() {
         // MOV R0, #42 -> 0x202A
         assert_eq!(
@@ -1001,6 +1212,8 @@ mod tests {
         assert_eq!(decode_thumb_16(0x431A), Instruction::Orr { rd: 2, rm: 3 });
         // EOR R4, R5 -> 0x406C (0100 00 0001 101 100)
         assert_eq!(decode_thumb_16(0x406C), Instruction::Eor { rd: 4, rm: 5 });
+        // BIC R1, R2 -> 0x4391 (0100 00 1110 010 001)
+        assert_eq!(decode_thumb_16(0x4391), Instruction::Bic { rd: 1, rm: 2 });
         // MVN R6, R7 -> 0x43FE (0100 00 1111 111 110)
         assert_eq!(decode_thumb_16(0x43FE), Instruction::Mvn { rd: 6, rm: 7 });
     }

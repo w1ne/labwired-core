@@ -1,10 +1,16 @@
 # LabWired Core - Firmware Simulation Engine
 
+
 > High-performance, declarative firmware simulator for ARM Cortex-M and RISC-V microcontrollers.
+
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://w1ne.github.io/labwired-core/)
 
 ## Highlights
 
+- **🚀 [Demos & Examples](../DEMOS.md)** - Central portal for all LabWired demos.
+- **🤖 [Agentic Hardware Fix](../ai/tests/autonomous_fix_demo.py)** - WATCH: AI agent autonomously fixing a peripheral model.
 - **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/demo-blinky/README.md)
+- **NUCLEO-H563ZI Showcase**: [Human Demo Example](examples/nucleo-h563zi/README.md)
 - **Case Study**: [Debugging STM32 Without Hardware](docs/case_study_stm32.md)
 
 ## Features
@@ -52,10 +58,12 @@ See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
 
 ## Documentation
 
-- [Architecture](./docs/architecture.md)
-- [Implementation Plan](./docs/plan.md)
+- [Architecture Overview](./docs/architecture.md)
+- [Architecture Guide](./docs/architecture_guide.md)
+- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md) (config-first)
 - [CI Integration Guide](./docs/ci_integration.md)
-- [GDB Integration](./docs/GDB_INTEGRATION.md)
+- [GDB Integration](./docs/gdb_integration.md)
+- [Release Strategy](./docs/release_strategy.md)
 - [VS Code Debugging](./docs/vscode_debugging.md)
 
 ## License

@@ -50,6 +50,7 @@ impl IrDevice {
                     description: None,
                     registers: Vec::new(),
                     interrupts: Vec::new(),
+                    timing: Vec::new(),
                 }
             };
 
@@ -231,6 +232,7 @@ fn convert_register(info: &svd::RegisterInfo, name: &str, offset: u64) -> IrRegi
         access: map_access(info.properties.access),
         reset_value: info.properties.reset_value.unwrap_or(0),
         fields,
+        side_effects: None,
         description: info.description.clone(),
     }
 }
@@ -252,37 +254,24 @@ mod tests {
     use svd_parser::svd::{self, Register, RegisterCluster};
 
     fn create_mock_register(name: &str, offset: u32) -> Register {
-        Register::Single(svd::RegisterInfo {
-            name: name.to_string(),
-            address_offset: offset,
-            description: None,
-            properties: svd::RegisterProperties::default(),
-            fields: None,
-            write_constraint: None,
-            read_action: None,
-            modified_write_values: None,
-            display_name: None,
-            alternate_group: None,
-            alternate_register: None,
-            derived_from: None,
-        })
+        Register::Single(
+            svd::RegisterInfo::builder()
+                .name(name.to_string())
+                .address_offset(offset)
+                .build(svd::ValidateLevel::Disabled)
+                .unwrap(),
+        )
     }
 
     fn create_mock_peripheral(name: &str, base: u64) -> svd::Peripheral {
-        svd::Peripheral {
-            name: name.to_string(),
-            base_address: base,
-            description: None,
-            group_name: None,
-            prepend_to_name: None,
-            append_to_name: None,
-            header_struct_name: None,
-            disable_condition: None,
-            derived_from: None,
-            registers: Some(vec![]),
-            interrupt: vec![],
-            default_register_properties: svd::RegisterProperties::default(),
-        }
+        svd::Peripheral::Single(
+            svd::PeripheralInfo::builder()
+                .name(name.to_string())
+                .base_address(base)
+                .registers(Some(vec![]))
+                .build(svd::ValidateLevel::Disabled)
+                .unwrap(),
+        )
     }
 
     #[test]
@@ -301,27 +290,16 @@ mod tests {
     #[test]
     fn test_flatten_register_array() {
         let mut out = Vec::new();
-        let info = svd::RegisterInfo {
-            name: "REG[%s]".to_string(),
-            address_offset: 0x00,
-            description: None,
-            properties: svd::RegisterProperties::default(),
-            fields: None,
-            write_constraint: None,
-            read_action: None,
-            modified_write_values: None,
-            display_name: None,
-            alternate_group: None,
-            alternate_register: None,
-            derived_from: None,
-        };
-        let dim = svd::DimElement {
-            dim: 3,
-            dim_increment: 0x4,
-            dim_index: None,
-            dim_name: None,
-            dim_array_index: None,
-        };
+        let info = svd::RegisterInfo::builder()
+            .name("REG[%s]".to_string())
+            .address_offset(0x00)
+            .build(svd::ValidateLevel::Disabled)
+            .unwrap();
+        let dim = svd::DimElement::builder()
+            .dim(3)
+            .dim_increment(0x4)
+            .build(svd::ValidateLevel::Disabled)
+            .unwrap();
 
         let rc = RegisterCluster::Register(Register::Array(info, dim));
         flatten_cluster(&rc, 0x1000, "PERIPH_", &mut out).unwrap();
@@ -352,23 +330,14 @@ mod tests {
             "SR", 0x04,
         ))]);
 
-        let device = svd::Device {
-            name: "TEST".to_string(),
-            peripherals: vec![parent, child],
-            description: String::new(),
-            address_unit_bits: 8,
-            width: 32,
-            default_register_properties: svd::RegisterProperties::default(),
-            cpu: None,
-            header_system_filename: None,
-            header_definitions_prefix: None,
-            vendor: None,
-            vendor_id: None,
-            series: None,
-            license_text: None,
-            schema_version: None,
-            no_namespace_schema_location: None,
-        };
+        let device = svd::Device::builder()
+            .name("TEST".to_string())
+            .peripherals(vec![parent, child])
+            .description(String::new())
+            .address_unit_bits(8)
+            .width(32)
+            .build(svd::ValidateLevel::Disabled)
+            .unwrap();
 
         let ir = IrDevice::from_svd(&device).unwrap();
 

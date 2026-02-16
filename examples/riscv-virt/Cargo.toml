@@ -10,3 +10,5 @@ riscv-rt = "0.12.0"
 [[bin]]
 name = "firmware"
 path = "src/main.rs"
+test = false
+bench = false
