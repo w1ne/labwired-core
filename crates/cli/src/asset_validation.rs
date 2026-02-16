@@ -30,10 +30,10 @@ pub struct ListChipsArgs {
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
 enum Severity {
     Error,
     Warning,
-    #[allow(dead_code)]
     Info,
 }
 
