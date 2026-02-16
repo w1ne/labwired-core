@@ -1,69 +1,86 @@
-# Example: STM32 I2C Sensor Interaction
+# Example: I2C Sensor Simulation
 
-This example demonstrates how to integrate and interact with a mock TMP102 temperature sensor in LabWired.
+This example demonstrates how to simulate an I2C peripheral (e.g., TMP102) and verify its behavior using standard Rust firmware.
 
-## 1. Registering the Peripheral
+## 1. System Configuration
 
-The `Tmp102` peripheral is implemented in `crates/core/src/peripherals/i2c_temp_sensor.rs`. It provides a simple register map:
+The simulation environment requires defining the sensor in the system manifest and connecting it to the appropriate I2C controller.
 
-| Offset | Register | Description |
-|--------|----------|-------------|
-| 0x00   | TEMP     | 12-bit Temperature Data (Read Only) |
-| 0x04   | CONFIG   | Configuration Register (R/W) |
-| 0x08   | T_LOW    | Lower Temperature Limit (R/W) |
-| 0x0C   | T_HIGH   | Upper Temperature Limit (R/W) |
+### Configuration (`system.yaml`)
+```yaml
+chip: "../chips/stm32f103.yaml"
+peripherals:
+  - id: "i2c1"
+    type: "i2c_master"
+    base_address: 0x40005400
 
-## 2. Configuring the System
+  - id: "tmp102"
+    type: "i2c_temp_sensor"  # Instantiates the TMP102 model
+    address: 0x48            # 7-bit I2C address
+    bus: "i2c1"              # Connects to the I2C1 controller
+```
 
-To add the sensor to your simulation, you can define it in your `system.yaml` or directly in the chip descriptor.
+## 2. Firmware Integration
 
-### Via YAML Descriptor
+The firmware uses standard HAL calls to interact with the simulated device. No simulation-specific code is required in the firmware itself.
+
+### Rust Implementation (`stm32f1xx-hal`)
+```rust
+use stm32f1xx_hal::{i2c::{BlockingI2c, Mode}, pac};
+
+fn main() -> ! {
+    let dp = pac::Peripherals::take().unwrap();
+    // ... Clock Configuration ...
+
+    // Initialize I2C1 (Standard Mode, 100kHz)
+    let mut i2c = BlockingI2c::i2c1(
+        dp.I2C1,
+        (scl, sda), // Pins PB6, PB7
+        &mut afio.mapr,
+        Mode::Standard { frequency: 100.kHz() },
+        clocks,
+        &mut rcc.apb1,
+        1000, 10, 1000, 1000,
+    );
+
+    let sensor_addr = 0x48;
+    let mut buffer = [0u8; 2];
+
+    loop {
+        // Read Temperature Register (0x00)
+        i2c.write_read(sensor_addr, &[0x00], &mut buffer).unwrap();
+        
+        // Convert to Celsius (12-bit, 0.0625°C resolution)
+        let raw_temp = u16::from_be_bytes(buffer) >> 4;
+        let celsius = raw_temp as f32 * 0.0625;
+    }
+}
+```
+
+## 3. Automated Verification
+
+LabWired supports scripted fault injection to verify error handling logic.
+
+### Fault Injection Script (`tests/fault_test.yaml`)
+Simulates a sensor failure or extreme environmental condition.
 
 ```yaml
-peripherals:
-  - id: "temp_sensor"
-    type: "i2c_temp_sensor"
-    base_address: 0x4000_1000
-    size: 0x100
+steps:
+  - run: 100ms
+  - write_peripheral:
+      id: "tmp102"
+      reg: "TEMP"
+      value: 0x7FF0 # Force sensor reading to 128°C
+  - run: 10ms
+  - assert_log: "CRITICAL: OVERTEMP DETECTED"
 ```
 
-*Note: In a more advanced simulation, the sensor would be connected behind an I2C controller. For this example, we map it directly to demonstrate register-level modeling.*
+## 4. Execution
 
-## 3. Interacting via Firmware
-
-In your C/Rust firmware, you can read the temperature by accessing the memory-mapped address:
-
-```c
-#define TEMP_SENSOR_BASE 0x40001000
-#define TEMP_REG_OFFSET  0x00
-
-uint32_t read_temperature() {
-    return *(volatile uint32_t*)(TEMP_SENSOR_BASE + TEMP_REG_OFFSET);
-}
-```
-
-## 4. Verification in Simulator
-
-When running the simulation, you can verify the sensor state using snapshots:
+Run the simulation with the test script:
 
 ```bash
-labwired run -f my_firmware.elf --snapshot snapshot.json
+labwired test --script tests/fault_test.yaml
 ```
 
-The resulting `snapshot.json` will contain:
-
-```json
-{
-  "peripherals": {
-    "temp_sensor": {
-      "temp": 401,
-      "config": 24736,
-      "t_low": 1200,
-      "t_high": 1280
-    }
-  }
-}
-```
-
-## Summary
-By using decoupled peripheral models like `Tmp102`, you can simulate complex digital sensor interactions without needing physical hardware, enabling earlier integration testing in your development cycle.
+The simulator will execute the firmware, inject the fault at the specified time, and verify that the firmware correctly detects and logs the error condition.

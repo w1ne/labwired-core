@@ -1,5 +1,7 @@
 # ARM C Hello Example
 
+> Part of the [LabWired Demos](../../../DEMOS.md) suite.
+
 A minimal C example demonstrating LabWired's ARM Cortex-M0 simulation capabilities.
 
 ## Building

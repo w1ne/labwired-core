@@ -12,6 +12,9 @@ members = [
     "crates/cli",
     "crates/firmware",
     "crates/firmware-ci-fixture",
+    "crates/firmware-h563-demo",
+    "crates/firmware-h563-io-demo",
+    "crates/firmware-h563-fullchip-demo",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",
@@ -19,12 +22,13 @@ members = [
     "examples/arm-cortex-m0",
     "examples/riscv-virt",
     "examples/demo-blinky", "crates/codegen",
+    "crates/python",
 ]
 exclude = ["crates/firmware-hal-test"]
 default-members = ["crates/cli", "crates/core", "crates/loader"]
 
 [workspace.package]
-version = "0.11.0"
+version = "0.12.0"
 edition = "2021"
 authors = ["LabWired Team"]
 license = "MIT"
@@ -42,10 +46,38 @@ bitflags = "2.4"
 human-size = "0.4"
 serde_json = "1.0"
 sha2 = "0.10"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
 
 [profile.dev]
 panic = "abort"
 
 [profile.release]
 panic = "abort"
-lto = true
+lto = false
+
+[profile.release.package.firmware-ci-fixture]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-h563-demo]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-h563-io-demo]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-h563-fullchip-demo]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.riscv-ci-fixture]
+codegen-units = 1
+debug = true
+opt-level = "s"

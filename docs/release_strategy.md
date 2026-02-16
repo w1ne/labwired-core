@@ -1,7 +1,7 @@
 # LabWired Release & Merging Strategy
 
 ## 1. Branching Model: Gitflow
-We follow the **Gitflow** branching strategy to manage releases and features efficiently. For more detailed rules and workflows, see the [Git Flow Guide](file:///home/andrii/Projects/labwired/docs/development/git_flow.md).
+We follow the **Gitflow** branching strategy to manage releases and features efficiently. For more detailed rules and workflows, see the [Git Flow Guide](./development/git_flow.md).
 - **`main`**: The production-ready state. Only merge from `release/*` or `hotfix/*`. Tags are created here.
 - **`develop`**: The integration branch for the next release. Features merge here.
 - **`feature/*`**: Individual work items. Created from `develop`, merged back to `develop`.
@@ -76,12 +76,11 @@ Fixes: (Optional)
     - Merge `release/vX.Y.Z` into `main`.
     - Tag `main` with `vX.Y.Z`.
     - Merge `release/vX.Y.Z` back into `develop`.
-7.  **Deploy (Automated)**:
-    -   When `release/vX.Y.Z` is merged to `main` and a **Tag** `vX.Y.Z` is pushed:
-    -   GitHub Actions (`release.yml`) triggers.
-    -   It builds the optimized release binary.
-    -   It attaches the binary artifacts to the draft created in step 4.
-    -   Developers verify the draft and publish.
+7.  **Publish**:
+    -   Merge `release/vX.Y.Z` into `main` and push the `vX.Y.Z` tag.
+    -   Ensure CI validation workflows are green (`.github/workflows/core-ci.yml` and `.github/workflows/vscode-ci.yml`).
+    -   Publish release artifacts (CLI binaries, docs, and extension package) using the current manual publishing process.
+    -   If/when a dedicated release workflow is added, document it here and make it part of the required gates.
 
 ## 4. Coding Standards documentation
 - **Style**: Follow standard Rust style (`rustfmt`).

@@ -1,187 +1,76 @@
-# LabWired Architecture
+# Architecture Internals
 
-## High-Level Overview
+LabWired is a modular execution engine designed to decouple the CPU core from the memory and peripheral bus. This design enables the simulation of multi-architecture systems within a unified peripheral environment.
 
-The system is designed as a set of decoupled Rust crates to ensure portability and separation of concerns.
+## 1. Core Execution Engine (`labwired-core`)
 
-```mermaid
-graph TD
-    CLI[labwired-cli] --> Config[labwired-config]
-    CLI --> Loader[labwired-loader]
-    CLI --> Core[labwired-core]
-    CLI --> GDB[labwired-gdbstub]
-    CLI --> DAP[labwired-dap]
+The `labwired-core` crate provides the central execution loop and state management.
 
-    Config --> Core
-    Loader --> Core
-    GDB --> Core
-    DAP --> Core
+### Pluggable CPU Abstraction
+The execution engine is generic over a `Cpu` trait, allowing for different instruction set architectures (ISAs) to interface with the same system bus.
 
-    subgraph Core [labwired-core]
-        Machine
-        CPU[Cpu Trait]
-        Bus[System Bus]
-        Dec[Decoder]
-        Mem[Linear Memory]
-        Periphs[Dynamic Peripherals]
-
-        Machine --> CPU
-        Machine --> Bus
-        CPU --> Dec
-        CPU --> Bus
-        Bus --> Mem
-        Bus --> Periphs
-    end
-```
-
-## Component Definitions
-
-### 1. `labwired-core`
-The execution engine. Designed to be `no_std` compatible and **architecture-agnostic**.
-
-#### **Pluggable Core Pattern**
-The `Machine` struct is generic over the `Cpu` trait (`Machine<C: Cpu>`). This allows swapping the execution core (e.g., specific Cortex-M variants, RISC-V, etc.) without changing the bus or memory infrastructure.
-The `Cpu` trait defines the minimal interface:
 ```rust
-trait Cpu {
+pub trait Cpu {
+    /// Resets the CPU state (PC, SP, etc.)
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
-    fn step(&mut self, bus: &mut dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> SimResult<()>;
-    // ... Debug accessors ...
+    
+    /// Executes a single instruction cycle
+    fn step(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
 }
 ```
 
-The system currently supports:
-- **Arm (Cortex-M)**: Via `CortexM` struct.
-- **RISC-V**: Via `RiscV` struct (initial support).
+The system currently implements:
+- **Cortex-M (ARMv7-M)**: Supports Thumb-2 instruction decoding.
+- **RISC-V (RV32I)**: Supports base integer instruction set.
 
-#### **Memory Model**
+### Memory Model
+The memory system uses a linear addressing model mapped to host memory regions.
+- **Flash**: Read-only segments populated from the ELF binary.
+- **RAM**: Read-write segments initialized to zero.
+- **MMIO**: Addresses outside predefined memory regions are routed to the Peripheral Bus.
 
-#### **Dynamic Bus & Peripherals**
-The system uses a `SystemBus` that routes memory accesses dynamically based on a project manifest.
-- **Flash Memory**: Base address varies by chip. Loads ELF segments.
-- **RAM**: Base address varies by chip. Supports read/write.
-- **Peripherals**: Memory-mapped devices (UART, SysTick, Stubs) mapped to arbitrary address ranges.
+## 2. Peripheral Interface
 
-Peripherals are integrated via the `Peripheral` trait:
+Peripherals communicate with the CPU via the `Peripheral` trait. This trait defines the contract for Memory-Mapped I/O (MMIO) and time-based state updates.
+
 ```rust
-pub trait Peripheral: std::fmt::Debug + Send {
-    fn read(&self, offset: u64) -> SimResult<u8>;
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
-    fn tick(&mut self) -> PeripheralTickResult; // Returns IRQ status, cycles, and DMA requests
-    fn snapshot(&self) -> serde_json::Value;
+pub trait Peripheral {
+    fn read(&self, offset: u64) -> u8;
+    fn write(&mut self, offset: u64, value: u8);
+    fn tick(&mut self) -> PeripheralTickResult;
 }
 ```
 
-#### **Debug Support**
-The core exposes a `DebugControl` trait implemented by `Machine`, allowing external tools (like GDB or DAP) to:
-- Read/Write Core Registers.
-- Read/Write Memory.
-- Set/Clear Breakpoints.
-- Single Step or Run (with stop reasons).
+### Two-Phase Execution Model
+To ensure deterministic behavior for DMA and interrupts, LabWired employs a two-phase update cycle for each simulation tick:
 
-#### **Decoder (Thumb-2)**
-A stateless module confirming to ARMv7-M Thumb-2 encoding.
-**Supported Instructions**:
-- **Control Flow**: `B <offset>`, `Bcc <cond, offset>`, `BL` (32-bit), `BX`, `CBZ`, `CBNZ`.
-- **Arithmetic**: `ADD`, `SUB`, `CMP`, `MOV`, `MVN`, `MOVW` (32-bit), `MOVT` (32-bit), `MUL`.
-    - **Wide (32-bit) Variants**: `ADD.W`, `SUB.W`, `ADC.W`, `SBC.W`, `MOV.W`, `MVN.W`, `BIC.W`, `ORN.W`.
-    - **Shifted Register Variants**: Support for 32-bit forms with arbitrary barrel shifter offsets.
-    - **Division**: `SDIV`, `UDIV` (32-bit encoding).
-    - Includes **High Register** support for `MOV`, `CMP`, and `ADD`.
-    - Dedicated `ADD SP, #imm` and `SUB SP, #imm` forms.
-- **Logic**: `AND`, `ORR`, `EOR`.
-- **Shifts**: `LSL`, `LSR`, `ASR`, `ROR` (Immediate and Register-modified).
-- **Bit Field & Misc**: `BFI`, `BFC`, `SBFX`, `UBFX`, `CLZ`, `RBIT`, `REV`, `REV16`, `UXTB`.
-- **Memory**:
-    - `LDR`/`STR` (Immediate Offset / Word)
-    - `LDRB`/`STRB` (Immediate Offset / Byte)
-    - `LDRH`/`STRH` (Immediate Offset / Halfword)
-    - `LDR` (Literal / PC-Relative)
-    - `LDR`/`STR` (SP-Relative)
-    - `LDRD`/`STRD` (Double Word - minimal support)
-    - `PUSH`/`POP` (Stack Operations)
-- **Interrupt Control**: `CPSIE`, `CPSID` (affecting `primask`).
-- **Other**: `NOP`, `IT` block (treated as NOP hints for robustness).
+1.  **Instruction Step**: The CPU fetches and executes one instruction.
+2.  **Peripheral Tick**: Each peripheral's `tick()` method is invoked. Peripherals return a `PeripheralTickResult` containing requested state changes (IRQs, DMA requests).
+3.  **Bus Arbitration**: The `SystemBus` processes pending DMA requests and updates the Interrupt Controller state.
 
-#### **Core Peripherals (STM32F1 Compatible)**
-The system includes a suite of memory-mapped peripherals to support real-world HAL libraries:
-- **GPIO**: Mode configuration (CRL/CRH), Pin state tracking (IDR/ODR), and atomic bit manipulation (BSRR/BRR).
-- **RCC**: Reset and Clock Control (minimal) for peripheral enablement.
-- **Timers**: TIM2/TIM3 general-purpose timers with prescaling and update interrupts.
-- **I2C**: I2C Master mode with status flag sequence support (Start, Address, Transmit).
-- **SPI**: SPI Master mode with basic full-duplex transfer mocking.
-- **SysTick**: Standard Cortex-M system timer.
-- **NVIC**: Nested Vectored Interrupt Controller with prioritization and masking.
-- **SCB**: System Control Block with VTOR support.
-- **DMA1**: 7-channel Direct Memory Access controller with bus mastering support.
-- **EXTI**: External Interrupt/Event Controller for handling external signals.
-- **AFIO**: Alternate Function I/O for dynamic pin-to-interrupt mapping.
+This model prevents race conditions where a peripheral modifies memory while the CPU is executing, ensuring strict sequential consistency.
 
-### DMA Mastering (Two-Phase Execution)
-To maintain modularity and comply with Rust's ownership rules, LabWired uses a two-phase execution model for DMA:
-1.  **Phase 1 (Request)**: During `tick()`, a peripheral returns a list of `DmaRequest`s.
-2.  **Phase 2 (Execute)**: The `SystemBus` iterates over these requests and performs the corresponding memory operations.
+## 3. Thumb-2 Decoder
 
-#### **32-bit Reassembly**
-The CPU supports robust reassembly of 32-bit Thumb-2 instructions (`BL`, `MOVW`, `MOVT`, `MOV.W`, `MVN.W`, `SDIV`, `UDIV`) by fetching the suffix half-word during the execution of a `Prefix32` opcode.
+The Cortex-M implementation uses a custom stateless decoder for the ARMv7-M Thumb-2 instruction set.
 
-### 2. `labwired-config`
-Handles hardware declaration, validation, and test scripting.
-- **Chips**: `ChipDescriptor` defines memory map (Flash/RAM) and peripheral base addresses.
-- **System**: `SystemManifest` defines the board-level configuration (chip selection, external devices).
-- **Peripherals**: `PeripheralDescriptor` defines register maps, fields, and side-effects.
-- **Tests**: `TestScript` (v1.0) defines automated test scenarios with:
-    - Inputs (firmware, system config)
-    - Limits (steps, cycles, wall time)
-    - Assertions (UART output regex, expected stop reason)
+**Supported Instruction Classes**:
+- **32-bit Instructions**: `BL`, `MOVW`, `MOVT` (handled via double half-word fetch).
+- **Control Flow**: `B`, `BL`, `BX`, `CBZ/CBNZ`, `IT` blocks.
+- **Arithmetic/Logic**: `ADD`, `SUB`, `MUL`, `SDIV/UDIV`, `AND`, `ORR`, `EOR`.
+- **Bit Manipulation**: `BFI`, `UBFX`, `CLZ`, `RBIT`.
 
-### 3. `labwired-loader`
-Handles binary parsing.
-- Uses `goblin` to parse ELF files.
-- Extracts `PT_LOAD` segments.
-- Produces a `ProgramImage` containing segments and the Entry Point.
+## 4. Debug Integration
 
-### 4. `labwired-cli`
-The host runner and entry point.
-- **Initialization**: Parses arguments and loads configuration.
-- **Configuration**: Resolves Chip Descriptors and wiring via `labwired-config`.
-- **Loading**: Loads ELF segments into the dynamically configured `SystemBus`.
-- **Modes**:
-    - **Run**: continuous execution.
-    - **Debug**: Starts GDB server or DAP server.
-    - **Test**: Runs automated test scripts.
+LabWired integrates with external debuggers via standard protocols.
 
-### 5. `labwired-gdbstub`
-Implements the GDB Remote Serial Protocol (RSP) to allow debugging LabWired from GDB.
-- Wraps `Machine` in a `LabwiredTarget`.
-- Implements `gdbstub::Target` traits for single-step, breakpoints, and register/memory access.
-- Supports both Arm and RISC-V architectures.
+### GDB Remote Serial Protocol (RSP)
+The `labwired-gdbstub` crate implements the RSP server, allowing `gdb-multiarch` to attach to the simulation. It supports:
+- Breakpoints (Software/Hardware)
+- Single-stepping
+- Register and Memory inspection
 
-### 6. `labwired-dap`
-Implements the Debug Adapter Protocol (DAP) to allow debugging LabWired directly from VS Code.
-- Provides a DAP server that communicates with the IDE.
-- Controls the `Machine` execution.
-- **Custom Telemetry Protocol**: Streams high-frequency simulation metrics without interfering with standard DAP request/response cycles.
-
-#### **Telemetry Event Specification**
-The server emits a custom `telemetry` event every 100ms during execution:
-```json
-{
-  "type": "event",
-  "event": "telemetry",
-  "body": {
-    "pc": 134218240,
-    "cycles": 1204500,
-    "mips": 42.5,
-    "registers": {
-      "R0": 0,
-      "R15": 134218240,
-      "...": 0
-    }
-  }
-}
-```
-- **`pc`**: Current Program Counter.
-- **`cycles`**: Total cumulative simulation cycles.
-- **`mips`**: Calculated Millions of Instructions Per Second based on the 100ms delta.
-- **`registers`**: Map of register names to their current 32nd-bit unsigned values.
+### Debug Adapter Protocol (DAP)
+The `labwired-dap` crate provides a direct interface for VS Code. It exposes:
+- **State Inspection**: Live view of registers and call stack.
+- **Telemetry**: A custom event stream for real-time performance metrics (Cycles, MIPS) without polling overhead.

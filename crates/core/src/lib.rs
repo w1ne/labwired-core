@@ -94,6 +94,11 @@ pub trait Cpu: Send {
 pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
+    /// Side-effect-free value probe used for debug/observer bookkeeping.
+    /// Implementations should return `None` when such probing is not supported.
+    fn peek(&self, _offset: u64) -> Option<u8> {
+        None
+    }
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }
@@ -178,6 +183,10 @@ pub trait DebugControl {
         name: &str,
     ) -> Option<labwired_config::PeripheralDescriptor>;
     fn reset(&mut self) -> SimResult<()>;
+
+    // State Management
+    fn snapshot(&self) -> snapshot::MachineSnapshot;
+    fn restore(&mut self, snapshot: &snapshot::MachineSnapshot) -> SimResult<()>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -247,7 +256,7 @@ impl<C: Cpu> Machine<C> {
 
     pub fn step(&mut self) -> SimResult<()> {
         self.total_cycles += 1; // Base instruction cycle
-        let res = self.cpu.step(&mut self.bus, &self.observers);
+        self.cpu.step(&mut self.bus, &self.observers)?;
 
         // Propagate peripherals
         let (interrupts, costs) = self.bus.tick_peripherals_fully();
@@ -264,7 +273,7 @@ impl<C: Cpu> Machine<C> {
             tracing::debug!("Exception {} Pend", irq);
         }
 
-        res
+        Ok(())
     }
 
     pub fn snapshot(&self) -> snapshot::MachineSnapshot {
@@ -408,5 +417,13 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
     fn reset(&mut self) -> SimResult<()> {
         self.cpu.reset(&mut self.bus)
+    }
+
+    fn snapshot(&self) -> snapshot::MachineSnapshot {
+        self.snapshot()
+    }
+
+    fn restore(&mut self, snapshot: &snapshot::MachineSnapshot) -> SimResult<()> {
+        self.apply_snapshot(snapshot.clone())
     }
 }
