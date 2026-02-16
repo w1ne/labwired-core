@@ -28,11 +28,12 @@ pub struct ListChipsArgs {
     pub format: String,
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 enum Severity {
     Error,
     Warning,
+    #[allow(dead_code)]
     Info,
 }
 
@@ -75,7 +76,7 @@ impl ValidationResult {
 
     fn add_issue(&mut self, issue: ValidationIssue) {
         self.statistics.total_checks += 1;
-        
+
         match issue.severity {
             Severity::Error => {
                 self.valid = false;
@@ -88,11 +89,17 @@ impl ValidationResult {
                 self.statistics.infos += 1;
             }
         }
-        
+
         self.issues.push(issue);
     }
 
-    fn add_error(&mut self, code: impl Into<String>, message: impl Into<String>, suggestion: Option<String>, location: Option<String>) {
+    fn add_error(
+        &mut self,
+        code: impl Into<String>,
+        message: impl Into<String>,
+        suggestion: Option<String>,
+        location: Option<String>,
+    ) {
         self.add_issue(ValidationIssue {
             severity: Severity::Error,
             code: code.into(),
@@ -102,7 +109,13 @@ impl ValidationResult {
         });
     }
 
-    fn add_warning(&mut self, code: impl Into<String>, message: impl Into<String>, suggestion: Option<String>, location: Option<String>) {
+    fn add_warning(
+        &mut self,
+        code: impl Into<String>,
+        message: impl Into<String>,
+        suggestion: Option<String>,
+        location: Option<String>,
+    ) {
         self.add_issue(ValidationIssue {
             severity: Severity::Warning,
             code: code.into(),
@@ -155,8 +168,14 @@ fn validate_system(path: &PathBuf) -> ExitCode {
         Err(e) => {
             result.add_error(
                 "CHIP_LOAD_ERROR",
-                format!("Failed to load referenced chip '{:?}': {}", chip_path_resolved, e),
-                Some(format!("Ensure chip file exists at {:?}", chip_path_resolved)),
+                format!(
+                    "Failed to load referenced chip '{:?}': {}",
+                    chip_path_resolved, e
+                ),
+                Some(format!(
+                    "Ensure chip file exists at {:?}",
+                    chip_path_resolved
+                )),
                 Some("chip".to_string()),
             );
             print_result(&result);
@@ -220,7 +239,10 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
     if chip.schema_version != "1.0" {
         result.add_error(
             "SCHEMA_VERSION_UNSUPPORTED",
-            format!("Unsupported schema version '{}'. Supported: '1.0'", chip.schema_version),
+            format!(
+                "Unsupported schema version '{}'. Supported: '1.0'",
+                chip.schema_version
+            ),
             Some("Update schema_version field to '1.0' or migrate configuration".to_string()),
             Some("schema_version".to_string()),
         );
@@ -230,7 +252,10 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
     if !chip.schema_version.contains('.') {
         result.add_warning(
             "SCHEMA_VERSION_FORMAT",
-            format!("Schema version '{}' should use semver format (e.g., '1.0')", chip.schema_version),
+            format!(
+                "Schema version '{}' should use semver format (e.g., '1.0')",
+                chip.schema_version
+            ),
             Some("Use format 'MAJOR.MINOR' for schema_version".to_string()),
             Some("schema_version".to_string()),
         );
@@ -305,7 +330,7 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
         } else {
             0x1000 // Default 4KB
         };
-        
+
         peripheral_ranges.push((idx, p.id.clone(), p.base_address, p.base_address + size));
 
         // Collect IRQ assignments
@@ -317,18 +342,30 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
         if p.base_address >= chip.flash.base && p.base_address < flash_end {
             result.add_warning(
                 "PERIPHERAL_IN_FLASH",
-                format!("Peripheral '{}' at {:#x} is in Flash region", p.id, p.base_address),
-                Some("Peripherals should typically be in peripheral address space (0x40000000+)".to_string()),
+                format!(
+                    "Peripheral '{}' at {:#x} is in Flash region",
+                    p.id, p.base_address
+                ),
+                Some(
+                    "Peripherals should typically be in peripheral address space (0x40000000+)"
+                        .to_string(),
+                ),
                 Some(format!("peripherals[{}].base_address", idx)),
             );
         }
-        
+
         // Check if peripheral overlaps with RAM
         if p.base_address >= chip.ram.base && p.base_address < ram_end {
             result.add_warning(
                 "PERIPHERAL_IN_RAM",
-                format!("Peripheral '{}' at {:#x} is in RAM region", p.id, p.base_address),
-                Some("Peripherals should typically be in peripheral address space (0x40000000+)".to_string()),
+                format!(
+                    "Peripheral '{}' at {:#x} is in RAM region",
+                    p.id, p.base_address
+                ),
+                Some(
+                    "Peripherals should typically be in peripheral address space (0x40000000+)"
+                        .to_string(),
+                ),
                 Some(format!("peripherals[{}].base_address", idx)),
             );
         }
@@ -339,7 +376,7 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
         for j in (i + 1)..peripheral_ranges.len() {
             let (idx1, id1, start1, end1) = &peripheral_ranges[i];
             let (_idx2, id2, start2, end2) = &peripheral_ranges[j];
-            
+
             // Check if ranges overlap
             if start1 < end2 && start2 < end1 {
                 result.add_error(
@@ -348,7 +385,10 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
                         "Peripheral '{}' ({:#x}-{:#x}) overlaps with '{}' ({:#x}-{:#x})",
                         id1, start1, end1, id2, start2, end2
                     ),
-                    Some(format!("Adjust base_address or size of '{}' or '{}'", id1, id2)),
+                    Some(format!(
+                        "Adjust base_address or size of '{}' or '{}'",
+                        id1, id2
+                    )),
                     Some(format!("peripherals[{}].base_address", idx1)),
                 );
             }
@@ -369,7 +409,7 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
                 Some("peripherals[].irq".to_string()),
             );
         }
-        
+
         // Validate IRQ range (Cortex-M typically 0-239)
         if *irq_num > 239 {
             result.add_warning(

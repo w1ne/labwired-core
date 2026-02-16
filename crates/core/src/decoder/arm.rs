@@ -743,10 +743,10 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // MOVW: 1111 0 i 10 0100 imm4 0 imm3 rd imm8 -> F24..
     if (h1 & 0xFBF0) == 0xF240 {
         let i = (h1 >> 10) & 1;
-        let imm4 = (h1 & 0xF) as u16;
-        let imm3 = ((h2 >> 12) & 7) as u16;
+        let imm4 = h1 & 0xF;
+        let imm3 = (h2 >> 12) & 7;
         let rd = ((h2 >> 8) & 0xF) as u8;
-        let imm8 = (h2 & 0xFF) as u16;
+        let imm8 = h2 & 0xFF;
         let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
         return Instruction::Movw { rd, imm: imm16 };
     }
@@ -754,10 +754,10 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // MOVT: 1111 0 i 10 1100 imm4 0 imm3 rd imm8 -> F2C..
     if (h1 & 0xFBF0) == 0xF2C0 {
         let i = (h1 >> 10) & 1;
-        let imm4 = (h1 & 0xF) as u16;
-        let imm3 = ((h2 >> 12) & 7) as u16;
+        let imm4 = h1 & 0xF;
+        let imm3 = (h2 >> 12) & 7;
         let rd = ((h2 >> 8) & 0xF) as u8;
-        let imm8 = (h2 & 0xFF) as u16;
+        let imm8 = h2 & 0xFF;
         let imm16 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
         return Instruction::Movt { rd, imm: imm16 };
     }
@@ -807,10 +807,10 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // ADR.W (T3): 1111 0 i 10 1010 .... F2A..
     if (h1 & 0xFBF0) == 0xF2A0 {
         let i = (h1 >> 10) & 1;
-        let imm4 = (h1 & 0xF) as u16;
-        let imm3 = ((h2 >> 12) & 7) as u16;
+        let imm4 = h1 & 0xF;
+        let imm3 = (h2 >> 12) & 7;
         let rd = ((h2 >> 8) & 0xF) as u8;
-        let imm8 = (h2 & 0xFF) as u16;
+        let imm8 = h2 & 0xFF;
         let imm12 = (imm4 << 12) | (i << 11) | (imm3 << 8) | imm8;
         return Instruction::Adr { rd, imm: imm12 };
     }
@@ -819,7 +819,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     if (h1 & 0xFFF0) == 0xF8D0 {
         let rn = (h1 & 0xF) as u8;
         let rt = ((h2 >> 12) & 0xF) as u8;
-        let imm12 = (h2 & 0xFFF) as u16;
+        let imm12 = h2 & 0xFFF;
         return Instruction::LdrImm32 { rt, rn, imm12 };
     }
 
@@ -827,7 +827,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     if (h1 & 0xFFF0) == 0xF8C0 {
         let rn = (h1 & 0xF) as u8;
         let rt = ((h2 >> 12) & 0xF) as u8;
-        let imm12 = (h2 & 0xFFF) as u16;
+        let imm12 = h2 & 0xFFF;
         return Instruction::StrImm32 { rt, rn, imm12 };
     }
 
@@ -876,7 +876,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     }
 
     // UXTB.W (Thumb-2): 1111 1010 0100 1111 1111 <rd> 1000 <rm> -> FA4F ...
-    // My log said FA23 F404 (LSR) and FA2E F303 (LSR). 
+    // My log said FA23 F404 (LSR) and FA2E F303 (LSR).
     // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
     // Encodings: 1111 1010 0... (FA0x to FA7x)
     if (h1 & 0xFF80) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
