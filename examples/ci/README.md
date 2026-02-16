@@ -7,6 +7,7 @@ Run from the repo root:
 ```bash
 cargo build --release -p labwired-cli
 ./target/release/labwired test --script examples/ci/dummy-max-steps.yaml --no-uart-stdout
+./scripts/trace_drift_assert.sh --out-dir out/trace-drift-assert
 ```
 
 Expected outcomes:
@@ -18,3 +19,6 @@ Expected outcomes:
 - `dummy-no-progress.yaml`: exit code `0` (passes; asserts `expected_stop_reason: no_progress`)
 - `dummy-memory-violation.yaml`: exit code `0` (passes; asserts `expected_stop_reason: memory_violation`)
 - `dummy-fail-uart.yaml`: exit code `1` (fails; asserts UART contains a string that isn’t emitted)
+
+Trace drift baseline hashes are stored under `examples/ci/fingerprints/` and
+validated by `scripts/trace_drift_assert.sh`.
