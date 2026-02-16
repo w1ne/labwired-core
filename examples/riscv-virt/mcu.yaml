@@ -3,12 +3,12 @@ name: RISC-V Virt Machine
 arch: riscv
 flash:
   base: 0x40000000
-  size: 128K
+  size: "128KB"
 ram:
-  base: 0x40020000
-  size: 64K
+  base: 0x80000000
+  size: "64KB"
 peripherals:
   - id: uart1
     type: uart
-    base_address: 0x4000_C000
-    size: 4K
+    base_address: 0x4000_0000
+    size: "64KB"

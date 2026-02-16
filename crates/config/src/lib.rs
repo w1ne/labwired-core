@@ -9,6 +9,31 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+fn deserialize_u64_lax<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IntOrString {
+        Int(u64),
+        String(String),
+    }
+
+    match IntOrString::deserialize(deserializer)? {
+        IntOrString::Int(v) => Ok(v),
+        IntOrString::String(s) => {
+            let s = s.trim();
+            if let Some(stripped) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+                u64::from_str_radix(&stripped.replace('_', ""), 16).map_err(serde::de::Error::custom)
+            } else {
+                s.replace('_', "").parse::<u64>().map_err(serde::de::Error::custom)
+            }
+        }
+    }
+}
+
 /// Default schema version for YAML configs
 fn default_schema_version() -> String {
     "1.0".to_string()
@@ -26,6 +51,7 @@ pub enum Arch {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MemoryRange {
+    #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
     pub size: String, // e.g. "128KB"
 }
@@ -34,6 +60,7 @@ pub struct MemoryRange {
 pub struct PeripheralConfig {
     pub id: String,
     pub r#type: String, // "uart", "timer", "gpio", etc.
+    #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base_address: u64,
     #[serde(default)]
     pub size: Option<String>,
