@@ -9,14 +9,8 @@ The `labwired-cli` tool includes experimental support for importing CMSIS-SVD fi
 ## Command
 
 ```bash
-cargo run -p labwired-cli -- experimental import-svd --input <path/to/device.svd> --output <path/to/output.json>
-```
-
-## Example
-
-```bash
-# Convert an STM32F103 SVD to LabWired JSON
-cargo run -p labwired-cli -- experimental import-svd --input stm32f103.svd --output stm32f103.json
+# Convert an STM32F103 SVD to LabWired YAMLs
+cargo run -p svd-ingestor -- --input stm32f103.svd --output-dir ./peripherals
 ```
 
 ## Output Format

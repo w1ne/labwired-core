@@ -201,7 +201,45 @@ All CLI commands support the `--json` flag for machine-readable error output.
 - **2**: Configuration error
 - **3**: Runtime error
 
-## 9. Agentic Toolset (Python)
+## 9. SVD Ingestion Pipeline (Grounding)
+
+LabWired allows agents to "ground" their knowledge by ingesting vendor-standard CMSIS-SVD files. This is the preferred method for generating high-fidelity `PeripheralDescriptor` YAMLs.
+
+### Workflow
+1.  **Acquire**: Agent locates `.svd` file for the target chip.
+2.  **Ingest**: Run `svd-ingestor` to generate canonical YAMLs.
+3.  **Integrate**: Reference generated YAMLs in `system.yaml`.
+
+### Command
+```bash
+cargo run -p svd-ingestor -- \
+  --input <PATH_TO_SVD> \
+  --output-dir <OUTPUT_DIRECTORY> \
+  --filter <PERIPHERAL_NAMES>
+```
+
+### Example
+```bash
+# Generate descriptors for RCC and USART2
+cargo run -p svd-ingestor -- \
+  --input core/tests/fixtures/real_world/stm32f401.svd \
+  --output-dir core/examples/my_board/peripherals \
+  --filter RCC,USART2
+```
+
+## 10. Agentic Toolset (Python)
+## 11. Documentation Index
+
+For detailed agent workflows and architecture, refer to:
+- [Architecture Guide](./architecture.md)
+- [Peripheral Generation](./ai_peripheral_generation.md)
+- [Roadmap](./roadmap.md)
+
+### Workflows
+- [SVD Import Rules](./svd_ingestion.md)
+- [SVD Import Workflow](./workflows/import_svd.md)
+- [Peripheral Refinement](./workflows/ai_peripheral_refinement.md)
+- [Instruction Audit](./workflows/unsupported_instruction_audit.md)
 
 The `ai/labwired_ai` directory provides the high-level toolset for agents following the Iterative Loop protocol.
 
