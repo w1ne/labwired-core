@@ -232,13 +232,10 @@ cargo run -p svd-ingestor -- \
 
 For detailed agent workflows and architecture, refer to:
 - [Architecture Guide](./architecture.md)
-- [Peripheral Generation](./ai_peripheral_generation.md)
+- [Hardware Onboarding (SVD & AI)](./workflows/hardware_onboarding.md)
 - [Roadmap](./roadmap.md)
 
 ### Workflows
-- [SVD Import Rules](./svd_ingestion.md)
-- [SVD Import Workflow](./workflows/import_svd.md)
-- [Peripheral Refinement](./workflows/ai_peripheral_refinement.md)
 - [Instruction Audit](./workflows/unsupported_instruction_audit.md)
 
 The `ai/labwired_ai` directory provides the high-level toolset for agents following the Iterative Loop protocol.

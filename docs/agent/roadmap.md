@@ -18,6 +18,8 @@ This document breaks down the "AI Peripheral Generation" track into small, testa
     *   Action: Convert JSON IR to `labwired-config` YAML.
     *   Deliverable: A valid YAML file that `labwired-cli` can load.
 
+
+
 ## 🧠 Phase 2: Logic Synthesis (Behavior)
 **Goal**: Make the generated peripherals *do* something.
 
@@ -46,6 +48,13 @@ To ensure we ship useful tools early, we define three maturity levels:
     *   Extracts Access Types and basic Logic/Interrupts.
     *   *Value*: "Review only" workflow.
 
-## 👥 User Success Metrics
-1.  **Time-to-Blinky**: A beta user can generate a working GPIO/Timer config and run a Blinky demo in **< 5 minutes**.
-2.  **Edit Distance**: The generated YAML requires **< 5 manual edits** to pass the schema validator.
+## Phase 4: Board Onboarding Automation (Q2 2026)
+**Goal:** Reduce "Time to First Simulation" from minutes to seconds.
+
+### 4.1 SVD "Chip Scaffolding"
+*   **Current State**: User manually creates `chip.yaml` and links peripherals.
+*   **Planned**: `svd-ingestor --scaffold` generates the full `chip.yaml` automatically.
+
+### 4.2 Project Templates (`labwired new`)
+*   **Current State**: Manual `mkdir`, copy-paste `Cargo.toml`.
+*   **Planned**: `cargo labwired new --board nrf52` generates full project structure with dependencies and memory layout.
