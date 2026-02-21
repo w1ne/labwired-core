@@ -39,8 +39,14 @@ impl MultiCoreMachine {
         }
 
         // Tick peripherals once after all cores have stepped
-        let _interrupts = self.bus.tick_peripherals();
-        // TODO: Map interrupts to specific cores based on system wiring
+        let interrupts = self.bus.tick_peripherals();
+        // Distribute interrupts to cores. For now, route all to core 0.
+        // In fully mature models, an external interrupt controller (like GIC/PLIC) handles routing.
+        if !interrupts.is_empty() && !self.cores.is_empty() {
+            for irq in interrupts {
+                self.cores[0].set_exception_pending(irq);
+            }
+        }
 
         results
     }

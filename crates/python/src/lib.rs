@@ -52,12 +52,11 @@ impl From<PySimulationError> for PyErr {
 }
 
 fn build_bus(system_path: Option<PathBuf>) -> anyhow::Result<SystemBus> {
-    let mut bus = SystemBus::new();
-
     use labwired_core::memory::LinearMemory;
 
     // Default memory map if no config
     if system_path.is_none() {
+        let mut bus = SystemBus::new();
         // Standard Cortex-M layout
         bus.flash = LinearMemory::new(1024 * 1024, 0x0800_0000); // 1MB Flash
         bus.ram = LinearMemory::new(128 * 1024, 0x2000_0000); // 128KB RAM
@@ -74,14 +73,7 @@ fn build_bus(system_path: Option<PathBuf>) -> anyhow::Result<SystemBus> {
         .join(&manifest.chip);
     let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
 
-    // Configure Memory
-    let flash_size = labwired_config::parse_size(&chip.flash.size)?;
-    let ram_size = labwired_config::parse_size(&chip.ram.size)?;
-
-    bus.flash = LinearMemory::new(flash_size as usize, chip.flash.base);
-    bus.ram = LinearMemory::new(ram_size as usize, chip.ram.base);
-
-    // TODO: Configure peripherals
+    let bus = SystemBus::from_config(&chip, &manifest)?;
 
     Ok(bus)
 }
