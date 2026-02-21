@@ -5,6 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 pub mod bus;
+pub mod config;
 pub mod cpu;
 pub mod decoder;
 pub mod interrupt;
@@ -14,7 +15,6 @@ pub mod multi_core;
 pub mod peripherals;
 pub mod signals;
 pub mod snapshot;
-pub mod config;
 pub mod system;
 
 pub use config::SimulationConfig;
@@ -64,7 +64,10 @@ pub struct PeripheralTickResult {
 
 impl PeripheralTickResult {
     pub fn with_irq(irq: bool) -> Self {
-        Self { irq, ..Default::default() }
+        Self {
+            irq,
+            ..Default::default()
+        }
     }
 }
 
@@ -269,7 +272,8 @@ impl<C: Cpu> Machine<C> {
 
     pub fn step(&mut self) -> SimResult<()> {
         self.total_cycles += 1;
-        self.cpu.step(&mut self.bus, &self.observers, &self.config)?;
+        self.cpu
+            .step(&mut self.bus, &self.observers, &self.config)?;
 
         if self.total_cycles % self.config.peripheral_tick_interval as u64 == 0 {
             // Propagate peripherals

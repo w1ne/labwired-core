@@ -946,19 +946,9 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 return Instruction::Tbb { rn, rm };
             }
         } else if op == 2 {
-            return Instruction::Strd {
-                rt,
-                rt2,
-                rn,
-                imm8,
-            };
+            return Instruction::Strd { rt, rt2, rn, imm8 };
         } else if op == 3 {
-            return Instruction::Ldrd {
-                rt,
-                rt2,
-                rn,
-                imm8,
-            };
+            return Instruction::Ldrd { rt, rt2, rn, imm8 };
         }
     }
 
@@ -978,11 +968,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             (h1 & 0x7FF) as i32
         };
 
-        let mut offset = (s << 24)
-            | (i1 << 23)
-            | (i2 << 22)
-            | (imm_h1 << 12)
-            | (imm11 << 1);
+        let mut offset = (s << 24) | (i1 << 23) | (i2 << 22) | (imm_h1 << 12) | (imm11 << 1);
 
         if (offset & (1 << 24)) != 0 {
             offset |= !0x01FF_FFFF;

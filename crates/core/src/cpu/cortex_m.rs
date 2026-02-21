@@ -50,8 +50,23 @@ pub struct CortexM {
 impl Default for CortexM {
     fn default() -> Self {
         Self {
-            r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, r6: 0, r7: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0,
-            sp: 0, lr: 0, pc: 0, xpsr: 0x01000000, // Typical reset state (Thumb bit set)
+            r0: 0,
+            r1: 0,
+            r2: 0,
+            r3: 0,
+            r4: 0,
+            r5: 0,
+            r6: 0,
+            r7: 0,
+            r8: 0,
+            r9: 0,
+            r10: 0,
+            r11: 0,
+            r12: 0,
+            sp: 0,
+            lr: 0,
+            pc: 0,
+            xpsr: 0x01000000, // Typical reset state (Thumb bit set)
             pending_exceptions: 0,
             primask: false,
             vtor: Arc::new(AtomicU32::new(0)),
@@ -522,23 +537,49 @@ impl Cpu for CortexM {
                     let mut op2 = self.read_reg(rm);
                     match shift_type {
                         0 => op2 = op2.wrapping_shl(imm5 as u32), // LSL
-                        1 => op2 = if imm5 == 0 { 0 } else { op2.wrapping_shr(imm5 as u32) }, // LSR
+                        1 => {
+                            op2 = if imm5 == 0 {
+                                0
+                            } else {
+                                op2.wrapping_shr(imm5 as u32)
+                            }
+                        } // LSR
                         2 => {
                             op2 = if imm5 == 0 {
-                                if (op2 & 0x80000000) != 0 { 0xFFFFFFFF } else { 0 }
+                                if (op2 & 0x80000000) != 0 {
+                                    0xFFFFFFFF
+                                } else {
+                                    0
+                                }
                             } else {
                                 ((op2 as i32) >> (imm5 as u32)) as u32
                             }
                         } // ASR
-                        3 => if imm5 != 0 { op2 = op2.rotate_right(imm5 as u32) }, // ROR
+                        3 => {
+                            if imm5 != 0 {
+                                op2 = op2.rotate_right(imm5 as u32)
+                            }
+                        } // ROR
                         _ => {}
                     }
                     let op1 = self.read_reg(rn);
                     let result = match op {
                         0x0 => op1 & op2,  // AND
                         0x1 => op1 & !op2, // BIC
-                        0x2 => if rn == 0xF { op2 } else { op1 | op2 }, // ORR / MOV
-                        0x3 => if rn == 0xF { !op2 } else { op1 | !op2 }, // ORN / MVN
+                        0x2 => {
+                            if rn == 0xF {
+                                op2
+                            } else {
+                                op1 | op2
+                            }
+                        } // ORR / MOV
+                        0x3 => {
+                            if rn == 0xF {
+                                !op2
+                            } else {
+                                op1 | !op2
+                            }
+                        } // ORN / MVN
                         0x4 => op1 ^ op2,  // EOR
                         0x8 => op1.wrapping_add(op2), // ADD
                         0xD => op1.wrapping_sub(op2), // SUB
@@ -548,8 +589,12 @@ impl Cpu for CortexM {
                             op2
                         }
                     };
-                    if rd != 15 { self.write_reg(rd, result); }
-                    if set_flags { self.update_nz(result); }
+                    if rd != 15 {
+                        self.write_reg(rd, result);
+                    }
+                    if set_flags {
+                        self.update_nz(result);
+                    }
                     pc_increment = 4;
                 }
                 Instruction::DataProcImm32 {
@@ -564,8 +609,20 @@ impl Cpu for CortexM {
                     let result = match op {
                         0x0 => op1 & imm,  // AND
                         0x1 => op1 & !imm, // BIC
-                        0x2 => if rn == 0xF { imm } else { op1 | imm }, // ORR / MOV
-                        0x3 => if rn == 0xF { !imm } else { op1 | !imm }, // ORN / MVN
+                        0x2 => {
+                            if rn == 0xF {
+                                imm
+                            } else {
+                                op1 | imm
+                            }
+                        } // ORR / MOV
+                        0x3 => {
+                            if rn == 0xF {
+                                !imm
+                            } else {
+                                op1 | !imm
+                            }
+                        } // ORN / MVN
                         0x4 => op1 ^ imm,  // EOR
                         0x8 => op1.wrapping_add(imm), // ADD
                         0xA => {
@@ -584,8 +641,12 @@ impl Cpu for CortexM {
                             imm
                         }
                     };
-                    if rd != 15 { self.write_reg(rd, result); }
-                    if set_flags { self.update_nz(result); }
+                    if rd != 15 {
+                        self.write_reg(rd, result);
+                    }
+                    if set_flags {
+                        self.update_nz(result);
+                    }
                     pc_increment = 4;
                 }
                 Instruction::ShiftReg32 {
@@ -597,12 +658,42 @@ impl Cpu for CortexM {
                     let value = self.read_reg(rn);
                     let shift = self.read_reg(rm) & 0xFF;
                     let result = match shift_type {
-                        0 => if shift >= 32 { 0 } else { value.wrapping_shl(shift) },
-                        1 => if shift == 0 { value } else if shift >= 32 { 0 } else { value.wrapping_shr(shift) },
-                        2 => if shift == 0 { value } else if shift >= 32 {
-                                if (value & 0x8000_0000) != 0 { 0xFFFF_FFFF } else { 0 }
-                            } else { ((value as i32) >> shift) as u32 },
-                        3 => if shift == 0 { value } else { value.rotate_right(shift % 32) },
+                        0 => {
+                            if shift >= 32 {
+                                0
+                            } else {
+                                value.wrapping_shl(shift)
+                            }
+                        }
+                        1 => {
+                            if shift == 0 {
+                                value
+                            } else if shift >= 32 {
+                                0
+                            } else {
+                                value.wrapping_shr(shift)
+                            }
+                        }
+                        2 => {
+                            if shift == 0 {
+                                value
+                            } else if shift >= 32 {
+                                if (value & 0x8000_0000) != 0 {
+                                    0xFFFF_FFFF
+                                } else {
+                                    0
+                                }
+                            } else {
+                                ((value as i32) >> shift) as u32
+                            }
+                        }
+                        3 => {
+                            if shift == 0 {
+                                value
+                            } else {
+                                value.rotate_right(shift % 32)
+                            }
+                        }
                         _ => value,
                     };
                     self.write_reg(rd, result);
@@ -636,8 +727,12 @@ impl Cpu for CortexM {
                 Instruction::Ldrd { rt, rt2, rn, imm8 } => {
                     let base = self.read_reg(rn);
                     let addr = base.wrapping_add(imm8 << 2);
-                    if let Ok(v1) = bus.read_u32(addr as u64) { self.write_reg(rt, v1); }
-                    if let Ok(v2) = bus.read_u32((addr + 4) as u64) { self.write_reg(rt2, v2); }
+                    if let Ok(v1) = bus.read_u32(addr as u64) {
+                        self.write_reg(rt, v1);
+                    }
+                    if let Ok(v2) = bus.read_u32((addr + 4) as u64) {
+                        self.write_reg(rt2, v2);
+                    }
                     pc_increment = 4;
                 }
                 Instruction::Strd { rt, rt2, rn, imm8 } => {
@@ -651,7 +746,9 @@ impl Cpu for CortexM {
                 }
                 Instruction::Tbb { rn, rm } => {
                     let mut base = self.read_reg(rn);
-                    if rn == 15 { base = (self.pc & !3).wrapping_add(4); }
+                    if rn == 15 {
+                        base = (self.pc & !3).wrapping_add(4);
+                    }
                     let index = self.read_reg(rm);
                     let addr = base.wrapping_add(index);
                     if let Ok(byte) = bus.read_u8(addr as u64) {
@@ -662,7 +759,9 @@ impl Cpu for CortexM {
                 }
                 Instruction::Tbh { rn, rm } => {
                     let mut base = self.read_reg(rn);
-                    if rn == 15 { base = (self.pc & !3).wrapping_add(4); }
+                    if rn == 15 {
+                        base = (self.pc & !3).wrapping_add(4);
+                    }
                     let index = self.read_reg(rm);
                     let addr = base.wrapping_add(index << 1);
                     if let Ok(halfword) = bus.read_u16(addr as u64) {
@@ -674,8 +773,8 @@ impl Cpu for CortexM {
                 Instruction::Unknown32(h1, h2) => {
                     // Manual fallback for complex bit patterns not yet in Instruction enum
                     if (h1 & 0xFE00) == 0xE800 {
-                         // Table branch, load/store exclusive etc (handled by Tbb/Tbh above usually, but just in case)
-                         pc_increment = 4;
+                        // Table branch, load/store exclusive etc (handled by Tbb/Tbh above usually, but just in case)
+                        pc_increment = 4;
                     } else if (h1 & 0xFF00) == 0xF800 {
                         // LDR/STR (immediate) T3/T4
                         let op1 = (h1 >> 4) & 0xF;
@@ -700,7 +799,10 @@ impl Cpu for CortexM {
                                 let base = self.read_reg(rn);
                                 if p != 0 {
                                     addr = base.wrapping_add(offset as u32);
-                                    if w != 0 { wb = true; wb_val = addr; }
+                                    if w != 0 {
+                                        wb = true;
+                                        wb_val = addr;
+                                    }
                                 } else {
                                     addr = base;
                                     wb = true;
@@ -708,16 +810,40 @@ impl Cpu for CortexM {
                                 }
                             }
                             match op1 & 0x7 {
-                                0 => { let val = (self.read_reg(rt) & 0xFF) as u8; let _ = bus.write_u8(addr as u64, val); }
-                                1 => { if let Ok(v) = bus.read_u8(addr as u64) { self.write_reg(rt, v as u32); } }
-                                2 => { let val = (self.read_reg(rt) & 0xFFFF) as u16; let _ = bus.write_u16(addr as u64, val); }
-                                3 => { if let Ok(v) = bus.read_u16(addr as u64) { self.write_reg(rt, v as u32); } }
-                                4 => { let _ = bus.write_u32(addr as u64, self.read_reg(rt)); }
-                                5 => { if let Ok(v) = bus.read_u32(addr as u64) { self.write_reg(rt, v); } }
-                                _ => { supported = false; }
+                                0 => {
+                                    let val = (self.read_reg(rt) & 0xFF) as u8;
+                                    let _ = bus.write_u8(addr as u64, val);
+                                }
+                                1 => {
+                                    if let Ok(v) = bus.read_u8(addr as u64) {
+                                        self.write_reg(rt, v as u32);
+                                    }
+                                }
+                                2 => {
+                                    let val = (self.read_reg(rt) & 0xFFFF) as u16;
+                                    let _ = bus.write_u16(addr as u64, val);
+                                }
+                                3 => {
+                                    if let Ok(v) = bus.read_u16(addr as u64) {
+                                        self.write_reg(rt, v as u32);
+                                    }
+                                }
+                                4 => {
+                                    let _ = bus.write_u32(addr as u64, self.read_reg(rt));
+                                }
+                                5 => {
+                                    if let Ok(v) = bus.read_u32(addr as u64) {
+                                        self.write_reg(rt, v);
+                                    }
+                                }
+                                _ => {
+                                    supported = false;
+                                }
                             }
                             if supported {
-                                if wb { self.write_reg(rn, wb_val); }
+                                if wb {
+                                    self.write_reg(rn, wb_val);
+                                }
                                 pc_increment = 4;
                             }
                         } else {
@@ -730,9 +856,21 @@ impl Cpu for CortexM {
                             let offset = self.read_reg(rm).wrapping_shl(imm2 as u32);
                             let addr = base.wrapping_add(offset);
                             match op1 & 0x7 {
-                                1 => { if let Ok(v) = bus.read_u8(addr as u64) { self.write_reg(rt, v as u32); } }
-                                3 => { if let Ok(v) = bus.read_u16(addr as u64) { self.write_reg(rt, v as u32); } }
-                                5 => { if let Ok(v) = bus.read_u32(addr as u64) { self.write_reg(rt, v); } }
+                                1 => {
+                                    if let Ok(v) = bus.read_u8(addr as u64) {
+                                        self.write_reg(rt, v as u32);
+                                    }
+                                }
+                                3 => {
+                                    if let Ok(v) = bus.read_u16(addr as u64) {
+                                        self.write_reg(rt, v as u32);
+                                    }
+                                }
+                                5 => {
+                                    if let Ok(v) = bus.read_u32(addr as u64) {
+                                        self.write_reg(rt, v);
+                                    }
+                                }
                                 _ => {}
                             }
                             pc_increment = 4;
@@ -752,18 +890,22 @@ impl Cpu for CortexM {
                         let mut result = 0u32;
                         let mut update_rd = true;
                         match op {
-                            0x0 => result = op1 & imm32, // AND
-                            0x1 => result = op1 & !imm32, // BIC
-                            0x2 => result = if rn == 15 { imm32 } else { op1 | imm32 }, // ORR/MOV
+                            0x0 => result = op1 & imm32,                                  // AND
+                            0x1 => result = op1 & !imm32,                                 // BIC
+                            0x2 => result = if rn == 15 { imm32 } else { op1 | imm32 },   // ORR/MOV
                             0x3 => result = if rn == 15 { !imm32 } else { op1 | !imm32 }, // ORN/MVN
-                            0x4 => result = op1 ^ imm32, // EOR
-                            0x8 => result = op1.wrapping_add(imm32), // ADD
-                            0xD => result = op1.wrapping_sub(imm32), // SUB
+                            0x4 => result = op1 ^ imm32,                                  // EOR
+                            0x8 => result = op1.wrapping_add(imm32),                      // ADD
+                            0xD => result = op1.wrapping_sub(imm32),                      // SUB
                             _ => update_rd = false,
                         }
                         if update_rd {
-                            if rd != 15 { self.write_reg(rd, result); }
-                            if s { self.update_nz(result); }
+                            if rd != 15 {
+                                self.write_reg(rd, result);
+                            }
+                            if s {
+                                self.update_nz(result);
+                            }
                             pc_increment = 4;
                         }
                     } else if (h1 & 0xFB00) == 0xF100 && (h2 & 0x8000) == 0 {
@@ -777,19 +919,29 @@ impl Cpu for CortexM {
                         let imm12 = (i << 11) | (imm3 << 8) | imm8;
                         let op1 = self.read_reg(rn);
                         match op {
-                            0x0 => { self.write_reg(rd, op1.wrapping_add(imm12 as u32)); pc_increment = 4; } // ADD
-                            0xA => { self.write_reg(rd, op1.wrapping_sub(imm12 as u32)); pc_increment = 4; } // SUB
+                            0x0 => {
+                                self.write_reg(rd, op1.wrapping_add(imm12 as u32));
+                                pc_increment = 4;
+                            } // ADD
+                            0xA => {
+                                self.write_reg(rd, op1.wrapping_sub(imm12 as u32));
+                                pc_increment = 4;
+                            } // SUB
                             _ => {}
                         }
                     } else if (h1 & 0xF000) == 0xF000 && (h2 & 0x8000) == 0x8000 {
                         // B.W / BL (handled elsewhere but just in case)
                         pc_increment = 4;
                     } else {
-                        tracing::warn!("Unknown 32-bit instruction at {:#x}: {:#x} {:#x}", self.pc, h1, h2);
+                        tracing::warn!(
+                            "Unknown 32-bit instruction at {:#x}: {:#x} {:#x}",
+                            self.pc,
+                            h1,
+                            h2
+                        );
                         pc_increment = 4;
                     }
                 }
-
 
                 Instruction::Nop => { /* Do nothing */ }
                 Instruction::MovImm { rd, imm } => {
@@ -1319,7 +1471,6 @@ impl Cpu for CortexM {
                     self.branch_to(target, bus)?;
                     pc_increment = 0;
                 }
-
 
                 Instruction::Unknown(op) => {
                     tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);

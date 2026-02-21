@@ -745,8 +745,12 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
-        if let Some(val) = self.ram.read_u16(addr) { return Ok(val); }
-        if let Some(val) = self.flash.read_u16(addr) { return Ok(val); }
+        if let Some(val) = self.ram.read_u16(addr) {
+            return Ok(val);
+        }
+        if let Some(val) = self.flash.read_u16(addr) {
+            return Ok(val);
+        }
         if self.flash.base_addr != 0 && addr + 1 < self.flash.data.len() as u64 {
             if let Some(val) = self.flash.read_u16(self.flash.base_addr + addr) {
                 return Ok(val);
@@ -758,8 +762,12 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
-        if let Some(val) = self.ram.read_u32(addr) { return Ok(val); }
-        if let Some(val) = self.flash.read_u32(addr) { return Ok(val); }
+        if let Some(val) = self.ram.read_u32(addr) {
+            return Ok(val);
+        }
+        if let Some(val) = self.flash.read_u32(addr) {
+            return Ok(val);
+        }
         if self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
             if let Some(val) = self.flash.read_u32(self.flash.base_addr + addr) {
                 return Ok(val);
@@ -777,7 +785,9 @@ impl crate::Bus for SystemBus {
         if !wrote && self.flash.base_addr != 0 && addr + 1 < self.flash.data.len() as u64 {
             wrote = self.flash.write_u16(self.flash.base_addr + addr, value);
         }
-        if wrote { return Ok(()); }
+        if wrote {
+            return Ok(());
+        }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
@@ -788,7 +798,9 @@ impl crate::Bus for SystemBus {
         if !wrote && self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
             wrote = self.flash.write_u32(self.flash.base_addr + addr, value);
         }
-        if wrote { return Ok(()); }
+        if wrote {
+            return Ok(());
+        }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
