@@ -66,6 +66,57 @@ impl LinearMemory {
         }
     }
 
+    pub fn read_u16(&self, addr: u64) -> Option<u16> {
+        if addr >= self.base_addr && addr + 1 < self.base_addr + self.data.len() as u64 {
+            let offset = (addr - self.base_addr) as usize;
+            let bytes = [self.data[offset], self.data[offset + 1]];
+            Some(u16::from_le_bytes(bytes))
+        } else {
+            None
+        }
+    }
+
+    pub fn read_u32(&self, addr: u64) -> Option<u32> {
+        if addr >= self.base_addr && addr + 3 < self.base_addr + self.data.len() as u64 {
+            let offset = (addr - self.base_addr) as usize;
+            let bytes = [
+                self.data[offset],
+                self.data[offset + 1],
+                self.data[offset + 2],
+                self.data[offset + 3],
+            ];
+            Some(u32::from_le_bytes(bytes))
+        } else {
+            None
+        }
+    }
+
+    pub fn write_u16(&mut self, addr: u64, value: u16) -> bool {
+        if addr >= self.base_addr && addr + 1 < self.base_addr + self.data.len() as u64 {
+            let offset = (addr - self.base_addr) as usize;
+            let bytes = value.to_le_bytes();
+            self.data[offset] = bytes[0];
+            self.data[offset + 1] = bytes[1];
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn write_u32(&mut self, addr: u64, value: u32) -> bool {
+        if addr >= self.base_addr && addr + 3 < self.base_addr + self.data.len() as u64 {
+            let offset = (addr - self.base_addr) as usize;
+            let bytes = value.to_le_bytes();
+            self.data[offset] = bytes[0];
+            self.data[offset + 1] = bytes[1];
+            self.data[offset + 2] = bytes[2];
+            self.data[offset + 3] = bytes[3];
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn load_from_segment(&mut self, segment: &Segment) -> bool {
         // Simple overlap check
         let end_addr = segment.start_addr + segment.data.len() as u64;
