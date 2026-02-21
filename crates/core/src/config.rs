@@ -20,7 +20,7 @@ impl Default for SimulationConfig {
     fn default() -> Self {
         Self {
             decode_cache_enabled: true,
-            peripheral_tick_interval: 16, // Optimized default
+            peripheral_tick_interval: 1, // Default to strict timing for safety
             optimized_bus_access: true,
         }
     }
