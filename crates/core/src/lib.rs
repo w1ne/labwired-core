@@ -90,6 +90,18 @@ pub trait Cpu: Send {
         observers: &[Arc<dyn SimulationObserver>],
         config: &SimulationConfig,
     ) -> SimResult<()>;
+    fn step_batch(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        for _ in 0..max_count {
+            self.step(bus, observers, config)?;
+        }
+        Ok(max_count)
+    }
     fn set_pc(&mut self, val: u32);
     fn get_pc(&self) -> u32;
     fn set_sp(&mut self, val: u32);
@@ -136,6 +148,12 @@ pub trait Bus {
     fn tick_peripherals(&mut self) -> Vec<u32>; // Returns list of pending exception numbers
     fn execute_dma(&mut self, requests: &[DmaRequest]) -> SimResult<()>;
     fn config(&self) -> &SimulationConfig;
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;
@@ -344,32 +362,75 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
     fn run(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
         let mut steps = 0;
+
         loop {
-            // Check breakpoints BEFORE stepping
+            // Check breakpoints BEFORE batch
             let pc = self.cpu.get_pc();
             let pc_aligned = pc & !1;
 
             if self.breakpoints.contains(&pc_aligned) {
-                // If we haven't already reported a stop at THIS specific address, stop now.
-                // This allows 'Continue' to move past a breakpoint we just hit.
                 if self.last_breakpoint != Some(pc_aligned) {
                     self.last_breakpoint = Some(pc_aligned);
                     return Ok(StopReason::Breakpoint(pc));
                 }
             }
 
-            // We are executing an instruction, so clear the "last hit" sticky BP
+            // We are executing, so clear the "last hit" sticky BP
             self.last_breakpoint = None;
 
-            self.step()?;
-            steps += 1;
-
-            if let Some(max) = max_steps {
-                if steps >= max {
+            if let Some(limit) = max_steps {
+                if steps >= limit {
                     return Ok(StopReason::MaxStepsReached);
                 }
             }
+
+            // Execute in batch until next peripheral tick or breakpoint/limit
+            let current_cycles = self.total_cycles;
+            let tick_interval = self.config.peripheral_tick_interval as u64;
+            let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
+
+            let current_batch = if let Some(limit) = max_steps {
+                remaining_until_tick.min(limit - steps)
+            } else {
+                remaining_until_tick
+            };
+
+            let executed = self
+                .cpu
+                .step_batch(&mut self.bus, &self.observers, &self.config, current_batch)?;
+
+            steps += executed;
+            self.total_cycles += executed as u64;
+
+            if self
+                .total_cycles
+                .is_multiple_of(self.config.peripheral_tick_interval as u64)
+            {
+                // Propagate peripherals
+                let (interrupts, costs) = self.bus.tick_peripherals_fully();
+                for c in costs {
+                    self.total_cycles += c.cycles as u64;
+                    if let Some(p) = self.bus.peripherals.get(c.index) {
+                        for observer in &self.observers {
+                            observer.on_peripheral_tick(&p.name, c.cycles);
+                        }
+                    }
+                }
+                for irq in interrupts {
+                    self.cpu.set_exception_pending(irq);
+                    tracing::debug!("Exception {} Pend", irq);
+                }
+            }
+
+            // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
+            // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.
+            if executed == 0 && current_batch > 0 {
+                // If the CPU makes no progress but says Ok(0), we might need to investigate.
+                // For now, assume it's valid (e.g. waiting for something).
+                break;
+            }
         }
+        Ok(StopReason::StepDone)
     }
 
     fn step_single(&mut self) -> SimResult<StopReason> {

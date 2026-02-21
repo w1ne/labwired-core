@@ -5,7 +5,8 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::decoder::arm::{decode_thumb_16, decode_thumb_32, Instruction};
-use crate::{Bus, Cpu, SimResult, SimulationObserver};
+use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationObserver};
+use crate::bus::SystemBus;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
@@ -176,6 +177,7 @@ impl CortexM {
         self.xpsr |= (n << 31) | (z << 30) | (c << 29) | (v << 28);
     }
 
+    #[inline(always)]
     fn check_condition(&self, cond: u8) -> bool {
         let n = (self.xpsr >> 31) & 1 == 1;
         let z = (self.xpsr >> 30) & 1 == 1;
@@ -202,7 +204,7 @@ impl CortexM {
         }
     }
 
-    fn branch_to(&mut self, addr: u32, bus: &mut dyn Bus) -> SimResult<()> {
+    fn branch_to<B: Bus + ?Sized>(&mut self, addr: u32, bus: &mut B) -> SimResult<()> {
         if (addr & 0xF000_0000) == 0xF000_0000 {
             // EXC_RETURN logic
             self.exception_return(bus)?;
@@ -212,7 +214,7 @@ impl CortexM {
         Ok(())
     }
 
-    fn exception_return(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
+    fn exception_return<B: Bus + ?Sized>(&mut self, bus: &mut B) -> SimResult<()> {
         // Perform Unstacking
         let frame_ptr = self.sp;
 
@@ -324,11 +326,72 @@ impl Cpu for CortexM {
         names
     }
 
+
     fn step(
         &mut self,
         bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+    ) -> SimResult<()> {
+        self.step_internal(bus, observers, config)
+    }
+
+    fn step_batch(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        if !config.batch_mode_enabled {
+            for _ in 0..max_count {
+                self.step(bus, observers, config)?;
+            }
+            return Ok(max_count);
+        }
+
+        let mut executed = 0;
+        let empty_observers: &[Arc<dyn SimulationObserver>] = &[];
+        
+        if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
+            while executed < max_count {
+                if self.pending_exceptions != 0 && !self.primask {
+                    break;
+                }
+                let old_pc = self.pc;
+                self.step_internal(sysbus, empty_observers, config)?;
+                executed += 1;
+                let pc_diff = self.pc.wrapping_sub(old_pc);
+                if pc_diff != 2 && pc_diff != 4 {
+                    break;
+                }
+            }
+        } else {
+            while executed < max_count {
+                if self.pending_exceptions != 0 && !self.primask {
+                    break;
+                }
+                let old_pc = self.pc;
+                self.step_internal(bus, empty_observers, config)?;
+                executed += 1;
+                let pc_diff = self.pc.wrapping_sub(old_pc);
+                if pc_diff != 2 && pc_diff != 4 {
+                    break;
+                }
+            }
+        }
+
+        Ok(executed)
+    }
+}
+
+impl CortexM {
+    #[inline(always)]
+    fn step_internal<B: Bus + ?Sized>(
+        &mut self,
+        bus: &mut B,
         _observers: &[Arc<dyn SimulationObserver>],
-        config: &crate::SimulationConfig,
+        config: &SimulationConfig,
     ) -> SimResult<()> {
         // Check for pending exceptions before executing instruction
         if self.pending_exceptions != 0 {
@@ -370,8 +433,6 @@ impl Cpu for CortexM {
 
             return Ok(());
         }
-
-        // ... (existing logic)
         // Fetch/Decode with optional Cache
         let cache_idx = ((self.pc >> 1) & 0xFFF) as usize;
         let entry = if config.decode_cache_enabled {
@@ -418,8 +479,10 @@ impl Cpu for CortexM {
             (instr, op, pincr as u32, cyc)
         };
 
-        for observer in _observers {
-            observer.on_step_start(self.pc, opcode);
+        if !_observers.is_empty() {
+            for observer in _observers {
+                observer.on_step_start(self.pc, opcode);
+            }
         }
 
         let mut execute = true;
@@ -1492,13 +1555,16 @@ impl Cpu for CortexM {
 
         self.pc = self.pc.wrapping_add(pc_increment);
 
-        for observer in _observers {
-            observer.on_step_end(_cycles);
+        if !_observers.is_empty() {
+            for observer in _observers {
+                observer.on_step_end(_cycles);
+            }
         }
 
         Ok(())
     }
-}
+
+    }
 
 // Thumb expand immediate - implements ARM's modified immediate constant expansion
 fn thumb_expand_imm(imm12: u32) -> u32 {

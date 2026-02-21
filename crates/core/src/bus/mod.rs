@@ -822,6 +822,14 @@ impl crate::Bus for SystemBus {
         &self.config
     }
 
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn tick_peripherals(&mut self) -> Vec<u32> {
         let (interrupts, _costs) = self.tick_peripherals_fully();
         interrupts
