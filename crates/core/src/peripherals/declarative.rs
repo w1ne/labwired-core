@@ -245,10 +245,10 @@ impl Peripheral for GenericPeripheral {
                 // This is a limitation: multi-byte write triggers might be tricky.
                 // However, most SVD tools/emulators assume 32-bit writes for control registers.
                 // Let's at least trigger on the byte write.
-                // TODO: Buffer multi-byte writes for trigger matching?
-                // For now, simple byte-level trigger is okay if we only match bits within that byte.
-                // Or we can pass the written 'value' shifted as if it was a 32-bit write if we knew the alignment.
-                self.check_triggers(&reg.id, true, Some(value as u32));
+                // Calculate the shift for this byte within the register
+                let byte_offset = (offset - reg_start) * 8;
+                let shifted_val = (value as u32) << byte_offset;
+                self.check_triggers(&reg.id, true, Some(shifted_val));
 
                 return Ok(());
             }
