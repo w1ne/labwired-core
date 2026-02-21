@@ -497,10 +497,7 @@ mod tests {
 
         // Tick 2: Triggered! (delay 0 -> fired)
         let res = p.tick();
-        assert!(res
-            .explicit_irqs
-            .as_ref()
-            .map_or(false, |v| v.contains(&42)));
+        assert!(res.explicit_irqs.as_ref().is_some_and(|v| v.contains(&42)));
         assert_eq!(p.read(0x10).unwrap(), 0x01);
     }
 

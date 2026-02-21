@@ -474,10 +474,8 @@ impl SystemBus {
     }
 
     pub fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
-        if self.config.optimized_bus_access {
-            if self.ram.write_u32(addr, value) {
-                return Ok(());
-            }
+        if self.config.optimized_bus_access && self.ram.write_u32(addr, value) {
+            return Ok(());
         }
         // Flash is read-only via bus writes usually, but let's stick to the behavior of write_u8
         // which would likely fail or do nothing if it's flash.
@@ -515,10 +513,8 @@ impl SystemBus {
     }
 
     pub fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
-        if self.config.optimized_bus_access {
-            if self.ram.write_u16(addr, value) {
-                return Ok(());
-            }
+        if self.config.optimized_bus_access && self.ram.write_u16(addr, value) {
+            return Ok(());
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
