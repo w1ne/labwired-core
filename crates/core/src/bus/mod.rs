@@ -766,6 +766,58 @@ impl crate::Bus for SystemBus {
         res
     }
 
+    fn read_u16(&self, addr: u64) -> SimResult<u16> {
+        if let Some(val) = self.ram.read_u16(addr) { return Ok(val); }
+        if let Some(val) = self.flash.read_u16(addr) { return Ok(val); }
+        if self.flash.base_addr != 0 && addr + 1 < self.flash.data.len() as u64 {
+            if let Some(val) = self.flash.read_u16(self.flash.base_addr + addr) {
+                return Ok(val);
+            }
+        }
+        let b0 = self.read_u8(addr)? as u16;
+        let b1 = self.read_u8(addr + 1)? as u16;
+        Ok(b0 | (b1 << 8))
+    }
+
+    fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        if let Some(val) = self.ram.read_u32(addr) { return Ok(val); }
+        if let Some(val) = self.flash.read_u32(addr) { return Ok(val); }
+        if self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
+            if let Some(val) = self.flash.read_u32(self.flash.base_addr + addr) {
+                return Ok(val);
+            }
+        }
+        let b0 = self.read_u8(addr)? as u32;
+        let b1 = self.read_u8(addr + 1)? as u32;
+        let b2 = self.read_u8(addr + 2)? as u32;
+        let b3 = self.read_u8(addr + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+    }
+
+    fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+        let mut wrote = self.ram.write_u16(addr, value) || self.flash.write_u16(addr, value);
+        if !wrote && self.flash.base_addr != 0 && addr + 1 < self.flash.data.len() as u64 {
+            wrote = self.flash.write_u16(self.flash.base_addr + addr, value);
+        }
+        if wrote { return Ok(()); }
+        self.write_u8(addr, (value & 0xFF) as u8)?;
+        self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
+        Ok(())
+    }
+
+    fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        let mut wrote = self.ram.write_u32(addr, value) || self.flash.write_u32(addr, value);
+        if !wrote && self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
+            wrote = self.flash.write_u32(self.flash.base_addr + addr, value);
+        }
+        if wrote { return Ok(()); }
+        self.write_u8(addr, (value & 0xFF) as u8)?;
+        self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
+        self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
+        self.write_u8(addr + 3, ((value >> 24) & 0xFF) as u8)?;
+        Ok(())
+    }
+
     fn tick_peripherals(&mut self) -> Vec<u32> {
         let (interrupts, _costs, dma_requests) = self.tick_peripherals_with_costs();
 
