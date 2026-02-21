@@ -106,6 +106,7 @@ impl Cpu for RiscV {
         &mut self,
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
+        _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
         let opcode = bus.read_u32(self.pc as u64)?;
 
@@ -436,7 +437,10 @@ impl Cpu for RiscV {
         self.write_reg(2, val); // x2 is SP
     }
     fn set_exception_pending(&mut self, _exception_num: u32) {
-        // TODO: RISC-V Interrupts
+        // For RISC-V Machine mode, external interrupts are routed to MEIP (bit 11).
+        // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
+        // Since we don't have a PLIC yet, we pend a generic external interrupt.
+        self.mip |= 1 << 11;
     }
 
     fn get_register(&self, id: u8) -> u32 {

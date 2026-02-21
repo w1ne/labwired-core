@@ -5,6 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 pub mod bus;
+pub mod config;
 pub mod cpu;
 pub mod decoder;
 pub mod interrupt;
@@ -15,6 +16,8 @@ pub mod peripherals;
 pub mod signals;
 pub mod snapshot;
 pub mod system;
+
+pub use config::SimulationConfig;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -55,8 +58,17 @@ pub struct DmaRequest {
 pub struct PeripheralTickResult {
     pub irq: bool,
     pub cycles: u32,
-    pub dma_requests: Vec<DmaRequest>,
-    pub explicit_irqs: Vec<u32>,
+    pub dma_requests: Option<Vec<DmaRequest>>,
+    pub explicit_irqs: Option<Vec<u32>>,
+}
+
+impl PeripheralTickResult {
+    pub fn with_irq(irq: bool) -> Self {
+        Self {
+            irq,
+            ..Default::default()
+        }
+    }
 }
 
 /// Trait for observing simulation events in a modular way.
@@ -76,6 +88,7 @@ pub trait Cpu: Send {
         &mut self,
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
     ) -> SimResult<()>;
     fn set_pc(&mut self, val: u32);
     fn get_pc(&self) -> u32;
@@ -122,6 +135,7 @@ pub trait Bus {
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()>;
     fn tick_peripherals(&mut self) -> Vec<u32>; // Returns list of pending exception numbers
     fn execute_dma(&mut self, requests: &[DmaRequest]) -> SimResult<()>;
+    fn config(&self) -> &SimulationConfig;
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;
@@ -203,9 +217,10 @@ pub struct Machine<C: Cpu> {
     pub observers: Vec<Arc<dyn SimulationObserver>>,
 
     // Debug state
-    pub breakpoints: HashSet<u32>,
+    pub breakpoints: std::collections::HashSet<u32>,
     pub last_breakpoint: Option<u32>,
     pub total_cycles: u64,
+    pub config: SimulationConfig,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -217,6 +232,7 @@ impl<C: Cpu> Machine<C> {
             breakpoints: HashSet::new(),
             last_breakpoint: None,
             total_cycles: 0,
+            config: SimulationConfig::default(),
         }
     }
 }
@@ -255,22 +271,28 @@ impl<C: Cpu> Machine<C> {
     }
 
     pub fn step(&mut self) -> SimResult<()> {
-        self.total_cycles += 1; // Base instruction cycle
-        self.cpu.step(&mut self.bus, &self.observers)?;
+        self.total_cycles += 1;
+        self.cpu
+            .step(&mut self.bus, &self.observers, &self.config)?;
 
-        // Propagate peripherals
-        let (interrupts, costs) = self.bus.tick_peripherals_fully();
-        for c in costs {
-            self.total_cycles += c.cycles as u64;
-            if let Some(p) = self.bus.peripherals.get(c.index) {
-                for observer in &self.observers {
-                    observer.on_peripheral_tick(&p.name, c.cycles);
+        if self
+            .total_cycles
+            .is_multiple_of(self.config.peripheral_tick_interval as u64)
+        {
+            // Propagate peripherals
+            let (interrupts, costs) = self.bus.tick_peripherals_fully();
+            for c in costs {
+                self.total_cycles += c.cycles as u64;
+                if let Some(p) = self.bus.peripherals.get(c.index) {
+                    for observer in &self.observers {
+                        observer.on_peripheral_tick(&p.name, c.cycles);
+                    }
                 }
             }
-        }
-        for irq in interrupts {
-            self.cpu.set_exception_pending(irq);
-            tracing::debug!("Exception {} Pend", irq);
+            for irq in interrupts {
+                self.cpu.set_exception_pending(irq);
+                tracing::debug!("Exception {} Pend", irq);
+            }
         }
 
         Ok(())

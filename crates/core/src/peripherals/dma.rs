@@ -102,7 +102,7 @@ impl Peripheral for Dma1 {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        let mut dma_requests = Vec::new();
+        let mut dma_requests = None;
         let mut irq = false;
 
         for (i, chan) in self.channels.iter_mut().enumerate() {
@@ -120,7 +120,7 @@ impl Peripheral for Dma1 {
 
                 if dir_bit == 1 {
                     // Memory to Peripheral
-                    dma_requests.push(DmaRequest {
+                    dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
                         addr: chan.cmar as u64,
                         val: 0, // Value will be populated by SystemBus during Read
                         direction: DmaDirection::Read,
@@ -144,7 +144,7 @@ impl Peripheral for Dma1 {
                         // Actually, in MEM2MEM, DIR is usually ignored or determines src/dst.
 
                         // Let's just implement a fake write for now to verify the plumbing.
-                        dma_requests.push(DmaRequest {
+                        dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
                             addr: chan.cmar as u64,
                             val: 0x42, // Dummy value
                             direction: DmaDirection::Write,
@@ -174,9 +174,9 @@ impl Peripheral for Dma1 {
 
         PeripheralTickResult {
             irq,
-            cycles: if dma_requests.is_empty() { 0 } else { 1 },
+            cycles: if dma_requests.is_none() { 0 } else { 1 },
             dma_requests,
-            explicit_irqs: Vec::new(),
+            explicit_irqs: None,
         }
     }
 

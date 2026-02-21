@@ -86,24 +86,26 @@ impl Peripheral for Exti {
 
     fn tick(&mut self) -> PeripheralTickResult {
         // EXTI interrupts are triggered when PR bits are set AND corresponding IMR bits are set.
-        let mut explicit_irqs = Vec::new();
+        let mut explicit_irqs = None;
         let active = self.pr & self.imr;
 
         if active != 0 {
+            let mut irqs = Vec::new();
             // Map lines 0-4
             for i in 0..5 {
                 if (active & (1 << i)) != 0 {
-                    explicit_irqs.push(6 + i); // EXTI0..4 -> IRQ 6..10
+                    irqs.push(6 + i); // EXTI0..4 -> IRQ 6..10
                 }
             }
             // Map lines 5-9
             if (active & 0x03E0) != 0 {
-                explicit_irqs.push(23); // EXTI9_5 -> IRQ 23
+                irqs.push(23); // EXTI9_5 -> IRQ 23
             }
             // Map lines 10-15
             if (active & 0xFC00) != 0 {
-                explicit_irqs.push(40); // EXTI15_10 -> IRQ 40
+                irqs.push(40); // EXTI15_10 -> IRQ 40
             }
+            explicit_irqs = Some(irqs);
         }
 
         PeripheralTickResult {

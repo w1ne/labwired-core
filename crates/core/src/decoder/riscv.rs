@@ -5,7 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 /// RISC-V RV32I Base Integer Instruction Set
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Instruction {
     Lui { rd: u8, imm: u32 },             // LUI rd, imm
     Auipc { rd: u8, imm: u32 },           // AUIPC rd, imm

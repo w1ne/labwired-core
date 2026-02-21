@@ -14,6 +14,7 @@ impl Cpu for MockCpu {
         &mut self,
         _bus: &mut dyn Bus,
         _observers: &[Arc<dyn SimulationObserver>],
+        _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
         self.pc += 2;
         Ok(())

@@ -245,10 +245,10 @@ impl Peripheral for GenericPeripheral {
                 // This is a limitation: multi-byte write triggers might be tricky.
                 // However, most SVD tools/emulators assume 32-bit writes for control registers.
                 // Let's at least trigger on the byte write.
-                // TODO: Buffer multi-byte writes for trigger matching?
-                // For now, simple byte-level trigger is okay if we only match bits within that byte.
-                // Or we can pass the written 'value' shifted as if it was a 32-bit write if we knew the alignment.
-                self.check_triggers(&reg.id, true, Some(value as u32));
+                // Calculate the shift for this byte within the register
+                let byte_offset = (offset - reg_start) * 8;
+                let shifted_val = (value as u32) << byte_offset;
+                self.check_triggers(&reg.id, true, Some(shifted_val));
 
                 return Ok(());
             }
@@ -286,7 +286,7 @@ impl Peripheral for GenericPeripheral {
                 if let Some(ref int_name) = event.interrupt {
                     if let Some(ints) = &self.descriptor.interrupts {
                         if let Some(&val) = ints.get(int_name) {
-                            result.explicit_irqs.push(val);
+                            result.explicit_irqs.get_or_insert_with(Vec::new).push(val);
                         }
                     }
                 }
@@ -492,12 +492,12 @@ mod tests {
 
         // Tick 1: Still 1 cycle left (delay 1 -> 0)
         let res = p.tick();
-        assert!(res.explicit_irqs.is_empty());
+        assert!(res.explicit_irqs.is_none());
         assert_eq!(p.read(0x10).unwrap(), 0x00);
 
         // Tick 2: Triggered! (delay 0 -> fired)
         let res = p.tick();
-        assert!(res.explicit_irqs.contains(&42));
+        assert!(res.explicit_irqs.as_ref().is_some_and(|v| v.contains(&42)));
         assert_eq!(p.read(0x10).unwrap(), 0x01);
     }
 
@@ -533,7 +533,7 @@ mod tests {
 
         // Tick 1: Triggered immediately (delay 0 -> fired)
         let res = p.tick();
-        assert!(res.explicit_irqs.is_empty());
+        assert!(res.explicit_irqs.is_none());
         assert_eq!(p.read(0x10).unwrap(), 0x55);
     }
 
