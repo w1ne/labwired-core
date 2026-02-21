@@ -86,8 +86,8 @@ impl Peripheral for Dwt {
         PeripheralTickResult {
             irq: false,
             cycles: 0,
-            dma_requests: Vec::new(),
-            explicit_irqs: Vec::new(),
+            dma_requests: None,
+            explicit_irqs: None,
         }
     }
 

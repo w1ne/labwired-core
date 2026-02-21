@@ -75,8 +75,7 @@ mod integration_tests {
             crate::PeripheralTickResult {
                 irq: tick_now,
                 cycles: 0,
-                dma_requests: Vec::new(),
-                explicit_irqs: Vec::new(),
+                ..Default::default()
             }
         }
     }
@@ -344,8 +343,7 @@ mod integration_tests {
                 crate::PeripheralTickResult {
                     irq: true,
                     cycles: 1,
-                    dma_requests: Vec::new(),
-                    explicit_irqs: Vec::new(),
+                    ..Default::default()
                 }
             }
         }

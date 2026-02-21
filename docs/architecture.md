@@ -15,7 +15,12 @@ pub trait Cpu {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
     
     /// Executes a single instruction cycle
-    fn step(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
+    fn step(
+        &mut self, 
+        bus: &mut dyn Bus, 
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig
+    ) -> SimResult<()>;
 }
 ```
 
@@ -35,20 +40,21 @@ Peripherals communicate with the CPU via the `Peripheral` trait. This trait defi
 
 ```rust
 pub trait Peripheral {
-    fn read(&self, offset: u64) -> u8;
-    fn write(&mut self, offset: u64, value: u8);
+    fn read(&self, offset: u64) -> SimResult<u8>;
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
     fn tick(&mut self) -> PeripheralTickResult;
 }
 ```
 
-### Two-Phase Execution Model
-To ensure deterministic behavior for DMA and interrupts, LabWired employs a two-phase update cycle for each simulation tick:
-
-1.  **Instruction Step**: The CPU fetches and executes one instruction.
-2.  **Peripheral Tick**: Each peripheral's `tick()` method is invoked. Peripherals return a `PeripheralTickResult` containing requested state changes (IRQs, DMA requests).
-3.  **Bus Arbitration**: The `SystemBus` processes pending DMA requests and updates the Interrupt Controller state.
-
 This model prevents race conditions where a peripheral modifies memory while the CPU is executing, ensuring strict sequential consistency.
+
+### Optimized Execution
+To achieve high MIPS (Million Instructions Per Second) for autonomous agents, LabWired supports configurable performance gates:
+- **Instruction Decode Cache**: A direct-mapped cache in the CPU core that avoids re-decoding instructions on every hit.
+- **Multi-Byte Bus Fast-Path**: Specialized 16/32-bit access methods in `SystemBus` that bypass the virtual `read_u8` loop for memory regions (RAM/Flash).
+- **Batched Ticking**: Configurable `peripheral_tick_interval`. Ticking every N cycles instead of every instruction significantly reduces virtual call overhead in the hot path.
+
+Defaults and gating are controlled via `SimulationConfig`. Setting `peripheral_tick_interval` to 1 and disabling caches restores strict cycle-accurate behavior for time-sensitive firmware.
 
 ## 3. Thumb-2 Decoder
 

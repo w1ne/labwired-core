@@ -34,6 +34,7 @@ pub struct SystemBus {
     pub peripherals: Vec<PeripheralEntry>,
     pub nvic: Option<Arc<NvicState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
+    pub config: crate::SimulationConfig,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
 }
@@ -184,57 +185,15 @@ impl SystemBus {
             ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
             peripherals: vec![
                 PeripheralEntry {
-                    name: "dma1".to_string(),
-                    base: 0x4002_0000,
-                    size: 0x400,
-                    irq: None,
-                    dev: Box::new(crate::peripherals::dma::Dma1::new()),
-                },
-                PeripheralEntry {
-                    name: "afio".to_string(),
-                    base: 0x4001_0000,
-                    size: 0x400,
-                    irq: None,
-                    dev: Box::new(crate::peripherals::afio::Afio::new()),
-                },
-                PeripheralEntry {
-                    name: "exti".to_string(),
-                    base: 0x4001_0400,
-                    size: 0x400,
-                    irq: None,
-                    dev: Box::new(crate::peripherals::exti::Exti::new()),
-                },
-                PeripheralEntry {
-                    name: "systick".to_string(),
-                    base: 0xE000_E010,
-                    size: 0x10,
-                    irq: Some(15),
-                    dev: Box::new(crate::peripherals::systick::Systick::new()),
-                },
-                PeripheralEntry {
                     name: "uart1".to_string(),
                     base: 0x4000_C000,
-                    size: 0x1000,
-                    irq: None,
+                    size: 0x400,
+                    irq: Some(37),
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                 },
                 PeripheralEntry {
                     name: "gpioa".to_string(),
                     base: 0x4001_0800,
-                    size: 0x400,
-                    irq: None,
-                    dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
-                },
-                PeripheralEntry {
-                    name: "gpiob".to_string(),
-                    base: 0x4001_0C00,
-                    size: 0x400,
-                    irq: None,
-                    dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
-                },
-                PeripheralEntry {
-                    name: "gpioc".to_string(),
-                    base: 0x4001_1000,
                     size: 0x400,
                     irq: None,
                     dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
@@ -247,50 +206,16 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::rcc::Rcc::new()),
                 },
                 PeripheralEntry {
-                    name: "tim2".to_string(),
-                    base: 0x4000_0000,
-                    size: 0x400,
-                    irq: Some(28),
-                    dev: Box::new(crate::peripherals::timer::Timer::new()),
-                },
-                PeripheralEntry {
-                    name: "tim3".to_string(),
-                    base: 0x4000_0400,
-                    size: 0x400,
-                    irq: Some(29),
-                    dev: Box::new(crate::peripherals::timer::Timer::new()),
-                },
-                PeripheralEntry {
-                    name: "i2c1".to_string(),
-                    base: 0x4000_5400,
-                    size: 0x400,
-                    irq: Some(31),
-                    dev: Box::new(crate::peripherals::i2c::I2c::new()),
-                },
-                PeripheralEntry {
-                    name: "i2c2".to_string(),
-                    base: 0x4000_5800,
-                    size: 0x400,
-                    irq: Some(33),
-                    dev: Box::new(crate::peripherals::i2c::I2c::new()),
-                },
-                PeripheralEntry {
-                    name: "spi1".to_string(),
-                    base: 0x4001_3000,
-                    size: 0x400,
-                    irq: Some(35),
-                    dev: Box::new(crate::peripherals::spi::Spi::new()),
-                },
-                PeripheralEntry {
-                    name: "spi2".to_string(),
-                    base: 0x4000_3800,
-                    size: 0x400,
-                    irq: Some(36),
-                    dev: Box::new(crate::peripherals::spi::Spi::new()),
+                    name: "systick".to_string(),
+                    base: 0xE000_E010,
+                    size: 0x100,
+                    irq: Some(15),
+                    dev: Box::new(crate::peripherals::systick::Systick::new()),
                 },
             ],
             nvic: None,
             observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -323,6 +248,7 @@ impl SystemBus {
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -522,6 +448,24 @@ impl SystemBus {
     }
 
     pub fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        if self.config.optimized_bus_access {
+            if let Some(val) = self.ram.read_u32(addr) {
+                return Ok(val);
+            }
+            if let Some(val) = self.flash.read_u32(addr) {
+                return Ok(val);
+            }
+            // Boot alias handle
+            if self.flash.base_addr != 0 {
+                let alias_end = self.flash.data.len() as u64;
+                if addr + 3 < alias_end {
+                    if let Some(val) = self.flash.read_u32(self.flash.base_addr + addr) {
+                        return Ok(val);
+                    }
+                }
+            }
+        }
+
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
         let b2 = self.read_u8(addr + 2)? as u32;
@@ -530,6 +474,15 @@ impl SystemBus {
     }
 
     pub fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        if self.config.optimized_bus_access {
+            if self.ram.write_u32(addr, value) {
+                return Ok(());
+            }
+        }
+        // Flash is read-only via bus writes usually, but let's stick to the behavior of write_u8
+        // which would likely fail or do nothing if it's flash.
+        // Actually write_u8 checks flash_alias_old etc.
+
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
@@ -538,12 +491,35 @@ impl SystemBus {
     }
 
     pub fn read_u16(&self, addr: u64) -> SimResult<u16> {
+        if self.config.optimized_bus_access {
+            if let Some(val) = self.ram.read_u16(addr) {
+                return Ok(val);
+            }
+            if let Some(val) = self.flash.read_u16(addr) {
+                return Ok(val);
+            }
+            // Boot alias handle
+            if self.flash.base_addr != 0 {
+                let alias_end = self.flash.data.len() as u64;
+                if addr + 1 < alias_end {
+                    if let Some(val) = self.flash.read_u16(self.flash.base_addr + addr) {
+                        return Ok(val);
+                    }
+                }
+            }
+        }
+
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
         Ok(b0 | (b1 << 8))
     }
 
     pub fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+        if self.config.optimized_bus_access {
+            if self.ram.write_u16(addr, value) {
+                return Ok(());
+            }
+        }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
@@ -563,8 +539,8 @@ impl SystemBus {
                 });
             }
 
-            if !res.dma_requests.is_empty() {
-                dma_requests.extend(res.dma_requests);
+            if let Some(reqs) = res.dma_requests {
+                dma_requests.extend(reqs);
             }
 
             if res.irq {
@@ -585,19 +561,21 @@ impl SystemBus {
                 }
             }
 
-            for irq in res.explicit_irqs {
-                if let Some(nvic) = &self.nvic {
-                    if irq >= 16 {
-                        let idx = ((irq - 16) / 32) as usize;
-                        let bit = (irq - 16) % 32;
-                        if idx < 8 {
-                            nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
+            if let Some(irqs) = res.explicit_irqs {
+                for irq in irqs {
+                    if let Some(nvic) = &self.nvic {
+                        if irq >= 16 {
+                            let idx = ((irq - 16) / 32) as usize;
+                            let bit = (irq - 16) % 32;
+                            if idx < 8 {
+                                nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
+                            }
+                        } else {
+                            interrupts.push(irq);
                         }
                     } else {
                         interrupts.push(irq);
                     }
-                } else {
-                    interrupts.push(irq);
                 }
             }
         }
@@ -818,24 +796,10 @@ impl crate::Bus for SystemBus {
         Ok(())
     }
 
-    fn tick_peripherals(&mut self) -> Vec<u32> {
-        let (interrupts, _costs, dma_requests) = self.tick_peripherals_with_costs();
-
-        // Execute DMA requests
-        if !dma_requests.is_empty() {
-            let _ = self.execute_dma(&dma_requests);
-        }
-
-        interrupts
-    }
-
-    fn execute_dma(&mut self, requests: &[DmaRequest]) -> SimResult<()> {
+    fn execute_dma(&mut self, requests: &[crate::DmaRequest]) -> SimResult<()> {
         for req in requests {
             match req.direction {
                 crate::DmaDirection::Read => {
-                    // Note: In a real system, the DMA controller reads into its internal register.
-                    // Here we just verify the read is valid for now, or we could pass the value back.
-                    // For STM32 DMA, it's usually memory-to-peripheral or peripheral-to-memory.
                     let _ = self.read_u8(req.addr)?;
                 }
                 crate::DmaDirection::Write => {
@@ -844,6 +808,15 @@ impl crate::Bus for SystemBus {
             }
         }
         Ok(())
+    }
+
+    fn config(&self) -> &crate::SimulationConfig {
+        &self.config
+    }
+
+    fn tick_peripherals(&mut self) -> Vec<u32> {
+        let (interrupts, _costs) = self.tick_peripherals_fully();
+        interrupts
     }
 }
 
@@ -959,6 +932,7 @@ mod tests {
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -998,6 +972,7 @@ mod tests {
             ],
             nvic: None,
             observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };

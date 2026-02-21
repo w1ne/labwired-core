@@ -15,6 +15,7 @@ pub struct MultiCoreMachine {
     pub cores: Vec<Box<dyn Cpu>>,
     pub bus: SystemBus,
     pub observers: Vec<Arc<dyn SimulationObserver>>,
+    pub config: crate::SimulationConfig,
 }
 
 impl MultiCoreMachine {
@@ -23,6 +24,7 @@ impl MultiCoreMachine {
             cores: Vec::new(),
             bus,
             observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
         }
     }
 
@@ -35,7 +37,7 @@ impl MultiCoreMachine {
     pub fn step_all(&mut self) -> Vec<crate::SimResult<()>> {
         let mut results = Vec::new();
         for core in &mut self.cores {
-            results.push(core.step(&mut self.bus, &self.observers));
+            results.push(core.step(&mut self.bus, &self.observers, &self.config));
         }
 
         // Tick peripherals once after all cores have stepped

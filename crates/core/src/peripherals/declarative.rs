@@ -286,7 +286,7 @@ impl Peripheral for GenericPeripheral {
                 if let Some(ref int_name) = event.interrupt {
                     if let Some(ints) = &self.descriptor.interrupts {
                         if let Some(&val) = ints.get(int_name) {
-                            result.explicit_irqs.push(val);
+                            result.explicit_irqs.get_or_insert_with(Vec::new).push(val);
                         }
                     }
                 }
@@ -492,12 +492,12 @@ mod tests {
 
         // Tick 1: Still 1 cycle left (delay 1 -> 0)
         let res = p.tick();
-        assert!(res.explicit_irqs.is_empty());
+        assert!(res.explicit_irqs.is_none());
         assert_eq!(p.read(0x10).unwrap(), 0x00);
 
         // Tick 2: Triggered! (delay 0 -> fired)
         let res = p.tick();
-        assert!(res.explicit_irqs.contains(&42));
+        assert!(res.explicit_irqs.as_ref().map_or(false, |v| v.contains(&42)));
         assert_eq!(p.read(0x10).unwrap(), 0x01);
     }
 
@@ -533,7 +533,7 @@ mod tests {
 
         // Tick 1: Triggered immediately (delay 0 -> fired)
         let res = p.tick();
-        assert!(res.explicit_irqs.is_empty());
+        assert!(res.explicit_irqs.is_none());
         assert_eq!(p.read(0x10).unwrap(), 0x55);
     }
 

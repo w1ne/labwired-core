@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Instruction {
     Nop,
     MovImm {
@@ -314,6 +314,16 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // REVSH Rd, Rm
+    Udiv {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    }, // UDIV Rd, Rn, Rm
+    Sdiv {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    }, // SDIV Rd, Rn, Rm
 
     DataProc32 {
         op: u8,
@@ -343,9 +353,29 @@ pub enum Instruction {
         mask: u8,
     }, // IT <cond> <mask...ish>
 
+    Ldrd {
+        rt: u8,
+        rt2: u8,
+        rn: u8,
+        imm8: u32,
+    },
+    Strd {
+        rt: u8,
+        rt2: u8,
+        rn: u8,
+        imm8: u32,
+    },
+    Tbb {
+        rn: u8,
+        rm: u8,
+    },
+    Tbh {
+        rn: u8,
+        rm: u8,
+    },
+
     Unknown(u16),
-    // Intermediate state for 32-bit instruction (First half)
-    Prefix32(u16),
+    Unknown32(u16, u16),
 }
 
 /// Decodes a 16-bit Thumb instruction
@@ -654,7 +684,7 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
     // 6. 32-bit Instruction Prefix (0xE800-0xFFFF range, excluding B/BL 16-bit range)
     // 32-bit Thumb instructions start with 111, with bits [12:11] != 00
     if (opcode & 0xE000) == 0xE000 && (opcode & 0x1800) != 0 {
-        return Instruction::Prefix32(opcode);
+        return Instruction::Unknown(opcode);
     }
 
     // ADD/SUB SP (T1): 1011 0000 x iii iiii
@@ -899,7 +929,86 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         return Instruction::Uxtb { rd, rm };
     }
 
-    Instruction::Unknown(h1)
+    // LDRD / STRD / TBB / TBH (Encoding A1)
+    if (h1 & 0xFE00) == 0xE800 {
+        let op = ((h1 >> 7) & 3) as u8;
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let rt2 = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u32;
+
+        if (h1 & 0x01F0) == 0x00D0 && (h2 & 0xFFF0) == 0xF000 {
+            let rm = (h2 & 0xF) as u8;
+            let is_tbh = (h2 & 0x0010) != 0;
+            if is_tbh {
+                return Instruction::Tbh { rn, rm };
+            } else {
+                return Instruction::Tbb { rn, rm };
+            }
+        } else if op == 2 {
+            return Instruction::Strd {
+                rt,
+                rt2,
+                rn,
+                imm8,
+            };
+        } else if op == 3 {
+            return Instruction::Ldrd {
+                rt,
+                rt2,
+                rn,
+                imm8,
+            };
+        }
+    }
+
+    // B.W / BL
+    if (h1 & 0xF800) == 0xF000 && (h2 & 0x8000) == 0x8000 {
+        let s = ((h1 >> 10) & 0x1) as i32;
+        let j1 = ((h2 >> 13) & 0x1) as i32;
+        let j2 = ((h2 >> 11) & 0x1) as i32;
+        let i1 = (!(j1 ^ s)) & 0x1;
+        let i2 = (!(j2 ^ s)) & 0x1;
+        let imm11 = (h2 & 0x7FF) as i32;
+
+        let is_bl = (h2 & 0x1000) != 0;
+        let imm_h1 = if is_bl {
+            (h1 & 0x3FF) as i32
+        } else {
+            (h1 & 0x7FF) as i32
+        };
+
+        let mut offset = (s << 24)
+            | (i1 << 23)
+            | (i2 << 22)
+            | (imm_h1 << 12)
+            | (imm11 << 1);
+
+        if (offset & (1 << 24)) != 0 {
+            offset |= !0x01FF_FFFF;
+        }
+
+        if is_bl {
+            return Instruction::Bl { offset };
+        } else {
+            return Instruction::Branch { offset };
+        }
+    }
+
+    // UDIV / SDIV: 1111 1011 10x1 ... -> FB9.. / FBB..
+    if (h1 & 0xFFD0) == 0xFB90 && (h2 & 0xF0F0) == 0xF0F0 {
+        let is_unsigned = (h1 & 0x0020) != 0;
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        if is_unsigned {
+            return Instruction::Udiv { rd, rn, rm };
+        } else {
+            return Instruction::Sdiv { rd, rn, rm };
+        }
+    }
+
+    Instruction::Unknown32(h1, h2)
 }
 
 #[cfg(test)]

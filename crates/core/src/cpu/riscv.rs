@@ -106,6 +106,7 @@ impl Cpu for RiscV {
         &mut self,
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
+        _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
         let opcode = bus.read_u32(self.pc as u64)?;
 
