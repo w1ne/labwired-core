@@ -275,7 +275,10 @@ impl<C: Cpu> Machine<C> {
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
 
-        if self.total_cycles.is_multiple_of(self.config.peripheral_tick_interval as u64) {
+        if self
+            .total_cycles
+            .is_multiple_of(self.config.peripheral_tick_interval as u64)
+        {
             // Propagate peripherals
             let (interrupts, costs) = self.bus.tick_peripherals_fully();
             for c in costs {
