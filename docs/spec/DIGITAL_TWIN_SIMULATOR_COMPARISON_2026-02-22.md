@@ -4,6 +4,8 @@ Date: February 22, 2026
 Author: Codex research synthesis  
 Scope: Embedded firmware/system simulation platforms and adjacent industrial digital twin platforms
 
+Daily operating view (lean): `docs/spec/COMPETITIVE_EXECUTION_ONE_PAGER.md`
+
 ## 1) Executive Summary
 
 LabWired is currently best positioned in the **deterministic embedded firmware simulation for CI** segment, not in the broad industrial asset-graph digital twin segment.
