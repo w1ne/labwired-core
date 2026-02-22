@@ -17,6 +17,10 @@ jobs:
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly
+          workspaces: |
+            . -> target
 
       - name: Install ARM Toolchain
         run: |

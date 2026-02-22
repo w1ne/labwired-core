@@ -42,6 +42,10 @@ jobs:
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-onboarding-smoke
+          workspaces: |
+            . -> target
 
       - name: Run onboarding smoke
         run: |
@@ -104,4 +108,3 @@ jobs:
             out/onboarding-smoke/onboarding-scoreboard.md
             out/onboarding-smoke/onboarding-scoreboard.json
           retention-days: 14
-

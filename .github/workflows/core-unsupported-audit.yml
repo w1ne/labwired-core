@@ -16,6 +16,10 @@ jobs:
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-unsupported-audit
+          workspaces: |
+            . -> target
 
       - name: Install ARM target
         run: rustup target add thumbv7m-none-eabi

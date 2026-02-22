@@ -40,6 +40,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: core-coverage
+          workspaces: |
+            . -> target
 
       - name: Cache cargo-llvm-cov
         id: cache-llvm-cov

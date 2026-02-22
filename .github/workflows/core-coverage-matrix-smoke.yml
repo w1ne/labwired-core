@@ -75,6 +75,10 @@ jobs:
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-coverage-matrix
+          workspaces: |
+            . -> target
 
       - name: Build CLI
         run: cargo build -p labwired-cli
