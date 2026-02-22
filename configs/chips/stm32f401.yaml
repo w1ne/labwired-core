@@ -17,6 +17,8 @@ peripherals:
     type: "rcc"
     base_address: 0x40023800
     size: "1KB"
+    config:
+      profile: "stm32f4"
   - id: "gpioa"
     type: "gpio"
     base_address: 0x40020000

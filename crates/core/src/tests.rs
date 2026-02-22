@@ -698,12 +698,66 @@ mod integration_tests {
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
         let base = 0x4402_0C00;
 
+        bus.write_u32(base + 0x8C, 0x0102_0304).unwrap();
         bus.write_u32(base + 0xA4, 0xA5A5_0001).unwrap();
         bus.write_u32(base + 0x9C, 0x5A5A_0002).unwrap();
 
+        assert_eq!(bus.read_u32(base + 0x8C).unwrap(), 0x0102_0304);
         assert_eq!(bus.read_u32(base + 0xA4).unwrap(), 0xA5A5_0001);
         assert_eq!(bus.read_u32(base + 0x9C).unwrap(), 0x5A5A_0002);
         assert_eq!(bus.read_u32(base + 0x18).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_from_config_rcc_profile_stm32f4() {
+        let mut rcc_config = HashMap::new();
+        rcc_config.insert(
+            "profile".to_string(),
+            serde_yaml::Value::String("stm32f4".to_string()),
+        );
+
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "test-chip-rcc-f4".to_string(),
+            arch: Arch::Arm,
+            flash: MemoryRange {
+                base: 0x0,
+                size: "128KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "rcc".to_string(),
+                r#type: "rcc".to_string(),
+                base_address: 0x4002_3800,
+                size: None,
+                irq: None,
+                config: rcc_config,
+            }],
+        };
+
+        let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "test-system-rcc-f4".to_string(),
+            chip: "test-chip-rcc-f4".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let base = 0x4002_3800;
+
+        bus.write_u32(base + 0x30, 0x1111_0001).unwrap(); // AHB1ENR
+        bus.write_u32(base + 0x44, 0x2222_0002).unwrap(); // APB2ENR
+        bus.write_u32(base + 0x40, 0x3333_0003).unwrap(); // APB1ENR
+
+        assert_eq!(bus.read_u32(base + 0x30).unwrap(), 0x1111_0001);
+        assert_eq!(bus.read_u32(base + 0x44).unwrap(), 0x2222_0002);
+        assert_eq!(bus.read_u32(base + 0x40).unwrap(), 0x3333_0003);
+        assert_eq!(bus.read_u32(base + 0x1C).unwrap(), 0);
     }
 
     #[test]
