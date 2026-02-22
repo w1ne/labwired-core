@@ -59,11 +59,11 @@ jobs:
             system: configs/systems/nucleo-f401re.yaml
           - id: stm32f103-bluepill
             target: thumbv7m-none-eabi
-            crate: firmware
-            profile: debug
-            profile_dir: debug
-            script: examples/tests/stm32f103_integrated_test.yaml
-            system: configs/systems/stm32f103-integrated-test.yaml
+            crate: demo-blinky
+            profile: release
+            profile_dir: release
+            script: examples/demo-blinky/io-smoke.yaml
+            system: examples/demo-blinky/system.yaml
 
     steps:
       - uses: actions/checkout@v4
