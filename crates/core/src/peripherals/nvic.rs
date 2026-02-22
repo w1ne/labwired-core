@@ -13,31 +13,17 @@ use std::sync::Arc;
 pub struct NvicState {
     pub iser: [AtomicU32; 8],
     pub ispr: [AtomicU32; 8],
+    pub iabr: [AtomicU32; 8],
+    pub ipr: [AtomicU32; 240], // Priority registers (simplified)
 }
 
 impl Default for NvicState {
     fn default() -> Self {
         Self {
-            iser: [
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-            ],
-            ispr: [
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-                AtomicU32::new(0),
-            ],
+            iser: Default::default(),
+            ispr: Default::default(),
+            iabr: Default::default(),
+            ipr: [0; 240].map(|_| AtomicU32::new(0)),
         }
     }
 }
@@ -65,6 +51,29 @@ impl Nvic {
             false
         }
     }
+
+    pub fn acknowledge_interrupt(&self, irq: u32) {
+        if irq >= 16 {
+            let idx = ((irq - 16) / 32) as usize;
+            let bit = (irq - 16) % 32;
+            if idx < 8 {
+                // Clear pending, set active
+                self.state.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
+                self.state.iabr[idx].fetch_or(1 << bit, Ordering::SeqCst);
+            }
+        }
+    }
+
+    pub fn complete_interrupt(&self, irq: u32) {
+        if irq >= 16 {
+            let idx = ((irq - 16) / 32) as usize;
+            let bit = (irq - 16) % 32;
+            if idx < 8 {
+                // Clear active
+                self.state.iabr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
+            }
+        }
+    }
 }
 
 impl Peripheral for Nvic {
@@ -79,6 +88,14 @@ impl Peripheral for Nvic {
             // ISPR0-7
             let real_idx = (offset - 0x100) / 4;
             self.state.ispr[real_idx as usize].load(Ordering::SeqCst)
+        } else if (0x200..0x220).contains(&offset) {
+            // IABR0-7
+            let real_idx = (offset - 0x200) / 4;
+            self.state.iabr[real_idx as usize].load(Ordering::SeqCst)
+        } else if (0x300..0x6BC).contains(&offset) {
+            // IPR0-239
+            let real_idx = (offset - 0x300) / 4;
+            self.state.ipr[real_idx as usize].load(Ordering::SeqCst)
         } else {
             0
         };
@@ -106,6 +123,25 @@ impl Peripheral for Nvic {
             // ICPR: Writing 1 clears the pending bit
             let real_idx = reg_idx - 0x180 / 4;
             self.state.ispr[real_idx].fetch_and(!mask, Ordering::SeqCst);
+        } else if (0x300..0x6BC).contains(&offset) {
+            // IPR: Priority registers
+            let real_idx = (offset - 0x300) / 4;
+            let mut old_val = self.state.ipr[real_idx as usize].load(Ordering::SeqCst);
+            loop {
+                let mut new_val = old_val;
+                let m = 0xFF << (byte_offset * 8);
+                new_val &= !m;
+                new_val |= mask;
+                match self.state.ipr[real_idx as usize].compare_exchange_weak(
+                    old_val,
+                    new_val,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                ) {
+                    Ok(_) => break,
+                    Err(actual) => old_val = actual,
+                }
+            }
         }
 
         Ok(())

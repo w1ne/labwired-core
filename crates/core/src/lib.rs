@@ -62,6 +62,7 @@ pub struct PeripheralTickResult {
     pub cycles: u32,
     pub dma_requests: Option<Vec<DmaRequest>>,
     pub explicit_irqs: Option<Vec<u32>>,
+    pub dma_signals: Option<Vec<u32>>,
 }
 
 impl PeripheralTickResult {
@@ -135,6 +136,7 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         None
     }
+    fn dma_request(&mut self, _request_id: u32) {}
     fn snapshot(&self) -> serde_json::Value {
         serde_json::Value::Null
     }

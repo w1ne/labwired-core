@@ -80,7 +80,9 @@ impl crate::Peripheral for Systick {
             return crate::PeripheralTickResult {
                 irq: false,
                 cycles: 0,
-                ..Default::default()
+                dma_requests: None,
+                explicit_irqs: None,
+                dma_signals: None,
             };
         }
 
