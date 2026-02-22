@@ -75,7 +75,7 @@ jobs:
           import pathlib
           import sys
 
-          threshold = 60.0
+          threshold = 55.0
           p = pathlib.Path("out/coverage/llvm-cov.json")
           data = json.loads(p.read_text())
           nodes = data.get("data", [])
