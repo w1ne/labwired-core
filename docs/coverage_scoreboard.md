@@ -19,25 +19,34 @@ Current CI hard gate:
 - Top-5 executable deterministic targets must maintain >=80% pass rate.
 - Gate is enforced in `core-coverage-matrix-smoke.yml` scoreboard job.
 
-## Baseline Snapshot
+Latest validated run:
+- Date: `2026-02-22`
+- Run: `https://github.com/w1ne/labwired-core/actions/runs/22281072679`
+- Summary: `6/6 pass`, `0 fail`, `0 missing`
+- Top-5 gate: `5/5 pass` (`100%`, threshold `>=80%`)
+
+## Current Snapshot
 
 | Metric | Baseline Value | Notes |
 |---|---|---|
 | Top-5 targets defined | `5` | Defined in `docs/spec/TOP20_COVERAGE_MATRIX.md` |
 | Top-5 with runnable smoke script | `5/5` | `stm32f401-nucleo` smoke package added |
-| Top-5 with deterministic evidence artifacts in matrix CI | `0/5` | Matrix workflow introduced; first run pending |
-| Top-5 with unsupported-instruction audit artifacts | `0/5` | Audit step is integrated in matrix workflow; first run pending |
+| Top-5 with deterministic evidence artifacts in matrix CI | `5/5` | Published in `coverage-matrix-scoreboard` artifact |
+| Top-5 with unsupported-instruction audit artifacts | `5/5` | Published per-target under matrix artifacts |
 | Top-5 with explicit known-limitations entries | `3/5` | `stm32f103-bluepill`, `stm32h563-nucleo`, `stm32f401-nucleo` |
 
 ## Target-Level Baseline
 
 | Target ID | Smoke Script | Build Path | Baseline State | Evidence Path (when available) |
 |---|---|---|---|---|
-| `stm32f103-bluepill` | `examples/tests/stm32f103_integrated_test.yaml` | `cargo build -p firmware --target thumbv7m-none-eabi` | `scheduled` | `core/out/coverage-matrix/stm32f103-bluepill/` |
-| `stm32h563-nucleo` | `examples/nucleo-h563zi/uart-smoke.yaml` | `cargo build -p firmware-h563-demo --release --target thumbv7m-none-eabi` | `scheduled` | `core/out/coverage-matrix/stm32h563-nucleo/` |
-| `stm32f401-nucleo` | `examples/nucleo-f401re/uart-smoke.yaml` | `cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi` | `scheduled` | `core/out/coverage-matrix/stm32f401-nucleo/` |
-| `rp2040-pico` | `planned` | `planned` | `blocked` | `n/a` |
-| `riscv-ci-fixture` | `examples/ci/riscv-uart-ok.yaml` | `cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf` | `scheduled` | `core/out/coverage-matrix/riscv-ci-fixture/` |
+| `stm32f103-bluepill` | `examples/demo-blinky/io-smoke.yaml` | `cargo build -p demo-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f103-bluepill/` |
+| `stm32h563-nucleo` | `examples/nucleo-h563zi/uart-smoke.yaml` | `cargo build -p firmware-h563-demo --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32h563-nucleo/` |
+| `stm32f401-nucleo` | `examples/nucleo-f401re/uart-smoke.yaml` | `cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f401-nucleo/` |
+| `riscv-ci-fixture` | `examples/ci/riscv-uart-ok.yaml` | `cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf` | `passing` | `out/coverage-matrix/coverage-matrix-riscv-ci-fixture/` |
+| `demo-blinky-stm32f103` | `examples/demo-blinky/io-smoke.yaml` | `cargo build -p demo-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-demo-blinky-stm32f103/` |
+
+Additional matrix sentinel target:
+- `ci-fixture-armv6m` (included in matrix run, excluded from Top-5 hard gate)
 
 ## Update Protocol
 
