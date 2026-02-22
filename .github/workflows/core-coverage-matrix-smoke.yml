@@ -1,0 +1,87 @@
+name: Core Coverage Matrix Smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "crates/**"
+      - "configs/**"
+      - "examples/**"
+      - "scripts/**"
+      - "docs/coverage_scoreboard.md"
+      - ".github/workflows/core-coverage-matrix-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  coverage-matrix-smoke:
+    name: coverage-matrix-${{ matrix.id }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ci-fixture-armv6m
+            target: thumbv6m-none-eabi
+            crate: firmware-ci-fixture
+            profile: release
+            script: examples/ci/uart-ok.yaml
+          - id: riscv-ci-fixture
+            target: riscv32i-unknown-none-elf
+            crate: riscv-ci-fixture
+            profile: release
+            script: examples/ci/riscv-uart-ok.yaml
+          - id: demo-blinky-stm32f103
+            target: thumbv7m-none-eabi
+            crate: demo-blinky
+            profile: release
+            script: examples/demo-blinky/io-smoke.yaml
+          - id: stm32h563-nucleo
+            target: thumbv7m-none-eabi
+            crate: firmware-h563-demo
+            profile: release
+            script: examples/nucleo-h563zi/uart-smoke.yaml
+          - id: stm32f103-bluepill
+            target: thumbv7m-none-eabi
+            crate: firmware
+            profile: debug
+            script: examples/tests/stm32f103_integrated_test.yaml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,riscv32i-unknown-none-elf
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build -p labwired-cli
+
+      - name: Build matrix firmware
+        run: |
+          if [ "${{ matrix.profile }}" = "release" ]; then
+            cargo build -p "${{ matrix.crate }}" --release --target "${{ matrix.target }}"
+          else
+            cargo build -p "${{ matrix.crate }}" --target "${{ matrix.target }}"
+          fi
+
+      - name: Run matrix smoke
+        run: |
+          mkdir -p "out/coverage-matrix/${{ matrix.id }}"
+          cargo run -q -p labwired-cli -- test \
+            --script "${{ matrix.script }}" \
+            --output-dir "out/coverage-matrix/${{ matrix.id }}" \
+            --no-uart-stdout
+
+      - name: Upload matrix artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-matrix-${{ matrix.id }}
+          path: out/coverage-matrix/${{ matrix.id }}/
+          retention-days: 14
