@@ -24,6 +24,7 @@ For contributors extending the core engine or adding new peripherals:
 - **[Declarative Registers](declarative_registers.md)**: Defining register maps using simple YAML files.
 - **[CI Integration](ci_integration.md)**: How to run LabWired in GitHub Actions or GitLab CI.
 - **[Coverage Scoreboard](coverage_scoreboard.md)**: Top-target smoke coverage and deterministic status tracking.
+- **Onboarding Smoke CI**: `core-onboarding-smoke.yml` publishes time-to-first-smoke metrics and scoreboard artifacts.
 - **[Target Support Rubric](target_support_rubric.md)**: Objective support levels and promotion criteria.
 
 ## 🔍 Debugging
