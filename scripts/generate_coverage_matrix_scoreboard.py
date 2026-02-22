@@ -41,15 +41,34 @@ def main() -> int:
         default="out/coverage-matrix/scoreboard.json",
         help="Path to write machine-readable scoreboard.",
     )
+    parser.add_argument(
+        "--required-target",
+        action="append",
+        default=[],
+        help="Target ID required for pass-rate gating. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--min-required-pass-rate",
+        type=float,
+        default=None,
+        help="Minimum pass rate (0..1) required across required targets.",
+    )
     args = parser.parse_args()
 
     matrix_root = Path(args.matrix_root)
     if not matrix_root.exists():
         raise SystemExit(f"matrix root not found: {matrix_root}")
 
-    rows: list[dict[str, Any]] = []
-    for target_dir in sorted(p for p in matrix_root.iterdir() if p.is_dir()):
-        result = _load_json(target_dir / "result.json")
+    # Discover target outputs by scanning for result.json recursively.
+    # This tolerates both flattened and nested artifact download layouts.
+    discovered: dict[str, dict[str, Any]] = {}
+    for result_path in sorted(matrix_root.rglob("result.json")):
+        target_dir = result_path.parent
+        target_id = target_dir.name
+        if target_id.startswith("coverage-matrix-"):
+            target_id = target_id[len("coverage-matrix-") :]
+
+        result = _load_json(result_path)
         metrics = _load_json(target_dir / "unsupported-audit" / "metrics.json")
 
         status = "missing"
@@ -69,17 +88,17 @@ def main() -> int:
             unsupported = str(unsupported_val)
             support_pct = f"{float(support_pct_val):.2f}%"
 
-        rows.append(
-            {
-                "target_id": target_dir.name,
-                "status": status,
-                "stop_reason": stop_reason,
-                "instructions": instructions,
-                "unsupported_total": unsupported,
-                "instruction_support_percent": support_pct,
-                "artifact_path": str(target_dir),
-            }
-        )
+        discovered[target_id] = {
+            "target_id": target_id,
+            "status": status,
+            "stop_reason": stop_reason,
+            "instructions": instructions,
+            "unsupported_total": unsupported,
+            "instruction_support_percent": support_pct,
+            "artifact_path": str(target_dir),
+        }
+
+    rows: list[dict[str, Any]] = [discovered[k] for k in sorted(discovered.keys())]
 
     pass_count = sum(1 for r in rows if r["status"] == "pass")
     fail_count = sum(1 for r in rows if r["status"] == "fail")
@@ -110,6 +129,34 @@ def main() -> int:
 
     json_out = Path(args.json_out)
     json_out.parent.mkdir(parents=True, exist_ok=True)
+    required_targets = set(args.required_target)
+    required_rows = [r for r in rows if r["target_id"] in required_targets]
+    required_present = {r["target_id"] for r in required_rows}
+    missing_required = sorted(required_targets - required_present)
+    required_pass = sum(1 for r in required_rows if r["status"] == "pass")
+    required_total = len(required_rows)
+    required_rate = (required_pass / required_total) if required_total else 0.0
+
+    if required_targets:
+        markdown_lines.extend(
+            [
+                "",
+                "## Required Target Gate",
+                "",
+                f"- required targets: `{required_total}/{len(required_targets)}` present",
+                f"- required pass: `{required_pass}`",
+                f"- required pass rate: `{required_rate * 100.0:.2f}%`",
+            ]
+        )
+        if args.min_required_pass_rate is not None:
+            markdown_lines.append(
+                f"- required threshold: `{args.min_required_pass_rate * 100.0:.2f}%`"
+            )
+        if missing_required:
+            markdown_lines.append(
+                f"- missing required targets: `{', '.join(missing_required)}`"
+            )
+
     json_out.write_text(
         json.dumps(
             {
@@ -120,10 +167,35 @@ def main() -> int:
                     "fail": fail_count,
                     "missing": missing_count,
                 },
+                "required_gate": {
+                    "required_targets": sorted(required_targets),
+                    "required_present": sorted(required_present),
+                    "required_missing": missing_required,
+                    "required_pass": required_pass,
+                    "required_total": required_total,
+                    "required_pass_rate": required_rate,
+                    "required_pass_rate_threshold": args.min_required_pass_rate,
+                },
             },
             indent=2,
         )
     )
+
+    if args.min_required_pass_rate is not None:
+        if missing_required:
+            print(
+                "ERROR: missing required targets in matrix artifacts: "
+                + ", ".join(missing_required)
+            )
+            return 2
+        if required_rate < args.min_required_pass_rate:
+            pct = required_rate * 100.0
+            threshold_pct = args.min_required_pass_rate * 100.0
+            print(
+                f"ERROR: required target pass rate {pct:.2f}% below threshold {threshold_pct:.2f}%"
+            )
+            return 3
+
     return 0
 
 

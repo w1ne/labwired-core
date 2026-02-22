@@ -15,6 +15,10 @@ The matrix workflow now generates:
 
 These artifacts are published on every matrix run and summarized in GitHub Actions step summary.
 
+Current CI hard gate:
+- Top-5 executable deterministic targets must maintain >=80% pass rate.
+- Gate is enforced in `core-coverage-matrix-smoke.yml` scoreboard job.
+
 ## Baseline Snapshot
 
 | Metric | Baseline Value | Notes |
