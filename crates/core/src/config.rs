@@ -14,6 +14,8 @@ pub struct SimulationConfig {
     pub peripheral_tick_interval: u32,
     /// Enable optimized multi-byte memory access paths in the SystemBus.
     pub optimized_bus_access: bool,
+    /// Enable high-throughput batch execution for the CPU.
+    pub batch_mode_enabled: bool,
 }
 
 impl Default for SimulationConfig {
@@ -22,6 +24,7 @@ impl Default for SimulationConfig {
             decode_cache_enabled: true,
             peripheral_tick_interval: 1, // Default to strict timing for safety
             optimized_bus_access: true,
+            batch_mode_enabled: false,
         }
     }
 }

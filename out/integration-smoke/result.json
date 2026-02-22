@@ -1,0 +1,41 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 23,
+  "cycles": 27,
+  "instructions": 23,
+  "stop_reason": "max_uart_bytes",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_uart_bytes",
+    "triggered_limit": {
+      "name": "max_uart_bytes",
+      "value": 2
+    },
+    "observed": {
+      "name": "uart_bytes",
+      "value": 2
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": 2,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "expected_stop_reason": "max_uart_bytes"
+      },
+      "passed": true
+    }
+  ],
+  "firmware_hash": "2d87f4fa3133207904ac1d353113d7af4adf7d325ab9bef6a058333389fac499",
+  "config": {
+    "firmware": "examples/ci/../../tests/fixtures/uart-ok-thumbv7m.elf",
+    "system": "examples/ci/../../configs/systems/ci-fixture-uart1.yaml",
+    "script": "examples/ci/dummy-max-uart-bytes.yaml"
+  }
+}
