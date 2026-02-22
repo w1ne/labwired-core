@@ -24,6 +24,20 @@ First off, thank you for considering contributing to LabWired! It's people like 
 - Ensure `cargo clippy` passes without warnings.
 - Write clear, concise commit messages.
 
+## Local Pre-Hooks (Required)
+
+Install local hooks so CI failures (format/lint/test) are caught before push:
+
+```bash
+cd core
+./scripts/install-hooks.sh
+```
+
+Installed hooks:
+
+- `pre-commit`: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo check` (host workspace)
+- `pre-push`: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` (host workspace)
+
 ## Pull Request Process
 1. Create a branch from `main`.
 2. Ensure the CI suite passes.

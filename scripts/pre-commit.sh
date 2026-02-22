@@ -5,20 +5,20 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# Pre-commit hook to run linting and validations
+# Pre-commit hook to run fast local validations aligned with CI integrity gates.
 
-set -e
+set -euo pipefail
 
 echo "--- [Running Pre-commit Validations] ---"
 
 echo "Checking formatting..."
 cargo fmt --all -- --check
 
-echo "Running Clippy (Host)..."
-cargo clippy --workspace --exclude firmware --exclude firmware-ci-fixture -- -D warnings
+echo "Running Clippy (all targets)..."
+cargo clippy --all-targets -- -D warnings
 
 echo "Running Cargo Check (Host)..."
-cargo check --workspace --exclude firmware --exclude firmware-ci-fixture
+cargo check --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
 
 # Optionally run firmware checks if needed, but these might be slow
 # echo "Running Clippy (Firmware)..."
