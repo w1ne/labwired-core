@@ -111,62 +111,30 @@ impl Peripheral for Dma1 {
                 // 0: Read from peripheral, write to memory
                 // 1: Read from memory, write to peripheral
                 let dir_bit = (chan.ccr >> 4) & 1;
+                let src = if dir_bit == 1 { chan.cmar } else { chan.cpar };
+                let dst = if dir_bit == 1 { chan.cpar } else { chan.cmar };
+                dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
+                    src_addr: src as u64,
+                    addr: dst as u64,
+                    val: 0,
+                    direction: DmaDirection::Copy,
+                });
 
-                // For a single tick, we transfer one item?
-                // STM32 DMA can be very fast, but 1 byte per tick is a good start.
+                chan.cndtr -= 1;
+                if (chan.ccr & (1 << 7)) != 0 {
+                    chan.cmar += 1;
+                } // MINC
+                if (chan.ccr & (1 << 6)) != 0 {
+                    chan.cpar += 1;
+                } // PINC
 
-                // Note: Simplified logic assumes 8-bit transfers for now.
-                // In reality, PSIZE/MSIZE determine 8/16/32 bit.
-
-                if dir_bit == 1 {
-                    // Memory to Peripheral
-                    dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
-                        addr: chan.cmar as u64,
-                        val: 0, // Value will be populated by SystemBus during Read
-                        direction: DmaDirection::Read,
-                    });
-                    // Wait, our DmaRequest doesn't support "Read then Write".
-                    // It's either Read OR Write.
-                    // For a real DMA, it's a two-stage process.
-                    // To keep it simple in one tick, we'll assume we know the value?
-                    // No, that's what buses are for.
-
-                    // Let's refine DmaRequest: maybe we need a way to store the read value.
-                    // For now, let's just implement Memory-to-Memory manually for testing.
-                } else {
-                    // Peripheral to Memory
-                    // In a real system, the peripheral would trigger the DMA.
-                    // For now, let's just implement a simple memory-to-memory copy if MEM2MEM (bit 14) is set.
-                    if (chan.ccr & (1 << 14)) != 0 {
-                        // MEM2MEM mode
-                        // We need to read from CPAR and write to CMAR (or vice versa depending on DIR?)
-                        // Spec: MEM2MEM=1, DIR=1 (Memory to Memory).
-                        // Actually, in MEM2MEM, DIR is usually ignored or determines src/dst.
-
-                        // Let's just implement a fake write for now to verify the plumbing.
-                        dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
-                            addr: chan.cmar as u64,
-                            val: 0x42, // Dummy value
-                            direction: DmaDirection::Write,
-                        });
-
-                        chan.cndtr -= 1;
-                        if (chan.ccr & (1 << 7)) != 0 {
-                            chan.cmar += 1;
-                        } // MINC
-                        if (chan.ccr & (1 << 6)) != 0 {
-                            chan.cpar += 1;
-                        } // PINC
-
-                        if chan.cndtr == 0 {
-                            chan.active = false;
-                            // Set TCIF (Transfer Complete Interrupt Flag) in ISR
-                            self.isr |= 1 << (i * 4 + 1);
-                            if (chan.ccr & (1 << 1)) != 0 {
-                                // TCIE
-                                irq = true;
-                            }
-                        }
+                if chan.cndtr == 0 {
+                    chan.active = false;
+                    // Set TCIF (Transfer Complete Interrupt Flag) in ISR
+                    self.isr |= 1 << (i * 4 + 1);
+                    if (chan.ccr & (1 << 1)) != 0 {
+                        // TCIE
+                        irq = true;
                     }
                 }
             }
@@ -189,5 +157,31 @@ impl Peripheral for Dma1 {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dma_channel_completes_and_sets_irq_on_tcie() {
+        let mut dma = Dma1::new();
+        // CH1: CCR=EN|TCIE|DIR|MINC|PINC, one byte transfer.
+        dma.write_reg(0x10, 0x2000_0010); // CH1 CPAR
+        dma.write_reg(0x0C, 1); // CH1 CNDTR
+        dma.write_reg(0x14, 0x2000_0020); // CH1 CMAR
+        dma.write_reg(0x08, (1 << 0) | (1 << 1) | (1 << 4) | (1 << 6) | (1 << 7));
+
+        let res = dma.tick();
+        assert!(res.irq);
+        assert!(res.dma_requests.is_some());
+        let reqs = res.dma_requests.unwrap();
+        assert_eq!(reqs.len(), 1);
+        assert_eq!(reqs[0].direction, DmaDirection::Copy);
+        assert_eq!(reqs[0].src_addr, 0x2000_0020);
+        assert_eq!(reqs[0].addr, 0x2000_0010);
+        // CH1 TCIF is bit 1.
+        assert_ne!(dma.read_reg(0x00) & (1 << 1), 0);
     }
 }
