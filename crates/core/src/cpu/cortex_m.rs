@@ -4,9 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::bus::SystemBus;
 use crate::decoder::arm::{decode_thumb_16, decode_thumb_32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationObserver};
-use crate::bus::SystemBus;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
@@ -326,7 +326,6 @@ impl Cpu for CortexM {
         names
     }
 
-
     fn step(
         &mut self,
         bus: &mut dyn Bus,
@@ -352,7 +351,7 @@ impl Cpu for CortexM {
 
         let mut executed = 0;
         let empty_observers: &[Arc<dyn SimulationObserver>] = &[];
-        
+
         if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
             while executed < max_count {
                 if self.pending_exceptions != 0 && !self.primask {
@@ -1563,8 +1562,7 @@ impl CortexM {
 
         Ok(())
     }
-
-    }
+}
 
 // Thumb expand immediate - implements ARM's modified immediate constant expansion
 fn thumb_expand_imm(imm12: u32) -> u32 {

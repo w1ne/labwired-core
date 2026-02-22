@@ -4,14 +4,14 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-name: "stm32f401cc"
+name: "stm32f401re"
 arch: "arm"
 flash:
   base: 0x08000000
-  size: "256KB"
+  size: "512KB"
 ram:
   base: 0x20000000
-  size: "64KB"
+  size: "96KB"
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -32,13 +32,8 @@ peripherals:
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
-  - id: "uart1"
+  - id: "uart2"
     type: "uart"
-    base_address: 0x40011000
+    base_address: 0x40004400
     size: "1KB"
-    irq: 37
-  - id: "i2c1"
-    type: "i2c"
-    base_address: 0x40005400
-    size: "1KB"
-    irq: 31
+    irq: 38

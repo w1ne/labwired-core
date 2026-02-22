@@ -1667,13 +1667,13 @@ mod integration_tests {
         // Simple loop: SUBS R0, #1; BNE .-2
         machine.bus.write_u16(pc as u64, 0x3801).unwrap();
         machine.bus.write_u16(pc as u64 + 2, 0xD1FD).unwrap();
-        
-        machine.cpu.r0 = 1_000_000; 
-        
+
+        machine.cpu.r0 = 1_000_000;
+
         let start = std::time::Instant::now();
         let _res = machine.run(Some(2_000_000)).unwrap();
         let elapsed = start.elapsed();
-        
+
         let mips = 2.0 / elapsed.as_secs_f64();
         println!("\n[PERF] MIPS: {:.2} (Elapsed: {:?})", mips, elapsed);
     }
