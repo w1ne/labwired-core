@@ -41,4 +41,4 @@ Use this page first. Ignore deep analysis unless needed.
 
 1. Keep Top-5 green.
 2. Keep onboarding smoke passing.
-3. Reduce onboarding `elapsed_seconds` by removing obvious friction in board examples/manifests.
+3. Increase functional fidelity on Top-5 paths (current: DMA copy + transfer-complete IRQ path in core).
