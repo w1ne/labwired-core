@@ -144,7 +144,7 @@ jobs:
         with:
           path: out/coverage-matrix
           pattern: coverage-matrix-*
-          merge-multiple: true
+          merge-multiple: false
 
       - name: Generate scoreboard
         run: |
