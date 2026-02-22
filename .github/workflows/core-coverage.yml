@@ -42,7 +42,11 @@ jobs:
       - name: Install coverage tooling
         run: |
           rustup component add llvm-tools-preview
+          rustup target add thumbv7m-none-eabi
           cargo install cargo-llvm-cov --locked
+
+      - name: Build firmware fixture for coverage tests
+        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
 
       - name: Run coverage
         run: |
