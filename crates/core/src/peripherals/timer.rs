@@ -12,6 +12,7 @@ pub struct Timer {
     cr1: u32,
     dier: u32,
     sr: u32,
+    egr: u32,
     cnt: u32,
     psc: u32,
     arr: u32,
@@ -33,6 +34,7 @@ impl Timer {
             0x00 => self.cr1,
             0x0C => self.dier,
             0x10 => self.sr,
+            0x14 => self.egr,
             0x24 => self.cnt,
             0x28 => self.psc,
             0x2C => self.arr,
@@ -42,9 +44,19 @@ impl Timer {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            0x00 => self.cr1 = value & 0x3FF,  // Support only basic bits
-            0x0C => self.dier = value & 0x5F,  // Update Interrupt Enable (bit 0)
-            0x10 => self.sr = value & 0x1FFFF, // Update interrupt flag (bit 0)
+            0x00 => self.cr1 = value & 0x3FF, // Support only basic bits
+            0x0C => self.dier = value & 0x5F, // Update Interrupt Enable (bit 0)
+            // TIMx_SR is rc_w0 for status flags: writing 0 clears, writing 1 keeps current.
+            0x10 => self.sr &= value & 0x1FFFF,
+            // TIMx_EGR: only UG (bit 0) modeled for deterministic init flows.
+            0x14 => {
+                self.egr = value & 0xFF;
+                if (self.egr & 0x1) != 0 {
+                    self.cnt = 0;
+                    self.psc_cnt = 0;
+                    self.sr |= 1; // UIF set on update generation
+                }
+            }
             0x24 => self.cnt = value & 0xFFFF,
             0x28 => self.psc = value & 0xFFFF,
             0x2C => self.arr = value & 0xFFFF,
@@ -75,6 +87,15 @@ impl crate::Peripheral for Timer {
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
+        // Keep IRQ level high while UIF is latched and UIE is enabled.
+        if (self.sr & 1) != 0 && (self.dier & 1) != 0 {
+            return crate::PeripheralTickResult {
+                irq: true,
+                cycles: 1,
+                ..Default::default()
+            };
+        }
+
         // Counter Enable (bit 0)
         if (self.cr1 & 0x1) == 0 {
             return crate::PeripheralTickResult {
@@ -111,5 +132,41 @@ impl crate::Peripheral for Timer {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Timer;
+    use crate::Peripheral;
+
+    #[test]
+    fn test_egr_ug_sets_uif_and_cnt_reset() {
+        let mut tim = Timer::new();
+        tim.write(0x24, 0x34).unwrap(); // CNT low byte
+        tim.write(0x25, 0x12).unwrap(); // CNT high byte => 0x1234
+
+        tim.write(0x14, 0x01).unwrap(); // EGR.UG
+
+        let cnt_lo = tim.read(0x24).unwrap();
+        let cnt_hi = tim.read(0x25).unwrap();
+        let sr = tim.read(0x10).unwrap();
+        assert_eq!((cnt_hi as u16) << 8 | cnt_lo as u16, 0);
+        assert_eq!(sr & 0x1, 0x1);
+    }
+
+    #[test]
+    fn test_sr_write_zero_clears_uif_and_drops_irq() {
+        let mut tim = Timer::new();
+
+        // Enable UIE and set UIF via UG.
+        tim.write(0x0C, 0x01).unwrap();
+        tim.write(0x14, 0x01).unwrap();
+        assert!(tim.tick().irq);
+
+        // Clear UIF by writing 0 to SR bit 0.
+        tim.write(0x10, 0x00).unwrap();
+        assert_eq!(tim.read(0x10).unwrap() & 0x1, 0);
+        assert!(!tim.tick().irq);
     }
 }
