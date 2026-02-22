@@ -26,14 +26,19 @@ jobs:
       - name: Install ARM and RISC-V targets
         run: |
           rustup target add thumbv7m-none-eabi
+          rustup target add thumbv7em-none-eabihf
           rustup target add thumbv6m-none-eabi
           rustup target add riscv32i-unknown-none-elf
 
       - name: Build Firmware Fixtures
         run: |
           cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+          cargo build -p firmware-h563-demo --release --target thumbv7em-none-eabihf
           cargo build -p firmware-ci-fixture --release --target thumbv6m-none-eabi
           cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf
+
+      - name: Run ignored H563 CLI integration test
+        run: cargo test -p labwired-cli --test h5_demo -- --ignored
 
       - name: Unsupported Instruction Audit
         run: ./scripts/unsupported_instruction_audit.sh --firmware target/thumbv7m-none-eabi/release/demo-blinky --system configs/systems/ci-fixture-uart1.yaml --max-steps 20000 --out-dir out/unsupported-audit/ci-fixture --fail-on-unsupported

@@ -23,6 +23,8 @@ jobs:
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-ci
 
       - name: Check Formatting
         run: cargo fmt --all -- --check
@@ -34,14 +36,12 @@ jobs:
         run: |
           rustup target add thumbv7m-none-eabi
           rustup target add thumbv7em-none-eabi
-          rustup target add thumbv7em-none-eabihf
 
       - name: Build test firmware fixture
         run: |
           cargo build -p demo-blinky --release --target thumbv7m-none-eabi
           cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-          cargo build -p firmware-h563-demo --release --target thumbv7em-none-eabihf
 
       - name: Run Workspace Tests
         run: cargo test --workspace
