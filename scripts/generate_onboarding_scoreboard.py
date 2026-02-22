@@ -39,8 +39,8 @@ def build_markdown(metrics: list[dict], threshold_seconds: int) -> str:
         f"- threshold_seconds: `{threshold_seconds}`",
         f"- threshold_met: `{threshold_hits}/{total}`",
         "",
-        "| Target | Status | Elapsed (s) | Threshold Met | Failure Stage | Signature |",
-        "|---|---|---:|---|---|---|",
+        "| Target | Status | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |",
+        "|---|---|---:|---|---|---|---|",
     ]
 
     for m in sorted(metrics, key=lambda row: row.get("target_id", "")):
@@ -49,9 +49,10 @@ def build_markdown(metrics: list[dict], threshold_seconds: int) -> str:
         elapsed = m.get("elapsed_seconds", 0)
         threshold_met = m.get("threshold_met", False)
         failure_stage = m.get("failure_stage") or "n/a"
+        hint = (m.get("failure_hint") or "n/a").replace("|", "/")
         signature = (m.get("first_error_signature") or "n/a").replace("|", "/")
         lines.append(
-            f"| `{target}` | `{status}` | `{elapsed}` | `{threshold_met}` | `{failure_stage}` | `{signature}` |"
+            f"| `{target}` | `{status}` | `{elapsed}` | `{threshold_met}` | `{failure_stage}` | `{hint}` | `{signature}` |"
         )
     return "\n".join(lines) + "\n"
 
@@ -88,4 +89,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
