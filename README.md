@@ -10,7 +10,7 @@
 | Indicator | Status | Link |
 |---|---|---|
 | Core Integrity (PR Gate) | ![Core Integrity](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml) |
-| Coverage Gate (Scheduled/Manual) | ![Coverage](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml) |
+| Coverage Gate (PR + Scheduled/Manual) | ![Coverage](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml) |
 | Unsupported Audit (Scheduled/Manual) | ![Unsupported Audit](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml) |
 | Nightly Validation (Scheduled/Manual) | ![Nightly](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml) |
 

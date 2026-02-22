@@ -1,6 +1,28 @@
-name: Core Coverage
+name: Core Coverage Gate
 
 on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "crates/**"
+      - "configs/**"
+      - "scripts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/core-coverage.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "crates/**"
+      - "configs/**"
+      - "scripts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/core-coverage.yml"
   schedule:
     - cron: "20 2 * * *"
   workflow_dispatch:
