@@ -6,6 +6,15 @@ Scope: Priority-1 Top-5 matrix baseline for deterministic smoke.
 This document is the baseline scoreboard referenced by the Top-20 coverage plan.
 Values should be updated by CI artifacts from the matrix smoke workflow.
 
+## Automated Scoreboard Artifact
+
+The matrix workflow now generates:
+
+- `coverage-matrix-scoreboard/scoreboard.md`
+- `coverage-matrix-scoreboard/scoreboard.json`
+
+These artifacts are published on every matrix run and summarized in GitHub Actions step summary.
+
 ## Baseline Snapshot
 
 | Metric | Baseline Value | Notes |
@@ -29,6 +38,6 @@ Values should be updated by CI artifacts from the matrix smoke workflow.
 ## Update Protocol
 
 1. Matrix CI uploads per-target artifacts under `out/coverage-matrix/<target-id>/`.
-2. Record pass/fail plus stop reason and assertion summary.
-3. Update this file each time top-5 status changes.
+2. Matrix CI aggregates and publishes scoreboard artifacts via `scripts/generate_coverage_matrix_scoreboard.py`.
+3. Update this file when the Top-5 scope, thresholds, or status policy changes.
 4. Do not mark `green` without deterministic re-run evidence.

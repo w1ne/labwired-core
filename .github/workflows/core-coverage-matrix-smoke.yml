@@ -130,3 +130,38 @@ jobs:
           name: coverage-matrix-${{ matrix.id }}
           path: out/coverage-matrix/${{ matrix.id }}/
           retention-days: 14
+
+  coverage-matrix-scoreboard:
+    name: coverage-matrix-scoreboard
+    runs-on: ubuntu-latest
+    needs: coverage-matrix-smoke
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download matrix artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: out/coverage-matrix
+          pattern: coverage-matrix-*
+          merge-multiple: true
+
+      - name: Generate scoreboard
+        run: |
+          python3 scripts/generate_coverage_matrix_scoreboard.py \
+            --matrix-root out/coverage-matrix \
+            --markdown-out out/coverage-matrix/scoreboard.md \
+            --json-out out/coverage-matrix/scoreboard.json
+
+      - name: Publish scoreboard summary
+        run: |
+          cat out/coverage-matrix/scoreboard.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload scoreboard artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-matrix-scoreboard
+          path: |
+            out/coverage-matrix/scoreboard.md
+            out/coverage-matrix/scoreboard.json
+          retention-days: 14
