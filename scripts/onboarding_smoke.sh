@@ -69,8 +69,8 @@ build_cli_ms=""
 build_firmware_ms=""
 run_smoke_ms=""
 
-stage_start_epoch=0
-run_started_epoch="$(date +%s)"
+stage_start_ms=0
+run_started_ms="$(date +%s%3N)"
 run_started_iso="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 capture_signature() {
@@ -82,12 +82,12 @@ run_stage() {
   local stage="$1"
   shift
   local log_file="${OUT_DIR}/logs/${stage}.log"
-  stage_start_epoch="$(date +%s)"
+  stage_start_ms="$(date +%s%3N)"
 
   if "$@" >"${log_file}" 2>&1; then
-    local stage_end_epoch
-    stage_end_epoch="$(date +%s)"
-    local elapsed=$((stage_end_epoch - stage_start_epoch))
+    local stage_end_ms
+    stage_end_ms="$(date +%s%3N)"
+    local elapsed=$((stage_end_ms - stage_start_ms))
     case "${stage}" in
       build_cli) build_cli_ms="${elapsed}" ;;
       build_firmware) build_firmware_ms="${elapsed}" ;;
@@ -96,9 +96,9 @@ run_stage() {
     return 0
   fi
 
-  local stage_end_epoch
-  stage_end_epoch="$(date +%s)"
-  local elapsed=$((stage_end_epoch - stage_start_epoch))
+  local stage_end_ms
+  stage_end_ms="$(date +%s%3N)"
+  local elapsed=$((stage_end_ms - stage_start_ms))
   case "${stage}" in
     build_cli) build_cli_ms="${elapsed}" ;;
     build_firmware) build_firmware_ms="${elapsed}" ;;
@@ -181,9 +181,10 @@ else
   fi
 fi
 
-run_finished_epoch="$(date +%s)"
+run_finished_ms="$(date +%s%3N)"
 run_finished_iso="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-elapsed_seconds=$((run_finished_epoch - run_started_epoch))
+elapsed_ms=$((run_finished_ms - run_started_ms))
+elapsed_seconds=$(((elapsed_ms + 999) / 1000))
 threshold_met=false
 if [[ "${elapsed_seconds}" -le "${THRESHOLD_SECONDS}" ]]; then
   threshold_met=true
@@ -194,7 +195,7 @@ if [[ "${status}" != "pass" ]]; then
 fi
 
 export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PROFILE
-export run_started_iso run_finished_iso elapsed_seconds
+export run_started_iso run_finished_iso elapsed_seconds elapsed_ms
 export status failure_stage first_error_signature threshold_met THRESHOLD_SECONDS
 export build_cli_ms build_firmware_ms run_smoke_ms
 export failure_hint
@@ -223,12 +224,18 @@ metrics = {
     "started_at_utc": os.environ["run_started_iso"],
     "finished_at_utc": os.environ["run_finished_iso"],
     "elapsed_seconds": int(os.environ["elapsed_seconds"]),
+    "elapsed_ms": int(os.environ["elapsed_ms"]),
     "failure_stage": os.environ.get("failure_stage", ""),
     "first_error_signature": os.environ.get("first_error_signature", ""),
     "failure_hint": os.environ.get("failure_hint", ""),
     "threshold_seconds": int(os.environ["THRESHOLD_SECONDS"]),
     "threshold_met": threshold_met,
     "stages_seconds": {
+        "build_cli": round((parse_int("build_cli_ms") or 0) / 1000.0, 3),
+        "build_firmware": round((parse_int("build_firmware_ms") or 0) / 1000.0, 3),
+        "run_smoke": round((parse_int("run_smoke_ms") or 0) / 1000.0, 3),
+    },
+    "stages_ms": {
         "build_cli": parse_int("build_cli_ms"),
         "build_firmware": parse_int("build_firmware_ms"),
         "run_smoke": parse_int("run_smoke_ms"),
@@ -240,6 +247,7 @@ summary_lines = [
     "",
     f"- status: `{metrics['status']}`",
     f"- elapsed_seconds: `{metrics['elapsed_seconds']}`",
+    f"- elapsed_ms: `{metrics['elapsed_ms']}`",
     f"- threshold_seconds: `{metrics['threshold_seconds']}`",
     f"- threshold_met: `{metrics['threshold_met']}`",
     f"- failure_stage: `{metrics['failure_stage'] or 'n/a'}`",

@@ -25,8 +25,9 @@ def build_markdown(metrics: list[dict], threshold_seconds: int) -> str:
     total = len(metrics)
     passing = sum(1 for m in metrics if m.get("status") == "pass")
     failing = total - passing
-    elapsed_values = [int(m.get("elapsed_seconds", 0)) for m in metrics]
-    median_elapsed = int(median(elapsed_values)) if elapsed_values else 0
+    elapsed_values_ms = [int(m.get("elapsed_ms", int(m.get("elapsed_seconds", 0)) * 1000)) for m in metrics]
+    median_elapsed_ms = int(median(elapsed_values_ms)) if elapsed_values_ms else 0
+    median_elapsed_seconds = round(median_elapsed_ms / 1000.0, 3)
     threshold_hits = sum(1 for m in metrics if bool(m.get("threshold_met")))
 
     lines = [
@@ -35,24 +36,26 @@ def build_markdown(metrics: list[dict], threshold_seconds: int) -> str:
         f"- targets_total: `{total}`",
         f"- pass: `{passing}`",
         f"- fail: `{failing}`",
-        f"- median_elapsed_seconds: `{median_elapsed}`",
+        f"- median_elapsed_ms: `{median_elapsed_ms}`",
+        f"- median_elapsed_seconds: `{median_elapsed_seconds}`",
         f"- threshold_seconds: `{threshold_seconds}`",
         f"- threshold_met: `{threshold_hits}/{total}`",
         "",
-        "| Target | Status | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |",
-        "|---|---|---:|---|---|---|---|",
+        "| Target | Status | Elapsed (ms) | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |",
+        "|---|---|---:|---:|---|---|---|---|",
     ]
 
     for m in sorted(metrics, key=lambda row: row.get("target_id", "")):
         target = m.get("target_id", "unknown")
         status = m.get("status", "missing")
-        elapsed = m.get("elapsed_seconds", 0)
+        elapsed_ms = int(m.get("elapsed_ms", int(m.get("elapsed_seconds", 0)) * 1000))
+        elapsed_seconds = round(elapsed_ms / 1000.0, 3)
         threshold_met = m.get("threshold_met", False)
         failure_stage = m.get("failure_stage") or "n/a"
         hint = (m.get("failure_hint") or "n/a").replace("|", "/")
         signature = (m.get("first_error_signature") or "n/a").replace("|", "/")
         lines.append(
-            f"| `{target}` | `{status}` | `{elapsed}` | `{threshold_met}` | `{failure_stage}` | `{hint}` | `{signature}` |"
+            f"| `{target}` | `{status}` | `{elapsed_ms}` | `{elapsed_seconds}` | `{threshold_met}` | `{failure_stage}` | `{hint}` | `{signature}` |"
         )
     return "\n".join(lines) + "\n"
 
@@ -70,12 +73,15 @@ def main() -> int:
         "targets_total": len(metrics),
         "pass": sum(1 for m in metrics if m.get("status") == "pass"),
         "fail": sum(1 for m in metrics if m.get("status") != "pass"),
-        "median_elapsed_seconds": int(median([int(m.get("elapsed_seconds", 0)) for m in metrics]))
+        "median_elapsed_ms": int(
+            median([int(m.get("elapsed_ms", int(m.get("elapsed_seconds", 0)) * 1000)) for m in metrics])
+        )
         if metrics
         else 0,
         "threshold_seconds": args.soft_threshold_seconds,
         "threshold_met": sum(1 for m in metrics if bool(m.get("threshold_met"))),
     }
+    summary["median_elapsed_seconds"] = round(summary["median_elapsed_ms"] / 1000.0, 3)
     payload = {"summary": summary, "targets": metrics}
 
     args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
