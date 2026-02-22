@@ -109,7 +109,7 @@ See [`core/docs/release_strategy.md`](./core/docs/release_strategy.md) for the f
 1. Create a feature branch: `git checkout -b feature/my-feature`
 2. Make changes in the relevant component directory
 3. Run tests locally
-4. Submit a PR to `develop`
+4. Submit a PR to `main`
 
 ## Common Tasks
 

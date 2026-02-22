@@ -7,7 +7,7 @@ Use this process for every GitHub release. A release is blocked until all requir
 - [ ] Target version selected (`vX.Y.Z`).
 - [ ] Release owner assigned.
 - [ ] Scope declared: `core`, `vscode`, `ai`, `docs` (one or more).
-- [ ] Release branch created from `develop`: `release/vX.Y.Z`.
+- [ ] Release branch created from `main`: `release/vX.Y.Z`.
 
 ## 1. Version and Changelog Sync
 
@@ -93,7 +93,7 @@ These checks are mandatory due to incidents on 2026-02-14, 2026-02-15, and 2026-
 - [ ] Merge `release/vX.Y.Z` into `main`.
 - [ ] Tag on `main`: `vX.Y.Z` and push tag.
 - [ ] Publish GitHub release.
-- [ ] Merge `main` back into `develop`.
+- [ ] Ensure all release commits are in `main`.
 
 ## 8. Sign-Off
 

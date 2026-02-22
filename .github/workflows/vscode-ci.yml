@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - develop
     paths:
       - 'vscode/**'
       - 'core/**'
@@ -12,7 +11,6 @@ on:
   pull_request:
     branches:
       - main
-      - develop
     paths:
       - 'vscode/**'
       - 'core/**'
@@ -46,7 +44,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build LabWired (DAP)
-        run: cargo build -p labwired-dap --release
+        run: cargo build -p labwired-dap
         working-directory: ./core
 
       - name: Compile

@@ -1,8 +1,6 @@
 name: VS Code Extension Nightly
 
 on:
-  schedule:
-    - cron: '10 4 * * *'
   workflow_dispatch:
 
 jobs:

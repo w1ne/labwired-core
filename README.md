@@ -7,17 +7,18 @@
 
 | Indicator | Status | Link |
 |---|---|---|
-| Core CI | ![Core CI](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml) |
-| Coverage Gate | ![Coverage](https://github.com/w1ne/labwired/actions/workflows/core-coverage.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-coverage.yml) |
-| Unsupported Audit | ![Unsupported Audit](https://github.com/w1ne/labwired/actions/workflows/core-unsupported-audit.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-unsupported-audit.yml) |
+| Core Integration | ![Core Integration](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml) |
+| VS Code Integration | ![VS Code Integration](https://github.com/w1ne/labwired/actions/workflows/vscode-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/vscode-ci.yml) |
+| VS Code Nightly | ![VS Code Nightly](https://github.com/w1ne/labwired/actions/workflows/vscode-nightly.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/vscode-nightly.yml) |
 
-### Board Model Dashboard
+Core verification dashboards (coverage, unsupported audit, board model validation, nightly) are owned by `labwired-core`:
+[`./core/README.md`](./core/README.md)
 
-| Board Model | Status | Verification Coverage | Instruction Support % (runtime) | Workflow |
-|---|---|---|---|---|
-| `ci-fixture-uart1` (ARM Cortex-M) | ![ARM Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main) | smoke + max UART + no-progress | published in workflow summary/artifacts | [ARM Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-arm.yml) |
-| `ci-fixture-riscv-uart1` (RISC-V) | ![RISC-V Board](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main) | smoke | published in workflow summary/artifacts | [RISC-V Board CI](https://github.com/w1ne/labwired/actions/workflows/core-board-ci-fixture-riscv.yml) |
-| `nucleo-h563zi` | ![H563 Board](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main) | io-smoke + fullchip-smoke | published in workflow summary/artifacts | [NUCLEO-H563ZI CI](https://github.com/w1ne/labwired/actions/workflows/core-board-nucleo-h563zi.yml) |
+## Ownership Model
+
+- Root `labwired` repo owns model delivery and integration packaging for `labwired-core` consumption.
+- `labwired-core` repo owns simulator engine correctness and heavy verification workflows.
+- Root CI stays lean for fast merge feedback; heavy validation runs in `labwired-core`.
 
 ## 🤖 Agent-First Architecture
 LabWired is built primarily as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its core mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
@@ -34,6 +35,7 @@ The immutable source of truth for hardware behavior.
 - **Strict IR**: Ingests VLM-extracted netlists and JSON models.
 - **Headless by Design**: accurate simulation without UI overhead.
 - **CI/Agent Runner**: Deterministic execution for automated pipelines.
+- **Model Consumer**: Executes delivered board/chip models shipped through this monorepo flow.
 
 ### [`ai/`](./ai/) - The Agent Toolset (AIPi)
 The primary interface for autonomous interaction.
@@ -133,15 +135,14 @@ docker run --rm -v $PWD:/workspace ghcr.io/w1ne/labwired:latest \
 
 
 ## 🤝 Development Workflow
-We follow **Gitflow** and enforce strict quality gates.
+We follow **Trunk-Based Development** and enforce strict quality gates.
 
-- **Main Branch**: `main` (Production tags only).
-- **Development**: `develop` (Feature integration).
-- **Feature Branches**: `feature/xyz`.
+- **Main Branch**: `main` (Primary branch for active development and releases).
+- **Feature Branches**: `feature/xyz` (Merged via PR to `main`).
 
 **Quality Gates:**
-- All PRs must pass CI (Format, Lint, Test, Build).
-- Code coverage goal: >80%.
+- Root PRs must pass lean integration gates.
+- Core engine gates and coverage thresholds are enforced in `labwired-core` workflows.
 
 See [Release & Merging Strategy](core/docs/release_strategy.md) for the full protocol.
 

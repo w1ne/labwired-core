@@ -4,10 +4,9 @@ Thank you for your interest in contributing to LabWired! We welcome contribution
 
 ## Development Workflow
 
-We follow a **Gitflow** workflow:
-- **`main`**: Stable production releases. Do not commit here directly.
-- **`develop`**: Integration branch for next release. Open PRs against this branch.
-- **`feature/name`**: Your working branch.
+We follow a **Trunk-Based Development** workflow:
+- **`main`**: The primary branch for active development.
+- **`feature/name`**: Your working branch. Open PRs against `main`.
 
 ### 1. Setup
 ```bash
@@ -36,7 +35,7 @@ docker run --rm labwired-test
 
 ### 4. Submitting a Pull Request
 - Push your branch to GitHub.
-- Open a PR against `develop`.
+- Open a PR against `main`.
 - Ensure all CI checks pass.
 - Request review from a maintainer.
 
