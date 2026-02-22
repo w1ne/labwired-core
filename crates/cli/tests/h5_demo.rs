@@ -4,6 +4,7 @@ use labwired_loader::load_elf;
 use std::path::PathBuf;
 
 #[test]
+#[ignore = "requires thumbv7em-none-eabihf fixture; run in nightly validation"]
 fn test_h5_demo_uart_output() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()

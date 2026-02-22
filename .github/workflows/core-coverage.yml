@@ -38,15 +38,30 @@ jobs:
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-coverage
+
+      - name: Cache cargo-llvm-cov
+        id: cache-llvm-cov
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-llvm-cov
+          key: ${{ runner.os }}-cargo-llvm-cov-v0.6.21
 
       - name: Install coverage tooling
         run: |
           rustup component add llvm-tools-preview
           rustup target add thumbv7m-none-eabi
-          cargo install cargo-llvm-cov --locked
+          rustup target add thumbv7em-none-eabi
+          if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+            cargo install cargo-llvm-cov --locked --version 0.6.21
+          fi
 
       - name: Build firmware fixture for coverage tests
-        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+        run: |
+          cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+          cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
+          cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
 
       - name: Run coverage
         run: |
