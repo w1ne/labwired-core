@@ -1032,4 +1032,42 @@ mod tests {
 
         assert_eq!(bus.read_u8(0x2000_0020).unwrap(), 0xAB);
     }
+
+    #[test]
+    fn test_dma_tick_executes_copy_and_raises_irq() {
+        let mut bus = SystemBus {
+            flash: LinearMemory::new(256, 0x0800_0000),
+            ram: LinearMemory::new(256, 0x2000_0000),
+            peripherals: vec![PeripheralEntry {
+                name: "dma1".to_string(),
+                base: 0x4002_0000,
+                size: 0x400,
+                irq: Some(16),
+                dev: Box::new(crate::peripherals::dma::Dma1::new()),
+            }],
+            nvic: None,
+            observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+        };
+        bus.rebuild_peripheral_ranges();
+
+        // Source byte in RAM.
+        bus.write_u8(0x2000_0010, 0x5A).unwrap();
+        // Clear destination in mapped DMA register space for the model.
+        bus.write_u8(0x2000_0020, 0x00).unwrap();
+
+        // Program DMA1 Channel1:
+        // CPAR=src, CNDTR=1, CMAR=dst, CCR=EN|TCIE|PINC|MINC (DIR=0)
+        bus.write_u32(0x4002_0010, 0x2000_0010).unwrap(); // CPAR1
+        bus.write_u32(0x4002_000C, 1).unwrap(); // CNDTR1
+        bus.write_u32(0x4002_0014, 0x2000_0020).unwrap(); // CMAR1
+        bus.write_u32(0x4002_0008, (1 << 0) | (1 << 1) | (1 << 6) | (1 << 7))
+            .unwrap(); // CCR1
+
+        let (interrupts, _costs) = bus.tick_peripherals_fully();
+        assert_eq!(bus.read_u8(0x2000_0020).unwrap(), 0x5A);
+        assert!(interrupts.contains(&16));
+    }
 }
