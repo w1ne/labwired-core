@@ -59,13 +59,16 @@ def main() -> int:
     if not matrix_root.exists():
         raise SystemExit(f"matrix root not found: {matrix_root}")
 
-    rows: list[dict[str, Any]] = []
-    for target_dir in sorted(p for p in matrix_root.iterdir() if p.is_dir()):
+    # Discover target outputs by scanning for result.json recursively.
+    # This tolerates both flattened and nested artifact download layouts.
+    discovered: dict[str, dict[str, Any]] = {}
+    for result_path in sorted(matrix_root.rglob("result.json")):
+        target_dir = result_path.parent
         target_id = target_dir.name
         if target_id.startswith("coverage-matrix-"):
             target_id = target_id[len("coverage-matrix-") :]
 
-        result = _load_json(target_dir / "result.json")
+        result = _load_json(result_path)
         metrics = _load_json(target_dir / "unsupported-audit" / "metrics.json")
 
         status = "missing"
@@ -85,17 +88,17 @@ def main() -> int:
             unsupported = str(unsupported_val)
             support_pct = f"{float(support_pct_val):.2f}%"
 
-        rows.append(
-            {
-                "target_id": target_id,
-                "status": status,
-                "stop_reason": stop_reason,
-                "instructions": instructions,
-                "unsupported_total": unsupported,
-                "instruction_support_percent": support_pct,
-                "artifact_path": str(target_dir),
-            }
-        )
+        discovered[target_id] = {
+            "target_id": target_id,
+            "status": status,
+            "stop_reason": stop_reason,
+            "instructions": instructions,
+            "unsupported_total": unsupported,
+            "instruction_support_percent": support_pct,
+            "artifact_path": str(target_dir),
+        }
+
+    rows: list[dict[str, Any]] = [discovered[k] for k in sorted(discovered.keys())]
 
     pass_count = sum(1 for r in rows if r["status"] == "pass")
     fail_count = sum(1 for r in rows if r["status"] == "fail")
