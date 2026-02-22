@@ -1,0 +1,125 @@
+name: Core Coverage Matrix Smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "crates/**"
+      - "configs/**"
+      - "examples/**"
+      - "scripts/**"
+      - "docs/coverage_scoreboard.md"
+      - ".github/workflows/core-coverage-matrix-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  coverage-matrix-smoke:
+    name: coverage-matrix-${{ matrix.id }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ci-fixture-armv6m
+            target: thumbv6m-none-eabi
+            crate: firmware-ci-fixture
+            profile: release
+            profile_dir: release
+            script: examples/ci/uart-ok.yaml
+            system: configs/systems/ci-fixture-uart1.yaml
+          - id: riscv-ci-fixture
+            target: riscv32i-unknown-none-elf
+            crate: riscv-ci-fixture
+            profile: release
+            profile_dir: release
+            script: examples/ci/riscv-uart-ok.yaml
+            system: configs/systems/ci-fixture-riscv-uart1.yaml
+          - id: demo-blinky-stm32f103
+            target: thumbv7m-none-eabi
+            crate: demo-blinky
+            profile: release
+            profile_dir: release
+            script: examples/demo-blinky/io-smoke.yaml
+            system: examples/demo-blinky/system.yaml
+          - id: stm32h563-nucleo
+            target: thumbv7m-none-eabi
+            crate: firmware-h563-demo
+            profile: release
+            profile_dir: release
+            script: examples/nucleo-h563zi/uart-smoke.yaml
+            system: examples/nucleo-h563zi/system.yaml
+          - id: stm32f103-bluepill
+            target: thumbv7m-none-eabi
+            crate: firmware
+            profile: debug
+            profile_dir: debug
+            script: examples/tests/stm32f103_integrated_test.yaml
+            system: configs/systems/stm32f103-integrated-test.yaml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,riscv32i-unknown-none-elf
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build -p labwired-cli
+
+      - name: Build matrix firmware
+        run: |
+          if [ "${{ matrix.profile }}" = "release" ]; then
+            cargo build -p "${{ matrix.crate }}" --release --target "${{ matrix.target }}"
+          else
+            cargo build -p "${{ matrix.crate }}" --target "${{ matrix.target }}"
+          fi
+
+      - name: Run matrix smoke
+        run: |
+          mkdir -p "out/coverage-matrix/${{ matrix.id }}"
+          cargo run -q -p labwired-cli -- test \
+            --script "${{ matrix.script }}" \
+            --output-dir "out/coverage-matrix/${{ matrix.id }}" \
+            --no-uart-stdout
+
+      - name: Run unsupported-instruction audit
+        run: |
+          ./scripts/unsupported_instruction_audit.sh \
+            --firmware "target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}" \
+            --system "${{ matrix.system }}" \
+            --max-steps 20000 \
+            --out-dir "out/coverage-matrix/${{ matrix.id }}/unsupported-audit"
+
+      - name: Publish audit summary
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          metrics = Path("out/coverage-matrix/${{ matrix.id }}/unsupported-audit/metrics.json")
+          if not metrics.exists():
+              print("### Coverage Matrix Audit: ${{ matrix.id }}")
+              print("")
+              print("- metrics: missing")
+          else:
+              data = json.loads(metrics.read_text())
+              print("### Coverage Matrix Audit: ${{ matrix.id }}")
+              print("")
+              print(f"- instructions executed: `{data.get('instructions_executed', 0)}`")
+              print(f"- unsupported observations: `{data.get('unsupported_total', 0)}`")
+              print(f"- instruction support coverage: `{data.get('instruction_support_percent', 0)}%`")
+          PY
+
+      - name: Upload matrix artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-matrix-${{ matrix.id }}
+          path: out/coverage-matrix/${{ matrix.id }}/
+          retention-days: 14

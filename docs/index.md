@@ -23,6 +23,8 @@ For contributors extending the core engine or adding new peripherals:
 - **[Peripheral Development](peripheral_development.md)**: How to implement custom peripheral models in Rust.
 - **[Declarative Registers](declarative_registers.md)**: Defining register maps using simple YAML files.
 - **[CI Integration](ci_integration.md)**: How to run LabWired in GitHub Actions or GitLab CI.
+- **[Coverage Scoreboard](coverage_scoreboard.md)**: Top-target smoke coverage and deterministic status tracking.
+- **[Target Support Rubric](target_support_rubric.md)**: Objective support levels and promotion criteria.
 
 ## 🔍 Debugging
 
