@@ -16,6 +16,10 @@ jobs:
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-board-riscv
+          workspaces: |
+            . -> target
 
       - name: Install RISC-V target
         run: rustup target add riscv32i-unknown-none-elf
