@@ -567,6 +567,12 @@ Top-5 hard gate targets:
 Gate state:
 - Required targets passing: `5/5` (`100%`, threshold `>=80%`)
 
+Onboarding KPI instrumentation (new):
+- Workflow: `core/.github/workflows/core-onboarding-smoke.yml`
+- Per-target artifact: `onboarding-metrics.json` (elapsed seconds, failure stage, first error signature)
+- Aggregated artifact: `onboarding-scoreboard.json` / `onboarding-scoreboard.md`
+- Current policy: soft threshold tracking (`3600s`) before hard gating
+
 ## 13) Sources
 
 ### LabWired internal sources
