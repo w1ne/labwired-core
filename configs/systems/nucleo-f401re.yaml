@@ -1,0 +1,17 @@
+# LabWired - NUCLEO-F401RE Demo System Configuration
+name: "nucleo-f401re"
+chip: "../chips/stm32f401.yaml"
+external_devices: []
+board_io:
+  - id: "led2_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_user_pc13"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true
