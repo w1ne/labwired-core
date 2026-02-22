@@ -25,6 +25,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: core-ci
+          workspaces: |
+            . -> target
 
       - name: Check Formatting
         run: cargo fmt --all -- --check
