@@ -61,6 +61,10 @@ def main() -> int:
 
     rows: list[dict[str, Any]] = []
     for target_dir in sorted(p for p in matrix_root.iterdir() if p.is_dir()):
+        target_id = target_dir.name
+        if target_id.startswith("coverage-matrix-"):
+            target_id = target_id[len("coverage-matrix-") :]
+
         result = _load_json(target_dir / "result.json")
         metrics = _load_json(target_dir / "unsupported-audit" / "metrics.json")
 
@@ -83,7 +87,7 @@ def main() -> int:
 
         rows.append(
             {
-                "target_id": target_dir.name,
+                "target_id": target_id,
                 "status": status,
                 "stop_reason": stop_reason,
                 "instructions": instructions,
