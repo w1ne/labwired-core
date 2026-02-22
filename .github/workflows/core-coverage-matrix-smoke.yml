@@ -157,7 +157,21 @@ jobs:
         run: |
           cat out/coverage-matrix/scoreboard.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Enforce Top-5 deterministic pass gate
+        run: |
+          python3 scripts/generate_coverage_matrix_scoreboard.py \
+            --matrix-root out/coverage-matrix \
+            --markdown-out /tmp/coverage-matrix-gate.md \
+            --json-out /tmp/coverage-matrix-gate.json \
+            --required-target stm32f103-bluepill \
+            --required-target stm32h563-nucleo \
+            --required-target stm32f401-nucleo \
+            --required-target riscv-ci-fixture \
+            --required-target demo-blinky-stm32f103 \
+            --min-required-pass-rate 0.80
+
       - name: Upload scoreboard artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-matrix-scoreboard
