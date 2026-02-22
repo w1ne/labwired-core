@@ -13,7 +13,7 @@ Values should be updated by CI artifacts from the matrix smoke workflow.
 | Top-5 targets defined | `5` | Defined in `docs/spec/TOP20_COVERAGE_MATRIX.md` |
 | Top-5 with runnable smoke script | `4/5` | `stm32f401-nucleo` is still backlog |
 | Top-5 with deterministic evidence artifacts in matrix CI | `0/5` | Matrix workflow introduced; first run pending |
-| Top-5 with unsupported-instruction audit artifacts | `0/5` | Audit integration pending for matrix workflow |
+| Top-5 with unsupported-instruction audit artifacts | `0/5` | Audit step is integrated in matrix workflow; first run pending |
 | Top-5 with explicit known-limitations entries | `2/5` | `stm32f103-bluepill`, `stm32h563-nucleo` |
 
 ## Target-Level Baseline
@@ -32,4 +32,3 @@ Values should be updated by CI artifacts from the matrix smoke workflow.
 2. Record pass/fail plus stop reason and assertion summary.
 3. Update this file each time top-5 status changes.
 4. Do not mark `green` without deterministic re-run evidence.
-
