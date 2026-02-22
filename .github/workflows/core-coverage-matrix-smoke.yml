@@ -151,7 +151,13 @@ jobs:
           python3 scripts/generate_coverage_matrix_scoreboard.py \
             --matrix-root out/coverage-matrix \
             --markdown-out out/coverage-matrix/scoreboard.md \
-            --json-out out/coverage-matrix/scoreboard.json
+            --json-out out/coverage-matrix/scoreboard.json \
+            --required-target stm32f103-bluepill \
+            --required-target stm32h563-nucleo \
+            --required-target stm32f401-nucleo \
+            --required-target riscv-ci-fixture \
+            --required-target demo-blinky-stm32f103 \
+            --min-required-pass-rate 0.80
 
       - name: Publish scoreboard summary
         run: |
