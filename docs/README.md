@@ -16,6 +16,7 @@ This directory contains **platform-level** documentation for the LabWired monore
 - **[NUCLEO-H563ZI Voiceover Script](./NUCLEO_H563ZI_VOICEOVER_SCRIPT.md)** - Ready-to-read narration mapped to terminal/UI moments
 - **[VS Code UI Demo Checklist](./VS_CODE_UI_DEMO_CHECKLIST.md)** - Manual UI validation (breakpoints, step, registers, memory, Docker mode)
 - **[Business Strategy](./spec/)** - Market analysis, business roadmaps, and strategic vision
+- **[Digital Twin Simulator Comparison (2026-02-22)](./spec/DIGITAL_TWIN_SIMULATOR_COMPARISON_2026-02-22.md)** - Deep competitive analysis of LabWired vs direct and adjacent simulator platforms
 
 ## Component Documentation
 
