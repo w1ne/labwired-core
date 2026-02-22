@@ -513,117 +513,59 @@ Implication:
 
 ## 12) Competitive Gap-Closure Plan (How LabWired Becomes More Competitive)
 
-This section focuses on practical actions with highest expected impact on the score gaps above.
+Lean 80/20 plan: execute only what moves Segment A ranking fastest.
 
-### 12.1 Priority 1: Coverage Depth on Top MCU Families
+### 12.1 Priority Stack (Only 3 Items)
 
-Why:
-- Coverage is the biggest recurring score drag across ICPs.
+1. **Coverage depth on Top-5 executable targets** (`stm32f103-bluepill`, `stm32h563-nucleo`, `stm32f401-nucleo`, `riscv-ci-fixture`, `demo-blinky-stm32f103`).
+2. **Onboarding speed to first deterministic smoke** (time-to-first-UART-smoke).
+3. **Deterministic CI evidence quality** (artifact reproducibility and hard gating).
 
-Actions:
-1. Define \"Top-20 target matrix\" (MCU + board + SDK sample firmware) and publish support status.
-2. Expand Tier-1 peripheral fidelity for each target (`clock/rcc`, `gpio`, `uart`, `timer`, `dma`, interrupts, watchdog).
-3. Ship compatibility packs for common SDK examples with deterministic golden outputs.
+Everything else is secondary until these three are stable.
 
-Success metric:
-- % of top-matrix examples running deterministically in CI without model patching.
+### 12.2 6-Week Execution Plan
 
-Execution plan (concrete):
-1. Week 1: Define and freeze target matrix.
-2. Weeks 2-3: Build coverage scoreboard and conformance harness for each matrix target.
-3. Weeks 4-8: Implement missing Tier-1 peripherals by family, prioritized by firmware break frequency.
-4. Weeks 9-10: Add deterministic compatibility packs and golden-output tests.
-5. Weeks 11-12: Publish dashboard + rerun benchmarks and lock quarter-end status.
+1. Weeks 1-2:
+   - Keep Top-5 matrix green with hard CI gate.
+   - Fix highest-frequency peripheral failures only.
+2. Weeks 3-4:
+   - Improve onboarding path (starter manifests + clearer failure diagnostics).
+   - Reduce median onboarding time.
+3. Weeks 5-6:
+   - Stabilize deterministic replay artifacts and close top flakiness sources.
+   - Recompute Segment A weighted score from actual matrix outcomes.
 
-Required deliverables:
-1. `docs/spec/TOP20_COVERAGE_MATRIX.md` with board/chip/SDK status.
-2. `core/examples/compat/<family>/` compatibility examples with deterministic expected outputs.
-3. `core/docs/coverage_scoreboard.md` with pass/fail trend by target and peripheral class.
-4. CI job that runs matrix smoke tests and posts artifacts.
+### 12.3 Hard Success Criteria (Quarter Gate)
 
-Acceptance criteria:
-1. At least 70% of Top-20 matrix runs pass deterministic smoke in CI by end of quarter.
-2. For every passing matrix target: reset PC/SP is correct and UART smoke output is stable.
-3. Unsupported-instruction/peripheral-access incidents trend downward release over release.
-4. Re-run variance on matrix suite remains within defined deterministic tolerance.
+1. Top-5 deterministic pass rate: `>=80%` sustained.
+2. Median time-to-first-UART-smoke for supported families: `<60 minutes`.
+3. Deterministic replay success for CI failures: `>=95%`.
 
-Risk controls:
-1. Do not onboard breadth without per-target validation artifacts.
-2. Keep a visible \"known limitations\" list for each target to avoid overclaiming support.
-3. Gate new target claims on executable examples, not config presence alone.
+If these are not met, do not expand scope.
 
-### 12.2 Priority 2: Onboarding Time-to-Value Moat
+### 12.4 Immediate Implementation Backlog
 
-Why:
-- LabWired can outcompete by being the fastest route from board docs to first deterministic run.
+1. Keep `core/.github/workflows/core-coverage-matrix-smoke.yml` as a hard gate for Top-5 executable targets.
+2. Use `core/scripts/generate_coverage_matrix_scoreboard.py` artifacts as single source of truth.
+3. Prioritize bug fixes by matrix failure frequency, not by speculative feature breadth.
+4. Update `core/docs/coverage_scoreboard.md` only from CI artifacts.
 
-Actions:
-1. Provide generated starter manifests for popular boards plus guided validation commands.
-2. Add automated diagnostics that explain unsupported MMIO/peripheral accesses with fix suggestions.
-3. Publish a strict onboarding SLA internally (for example: first UART smoke under 60 minutes for supported families).
+### 12.5 Current Scoreboard (Implementation Alignment)
 
-Success metric:
-- Median time-to-first-UART-smoke for new users and new boards.
+Latest validated matrix run on `main`:
+- Date: `2026-02-22`
+- Run: `https://github.com/w1ne/labwired-core/actions/runs/22281072679`
+- Summary: `6/6 pass`, `0 fail`, `0 missing`
 
-### 12.3 Priority 3: Enterprise Interoperability Without Product Bloat
+Top-5 hard gate targets:
+- `stm32f103-bluepill`
+- `stm32h563-nucleo`
+- `stm32f401-nucleo`
+- `riscv-ci-fixture`
+- `demo-blinky-stm32f103`
 
-Why:
-- Automotive/enterprise scores are limited by interoperability and process fit, not core determinism.
-
-Actions:
-1. Add export adapters for test artifacts and simulation traces into enterprise pipelines.
-2. Provide co-simulation integration patterns with existing incumbents instead of forced replacement.
-3. Introduce traceability/evidence packages aligned with safety process documentation workflows.
-
-Success metric:
-- Number of enterprise pipelines where LabWired runs as accepted validation stage.
-
-### 12.4 Priority 4: Deterministic CI Differentiation as Product Surface
-
-Why:
-- This is already a strength and should be made visible/measurable versus competitors.
-
-Actions:
-1. Publish reproducible benchmark suite: rerun variance, throughput, and debugging turnaround.
-2. Add one-command replay bundles containing firmware, system manifest, and failing trace snapshot.
-3. Standardize deterministic incident artifacts for postmortem workflows.
-
-Success metric:
-- Reproduction success rate for CI failures across machines and team members.
-
-### 12.5 Priority 5: Ecosystem Reach and Trust
-
-Why:
-- Semiconductor and enterprise buyers weight ecosystem and confidence heavily.
-
-Actions:
-1. Publish public compatibility dashboards and validation badges per board family.
-2. Maintain canonical examples for Zephyr/FreeRTOS/STM32Cube/Pico SDK workflows.
-3. Create a transparent model quality rubric (coverage, known limitations, conformance tests).
-
-Success metric:
-- External adoption signals: active integrations, recurring CI usage, and third-party model contributions.
-
-### 12.6 Suggested Execution Sequence (Next 2 Quarters)
-
-1. Quarter 1:
-   - Coverage expansion for top targets
-   - Onboarding automation and diagnostics
-   - Benchmark baseline publication
-2. Quarter 2:
-   - Enterprise artifact/export adapters
-   - Safety-evidence workflow templates
-   - Ecosystem dashboards and partner reference integrations
-
-### 12.7 Immediate Backlog (Start This Week)
-
-Status update (implemented):
-
-1. `done` Create `docs/spec/TOP20_COVERAGE_MATRIX.md` with initial candidates and status columns.
-2. `done` Select top 5 targets by market pull and current failure frequency.
-3. `done` Add CI matrix smoke workflow skeleton (build, run, deterministic output check, artifact upload) via `core/.github/workflows/core-coverage-matrix-smoke.yml`.
-4. `done` Add first coverage scoreboard markdown with baseline values via `core/docs/coverage_scoreboard.md`.
-5. `done` Publish \"definition of supported\" rubric for targets via `core/docs/target_support_rubric.md`.
+Gate state:
+- Required targets passing: `5/5` (`100%`, threshold `>=80%`)
 
 ## 13) Sources
 
