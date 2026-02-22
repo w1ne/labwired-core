@@ -625,6 +625,17 @@ impl SystemBus {
                     let _ = self.write_u8(req.addr, req.val);
                     tracing::trace!("DMA Write: {:#x} <- {:#x}", req.addr, req.val);
                 }
+                crate::DmaDirection::Copy => {
+                    if let Ok(val) = self.read_u8(req.src_addr) {
+                        let _ = self.write_u8(req.addr, val);
+                        tracing::trace!(
+                            "DMA Copy: {:#x} -> {:#x} ({:#x})",
+                            req.src_addr,
+                            req.addr,
+                            val
+                        );
+                    }
+                }
             }
         }
 
@@ -813,6 +824,10 @@ impl crate::Bus for SystemBus {
                 crate::DmaDirection::Write => {
                     self.write_u8(req.addr, req.val)?;
                 }
+                crate::DmaDirection::Copy => {
+                    let val = self.read_u8(req.src_addr)?;
+                    self.write_u8(req.addr, val)?;
+                }
             }
         }
         Ok(())
@@ -999,5 +1014,22 @@ mod tests {
 
         assert_eq!(low_idx, Some(1));
         assert_eq!(high_idx, Some(0));
+    }
+
+    #[test]
+    fn test_execute_dma_copy_request() {
+        let mut bus = SystemBus::new();
+        bus.write_u8(0x2000_0010, 0xAB).unwrap();
+        bus.write_u8(0x2000_0020, 0x00).unwrap();
+
+        let req = crate::DmaRequest {
+            src_addr: 0x2000_0010,
+            addr: 0x2000_0020,
+            val: 0,
+            direction: crate::DmaDirection::Copy,
+        };
+        bus.execute_dma(&[req]).unwrap();
+
+        assert_eq!(bus.read_u8(0x2000_0020).unwrap(), 0xAB);
     }
 }

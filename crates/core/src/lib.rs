@@ -45,10 +45,12 @@ pub type SimResult<T> = Result<T, SimulationError>;
 pub enum DmaDirection {
     Read,
     Write,
+    Copy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DmaRequest {
+    pub src_addr: u64,
     pub addr: u64,
     pub val: u8,
     pub direction: DmaDirection,
