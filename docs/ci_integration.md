@@ -100,3 +100,13 @@ The test runner produces machine-readable outputs for integration with CI report
 - **`uart.log`**: Captured serial output for debugging failures.
 
 Ensure your CI pipeline is configured to archive these artifacts upon failure.
+
+## 5. Onboarding KPI Tracking
+
+For board onboarding competitiveness, `core-onboarding-smoke.yml` runs a deterministic smoke path and emits:
+
+- `onboarding-metrics.json`: elapsed time, failure stage, and first error signature.
+- `onboarding-summary.md`: per-target summary for step output.
+- `onboarding-scoreboard.json` / `onboarding-scoreboard.md`: aggregated run-level view.
+
+This workflow uses a soft threshold (`3600s`) to track time-to-first-smoke without blocking merges.

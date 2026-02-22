@@ -1,0 +1,107 @@
+name: Core Onboarding Smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "crates/**"
+      - "configs/**"
+      - "examples/**"
+      - "scripts/**"
+      - ".github/workflows/core-onboarding-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  onboarding-smoke:
+    name: onboarding-${{ matrix.id }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: stm32f401-nucleo
+            crate: firmware-f401-demo
+            target: thumbv7em-none-eabi
+            script: examples/nucleo-f401re/uart-smoke.yaml
+            system: configs/systems/nucleo-f401re.yaml
+          - id: stm32h563-nucleo
+            crate: firmware-h563-demo
+            target: thumbv7m-none-eabi
+            script: examples/nucleo-h563zi/uart-smoke.yaml
+            system: examples/nucleo-h563zi/system.yaml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7m-none-eabi,thumbv7em-none-eabi
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run onboarding smoke
+        run: |
+          chmod +x scripts/onboarding_smoke.sh
+          scripts/onboarding_smoke.sh \
+            --target-id "${{ matrix.id }}" \
+            --crate "${{ matrix.crate }}" \
+            --target "${{ matrix.target }}" \
+            --script "${{ matrix.script }}" \
+            --system "${{ matrix.system }}" \
+            --out-dir "out/onboarding-smoke/${{ matrix.id }}" \
+            --threshold-seconds 3600
+
+      - name: Publish onboarding summary
+        if: always()
+        run: |
+          cat "out/onboarding-smoke/${{ matrix.id }}/onboarding-summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload onboarding artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-smoke-${{ matrix.id }}
+          path: out/onboarding-smoke/${{ matrix.id }}/
+          retention-days: 14
+
+  onboarding-scoreboard:
+    name: onboarding-scoreboard
+    runs-on: ubuntu-latest
+    needs: onboarding-smoke
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download onboarding artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: out/onboarding-smoke
+          pattern: onboarding-smoke-*
+          merge-multiple: false
+
+      - name: Generate onboarding scoreboard
+        run: |
+          python3 scripts/generate_onboarding_scoreboard.py \
+            --metrics-root out/onboarding-smoke \
+            --markdown-out out/onboarding-smoke/onboarding-scoreboard.md \
+            --json-out out/onboarding-smoke/onboarding-scoreboard.json \
+            --soft-threshold-seconds 3600
+
+      - name: Publish scoreboard summary
+        run: |
+          cat out/onboarding-smoke/onboarding-scoreboard.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload scoreboard artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-scoreboard
+          path: |
+            out/onboarding-smoke/onboarding-scoreboard.md
+            out/onboarding-smoke/onboarding-scoreboard.json
+          retention-days: 14
+
