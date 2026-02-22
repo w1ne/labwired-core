@@ -50,13 +50,20 @@ jobs:
             profile_dir: release
             script: examples/nucleo-h563zi/uart-smoke.yaml
             system: examples/nucleo-h563zi/system.yaml
+          - id: stm32f401-nucleo
+            target: thumbv7em-none-eabi
+            crate: firmware-f401-demo
+            profile: release
+            profile_dir: release
+            script: examples/nucleo-f401re/uart-smoke.yaml
+            system: configs/systems/nucleo-f401re.yaml
           - id: stm32f103-bluepill
             target: thumbv7m-none-eabi
-            crate: firmware
-            profile: debug
-            profile_dir: debug
-            script: examples/tests/stm32f103_integrated_test.yaml
-            system: configs/systems/stm32f103-integrated-test.yaml
+            crate: demo-blinky
+            profile: release
+            profile_dir: release
+            script: examples/demo-blinky/io-smoke.yaml
+            system: examples/demo-blinky/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +71,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,riscv32i-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,riscv32i-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

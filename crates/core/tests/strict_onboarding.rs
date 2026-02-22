@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -59,31 +60,11 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                     continue;
                 }
 
-                // 1.5 Build the firmware
-                // We need to know which package to build.
-                // Heuristic: Check if there's a Cargo.toml in the example dir.
-                // If so, build that package.
-                let cargo_toml = dir.join("Cargo.toml");
-                if cargo_toml.exists() {
-                    println!("  Building firmware in {:?}", dir);
-                    // We assume the package name matches the directory name or is the only package in that manifest?
-                    // Simpler: just run `cargo build --release` inside that directory?
-                    // But we are in workspace root.
-                    // Let's rely on workspace members.
-                    // Try to guess package name from Cargo.toml?
-                    // Or just run `cargo build --release --manifest-path <path>`
-
-                    // Change current directory to the example directory so it picks up .cargo/config.toml
-                    let build_status = Command::new("cargo")
-                        .current_dir(dir)
-                        .args(["build", "--release"])
-                        .status();
-
-                    if build_status.is_err() || !build_status.unwrap().success() {
-                        println!("  [FAIL] Firmware build failed for {}", file_stem);
-                        failed_boards.push(format!("{} (firmware build failed)", file_stem));
-                        continue;
-                    }
+                // 1.5 Build firmware if io-smoke references a workspace target output path.
+                if !ensure_smoke_firmware_exists(project_root, &smoke_test)? {
+                    println!("  [FAIL] Firmware build failed for {}", file_stem);
+                    failed_boards.push(format!("{} (firmware build failed)", file_stem));
+                    continue;
                 }
 
                 // 2. Run the smoke test in Emulator mode
@@ -123,6 +104,70 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyhow::Result<bool> {
+    let Some(firmware_path) = firmware_path_from_smoke(smoke_test)? else {
+        return Ok(true);
+    };
+
+    if firmware_path.exists() {
+        return Ok(true);
+    }
+
+    let Ok(relative_path) = firmware_path.strip_prefix(project_root) else {
+        return Ok(false);
+    };
+
+    let parts: Vec<String> = relative_path
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    let Some(target_idx) = parts.iter().position(|p| p == "target") else {
+        return Ok(false);
+    };
+
+    if parts.len() <= target_idx + 3 {
+        return Ok(false);
+    }
+
+    let target = parts[target_idx + 1].clone();
+    let profile = parts[target_idx + 2].clone();
+    let package = parts[target_idx + 3].clone();
+
+    let mut args = vec![
+        "build".to_string(),
+        "-p".to_string(),
+        package,
+        "--target".to_string(),
+        target,
+    ];
+    if profile == "release" {
+        args.push("--release".to_string());
+    }
+
+    let status = Command::new("cargo")
+        .current_dir(project_root)
+        .args(args)
+        .status()?;
+
+    Ok(status.success())
+}
+
+fn firmware_path_from_smoke(smoke_test: &Path) -> anyhow::Result<Option<PathBuf>> {
+    let content = fs::read_to_string(smoke_test)?;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("firmware:") {
+            let rel = rest.trim().trim_matches('"').trim_matches('\'');
+            if rel.is_empty() {
+                return Ok(None);
+            }
+            let base = smoke_test.parent().unwrap_or_else(|| Path::new("."));
+            return Ok(Some(base.join(rel)));
+        }
+    }
+    Ok(None)
 }
 
 fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<PathBuf> {

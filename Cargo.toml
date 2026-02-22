@@ -11,6 +11,7 @@ members = [
     "crates/loader",
     "crates/cli",
     "crates/firmware",
+    "crates/firmware-f401-demo",
     "crates/firmware-ci-fixture",
     "crates/firmware-h563-demo",
     "crates/firmware-h563-io-demo",
@@ -58,6 +59,11 @@ panic = "abort"
 lto = false
 
 [profile.release.package.firmware-ci-fixture]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-f401-demo]
 codegen-units = 1
 debug = true
 opt-level = "s"

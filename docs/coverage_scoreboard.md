@@ -11,10 +11,10 @@ Values should be updated by CI artifacts from the matrix smoke workflow.
 | Metric | Baseline Value | Notes |
 |---|---|---|
 | Top-5 targets defined | `5` | Defined in `docs/spec/TOP20_COVERAGE_MATRIX.md` |
-| Top-5 with runnable smoke script | `4/5` | `stm32f401-nucleo` is still backlog |
+| Top-5 with runnable smoke script | `5/5` | `stm32f401-nucleo` smoke package added |
 | Top-5 with deterministic evidence artifacts in matrix CI | `0/5` | Matrix workflow introduced; first run pending |
 | Top-5 with unsupported-instruction audit artifacts | `0/5` | Audit step is integrated in matrix workflow; first run pending |
-| Top-5 with explicit known-limitations entries | `2/5` | `stm32f103-bluepill`, `stm32h563-nucleo` |
+| Top-5 with explicit known-limitations entries | `3/5` | `stm32f103-bluepill`, `stm32h563-nucleo`, `stm32f401-nucleo` |
 
 ## Target-Level Baseline
 
@@ -22,7 +22,7 @@ Values should be updated by CI artifacts from the matrix smoke workflow.
 |---|---|---|---|---|
 | `stm32f103-bluepill` | `examples/tests/stm32f103_integrated_test.yaml` | `cargo build -p firmware --target thumbv7m-none-eabi` | `scheduled` | `core/out/coverage-matrix/stm32f103-bluepill/` |
 | `stm32h563-nucleo` | `examples/nucleo-h563zi/uart-smoke.yaml` | `cargo build -p firmware-h563-demo --release --target thumbv7m-none-eabi` | `scheduled` | `core/out/coverage-matrix/stm32h563-nucleo/` |
-| `stm32f401-nucleo` | `planned` | `planned` | `blocked` | `n/a` |
+| `stm32f401-nucleo` | `examples/nucleo-f401re/uart-smoke.yaml` | `cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi` | `scheduled` | `core/out/coverage-matrix/stm32f401-nucleo/` |
 | `rp2040-pico` | `planned` | `planned` | `blocked` | `n/a` |
 | `riscv-ci-fixture` | `examples/ci/riscv-uart-ok.yaml` | `cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf` | `scheduled` | `core/out/coverage-matrix/riscv-ci-fixture/` |
 

@@ -368,11 +368,9 @@ impl<C: Cpu> DebugControl for Machine<C> {
             let pc = self.cpu.get_pc();
             let pc_aligned = pc & !1;
 
-            if self.breakpoints.contains(&pc_aligned) {
-                if self.last_breakpoint != Some(pc_aligned) {
-                    self.last_breakpoint = Some(pc_aligned);
-                    return Ok(StopReason::Breakpoint(pc));
-                }
+            if self.breakpoints.contains(&pc_aligned) && self.last_breakpoint != Some(pc_aligned) {
+                self.last_breakpoint = Some(pc_aligned);
+                return Ok(StopReason::Breakpoint(pc));
             }
 
             // We are executing, so clear the "last hit" sticky BP
@@ -395,9 +393,9 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 remaining_until_tick
             };
 
-            let executed = self
-                .cpu
-                .step_batch(&mut self.bus, &self.observers, &self.config, current_batch)?;
+            let executed =
+                self.cpu
+                    .step_batch(&mut self.bus, &self.observers, &self.config, current_batch)?;
 
             steps += executed;
             self.total_cycles += executed as u64;

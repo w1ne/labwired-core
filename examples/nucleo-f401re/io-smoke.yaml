@@ -1,0 +1,10 @@
+# LabWired - NUCLEO-F401RE IO/UART smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 64
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps
