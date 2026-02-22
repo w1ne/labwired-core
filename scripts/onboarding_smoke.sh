@@ -63,6 +63,7 @@ mkdir -p "${OUT_DIR}/logs"
 status="pass"
 failure_stage=""
 first_error_signature=""
+failure_hint=""
 
 build_cli_ms=""
 build_firmware_ms=""
@@ -113,6 +114,54 @@ run_stage() {
   return 1
 }
 
+infer_failure_hint() {
+  local stage="$1"
+  local signature="$2"
+  local sig_lc
+  sig_lc="$(printf '%s' "${signature}" | tr '[:upper:]' '[:lower:]')"
+
+  if [[ "${stage}" == "build_cli" ]]; then
+    echo "Fix host toolchain first: run \`rustup show\` and ensure CLI dependencies build on this runner."
+    return
+  fi
+
+  if [[ "${stage}" == "build_firmware" ]]; then
+    if [[ "${sig_lc}" == *"can't find crate"* ]] || [[ "${sig_lc}" == *"cannot find crate"* ]]; then
+      echo "Firmware dependency missing. Verify crate features and Cargo.toml dependencies for this target."
+      return
+    fi
+    if [[ "${sig_lc}" == *"linker"* ]] || [[ "${sig_lc}" == *"linking with"* ]]; then
+      echo "Linker/target mismatch. Check target triple, linker script, and memory layout for this board."
+      return
+    fi
+    if [[ "${sig_lc}" == *"target"* ]] && [[ "${sig_lc}" == *"not installed"* ]]; then
+      echo "Rust target missing. Add it in CI toolchain install step for this board target."
+      return
+    fi
+    echo "Firmware build failed. Start with the first compiler error in logs/build_firmware.log."
+    return
+  fi
+
+  if [[ "${stage}" == "run_smoke" ]]; then
+    if [[ "${sig_lc}" == *"no such file or directory"* ]] || [[ "${sig_lc}" == *"not found"* ]]; then
+      echo "Path mismatch. Verify script/system paths in workflow matrix and repository layout."
+      return
+    fi
+    if [[ "${sig_lc}" == *"unknown peripheral"* ]] || [[ "${sig_lc}" == *"unmapped"* ]] || [[ "${sig_lc}" == *"unsupported"* ]]; then
+      echo "Model gap. Check unsupported access logs and implement/fix the first missing peripheral behavior."
+      return
+    fi
+    if [[ "${sig_lc}" == *"assertion"* ]] || [[ "${sig_lc}" == *"expected"* ]]; then
+      echo "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output."
+      return
+    fi
+    echo "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only."
+    return
+  fi
+
+  echo "Unknown failure stage. Start from first non-empty line in stage log."
+}
+
 run_smoke_output_dir="${OUT_DIR}/simulation-output"
 mkdir -p "${run_smoke_output_dir}"
 
@@ -140,10 +189,15 @@ if [[ "${elapsed_seconds}" -le "${THRESHOLD_SECONDS}" ]]; then
   threshold_met=true
 fi
 
+if [[ "${status}" != "pass" ]]; then
+  failure_hint="$(infer_failure_hint "${failure_stage}" "${first_error_signature}")"
+fi
+
 export TARGET_ID CRATE TARGET SCRIPT SYSTEM OUT_DIR PROFILE
 export run_started_iso run_finished_iso elapsed_seconds
 export status failure_stage first_error_signature threshold_met THRESHOLD_SECONDS
 export build_cli_ms build_firmware_ms run_smoke_ms
+export failure_hint
 
 python3 - <<'PY'
 import json
@@ -171,6 +225,7 @@ metrics = {
     "elapsed_seconds": int(os.environ["elapsed_seconds"]),
     "failure_stage": os.environ.get("failure_stage", ""),
     "first_error_signature": os.environ.get("first_error_signature", ""),
+    "failure_hint": os.environ.get("failure_hint", ""),
     "threshold_seconds": int(os.environ["THRESHOLD_SECONDS"]),
     "threshold_met": threshold_met,
     "stages_seconds": {
@@ -189,6 +244,7 @@ summary_lines = [
     f"- threshold_met: `{metrics['threshold_met']}`",
     f"- failure_stage: `{metrics['failure_stage'] or 'n/a'}`",
     f"- first_error_signature: `{metrics['first_error_signature'] or 'n/a'}`",
+    f"- failure_hint: `{metrics['failure_hint'] or 'n/a'}`",
 ]
 
 out_dir.mkdir(parents=True, exist_ok=True)
@@ -199,5 +255,6 @@ PY
 if [[ "${status}" != "pass" ]]; then
   echo "Onboarding smoke failed at stage: ${failure_stage}" >&2
   echo "Signature: ${first_error_signature}" >&2
+  echo "Hint: ${failure_hint}" >&2
   exit 1
 fi
