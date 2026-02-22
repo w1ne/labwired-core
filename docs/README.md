@@ -17,6 +17,7 @@ This directory contains **platform-level** documentation for the LabWired monore
 - **[VS Code UI Demo Checklist](./VS_CODE_UI_DEMO_CHECKLIST.md)** - Manual UI validation (breakpoints, step, registers, memory, Docker mode)
 - **[Business Strategy](./spec/)** - Market analysis, business roadmaps, and strategic vision
 - **[Digital Twin Simulator Comparison (2026-02-22)](./spec/DIGITAL_TWIN_SIMULATOR_COMPARISON_2026-02-22.md)** - Deep competitive analysis of LabWired vs direct and adjacent simulator platforms
+- **[Top-20 Coverage Matrix](./spec/TOP20_COVERAGE_MATRIX.md)** - Priority target matrix for closing simulation coverage gaps
 
 ## Component Documentation
 

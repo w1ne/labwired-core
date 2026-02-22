@@ -1,0 +1,66 @@
+# Top-20 Coverage Matrix
+
+Date: February 22, 2026  
+Owner: Core simulation team  
+Goal: Prioritize target bring-up and track deterministic smoke readiness.
+
+## Status Legend
+
+- `green`: deterministic smoke passing with reproducible output.
+- `yellow`: runnable, but partial peripheral fidelity or unstable assertions.
+- `red`: blocked (missing critical peripheral behavior or reset path).
+- `backlog`: not implemented yet.
+
+## Selection Basis
+
+Top-20 is ranked by a weighted mix:
+
+1. Market pull (ecosystem size, expected user demand).
+2. Current failure pressure (how often gaps appear in our examples/tests).
+3. Architectural leverage (how much one target unlocks related boards/families).
+
+## Top-5 Focus for Current Quarter
+
+| Rank | Target ID | MCU / Board | Why It Is in Top-5 | Current Status |
+|---|---|---|---|---|
+| 1 | `stm32f103-bluepill` | STM32F103C8 / Blue Pill | Large install base, broad firmware sample availability | `yellow` |
+| 2 | `stm32h563-nucleo` | STM32H563ZI / NUCLEO-H563ZI | Existing flagship demo path and enterprise narrative | `yellow` |
+| 3 | `stm32f401-nucleo` | STM32F401RE / NUCLEO-F401RE | Tier-1 strategy target and common Cortex-M4 baseline | `backlog` |
+| 4 | `rp2040-pico` | RP2040 / Raspberry Pi Pico | Tier-1 strategy target and strong hobby/pro crossover | `backlog` |
+| 5 | `riscv-ci-fixture` | RV32I CI fixture board | Coverage for non-ARM path and CI smoke reliability | `green` |
+
+## Full Top-20 Matrix
+
+| Rank | Target ID | MCU Family | Representative Board | Arch | SDK / Firmware Fixture | System Manifest | Smoke Script | Tier-1 Peripheral Baseline (`rcc/clock`, `gpio`, `uart`, `timer`, `dma`, `irq`) | Status | Known Gaps |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `stm32f103-bluepill` | STM32F1 | Blue Pill | ARMv7-M | `firmware` | `core/configs/systems/stm32f103-integrated-test.yaml` | `core/examples/tests/stm32f103_integrated_test.yaml` | `clock/gpio/uart/irq` mostly usable; `timer/dma` partial | `yellow` | Timer/DMA breadth |
+| 2 | `stm32h563-nucleo` | STM32H5 | NUCLEO-H563ZI | ARMv8-M-ish firmware path; simulated via current core support subset | `firmware-h563-demo` | `core/examples/nucleo-h563zi/system.yaml` | `core/examples/nucleo-h563zi/uart-smoke.yaml` | Baseline smoke path present; deeper peripherals partial | `yellow` | Broader peripheral fidelity |
+| 3 | `stm32f401-nucleo` | STM32F4 | NUCLEO-F401RE | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Full board onboarding |
+| 4 | `rp2040-pico` | RP2040 | Raspberry Pi Pico | ARMv6-M (dual core) | planned | planned | planned | Not started | `backlog` | Dual-core + PIO model |
+| 5 | `riscv-ci-fixture` | Generic RV32I | CI fixture | RV32I | `riscv-ci-fixture` | `core/configs/systems/ci-fixture-riscv-uart1.yaml` | `core/examples/ci/riscv-uart-ok.yaml` | `gpio/uart/timer` CI baseline | `green` | Broader peripheral set |
+| 6 | `stm32f401-blackpill` | STM32F4 | BlackPill F401CC | ARMv7E-M | planned | planned | planned | Not started | `backlog` | New board mapping |
+| 7 | `nrf52832-dk` | nRF52 | PCA10040 DK | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Radio/PPI/EasyDMA |
+| 8 | `nrf52840-dk` | nRF52 | PCA10056 DK | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Radio/PPI/EasyDMA |
+| 9 | `stm32g474-nucleo` | STM32G4 | NUCLEO-G474RE | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Advanced timer/ADC paths |
+| 10 | `stm32l476-nucleo` | STM32L4 | NUCLEO-L476RG | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Low-power clock tree |
+| 11 | `stm32wb55-nucleo` | STM32WB | NUCLEO-WB55RG | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Dual-core + radio |
+| 12 | `atsamd21-xplained` | SAMD21 | Xplained Pro | ARMv6-M | planned | planned | planned | Not started | `backlog` | SERCOM/GCLK behavior |
+| 13 | `atsame54-xplained` | SAME54 | Xplained Pro | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Clock/peripheral breadth |
+| 14 | `efr32bg22-dk` | EFR32 | BRD4184 | ARMv8-M | planned | planned | planned | Not started | `backlog` | Radio + low-power modes |
+| 15 | `gd32f103-board` | GD32F1 | Generic dev board | ARMv7-M | planned | planned | planned | Not started | `backlog` | Vendor variant diffs |
+| 16 | `ch32v003-board` | CH32V | CH32V003 EVB | RV32EC-ish | planned | planned | planned | Not started | `backlog` | ISA/peripheral variance |
+| 17 | `fe310-hifive1` | SiFive FE310 | HiFive1 Rev B | RV32IMAC | planned | planned | planned | Not started | `backlog` | Timer/UART/PLIC model depth |
+| 18 | `esp32c3-devkit` | ESP32-C3 | DevKit | RV32IMC | planned | planned | planned | Not started | `backlog` | Wi-Fi stack out-of-scope for smoke |
+| 19 | `stm32u575-nucleo` | STM32U5 | NUCLEO-U575ZI-Q | ARMv8-M | planned | planned | planned | Not started | `backlog` | TrustZone and low-power |
+| 20 | `ra6m5-ek` | Renesas RA6 | EK-RA6M5 | ARMv8-M | planned | planned | planned | Not started | `backlog` | Clock/IRQ/peripheral adaptation |
+
+## Current Quarter Tracking Fields
+
+Use this checklist per target:
+
+- `chip descriptor`: exists and validated.
+- `system manifest`: exists and validated.
+- `smoke firmware`: deterministic UART or memory assertion.
+- `unsupported instruction audit`: report generated.
+- `known limitations`: documented and reviewed.
+

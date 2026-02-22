@@ -617,11 +617,13 @@ Success metric:
 
 ### 12.7 Immediate Backlog (Start This Week)
 
-1. Create `docs/spec/TOP20_COVERAGE_MATRIX.md` with initial candidates and status columns.
-2. Select top 5 targets by market pull and current failure frequency.
-3. Add CI matrix smoke workflow skeleton (build, run, deterministic output check, artifact upload).
-4. Add first coverage scoreboard markdown with baseline values (even if low).
-5. Publish \"definition of supported\" rubric for targets (minimum peripheral/test requirements).
+Status update (implemented):
+
+1. `done` Create `docs/spec/TOP20_COVERAGE_MATRIX.md` with initial candidates and status columns.
+2. `done` Select top 5 targets by market pull and current failure frequency.
+3. `done` Add CI matrix smoke workflow skeleton (build, run, deterministic output check, artifact upload) via `core/.github/workflows/core-coverage-matrix-smoke.yml`.
+4. `done` Add first coverage scoreboard markdown with baseline values via `core/docs/coverage_scoreboard.md`.
+5. `done` Publish \"definition of supported\" rubric for targets via `core/docs/target_support_rubric.md`.
 
 ## 13) Sources
 
