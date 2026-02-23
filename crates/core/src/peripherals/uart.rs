@@ -40,6 +40,8 @@ pub struct Uart {
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     echo_stdout: bool,
+    cr3: u32,
+    dma_tx_pending: bool,
 }
 
 impl Uart {
@@ -52,6 +54,8 @@ impl Uart {
             layout,
             sink: None,
             echo_stdout: true,
+            cr3: 0,
+            dma_tx_pending: false,
         }
     }
 
@@ -73,6 +77,13 @@ impl Uart {
         match self.layout {
             UartRegisterLayout::Stm32F1 => 0x04, // DR
             UartRegisterLayout::Stm32V2 => 0x24, // RDR
+        }
+    }
+
+    fn cr3_offset(&self) -> u64 {
+        match self.layout {
+            UartRegisterLayout::Stm32F1 => 0x14,
+            UartRegisterLayout::Stm32V2 => 0x08,
         }
     }
 
@@ -110,16 +121,47 @@ impl crate::Peripheral for Uart {
         if offset == self.rx_offset() {
             return Ok(0x00);
         }
+        if offset == self.cr3_offset() {
+            return Ok(self.cr3 as u8);
+        }
         Ok(0)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let is_legacy_tx_alias =
             matches!(self.layout, UartRegisterLayout::Stm32F1) && offset == 0x00;
+
         if offset == self.tx_offset() || is_legacy_tx_alias {
             self.push_tx(value);
+            // If DMAT bit is set, we might be in a DMA sequence,
+            // but usually the DMA controller writes here, and the UART signals it *needs* data.
+            // So the 'trigger' is usually when the UART buffer is EMPTY and DMAT is enabled.
+            if (self.cr3 & (1 << 7)) != 0 {
+                self.dma_tx_pending = true;
+            }
+        } else if offset == self.cr3_offset() {
+            self.cr3 = value as u32;
+            if (self.cr3 & (1 << 7)) != 0 {
+                self.dma_tx_pending = true;
+            }
         }
         Ok(())
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        let mut dma_signals = None;
+        if self.dma_tx_pending {
+            dma_signals = Some(vec![1]); // 1 = TX Signal
+            self.dma_tx_pending = false;
+        }
+
+        crate::PeripheralTickResult {
+            irq: false,
+            cycles: 0,
+            dma_requests: None,
+            explicit_irqs: None,
+            dma_signals,
+        }
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
@@ -128,6 +170,9 @@ impl crate::Peripheral for Uart {
         }
         if offset == self.rx_offset() {
             return Some(0x00);
+        }
+        if offset == self.cr3_offset() {
+            return Some(self.cr3 as u8);
         }
         Some(0)
     }

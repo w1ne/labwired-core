@@ -1,4 +1,19 @@
 # LabWired - Integrated STM32 Test System
 name: "stm32f103-integrated-test"
-chip: "../chips/stm32f103.yaml"
+#chip: ../chips/stm32f103.yaml
+peripherals:
+  - id: dma1
+    type: dma
+    base_address: 0x40020000
+    size: "1k"
+
+  - id: uart1
+    type: uart
+    base_address: 0x40013800
+    irq: 37
+    config:
+      profile: stm32f1
+    dma_mappings:
+      tx: { controller: dma1, channel: 4 }
+      rx: { controller: dma1, channel: 5 }
 external_devices: []

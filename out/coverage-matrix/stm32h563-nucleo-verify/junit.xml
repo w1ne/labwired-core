@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="1" failures="0" errors="1" time="0.000000">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="ConfigError"/>
+    <property name="firmware_hash" value=""/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000000">
+    <error message="config error">result_schema_version=1.0
+stop_reason=ConfigError
+message=Failed to read firmware &quot;examples/nucleo-h563zi/../../target/thumbv7m-none-eabi/release/firmware-h563-demo&quot;: No such file or directory (os error 2)
+stop_reason_details.triggered_stop_condition=ConfigError
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=64
+firmware_hash=
+firmware=examples/nucleo-h563zi/../../target/thumbv7m-none-eabi/release/firmware-h563-demo
+system=examples/nucleo-h563zi/./system.yaml
+script=examples/nucleo-h563zi/uart-smoke.yaml
+</error>
+  </testcase>
+</testsuite>

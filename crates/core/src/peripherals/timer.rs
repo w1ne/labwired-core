@@ -118,6 +118,7 @@ impl crate::Peripheral for Timer {
                 return crate::PeripheralTickResult {
                     irq: (self.dier & 1) != 0,
                     cycles: 1,
+                    dma_signals: None,
                     ..Default::default()
                 };
             }
@@ -126,6 +127,7 @@ impl crate::Peripheral for Timer {
         crate::PeripheralTickResult {
             irq: false,
             cycles: 1,
+            dma_signals: None,
             ..Default::default()
         }
     }

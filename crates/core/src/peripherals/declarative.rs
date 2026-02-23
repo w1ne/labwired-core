@@ -307,6 +307,7 @@ impl Peripheral for GenericPeripheral {
         }
         events.extend(re_adds);
 
+        result.dma_signals = None;
         result
     }
 

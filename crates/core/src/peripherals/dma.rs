@@ -101,6 +101,18 @@ impl Peripheral for Dma1 {
         Ok(())
     }
 
+    fn dma_request(&mut self, request_id: u32) {
+        // request_id usually corresponds to the channel (1-7) or a mapping
+        let chan_idx = (request_id.saturating_sub(1)) as usize;
+        if chan_idx < 7 {
+            let chan = &mut self.channels[chan_idx];
+            if (chan.ccr & 1) != 0 {
+                // Channel is enabled, mark as active for the next tick
+                chan.active = true;
+            }
+        }
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
         let mut dma_requests = None;
         let mut irq = false;
@@ -111,22 +123,46 @@ impl Peripheral for Dma1 {
                 // 0: Read from peripheral, write to memory
                 // 1: Read from memory, write to peripheral
                 let dir_bit = (chan.ccr >> 4) & 1;
-                let src = if dir_bit == 1 { chan.cmar } else { chan.cpar };
-                let dst = if dir_bit == 1 { chan.cpar } else { chan.cmar };
+
+                // Also support memory-to-memory (MEM2MEM = bit 14)
+                let mem2mem = (chan.ccr >> 14) & 1;
+
+                let (src, dst, direction) = if mem2mem == 1 {
+                    (chan.cpar, chan.cmar, DmaDirection::Copy)
+                } else if dir_bit == 1 {
+                    // Read from memory, write to peripheral
+                    (chan.cmar, chan.cpar, DmaDirection::Write)
+                } else {
+                    // Read from peripheral, write to memory
+                    (chan.cpar, chan.cmar, DmaDirection::Read)
+                };
+
                 dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
                     src_addr: src as u64,
                     addr: dst as u64,
-                    val: 0,
-                    direction: DmaDirection::Copy,
+                    val: 0, // Used for Write if needed, but bus handles Copy/Read
+                    direction,
                 });
 
                 chan.cndtr -= 1;
                 if (chan.ccr & (1 << 7)) != 0 {
-                    chan.cmar += 1;
-                } // MINC
+                    chan.cmar += if (chan.ccr & (1 << 10)) != 0 {
+                        4
+                    } else if (chan.ccr & (1 << 8)) != 0 {
+                        2
+                    } else {
+                        1
+                    };
+                } // MINC with size support
                 if (chan.ccr & (1 << 6)) != 0 {
-                    chan.cpar += 1;
-                } // PINC
+                    chan.cpar += if (chan.ccr & (1 << 11)) != 0 {
+                        4
+                    } else if (chan.ccr & (1 << 8)) != 0 {
+                        2
+                    } else {
+                        1
+                    };
+                } // PINC with size support
 
                 if chan.cndtr == 0 {
                     chan.active = false;
@@ -136,6 +172,12 @@ impl Peripheral for Dma1 {
                         // TCIE
                         irq = true;
                     }
+
+                    // Handle Circular mode (CIRC = bit 5)
+                    // In a real implementation we'd reload CNDTR, but let's keep it simple for now
+                } else if mem2mem == 0 {
+                    // For peripheral requests, we process one unit and then wait for the next signal
+                    chan.active = false;
                 }
             }
         }
@@ -145,6 +187,7 @@ impl Peripheral for Dma1 {
             cycles: if dma_requests.is_none() { 0 } else { 1 },
             dma_requests,
             explicit_irqs: None,
+            dma_signals: None,
         }
     }
 
@@ -178,7 +221,7 @@ mod tests {
         assert!(res.dma_requests.is_some());
         let reqs = res.dma_requests.unwrap();
         assert_eq!(reqs.len(), 1);
-        assert_eq!(reqs[0].direction, DmaDirection::Copy);
+        assert_eq!(reqs[0].direction, DmaDirection::Write);
         assert_eq!(reqs[0].src_addr, 0x2000_0020);
         assert_eq!(reqs[0].addr, 0x2000_0010);
         // CH1 TCIF is bit 1.

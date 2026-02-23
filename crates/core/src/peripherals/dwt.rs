@@ -88,6 +88,7 @@ impl Peripheral for Dwt {
             cycles: 0,
             dma_requests: None,
             explicit_irqs: None,
+            dma_signals: None,
         }
     }
 

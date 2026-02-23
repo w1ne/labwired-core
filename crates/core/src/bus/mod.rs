@@ -521,10 +521,19 @@ impl SystemBus {
         Ok(())
     }
 
-    fn tick_peripherals_phase1(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
+    #[allow(clippy::type_complexity)]
+    fn tick_peripherals_phase1(
+        &mut self,
+    ) -> (
+        Vec<u32>,
+        Vec<PeripheralTickCost>,
+        Vec<DmaRequest>,
+        Vec<(String, u32)>,
+    ) {
         let mut interrupts = Vec::new();
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
+        let mut dma_signals_out = Vec::new();
 
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
             let res = p.dev.tick();
@@ -537,6 +546,12 @@ impl SystemBus {
 
             if let Some(reqs) = res.dma_requests {
                 dma_requests.extend(reqs);
+            }
+
+            if let Some(signals) = res.dma_signals {
+                for sig in signals {
+                    dma_signals_out.push((p.name.clone(), sig));
+                }
             }
 
             if res.irq {
@@ -576,7 +591,7 @@ impl SystemBus {
             }
         }
 
-        (interrupts, costs, dma_requests)
+        (interrupts, costs, dma_requests, dma_signals_out)
     }
 
     fn collect_enabled_nvic_interrupts(&self, interrupts: &mut Vec<u32>) {
@@ -599,29 +614,42 @@ impl SystemBus {
     pub fn tick_peripherals_with_costs(
         &mut self,
     ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
-        let (mut interrupts, costs, dma_requests) = self.tick_peripherals_phase1();
+        let (mut interrupts, costs, dma_requests, _dma_signals) = self.tick_peripherals_phase1();
         self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs, dma_requests)
     }
 
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
-        let (mut interrupts, costs, pending_dma) = self.tick_peripherals_phase1();
+        let (mut interrupts, costs, pending_dma, dma_signals) = self.tick_peripherals_phase1();
+
+        // Phase 1.5: Route DMA signals
+        for (source_name, request_id) in dma_signals {
+            // Simplified routing for Top-5 targets (e.g. STM32F1)
+            // UART1_TX (signal ID 1) -> DMA1 Channel 4
+            // This would ideally be in a system-specific routing table
+            let target_dma = if source_name == "uart1" && request_id == 1 {
+                Some(("dma1", 4))
+            } else {
+                None
+            };
+
+            if let Some((dma_name, channel)) = target_dma {
+                if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
+                    self.peripherals[p_idx].dev.dma_request(channel);
+                }
+            }
+        }
 
         // Phase 2: Execute DMA requests (this now has access to self.flash/ram via write_u8)
         for req in pending_dma {
             match req.direction {
                 crate::DmaDirection::Read => {
-                    // DMA Read from source
                     if let Ok(val) = self.read_u8(req.addr) {
-                        // In a real DMA transfer, this value would be written somewhere else.
-                        // For a generic DmaRequest, we might need a way to pass the value back to the peripheral.
-                        // Let's refine DmaRequest later if needed.
                         tracing::trace!("DMA Read: {:#x} -> {:#x}", req.addr, val);
                     }
                 }
                 crate::DmaDirection::Write => {
-                    // DMA Write to destination
                     let _ = self.write_u8(req.addr, req.val);
                     tracing::trace!("DMA Write: {:#x} <- {:#x}", req.addr, req.val);
                 }
@@ -639,12 +667,14 @@ impl SystemBus {
             }
         }
 
-        // Phase 2.5: EXTI Logic Removed - moved to Exti peripheral via explicit_irqs.
-
         // Phase 3: Scan NVIC
         self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs)
+    }
+
+    pub fn find_peripheral_index_by_name(&self, name: &str) -> Option<usize> {
+        self.peripherals.iter().position(|p| p.name == name)
     }
 }
 
@@ -1063,8 +1093,11 @@ mod tests {
         bus.write_u32(0x4002_0010, 0x2000_0010).unwrap(); // CPAR1
         bus.write_u32(0x4002_000C, 1).unwrap(); // CNDTR1
         bus.write_u32(0x4002_0014, 0x2000_0020).unwrap(); // CMAR1
-        bus.write_u32(0x4002_0008, (1 << 0) | (1 << 1) | (1 << 6) | (1 << 7))
-            .unwrap(); // CCR1
+        bus.write_u32(
+            0x4002_0008,
+            (1 << 0) | (1 << 1) | (1 << 6) | (1 << 7) | (1 << 14),
+        )
+        .unwrap(); // CCR1 (EN | TCIE | PINC | MINC | MEM2MEM)
 
         let (interrupts, _costs) = bus.tick_peripherals_fully();
         assert_eq!(bus.read_u8(0x2000_0020).unwrap(), 0x5A);
