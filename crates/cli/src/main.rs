@@ -1235,6 +1235,7 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                         StopReason::MemoryViolation
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                    labwired_core::SimulationError::Halt => StopReason::Halt,
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1717,8 +1718,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             stop_reason = match e {
                 labwired_core::SimulationError::MemoryViolation(_) => StopReason::MemoryViolation,
                 labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                labwired_core::SimulationError::Halt => StopReason::Halt,
             };
-            error!("Simulation error at step {}: {}", step, e);
+            if stop_reason != StopReason::Halt {
+                error!("Simulation error at step {}: {}", step, e);
+            }
             break;
         }
 

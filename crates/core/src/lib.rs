@@ -37,6 +37,8 @@ pub enum SimulationError {
     MemoryViolation(u64),
     #[error("Instruction decoding error at {0:#x}")]
     DecodeError(u64),
+    #[error("Simulation halted")]
+    Halt,
 }
 
 pub type SimResult<T> = Result<T, SimulationError>;

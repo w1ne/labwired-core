@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="2" errors="0" time="3.823544">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="0000157164f2ffb3145796f75b6ade37ba296d3a107f07cab40fe9de26ea0d6f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="3.823544">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: HIL Stress Test Passed" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: HIL Stress Test Passed
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=1000000
+stop_reason_details.observed.steps_executed=1000000
+steps_executed=1000000
+cycles=1333197
+instructions=1000000
+limits:
+  - max_steps=1000000
+  - max_cycles=5000000
+firmware_hash=0000157164f2ffb3145796f75b6ade37ba296d3a107f07cab40fe9de26ea0d6f
+firmware=examples/hil-displacement-showcase/../../target/thumbv7m-none-eabi/release/firmware-hil-showcase
+system=examples/hil-displacement-showcase/./system.yaml
+script=examples/hil-displacement-showcase/showcase-test.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;HIL Stress Test Passed&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: Halt }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: Halt" time="0.000000">
+    <failure message="assertion failed">assertion 2: expected_stop_reason: Halt
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=1000000
+stop_reason_details.observed.steps_executed=1000000
+steps_executed=1000000
+cycles=1333197
+instructions=1000000
+limits:
+  - max_steps=1000000
+  - max_cycles=5000000
+firmware_hash=0000157164f2ffb3145796f75b6ade37ba296d3a107f07cab40fe9de26ea0d6f
+firmware=examples/hil-displacement-showcase/../../target/thumbv7m-none-eabi/release/firmware-hil-showcase
+system=examples/hil-displacement-showcase/./system.yaml
+script=examples/hil-displacement-showcase/showcase-test.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;HIL Stress Test Passed&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: Halt }): false
+</failure>
+  </testcase>
+</testsuite>

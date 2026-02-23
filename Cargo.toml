@@ -16,6 +16,7 @@ members = [
     "crates/firmware-h563-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-h563-fullchip-demo",
+    "crates/firmware-hil-showcase",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",
@@ -84,6 +85,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.riscv-ci-fixture]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-hil-showcase]
 codegen-units = 1
 debug = true
 opt-level = "s"

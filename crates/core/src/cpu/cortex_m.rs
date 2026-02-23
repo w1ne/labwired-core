@@ -10,9 +10,6 @@ use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationObserver};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-// PSR Bits (Internal usage) - Omitted if unused
-const PSR_C: u32 = 1 << 29;
-
 #[derive(Debug, Clone, Copy)]
 pub struct DecodeCacheEntry {
     pub tag: u32,
@@ -140,31 +137,20 @@ impl CortexM {
         }
     }
 
-    fn expand_imm_thumb(imm12: u32) -> u32 {
-        let i_imm3 = (imm12 >> 8) & 0xF;
-        let abcdefgh = imm12 & 0xFF;
-
-        if (i_imm3 & 0xC) == 0 {
-            match i_imm3 {
-                0 => abcdefgh,
-                1 => (abcdefgh << 16) | abcdefgh,
-                2 => (abcdefgh << 24) | (abcdefgh << 8),
-                3 => (abcdefgh << 24) | (abcdefgh << 16) | (abcdefgh << 8) | abcdefgh,
-                _ => abcdefgh,
-            }
-        } else {
-            let unrotated = 0x80 | abcdefgh;
-            let rotation = (imm12 >> 7) & 0x1F;
-            unrotated.rotate_right(rotation)
-        }
-    }
-
     fn update_nz(&mut self, result: u32) {
         let n = (result >> 31) & 1;
         let z = if result == 0 { 1 } else { 0 };
         // Clear N/Z (bits 31, 30)
         self.xpsr &= !(0xC000_0000);
         self.xpsr |= (n << 31) | (z << 30);
+    }
+
+    fn get_carry(&self) -> bool {
+        (self.xpsr >> 29) & 1 == 1
+    }
+
+    fn get_overflow(&self) -> bool {
+        (self.xpsr >> 28) & 1 == 1
     }
 
     fn update_nzcv(&mut self, result: u32, carry: bool, overflow: bool) {
@@ -666,48 +652,36 @@ impl CortexM {
                     imm12,
                     set_flags,
                 } => {
-                    let imm = Self::expand_imm_thumb(imm12);
-                    let op1 = self.read_reg(rn);
-                    let result = match op {
-                        0x0 => op1 & imm,  // AND
-                        0x1 => op1 & !imm, // BIC
+                    let imm = thumb_expand_imm(imm12);
+                    let val1 = self.read_reg(rn);
+                    let (res, c, v) = match op {
+                        0x0 => (val1 & imm, self.get_carry(), self.get_overflow()), // AND
+                        0x1 => (val1 & !imm, self.get_carry(), self.get_overflow()), // BIC
                         0x2 => {
-                            if rn == 0xF {
-                                imm
-                            } else {
-                                op1 | imm
-                            }
+                            let res = if rn == 0xF { imm } else { val1 | imm };
+                            (res, self.get_carry(), self.get_overflow())
                         } // ORR / MOV
                         0x3 => {
-                            if rn == 0xF {
-                                !imm
-                            } else {
-                                op1 | !imm
-                            }
+                            let res = if rn == 0xF { !imm } else { val1 | !imm };
+                            (res, self.get_carry(), self.get_overflow())
                         } // ORN / MVN
-                        0x4 => op1 ^ imm,  // EOR
-                        0x8 => op1.wrapping_add(imm), // ADD
-                        0xA => {
-                            let c = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
-                            op1.wrapping_add(imm).wrapping_add(c)
-                        } // ADC
-                        0xB => {
-                            let c = if self.xpsr & PSR_C != 0 { 1 } else { 0 };
-                            op1.wrapping_sub(imm).wrapping_sub(1 - c)
-                        } // SBC
-                        0xD => op1.wrapping_sub(imm), // SUB
-                        0xE => imm.wrapping_sub(op1), // RSB
+                        0x4 => (val1 ^ imm, self.get_carry(), self.get_overflow()), // EOR
+                        0x8 => add_with_flags(val1, imm),                           // ADD
+                        0xA => adc_with_flags(val1, imm, self.get_carry() as u32),  // ADC
+                        0xB => sbc_with_flags(val1, imm, self.get_carry() as u32),  // SBC
+                        0xD => sub_with_flags(val1, imm),                           // SUB / CMP
+                        0xE => sub_with_flags(imm, val1),                           // RSB
                         _ => {
-                            #[cfg(debug_assertions)]
-                            tracing::warn!("Unknown DataProcImm32 op {:#x}", op);
-                            imm
+                            tracing::warn!("Unhandled T32 DataProcImm32 op {:#x}", op);
+                            (0, self.get_carry(), self.get_overflow())
                         }
                     };
+
                     if rd != 15 {
-                        self.write_reg(rd, result);
+                        self.write_reg(rd, res);
                     }
                     if set_flags {
-                        self.update_nz(result);
+                        self.update_nzcv(res, c, v);
                     }
                     pc_increment = 4;
                 }
@@ -1288,6 +1262,11 @@ impl CortexM {
                         tracing::error!("Bus Read Fault (LDR reg) at {:#x}", addr);
                     }
                 }
+                Instruction::StrReg { rt, rn, rm } => {
+                    let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                    let val = self.read_reg(rt);
+                    let _ = bus.write_u32(addr as u64, val);
+                }
 
                 Instruction::LdrLit { rt, imm } => {
                     // ... (existing)
@@ -1366,6 +1345,42 @@ impl CortexM {
                         tracing::error!("Bus Read Fault (LDRB reg) at {:#x}", addr);
                     }
                 }
+                Instruction::StrbReg { rt, rn, rm } => {
+                    let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                    let val = (self.read_reg(rt) & 0xFF) as u8;
+                    let _ = bus.write_u8(addr as u64, val);
+                }
+                Instruction::LdrsbReg { rt, rn, rm } => {
+                    let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                    if let Ok(val) = bus.read_u8(addr as u64) {
+                        let res = (val as i8) as i32 as u32;
+                        self.write_reg(rt, res);
+                    } else {
+                        tracing::error!("Bus Read Fault (LDRSB reg) at {:#x}", addr);
+                    }
+                }
+                Instruction::LdrhReg { rt, rn, rm } => {
+                    let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                    if let Ok(val) = bus.read_u16(addr as u64) {
+                        self.write_reg(rt, val as u32);
+                    } else {
+                        tracing::error!("Bus Read Fault (LDRH reg) at {:#x}", addr);
+                    }
+                }
+                Instruction::StrhReg { rt, rn, rm } => {
+                    let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                    let val = (self.read_reg(rt) & 0xFFFF) as u16;
+                    let _ = bus.write_u16(addr as u64, val);
+                }
+                Instruction::LdrshReg { rt, rn, rm } => {
+                    let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
+                    if let Ok(val) = bus.read_u16(addr as u64) {
+                        let res = (val as i16) as i32 as u32;
+                        self.write_reg(rt, res);
+                    } else {
+                        tracing::error!("Bus Read Fault (LDRSH reg) at {:#x}", addr);
+                    }
+                }
                 Instruction::StrbImm { rt, rn, imm } => {
                     let base = self.read_reg(rn);
                     let addr = base.wrapping_add(imm as u32);
@@ -1395,6 +1410,9 @@ impl CortexM {
                     if bus.write_u16(addr as u64, val).is_err() {
                         tracing::error!("Bus Write Fault (STRH) at {:#x}", addr);
                     }
+                }
+                Instruction::Bkpt { imm8: _ } => {
+                    return Err(crate::SimulationError::Halt);
                 }
 
                 // Stack Operations

@@ -1,0 +1,11 @@
+# LabWired - HIL Displacement Showcase System Configuration
+name: "hil-displacement-showcase"
+chip: "/home/andrii/Projects/labwired/core/configs/chips/stm32h563.yaml"
+external_devices: []
+board_io:
+  - id: "led_green_pb0"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true

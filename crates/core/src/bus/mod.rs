@@ -628,11 +628,12 @@ impl SystemBus {
             // Simplified routing for Top-5 targets (e.g. STM32F1)
             // UART1_TX (signal ID 1) -> DMA1 Channel 4
             // This would ideally be in a system-specific routing table
-            let target_dma = if source_name == "uart1" && request_id == 1 {
-                Some(("dma1", 4))
-            } else {
-                None
-            };
+            let target_dma =
+                if (source_name == "uart1" || source_name == "uart3") && request_id == 1 {
+                    Some(("dma1", 1)) // H5 uses GPDMA, but for our mock we map it to channel 1
+                } else {
+                    None
+                };
 
             if let Some((dma_name, channel)) = target_dma {
                 if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
