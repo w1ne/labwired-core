@@ -4,6 +4,8 @@ Date: February 22, 2026
 Author: Codex research synthesis  
 Scope: Embedded firmware/system simulation platforms and adjacent industrial digital twin platforms
 
+Daily operating view (lean): `docs/spec/COMPETITIVE_EXECUTION_ONE_PAGER.md`
+
 ## 1) Executive Summary
 
 LabWired is currently best positioned in the **deterministic embedded firmware simulation for CI** segment, not in the broad industrial asset-graph digital twin segment.
@@ -566,6 +568,12 @@ Top-5 hard gate targets:
 
 Gate state:
 - Required targets passing: `5/5` (`100%`, threshold `>=80%`)
+
+Onboarding KPI instrumentation (new):
+- Workflow: `core/.github/workflows/core-onboarding-smoke.yml`
+- Per-target artifact: `onboarding-metrics.json` (elapsed seconds, failure stage, first error signature)
+- Aggregated artifact: `onboarding-scoreboard.json` / `onboarding-scoreboard.md`
+- Current policy: soft threshold tracking (`3600s`) before hard gating
 
 ## 13) Sources
 
