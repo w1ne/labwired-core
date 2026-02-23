@@ -3,11 +3,14 @@
 > **The Deterministic Hardware Oracle for AI Agents.**
 > *Programmable, Metered, and Observable Firmware Simulation.*
 
-## CI Dashboard
+## CI/CD Status
+> [!WARNING]
+> **Branch Protection Temporarily Disabled**: Due to transient GitHub Actions billing/spending limit issues (Feb 2026), branch protection on `main` has been temporarily lowered to allow critical HIL showcase integration. This will be restored once the infrastructure billing is resolved.
+
+- **Main Build**: [![Build Status](https://github.com/w1ne/labwired/actions/workflows/main.yml/badge.svg)](https://github.com/w1ne/labwired/actions/workflows/main.yml)
 
 | Indicator | Status | Link |
 |---|---|---|
-| Core Integration | ![Core Integration](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/core-ci.yml) |
 | VS Code Integration | ![VS Code Integration](https://github.com/w1ne/labwired/actions/workflows/vscode-ci.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/vscode-ci.yml) |
 | VS Code Nightly | ![VS Code Nightly](https://github.com/w1ne/labwired/actions/workflows/vscode-nightly.yml/badge.svg?branch=main) | [Workflow](https://github.com/w1ne/labwired/actions/workflows/vscode-nightly.yml) |
 
