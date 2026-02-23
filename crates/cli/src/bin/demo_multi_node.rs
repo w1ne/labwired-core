@@ -2,7 +2,6 @@
 // This demo shows two independent simulated nodes synchronized in a single "World".
 
 use labwired_core::{bus::SystemBus, cpu::cortex_m::CortexM, world::World, Machine};
-use tracing_subscriber;
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();

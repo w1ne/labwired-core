@@ -92,7 +92,8 @@ fn dma1_init() {
 
 fn main() -> ! {
     unsafe {
-        for (i, val) in STRESS_BUFFER.iter_mut().enumerate() {
+        let buffer = &mut *core::ptr::addr_of_mut!(STRESS_BUFFER);
+        for (i, val) in buffer.iter_mut().enumerate() {
             *val = (i & 0xFF) as u8;
         }
 

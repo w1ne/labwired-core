@@ -506,8 +506,8 @@ impl Cpu for RiscV {
     }
 
     fn index_of_register(&self, name: &str) -> Option<u8> {
-        if name.starts_with('x') {
-            name[1..].parse().ok()
+        if let Some(stripped) = name.strip_prefix('x') {
+            stripped.parse().ok()
         } else if name.to_lowercase() == "pc" {
             Some(32)
         } else {

@@ -18,6 +18,7 @@ impl ShmTransport {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(path)?;
         file.set_len(size as u64)?;
         let mmap = unsafe { MmapMut::map_mut(&file)? };
