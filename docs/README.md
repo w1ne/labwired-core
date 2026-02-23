@@ -12,6 +12,7 @@ This directory contains **platform-level** documentation for the LabWired monore
 - **[Postmortems](./postmortems/README.md)** - Incident analyses, root causes, and prevention actions
 - **[Demo Dry Run](./DEMO_DRY_RUN.md)** - Release-gate checklist and commands for external demos
 - **[NUCLEO-H563ZI Demo Story](./NUCLEO_H563ZI_DEMO.md)** - Marketing narrative and live showcase script
+- **[HIL Displacement Showcase](./HIL_DISPLACEMENT_SHOWCASE.md)** - ROI analysis and technical results of displacing physical HIL with LabWired
 - **[NUCLEO-H563ZI Video Runbook](./NUCLEO_H563ZI_VIDEO_RUNBOOK.md)** - Shot-by-shot recording procedure with exact commands
 - **[NUCLEO-H563ZI Voiceover Script](./NUCLEO_H563ZI_VOICEOVER_SCRIPT.md)** - Ready-to-read narration mapped to terminal/UI moments
 - **[VS Code UI Demo Checklist](./VS_CODE_UI_DEMO_CHECKLIST.md)** - Manual UI validation (breakpoints, step, registers, memory, Docker mode)

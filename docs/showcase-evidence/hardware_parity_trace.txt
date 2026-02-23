@@ -1,0 +1,58 @@
+--- Starting Hardware CLI Tests ---
+[TEST] Status
+Error: tonic::transport::Error(Transport, ConnectError(ConnectError("tcp connect error", 127.0.0.1:50051, Os { code: 111, kind: ConnectionRefused, message: "Connection refused" })))
+--- Starting Hardware CLI Tests ---
+[TEST] Status
+Status: StatusResponse { halted: false, pc: 0, core_status: "Only via events" }
+[TEST] Halt
+Halted.
+[TEST] Read Registers
+R0: 0x00000000
+R1: 0x00000000
+R2: 0x00000000
+R3: 0x00000000
+R4: 0x00000000
+R5: 0x00000000
+R6: 0x00000000
+R7: 0x00000000
+R8: 0x00000000
+R9: 0x00000000
+R10: 0x00000000
+R11: 0x00000000
+R12: 0x00000000
+R13: 0x200019C0
+R14: 0xFFFFFFFF
+R15: 0x0800204C
+[TEST] Step (Basic)
+Stepped.
+R15: 0x0800204E
+[TEST] Write Register
+Written R0: 0x00001234
+[TEST] Resume
+Resumed.
+Status: StatusResponse { halted: false, pc: 0, core_status: "Only via events" }
+[TEST] Disassemble
+0x08000000:  movs  r0, r0
+0x08000002:  movs  r0, r0
+0x08000004:  movs  r0, r0
+0x08000006:  movs  r0, r0
+0x08000008:  movs  r0, r0
+0x0800000A:  movs  r0, r0
+0x0800000C:  movs  r0, r0
+0x0800000E:  movs  r0, r0
+0x08000010:  movs  r0, r0
+0x08000012:  movs  r0, r0
+0x08000014:  movs  r0, r0
+0x08000016:  movs  r0, r0
+0x08000018:  movs  r0, r0
+0x0800001A:  movs  r0, r0
+0x0800001C:  movs  r0, r0
+0x0800001E:  movs  r0, r0
+[TEST] Read Memory
+error: unrecognized subcommand 'read-mem'
+
+  tip: a similar subcommand exists: 'resume'
+
+Usage: aether-cli core <COMMAND>
+
+For more information, try '--help'.
