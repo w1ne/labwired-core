@@ -232,7 +232,7 @@ impl Cpu for CortexM {
             self.sp = sp;
         }
         if let Ok(pc) = bus.read_u32(vtor + 4) {
-            self.pc = pc;
+            self.pc = pc & !1;
         }
 
         Ok(())
@@ -242,13 +242,16 @@ impl Cpu for CortexM {
         self.pc
     }
     fn set_pc(&mut self, val: u32) {
-        self.pc = val;
+        self.pc = val & !1;
     }
     fn set_sp(&mut self, val: u32) {
         self.sp = val;
     }
     fn set_exception_pending(&mut self, exception_num: u32) {
         if exception_num < 32 {
+            if self.pending_exceptions & (1 << exception_num) == 0 {
+                println!("Exception {} Pending", exception_num);
+            }
             self.pending_exceptions |= 1 << exception_num;
         }
     }
@@ -310,6 +313,29 @@ impl Cpu for CortexM {
         names.push("LR".to_string());
         names.push("PC".to_string());
         names
+    }
+
+    fn index_of_register(&self, name: &str) -> Option<u8> {
+        match name.to_uppercase().as_str() {
+            "R0" => Some(0),
+            "R1" => Some(1),
+            "R2" => Some(2),
+            "R3" => Some(3),
+            "R4" => Some(4),
+            "R5" => Some(5),
+            "R6" => Some(6),
+            "R7" => Some(7),
+            "R8" => Some(8),
+            "R9" => Some(9),
+            "R10" => Some(10),
+            "R11" => Some(11),
+            "R12" => Some(12),
+            "SP" | "R13" => Some(13),
+            "LR" | "R14" => Some(14),
+            "PC" | "R15" => Some(15),
+            "XPSR" => Some(16),
+            _ => None,
+        }
     }
 
     fn step(

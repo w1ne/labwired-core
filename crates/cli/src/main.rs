@@ -1236,6 +1236,7 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                     labwired_core::SimulationError::Halt => StopReason::Halt,
+                    labwired_core::SimulationError::Other(_) => StopReason::Exception,
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1348,6 +1349,7 @@ fn build_stop_reason_details(
         StopReason::MemoryViolation
         | StopReason::DecodeError
         | StopReason::Halt
+        | StopReason::Exception
         | StopReason::ConfigError => (None, None),
     };
 
@@ -1719,6 +1721,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 labwired_core::SimulationError::MemoryViolation(_) => StopReason::MemoryViolation,
                 labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                 labwired_core::SimulationError::Halt => StopReason::Halt,
+                labwired_core::SimulationError::Other(_) => StopReason::Exception,
             };
             if stop_reason != StopReason::Halt {
                 error!("Simulation error at step {}: {}", step, e);

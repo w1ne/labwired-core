@@ -823,7 +823,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
 
     // Data-processing (modified immediate) T1: 1111 0 i 00 op4 S rn 0 imm3 rd imm8
     // F0xx or F1xx.
-    if (h1 & 0xFB00) == 0xF000 || (h1 & 0xFB00) == 0xF100 {
+    if ((h1 & 0xFB00) == 0xF000 || (h1 & 0xFB00) == 0xF100) && (h2 & 0x8000) == 0 {
         let i = (h1 >> 10) & 1;
         let op = ((h1 >> 5) & 0xF) as u8;
         let s = (h1 & (1 << 4)) != 0;

@@ -11,7 +11,7 @@ dependencies = [
  "cpp_demangle",
  "fallible-iterator",
  "gimli",
- "memmap2",
+ "memmap2 0.5.10",
  "object",
  "rustc-demangle",
  "smallvec",
@@ -714,6 +714,7 @@ dependencies = [
  "bitflags",
  "labwired-config",
  "labwired-ir",
+ "memmap2 0.9.10",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -845,6 +846,15 @@ name = "memmap2"
 version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "memmap2"
+version = "0.9.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3"
 dependencies = [
  "libc",
 ]

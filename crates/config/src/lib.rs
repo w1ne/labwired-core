@@ -138,6 +138,40 @@ pub struct SystemManifest {
     pub board_io: Vec<BoardIoBinding>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeConfig {
+    pub id: String,
+    pub system: String,   // Path to SystemManifest
+    pub firmware: String, // Path to ELF
+    #[serde(default)]
+    pub config_overrides: HashMap<String, serde_yaml::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EnvironmentManifest {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: String,
+    pub name: String,
+    pub nodes: Vec<NodeConfig>,
+    #[serde(default)]
+    pub interconnects: Vec<InterconnectConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InterconnectConfig {
+    pub r#type: String,     // "uart_cross_link", "virtual_switch", etc.
+    pub nodes: Vec<String>, // List of node IDs
+    #[serde(default)]
+    pub config: HashMap<String, serde_yaml::Value>,
+}
+
+impl EnvironmentManifest {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let f = std::fs::File::open(path)?;
+        serde_yaml::from_reader(f).context("Failed to parse Environment Manifest")
+    }
+}
+
 impl ChipDescriptor {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
@@ -448,6 +482,7 @@ pub enum StopReason {
     MemoryViolation,
     DecodeError,
     Halt,
+    Exception,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

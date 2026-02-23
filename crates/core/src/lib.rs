@@ -1,3 +1,4 @@
+#![allow(clippy::manual_is_multiple_of)]
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
 //
@@ -6,16 +7,21 @@
 
 pub mod bus;
 pub mod config;
+pub mod cosim;
 pub mod cpu;
 pub mod decoder;
 pub mod interrupt;
 pub mod memory;
 pub mod metrics;
 pub mod multi_core;
+pub mod network;
 pub mod peripherals;
+pub mod physics;
 pub mod signals;
 pub mod snapshot;
 pub mod system;
+pub mod vfi;
+pub mod world;
 
 pub use config::SimulationConfig;
 
@@ -39,6 +45,8 @@ pub enum SimulationError {
     DecodeError(u64),
     #[error("Simulation halted")]
     Halt,
+    #[error("Simulation error: {0}")]
+    Other(String),
 }
 
 pub type SimResult<T> = Result<T, SimulationError>;
@@ -118,6 +126,15 @@ pub trait Cpu: Send {
     fn snapshot(&self) -> snapshot::CpuSnapshot;
     fn apply_snapshot(&mut self, snapshot: &snapshot::CpuSnapshot);
     fn get_register_names(&self) -> Vec<String>;
+    fn index_of_register(&self, name: &str) -> Option<u8>;
+
+    // Security & Physical Extensions
+    fn inject_fault(&mut self, _target: &str) -> SimResult<()> {
+        Ok(())
+    }
+    fn get_energy_consumption(&self) -> f64 {
+        0.0
+    }
 }
 
 /// Trait representing a memory-mapped peripheral
@@ -299,10 +316,7 @@ impl<C: Cpu> Machine<C> {
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
 
-        if self
-            .total_cycles
-            .is_multiple_of(self.config.peripheral_tick_interval as u64)
-        {
+        if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
             // Propagate peripherals
             let (interrupts, costs) = self.bus.tick_peripherals_fully();
             for c in costs {
@@ -406,10 +420,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
             steps += executed;
             self.total_cycles += executed as u64;
 
-            if self
-                .total_cycles
-                .is_multiple_of(self.config.peripheral_tick_interval as u64)
-            {
+            if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
                 // Propagate peripherals
                 let (interrupts, costs) = self.bus.tick_peripherals_fully();
                 for c in costs {

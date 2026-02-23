@@ -51,6 +51,7 @@ sha2 = "0.10"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "0.2"
+memmap2 = "0.9"
 
 [profile.dev]
 panic = "abort"
