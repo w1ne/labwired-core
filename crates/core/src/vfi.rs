@@ -114,7 +114,6 @@ impl ShadowEngine {
 mod tests {
     use super::*;
     use crate::bus::SystemBus;
-    use crate::cpu::CortexM;
     use crate::system::cortex_m::configure_cortex_m;
 
     fn setup_shadow_engine() -> (ShadowEngine, SystemBus) {

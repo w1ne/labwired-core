@@ -95,7 +95,6 @@ mod tests {
     use super::*;
     use crate::bus::SystemBus;
     use crate::cpu::cortex_m::CortexM;
-    use crate::SimulationConfig;
 
     #[test]
     fn test_multi_node_basic_sync() {

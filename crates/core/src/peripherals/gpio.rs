@@ -149,6 +149,7 @@ impl GpioPort {
         }
     }
 
+    #[allow(dead_code)]
     fn bsrr_offset(&self) -> u64 {
         match self.layout {
             GpioRegisterLayout::Stm32F1 => 0x10,
@@ -156,6 +157,7 @@ impl GpioPort {
         }
     }
 
+    #[allow(dead_code)]
     fn brr_offset(&self) -> u64 {
         match self.layout {
             GpioRegisterLayout::Stm32F1 => 0x14,
