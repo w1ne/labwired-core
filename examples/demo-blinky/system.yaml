@@ -8,3 +8,10 @@ external_devices:
     config:
       descriptor: "../../configs/peripherals/tmp102.yaml"
       i2c_address: 0x48
+board_io:
+  - id: "led_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

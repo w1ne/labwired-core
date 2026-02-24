@@ -7,69 +7,89 @@
    code examples/demo-blinky
    ```
 
-2. **Install the LabWired VS Code extension** (if not already installed):
-   - Open VS Code Extensions (Ctrl+Shift+X)
-   - Search for "LabWired"
-   - Click Install
+2. **Install required extensions**:
+- LabWired extension (`w1ne.labwired-vscode`)
+- Cortex-Debug (`marus25.cortex-debug`)
 
-3. **Start Debugging**:
-   - Press `F5` or click "Run and Debug"
-   - Select "Debug Demo Firmware (Blinky + Sensor)"
-   - Firmware will build automatically and launch in debugger
+3. **Build debug firmware**:
+   ```bash
+   cd ../../
+   cargo build -p demo-blinky --target thumbv7m-none-eabi
+   ```
 
-## Features
+## Debug Profiles in `.vscode/launch.json`
 
-### Breakpoints
-- Click in the gutter next to line numbers to set breakpoints
-- Execution will pause when breakpoint is hit
-- Inspect variables and registers in the Debug sidebar
+The project now has three launch profiles:
 
-### Stepping
-- **Step Over** (F10): Execute current line
-- **Step Into** (F11): Step into function calls
-- **Step Out** (Shift+F11): Step out of current function
-- **Continue** (F5): Resume execution
+1. `LabWired: Demo Blinky`
+- Native LabWired DAP path.
 
-### Register Inspection
-- View CPU registers in the "Variables" panel
-- Registers update after each step
-- Includes: R0-R15, SP, LR, PC, CPSR
+2. `Cortex-Debug: LabWired (GDB :3333)`
+- Uses Cortex-Debug against LabWired GDB server at `localhost:3333`.
 
-## Configuration
+3. `Cortex-Debug: Hardware (OpenOCD ST-Link)`
+- Uses Cortex-Debug + OpenOCD on real STM32F103 hardware via ST-Link.
 
-The `.vscode/launch.json` file contains two configurations:
+4. `Cortex-Debug: Hardware (OpenOCD J-Link)`
+- Uses Cortex-Debug + OpenOCD on real STM32F103 hardware via J-Link.
 
-1. **Debug Demo Firmware** - Builds and debugs the demo-blinky example
-2. **Debug Firmware (Custom)** - For debugging other firmware binaries
+## Same ELF, Two Targets (Recommended Flow)
 
-### Customizing
+Use the same binary for both debug targets:
+`core/target/thumbv7m-none-eabi/debug/demo-blinky`
 
-Edit `launch.json` to change:
-- `program`: Path to your firmware ELF file
-- `system`: Path to system configuration YAML
-- `stopOnEntry`: Whether to break at entry point
+### A) LabWired via Cortex-Debug
+
+1. Start LabWired GDB server in terminal:
+   ```bash
+   ./scripts/start_labwired_gdb.sh
+   ```
+2. In VS Code Run and Debug, launch:
+   `Cortex-Debug: LabWired (GDB :3333)`
+
+### B) Real Hardware via Cortex-Debug
+
+1. Connect STM32F103 board via ST-Link or J-Link.
+2. In VS Code Run and Debug, launch one of:
+   - `Cortex-Debug: Hardware (OpenOCD ST-Link)`
+   - `Cortex-Debug: Hardware (OpenOCD J-Link)`
+
+## Antigravity Console Demo Flow
+
+Use these tasks from `Terminal -> Run Task` in `examples/demo-blinky`:
+
+- `Nucleo: Flash only (auto probe)`
+- `Nucleo: Flash + GDB (auto probe)`
+
+They call:
+
+`scripts/nucleo_flash_debug.sh`
+
+with auto probe detection (`stlink` preferred, then `jlink`).
+
+## Notes
+
+- OpenOCD config uses:
+  - `interface/stlink.cfg`
+  - `target/stm32f1x.cfg`
+- If your board/debug probe differs, adjust `configFiles` in `.vscode/launch.json`.
+- If port `3333` is busy, change both:
+  - `core/examples/demo-blinky/scripts/start_labwired_gdb.sh`
+  - `Cortex-Debug: LabWired (GDB :3333)` `gdbTarget`
 
 ## Troubleshooting
 
-### DAP Server Not Found
-Ensure `labwired-dap` is built:
-```bash
-cargo build -p labwired-dap --release
-```
+### Cortex-Debug cannot connect to LabWired
+- Ensure `start_labwired_gdb.sh` is running.
+- Verify port with `ss -ltnp | rg 3333`.
 
-### Breakpoints Not Working
-- Ensure firmware is compiled with debug symbols (`debug = true` in Cargo.toml)
-- Check that the ELF file path in `launch.json` is correct
+### OpenOCD launch fails
+- Ensure OpenOCD is installed.
+- Confirm ST-Link USB access and board power.
+- If you see `cannot read IDR`, check ST-Link/J-Link SWD jumpers and reset wiring on the Nucleo.
 
-### Extension Not Found
-The LabWired VS Code extension is located in `vscode/`. Install it:
-```bash
-cd ../../vscode
-npm install
-npm run compile
-code --install-extension .
-```
-
-## Next Steps
-
-For advanced features (peripheral viewers, memory inspector), see the [VS Code Extension Research](../../../docs/vscode_extension_research.md) document.
+### Breakpoints not binding
+- Rebuild debug binary:
+  ```bash
+  cargo build -p demo-blinky --target thumbv7m-none-eabi
+  ```

@@ -504,6 +504,16 @@ impl Cpu for RiscV {
         names.push("pc".to_string());
         names
     }
+
+    fn index_of_register(&self, name: &str) -> Option<u8> {
+        if let Some(stripped) = name.strip_prefix('x') {
+            stripped.parse().ok()
+        } else if name.to_lowercase() == "pc" {
+            Some(32)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,11 @@
+# LabWired - HIL Displacement Showcase Test Manifest
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-hil-showcase"
+limits:
+  max_steps: 1000000
+  max_cycles: 5000000
+assertions:
+  - uart_contains: "HIL Stress Test Passed"
+  - expected_stop_reason: halt

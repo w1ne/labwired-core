@@ -16,6 +16,8 @@ members = [
     "crates/firmware-h563-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-h563-fullchip-demo",
+    "crates/firmware-hil-showcase",
+    "crates/firmware-comparative-benchmark",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",
@@ -50,6 +52,7 @@ sha2 = "0.10"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "0.2"
+memmap2 = "0.9"
 
 [profile.dev]
 panic = "abort"
@@ -84,6 +87,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.riscv-ci-fixture]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-hil-showcase]
 codegen-units = 1
 debug = true
 opt-level = "s"
