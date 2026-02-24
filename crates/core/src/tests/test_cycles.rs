@@ -44,6 +44,10 @@ impl Cpu for MockCpu {
     fn get_register_names(&self) -> Vec<String> {
         vec![]
     }
+
+    fn index_of_register(&self, _name: &str) -> Option<u8> {
+        None
+    }
 }
 
 #[test]

@@ -16,6 +16,7 @@ pub struct MultiCoreMachine {
     pub bus: SystemBus,
     pub observers: Vec<Arc<dyn SimulationObserver>>,
     pub config: crate::SimulationConfig,
+    pub lockstep: bool,
 }
 
 impl MultiCoreMachine {
@@ -25,6 +26,7 @@ impl MultiCoreMachine {
             bus,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            lockstep: false,
         }
     }
 
@@ -38,6 +40,15 @@ impl MultiCoreMachine {
         let mut results = Vec::new();
         for core in &mut self.cores {
             results.push(core.step(&mut self.bus, &self.observers, &self.config));
+        }
+
+        if self.lockstep && self.cores.len() >= 2 {
+            if let Err(e) = crate::vfi::ShadowEngine::check_parity_between(
+                self.cores[0].as_ref(),
+                self.cores[1].as_ref(),
+            ) {
+                results.push(Err(e));
+            }
         }
 
         // Tick peripherals once after all cores have stepped

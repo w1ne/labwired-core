@@ -26,3 +26,8 @@
 /test_device.json
 /test_device.rs
 /demo_chip.rs
+
+# Simulation artifacts
+/out/
+/tmp/
+/run_debug.json

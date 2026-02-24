@@ -1,0 +1,73 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build labwired-dap (release)",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "build",
+        "-p",
+        "labwired-dap",
+        "--release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/../.."
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build demo-blinky (debug)",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "build",
+        "-p",
+        "demo-blinky",
+        "--target",
+        "thumbv7m-none-eabi"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/../.."
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "Build LabWired demo stack",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Build labwired-dap (release)",
+        "Build demo-blinky (debug)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Nucleo: Flash only (auto probe)",
+      "type": "shell",
+      "command": "${workspaceFolder}/../../../scripts/nucleo_flash_debug.sh",
+      "args": [
+        "--crate",
+        "demo-blinky",
+        "--no-gdb"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Nucleo: Flash + GDB (auto probe)",
+      "type": "shell",
+      "command": "${workspaceFolder}/../../../scripts/nucleo_flash_debug.sh",
+      "args": [
+        "--crate",
+        "demo-blinky"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

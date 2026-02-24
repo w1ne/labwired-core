@@ -77,3 +77,7 @@ peripherals:
     irq: 60
     config:
       profile: "stm32v2"
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"

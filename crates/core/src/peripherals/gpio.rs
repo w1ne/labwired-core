@@ -149,6 +149,7 @@ impl GpioPort {
         }
     }
 
+    #[allow(dead_code)]
     fn bsrr_offset(&self) -> u64 {
         match self.layout {
             GpioRegisterLayout::Stm32F1 => 0x10,
@@ -156,6 +157,7 @@ impl GpioPort {
         }
     }
 
+    #[allow(dead_code)]
     fn brr_offset(&self) -> u64 {
         match self.layout {
             GpioRegisterLayout::Stm32F1 => 0x14,
@@ -175,8 +177,10 @@ impl crate::Peripheral for GpioPort {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
-        let _bsrr_offset = self.bsrr_offset();
-        let _brr_offset = self.brr_offset();
+
+        if reg_offset == 0x0C {
+            println!("GPIO ODR Write: byte {} = {:#x}", byte_offset, value);
+        }
 
         let mut reg_val = self.read_reg(reg_offset);
 

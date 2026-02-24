@@ -1235,6 +1235,8 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                         StopReason::MemoryViolation
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                    labwired_core::SimulationError::Halt => StopReason::Halt,
+                    labwired_core::SimulationError::Other(_) => StopReason::Exception,
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1347,6 +1349,7 @@ fn build_stop_reason_details(
         StopReason::MemoryViolation
         | StopReason::DecodeError
         | StopReason::Halt
+        | StopReason::Exception
         | StopReason::ConfigError => (None, None),
     };
 
@@ -1681,7 +1684,17 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let mut prev_pc = machine.cpu.get_pc();
     let mut stuck_counter: u64 = 0;
 
-    for step in 0..max_steps {
+    let batch_size = if machine.config.batch_mode_enabled
+        && args.breakpoint.is_empty()
+        && detect_stuck.is_none()
+    {
+        10000.min(max_steps)
+    } else {
+        1
+    };
+
+    let mut step = 0;
+    while step < max_steps {
         if !args.breakpoint.is_empty() && args.breakpoint.contains(&machine.cpu.get_pc()) {
             stop_reason = StopReason::Halt;
             steps_executed = step;
@@ -1711,18 +1724,83 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             }
         }
 
-        steps_executed = step + 1;
-        if let Err(e) = machine.step() {
-            sim_error_happened = true;
-            stop_reason = match e {
-                labwired_core::SimulationError::MemoryViolation(_) => StopReason::MemoryViolation,
-                labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
-            };
-            error!("Simulation error at step {}: {}", step, e);
-            break;
+        let remaining = (max_steps - step) as u32;
+        let current_batch = batch_size as u32;
+        let to_execute = current_batch.min(remaining);
+
+        if to_execute > 1 {
+            match machine.cpu.step_batch(
+                &mut machine.bus,
+                &machine.observers,
+                &machine.config,
+                to_execute,
+            ) {
+                Ok(executed) => {
+                    step += executed as u64;
+                    steps_executed = step;
+                    machine.total_cycles += executed as u64;
+
+                    // Manual tick propagation for batch runs
+                    if machine.total_cycles % (machine.config.peripheral_tick_interval as u64)
+                        < executed as u64
+                    {
+                        let (interrupts, costs) = machine.bus.tick_peripherals_fully();
+                        for c in costs {
+                            machine.total_cycles += c.cycles as u64;
+                            if let Some(p) = machine.bus.peripherals.get(c.index) {
+                                for observer in &machine.observers {
+                                    observer.on_peripheral_tick(&p.name, c.cycles);
+                                }
+                            }
+                        }
+                        for irq in interrupts {
+                            machine.cpu.set_exception_pending(irq);
+                            tracing::debug!("Exception {} Pend", irq);
+                        }
+                    }
+
+                    if executed < to_execute {
+                        // Bailed out early (e.g. exception/branch)
+                        continue;
+                    }
+                }
+                Err(e) => {
+                    sim_error_happened = true;
+                    stop_reason = match e {
+                        labwired_core::SimulationError::MemoryViolation(_) => {
+                            StopReason::MemoryViolation
+                        }
+                        labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                        labwired_core::SimulationError::Halt => StopReason::Halt,
+                        labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                    };
+                    if stop_reason != StopReason::Halt {
+                        error!("Simulation error at step {}: {}", step, e);
+                    }
+                    break;
+                }
+            }
+        } else {
+            steps_executed = step + 1;
+            if let Err(e) = machine.step() {
+                sim_error_happened = true;
+                stop_reason = match e {
+                    labwired_core::SimulationError::MemoryViolation(_) => {
+                        StopReason::MemoryViolation
+                    }
+                    labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                    labwired_core::SimulationError::Halt => StopReason::Halt,
+                    labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                };
+                if stop_reason != StopReason::Halt {
+                    error!("Simulation error at step {}: {}", step, e);
+                }
+                break;
+            }
+            step += 1;
         }
 
-        // Check no_progress (PC stuck)
+        // Check no_progress (PC stuck) - only if batching disabled or not possible
         if let Some(limit) = detect_stuck {
             let current_pc = machine.cpu.get_pc();
             if current_pc == prev_pc {

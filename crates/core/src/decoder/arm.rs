@@ -153,6 +153,11 @@ pub enum Instruction {
         rn: u8,
         imm: u8,
     }, // STR Rt, [Rn, #imm] (imm is *4)
+    StrReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // STR Rt, [Rn, Rm]
     LdrLit {
         rt: u8,
         imm: u16,
@@ -182,6 +187,11 @@ pub enum Instruction {
         rn: u8,
         imm: u8,
     }, // STRB Rt, [Rn, #imm]
+    StrbReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // STRB Rt, [Rn, Rm]
     LdrhImm {
         rt: u8,
         rn: u8,
@@ -192,6 +202,26 @@ pub enum Instruction {
         rn: u8,
         imm: u8,
     }, // STRH Rt, [Rn, #imm] (imm is *2)
+    StrhReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // STRH Rt, [Rn, Rm]
+    LdrsbReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRSB Rt, [Rn, Rm]
+    LdrhReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRH Rt, [Rn, Rm]
+    LdrshReg {
+        rt: u8,
+        rn: u8,
+        rm: u8,
+    }, // LDRSH Rt, [Rn, Rm]
 
     // Stack
     Push {
@@ -374,6 +404,9 @@ pub enum Instruction {
         rm: u8,
     },
 
+    Bkpt {
+        imm8: u8,
+    },
     Unknown(u16),
     Unknown32(u16, u16),
 }
@@ -546,20 +579,31 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         return Instruction::LdrLit { rt, imm: imm8 << 2 };
     }
 
-    // 4.2 LDR (register) (T1): 0101 100 mmm nnn ttt
-    if (opcode & 0xFE00) == 0x5800 {
+    // 4.2 Load/Store Register Offset (T1): 0101 lb0 mmm nnn ttt
+    // 0101 000 ... STR
+    // 0101 001 ... STRH
+    // 0101 010 ... STRB
+    // 0101 011 ... LDRSB
+    // 0101 100 ... LDR
+    // 0101 101 ... LDRH
+    // 0101 110 ... LDRB
+    // 0101 111 ... LDRSH
+    if (opcode & 0xF200) == 0x5000 {
+        let op = (opcode >> 9) & 0x7;
         let rm = ((opcode >> 6) & 0x7) as u8;
         let rn = ((opcode >> 3) & 0x7) as u8;
         let rt = (opcode & 0x7) as u8;
-        return Instruction::LdrReg { rt, rn, rm };
-    }
-
-    // 4.2 LDRB (register) (T1): 0101 110 mmm nnn ttt
-    if (opcode & 0xFE00) == 0x5C00 {
-        let rm = ((opcode >> 6) & 0x7) as u8;
-        let rn = ((opcode >> 3) & 0x7) as u8;
-        let rt = (opcode & 0x7) as u8;
-        return Instruction::LdrbReg { rt, rn, rm };
+        return match op {
+            0 => Instruction::StrReg { rt, rn, rm },
+            1 => Instruction::StrhReg { rt, rn, rm },
+            2 => Instruction::StrbReg { rt, rn, rm },
+            3 => Instruction::LdrsbReg { rt, rn, rm },
+            4 => Instruction::LdrReg { rt, rn, rm },
+            5 => Instruction::LdrhReg { rt, rn, rm },
+            6 => Instruction::LdrbReg { rt, rn, rm },
+            7 => Instruction::LdrshReg { rt, rn, rm },
+            _ => unreachable!(),
+        };
     }
 
     // 4.2 PUSH/POP
@@ -715,6 +759,13 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         return Instruction::Nop;
     }
 
+    // BKPT: 1011 1110 imm8
+    if (opcode & 0xFF00) == 0xBE00 {
+        return Instruction::Bkpt {
+            imm8: (opcode & 0xFF) as u8,
+        };
+    }
+
     Instruction::Unknown(opcode)
 }
 
@@ -766,6 +817,28 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             rm,
             imm5,
             shift_type,
+            set_flags: s,
+        };
+    }
+
+    // Data-processing (modified immediate) T1: 1111 0 i 00 op4 S rn 0 imm3 rd imm8
+    // F0xx or F1xx.
+    if ((h1 & 0xFB00) == 0xF000 || (h1 & 0xFB00) == 0xF100) && (h2 & 0x8000) == 0 {
+        let i = (h1 >> 10) & 1;
+        let op = ((h1 >> 5) & 0xF) as u8;
+        let s = (h1 & (1 << 4)) != 0;
+        let rn = (h1 & 0xF) as u8;
+        let imm3 = ((h2 >> 12) & 0x7) as u32;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm8 = (h2 & 0xFF) as u32;
+
+        let imm12 = ((i as u32) << 11) | (imm3 << 8) | imm8;
+
+        return Instruction::DataProcImm32 {
+            op,
+            rn,
+            rd,
+            imm12,
             set_flags: s,
         };
     }

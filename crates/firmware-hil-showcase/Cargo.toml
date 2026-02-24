@@ -1,0 +1,13 @@
+[package]
+name = "firmware-hil-showcase"
+version = "0.11.0"
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-hil-showcase"
+path = "src/main.rs"
+test = false
+bench = false

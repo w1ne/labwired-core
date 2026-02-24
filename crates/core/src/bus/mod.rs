@@ -628,11 +628,12 @@ impl SystemBus {
             // Simplified routing for Top-5 targets (e.g. STM32F1)
             // UART1_TX (signal ID 1) -> DMA1 Channel 4
             // This would ideally be in a system-specific routing table
-            let target_dma = if source_name == "uart1" && request_id == 1 {
-                Some(("dma1", 4))
-            } else {
-                None
-            };
+            let target_dma =
+                if (source_name == "uart1" || source_name == "uart3") && request_id == 1 {
+                    Some(("dma1", 1)) // H5 uses GPDMA, but for our mock we map it to channel 1
+                } else {
+                    None
+                };
 
             if let Some((dma_name, channel)) = target_dma {
                 if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
@@ -700,21 +701,7 @@ impl crate::Bus for SystemBus {
         // Dynamic Peripherals
         if let Some(idx) = self.find_peripheral_index(addr) {
             let p = &self.peripherals[idx];
-            let res = p.dev.read(addr - p.base);
-            if (0x42020000..0x42021c00).contains(&addr) || addr == 0x21d0000 {
-                tracing::info!(
-                    "Bus Read GPIO/Suspicious: addr {:#x} -> {} + {:#x}, result {:?}",
-                    addr,
-                    p.name,
-                    addr - p.base,
-                    res
-                );
-            }
-            return res;
-        }
-
-        if addr == 0x21d0000 {
-            tracing::info!("Bus Read SUSPICIOUS: addr {:#x} is unmapped", addr);
+            return p.dev.read(addr - p.base);
         }
 
         Err(SimulationError::MemoryViolation(addr))
@@ -754,19 +741,8 @@ impl crate::Bus for SystemBus {
             // Dynamic Peripherals
             if let Some(idx) = self.find_peripheral_index(addr) {
                 let p = &mut self.peripherals[idx];
-                let res = p.dev.write(addr - p.base, value);
-                if (0x42020000..0x42021c00).contains(&addr) || addr == 0x21d0000 {
-                    tracing::info!("Bus Write GPIO/Suspicious: addr {:#x} -> {} + {:#x}, val {:#x}, result {:?}", addr, p.name, addr - p.base, value, res);
-                }
-                res
+                p.dev.write(addr - p.base, value)
             } else {
-                if addr == 0x21d0000 {
-                    tracing::info!(
-                        "Bus Write SUSPICIOUS: addr {:#x} is unmapped, val {:#x}",
-                        addr,
-                        value
-                    );
-                }
                 Err(SimulationError::MemoryViolation(addr))
             }
         };

@@ -5,7 +5,7 @@ use cortex_m_rt::entry;
 use panic_halt as _;
 
 // GPIO Base Addresses
-const GPIOC_BASE: u32 = 0x40011000;
+const GPIOA_BASE: u32 = 0x40010800;
 const RCC_BASE: u32 = 0x40021000;
 const I2C1_BASE: u32 = 0x40005400;
 
@@ -14,8 +14,8 @@ const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x18) as *mut u32;
 const RCC_APB1ENR: *mut u32 = (RCC_BASE + 0x1C) as *mut u32;
 
 // GPIO Registers
-const GPIOC_CRH: *mut u32 = (GPIOC_BASE + 0x04) as *mut u32;
-const GPIOC_ODR: *mut u32 = (GPIOC_BASE + 0x0C) as *mut u32;
+const GPIOA_CRL: *mut u32 = (GPIOA_BASE + 0x00) as *mut u32;
+const GPIOA_ODR: *mut u32 = (GPIOA_BASE + 0x0C) as *mut u32;
 
 // I2C Registers
 const I2C1_CR1: *mut u32 = I2C1_BASE as *mut u32;
@@ -25,23 +25,24 @@ const I2C1_CCR: *mut u32 = (I2C1_BASE + 0x1C) as *mut u32;
 const I2C1_TRISE: *mut u32 = (I2C1_BASE + 0x20) as *mut u32;
 
 // Bit definitions
-const RCC_APB2ENR_IOPCEN: u32 = 1 << 4;
+const RCC_APB2ENR_IOPAEN: u32 = 1 << 2;
 const RCC_APB1ENR_I2C1EN: u32 = 1 << 21;
-const GPIO_ODR_ODR13: u32 = 1 << 13;
+const GPIO_ODR_ODR5: u32 = 1 << 5;
+const BLINK_DELAY_NOPS: u32 = 20_000;
 
 #[entry]
 fn main() -> ! {
     unsafe {
-        // Enable GPIOC and I2C1 clocks
+        // Enable GPIOA and I2C1 clocks
         let rcc_apb2 = core::ptr::read_volatile(RCC_APB2ENR);
-        core::ptr::write_volatile(RCC_APB2ENR, rcc_apb2 | RCC_APB2ENR_IOPCEN);
+        core::ptr::write_volatile(RCC_APB2ENR, rcc_apb2 | RCC_APB2ENR_IOPAEN);
 
         let rcc_apb1 = core::ptr::read_volatile(RCC_APB1ENR);
         core::ptr::write_volatile(RCC_APB1ENR, rcc_apb1 | RCC_APB1ENR_I2C1EN);
 
-        // Configure PC13 as output (LED)
-        let crh = core::ptr::read_volatile(GPIOC_CRH);
-        core::ptr::write_volatile(GPIOC_CRH, (crh & !(0xF << 20)) | (0x3 << 20));
+        // Configure PA5 as output (NUCLEO-F103RB LD2)
+        let crl = core::ptr::read_volatile(GPIOA_CRL);
+        core::ptr::write_volatile(GPIOA_CRL, (crl & !(0xF << 20)) | (0x3 << 20));
 
         // Initialize I2C1 (simplified)
         core::ptr::write_volatile(I2C1_CR1, 0x0000); // Disable I2C
@@ -60,15 +61,15 @@ fn main() -> ! {
         // Toggle LED
         unsafe {
             if led_state {
-                core::ptr::write_volatile(GPIOC_ODR, GPIO_ODR_ODR13);
+                core::ptr::write_volatile(GPIOA_ODR, GPIO_ODR_ODR5);
             } else {
-                core::ptr::write_volatile(GPIOC_ODR, 0);
+                core::ptr::write_volatile(GPIOA_ODR, 0);
             }
         }
         led_state = !led_state;
 
         // Delay
-        for _ in 0..500_000 {
+        for _ in 0..BLINK_DELAY_NOPS {
             cortex_m::asm::nop();
         }
     }

@@ -6,13 +6,13 @@ inputs:
 limits:
   max_steps: 10000
 assertions:
-  # Verify GPIOC_CRH (0x40011004) is configured.
-  # Main sets PC13 to output push-pull 50MHz (0x3). 
-  # CRH bits 23:20 (for pin 13).
+  # Verify GPIOA_CRL (0x40010800) is configured.
+  # Main sets PA5 to output push-pull 50MHz (0x3).
+  # CRL bits 23:20 (for pin 5).
   # We check if bits 21:20 are 11 (0x3). 
   # Mask 0x00300000. Expected 0x00300000.
   - memory_value:
-      address: 0x40011004
+      address: 0x40010800
       expected_value: 0x00300000
       mask: 0x00300000
   - expected_stop_reason: max_steps

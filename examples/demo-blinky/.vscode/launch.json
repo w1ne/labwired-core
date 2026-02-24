@@ -1,0 +1,82 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "labwired",
+      "request": "launch",
+      "name": "LabWired: Demo Blinky",
+      "preLaunchTask": "Build LabWired demo stack",
+      "program": "${workspaceFolder}/../../target/thumbv7m-none-eabi/debug/demo-blinky",
+      "systemConfig": "${workspaceFolder}/system.yaml",
+      "stopOnEntry": true,
+      "cwd": "${workspaceFolder}",
+      "sourceMap": {
+        "/rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf/library": "${env:HOME}/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library"
+      }
+    },
+    {
+      "name": "Cortex-Debug: LabWired (GDB :3333)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "servertype": "external",
+      "gdbPath": "/usr/bin/gdb-multiarch",
+      "objdumpPath": "/usr/bin/arm-none-eabi-objdump",
+      "armToolchainPath": "/usr/bin",
+      "toolchainPrefix": "arm-none-eabi",
+      "gdbTarget": "localhost:3333",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/../../target/thumbv7m-none-eabi/debug/demo-blinky",
+      "runToEntryPoint": "main",
+      "device": "STM32F103RB",
+      "sourceFileMap": {
+        "/rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf": "/home/andrii/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust"
+      }
+    },
+    {
+      "name": "Cortex-Debug: Hardware (OpenOCD ST-Link)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "preLaunchTask": "Build demo-blinky (debug)",
+      "servertype": "openocd",
+      "gdbPath": "/usr/bin/gdb-multiarch",
+      "objdumpPath": "/usr/bin/arm-none-eabi-objdump",
+      "armToolchainPath": "/usr/bin",
+      "toolchainPrefix": "arm-none-eabi",
+      "openOCDPath": "/usr/bin/openocd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/../../target/thumbv7m-none-eabi/debug/demo-blinky",
+      "runToEntryPoint": "main",
+      "device": "STM32F103RB",
+      "sourceFileMap": {
+        "/rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf": "/home/andrii/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust"
+      },
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/stm32f1x.cfg"
+      ]
+    },
+    {
+      "name": "Cortex-Debug: Hardware (OpenOCD J-Link)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "preLaunchTask": "Build demo-blinky (debug)",
+      "servertype": "openocd",
+      "showDevDebugOutput": "raw",
+      "gdbPath": "/usr/bin/gdb-multiarch",
+      "objdumpPath": "/usr/bin/arm-none-eabi-objdump",
+      "armToolchainPath": "/usr/bin",
+      "toolchainPrefix": "arm-none-eabi",
+      "openOCDPath": "/usr/bin/openocd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/../../target/thumbv7m-none-eabi/debug/demo-blinky",
+      "runToEntryPoint": "main",
+      "device": "STM32F103RB",
+      "sourceFileMap": {
+        "/rustc/01f6ddf7588f42ae2d7eb0a2f21d44e8e96674cf": "/home/andrii/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust"
+      },
+      "configFiles": [
+        "openocd/jlink-stm32f1.cfg"
+      ]
+    }
+  ]
+}

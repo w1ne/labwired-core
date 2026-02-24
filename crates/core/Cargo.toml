@@ -21,3 +21,4 @@ anyhow = { workspace = true }
 serde_json = { workspace = true }
 labwired-ir = { path = "../ir" }
 serde_yaml.workspace = true
+memmap2.workspace = true
