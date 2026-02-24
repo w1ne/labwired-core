@@ -14,6 +14,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -22,6 +24,8 @@ pub struct DapServer {
     pub adapter: LabwiredAdapter,
     running: Arc<Mutex<bool>>,
     stop_on_entry: Arc<Mutex<bool>>,
+    source_map: Arc<Mutex<Vec<(String, String)>>>,
+    rust_source_root: Arc<Mutex<Option<String>>>,
 }
 
 #[derive(Serialize)]
@@ -97,6 +101,8 @@ struct LaunchArgs {
     system_config: Option<String>,
     #[serde(default)]
     stop_on_entry: Option<bool>,
+    #[serde(default)]
+    source_map: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -266,6 +272,59 @@ impl Default for DapServer {
 }
 
 impl DapServer {
+    fn detect_rust_source_root() -> Option<String> {
+        let output = Command::new("rustc")
+            .arg("--print")
+            .arg("sysroot")
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let sysroot = String::from_utf8(output.stdout).ok()?.trim().to_string();
+        if sysroot.is_empty() {
+            return None;
+        }
+        let path: PathBuf = PathBuf::from(sysroot)
+            .join("lib")
+            .join("rustlib")
+            .join("src")
+            .join("rust")
+            .join("library");
+        Some(path.to_string_lossy().to_string())
+    }
+
+    fn apply_source_map_outgoing(&self, path: &str) -> String {
+        let mappings = self.source_map.lock().unwrap();
+        for (from, to) in mappings.iter() {
+            if path.starts_with(from) {
+                return format!("{}{}", to, &path[from.len()..]);
+            }
+        }
+        drop(mappings);
+
+        // Fallback: remap rustc-internal paths even if sourceMap wasn't propagated.
+        if let Some(idx) = path.find("/library/") {
+            if path.starts_with("/rustc/") {
+                if let Some(root) = self.rust_source_root.lock().unwrap().clone() {
+                    let suffix = &path[idx + "/library".len()..];
+                    return format!("{}{}", root, suffix);
+                }
+            }
+        }
+        path.to_string()
+    }
+
+    fn apply_source_map_incoming(&self, path: &str) -> String {
+        let mappings = self.source_map.lock().unwrap();
+        for (from, to) in mappings.iter() {
+            if path.starts_with(to) {
+                return format!("{}{}", from, &path[to.len()..]);
+            }
+        }
+        path.to_string()
+    }
+
     fn parse_args<T: DeserializeOwned, W: Write>(
         req_seq: i64,
         command: &str,
@@ -295,6 +354,8 @@ impl DapServer {
             adapter: LabwiredAdapter::new(),
             running: Arc::new(Mutex::new(false)),
             stop_on_entry: Arc::new(Mutex::new(true)),
+            source_map: Arc::new(Mutex::new(Vec::new())),
+            rust_source_root: Arc::new(Mutex::new(Self::detect_rust_source_root())),
         }
     }
 
@@ -515,6 +576,16 @@ impl DapServer {
                     stop_on_entry
                 );
                 *self.stop_on_entry.lock().unwrap() = stop_on_entry;
+                {
+                    let mut mappings = self.source_map.lock().unwrap();
+                    mappings.clear();
+                    if let Some(source_map) = launch.source_map {
+                        let mut pairs: Vec<(String, String)> = source_map.into_iter().collect();
+                        // Longest path prefix first for deterministic remapping.
+                        pairs.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+                        *mappings = pairs;
+                    }
+                }
 
                 if let Some(p) = launch.program {
                     if let Err(e) = self
@@ -554,13 +625,14 @@ impl DapServer {
                     )?;
                     return Ok(HandleResult::Continue);
                 };
+                let mapped_path = self.apply_source_map_incoming(&path);
                 let lines = args
                     .breakpoints
                     .into_iter()
                     .map(|b| b.line.unwrap_or(0))
                     .collect::<Vec<i64>>();
 
-                let resolutions = match self.adapter.set_breakpoints(path, lines.clone()) {
+                let resolutions = match self.adapter.set_breakpoints(mapped_path, lines.clone()) {
                     Ok(r) => r,
                     Err(e) => {
                         tracing::error!("Failed to set breakpoints: {}", e);
@@ -641,9 +713,10 @@ impl DapServer {
                 let source_loc = self.adapter.lookup_source(pc as u64);
 
                 let (source, line, name) = if let Some(loc) = source_loc {
+                    let mapped_file = self.apply_source_map_outgoing(&loc.file);
                     let source = json!({
-                        "name": std::path::Path::new(&loc.file).file_name().and_then(|n| n.to_str()).unwrap_or(&loc.file),
-                        "path": loc.file,
+                        "name": std::path::Path::new(&mapped_file).file_name().and_then(|n| n.to_str()).unwrap_or(&mapped_file),
+                        "path": mapped_file,
                     });
                     (
                         Some(source),
@@ -1055,7 +1128,11 @@ impl DapServer {
                 };
 
                 let mut targets = Vec::new();
-                if let Some(target_addr) = self.adapter.lookup_source_reverse(&path, line as u32) {
+                let mapped_path = self.apply_source_map_incoming(&path);
+                if let Some(target_addr) = self
+                    .adapter
+                    .lookup_source_reverse(&mapped_path, line as u32)
+                {
                     targets.push(json!({
                         "id": 1,
                         "label": format!("Jump to line {}", line),

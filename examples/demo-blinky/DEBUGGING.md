@@ -30,6 +30,9 @@ The project now has three launch profiles:
 3. `Cortex-Debug: Hardware (OpenOCD ST-Link)`
 - Uses Cortex-Debug + OpenOCD on real STM32F103 hardware via ST-Link.
 
+4. `Cortex-Debug: Hardware (OpenOCD J-Link)`
+- Uses Cortex-Debug + OpenOCD on real STM32F103 hardware via J-Link.
+
 ## Same ELF, Two Targets (Recommended Flow)
 
 Use the same binary for both debug targets:
@@ -46,9 +49,23 @@ Use the same binary for both debug targets:
 
 ### B) Real Hardware via Cortex-Debug
 
-1. Connect STM32F103 board via ST-Link.
-2. In VS Code Run and Debug, launch:
-   `Cortex-Debug: Hardware (OpenOCD ST-Link)`
+1. Connect STM32F103 board via ST-Link or J-Link.
+2. In VS Code Run and Debug, launch one of:
+   - `Cortex-Debug: Hardware (OpenOCD ST-Link)`
+   - `Cortex-Debug: Hardware (OpenOCD J-Link)`
+
+## Antigravity Console Demo Flow
+
+Use these tasks from `Terminal -> Run Task` in `examples/demo-blinky`:
+
+- `Nucleo: Flash only (auto probe)`
+- `Nucleo: Flash + GDB (auto probe)`
+
+They call:
+
+`scripts/nucleo_flash_debug.sh`
+
+with auto probe detection (`stlink` preferred, then `jlink`).
 
 ## Notes
 
@@ -69,6 +86,7 @@ Use the same binary for both debug targets:
 ### OpenOCD launch fails
 - Ensure OpenOCD is installed.
 - Confirm ST-Link USB access and board power.
+- If you see `cannot read IDR`, check ST-Link/J-Link SWD jumpers and reset wiring on the Nucleo.
 
 ### Breakpoints not binding
 - Rebuild debug binary:
