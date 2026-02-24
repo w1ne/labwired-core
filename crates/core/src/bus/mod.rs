@@ -701,21 +701,7 @@ impl crate::Bus for SystemBus {
         // Dynamic Peripherals
         if let Some(idx) = self.find_peripheral_index(addr) {
             let p = &self.peripherals[idx];
-            let res = p.dev.read(addr - p.base);
-            if (0x42020000..0x42021c00).contains(&addr) || addr == 0x21d0000 {
-                tracing::info!(
-                    "Bus Read GPIO/Suspicious: addr {:#x} -> {} + {:#x}, result {:?}",
-                    addr,
-                    p.name,
-                    addr - p.base,
-                    res
-                );
-            }
-            return res;
-        }
-
-        if addr == 0x21d0000 {
-            tracing::info!("Bus Read SUSPICIOUS: addr {:#x} is unmapped", addr);
+            return p.dev.read(addr - p.base);
         }
 
         Err(SimulationError::MemoryViolation(addr))
@@ -755,19 +741,8 @@ impl crate::Bus for SystemBus {
             // Dynamic Peripherals
             if let Some(idx) = self.find_peripheral_index(addr) {
                 let p = &mut self.peripherals[idx];
-                let res = p.dev.write(addr - p.base, value);
-                if (0x42020000..0x42021c00).contains(&addr) || addr == 0x21d0000 {
-                    tracing::info!("Bus Write GPIO/Suspicious: addr {:#x} -> {} + {:#x}, val {:#x}, result {:?}", addr, p.name, addr - p.base, value, res);
-                }
-                res
+                p.dev.write(addr - p.base, value)
             } else {
-                if addr == 0x21d0000 {
-                    tracing::info!(
-                        "Bus Write SUSPICIOUS: addr {:#x} is unmapped, val {:#x}",
-                        addr,
-                        value
-                    );
-                }
                 Err(SimulationError::MemoryViolation(addr))
             }
         };

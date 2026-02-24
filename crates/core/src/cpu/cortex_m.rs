@@ -249,9 +249,6 @@ impl Cpu for CortexM {
     }
     fn set_exception_pending(&mut self, exception_num: u32) {
         if exception_num < 32 {
-            if self.pending_exceptions & (1 << exception_num) == 0 {
-                println!("Exception {} Pending", exception_num);
-            }
             self.pending_exceptions |= 1 << exception_num;
         }
     }
@@ -362,7 +359,6 @@ impl Cpu for CortexM {
         }
 
         let mut executed = 0;
-        let empty_observers: &[Arc<dyn SimulationObserver>] = &[];
 
         if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
             while executed < max_count {
@@ -370,7 +366,7 @@ impl Cpu for CortexM {
                     break;
                 }
                 let old_pc = self.pc;
-                self.step_internal(sysbus, empty_observers, config)?;
+                self.step_internal(sysbus, observers, config)?;
                 executed += 1;
                 let pc_diff = self.pc.wrapping_sub(old_pc);
                 if pc_diff != 2 && pc_diff != 4 {
@@ -383,7 +379,7 @@ impl Cpu for CortexM {
                     break;
                 }
                 let old_pc = self.pc;
-                self.step_internal(bus, empty_observers, config)?;
+                self.step_internal(bus, observers, config)?;
                 executed += 1;
                 let pc_diff = self.pc.wrapping_sub(old_pc);
                 if pc_diff != 2 && pc_diff != 4 {

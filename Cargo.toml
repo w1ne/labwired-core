@@ -17,6 +17,7 @@ members = [
     "crates/firmware-h563-io-demo",
     "crates/firmware-h563-fullchip-demo",
     "crates/firmware-hil-showcase",
+    "crates/firmware-comparative-benchmark",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",

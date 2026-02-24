@@ -441,6 +441,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-comparative-benchmark"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-f401-demo"
 version = "0.12.0"
 dependencies = [
