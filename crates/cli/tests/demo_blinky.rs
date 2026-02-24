@@ -54,7 +54,7 @@ fn test_demo_blinky_gpio_toggle() {
     let mut odr_values = Vec::new();
     let mut total_steps = 0;
 
-    // We want to detect writes to GPIOC_ODR (PC13 is the LED)
+    // We want to detect writes to GPIOA_ODR (PA5 is the LED on Nucleo)
     // Run in batches of 10,000 steps for performance
     while total_steps < 10_000_000 {
         match machine.run(Some(10_000)) {
@@ -67,8 +67,8 @@ fn test_demo_blinky_gpio_toggle() {
             println!("Step {}, PC: {:#x}", total_steps, machine.get_pc());
         }
 
-        // Peek at GPIOC state
-        if let Some(gpio_val) = machine.peek_peripheral("gpioc") {
+        // Peek at GPIOA state
+        if let Some(gpio_val) = machine.peek_peripheral("gpioa") {
             if let Some(odr) = gpio_val.get("odr").and_then(|v| v.as_u64()) {
                 let odr_u32 = odr as u32;
                 if odr_values.last() != Some(&odr_u32) {
@@ -84,28 +84,28 @@ fn test_demo_blinky_gpio_toggle() {
         }
     }
 
-    // PC13 is bit 13 (0x2000)
+    // PA5 is bit 5 (0x20)
     assert!(
         odr_values.len() > 1,
         "Expected at least one LED state change, but got sequence: {:?}",
         odr_values
     );
 
-    let bit_13_states: Vec<bool> = odr_values.iter().map(|&v| (v & 0x2000) != 0).collect();
+    let bit_5_states: Vec<bool> = odr_values.iter().map(|&v| (v & 0x20) != 0).collect();
     let mut changes = 0;
-    for i in 0..bit_13_states.len() - 1 {
-        if bit_13_states[i] != bit_13_states[i + 1] {
+    for i in 0..bit_5_states.len() - 1 {
+        if bit_5_states[i] != bit_5_states[i + 1] {
             changes += 1;
         }
     }
 
     assert!(
         changes >= 1,
-        "PC13 (LED) did not toggle. ODR log: {:?}",
+        "PA5 (LED) did not toggle. ODR log: {:?}",
         odr_values
     );
     println!(
-        "SUCCESS: Detected PC13 toggled {} times. ODR sequence: {:?}",
+        "SUCCESS: Detected PA5 toggled {} times. ODR sequence: {:?}",
         changes, odr_values
     );
 }

@@ -27,8 +27,8 @@ cargo run -p labwired-cli -- \
 ## Expected Output
 
 ```
-GPIO: Write to GPIOC_ODR: 0x00002000 (LED ON)
-GPIO: Write to GPIOC_ODR: 0x00000000 (LED OFF)
-GPIO: Write to GPIOC_ODR: 0x00002000 (LED ON)
+GPIO: Write to GPIOA_ODR: 0x00000020 (LED ON)
+GPIO: Write to GPIOA_ODR: 0x00000000 (LED OFF)
+GPIO: Write to GPIOA_ODR: 0x00000020 (LED ON)
 ...
 ```
