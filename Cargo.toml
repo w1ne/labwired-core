@@ -18,6 +18,7 @@ members = [
     "crates/firmware-h563-fullchip-demo",
     "crates/firmware-hil-showcase",
     "crates/firmware-comparative-benchmark",
+    "crates/firmware-rp2040-pio-onboarding",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",
@@ -53,6 +54,8 @@ cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "0.2"
 memmap2 = "0.9"
+pio = "0.2"
+pio-parser = "0.2"
 
 [profile.dev]
 panic = "abort"
@@ -92,6 +95,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.firmware-hil-showcase]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-rp2040-pio-onboarding]
 codegen-units = 1
 debug = true
 opt-level = "s"
