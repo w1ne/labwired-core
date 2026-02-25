@@ -1,0 +1,4 @@
+# LabWired - RP2040 PIO System
+name: "RP2040 PIO Onboarding"
+chip: "../../configs/chips/rp2040.yaml"
+peripherals: [] # Inherited from chip
