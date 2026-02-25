@@ -485,6 +485,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-rp2040-pio-onboarding"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "flate2"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
