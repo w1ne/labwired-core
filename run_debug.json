@@ -1,0 +1,5 @@
+[2m2026-02-23T00:23:16.156752Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading system manifest: "examples/hil-displacement-showcase/./system.yaml"
+[2m2026-02-23T00:23:16.157171Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: "/home/andrii/Projects/labwired/core/configs/chips/stm32h563.yaml"
+[2m2026-02-23T00:23:16.158776Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000009
+[2m2026-02-23T00:23:17.477307Z[0m [31mERROR[0m [2mlabwired[0m[2m:[0m Assertion failed: UartContains(UartContainsAssertion { uart_contains: "HIL Stress Test Passed" }) (captured len=0)
+[2m2026-02-23T00:23:17.477356Z[0m [31mERROR[0m [2mlabwired[0m[2m:[0m Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: Halt }) (captured len=0)

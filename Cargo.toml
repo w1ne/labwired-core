@@ -19,6 +19,7 @@ members = [
     "crates/firmware-rp2040-pio-onboarding",
     "crates/firmware-hil-showcase",
     "crates/firmware-comparative-benchmark",
+    "crates/firmware-rp2040-pio-onboarding",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",
