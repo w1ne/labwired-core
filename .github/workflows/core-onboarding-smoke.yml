@@ -43,7 +43,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: thumbv7m-none-eabi,thumbv7em-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
