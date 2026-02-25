@@ -1,0 +1,12 @@
+# LabWired - RP2040 PIO assembly smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-rp2040-pio-onboarding"
+  system: "./system-asm.yaml"
+limits:
+  max_steps: 10
+assertions:
+  # Verify instructions were loaded into PIO0 memory (INSTR_MEM0, INSTR_MEM1)
+  - memory_value: { address: 0x50200048, expected_value: 0xE03F } # set x, 31
+  - memory_value: { address: 0x5020004C, expected_value: 0xE03E } # set x, 30
+  - expected_stop_reason: max_steps

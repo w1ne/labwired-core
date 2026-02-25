@@ -1,0 +1,10 @@
+# LabWired - RP2040 PIO smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-rp2040-pio-onboarding"
+  system: "./system.yaml"
+limits:
+  max_steps: 10000
+assertions:
+  - uart_contains: "PIO_OK"
+  - expected_stop_reason: max_steps

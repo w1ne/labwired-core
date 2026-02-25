@@ -1,0 +1,41 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 1534,
+  "cycles": 2101,
+  "instructions": 1534,
+  "stop_reason": "halt",
+  "stop_reason_details": {
+    "triggered_stop_condition": "halt",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": 5000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "HIL Stress Test Passed"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "halt"
+      },
+      "passed": true
+    }
+  ],
+  "firmware_hash": "0000157164f2ffb3145796f75b6ade37ba296d3a107f07cab40fe9de26ea0d6f",
+  "config": {
+    "firmware": "examples/hil-displacement-showcase/../../target/thumbv7m-none-eabi/release/firmware-hil-showcase",
+    "system": "examples/hil-displacement-showcase/./system.yaml",
+    "script": "examples/hil-displacement-showcase/showcase-test.yaml"
+  }
+}

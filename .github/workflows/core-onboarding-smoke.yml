@@ -31,6 +31,11 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/nucleo-h563zi/uart-smoke.yaml
             system: examples/nucleo-h563zi/system.yaml
+          - id: rp2040-pio
+            crate: firmware-rp2040-pio-onboarding
+            target: thumbv6m-none-eabi
+            script: examples/rp2040-pio/io-smoke.yaml
+            system: examples/rp2040-pio/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +43,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: thumbv7m-none-eabi,thumbv7em-none-eabi
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2

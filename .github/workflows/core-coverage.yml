@@ -53,6 +53,7 @@ jobs:
       - name: Install coverage tooling
         run: |
           rustup component add llvm-tools-preview
+          rustup target add thumbv6m-none-eabi
           rustup target add thumbv7m-none-eabi
           rustup target add thumbv7em-none-eabi
           if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
@@ -64,6 +65,7 @@ jobs:
           cargo build -p demo-blinky --release --target thumbv7m-none-eabi
           cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
+          cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
 
       - name: Run coverage
         run: |

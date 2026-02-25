@@ -1,0 +1,20 @@
+# LabWired - RP2040 Chip Descriptor
+name: "rp2040"
+arch: "arm"
+flash:
+  base: 0x10000000
+  size: "2MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals:
+  - id: "pio0"
+    type: "pio"
+    base_address: 0x50200000
+    size: "4KB"
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40034000
+    size: "4KB"
+    config:
+      profile: "stm32v2"

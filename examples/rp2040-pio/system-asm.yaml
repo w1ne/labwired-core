@@ -1,0 +1,12 @@
+# LabWired - RP2040 PIO System with Assembly
+name: "RP2040 PIO Assembly"
+chip: "../../configs/chips/rp2040.yaml"
+peripherals:
+  - id: "pio0"
+    type: "pio"
+    base_address: 0x50200000
+    config:
+      program: |
+        .program test
+        set x, 31
+        set x, 30

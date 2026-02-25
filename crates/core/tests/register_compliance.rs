@@ -51,6 +51,7 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
         board_io: vec![],
+        peripherals: vec![],
         memory_overrides: Default::default(),
     };
 
