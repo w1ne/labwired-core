@@ -253,7 +253,29 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
         };
 
-        for p_cfg in &chip.peripherals {
+        let mut merged_peripherals = chip.peripherals.clone();
+        for m_p in &manifest.peripherals {
+            if let Some(existing) = merged_peripherals.iter_mut().find(|p| p.id == m_p.id) {
+                // Merge config map
+                for (k, v) in &m_p.config {
+                    existing.config.insert(k.clone(), v.clone());
+                }
+                // Also override other fields if provided
+                if m_p.base_address != 0 {
+                    existing.base_address = m_p.base_address;
+                }
+                if m_p.irq.is_some() {
+                    existing.irq = m_p.irq;
+                }
+                if m_p.size.is_some() {
+                    existing.size = m_p.size.clone();
+                }
+            } else {
+                merged_peripherals.push(m_p.clone());
+            }
+        }
+
+        for p_cfg in &merged_peripherals {
             let dev: Box<dyn Peripheral> = match p_cfg.r#type.as_str() {
                 "uart" => {
                     let layout: UartRegisterLayout = Self::parse_profile_or_default(p_cfg, "UART")?;
@@ -275,7 +297,13 @@ impl SystemBus {
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" => Box::new(crate::peripherals::dma::Dma1::new()),
                 "adc" => Box::new(crate::peripherals::adc::Adc::new()),
-                "pio" => Box::new(crate::peripherals::pio::Pio::new()),
+                "pio" => {
+                    let mut pio = crate::peripherals::pio::Pio::new();
+                    if let Some(program) = p_cfg.config.get("program").and_then(|v| v.as_str()) {
+                        pio.load_program_asm(program)?;
+                    }
+                    Box::new(pio)
+                }
                 "declarative" => {
                     let descriptor_path = p_cfg
                         .config

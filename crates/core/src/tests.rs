@@ -417,6 +417,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -486,6 +487,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -537,6 +539,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -586,6 +589,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -641,6 +645,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -693,6 +698,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -745,6 +751,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
@@ -797,6 +804,7 @@ mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            peripherals: Vec::new(),
         };
 
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();

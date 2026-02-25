@@ -969,6 +969,7 @@ mod tests {
                 signal: labwired_config::BoardIoSignal::Output,
                 active_high: true,
             }],
+            peripherals: Vec::new(),
         };
 
         let resolved = resolve_board_io_bindings(&chip, &manifest);
@@ -1026,6 +1027,7 @@ mod tests {
                     active_high: true,
                 },
             ],
+            peripherals: Vec::new(),
         };
 
         let resolved = resolve_board_io_bindings(&chip, &manifest);
@@ -1074,6 +1076,7 @@ mod tests {
                 signal: labwired_config::BoardIoSignal::Output,
                 active_high: true,
             }],
+            peripherals: Vec::new(),
         };
 
         let resolved = resolve_board_io_bindings(&chip, &manifest);

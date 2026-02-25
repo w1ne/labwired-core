@@ -54,6 +54,8 @@ cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "0.2"
 memmap2 = "0.9"
+pio = "0.2"
+pio-parser = "0.2"
 
 [profile.dev]
 panic = "abort"

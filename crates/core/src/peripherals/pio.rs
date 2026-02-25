@@ -7,6 +7,7 @@
 use crate::Peripheral;
 use crate::PeripheralTickResult;
 use crate::SimResult;
+use anyhow::Result;
 
 #[derive(Debug, Default, Clone)]
 pub struct StateMachine {
@@ -89,6 +90,40 @@ impl Pio {
         }
     }
 
+    pub fn load_program_asm(&mut self, asm: &str) -> Result<()> {
+        let programs = pio_parser::Parser::<32>::parse_file(asm)
+            .map_err(|e| anyhow::anyhow!("PIO Parse Error: {:?}", e))?;
+
+        // Extract instructions from the first program
+        let (name, program) = programs
+            .iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("No PIO programs found in assembly"))?;
+
+        tracing::debug!("Loading PIO program: {}", name);
+
+        for (i, &instr) in program.program.code.iter().enumerate() {
+            if i < 32 {
+                self.instruction_mem[i] = instr;
+            }
+        }
+
+        // Apply program settings to all state machines
+        for i in 0..4 {
+            self.sm[i].wrap_bottom = program.program.wrap.target;
+            self.sm[i].wrap_top = program.program.wrap.source;
+
+            // Update exec_ctrl with wrap settings
+            // RP2040 EXEC_CTRL bits: 11:7 is wrap_bottom, 16:12 is wrap_top
+            self.sm[i].exec_ctrl &= !(0x1F << 7);
+            self.sm[i].exec_ctrl |= (program.program.wrap.target as u32) << 7;
+            self.sm[i].exec_ctrl &= !(0x1F << 12);
+            self.sm[i].exec_ctrl |= (program.program.wrap.source as u32) << 12;
+        }
+
+        Ok(())
+    }
+
     pub fn read_reg(&self, addr: u64) -> u32 {
         let offset = addr & 0x1FF;
         match offset {
@@ -106,6 +141,14 @@ impl Pio {
             }
             0x030 => self.irq as u32,
             0x038 => self.input_sync_bypass,
+            0x048..=0x0c4 => {
+                let idx = ((offset - 0x048) / 4) as usize;
+                if idx < 32 {
+                    self.instruction_mem[idx] as u32
+                } else {
+                    0
+                }
+            }
             0x0c8..=0x124 => {
                 let sm_idx = ((offset - 0x0c8) / 24) as usize;
                 let reg_off = (offset - 0x0c8) % 24;
@@ -546,5 +589,15 @@ mod tests {
         pio.tick(); // Execute SET Y, 5
         assert_eq!(pio.sm[0].y, 5);
         assert_eq!(pio.sm[0].pc, 2);
+    }
+
+    #[test]
+    fn test_pio_assembly() {
+        let mut pio = Pio::new();
+        let asm = ".program test\nset x, 10\n";
+        pio.load_program_asm(asm).unwrap();
+
+        // 0xE02A is SET X, 10
+        assert_eq!(pio.instruction_mem[0], 0xE02A);
     }
 }

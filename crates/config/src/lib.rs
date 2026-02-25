@@ -136,6 +136,8 @@ pub struct SystemManifest {
     pub external_devices: Vec<ExternalDevice>,
     #[serde(default)]
     pub board_io: Vec<BoardIoBinding>,
+    #[serde(default)]
+    pub peripherals: Vec<PeripheralConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
