@@ -312,12 +312,24 @@ This section translates the business research roadmap (“The Strategic Horizon 
 | **4** | Automated peripheral modeling | Model IR + ingestion + verified codegen + registry | Planned as Iteration 13. |
 | **5** | Enterprise-scale fleets + compliance | Orchestrator + dashboard + reporting | Planned as Iteration 14. |
 
+### Strategic Positioning Update (Protocol-First)
+
+LabWired is repositioned from a "Simulator-as-a-Service" narrative to a **Simulation Protocol** narrative.
+
+- **Definition**: LabWired provides a deterministic execution protocol and artifact contract that agents, IDEs, CI systems, and hardware teams can rely on across local and remote environments.
+- **OSS Commitment (Current State)**:
+  - [x] Simulator core is open source.
+  - [x] Tooling path is open source (CLI, VS Code extension/Antigravity integration, debugger integrations).
+  - [x] External debugger interop remains standard-first (DAP/GDB/OpenOCD/J-Link workflows).
+- **Commercialization Principle**: Monetization is layered on hosted operations, enterprise controls, compliance workflows, and support SLAs, not by closing the simulator runtime.
+
 ### Cross-Cutting Workstreams (Always-On)
 
 **Release Engineering & Quality**
 - [x] Enforce CI quality gates: `cargo fmt -- --check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build` (see `core/docs/release_strategy.md`).
 - [ ] Maintain a per-release checklist: version bump, changelog entry, artifacts, docs update, demo verification.
 - [ ] Maintain a compatibility matrix (supported MCUs / boards / peripherals / known gaps).
+- [ ] Add a release gate for determinism evidence: publish golden-board comparison + reproducibility report for each release tag.
 
 **Determinism & Correctness**
 - [ ] Provide deterministic execution controls (stable time base, bounded nondeterminism, reproducible scheduling).
@@ -335,12 +347,44 @@ This section translates the business research roadmap (“The Strategic Horizon 
 **Market Validation & Adoption**
 - [ ] Define initial ICP + wedge use case (e.g., “run STM32 HAL firmware in CI without dev kits”).
 - [ ] Create a public demo + tutorial for the wedge use case (product-led growth).
-- [ ] Define the open-core boundary (what is OSS vs proprietary) and document the rationale.
+- [x] Document OSS boundary now: simulator + tooling are open source; differentiation is protocol reliability and enterprise delivery.
+- [ ] Publish a public "Simulation Protocol" spec (`inputs`, `events`, `artifacts`, `error taxonomy`, compatibility guarantees).
+- [ ] Publish versioned compatibility guarantees for the protocol (semver + deprecation policy).
 - [ ] Establish contribution guidelines for peripherals/models (review process, versioning, compatibility policy).
 
 **Economics & Compliance**
 - [ ] Define pricing metrics early (seats vs minutes vs storage) and instrument COGS per run.
 - [ ] Start an “enterprise readiness” checklist ahead of Iteration 14 (RBAC, audit logs, retention, SOC2 plan, ISO 26262 evidence scope).
+
+### Near-Term Priority Order (No Deletions, Reordered Focus)
+
+1. Reliability baseline for protocol trust:
+   - release-gated determinism report,
+   - compatibility matrix,
+   - per-peripheral regression fixtures.
+2. Protocol productization:
+   - public Simulation Protocol spec,
+   - compatibility policy and deprecation rules,
+   - reference client flows (CI + IDE + agent).
+3. Adoption and ecosystem:
+   - wedge demos/tutorials,
+   - contribution process for community models.
+4. Enterprise scale tracks:
+   - tenancy/metering/compliance and hosted orchestration.
+
+### Rationale For Protocol-First Priorities
+
+This roadmap prioritization is intentional and maps directly to adoption risk:
+
+1. **Public protocol spec**:
+   - Rationale: without a stable contract (`inputs`, `events`, `artifacts`, `errors`), external teams cannot safely build long-lived agent/debug/CI integrations.
+2. **Compatibility guarantees**:
+   - Rationale: protocol adoption in serious firmware organizations requires semver, deprecation windows, and predictable upgrade behavior.
+3. **Release-gated determinism reports**:
+   - Rationale: determinism claims must be continuously evidenced; per-release golden-board + reproducibility reports convert positioning into verifiable trust.
+4. **Reference integrations (external debuggers + internal pipelines)**:
+   - Rationale: platform value is proven when teams can keep existing tools while adopting the protocol layer.
+   - Scope: maintain and document working reference flows for DAP/GDB/OpenOCD/J-Link plus CI pipelines (GitHub/GitLab and internal equivalents).
 
 ## Iteration 11: Headless CI Integration & Test Runner (Business Iteration 2)
 **Objective**: Make simulation a deterministic, scriptable CI primitive with machine-readable outputs and drop-in workflows for GitHub/GitLab.
@@ -526,7 +570,8 @@ This section translates the business research roadmap (“The Strategic Horizon 
 ### Phase A: Accreditation & Partnerships
 - [ ] **ARM Approved Design Partner**: Apply for accreditation to validate technical rigor.
 - [ ] **Vendor Sponsorships**: Pitch to ST/NXP/Nordic to sponsor "Verified Models" for their new chips.
-- [ ] **Open Source Strategy**: Clearly define the boundary between OSS Core (Runner) and Proprietary (AI Foundry/Cloud).
+- [x] **Open Source Strategy**: Boundary is explicit today - simulator runtime and dev tooling stay OSS.
+- [ ] **Protocol-Led Partnerships**: Promote LabWired as an open simulation protocol and verification workflow standard with vendor-backed reference targets.
 
 ### Phase B: Community Growth (PLG)
 - [ ] **Viral Features**: "Share Snapshot" link generator for StackOverflow/Reddit support capability.
