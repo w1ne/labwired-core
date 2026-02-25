@@ -43,7 +43,7 @@ CI alignment note:
 | 4 | `demo-blinky-stm32f103` | STM32F1 | Demo blinky system | ARMv7-M | `demo-blinky` | `core/examples/demo-blinky/system.yaml` | `core/examples/demo-blinky/io-smoke.yaml` | deterministic integration smoke baseline | `green` | Coverage is narrow to smoke path |
 | 5 | `riscv-ci-fixture` | Generic RV32I | CI fixture | RV32I | `riscv-ci-fixture` | `core/configs/systems/ci-fixture-riscv-uart1.yaml` | `core/examples/ci/riscv-uart-ok.yaml` | `gpio/uart/timer` CI baseline | `green` | Broader peripheral set |
 | 6 | `stm32f401-blackpill` | STM32F4 | BlackPill F401CC | ARMv7E-M | planned | planned | planned | Not started | `backlog` | New board mapping |
-| 7 | `nrf52832-dk` | nRF52 | PCA10040 DK | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Radio/PPI/EasyDMA |
+| 7 | `rp2040-pico` | RP2040 | Raspberry Pi Pico | Cortex-M0+ | `firmware-rp2040-pio-onboarding` | `core/configs/systems/pico.yaml` | `core/examples/rp2040-pio/asm-smoke.yaml` | `pio/gpio/uart` hardware fidelity baseline | `green` | Clock tree depth |
 | 8 | `nrf52840-dk` | nRF52 | PCA10056 DK | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Radio/PPI/EasyDMA |
 | 9 | `stm32g474-nucleo` | STM32G4 | NUCLEO-G474RE | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Advanced timer/ADC paths |
 | 10 | `stm32l476-nucleo` | STM32L4 | NUCLEO-L476RG | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Low-power clock tree |
