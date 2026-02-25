@@ -1,7 +1,61 @@
 use labwired_core::peripherals::i2c::I2c;
 use labwired_core::peripherals::pio::Pio;
 use labwired_core::peripherals::spi::Spi;
-use labwired_core::{bus::PeripheralEntry, bus::SystemBus, Bus};
+use labwired_core::{bus::PeripheralEntry, bus::SystemBus, Bus, Peripheral};
+
+#[test]
+fn test_pio_fidelity_ws2812() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.push(PeripheralEntry {
+        name: "PIO0".to_string(),
+        base: 0x40020000,
+        size: 0x1000,
+        irq: None,
+        dev: Box::new(Pio::new()),
+    });
+    bus.refresh_peripheral_index();
+
+    // WS2812-like program: out pins, 1 [1] ; 1
+    // .program ws2812
+    // .wrap_target
+    //     out pins, 1 [1]
+    // .wrap
+    let pio_asm = "
+    .program ws2812
+    .wrap_target
+        out pins, 1 [1]
+    .wrap
+    ";
+
+    // Use the inner Pico PIO implementation for the test
+    let mut pio_peripheral = Pio::new();
+    pio_peripheral.load_program_asm(pio_asm).unwrap();
+
+    // Configure State Machine 0
+    // SET/OUT pins = GP0
+    // Clock div = 1.0 (Fixed point 16.8: 1.0 = 0x100)
+    pio_peripheral.write_reg(0x0c8, 1 << 16); // SM0_CLKDIV: INT=1, FRAC=0
+    pio_peripheral.write_reg(0x000, 1 << 0); // CTRL: Enable SM0
+
+    // Push data to TX FIFO
+    pio_peripheral.write_reg(0x010, 0xAAAAAAAA); // TXF0
+
+    // Step and verify
+    // Instruction: out pins, 1 [1]
+    // 1 cycle for instruction + 1 delay cycle = 2 cycles total per bit
+
+    // Note: Peripheral::tick takes no arguments in current implementation
+    for i in 0..10 {
+        pio_peripheral.tick();
+        let pc_inner = pio_peripheral.sm[0].pc;
+        // In the first 10 cycles, it should be executing the out pins [1] which cycles 0,0,1,1,etc?
+        // Actually the current simplified PIO logic in pio.rs:
+        // sm.delay_cycles = delay_side as u8;
+        // if sm.delay_cycles > 0 -> return.
+        // So at PC=0, it sets delay=1. Next tick, delay becomes 0. Next tick, it wraps or moves to 1.
+        assert!(pc_inner <= 1, "Unexpected PC {} at step {}", pc_inner, i);
+    }
+}
 
 #[test]
 fn test_spi_fidelity_in_machine() {
@@ -71,7 +125,7 @@ fn test_i2c_fidelity_in_machine() {
 }
 
 #[test]
-fn test_pio_fidelity_ws2812() {
+fn test_pio_fidelity_ws2812_full_bus() {
     let mut bus = SystemBus::new();
     let mut pio = Pio::new();
 

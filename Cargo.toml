@@ -16,7 +16,6 @@ members = [
     "crates/firmware-h563-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-h563-fullchip-demo",
-    "crates/firmware-rp2040-pio-onboarding",
     "crates/firmware-hil-showcase",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-rp2040-pio-onboarding",

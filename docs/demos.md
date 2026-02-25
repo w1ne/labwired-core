@@ -9,9 +9,9 @@ These demos showcase the **Interface-First** philosophy, where AI agents use Lab
 
 | Demo | Description | Path |
 | :--- | :--- | :--- |
-| **Autonomous Fix** | Watch an agent detect a bug in a peripheral model and fix it via simulation feedback. | [`ai/tests/autonomous_fix_demo.py`](./ai/tests/autonomous_fix_demo.py) |
-| **E2E Pipeline** | The full "Datasheet -> IR -> Codegen -> Simulation" path in one script. | [`ai/tests/e2e_test.py`](./ai/tests/e2e_test.py) |
-| **Python Agent** | A Gym-like agent loop interacting with a simulated machine via Python bindings. | [`core/examples/python-agent/`](./core/examples/python-agent/) |
+| **Autonomous Fix** | Watch an agent detect a bug in a peripheral model and fix it via simulation feedback. | *Available in Commercial Tier* |
+| **E2E Pipeline** | The full "Datasheet -> IR -> Codegen -> Simulation" path in one script. | *Available in Commercial Tier* |
+
 
 ---
 
