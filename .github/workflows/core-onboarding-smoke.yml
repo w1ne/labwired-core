@@ -34,7 +34,7 @@ jobs:
           - id: rp2040-pio
             crate: firmware-rp2040-pio-onboarding
             target: thumbv6m-none-eabi
-            script: examples/rp2040-pio/pio-smoke.yaml
+            script: examples/rp2040-pio/io-smoke.yaml
             system: examples/rp2040-pio/system.yaml
 
     steps:
