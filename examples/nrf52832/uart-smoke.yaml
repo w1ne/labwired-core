@@ -1,0 +1,10 @@
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52832-demo"
+  system: "system.yaml"
+limits:
+  max_steps: 500
+  no_progress_steps: 100
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: no_progress

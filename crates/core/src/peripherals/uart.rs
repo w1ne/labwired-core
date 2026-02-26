@@ -15,6 +15,7 @@ pub enum UartRegisterLayout {
     #[default]
     Stm32F1,
     Stm32V2,
+    Nrf52,
 }
 
 impl FromStr for UartRegisterLayout {
@@ -25,8 +26,9 @@ impl FromStr for UartRegisterLayout {
         match v.as_str() {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
+            "nrf52" | "nrf" | "nordic" => Ok(Self::Nrf52),
             _ => Err(format!(
-                "unsupported UART register layout '{}'; supported: stm32f1, stm32v2",
+                "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52",
                 value
             )),
         }
@@ -63,6 +65,7 @@ impl Uart {
         match self.layout {
             UartRegisterLayout::Stm32F1 => 0x00,
             UartRegisterLayout::Stm32V2 => 0x1C, // ISR
+            UartRegisterLayout::Nrf52 => 0x11C,  // EVENTS_TXDRDY
         }
     }
 
@@ -70,6 +73,7 @@ impl Uart {
         match self.layout {
             UartRegisterLayout::Stm32F1 => 0x04, // DR
             UartRegisterLayout::Stm32V2 => 0x28, // TDR
+            UartRegisterLayout::Nrf52 => 0x51C,  // TXD
         }
     }
 
@@ -77,6 +81,7 @@ impl Uart {
         match self.layout {
             UartRegisterLayout::Stm32F1 => 0x04, // DR
             UartRegisterLayout::Stm32V2 => 0x24, // RDR
+            UartRegisterLayout::Nrf52 => 0x518,  // RXD
         }
     }
 
@@ -84,6 +89,7 @@ impl Uart {
         match self.layout {
             UartRegisterLayout::Stm32F1 => 0x14,
             UartRegisterLayout::Stm32V2 => 0x08,
+            UartRegisterLayout::Nrf52 => 0x500, // CONFIG
         }
     }
 

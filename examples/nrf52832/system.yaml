@@ -1,0 +1,17 @@
+# LabWired - nRF52832 Example System Configuration
+name: "nrf52832-example"
+chip: "../../configs/chips/nrf52832.yaml"
+external_devices: []
+board_io:
+  - id: "led1_p0_17"
+    kind: "led"
+    peripheral: "P0"
+    pin: 17
+    signal: "output"
+    active_high: false
+  - id: "button1_p0_13"
+    kind: "button"
+    peripheral: "P0"
+    pin: 13
+    signal: "input"
+    active_high: false
