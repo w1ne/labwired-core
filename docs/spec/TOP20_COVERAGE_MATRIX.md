@@ -1,6 +1,6 @@
 # Top-20 Coverage Matrix
 
-Date: February 22, 2026  
+Date: February 26, 2026  
 Owner: Core simulation team  
 Goal: Prioritize target bring-up and track deterministic smoke readiness.
 
@@ -26,8 +26,8 @@ Top-20 is ranked by a weighted mix:
 | 1 | `stm32f103-bluepill` | STM32F103C8 / Blue Pill | Large install base, broad firmware sample availability | `green` |
 | 2 | `stm32h563-nucleo` | STM32H563ZI / NUCLEO-H563ZI | Existing flagship demo path and enterprise narrative | `green` |
 | 3 | `stm32f401-nucleo` | STM32F401RE / NUCLEO-F401RE | Tier-1 strategy target and common Cortex-M4 baseline | `green` |
-| 4 | `riscv-ci-fixture` | RV32I CI fixture board | Coverage for non-ARM path and CI smoke reliability | `green` |
-| 5 | `demo-blinky-stm32f103` | STM32F103 demo system | Deterministic integration smoke for common demo path | `green` |
+| 4 | `firmware-rv32i-ci-fixture` | RV32I CI fixture board | Coverage for non-ARM path and CI smoke reliability | `green` |
+| 5 | `firmware-stm32f103-blinky-stm32f103` | STM32F103 demo system | Deterministic integration smoke for common demo path | `green` |
 
 CI alignment note:
 - These are the hard-gated targets enforced in `core/.github/workflows/core-coverage-matrix-smoke.yml`.
@@ -37,13 +37,14 @@ CI alignment note:
 
 | Rank | Target ID | MCU Family | Representative Board | Arch | SDK / Firmware Fixture | System Manifest | Smoke Script | Tier-1 Peripheral Baseline (`rcc/clock`, `gpio`, `uart`, `timer`, `dma`, `irq`) | Status | Known Gaps |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | `stm32f103-bluepill` | STM32F1 | Blue Pill | ARMv7-M | `firmware` | `core/configs/systems/stm32f103-integrated-test.yaml` | `core/examples/tests/stm32f103_integrated_test.yaml` | `clock/gpio/uart/irq` mostly usable; `timer/dma` partial | `yellow` | Timer/DMA breadth |
+| 1 | `stm32f103-bluepill` | STM32F1 | Blue Pill | ARMv7-M | `firmware-stm32f103-uart` | `core/configs/systems/stm32f103-integrated-test.yaml` | `core/examples/tests/stm32f103_integrated_test.yaml` | `clock/gpio/uart/irq` mostly usable; `timer/dma` partial | `yellow` | Timer/DMA breadth |
 | 2 | `stm32h563-nucleo` | STM32H5 | NUCLEO-H563ZI | ARMv8-M-ish firmware path; simulated via current core support subset | `firmware-h563-demo` | `core/examples/nucleo-h563zi/system.yaml` | `core/examples/nucleo-h563zi/uart-smoke.yaml` | Baseline smoke path present; deeper peripherals partial | `yellow` | Broader peripheral fidelity |
 | 3 | `stm32f401-nucleo` | STM32F4 | NUCLEO-F401RE | ARMv7E-M | `firmware-f401-demo` | `core/configs/systems/nucleo-f401re.yaml` | `core/examples/nucleo-f401re/uart-smoke.yaml` | `rcc/gpio/uart/systick` deterministic smoke path | `green` | Deep peripheral breadth remains |
-| 4 | `demo-blinky-stm32f103` | STM32F1 | Demo blinky system | ARMv7-M | `demo-blinky` | `core/examples/demo-blinky/system.yaml` | `core/examples/demo-blinky/io-smoke.yaml` | deterministic integration smoke baseline | `green` | Coverage is narrow to smoke path |
-| 5 | `riscv-ci-fixture` | Generic RV32I | CI fixture | RV32I | `riscv-ci-fixture` | `core/configs/systems/ci-fixture-riscv-uart1.yaml` | `core/examples/ci/riscv-uart-ok.yaml` | `gpio/uart/timer` CI baseline | `green` | Broader peripheral set |
-| 6 | `stm32f401-blackpill` | STM32F4 | BlackPill F401CC | ARMv7E-M | planned | planned | planned | Not started | `backlog` | New board mapping |
+| 4 | `firmware-stm32f103-blinky-stm32f103` | STM32F1 | Demo blinky system | ARMv7-M | `firmware-stm32f103-blinky` | `core/examples/firmware-stm32f103-blinky/system.yaml` | `core/examples/firmware-stm32f103-blinky/io-smoke.yaml` | deterministic integration smoke baseline | `green` | Coverage is narrow to smoke path |
+| 5 | `firmware-rv32i-ci-fixture` | Generic RV32I | CI fixture | RV32I | `firmware-rv32i-ci-fixture` | `core/configs/systems/ci-fixture-riscv-uart1.yaml` | `core/examples/ci/riscv-uart-ok.yaml` | `gpio/uart/timer` CI baseline | `green` | Broader peripheral set |
+| 6 | `stm32f401-blackpill` | STM32F4 | BlackPill F401CC | ARMv7E-M | `firmware-f401-demo` | `core/configs/systems/blackpill-f401cc.yaml` | `core/examples/blackpill-f401cc/uart-smoke.yaml` | `rcc/gpio/uart/systick` deterministic smoke path (reuses F401 firmware) | `green` | Deep peripheral breadth |
 | 7 | `rp2040-pico` | RP2040 | Raspberry Pi Pico | Cortex-M0+ | `firmware-rp2040-pio-onboarding` | `core/configs/systems/pico.yaml` | `core/examples/rp2040-pio/asm-smoke.yaml` | `pio/gpio/uart` hardware fidelity baseline | `green` | Clock tree depth |
+| 7.5 | `nrf52832-example` | nRF52832 | nRF52 DK (PCA10040) | ARMv7E-M | `firmware-nrf52832-demo` | `core/configs/systems/nrf52832-example.yaml` | `core/examples/nrf52832/uart-smoke.yaml` | `gpio/uart` deterministic smoke path | `green` | Timer/Radio/EasyDMA |
 | 8 | `nrf52840-dk` | nRF52 | PCA10056 DK | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Radio/PPI/EasyDMA |
 | 9 | `stm32g474-nucleo` | STM32G4 | NUCLEO-G474RE | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Advanced timer/ADC paths |
 | 10 | `stm32l476-nucleo` | STM32L4 | NUCLEO-L476RG | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Low-power clock tree |

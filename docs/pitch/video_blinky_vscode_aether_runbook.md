@@ -11,7 +11,7 @@ Run from anywhere:
 ```
 
 This prepares:
-- `core/examples/demo-blinky/.vscode/launch.json`
+- `core/examples/firmware-stm32f103-blinky/.vscode/launch.json`
 - simulator artifacts in `out/pitch-video/blinky/sim/`
 - summary snapshot in `out/pitch-video/blinky/comparison_snapshot.txt`
 
@@ -23,7 +23,7 @@ If you already built recently:
 
 ## 2) VS Code shot (Blinky)
 
-1. Open folder: `core/examples/demo-blinky`.
+1. Open folder: `core/examples/firmware-stm32f103-blinky`.
 2. Start debug with `LabWired: Demo Blinky`.
 3. Show:
 - breakpoint hit in firmware

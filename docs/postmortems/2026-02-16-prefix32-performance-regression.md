@@ -9,12 +9,12 @@ During the fix for STM32H563 GPIO regressions, 32-bit instructions (Thumb-2) wer
 
 ## Impact
 - **Performance**: 50% reduction in simulation speed for binaries using Thumb-2 extensions (standard for Cortex-M4/M7/M33).
-- **Validation**: Smoke tests like `demo-blinky` began timing out in CI because they exceeded the step limit, even though the guest code hadn't changed.
+- **Validation**: Smoke tests like `firmware-stm32f103-blinky` began timing out in CI because they exceeded the step limit, even though the guest code hadn't changed.
 - **User Experience**: The CLI felt sluggish when running any complex firmware.
 
 ## Timeline
 - **2026-02-15**: `Prefix32` introduced as a quick way to support modular decoding of 32-bit instructions.
-- **2026-02-16 15:23**: User reports `demo-blinky` is failing/timing out.
+- **2026-02-16 15:23**: User reports `firmware-stm32f103-blinky` is failing/timing out.
 - **2026-02-16 16:10**: Analysis reveals that `Prefix32` is consuming a full cycles/step without executing the payload.
 - **2026-02-16 17:45**: Refactored `CortexM::step` to handle the immediate fetch of the second halfword and execution of the 32-bit instruction in a single cycle.
 

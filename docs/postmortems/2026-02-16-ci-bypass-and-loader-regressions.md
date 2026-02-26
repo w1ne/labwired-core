@@ -35,7 +35,7 @@ Immediately following the release of `v0.12.0`, several critical regressions wer
 ### 4. Second Pass Regressions (Config, DAP, & Demos)
 - **YAML Literal Regressions**: Commit `754398b` introduced a stricter YAML parser (or configuration) that rejects underscores in numeric literals (e.g., `0x4000_C000`) and the `K`/`M` aliases in size fields (requiring `KB`/`MB`). This broke `riscv-virt` and `arm-cortex-m0` configurations.
 - **DAP Version Drift**: `labwired-dap` was left at `v0.11.0` while the rest of the workspace moved to `v0.12.0`, leading to struct initialization errors (`schema_version` mandatory field missing).
-- **Demo Blinky Stall**: Functional tests for `demo-blinky` failed because the 500,000-iteration delay loop (~2.5M instructions) exceeded the default 500,000 step limit in the integration test, leading to false-negative functional failures.
+- **Demo Blinky Stall**: Functional tests for `firmware-stm32f103-blinky` failed because the 500,000-iteration delay loop (~2.5M instructions) exceeded the default 500,000 step limit in the integration test, leading to false-negative functional failures.
 
 ## Resolution
 - **Fixes**:
@@ -43,7 +43,7 @@ Immediately following the release of `v0.12.0`, several critical regressions wer
   - ISA: Implemented missing Thumb-1 Register Load/Store family in `arm.rs` and `cortex_m.rs`.
   - Config: Restored `riscv-virt` and `arm-cortex-m0` by normalizing numeric and size literals.
   - DAP: Synchronized `labwired-dap` with workspace version `v0.12.1` and fixed test initializers.
-  - Demos: Increased `demo-blinky` test limits to 5,000,000 steps to account for realistic delay loops.
+  - Demos: Increased `firmware-stm32f103-blinky` test limits to 5,000,000 steps to account for realistic delay loops.
 - **Verification**:
   - Verified `nucleo-h563zi` `fullchip-smoke` PASS.
   - Verified `arm-c-hello` (C-based pointer logic) PASS.

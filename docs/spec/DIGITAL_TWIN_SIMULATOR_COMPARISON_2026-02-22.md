@@ -519,7 +519,7 @@ Lean 80/20 plan: execute only what moves Segment A ranking fastest.
 
 ### 12.1 Priority Stack (Only 3 Items)
 
-1. **Coverage depth on Top-5 executable targets** (`stm32f103-bluepill`, `stm32h563-nucleo`, `stm32f401-nucleo`, `riscv-ci-fixture`, `demo-blinky-stm32f103`).
+1. **Coverage depth on Top-5 executable targets** (`stm32f103-bluepill`, `stm32h563-nucleo`, `stm32f401-nucleo`, `firmware-rv32i-ci-fixture`, `firmware-stm32f103-blinky-stm32f103`).
 2. **Onboarding speed to first deterministic smoke** (time-to-first-UART-smoke).
 3. **Deterministic CI evidence quality** (artifact reproducibility and hard gating).
 
@@ -563,8 +563,8 @@ Top-5 hard gate targets:
 - `stm32f103-bluepill`
 - `stm32h563-nucleo`
 - `stm32f401-nucleo`
-- `riscv-ci-fixture`
-- `demo-blinky-stm32f103`
+- `firmware-rv32i-ci-fixture`
+- `firmware-stm32f103-blinky-stm32f103`
 
 Gate state:
 - Required targets passing: `5/5` (`100%`, threshold `>=80%`)

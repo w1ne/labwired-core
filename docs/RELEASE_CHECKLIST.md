@@ -26,9 +26,9 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo build --workspace
-cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi
 ./scripts/unsupported_instruction_audit.sh \
-  --firmware target/thumbv7m-none-eabi/release/demo-blinky \
+  --firmware target/thumbv7m-none-eabi/release/firmware-stm32f103-blinky \
   --system configs/systems/ci-fixture-uart1.yaml \
   --max-steps 20000 \
   --out-dir out/unsupported-audit/ci-fixture \

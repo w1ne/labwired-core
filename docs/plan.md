@@ -193,7 +193,7 @@ _Validated gaps logged on February 12, 2026._
 - [x] Implement PC-Relative Load
     - **Verified**: `LDR` (Literal) handles constant pools.
 - [x] Firmware Project
-    - **Verified**: `crates/firmware` builds and runs via correctly configured `link.x`.
+    - **Verified**: `crates/firmware-stm32f103-uart` builds and runs via correctly configured `link.x`.
 - [x] End-to-End Verification
     - **Verified**: Firmware boots and executes in simulator.
 

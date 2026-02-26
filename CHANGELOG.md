@@ -218,7 +218,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Memory: `LDR` & `STR` (Immediate Offset), `LDR` (Literal), `LDR` & `STR` (SP-relative).
     - Stack & Control: `PUSH`, `POP`, `BL`, `BX`, and Conditional Branches (`Bcc`).
 - **Peripherals**: UART stub implementation mapped to `0x4000_C000`.
-- **Firmware**: Added `crates/firmware` demo project targeting `thumbv7m-none-eabi`.
+- **Firmware**: Added `crates/firmware-stm32f103-uart` demo project targeting `thumbv7m-none-eabi`.
 - **Core**: Refactored `Machine` to be architecture-agnostic (Pluggable Core).
 
 ### Fixed

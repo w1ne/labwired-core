@@ -61,11 +61,12 @@ Operational guidance:
 From repo root:
 
 ```bash
-# Core build/test/lint
+# Core build/test/lint (exclude all embedded firmware crates that require cross-compilation targets)
 cd core
-cargo build --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
-cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
-cargo clippy --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture -- -D warnings
+EXCLUDES="--exclude firmware-armv6m-hello --exclude firmware-stm32f103-blinky --exclude firmware-stm32f103-uart --exclude firmware-armv6m-ci-fixture --exclude firmware-armv7m-benchmark --exclude firmware-f401-demo --exclude firmware-h563-demo --exclude firmware-h563-fullchip-demo --exclude firmware-h563-io-demo --exclude firmware-hil-showcase --exclude firmware-nrf52832-demo --exclude firmware-rp2040-pio-onboarding --exclude firmware-rv32i-ci-fixture --exclude firmware-rv32i-hello"
+cargo build --workspace $EXCLUDES
+cargo test --workspace $EXCLUDES
+cargo clippy --workspace $EXCLUDES -- -D warnings
 cargo fmt --all -- --check
 ```
 

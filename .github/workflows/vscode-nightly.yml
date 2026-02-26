@@ -42,7 +42,7 @@ jobs:
         run: rustup target add thumbv7m-none-eabi
 
       - name: Build Demo Firmware Fixture
-        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+        run: cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi
         working-directory: ./core
 
       - name: Run Tests (Linux)
