@@ -89,13 +89,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
 
 [[package]]
-name = "arm-hello"
-version = "0.1.0"
-dependencies = [
- "panic-halt",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -380,15 +373,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "demo-blinky"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "cortex-m-rt",
- "panic-halt",
-]
-
-[[package]]
 name = "derive_more"
 version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -502,16 +486,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-name = "firmware"
-version = "0.11.0"
-dependencies = [
- "cortex-m",
- "cortex-m-rt",
- "panic-halt",
-]
-
-[[package]]
-name = "firmware-ci-fixture"
+name = "firmware-armv6m-ci-fixture"
 version = "0.11.0"
 dependencies = [
  "cortex-m",
@@ -519,7 +494,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "firmware-comparative-benchmark"
+name = "firmware-armv6m-hello"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-armv7m-benchmark"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
@@ -563,8 +545,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nrf52832-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-rp2040-pio-onboarding"
 version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-rv32i-ci-fixture"
+version = "0.11.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-rv32i-hello"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
+name = "firmware-stm32f103-blinky"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f103-uart"
+version = "0.11.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1522,23 +1548,6 @@ checksum = "2f5c1b8bf41ea746266cdee443d1d1e9125c86ce1447e1a2615abd34330d33a9"
 dependencies = [
  "critical-section",
  "embedded-hal 1.0.0",
-]
-
-[[package]]
-name = "riscv-ci-fixture"
-version = "0.11.0"
-dependencies = [
- "panic-halt",
- "riscv 0.10.1",
- "riscv-rt",
-]
-
-[[package]]
-name = "riscv-hello"
-version = "0.1.0"
-dependencies = [
- "panic-halt",
- "riscv-rt",
 ]
 
 [[package]]

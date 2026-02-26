@@ -25,7 +25,7 @@ jobs:
         run: rustup target add thumbv6m-none-eabi
 
       - name: Build ARM fixture firmware
-        run: cargo build -p firmware-ci-fixture --release --target thumbv6m-none-eabi
+        run: cargo build -p firmware-armv6m-ci-fixture --release --target thumbv6m-none-eabi
 
       - name: Run ARM smoke and fault-path checks
         run: |
@@ -36,7 +36,7 @@ jobs:
       - name: Measure instruction support coverage
         run: |
           ./scripts/unsupported_instruction_audit.sh \
-            --firmware target/thumbv6m-none-eabi/release/firmware-ci-fixture \
+            --firmware target/thumbv6m-none-eabi/release/firmware-armv6m-ci-fixture \
             --system configs/systems/ci-fixture-uart1.yaml \
             --max-steps 5000 \
             --out-dir out/boards/ci-fixture-arm/unsupported-audit \

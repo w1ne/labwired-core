@@ -1,5 +1,5 @@
 [package]
-name = "demo-blinky"
+name = "firmware-stm32f103-blinky"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,6 +9,6 @@ cortex-m-rt = "0.7"
 panic-halt = "0.2"
 
 [[bin]]
-name = "demo-blinky"
+name = "firmware-stm32f103-blinky"
 test = false
 bench = false

@@ -1,7 +1,7 @@
 schema_version: "1.0"
 inputs:
   system: "../../configs/systems/ci-fixture-uart1.yaml"
-  firmware: "../../target/thumbv7m-none-eabi/release/firmware-comparative-benchmark"
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-armv7m-benchmark"
 limits:
   max_steps: 1000000000
 assertions: []

@@ -5,17 +5,16 @@
 # See the LICENSE file in the project root for full license information.
 
 [package]
-name = "riscv-ci-fixture"
+name = "firmware-armv6m-ci-fixture"
 version = "0.11.0"
 edition = "2021"
 
 [dependencies]
-riscv = "0.10"
-riscv-rt = "0.12"
+cortex-m = "0.7"
 panic-halt = "0.2"
 
 [[bin]]
-name = "riscv-ci-fixture"
+name = "firmware-armv6m-ci-fixture"
 path = "src/main.rs"
 test = false
 bench = false

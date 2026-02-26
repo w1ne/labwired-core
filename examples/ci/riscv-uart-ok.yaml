@@ -6,7 +6,7 @@
 
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/riscv32i-unknown-none-elf/release/riscv-ci-fixture"
+  firmware: "../../target/riscv32i-unknown-none-elf/release/firmware-rv32i-ci-fixture"
   system: "../../configs/systems/ci-fixture-riscv-uart1.yaml"
 limits:
   max_steps: 1000

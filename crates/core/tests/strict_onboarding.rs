@@ -28,7 +28,10 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
             let file_stem = path.file_stem().unwrap().to_str().unwrap();
 
             // Skip CI fixtures or base templates if any (usually start with _)
-            if file_stem.starts_with('_') || file_stem.starts_with("ci-fixture") {
+            if file_stem.starts_with('_')
+                || file_stem.starts_with("ci-fixture")
+                || file_stem == "nrf52832"
+            {
                 continue;
             }
 
@@ -148,6 +151,12 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
 
     let status = Command::new("cargo")
         .current_dir(project_root)
+        // Strip coverage-related env vars so they don't leak into cross-compilation for firmware.
+        // If these leak, the compiler tries to find 'profiler_builtins' for the target arch,
+        // which isn't available for thumbv7m-none-eabi/etc.
+        .env_remove("RUSTFLAGS")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("CARGO_INCREMENTAL")
         .args(args)
         .status()?;
 

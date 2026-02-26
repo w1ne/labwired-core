@@ -66,7 +66,7 @@ Fixes: (Optional)
 3.  **Changelog**: Update `CHANGELOG.md` with features and fixes.
 4.  **Verify**: Run the full regression suite, lints, and formatting check locally:
     - Host: `cargo test --workspace --exclude firmware`
-    - Firmware: `cargo build -p firmware --target thumbv7m-none-eabi`
+    - Firmware: `cargo build -p firmware-stm32f103-uart --target thumbv7m-none-eabi`
     - Lints: `cargo clippy --workspace --exclude firmware -- -D warnings`
     - Format: `cargo fmt --all -- --check`
 5.  **Draft Release**: Create a GitHub Release draft using the **Verbatim** format above.

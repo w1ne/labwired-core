@@ -2,9 +2,9 @@
 
 ## Quick Start
 
-1. **Open the demo-blinky folder in VS Code**:
+1. **Open the firmware-stm32f103-blinky folder in VS Code**:
    ```bash
-   code examples/demo-blinky
+   code examples/firmware-stm32f103-blinky
    ```
 
 2. **Install required extensions**:
@@ -14,7 +14,7 @@
 3. **Build debug firmware**:
    ```bash
    cd ../../
-   cargo build -p demo-blinky --target thumbv7m-none-eabi
+   cargo build -p firmware-stm32f103-blinky --target thumbv7m-none-eabi
    ```
 
 ## Debug Profiles in `.vscode/launch.json`
@@ -36,7 +36,7 @@ The project now has three launch profiles:
 ## Same ELF, Two Targets (Recommended Flow)
 
 Use the same binary for both debug targets:
-`core/target/thumbv7m-none-eabi/debug/demo-blinky`
+`core/target/thumbv7m-none-eabi/debug/firmware-stm32f103-blinky`
 
 ### A) LabWired via Cortex-Debug
 
@@ -56,7 +56,7 @@ Use the same binary for both debug targets:
 
 ## Antigravity Console Demo Flow
 
-Use these tasks from `Terminal -> Run Task` in `examples/demo-blinky`:
+Use these tasks from `Terminal -> Run Task` in `examples/firmware-stm32f103-blinky`:
 
 - `Nucleo: Flash only (auto probe)`
 - `Nucleo: Flash + GDB (auto probe)`
@@ -74,7 +74,7 @@ with auto probe detection (`stlink` preferred, then `jlink`).
   - `target/stm32f1x.cfg`
 - If your board/debug probe differs, adjust `configFiles` in `.vscode/launch.json`.
 - If port `3333` is busy, change both:
-  - `core/examples/demo-blinky/scripts/start_labwired_gdb.sh`
+  - `core/examples/firmware-stm32f103-blinky/scripts/start_labwired_gdb.sh`
   - `Cortex-Debug: LabWired (GDB :3333)` `gdbTarget`
 
 ## Troubleshooting
@@ -91,5 +91,5 @@ with auto probe detection (`stlink` preferred, then `jlink`).
 ### Breakpoints not binding
 - Rebuild debug binary:
   ```bash
-  cargo build -p demo-blinky --target thumbv7m-none-eabi
+  cargo build -p firmware-stm32f103-blinky --target thumbv7m-none-eabi
   ```

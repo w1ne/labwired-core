@@ -12,7 +12,7 @@ Simple firmware demonstrating GPIO control on STM32F103.
 ## Building
 
 ```bash
-cd examples/demo-blinky
+cd examples/firmware-stm32f103-blinky
 make
 ```
 
@@ -20,7 +20,7 @@ make
 
 ```bash
 cargo run -p labwired-cli -- \
-  --firmware examples/demo-blinky/build/demo-blinky.elf \
+  --firmware examples/firmware-stm32f103-blinky/build/firmware-stm32f103-blinky.elf \
   --system system.yaml
 ```
 

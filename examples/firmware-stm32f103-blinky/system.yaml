@@ -1,5 +1,5 @@
 # LabWired - Demo Blinky System Configuration
-name: "demo-blinky-board"
+name: "firmware-stm32f103-blinky-board"
 chip: "../../configs/chips/stm32f103.yaml"
 external_devices:
   - id: "temp_sensor"

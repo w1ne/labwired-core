@@ -20,10 +20,10 @@ CRATES=(
     "crates/dap"
     "crates/loader"
     "crates/svd-ingestor"
-    "crates/firmware"
+    "crates/firmware-stm32f103-uart"
     "crates/firmware-hal-test"
-    "crates/firmware-ci-fixture"
-    "crates/riscv-ci-fixture"
+    "crates/firmware-armv6m-ci-fixture"
+    "crates/firmware-rv32i-ci-fixture"
 )
 
 echo "Bumping version to $NEW_VERSION..."

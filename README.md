@@ -36,7 +36,7 @@ Coverage: io-smoke + fullchip-smoke
 ## Highlights
 
 - **🚀 [Demos & Examples](../DEMOS.md)** - Central portal for all LabWired demos.
-- **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/demo-blinky/README.md)
+- **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/firmware-stm32f103-blinky/README.md)
 - **NUCLEO-H563ZI Showcase**: [Human Demo Example](examples/nucleo-h563zi/README.md)
 - **Case Study**: [Debugging STM32 Without Hardware](docs/case_study_stm32.md)
 
@@ -70,7 +70,7 @@ cargo run -p labwired-cli -- --firmware path/to/firmware.elf --system system.yam
 
 ### Testing
 ```bash
-cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+cargo test --workspace --exclude firmware-stm32f103-uart --exclude firmware-armv6m-ci-fixture --exclude firmware-rv32i-ci-fixture
 ```
 
 ## CI Integration

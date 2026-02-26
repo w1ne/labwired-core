@@ -25,10 +25,10 @@ jobs:
         run: rustup target add thumbv7m-none-eabi
 
       - name: Build audit firmware fixture
-        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+        run: cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi
 
       - name: Run unsupported instruction audit
-        run: ./scripts/unsupported_instruction_audit.sh --firmware target/thumbv7m-none-eabi/release/demo-blinky --system configs/systems/ci-fixture-uart1.yaml --max-steps 20000 --out-dir out/unsupported-audit/ci-fixture --fail-on-unsupported
+        run: ./scripts/unsupported_instruction_audit.sh --firmware target/thumbv7m-none-eabi/release/firmware-stm32f103-blinky --system configs/systems/ci-fixture-uart1.yaml --max-steps 20000 --out-dir out/unsupported-audit/ci-fixture --fail-on-unsupported
 
       - name: Upload unsupported audit artifacts
         if: always()

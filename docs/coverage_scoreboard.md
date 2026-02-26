@@ -39,11 +39,11 @@ Latest validated run:
 
 | Target ID | Smoke Script | Build Path | Baseline State | Evidence Path (when available) |
 |---|---|---|---|---|
-| `stm32f103-bluepill` | `examples/demo-blinky/io-smoke.yaml` | `cargo build -p demo-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f103-bluepill/` |
+| `stm32f103-bluepill` | `examples/firmware-stm32f103-blinky/io-smoke.yaml` | `cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f103-bluepill/` |
 | `stm32h563-nucleo` | `examples/nucleo-h563zi/uart-smoke.yaml` | `cargo build -p firmware-h563-demo --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32h563-nucleo/` |
 | `stm32f401-nucleo` | `examples/nucleo-f401re/uart-smoke.yaml` | `cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f401-nucleo/` |
-| `riscv-ci-fixture` | `examples/ci/riscv-uart-ok.yaml` | `cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf` | `passing` | `out/coverage-matrix/coverage-matrix-riscv-ci-fixture/` |
-| `demo-blinky-stm32f103` | `examples/demo-blinky/io-smoke.yaml` | `cargo build -p demo-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-demo-blinky-stm32f103/` |
+| `firmware-rv32i-ci-fixture` | `examples/ci/riscv-uart-ok.yaml` | `cargo build -p firmware-rv32i-ci-fixture --release --target riscv32i-unknown-none-elf` | `passing` | `out/coverage-matrix/coverage-matrix-firmware-rv32i-ci-fixture/` |
+| `firmware-stm32f103-blinky-stm32f103` | `examples/firmware-stm32f103-blinky/io-smoke.yaml` | `cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-firmware-stm32f103-blinky-stm32f103/` |
 
 Additional matrix sentinel target:
 - `ci-fixture-armv6m` (included in matrix run, excluded from Top-5 hard gate)

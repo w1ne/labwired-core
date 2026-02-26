@@ -74,7 +74,7 @@ assertions: []
             );
         }
 
-        // Assert passed status because firmware-ci-fixture is valid and shouldn't crash
+        // Assert passed status because firmware-armv6m-ci-fixture is valid and shouldn't crash
         assert!(output.status.success(), "Run {} failed exit code", i);
 
         let result_json_path = output_dir.join("result.json");

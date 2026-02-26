@@ -4,15 +4,15 @@ set -e
 # LabWired Python Bindings Verification Script
 # Usage: ./verify.sh [firmware_path]
 
-FIRMWARE=${1:-"../../examples/demo-blinky/target/thumbv7em-none-eabihf/debug/demo-blinky"}
+FIRMWARE=${1:-"../../examples/firmware-stm32f103-blinky/target/thumbv7em-none-eabihf/debug/firmware-stm32f103-blinky"}
 
 echo "=== LabWired Python Bindings Verification ==="
 echo "Firmware under test: $FIRMWARE"
 
 if [ ! -f "$FIRMWARE" ]; then
     echo "Warning: Firmware not found at $FIRMWARE"
-    echo "Please build the demo-blinky example first:"
-    echo "  cargo build -p demo-blinky --target thumbv7em-none-eabihf"
+    echo "Please build the firmware-stm32f103-blinky example first:"
+    echo "  cargo build -p firmware-stm32f103-blinky --target thumbv7em-none-eabihf"
     # We don't exit here to allow running if the user provides another path later or expects failure
 fi
 

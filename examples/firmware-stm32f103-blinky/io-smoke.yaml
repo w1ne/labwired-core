@@ -1,7 +1,7 @@
 # LabWired - Demo Blinky IO smoke test
 schema_version: "1.0"
 inputs:
-  firmware: "../../target/thumbv7m-none-eabi/release/demo-blinky"
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32f103-blinky"
   system: "./system.yaml"
 limits:
   max_steps: 10000

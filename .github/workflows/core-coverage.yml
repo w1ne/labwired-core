@@ -62,7 +62,7 @@ jobs:
 
       - name: Build firmware fixture for coverage tests
         run: |
-          cargo build -p demo-blinky --release --target thumbv7m-none-eabi
+          cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi
           cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
           cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi

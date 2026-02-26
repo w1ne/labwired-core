@@ -6,7 +6,7 @@ from pygdbmi.gdbcontroller import GdbController
 
 # Configuration
 LABWIRED_BIN = "/home/andrii/Projects/labwired/core/target/release/labwired"
-FIRMWARE_BIN = "/home/andrii/Projects/labwired/core/target/thumbv7m-none-eabi/debug/demo-blinky"
+FIRMWARE_BIN = "/home/andrii/Projects/labwired/core/target/thumbv7m-none-eabi/debug/firmware-stm32f103-blinky"
 GDB_PORT = 3333
 
 def test_gdb_sticky_breakpoint():

@@ -10,22 +10,23 @@ members = [
     "crates/core",
     "crates/loader",
     "crates/cli",
-    "crates/firmware",
+    "crates/firmware-stm32f103-uart",
     "crates/firmware-f401-demo",
-    "crates/firmware-ci-fixture",
+    "crates/firmware-armv6m-ci-fixture",
     "crates/firmware-h563-demo",
     "crates/firmware-h563-io-demo",
     "crates/firmware-h563-fullchip-demo",
     "crates/firmware-hil-showcase",
-    "crates/firmware-comparative-benchmark",
+    "crates/firmware-armv7m-benchmark",
     "crates/firmware-rp2040-pio-onboarding",
-    "crates/riscv-ci-fixture",
+    "crates/firmware-nrf52832-demo",
+    "crates/firmware-rv32i-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",
     "crates/svd-ingestor",
-    "examples/arm-cortex-m0",
-    "examples/riscv-virt",
-    "examples/demo-blinky", "crates/codegen",
+    "examples/firmware-armv6m-hello",
+    "examples/firmware-rv32i-hello",
+    "examples/firmware-stm32f103-blinky", "crates/codegen",
     "crates/python",
 ]
 exclude = ["crates/firmware-hal-test"]
@@ -64,7 +65,7 @@ panic = "abort"
 panic = "abort"
 lto = false
 
-[profile.release.package.firmware-ci-fixture]
+[profile.release.package.firmware-armv6m-ci-fixture]
 codegen-units = 1
 debug = true
 opt-level = "s"
@@ -89,7 +90,7 @@ codegen-units = 1
 debug = true
 opt-level = "s"
 
-[profile.release.package.riscv-ci-fixture]
+[profile.release.package.firmware-rv32i-ci-fixture]
 codegen-units = 1
 debug = true
 opt-level = "s"
@@ -100,6 +101,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-pio-onboarding]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-nrf52832-demo]
 codegen-units = 1
 debug = true
 opt-level = "s"

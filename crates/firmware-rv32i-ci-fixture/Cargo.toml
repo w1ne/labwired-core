@@ -5,16 +5,17 @@
 # See the LICENSE file in the project root for full license information.
 
 [package]
-name = "firmware-ci-fixture"
+name = "firmware-rv32i-ci-fixture"
 version = "0.11.0"
 edition = "2021"
 
 [dependencies]
-cortex-m = "0.7"
+riscv = "0.10"
+riscv-rt = "0.12"
 panic-halt = "0.2"
 
 [[bin]]
-name = "firmware-ci-fixture"
+name = "firmware-rv32i-ci-fixture"
 path = "src/main.rs"
 test = false
 bench = false

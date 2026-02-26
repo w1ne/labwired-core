@@ -18,11 +18,11 @@ echo "Running Clippy (all targets)..."
 cargo clippy --all-targets -- -D warnings
 
 echo "Running Cargo Check (Host)..."
-cargo check --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+cargo check --workspace --exclude firmware-stm32f103-uart --exclude firmware-armv6m-ci-fixture --exclude firmware-rv32i-ci-fixture
 
 # Optionally run firmware checks if needed, but these might be slow
 # echo "Running Clippy (Firmware)..."
-# cargo clippy -p firmware --target thumbv7m-none-eabi -- -D warnings
+# cargo clippy -p firmware-stm32f103-uart --target thumbv7m-none-eabi -- -D warnings
 
 echo "--- [All Validations Passed!] ---"
 exit 0

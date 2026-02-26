@@ -24,25 +24,25 @@ jobs:
         include:
           - id: ci-fixture-armv6m
             target: thumbv6m-none-eabi
-            crate: firmware-ci-fixture
+            crate: firmware-armv6m-ci-fixture
             profile: release
             profile_dir: release
             script: examples/ci/uart-ok.yaml
             system: configs/systems/ci-fixture-uart1.yaml
-          - id: riscv-ci-fixture
+          - id: firmware-rv32i-ci-fixture
             target: riscv32i-unknown-none-elf
-            crate: riscv-ci-fixture
+            crate: firmware-rv32i-ci-fixture
             profile: release
             profile_dir: release
             script: examples/ci/riscv-uart-ok.yaml
             system: configs/systems/ci-fixture-riscv-uart1.yaml
-          - id: demo-blinky-stm32f103
+          - id: firmware-stm32f103-blinky-stm32f103
             target: thumbv7m-none-eabi
-            crate: demo-blinky
+            crate: firmware-stm32f103-blinky
             profile: release
             profile_dir: release
-            script: examples/demo-blinky/io-smoke.yaml
-            system: examples/demo-blinky/system.yaml
+            script: examples/firmware-stm32f103-blinky/io-smoke.yaml
+            system: examples/firmware-stm32f103-blinky/system.yaml
           - id: stm32h563-nucleo
             target: thumbv7m-none-eabi
             crate: firmware-h563-demo
@@ -59,11 +59,11 @@ jobs:
             system: configs/systems/nucleo-f401re.yaml
           - id: stm32f103-bluepill
             target: thumbv7m-none-eabi
-            crate: demo-blinky
+            crate: firmware-stm32f103-blinky
             profile: release
             profile_dir: release
-            script: examples/demo-blinky/io-smoke.yaml
-            system: examples/demo-blinky/system.yaml
+            script: examples/firmware-stm32f103-blinky/io-smoke.yaml
+            system: examples/firmware-stm32f103-blinky/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -159,8 +159,8 @@ jobs:
             --required-target stm32f103-bluepill \
             --required-target stm32h563-nucleo \
             --required-target stm32f401-nucleo \
-            --required-target riscv-ci-fixture \
-            --required-target demo-blinky-stm32f103 \
+            --required-target firmware-rv32i-ci-fixture \
+            --required-target firmware-stm32f103-blinky-stm32f103 \
             --min-required-pass-rate 0.80
 
       - name: Publish scoreboard summary
@@ -176,8 +176,8 @@ jobs:
             --required-target stm32f103-bluepill \
             --required-target stm32h563-nucleo \
             --required-target stm32f401-nucleo \
-            --required-target riscv-ci-fixture \
-            --required-target demo-blinky-stm32f103 \
+            --required-target firmware-rv32i-ci-fixture \
+            --required-target firmware-stm32f103-blinky-stm32f103 \
             --min-required-pass-rate 0.80
 
       - name: Upload scoreboard artifacts

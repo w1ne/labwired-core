@@ -4,9 +4,9 @@ import os
 import json
 
 # This fixture assumes we have access to a test binary.
-# In a real CI, we would build `firmware-ci-fixture` or `demo-blinky`.
+# In a real CI, we would build `firmware-armv6m-ci-fixture` or `firmware-stm32f103-blinky`.
 # For now, we expect the user to provide FIRMWARE_PATH env var or we look in default places.
-FIRMWARE_PATH = os.environ.get("LABWIRED_FIRMWARE", "../../examples/demo-blinky/target/thumbv7em-none-eabihf/debug/demo-blinky")
+FIRMWARE_PATH = os.environ.get("LABWIRED_FIRMWARE", "../../examples/firmware-stm32f103-blinky/target/thumbv7em-none-eabihf/debug/firmware-stm32f103-blinky")
 
 @pytest.fixture
 def machine():

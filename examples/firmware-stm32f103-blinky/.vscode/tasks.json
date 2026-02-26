@@ -17,13 +17,13 @@
       "problemMatcher": []
     },
     {
-      "label": "Build demo-blinky (debug)",
+      "label": "Build firmware-stm32f103-blinky (debug)",
       "type": "shell",
       "command": "cargo",
       "args": [
         "build",
         "-p",
-        "demo-blinky",
+        "firmware-stm32f103-blinky",
         "--target",
         "thumbv7m-none-eabi"
       ],
@@ -38,7 +38,7 @@
       "dependsOrder": "sequence",
       "dependsOn": [
         "Build labwired-dap (release)",
-        "Build demo-blinky (debug)"
+        "Build firmware-stm32f103-blinky (debug)"
       ],
       "problemMatcher": []
     },
@@ -48,7 +48,7 @@
       "command": "${workspaceFolder}/../../../scripts/nucleo_flash_debug.sh",
       "args": [
         "--crate",
-        "demo-blinky",
+        "firmware-stm32f103-blinky",
         "--no-gdb"
       ],
       "options": {
@@ -62,7 +62,7 @@
       "command": "${workspaceFolder}/../../../scripts/nucleo_flash_debug.sh",
       "args": [
         "--crate",
-        "demo-blinky"
+        "firmware-stm32f103-blinky"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

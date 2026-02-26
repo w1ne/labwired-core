@@ -18,7 +18,7 @@ echo "Running Clippy (all targets)..."
 cargo clippy --all-targets -- -D warnings
 
 echo "Running workspace tests..."
-cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+cargo test --workspace --exclude firmware-stm32f103-uart --exclude firmware-armv6m-ci-fixture --exclude firmware-rv32i-ci-fixture
 
 echo "--- [All Pre-push Validations Passed!] ---"
 exit 0

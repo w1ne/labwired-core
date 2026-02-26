@@ -21,8 +21,8 @@ High-fidelity machine models showcasing peripheral accuracy and hardware parity.
 | Demo | Description | Path |
 | :--- | :--- | :--- |
 | **NUCLEO-H563ZI** | Our flagship demo: Absolute parity between simulation and the real physical board. | [`core/examples/nucleo-h563zi/`](./core/examples/nucleo-h563zi/README.md) |
-| **Demo Blinky** | The classic "Hello World" of embedded systems, running on a modeled Cortex-M3. | [`core/examples/demo-blinky/`](./core/examples/demo-blinky/) |
-| **RISC-V Virt** | Showcasing multi-architecture support via the `riscv-virt` machine. | [`core/examples/riscv-virt/`](./core/examples/riscv-virt/) |
+| **Demo Blinky** | The classic "Hello World" of embedded systems, running on a modeled Cortex-M3. | [`core/examples/firmware-stm32f103-blinky/`](./core/examples/firmware-stm32f103-blinky/) |
+| **RISC-V Virt** | Showcasing multi-architecture support via the `riscv-virt` machine. | [`core/examples/firmware-rv32i-hello/`](./core/examples/firmware-rv32i-hello/) |
 
 ---
 

@@ -11,13 +11,13 @@ fn test_demo_blinky_gpio_toggle() {
         .with_test_writer()
         .try_init();
 
-    // Load the demo-blinky firmware
+    // Load the firmware-stm32f103-blinky firmware
     let firmware_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/thumbv7m-none-eabi/release/demo-blinky");
+        .join("../../target/thumbv7m-none-eabi/release/firmware-stm32f103-blinky");
 
     if !firmware_path.exists() {
         panic!(
-            "Firmware not found at {:?}. Run 'cargo build -p demo-blinky --release' first.",
+            "Firmware not found at {:?}. Run 'cargo build -p firmware-stm32f103-blinky --release' first.",
             firmware_path
         );
     }
