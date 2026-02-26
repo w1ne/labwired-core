@@ -42,10 +42,14 @@ limits:
   wall_time_ms: 10000                # Optional: Timeout in real-world wall clock milliseconds
   max_uart_bytes: 512000             # Optional: Limit on total UART characters emitted
   no_progress_steps: 50000           # Optional: Halt if PC remains unchanged
-  max_energy_joules: 5.0             # Future (v1.1): Halt if estimated energy exceeds budget
+  max_vcd_bytes: 10000000            # Optional: Limit on VCD trace file size in bytes
 assertions:
   - expected_stop_reason: halt       # Halt instruction (e.g., BKPT, WFI loop)
   - uart_contains: "TEST PASSED"     # Substring match on the UART output stream
+  - uart_regex: "\\d+ cycles"        # Regex match on the UART output stream
+  - memory_value:                    # Assert a 32-bit value at a memory address
+      address: 0x20000000
+      expected_value: 0xDEADBEEF
 ```
 
 ### 2.2 System Manifest (`system.yaml`)
@@ -122,27 +126,31 @@ Provides programmatic access to the simulation's final state and metrics.
 ```json
 {
   "result_schema_version": "1.0",
-  "status": "passed",
+  "status": "pass",
   "steps_executed": 451203,
   "cycles": 620001,
   "instructions": 451203,
-  "energy_estimated_joules": 0.045, 
-  "carbon_impact_grams": 0.002,     
   "stop_reason": "halt",
   "stop_reason_details": {
     "triggered_stop_condition": "halt",
     "triggered_limit": null,
-    "observed": {
-      "name": "pc",
-      "value": 134218844
-    }
+    "observed": null
   },
   "limits": {
-    "max_steps": 100000000
+    "max_steps": 100000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null
   },
   "assertions": [
     {
-      "assertion": { "expected_stop_reason": { "expected_stop_reason": "halt" } },
+      "assertion": { "expected_stop_reason": "halt" },
+      "passed": true
+    },
+    {
+      "assertion": { "uart_contains": "TEST PASSED" },
       "passed": true
     }
   ],
@@ -154,6 +162,14 @@ Provides programmatic access to the simulation's final state and metrics.
   }
 }
 ```
+
+**Status values:**
+
+| Value | Meaning |
+|---|---|
+| `"pass"` | All assertions passed, simulation reached expected terminal condition. |
+| `"fail"` | At least one assertion failed, or a stop condition fired without a matching `expected_stop_reason` assertion. |
+| `"error"` | Simulation error (memory violation, decode error) without a matching `expected_stop_reason` assertion, or a configuration error. |
 
 ### 4.2 Value Change Dump (`trace.vcd`)
 
@@ -180,18 +196,17 @@ LabWired CI runners exit with specific, predictable status codes.
 
 The `stop_reason` represents the exact trigger that transitioned the simulator out of the Execution Loop:
 
-- `ConfigError`: Configuration or parsing failed.
-- `MaxSteps`: Exceeded `max_steps` limit.
-- `MaxCycles`: Exceeded `max_cycles` limit.
-- `MaxUartBytes`: Exceeded `max_uart_bytes` limit.
-- `MaxEnergy`: (Future) Exceeded `max_energy_joules` sustainability budget.
-- `NoProgress`: CPU is spinning without meaningful state change (e.g., stuck in a tight loop reading the same address).
-- `WallTime`: Exceeded `wall_time_ms`.
-- `MemoryViolation`: Accessing unmapped memory or violating access permissions.
-- `DecodeError`: Encountered an invalid opcode.
-- `Halt`: The CPU hit a software breakpoint or halted intentionally.
-- `AgentIntervention`: (Future) An external AI actor issued a halt command via the MAESTRO API.
-- `FmiTimeout`: (Future) Hardware-in-the-loop (FMI 3.0) plant simulation diverged.
+- `config_error`: Configuration or parsing failed before simulation started.
+- `max_steps`: Exceeded `max_steps` limit.
+- `max_cycles`: Exceeded `max_cycles` limit.
+- `max_uart_bytes`: Exceeded `max_uart_bytes` limit.
+- `max_vcd_bytes`: Exceeded `max_vcd_bytes` trace size limit.
+- `no_progress`: CPU is spinning without meaningful state change (e.g., PC stuck in a tight loop).
+- `wall_time`: Exceeded `wall_time_ms`.
+- `memory_violation`: Accessing unmapped memory or violating access permissions.
+- `decode_error`: Encountered an invalid opcode.
+- `halt`: The CPU hit a software breakpoint or halted intentionally.
+- `exception`: Unrecoverable simulation error (e.g., unhandled fault).
 
 ---
 
@@ -205,10 +220,11 @@ LabWired's Simulation Protocol follows strict Semantic Versioning.
 
 ---
 
-## 7. Future-Proofing Extensibility Hooks
+## 7. Reserved Extension Points
 
-The Simulation Protocol is designed to be future-proof against upcoming shifts in hardware simulation requirements. The following schemas and interactions are reserved for future major and minor releases without breaking the core `1.x` execution bounds:
+The following extensions are planned for future minor releases without breaking the `1.x` contract:
 
-*   **Hybrid Co-Simulation (RTL Integration)**: Future protocol additions will allow binding `peripheral.yaml` registers to Verilator/C++ RTL models via high-speed, zero-copy shared memory IPC interfaces.
-*   **Agentic AI API (MAESTRO Framework)**: The simulator will expose a gRPC/WebSocket streaming endpoint synchronized to this protocol's lifecycle (Reset -> Execution -> Halt). This allows external AI agents to read the virtual memory map, evaluate register states, map vulnerabilities, and trigger `AgentIntervention` limits autonomously.
-*   **Multi-Physics & FMI 3.0**: Future revisions will support `board_io` mapping extensions. IO pins will map not just to basic UI components (LEDs), but to external FMU (Functional Mock-up Unit) properties modeling dynamic Battery State-of-Charge and CPU Thermal throttling behavior in time-sync with the Execution Loop.
+*   **Additional stop reasons**: `agent_intervention` (external halt via API), `fmi_timeout` (co-simulation divergence).
+*   **Environment manifests**: Multi-node cluster simulation (`environment.yaml`, schema `v1.1`).
+*   **RTL co-simulation**: Binding peripheral registers to Verilator models via shared memory IPC.
+*   **FMI 3.0 plant models**: Routing GPIO events to external Functional Mock-up Units.
