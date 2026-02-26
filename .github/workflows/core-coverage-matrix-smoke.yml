@@ -64,6 +64,27 @@ jobs:
             profile_dir: release
             script: examples/firmware-stm32f103-blinky/io-smoke.yaml
             system: examples/firmware-stm32f103-blinky/system.yaml
+          - id: stm32f401-blackpill
+            target: thumbv7em-none-eabi
+            crate: firmware-f401-demo
+            profile: release
+            profile_dir: release
+            script: examples/blackpill-f401cc/uart-smoke.yaml
+            system: examples/blackpill-f401cc/system.yaml
+          - id: nrf52832-example
+            target: thumbv7em-none-eabi
+            crate: firmware-nrf52832-demo
+            profile: release
+            profile_dir: release
+            script: examples/nrf52832/uart-smoke.yaml
+            system: configs/systems/nrf52832-example.yaml
+          - id: rp2040-pico
+            target: thumbv6m-none-eabi
+            crate: firmware-rp2040-pio-onboarding
+            profile: release
+            profile_dir: release
+            script: examples/rp2040-pio/asm-smoke.yaml
+            system: examples/rp2040-pio/system-asm.yaml
 
     steps:
       - uses: actions/checkout@v4

@@ -1,0 +1,157 @@
+name: Release Gate
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      min_pass_rate:
+        description: "Minimum required target pass rate (0..1)"
+        default: "1.0"
+        type: string
+
+jobs:
+  coverage-matrix:
+    name: release-gate-${{ matrix.id }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ci-fixture-armv6m
+            target: thumbv6m-none-eabi
+            crate: firmware-armv6m-ci-fixture
+            script: examples/ci/uart-ok.yaml
+            system: configs/systems/ci-fixture-uart1.yaml
+          - id: firmware-rv32i-ci-fixture
+            target: riscv32i-unknown-none-elf
+            crate: firmware-rv32i-ci-fixture
+            script: examples/ci/riscv-uart-ok.yaml
+            system: configs/systems/ci-fixture-riscv-uart1.yaml
+          - id: firmware-stm32f103-blinky-stm32f103
+            target: thumbv7m-none-eabi
+            crate: firmware-stm32f103-blinky
+            script: examples/firmware-stm32f103-blinky/io-smoke.yaml
+            system: examples/firmware-stm32f103-blinky/system.yaml
+          - id: stm32h563-nucleo
+            target: thumbv7m-none-eabi
+            crate: firmware-h563-demo
+            script: examples/nucleo-h563zi/uart-smoke.yaml
+            system: examples/nucleo-h563zi/system.yaml
+          - id: stm32f401-nucleo
+            target: thumbv7em-none-eabi
+            crate: firmware-f401-demo
+            script: examples/nucleo-f401re/uart-smoke.yaml
+            system: configs/systems/nucleo-f401re.yaml
+          - id: stm32f103-bluepill
+            target: thumbv7m-none-eabi
+            crate: firmware-stm32f103-blinky
+            script: examples/firmware-stm32f103-blinky/io-smoke.yaml
+            system: examples/firmware-stm32f103-blinky/system.yaml
+          - id: stm32f401-blackpill
+            target: thumbv7em-none-eabi
+            crate: firmware-f401-demo
+            script: examples/blackpill-f401cc/uart-smoke.yaml
+            system: examples/blackpill-f401cc/system.yaml
+          - id: nrf52832-example
+            target: thumbv7em-none-eabi
+            crate: firmware-nrf52832-demo
+            script: examples/nrf52832/uart-smoke.yaml
+            system: configs/systems/nrf52832-example.yaml
+          - id: rp2040-pico
+            target: thumbv6m-none-eabi
+            crate: firmware-rp2040-pio-onboarding
+            script: examples/rp2040-pio/asm-smoke.yaml
+            system: examples/rp2040-pio/system-asm.yaml
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,riscv32i-unknown-none-elf
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-release-gate
+          workspaces: |
+            . -> target
+
+      - name: Build CLI
+        run: cargo build --release -p labwired-cli
+
+      - name: Build firmware
+        run: cargo build -p "${{ matrix.crate }}" --release --target "${{ matrix.target }}"
+
+      - name: Run smoke test
+        run: |
+          mkdir -p "out/release-gate/${{ matrix.id }}"
+          cargo run --release -q -p labwired-cli -- test \
+            --script "${{ matrix.script }}" \
+            --output-dir "out/release-gate/${{ matrix.id }}" \
+            --no-uart-stdout
+
+      - name: Run unsupported-instruction audit
+        run: |
+          ./scripts/unsupported_instruction_audit.sh \
+            --firmware "target/${{ matrix.target }}/release/${{ matrix.crate }}" \
+            --system "${{ matrix.system }}" \
+            --max-steps 20000 \
+            --out-dir "out/release-gate/${{ matrix.id }}/unsupported-audit"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-${{ matrix.id }}
+          path: out/release-gate/${{ matrix.id }}/
+          retention-days: 30
+
+  release-gate-enforce:
+    name: release-gate-enforce
+    runs-on: ubuntu-latest
+    needs: coverage-matrix
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: out/release-gate
+          pattern: release-gate-*
+          merge-multiple: false
+
+      - name: Enforce release gate
+        run: |
+          MIN_RATE="${{ inputs.min_pass_rate || '1.0' }}"
+          python3 scripts/generate_coverage_matrix_scoreboard.py \
+            --matrix-root out/release-gate \
+            --markdown-out out/release-gate/scoreboard.md \
+            --json-out out/release-gate/scoreboard.json \
+            --required-target stm32f103-bluepill \
+            --required-target stm32h563-nucleo \
+            --required-target stm32f401-nucleo \
+            --required-target firmware-rv32i-ci-fixture \
+            --required-target firmware-stm32f103-blinky-stm32f103 \
+            --required-target stm32f401-blackpill \
+            --required-target nrf52832-example \
+            --required-target rp2040-pico \
+            --min-required-pass-rate "${MIN_RATE}"
+
+      - name: Publish scoreboard
+        if: always()
+        run: cat out/release-gate/scoreboard.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload scoreboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-scoreboard
+          path: |
+            out/release-gate/scoreboard.md
+            out/release-gate/scoreboard.json
+          retention-days: 90
