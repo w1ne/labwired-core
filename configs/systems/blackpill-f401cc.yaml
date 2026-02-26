@@ -1,0 +1,23 @@
+# LabWired - BlackPill F401CC System Configuration
+#
+# Source: WeAct Studio BlackPill V3.1 schematic
+# LED: PC13 (active low)
+# Button: PA0 (active low)
+# No on-board debugger UART; user typically wires USART1 (PA9/PA10) or USART2 (PA2/PA3)
+
+name: "blackpill-f401cc"
+chip: "../chips/stm32f401cc.yaml"
+external_devices: []
+board_io:
+  - id: "led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false
+  - id: "button_pa0"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: false

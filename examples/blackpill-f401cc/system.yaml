@@ -1,0 +1,17 @@
+# LabWired - BlackPill F401CC Example System
+name: "blackpill-f401cc"
+chip: "../../configs/chips/stm32f401cc.yaml"
+external_devices: []
+board_io:
+  - id: "led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false
+  - id: "button_pa0"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: false

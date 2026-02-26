@@ -1,0 +1,49 @@
+# LabWired - STM32F401CC Chip Descriptor (BlackPill variant)
+#
+# Source: STM32F401xB/xC datasheet (DS9716)
+# https://www.st.com/resource/en/datasheet/stm32f401cc.pdf
+#
+# Same peripheral set as STM32F401RE but smaller memory:
+# - Flash: 256KB (vs 512KB on RE)
+# - RAM: 64KB (vs 96KB on RE)
+
+name: "stm32f401cc"
+arch: "arm"
+flash:
+  base: 0x08000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
