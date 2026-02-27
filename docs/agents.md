@@ -10,12 +10,12 @@ This is the operating manual for AI coding agents working inside the `core` repo
 ## 2) Key Documentation Links
 
 Start your learning and reference with these key files:
-- [README.md](./README.md) - The main entrypoint.
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - Core engine internals and architecture.
-- [CONTRIBUTING.md](./CONTRIBUTING.md) - General connection and contributing guidelines.
-- [CONTRIBUTING_PERIPHERALS.md](./docs/CONTRIBUTING_PERIPHERALS.md) - How to implement and integrate new peripheral models.
-- [board_onboarding_playbook.md](./docs/board_onboarding_playbook.md) - Complete playbook for onboarding new boards and MSUs.
-- [ci_test_runner.md](./docs/ci_test_runner.md) - Details on how CI validation works and is triggered.
+- [README.md](../README.md) - The main entrypoint.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Core engine internals and architecture.
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - General connection and contributing guidelines.
+- [CONTRIBUTING_PERIPHERALS.md](./CONTRIBUTING_PERIPHERALS.md) - How to implement and integrate new peripheral models.
+- [board_onboarding_playbook.md](./board_onboarding_playbook.md) - Complete playbook for onboarding new boards and MSUs.
+- [ci_test_runner.md](./ci_test_runner.md) - Details on how CI validation works and is triggered.
 
 ## 3) Standard Development Commands
 
