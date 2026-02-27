@@ -1,0 +1,15 @@
+[package]
+name = "labwired-wasm"
+version = "0.12.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2.92"
+labwired-core = { path = "../core" }
+labwired-config = { path = "../config" }
+labwired-loader = { path = "../loader" }
+cortex-m = "0.7"

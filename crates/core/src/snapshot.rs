@@ -24,6 +24,7 @@ pub enum CpuSnapshot {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ArmCpuSnapshot {
     pub registers: Vec<u32>,
+    pub pc: u32,
     pub xpsr: u32,
     pub primask: bool,
     pub pending_exceptions: u32,

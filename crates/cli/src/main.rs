@@ -291,6 +291,8 @@ struct TestResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<String>,
     assertions: Vec<AssertionResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_state: Option<labwired_core::snapshot::CpuSnapshot>,
     firmware_hash: String,
     config: TestConfig,
 }
@@ -2002,6 +2004,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         limits: limits.clone(),
         message: None,
         assertions,
+        cpu_state: Some(cpu.snapshot()),
         firmware_hash,
         config: TestConfig {
             firmware: firmware_path.to_path_buf(),
@@ -2154,6 +2157,7 @@ fn write_config_error_outputs(
         limits: resolved_limits.clone(),
         message: Some(message.clone()),
         assertions: vec![],
+        cpu_state: None,
         firmware_hash,
         config: TestConfig {
             firmware: firmware_path.cloned().unwrap_or_default(),
