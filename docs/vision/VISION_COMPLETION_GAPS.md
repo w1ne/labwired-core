@@ -27,8 +27,6 @@ Missing:
 - Determinism proof suite against real hardware baselines ("golden reference" periodic board validation) is still open in planning.
 - Compatibility matrix and explicit "known gaps by MCU/peripheral" is not maintained as a release artifact.
 - Run artifact standardization is not fully unified across all modes (interactive CLI vs test mode vs AI workflows).
-- Current repository state includes a core build blocker in config conversion:
-  - `core/crates/config/src/lib.rs:349` initializes `ChipDescriptor` without `schema_version`.
 
 Impact:
 - The "Hardware Oracle" claim is weaker without continuous determinism proof and a stable build baseline.
@@ -78,9 +76,6 @@ Impact:
 
 Missing:
 - A single release-grade "vision completion scoreboard" in docs has been missing (this file fills that gap).
-- Landing page files currently contain unresolved merge markers:
-  - `landing_page/index.html`
-  - `landing_page/docs.html`
 - This blocks clean public communication of status.
 
 Impact:
@@ -113,8 +108,7 @@ The vision is complete when all conditions below are true:
 
 ## Suggested Execution Priority (Highest First)
 
-1. Restore build baseline and remove public-facing merge conflicts.
-2. Ship determinism proof + compatibility matrix as release gates.
-3. Close zero-touch Agentic Loop for Tier-1 targets.
-4. Implement metering backend + tenancy primitives.
-5. Build hosted Foundry control plane and execution service.
+1. Ship determinism proof + compatibility matrix as release gates.
+2. Close zero-touch Agentic Loop for Tier-1 targets.
+3. Implement metering backend + tenancy primitives.
+4. Build hosted Foundry control plane and execution service.
