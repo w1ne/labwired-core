@@ -658,7 +658,7 @@ mod tests {
         // WAIT 1, IRQ, 3 -> 0x20C3 (Pol=1, Src=IRQ=2, Idx=3)
         // 0x2000 (WAIT) | 0x80 (Pol=1) | 0x40 (Src=2) | 0x03 (Idx=3) = 0x20C3
         pio.instruction_mem[0] = 0x20C3;
-        
+
         pio.write_reg(0, 1); // Enable SM0
 
         pio.tick();
@@ -678,14 +678,14 @@ mod tests {
         pio.instruction_mem[0] = 0xE021;
         // SET Y, 2 -> 0xE042
         pio.instruction_mem[1] = 0xE042;
-        
+
         // Wrap at PC=1 back to 0
-        pio.sm[0].exec_ctrl = (1 << 12) | (0 << 7); 
+        pio.sm[0].exec_ctrl = (1 << 12) | (0 << 7);
         pio.write_reg(0, 1); // Enable SM0
 
         pio.tick(); // Execute PC=0
         assert_eq!(pio.sm[0].pc, 1);
-        
+
         pio.tick(); // Execute PC=1, should wrap
         assert_eq!(pio.sm[0].pc, 0);
     }
@@ -713,7 +713,7 @@ mod tests {
         pio.write_reg(0x10, 0xDEADBEEF); // TX FIFO
         pio.sm[0].osr = 0xDEADBEEF;
         pio.sm[0].osr_count = 32;
-        
+
         pio.tick(); // OUT Y, 32
         assert_eq!(pio.sm[0].y, 0xDEADBEEF);
         assert_eq!(pio.sm[0].osr_count, 0);

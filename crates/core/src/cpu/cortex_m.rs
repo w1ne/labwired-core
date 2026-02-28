@@ -1743,10 +1743,11 @@ mod tests {
             lsb: 4,
             width: 8,
         };
-        cpu.step_internal(&mut bus, &[], &config).unwrap_or_else(|_| ()); // Force manual execute if needed, but let's just test logic
-        // Wait, step_internal fetches from bus. I should just test the match arm logic if possible, 
-        // but better to actually run it through step_internal by putting opcodes in bus.
-        
+        cpu.step_internal(&mut bus, &[], &config)
+            .unwrap_or_else(|_| ()); // Force manual execute if needed, but let's just test logic
+                                     // Wait, step_internal fetches from bus. I should just test the match arm logic if possible,
+                                     // but better to actually run it through step_internal by putting opcodes in bus.
+
         // Actually, let's just test the registers after manual application if step_internal is too complex to mock opcodes for.
         // But I want THE branch to be hit in coverage. So I MUST use step_internal.
     }
@@ -1755,7 +1756,8 @@ mod tests {
         let pc = cpu.pc;
         if is_32bit {
             bus.write_u16(pc as u64, (instr_bin >> 16) as u16).unwrap();
-            bus.write_u16((pc + 2) as u64, (instr_bin & 0xFFFF) as u16).unwrap();
+            bus.write_u16((pc + 2) as u64, (instr_bin & 0xFFFF) as u16)
+                .unwrap();
         } else {
             bus.write_u16(pc as u64, instr_bin as u16).unwrap();
         }
@@ -1824,14 +1826,14 @@ mod tests {
         // ADC R0, R1, #0
         cpu.r1 = 10;
         cpu.xpsr |= 1 << 29; // Set Carry
-        // ADC.W R0, R1, #0 is 0xF141 0000
+                             // ADC.W R0, R1, #0 is 0xF141 0000
         run_test_instr(&mut cpu, &mut bus, 0xF1410000, true);
         assert_eq!(cpu.r0, 11);
 
         // SBC R0, R1, #0
         cpu.r1 = 10;
         cpu.xpsr &= !(1 << 29); // Clear Carry (Borrow)
-        // SBC.W R0, R1, #0 is 0xF161 0000
+                                // SBC.W R0, R1, #0 is 0xF161 0000
         run_test_instr(&mut cpu, &mut bus, 0xF1610000, true);
         assert_eq!(cpu.r0, 9);
     }
@@ -1846,7 +1848,7 @@ mod tests {
         // STRD R0, R1, [R2, #8]
         cpu.r0 = 0x11111111;
         cpu.r1 = 0x22222222;
-        // STRD R0, R1, [R2, #8] is 0xE9C2 0102 
+        // STRD R0, R1, [R2, #8] is 0xE9C2 0102
         run_test_instr(&mut cpu, &mut bus, 0xE9C20102, true);
         assert_eq!(bus.read_u32(0x5008).unwrap(), 0x11111111);
         assert_eq!(bus.read_u32(0x500C).unwrap(), 0x22222222);
