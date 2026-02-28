@@ -13,9 +13,9 @@ name: Firmware CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   # Option 1: Use the composite action (recommended - easiest)

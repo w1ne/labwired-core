@@ -70,6 +70,38 @@ For advanced refinement, you can use the standalone AI utilities in the `ai/` di
   python3 -m labwired_ai.fixer --model path/to/model.json --result path/to/result.json
   ```
 
+## 6) Board Onboarding SOP
+
+Apply this checklist whenever the task is adding/simulating a new MCU/board target. 
+
+### Procedure (Phase Gates)
+
+1. `P0 - Source grounding`: Read `core/docs/board_onboarding_playbook.md` and collect authoritative vendor docs.
+2. `P1 - Engine fit`: Map requirements to supported peripherals (`rcc + gpio + uart + systick` by default).
+3. `P2 - Implementation`: Add chip descriptor, system manifest, and smoke firmware.
+4. `P3 - Example docs package`: Add `core/examples/<board>/` with README, VALIDATION, etc.
+5. `P4 - Validation`: Run test/build/run commands and confirm deterministic UART output.
+6. `P5 - Report`: Provide files changed, commands run, runtime evidence, and source links.
+
+### Required Deliverables
+
+1. `core/configs/chips/<chip>.yaml`
+2. `core/configs/systems/<board>.yaml`
+3. smoke firmware crate (new or adapted)
+4. `core/examples/<board>/system.yaml`
+5. `core/examples/<board>/README.md`
+6. `core/examples/<board>/REQUIRED_DOCS.md`
+7. `core/examples/<board>/EXTERNAL_COMPONENTS.md`
+8. `core/examples/<board>/VALIDATION.md`
+
+### Completion Criteria
+
+1. `labwired-cli` runs firmware with the new system manifest.
+2. Reset initializes PC/SP correctly.
+3. Expected UART smoke output is observable (for example, `OK\n`).
+4. New/updated tests pass for touched behavior.
+5. Unsupported-instruction audit report is generated and reviewed.
+
 ## 5) Best Practices for Agent Work in Core
 
 1. **Verify State Proactively**: Before assuming a code fix works, compile it using the standard development commands and review `cargo test` results. Do not infer correctness without validation.
