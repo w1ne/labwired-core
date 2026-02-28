@@ -127,7 +127,7 @@ impl crate::Peripheral for Spi {
 
         crate::PeripheralTickResult {
             irq,
-            cycles: 1,
+            cycles: 0,
             ..Default::default()
         }
     }

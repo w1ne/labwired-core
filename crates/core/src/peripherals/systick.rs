@@ -78,6 +78,7 @@ impl crate::Peripheral for Systick {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         if (self.csr & 0x1) == 0 {
             return crate::PeripheralTickResult {
+                cycles: 0,
                 ..Default::default()
             };
         }
