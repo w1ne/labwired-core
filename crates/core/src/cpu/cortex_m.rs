@@ -1744,7 +1744,7 @@ mod tests {
             width: 8,
         };
         cpu.step_internal(&mut bus, &[], &config)
-            .unwrap_or_else(|_| ()); // Force manual execute if needed, but let's just test logic
+            .unwrap_or(()); // Force manual execute if needed, but let's just test logic
                                      // Wait, step_internal fetches from bus. I should just test the match arm logic if possible,
                                      // but better to actually run it through step_internal by putting opcodes in bus.
 

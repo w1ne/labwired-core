@@ -680,7 +680,7 @@ mod tests {
         pio.instruction_mem[1] = 0xE042;
 
         // Wrap at PC=1 back to 0
-        pio.sm[0].exec_ctrl = (1 << 12) | (0 << 7);
+        pio.sm[0].exec_ctrl = 1 << 12;
         pio.write_reg(0, 1); // Enable SM0
 
         pio.tick(); // Execute PC=0
