@@ -113,3 +113,59 @@ Traditional DMA uses a central controller (DMA1, GPDMA). Peripherals send "Reque
 -   **Serialization**: If multiple peripherals return DMA requests in the same cycle, the `SystemBus` executes them in the order they appear in the peripheral list (deterministic arbitration).
 -   **Zero-Copy Simulation**: For high-performance "Mem-to-Mem" transfers, use `DmaDirection::Copy`. The `SystemBus` will perform a direct buffer move without the CPU ever seeing the intermediate data.
 -   **Error Handling**: If a DMA transfer hits an unmapped memory region, the `SystemBus` returns a `MemoryViolation` error, which can be used to simulate a `BusFault` exception.
+
+---
+
+## 3. Using DMA and Interrupts in Simulation
+
+Beyond implementation, you must configure and verify these behaviors within your simulation environment.
+
+### System Manifest Configuration
+To enable a peripheral's interrupt or DMA capabilities, you must define them in your `system.yaml` or `chip.yaml`.
+
+```yaml
+# system.yaml
+peripherals:
+  - id: "uarte0"
+    type: "declarative"
+    base_address: 0x40002000
+    irq: 2 # Maps the peripheral's `irq: true` to NVIC vector 2
+    config:
+      path: "peripherals/nrf52_uarte.yaml"
+
+  - id: "dma1"
+    type: "dma" # LabWired's built-in STM32-style DMA controller
+    base_address: 0x40020000
+    irq: 11
+```
+
+### Verification via Test Scripts
+Verification of DMA and interrupts is performed using LabWired's YAML-based smoke tests.
+
+**Example: Verifying an Interrupt**
+```yaml
+# dma_smoke_test.yaml
+steps:
+  - run: 50ms
+  - assert_interrupt_pending: 2 # Check if UARTE0 (IRQ 2) is pending
+  - assert_register: 
+      peripheral: "uarte0"
+      register: "EVENTS_ENDTX"
+      value: 1
+```
+
+**Example: Verifying DMA Transfer**
+```yaml
+steps:
+  - run: 1ms
+  - assert_memory:
+      address: 0x20001000 # Verify destination bytes
+      expected_bytes: [0xDE, 0xAD, 0xBE, 0xEF]
+```
+
+### Observability in the Debugger
+When running in VS Code, you can observe these effects live:
+-   **Peripheral View**: Watch registers like `CNDTR` (DMA count) decrement as the simulation steps.
+-   **Memory View**: Observe buffers being filled asynchronously by DMA.
+-   **Trace Logs**: LabWired logs DMA transfers as bus events:
+    `DEBUG [SystemBus] DMA Copy: 0x20000010 -> 0x20000020 (0xAB)`
