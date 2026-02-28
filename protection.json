@@ -1,7 +1,0 @@
-{
-    "required_status_checks": null,
-    "enforce_admins": false,
-    "required_pull_request_reviews": null,
-    "restrictions": null,
-    "note": "Temporarily disabled for HIL showcase merge due to CI billing issues."
-}
