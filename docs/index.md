@@ -33,6 +33,10 @@ For contributors extending the core engine or adding new peripherals:
 - **[Native DAP](debugging.md)**: Architecture of the built-in Debug Adapter.
 - **[GDB Integration](gdb_integration.md)**: Using standard GDB clients.
 
+## 🤖 AI Agents
+
+- **[Core Agents Manual](./agents.md)**: Essential onboarding for AI coding agents working in this repository.
+
 ## 📚 Examples
 
 Practical walkthroughs of specific features:

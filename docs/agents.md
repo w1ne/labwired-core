@@ -10,12 +10,12 @@ This is the operating manual for AI coding agents working inside the `core` repo
 ## 2) Key Documentation Links
 
 Start your learning and reference with these key files:
-- [README.md](./README.md) - The main entrypoint.
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - Core engine internals and architecture.
-- [CONTRIBUTING.md](./CONTRIBUTING.md) - General connection and contributing guidelines.
-- [CONTRIBUTING_PERIPHERALS.md](./docs/CONTRIBUTING_PERIPHERALS.md) - How to implement and integrate new peripheral models.
-- [board_onboarding_playbook.md](./docs/board_onboarding_playbook.md) - Complete playbook for onboarding new boards and MSUs.
-- [ci_test_runner.md](./docs/ci_test_runner.md) - Details on how CI validation works and is triggered.
+- [README.md](../README.md) - The main entrypoint.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Core engine internals and architecture.
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - General connection and contributing guidelines.
+- [CONTRIBUTING_PERIPHERALS.md](./CONTRIBUTING_PERIPHERALS.md) - How to implement and integrate new peripheral models.
+- [board_onboarding_playbook.md](./board_onboarding_playbook.md) - Complete playbook for onboarding new boards and MSUs.
+- [ci_test_runner.md](./ci_test_runner.md) - Details on how CI validation works and is triggered.
 
 ## 3) Standard Development Commands
 
@@ -51,7 +51,26 @@ cargo run -p labwired-cli -- --firmware path/to/firmware.elf --system path/to/sy
   --out-dir out/unsupported-audit/<board>
 ```
 
-## 4) Best Practices for Agent Work in Core
+**Analyzing Simulation Failures (Digital Twin Diagnostics):**
+When a simulation fails (e.g., hits `max_steps` or a memory violation), the CLI produces a `result.json` in the output directory. This file is your primary diagnostic tool.
+
+- **`cpu_state`**: Contains the final PC and all core registers (`r0-r15`, `x0-x31`, etc.).
+- **`stop_reason`**: Explains why the simulation ended (e.g., `MaxSteps`, `Breakpoint`, `Halt`).
+- **`uart.log`**: Standard output from the guest firmware.
+
+Agents should use the `cpu_state` to cross-reference with the IR model or datasheet to identify stalled status-bit polling or incorrect memory mapping.
+
+## 4) Standalone AI Tools
+
+For advanced refinement, you can use the standalone AI utilities in the `ai/` directory:
+
+- **`fixer.py`**: Analyzes a `result.json` and suggests IR timing fixes for busy-wait loops.
+  ```bash
+  export PYTHONPATH=$PYTHONPATH:$(pwd)/../ai
+  python3 -m labwired_ai.fixer --model path/to/model.json --result path/to/result.json
+  ```
+
+## 5) Best Practices for Agent Work in Core
 
 1. **Verify State Proactively**: Before assuming a code fix works, compile it using the standard development commands and review `cargo test` results. Do not infer correctness without validation.
 2. **Deterministic Outputs**: Ensure your peripheral and bus implementation logic respects the deterministic execution model. Avoid unpredictable or non-reproducible states.

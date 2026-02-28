@@ -4,7 +4,7 @@
     "type": "arm",
     "registers": [
       1073790976,
-      75,
+      10,
       1128,
       0,
       0,
@@ -18,16 +18,16 @@
       0,
       537001976,
       1063,
-      1104
+      1108
     ],
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
     "vtor": 0
   },
-  "steps_executed": 23,
-  "cycles": 27,
-  "instructions": 23,
+  "steps_executed": 26,
+  "cycles": 30,
+  "instructions": 26,
   "stop_reason": "max_uart_bytes",
   "stop_reason_details": {
     "triggered_stop_condition": "max_uart_bytes",
@@ -37,7 +37,7 @@
     },
     "observed": {
       "name": "uart_bytes",
-      "value": 2
+      "value": 3
     }
   },
   "limits": {

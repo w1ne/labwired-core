@@ -6,8 +6,8 @@ use svd_parser::svd::{self, Access, RegisterCluster};
 impl IrDevice {
     /// Converts a parsed SVD Device into a LabWired IR Device (Strict/Flat).
     pub fn from_svd(svd: &svd::Device) -> Result<Self, String> {
-        let mut peripherals = HashMap::new();
-        let mut interrupt_mapping = HashMap::new();
+        let mut peripherals = BTreeMap::new();
+        let mut interrupt_mapping = BTreeMap::new();
 
         let arch = if let Some(cpu) = &svd.cpu {
             cpu.name.clone()
@@ -129,6 +129,7 @@ impl IrDevice {
             description: Some(svd.description.clone()),
             peripherals,
             interrupt_mapping,
+            memory_regions: BTreeMap::new(),
         })
     }
 }

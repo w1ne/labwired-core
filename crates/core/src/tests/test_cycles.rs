@@ -34,6 +34,7 @@ impl Cpu for MockCpu {
     fn snapshot(&self) -> crate::snapshot::CpuSnapshot {
         crate::snapshot::CpuSnapshot::Arm(crate::snapshot::ArmCpuSnapshot {
             registers: vec![0; 16],
+            pc: self.pc,
             xpsr: 0,
             primask: false,
             pending_exceptions: 0,

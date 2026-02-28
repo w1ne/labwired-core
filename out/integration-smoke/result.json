@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 23,
-  "cycles": 27,
-  "instructions": 23,
+  "steps_executed": 26,
+  "cycles": 30,
+  "instructions": 26,
   "stop_reason": "max_uart_bytes",
   "stop_reason_details": {
     "triggered_stop_condition": "max_uart_bytes",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "uart_bytes",
-      "value": 2
+      "value": 3
     }
   },
   "limits": {

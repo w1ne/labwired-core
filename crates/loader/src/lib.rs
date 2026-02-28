@@ -18,8 +18,11 @@ use tracing::{debug, info, warn};
 
 pub fn load_elf(path: &Path) -> Result<ProgramImage> {
     let buffer = fs::read(path).with_context(|| format!("Failed to read ELF file: {:?}", path))?;
+    load_elf_bytes(&buffer)
+}
 
-    let elf = Elf::parse(&buffer).context("Failed to parse ELF binary")?;
+pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
+    let elf = Elf::parse(buffer).context("Failed to parse ELF binary")?;
 
     info!("ELF Entry Point: {:#x}", elf.entry);
 

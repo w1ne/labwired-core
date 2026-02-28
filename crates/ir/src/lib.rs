@@ -10,7 +10,7 @@
 #![warn(missing_docs)]
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[cfg(feature = "svd")]
 pub mod svd_transform;
@@ -29,10 +29,25 @@ pub struct IrDevice {
 
     /// Map of peripherals, keyed by their instance name (e.g., "USART1").
     /// Note: This map flattens any hardware clusters or arrays.
-    pub peripherals: HashMap<String, IrPeripheral>,
+    pub peripherals: BTreeMap<String, IrPeripheral>,
 
     /// Map of interrupt names to their vector number.
-    pub interrupt_mapping: HashMap<String, u32>,
+    pub interrupt_mapping: BTreeMap<String, u32>,
+
+    /// Memory regions (e.g., Flash, RAM).
+    #[serde(default)]
+    pub memory_regions: BTreeMap<String, IrMemoryRegion>,
+}
+
+/// A contiguous block of memory.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrMemoryRegion {
+    /// Name of the region (e.g., "FLASH").
+    pub name: String,
+    /// Base address.
+    pub base: u64,
+    /// Size in bytes.
+    pub size: u64,
 }
 
 /// A distinct hardware block mapped to a memory address.

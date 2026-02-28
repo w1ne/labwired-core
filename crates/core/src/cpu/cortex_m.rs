@@ -267,6 +267,7 @@ impl Cpu for CortexM {
                 self.r0, self.r1, self.r2, self.r3, self.r4, self.r5, self.r6, self.r7, self.r8,
                 self.r9, self.r10, self.r11, self.r12, self.sp, self.lr, self.pc,
             ],
+            pc: self.pc,
             xpsr: self.xpsr,
             primask: self.primask,
             pending_exceptions: self.pending_exceptions,
@@ -292,7 +293,7 @@ impl Cpu for CortexM {
                 self.r12 = s.registers[12];
                 self.sp = s.registers[13];
                 self.lr = s.registers[14];
-                self.pc = s.registers[15];
+                self.pc = s.pc; // Use explicit PC field
             }
             self.xpsr = s.xpsr;
             self.primask = s.primask;
