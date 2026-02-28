@@ -352,7 +352,11 @@ impl Peripheral for Pio {
                     } else {
                         (1 << count) - 1
                     };
-                    sm.isr = (sm.isr >> count) | ((val & mask) << (32 - count));
+                    if count == 32 {
+                        sm.isr = val;
+                    } else {
+                        sm.isr = (sm.isr >> count) | ((val & mask) << (32 - count));
+                    }
                     sm.isr_count = (sm.isr_count + count as u8).min(32);
                 }
                 3 => {
@@ -364,13 +368,17 @@ impl Peripheral for Pio {
                         instr & 0x1F
                     };
                     let val = if sm.osr_count >= count as u8 {
-                        let tmp = sm.osr
-                            & if count == 32 {
-                                0xFFFFFFFF
-                            } else {
-                                (1 << count) - 1
-                            };
-                        sm.osr >>= if count == 32 { 0 } else { count };
+                        let mask = if count == 32 {
+                            0xFFFFFFFF
+                        } else {
+                            (1 << count) - 1
+                        };
+                        let tmp = sm.osr & mask;
+                        if count == 32 {
+                            sm.osr = 0;
+                        } else {
+                            sm.osr >>= count;
+                        }
                         sm.osr_count -= count as u8;
                         tmp
                     } else {
@@ -599,5 +607,115 @@ mod tests {
 
         // 0xE02A is SET X, 10
         assert_eq!(pio.instruction_mem[0], 0xE02A);
+    }
+
+    #[test]
+    fn test_pio_mov() {
+        let mut pio = Pio::new();
+        pio.sm[0].x = 0xAAAAAAAA;
+        // MOV Y, X -> 0xA041
+        pio.instruction_mem[0] = 0xA041;
+        // MOV X, !X -> 0xA029 (Dest X=1, Op Not=1, Src X=1)
+        pio.instruction_mem[1] = 0xA029;
+        // MOV Y, ::X -> 0xA051 (Dest Y=2, Op Rev=2, Src X=1)
+        pio.instruction_mem[2] = 0xA051;
+
+        pio.write_reg(0, 1); // Enable SM0
+
+        pio.tick();
+        assert_eq!(pio.sm[0].y, 0xAAAAAAAA);
+        assert_eq!(pio.sm[0].pc, 1);
+
+        pio.tick();
+        assert_eq!(pio.sm[0].x, 0x55555555);
+        assert_eq!(pio.sm[0].pc, 2);
+
+        pio.sm[0].x = 0x80000000;
+        pio.tick();
+        assert_eq!(pio.sm[0].y, 0x00000001);
+    }
+
+    #[test]
+    fn test_pio_irq() {
+        let mut pio = Pio::new();
+        // IRQ set 7 -> 0xC007
+        pio.instruction_mem[0] = 0xC007;
+        // IRQ clear 7 -> 0xC047
+        pio.instruction_mem[1] = 0xC047;
+
+        pio.write_reg(0, 1); // Enable SM0
+
+        pio.tick();
+        assert_eq!(pio.irq, 0x80);
+
+        pio.tick();
+        assert_eq!(pio.irq, 0x00);
+    }
+
+    #[test]
+    fn test_pio_wait_irq() {
+        let mut pio = Pio::new();
+        // WAIT 1, IRQ, 3 -> 0x20C3 (Pol=1, Src=IRQ=2, Idx=3)
+        // 0x2000 (WAIT) | 0x80 (Pol=1) | 0x40 (Src=2) | 0x03 (Idx=3) = 0x20C3
+        pio.instruction_mem[0] = 0x20C3;
+
+        pio.write_reg(0, 1); // Enable SM0
+
+        pio.tick();
+        assert!(pio.sm[0].stalled);
+        assert_eq!(pio.sm[0].pc, 0);
+
+        pio.irq |= 1 << 3;
+        pio.tick();
+        assert!(!pio.sm[0].stalled);
+        assert_eq!(pio.sm[0].pc, 1);
+    }
+
+    #[test]
+    fn test_pio_wrap() {
+        let mut pio = Pio::new();
+        // SET X, 1 -> 0xE021
+        pio.instruction_mem[0] = 0xE021;
+        // SET Y, 2 -> 0xE042
+        pio.instruction_mem[1] = 0xE042;
+
+        // Wrap at PC=1 back to 0
+        pio.sm[0].exec_ctrl = 1 << 12;
+        pio.write_reg(0, 1); // Enable SM0
+
+        pio.tick(); // Execute PC=0
+        assert_eq!(pio.sm[0].pc, 1);
+
+        pio.tick(); // Execute PC=1, should wrap
+        assert_eq!(pio.sm[0].pc, 0);
+    }
+
+    #[test]
+    fn test_pio_in_out_full() {
+        let mut pio = Pio::new();
+        pio.sm[0].x = 0x12345678;
+        // IN X, 16 -> 0x4030 (0x4000 | Src=1(0x20) | Count=16(0x10)) = 0x4030
+        pio.instruction_mem[0] = 0x4030;
+        // PUSH blocking -> 0x8020
+        pio.instruction_mem[1] = 0x8020;
+        // OUT Y, 32 -> 0x6040
+        pio.instruction_mem[2] = 0x6040;
+
+        pio.write_reg(0, 1); // Enable SM0
+
+        pio.tick(); // IN X, 16
+        assert_eq!(pio.sm[0].isr, 0x56780000); // 16 LSBs of X (0x5678) shifted into ISR MSB
+        assert_eq!(pio.sm[0].isr_count, 16);
+
+        pio.tick(); // PUSH
+        assert_eq!(pio.rx_fifo[0][0], 0x56780000);
+
+        pio.write_reg(0x10, 0xDEADBEEF); // TX FIFO
+        pio.sm[0].osr = 0xDEADBEEF;
+        pio.sm[0].osr_count = 32;
+
+        pio.tick(); // OUT Y, 32
+        assert_eq!(pio.sm[0].y, 0xDEADBEEF);
+        assert_eq!(pio.sm[0].osr_count, 0);
     }
 }

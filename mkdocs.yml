@@ -55,7 +55,10 @@ plugins:
 
 nav:
   - Home: index.md
-  
+  - Architecture Overview: architecture.md
+  - Hardware Matrix: SUPPORTED_DEVICES.md
+  - AI Agent Manual: agents.md
+
   - Tutorials:
     - Running Firmware: getting_started_firmware.md
     - Simulating Sensors (I2C): examples/i2c_sensor_example.md
@@ -73,8 +76,6 @@ nav:
     - Declarative Registers: declarative_registers.md
     - CLI Commands: cli_reference.md
     - Test Script Schema: ci_test_runner.md
-    - Hardware Support Matrix: SUPPORTED_DEVICES.md
-    - AI Agent Instructions: agents.md
     
   - Operations:
     - Release Strategy: release_strategy.md
