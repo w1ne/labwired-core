@@ -26,6 +26,7 @@ pub struct PeripheralEntry {
     pub size: u64,
     pub irq: Option<u32>,
     pub dev: Box<dyn Peripheral>,
+    pub ticks_remaining: u64,
 }
 
 pub struct SystemBus {
@@ -190,6 +191,7 @@ impl SystemBus {
                     size: 0x400,
                     irq: Some(37),
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
+                    ticks_remaining: 0,
                 },
                 PeripheralEntry {
                     name: "gpioa".to_string(),
@@ -197,6 +199,7 @@ impl SystemBus {
                     size: 0x400,
                     irq: None,
                     dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
+                    ticks_remaining: 0,
                 },
                 PeripheralEntry {
                     name: "rcc".to_string(),
@@ -204,6 +207,7 @@ impl SystemBus {
                     size: 0x400,
                     irq: None,
                     dev: Box::new(crate::peripherals::rcc::Rcc::new()),
+                    ticks_remaining: 0,
                 },
                 PeripheralEntry {
                     name: "systick".to_string(),
@@ -211,6 +215,7 @@ impl SystemBus {
                     size: 0x100,
                     irq: Some(15),
                     dev: Box::new(crate::peripherals::systick::Systick::new()),
+                    ticks_remaining: 0,
                 },
             ],
             nvic: None,
@@ -453,6 +458,7 @@ impl SystemBus {
                 size,
                 irq,
                 dev,
+                ticks_remaining: 0,
             });
         }
 
@@ -517,6 +523,7 @@ impl SystemBus {
 
         if let Some(idx) = self.find_peripheral_index(addr) {
             let p = &mut self.peripherals[idx];
+            p.ticks_remaining = 0;
             return p.dev.write_u32(addr - p.base, value);
         }
 
@@ -562,6 +569,7 @@ impl SystemBus {
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
             let p = &mut self.peripherals[idx];
+            p.ticks_remaining = 0;
             return p.dev.write_u16(addr - p.base, value);
         }
 
@@ -584,8 +592,18 @@ impl SystemBus {
         let mut dma_requests = Vec::new();
         let mut dma_signals_out = Vec::new();
 
+        let tick_interval = self.config.peripheral_tick_interval as u64;
+
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
+            if p.ticks_remaining > tick_interval {
+                p.ticks_remaining -= tick_interval;
+                continue;
+            }
+
             let res = p.dev.tick();
+
+            p.ticks_remaining = res.ticks_until_next.unwrap_or(0);
+
             if res.cycles > 0 {
                 costs.push(PeripheralTickCost {
                     index: peripheral_index,
@@ -797,6 +815,11 @@ impl crate::Bus for SystemBus {
         };
 
         if res.is_ok() {
+            // Wake up the peripheral
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                self.peripherals[idx].ticks_remaining = 0;
+            }
+
             // Trigger observers
             for observer in &self.observers {
                 observer.on_memory_write(addr, old_value, value);
@@ -860,6 +883,7 @@ impl crate::Bus for SystemBus {
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
             let p = &mut self.peripherals[idx];
+            p.ticks_remaining = 0;
             return p.dev.write_u16(addr - p.base, value);
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
@@ -877,6 +901,7 @@ impl crate::Bus for SystemBus {
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
             let p = &mut self.peripherals[idx];
+            p.ticks_remaining = 0;
             return p.dev.write_u32(addr - p.base, value);
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
@@ -1063,6 +1088,7 @@ mod tests {
                     size: 0x1000,
                     irq: None,
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
+                    ticks_remaining: 0,
                 },
                 PeripheralEntry {
                     name: "low".to_string(),
@@ -1070,6 +1096,7 @@ mod tests {
                     size: 0x1000,
                     irq: None,
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
+                    ticks_remaining: 0,
                 },
             ],
             nvic: None,
@@ -1115,6 +1142,7 @@ mod tests {
                 size: 0x400,
                 irq: Some(16),
                 dev: Box::new(crate::peripherals::dma::Dma1::new()),
+                ticks_remaining: 0,
             }],
             nvic: None,
             observers: Vec::new(),

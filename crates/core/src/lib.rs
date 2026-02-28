@@ -73,6 +73,7 @@ pub struct PeripheralTickResult {
     pub dma_requests: Option<Vec<DmaRequest>>,
     pub explicit_irqs: Option<Vec<u32>>,
     pub dma_signals: Option<Vec<u32>>,
+    pub ticks_until_next: Option<u64>,
 }
 
 impl PeripheralTickResult {

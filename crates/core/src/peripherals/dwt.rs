@@ -84,11 +84,11 @@ impl Peripheral for Dwt {
         }
 
         PeripheralTickResult {
+            cycles: 1,
             irq: false,
-            cycles: 0,
             dma_requests: None,
-            explicit_irqs: None,
-            dma_signals: None,
+            ticks_until_next: None,
+            ..Default::default()
         }
     }
 

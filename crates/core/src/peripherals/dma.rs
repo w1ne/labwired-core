@@ -188,6 +188,7 @@ impl Peripheral for Dma1 {
             dma_requests,
             explicit_irqs: None,
             dma_signals: None,
+            ticks_until_next: None,
         }
     }
 
