@@ -126,7 +126,7 @@ impl crate::Peripheral for Timer {
 
         crate::PeripheralTickResult {
             irq: false,
-            cycles: 1,
+            cycles: 0,
             dma_signals: None,
             ..Default::default()
         }

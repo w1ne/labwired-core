@@ -207,6 +207,7 @@ mod integration_tests {
             size: 0x10,
             irq: None,
             dev: Box::new(RecordingPeripheral::new()),
+            ticks_remaining: 0,
         });
 
         bus.write_u8(base + 2, 0xAB).unwrap();
@@ -224,6 +225,7 @@ mod integration_tests {
             size: 0x10,
             irq: None,
             dev: Box::new(RecordingPeripheral::new()),
+            ticks_remaining: 0,
         });
 
         let value = 0xA1B2_C3D4;
@@ -269,6 +271,7 @@ mod integration_tests {
                 reg: AtomicU8::new(0xF0),
                 reads: reads.clone(),
             }),
+            ticks_remaining: 0,
         });
 
         bus.write_u8(base, 0xAA).unwrap();
@@ -293,6 +296,7 @@ mod integration_tests {
             size: 0x10,
             irq: Some(16),
             dev: Box::new(RecordingPeripheral::with_tick(true)),
+            ticks_remaining: 0,
         });
 
         let irqs = bus.tick_peripherals();
@@ -316,6 +320,7 @@ mod integration_tests {
             size: 0x10,
             irq: Some(16),
             dev: Box::new(RecordingPeripheral::with_tick(true)),
+            ticks_remaining: 0,
         });
 
         let irqs = bus.tick_peripherals();
@@ -359,6 +364,7 @@ mod integration_tests {
             dev: Box::new(TickCounterPeripheral {
                 tick_count: tick_count.clone(),
             }),
+            ticks_remaining: 0,
         });
 
         // Force instruction fetch to fail with a memory violation.
@@ -1189,6 +1195,7 @@ mod integration_tests {
             size: 0x10,
             irq: Some(irq_num),
             dev: Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
+            ticks_remaining: 0,
         });
         // (Note: StubPeripheral::tick returns false. I should use a more active one or just pend manually)
 
@@ -1567,6 +1574,7 @@ mod integration_tests {
             size: 0x400,
             irq: Some(18), // ADC1_2 global interrupt
             dev: Box::new(Adc::new()),
+            ticks_remaining: 0,
         });
 
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);

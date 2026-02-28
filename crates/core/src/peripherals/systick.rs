@@ -78,11 +78,8 @@ impl crate::Peripheral for Systick {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         if (self.csr & 0x1) == 0 {
             return crate::PeripheralTickResult {
-                irq: false,
                 cycles: 0,
-                dma_requests: None,
-                explicit_irqs: None,
-                dma_signals: None,
+                ..Default::default()
             };
         }
 
@@ -92,13 +89,15 @@ impl crate::Peripheral for Systick {
             crate::PeripheralTickResult {
                 irq: (self.csr & 0x2) != 0,
                 cycles: 1,
+                dma_requests: None,
                 ..Default::default()
             }
         } else {
             self.cvr -= 1;
             crate::PeripheralTickResult {
-                irq: false,
+                irq: false, // IRQ is only true when counter reaches 0
                 cycles: 1,
+                dma_requests: None,
                 ..Default::default()
             }
         }
