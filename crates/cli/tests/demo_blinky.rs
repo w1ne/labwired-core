@@ -25,7 +25,7 @@ fn test_demo_blinky_gpio_toggle() {
     let program = load_elf(&firmware_path).expect("Failed to load ELF");
 
     // Create machine with STM32F103 configuration
-    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../system.yaml");
+    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/systems/labwired-demo-board.yaml");
 
     let manifest = SystemManifest::from_file(&system_path).expect("Failed to load system manifest");
 
