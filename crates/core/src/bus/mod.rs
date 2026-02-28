@@ -495,6 +495,11 @@ impl SystemBus {
             }
         }
 
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &self.peripherals[idx];
+            return p.dev.read_u32(addr - p.base);
+        }
+
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
         let b2 = self.read_u8(addr + 2)? as u32;
@@ -509,6 +514,11 @@ impl SystemBus {
         // Flash is read-only via bus writes usually, but let's stick to the behavior of write_u8
         // which would likely fail or do nothing if it's flash.
         // Actually write_u8 checks flash_alias_old etc.
+
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &mut self.peripherals[idx];
+            return p.dev.write_u32(addr - p.base, value);
+        }
 
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
@@ -536,6 +546,11 @@ impl SystemBus {
             }
         }
 
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &self.peripherals[idx];
+            return p.dev.read_u16(addr - p.base);
+        }
+
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
         Ok(b0 | (b1 << 8))
@@ -545,6 +560,11 @@ impl SystemBus {
         if self.config.optimized_bus_access && self.ram.write_u16(addr, value) {
             return Ok(());
         }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &mut self.peripherals[idx];
+            return p.dev.write_u16(addr - p.base, value);
+        }
+
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
@@ -798,6 +818,10 @@ impl crate::Bus for SystemBus {
                 return Ok(val);
             }
         }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &self.peripherals[idx];
+            return p.dev.read_u16(addr - p.base);
+        }
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
         Ok(b0 | (b1 << 8))
@@ -815,6 +839,10 @@ impl crate::Bus for SystemBus {
                 return Ok(val);
             }
         }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &self.peripherals[idx];
+            return p.dev.read_u32(addr - p.base);
+        }
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
         let b2 = self.read_u8(addr + 2)? as u32;
@@ -830,6 +858,10 @@ impl crate::Bus for SystemBus {
         if wrote {
             return Ok(());
         }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &mut self.peripherals[idx];
+            return p.dev.write_u16(addr - p.base, value);
+        }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
@@ -842,6 +874,10 @@ impl crate::Bus for SystemBus {
         }
         if wrote {
             return Ok(());
+        }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &mut self.peripherals[idx];
+            return p.dev.write_u32(addr - p.base, value);
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;

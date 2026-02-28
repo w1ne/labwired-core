@@ -256,6 +256,98 @@ impl Peripheral for GenericPeripheral {
         Ok(())
     }
 
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        for reg in &self.descriptor.registers {
+            let reg_start = reg.address_offset;
+            let reg_end = reg_start + (reg.size as u64 / 8);
+            if offset >= reg_start && offset + 3 < reg_end {
+                if reg.access == labwired_config::Access::WriteOnly {
+                    return Ok(0);
+                }
+
+                let mut data = self.data.borrow_mut();
+                let b0 = data[offset as usize] as u32;
+                let b1 = data[(offset + 1) as usize] as u32;
+                let b2 = data[(offset + 2) as usize] as u32;
+                let b3 = data[(offset + 3) as usize] as u32;
+                let val = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+
+                // Side Effects: ReadAction
+                if let Some(side_effects) = &reg.side_effects {
+                    if let Some(labwired_config::ReadAction::Clear) = side_effects.read_action {
+                        data[offset as usize] = 0;
+                        data[(offset + 1) as usize] = 0;
+                        data[(offset + 2) as usize] = 0;
+                        data[(offset + 3) as usize] = 0;
+                    }
+                }
+
+                self.check_triggers(&reg.id, false, None);
+
+                return Ok(val);
+            }
+        }
+        let b0 = self.read(offset)? as u32;
+        let b1 = self.read(offset + 1)? as u32;
+        let b2 = self.read(offset + 2)? as u32;
+        let b3 = self.read(offset + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        for reg in &self.descriptor.registers {
+            let reg_start = reg.address_offset;
+            let reg_end = reg_start + (reg.size as u64 / 8);
+            if offset >= reg_start && offset + 3 < reg_end {
+                if reg.access == labwired_config::Access::ReadOnly {
+                    return Ok(());
+                }
+
+                let mut data = self.data.borrow_mut();
+                let b0 = (value & 0xFF) as u8;
+                let b1 = ((value >> 8) & 0xFF) as u8;
+                let b2 = ((value >> 16) & 0xFF) as u8;
+                let b3 = ((value >> 24) & 0xFF) as u8;
+
+                if let Some(side_effects) = &reg.side_effects {
+                    match side_effects.write_action {
+                        Some(labwired_config::WriteAction::WriteOneToClear) => {
+                            data[offset as usize] &= !b0;
+                            data[(offset + 1) as usize] &= !b1;
+                            data[(offset + 2) as usize] &= !b2;
+                            data[(offset + 3) as usize] &= !b3;
+                        }
+                        Some(labwired_config::WriteAction::WriteZeroToClear) => {
+                            data[offset as usize] &= b0;
+                            data[(offset + 1) as usize] &= b1;
+                            data[(offset + 2) as usize] &= b2;
+                            data[(offset + 3) as usize] &= b3;
+                        }
+                        _ => {
+                            data[offset as usize] = b0;
+                            data[(offset + 1) as usize] = b1;
+                            data[(offset + 2) as usize] = b2;
+                            data[(offset + 3) as usize] = b3;
+                        }
+                    }
+                } else {
+                    data[offset as usize] = b0;
+                    data[(offset + 1) as usize] = b1;
+                    data[(offset + 2) as usize] = b2;
+                    data[(offset + 3) as usize] = b3;
+                }
+
+                self.check_triggers(&reg.id, true, Some(value));
+                return Ok(());
+            }
+        }
+        self.write(offset, (value & 0xFF) as u8)?;
+        self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+        self.write(offset + 2, ((value >> 16) & 0xFF) as u8)?;
+        self.write(offset + 3, ((value >> 24) & 0xFF) as u8)?;
+        Ok(())
+    }
+
     fn peek(&self, offset: u64) -> Option<u8> {
         for reg in &self.descriptor.registers {
             let reg_start = reg.address_offset;
