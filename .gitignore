@@ -29,5 +29,7 @@
 
 # Simulation artifacts
 /out/
+/out_*/
 /tmp/
 /run_debug.json
+/system.yaml

@@ -1004,7 +1004,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
 
     // LDRD / STRD / TBB / TBH (Encoding A1)
     if (h1 & 0xFE00) == 0xE800 {
-        let op = ((h1 >> 7) & 3) as u8;
+        let is_load = (h1 & (1 << 4)) != 0;
         let rn = (h1 & 0xF) as u8;
         let rt = ((h2 >> 12) & 0xF) as u8;
         let rt2 = ((h2 >> 8) & 0xF) as u8;
@@ -1018,10 +1018,10 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             } else {
                 return Instruction::Tbb { rn, rm };
             }
-        } else if op == 2 {
-            return Instruction::Strd { rt, rt2, rn, imm8 };
-        } else if op == 3 {
+        } else if is_load {
             return Instruction::Ldrd { rt, rt2, rn, imm8 };
+        } else {
+            return Instruction::Strd { rt, rt2, rn, imm8 };
         }
     }
 
