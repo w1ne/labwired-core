@@ -156,11 +156,8 @@ impl crate::Peripheral for Uart {
         }
 
         crate::PeripheralTickResult {
-            irq: false,
-            cycles: 0,
-            dma_requests: None,
-            explicit_irqs: None,
             dma_signals,
+            ..Default::default()
         }
     }
 

@@ -142,9 +142,7 @@ impl Peripheral for Adc {
         PeripheralTickResult {
             irq,
             cycles,
-            dma_requests: None,
-            explicit_irqs: None,
-            dma_signals: None,
+            ..Default::default()
         }
     }
 

@@ -510,7 +510,7 @@ impl Peripheral for Pio {
 
         PeripheralTickResult {
             irq: false,
-            cycles: 1,
+            cycles: 0,
             ..Default::default()
         }
     }
