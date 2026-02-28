@@ -1743,10 +1743,9 @@ mod tests {
             lsb: 4,
             width: 8,
         };
-        cpu.step_internal(&mut bus, &[], &config)
-            .unwrap_or(()); // Force manual execute if needed, but let's just test logic
-                                     // Wait, step_internal fetches from bus. I should just test the match arm logic if possible,
-                                     // but better to actually run it through step_internal by putting opcodes in bus.
+        cpu.step_internal(&mut bus, &[], &config).unwrap_or(()); // Force manual execute if needed, but let's just test logic
+                                                                 // Wait, step_internal fetches from bus. I should just test the match arm logic if possible,
+                                                                 // but better to actually run it through step_internal by putting opcodes in bus.
 
         // Actually, let's just test the registers after manual application if step_internal is too complex to mock opcodes for.
         // But I want THE branch to be hit in coverage. So I MUST use step_internal.
