@@ -74,6 +74,7 @@ nav:
     - CLI Commands: cli_reference.md
     - Test Script Schema: ci_test_runner.md
     - Hardware Support Matrix: SUPPORTED_DEVICES.md
+    - AI Agent Instructions: agents.md
     
   - Operations:
     - Release Strategy: release_strategy.md
