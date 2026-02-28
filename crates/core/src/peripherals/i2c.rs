@@ -165,7 +165,7 @@ impl crate::Peripheral for I2c {
 
         crate::PeripheralTickResult {
             irq,
-            cycles: 1,
+            cycles: 0,
             ..Default::default()
         }
     }

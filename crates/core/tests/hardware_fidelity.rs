@@ -12,6 +12,7 @@ fn test_pio_fidelity_ws2812() {
         size: 0x1000,
         irq: None,
         dev: Box::new(Pio::new()),
+        ticks_remaining: 0,
     });
     bus.refresh_peripheral_index();
 
@@ -67,6 +68,7 @@ fn test_spi_fidelity_in_machine() {
         size: 0x400,
         irq: None,
         dev: Box::new(Spi::new()),
+        ticks_remaining: 0,
     });
     bus.refresh_peripheral_index();
 
@@ -105,6 +107,7 @@ fn test_i2c_fidelity_in_machine() {
         size: 0x400,
         irq: None,
         dev: Box::new(I2c::new()),
+        ticks_remaining: 0,
     });
     bus.refresh_peripheral_index();
 
@@ -153,6 +156,7 @@ end:
         size: 0x1000,
         irq: None,
         dev: Box::new(pio),
+        ticks_remaining: 0,
     });
     bus.refresh_peripheral_index();
 

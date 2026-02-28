@@ -73,6 +73,7 @@ pub struct PeripheralTickResult {
     pub dma_requests: Option<Vec<DmaRequest>>,
     pub explicit_irqs: Option<Vec<u32>>,
     pub dma_signals: Option<Vec<u32>>,
+    pub ticks_until_next: Option<u64>,
 }
 
 impl PeripheralTickResult {
@@ -141,6 +142,30 @@ pub trait Cpu: Send {
 pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
+    fn read_u16(&self, offset: u64) -> SimResult<u16> {
+        let b0 = self.read(offset)? as u16;
+        let b1 = self.read(offset + 1)? as u16;
+        Ok(b0 | (b1 << 8))
+    }
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        let b0 = self.read(offset)? as u32;
+        let b1 = self.read(offset + 1)? as u32;
+        let b2 = self.read(offset + 2)? as u32;
+        let b3 = self.read(offset + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+    }
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        self.write(offset, (value & 0xFF) as u8)?;
+        self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+        Ok(())
+    }
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write(offset, (value & 0xFF) as u8)?;
+        self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+        self.write(offset + 2, ((value >> 16) & 0xFF) as u8)?;
+        self.write(offset + 3, ((value >> 24) & 0xFF) as u8)?;
+        Ok(())
+    }
     /// Side-effect-free value probe used for debug/observer bookkeeping.
     /// Implementations should return `None` when such probing is not supported.
     fn peek(&self, _offset: u64) -> Option<u8> {
