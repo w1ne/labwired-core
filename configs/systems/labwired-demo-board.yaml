@@ -1,0 +1,10 @@
+# LabWired - Demo Board System Configuration
+name: "labwired-demo-board"
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: "temp_sensor"
+    type: "tmp102"
+    connection: "i2c1"
+    config:
+      descriptor: "../peripherals/tmp102.yaml"
+      i2c_address: 0x48

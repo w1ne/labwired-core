@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 #[test]
 fn test_chip_config_validation() {
-    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../system.yaml");
+    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../configs/systems/labwired-demo-board.yaml");
 
     let manifest = SystemManifest::from_file(&system_path).expect("Failed to load system manifest");
 

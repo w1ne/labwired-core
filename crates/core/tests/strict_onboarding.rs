@@ -176,7 +176,7 @@ fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<Path
     // stm32f401 -> nucleo-f401re (hypothetical)
     // stm32f103 -> bluepill (hypothetical)
 
-    // Better: Grep all examples/**/system.yaml for "chip: .*<chip_name>"
+    // Better: Grep all exampl../../configs/systems/labwired-demo-board.yaml for "chip: .*<chip_name>"
     // This is robust.
 
     let examples = root.join("examples");
