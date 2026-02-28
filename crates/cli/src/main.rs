@@ -182,6 +182,22 @@ pub struct ImportSvdArgs {
     /// Path to the output JSON file
     #[arg(short, long)]
     pub output: PathBuf,
+
+    /// Optional Flash base address
+    #[arg(long, value_parser = parse_u32_addr)]
+    pub flash_base: Option<u32>,
+
+    /// Optional Flash size (e.g. "512KB")
+    #[arg(long)]
+    pub flash_size: Option<String>,
+
+    /// Optional RAM base address
+    #[arg(long, value_parser = parse_u32_addr)]
+    pub ram_base: Option<u32>,
+
+    /// Optional RAM size (e.g. "128KB")
+    #[arg(long)]
+    pub ram_size: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -275,6 +291,8 @@ struct TestResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<String>,
     assertions: Vec<AssertionResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_state: Option<labwired_core::snapshot::CpuSnapshot>,
     firmware_hash: String,
     config: TestConfig,
 }
@@ -744,13 +762,43 @@ fn run_import_svd(args: ImportSvdArgs) -> ExitCode {
         }
     };
 
-    let device = match labwired_ir::IrDevice::from_svd(&svd) {
+    let mut device = match labwired_ir::IrDevice::from_svd(&svd) {
         Ok(d) => d,
         Err(e) => {
             error!("Failed to convert to Strict IR: {}", e);
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
+    if let (Some(base), Some(size)) = (args.flash_base, &args.flash_size) {
+        device.memory_regions.insert(
+            "FLASH".to_string(),
+            labwired_ir::IrMemoryRegion {
+                name: "FLASH".to_string(),
+                base: base as u64,
+                size: labwired_config::parse_size(size)
+                    .map_err(|e| {
+                        error!("Invalid flash size '{}': {}", size, e);
+                    })
+                    .unwrap_or(0),
+            },
+        );
+    }
+
+    if let (Some(base), Some(size)) = (args.ram_base, &args.ram_size) {
+        device.memory_regions.insert(
+            "RAM".to_string(),
+            labwired_ir::IrMemoryRegion {
+                name: "RAM".to_string(),
+                base: base as u64,
+                size: labwired_config::parse_size(size)
+                    .map_err(|e| {
+                        error!("Invalid ram size '{}': {}", size, e);
+                    })
+                    .unwrap_or(0),
+            },
+        );
+    }
 
     let file = match std::fs::File::create(&args.output) {
         Ok(f) => f,
@@ -1956,6 +2004,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         limits: limits.clone(),
         message: None,
         assertions,
+        cpu_state: Some(cpu.snapshot()),
         firmware_hash,
         config: TestConfig {
             firmware: firmware_path.to_path_buf(),
@@ -2108,6 +2157,7 @@ fn write_config_error_outputs(
         limits: resolved_limits.clone(),
         message: Some(message.clone()),
         assertions: vec![],
+        cpu_state: None,
         firmware_hash,
         config: TestConfig {
             firmware: firmware_path.cloned().unwrap_or_default(),

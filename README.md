@@ -51,26 +51,44 @@ Coverage: io-smoke + fullchip-smoke
 
 ## Quick Start
 
-### Prerequisites
-- Rust 1.75+ ([Install](https://rustup.rs/))
-- ARM/RISC-V targets:
-  ```bash
-  rustup target add thumbv6m-none-eabi thumbv7m-none-eabi riscv32i-unknown-none-elf
-  ```
+### Install (one-liner)
 
-### Building
-```bash
-cargo build --release
+```sh
+curl -fsSL https://labwired.com/install.sh | sh
 ```
+
+This detects your platform (Linux / macOS, x86_64 / ARM64), downloads a prebuilt binary from the
+latest [GitHub Release](https://github.com/w1ne/labwired-core/releases), and adds `labwired` to
+your `$PATH`. If no prebuilt is available for your platform it falls back to compiling from source
+via `cargo install`.
+
+```sh
+labwired --version
+```
+
+> **Options** (env vars):
+> - `LABWIRED_VERSION=v0.12.0` — pin a specific release
+> - `LABWIRED_FROM_SOURCE=1` — always build from source
+> - `LABWIRED_INSTALL_DIR=~/.local/bin` — override install directory
 
 ### Running a Simulation
+
 ```bash
-cargo run -p labwired-cli -- --firmware path/to/firmware.elf --system system.yaml
+labwired test --script tests/uart-ok.yaml --output-dir results
 ```
 
-### Testing
+### From Source
+
+If you prefer to build manually:
+
 ```bash
-cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+# Prerequisites: Rust 1.75+ and target toolchains
+rustup target add thumbv6m-none-eabi thumbv7m-none-eabi riscv32i-unknown-none-elf
+
+git clone https://github.com/w1ne/labwired-core.git
+cd labwired-core
+cargo build --release -p labwired-cli
+./target/release/labwired --version
 ```
 
 ## CI Integration
@@ -85,6 +103,7 @@ See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
 
 ## Documentation
 
+- [Agents Manual](./docs/agents.md) 🤖
 - [Architecture Overview](./docs/architecture.md)
 - [Architecture Guide](./docs/architecture_guide.md)
 - [Board Onboarding Playbook](./docs/board_onboarding_playbook.md) (config-first)

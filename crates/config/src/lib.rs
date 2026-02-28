@@ -412,18 +412,36 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             _ => Arch::Arm, // Default to Arm for CMSIS-SVD
         };
 
+        let flash = ir
+            .memory_regions
+            .get("FLASH")
+            .map(|r| MemoryRange {
+                base: r.base,
+                size: format!("{}B", r.size),
+            })
+            .unwrap_or(MemoryRange {
+                base: 0,
+                size: "0".to_string(),
+            });
+
+        let ram = ir
+            .memory_regions
+            .get("RAM")
+            .map(|r| MemoryRange {
+                base: r.base,
+                size: format!("{}B", r.size),
+            })
+            .unwrap_or(MemoryRange {
+                base: 0,
+                size: "0".to_string(),
+            });
+
         Self {
             schema_version: default_schema_version(),
             name: ir.name,
             arch,
-            flash: MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            }, // IR doesn't carry memory map yet
-            ram: MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            },
+            flash,
+            ram,
             peripherals: ir
                 .peripherals
                 .into_values()

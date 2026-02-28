@@ -24,7 +24,8 @@ fn main() -> ! {
     loop {
         // High-density instruction loop
         for i in 0..1_000_000 {
-            core::hint::black_box(count = count.wrapping_add(i));
+            count = count.wrapping_add(i);
+            core::hint::black_box(count);
         }
 
         // Occasional UART pulse

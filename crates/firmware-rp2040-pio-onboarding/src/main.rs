@@ -12,7 +12,7 @@ const PIO0_BASE: u32 = 0x50200000;
 const UART0_TDR: *mut u32 = (UART0_BASE + 0x28) as *mut u32;
 
 // PIO Registers
-const PIO0_CTRL: *mut u32 = (PIO0_BASE + 0x00) as *mut u32;
+const PIO0_CTRL: *mut u32 = PIO0_BASE as *mut u32;
 const PIO0_FSTAT: *const u32 = (PIO0_BASE + 0x04) as *const u32;
 const PIO0_INSTR_MEM0: *mut u32 = (PIO0_BASE + 0x48) as *mut u32;
 const PIO0_INSTR_MEM1: *mut u32 = (PIO0_BASE + 0x4C) as *mut u32;
@@ -30,7 +30,7 @@ fn main() -> ! {
         core::ptr::write_volatile(PIO0_INSTR_MEM1, 0x80A0);
 
         // Set wrap: top=1, bottom=0 (so program wraps within [0,1])
-        core::ptr::write_volatile(PIO0_SM0_EXEC_CTRL, (1u32 << 12) | (0u32 << 7));
+        core::ptr::write_volatile(PIO0_SM0_EXEC_CTRL, 1u32 << 12);
 
         // Enable SM0
         core::ptr::write_volatile(PIO0_CTRL, 1);

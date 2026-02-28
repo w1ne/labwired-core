@@ -23,6 +23,7 @@ labwired-config = { path = "../config" }
 labwired-gdbstub = { path = "../gdbstub" }
 labwired-codegen = { path = "../codegen" }
 labwired-ir = { path = "../ir", features = ["svd"] }
+human-size = { workspace = true }
 svd-parser = "0.14"
 anyhow = { workspace = true }
 clap = { workspace = true }

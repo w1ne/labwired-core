@@ -14,7 +14,7 @@ const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x18) as *mut u32;
 const RCC_APB1ENR: *mut u32 = (RCC_BASE + 0x1C) as *mut u32;
 
 // GPIO Registers
-const GPIOA_CRL: *mut u32 = (GPIOA_BASE + 0x00) as *mut u32;
+const GPIOA_CRL: *mut u32 = GPIOA_BASE as *mut u32;
 const GPIOA_ODR: *mut u32 = (GPIOA_BASE + 0x0C) as *mut u32;
 
 // I2C Registers

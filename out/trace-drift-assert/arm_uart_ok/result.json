@@ -32,7 +32,7 @@
       "passed": true
     }
   ],
-  "firmware_hash": "c3d4012f4574665a9b514c38cd1ba92d2fb9d990ef58c3cf90c428b36c1fb9bd",
+  "firmware_hash": "a8c8679672afc67e5e18491cd88c769b46d60752d30a014ac71a4079b03dd344",
   "config": {
     "firmware": "examples/ci/../../target/thumbv6m-none-eabi/release/firmware-ci-fixture",
     "system": "examples/ci/../../configs/systems/ci-fixture-uart1.yaml",

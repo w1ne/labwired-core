@@ -14,6 +14,7 @@ use gdbstub::target::{Target, TargetError, TargetResult};
 use labwired_core::cpu::{CortexM, RiscV};
 use labwired_core::{Cpu, DebugControl, Machine, StopReason};
 use std::marker::PhantomData;
+#[cfg(not(target_arch = "wasm32"))]
 use std::net::{TcpListener, TcpStream};
 
 pub struct LabwiredTarget<C: Cpu> {
@@ -232,10 +233,12 @@ where
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub struct GdbServer {
     port: u16,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl GdbServer {
     pub fn new(port: u16) -> Self {
         Self { port }
@@ -270,6 +273,7 @@ impl GdbServer {
 
 pub struct GdbEventLoop<C: Cpu>(PhantomData<C>);
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<C: Cpu> gdbstub::stub::run_blocking::BlockingEventLoop for GdbEventLoop<C>
 where
     LabwiredTarget<C>: Target<Arch: gdbstub::arch::Arch<Usize = u32>>,

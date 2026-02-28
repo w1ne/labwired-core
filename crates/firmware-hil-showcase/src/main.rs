@@ -83,7 +83,7 @@ fn dma1_init() {
 
         // Program DMA1 Channel 1
         core::ptr::write_volatile(DMA1_CPAR1, USART3_TDR as u32);
-        core::ptr::write_volatile(DMA1_CMAR1, STRESS_BUFFER.as_ptr() as u32);
+        core::ptr::write_volatile(DMA1_CMAR1, core::ptr::addr_of_mut!(STRESS_BUFFER) as u32);
         core::ptr::write_volatile(DMA1_CNDTR1, STRESS_BUFFER_SIZE as u32);
         // CCR: MINC(1<<7), DIR(1<<4), TCIE(1<<1), EN(1<<0)
         core::ptr::write_volatile(DMA1_CCR1, (1 << 7) | (1 << 4) | (1 << 1) | (1 << 0));
