@@ -112,6 +112,14 @@ npm run compile
 4. Report exact commands run and concrete evidence (logs/artifacts/paths).
 5. Do not claim completion without passing checks relevant to changed components.
 
+## 5.1) Pre-Flight Validation (Hallucination Prevention)
+
+Before starting any task, the agent MUST:
+1. **Locate Source Evidence:** Confirm the task exists in a documented file with a `[TODO:AI]` or `[OPENCLAW]` tag.
+2. **Path Audit:** Verify that all paths mentioned in the task actually exist and match the current repo state.
+3. **Negative Path Definition:** Explicitly state what constitutes a "Task Invalid" state (e.g., "If the bug is not reproducible after 3 attempts, the task is marked as hallucination").
+4. **Plan Approval:** For non-trivial tasks, the proposed plan must be written to a temporary artifact and verified by a secondary reasoning call (or human) before execution.
+
 ## 6) Board Onboarding SOP (Mandatory for New MCU/Board Work)
 
 Apply this checklist whenever the task is adding/simulating a new MCU/board target.
