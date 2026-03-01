@@ -13,13 +13,13 @@ mkdir -p out/pitch-video
 Recommended one-command prep (works from any current directory):
 
 ```bash
-/home/andrii/Projects/labwired/scripts/run_pitch_flaky_to_deterministic.sh
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh
 ```
 
 Fallback prep (reuse existing showcase artifacts, no build/run):
 
 ```bash
-/home/andrii/Projects/labwired/scripts/run_pitch_flaky_to_deterministic.sh --use-existing
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh --use-existing
 ```
 
 Manual live-run prep (if you want to run commands directly):
@@ -53,7 +53,7 @@ On screen (terminal):
 
 Live option:
 ```bash
-/home/andrii/Projects/labwired/scripts/run_pitch_flaky_to_deterministic.sh
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh
 ```
 
 Artifact option (no compute risk):
@@ -70,7 +70,7 @@ On screen:
 
 Live artifacts:
 ```bash
-/home/andrii/Projects/labwired/scripts/show_pitch_proof.sh
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh --mode proof
 ```
 
 Existing evidence artifacts:

@@ -7,7 +7,7 @@ Goal: record a 90-150s demo where the LabWired VS Code flow is shown together wi
 Run from anywhere:
 
 ```bash
-/home/andrii/Projects/labwired/scripts/run_pitch_blinky_vscode_aether.sh
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh
 ```
 
 This prepares:
@@ -18,7 +18,7 @@ This prepares:
 If you already built recently:
 
 ```bash
-/home/andrii/Projects/labwired/scripts/run_pitch_blinky_vscode_aether.sh --skip-build
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh --skip-build
 ```
 
 ## 2) VS Code shot (Blinky)
@@ -38,7 +38,7 @@ Voiceover:
 Terminal command:
 
 ```bash
-/home/andrii/Projects/labwired/scripts/show_pitch_blinky_comparison.sh
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh --mode proof
 ```
 
 Highlight:
@@ -54,7 +54,7 @@ Voiceover:
 Collect board trace/log in Aether (your normal command flow), save to a file, then:
 
 ```bash
-/home/andrii/Projects/labwired/scripts/show_pitch_blinky_comparison.sh --aether-log /path/to/aether.log
+/home/andrii/Projects/labwired/core/examples/nucleo-h563zi/scripts/run_video_demo.sh --aether-log /path/to/aether.log
 ```
 
 On screen layout:

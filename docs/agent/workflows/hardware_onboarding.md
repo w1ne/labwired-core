@@ -84,7 +84,30 @@ python3 -m labwired_ai.executor --model adxl345_final.yaml --stimulus "write 0x2
 
 ---
 
+## Path C: External Device Integration (I2C/SPI)
+
+Once a bus controller (I2C/SPI) is onboarded via Path A or B, external sensors can be attached to it via the system manifest.
+
+### 1. Attachment Strategy
+- **I2C**: Define the `address` and `connection` (bus controller ID).
+- **SPI**: Define the `connection`. Note that CS is typically handled via GPIO in the firmware, so the `Spi` core broadcasts transfers to all attached devices, and devices should only respond if they were "selected" by a preceding GPIO operation that the simulator understands (or by being the only device).
+
+### 2. Manifest Configuration
+Add the device to `system.yaml`:
+```yaml
+external_devices:
+  - id: "temp_sensor"
+    type: "lm75"
+    connection: "TWI0"
+    config:
+      address: 0x48
+```
+
+---
+
 ## Validation
 Regardless of the generation method, the final step is **Simulation Verification**:
 1.  Create a minimal firmware that interacts with the peripheral.
-2.  Run `labwired --audit-checks` to ensure no Bus Faults or access violations occur.
+2.  Search for success/failure loops in the disassembly to identify target PCs.
+3.  Run `labwired --audit-checks` to ensure no Bus Faults or access violations occur.
+4.  Verify register transitions using `--trace` or a test script.

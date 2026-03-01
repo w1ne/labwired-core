@@ -227,8 +227,30 @@ cargo run -p svd-ingestor -- \
   --filter RCC,USART2
 ```
 
-## 10. Agentic Toolset (Python)
-## 11. Documentation Index
+## 10. External Hardware Simulation (SPI/I2C)
+
+LabWired supports simulating external sensors and devices connected via serial protocols. This is achieved by "attaching" a virtual device to a simulated bus controller.
+
+### Supported Protocols
+- **I2C Master**: Supports multi-slave addressing, 7-bit addresses, and standard data phases.
+- **SPI Master**: Supports full-duplex transfers and manual Chip Select (CS) logic.
+
+### System Manifest Configuration
+To connect an external device, define it in the `external_devices` section of `system.yaml`:
+
+```yaml
+external_devices:
+  - id: "accel0"
+    type: "adxl345"    # Type must match an implemented virtual sensor
+    connection: "SPI0"  # Must match a peripheral ID of type 'spi'
+    config: {}
+```
+
+### Agentic Interaction
+Agents can verify external device communication by observing the controller registers (e.g., `DR` for SPI, `TXDR`/`RXDR` for I2C) or by using the `AgenticExecutor` to perform transactions against the bus.
+
+## 11. Agentic Toolset (Python)
+## 12. Documentation Index
 
 For detailed agent workflows and architecture, refer to:
 - [Architecture Guide](./architecture.md)

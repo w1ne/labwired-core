@@ -49,7 +49,7 @@ Roadmap and positioning:
 - `vscode/`: VS Code/Antigravity extension for human observer workflows.
 - `docs/`: strategy, roadmap, runbooks, pitch/demo docs.
 - `marketing/`: external-facing comparison/blog positioning.
-- `scripts/`: helper scripts for demos, audits, and automation.
+- `core/scripts/`: helper scripts for demos, audits, and automation.
 
 Operational guidance:
 - Prefer implementation and validation in `core/` for simulator behavior changes.
@@ -202,3 +202,16 @@ Do not mark onboarding complete if any is true:
 3. Validation commands not executed.
 4. Final report missing runtime evidence or source links.
 5. Unsupported-instruction audit not run or artifacts missing.
+
+## 7) Release Readiness Scoreboard
+
+Use this to track progress toward the v0.1.0 "VC-Ready" public release.
+
+| Feature | Status | Goal |
+| :--- | :--- | :--- |
+| **Core Determinism Proof** | 🟡 Partial | Periodic golden-board validation suite. |
+| **Agentic Loop (AI Foundry)** | 🟡 In-Progress | Zero-touch datasheet -> model path. |
+| **Professional Debugging** | 🟢 Ready | Timeline, registers, memory inspector. |
+| **CI Integration** | 🟢 Ready | `labwired test` with machine artifacts. |
+| **Compatibility Matrix** | 🟢 Ready | Documented Tier-1 vs Tier-2 support. |
+| **Foundry (Cloud Service)** | ⚪ Not Started | Multi-tenant hosted execution. |
