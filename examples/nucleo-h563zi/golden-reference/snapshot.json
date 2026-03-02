@@ -1,0 +1,58 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073760296,
+      10,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537526272,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537526272,
+      0,
+      134217760
+    ],
+    "pc": 134217760,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "vtor": 0
+  },
+  "steps_executed": 100,
+  "cycles": 102,
+  "instructions": 100,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100
+    }
+  },
+  "limits": {
+    "max_steps": 100,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null
+  },
+  "firmware_hash": "99606ebc483dab806b05c83dbeb9bd3761b376a403e79fbe0cec43ad46e9ce55",
+  "config": {
+    "firmware": "target/thumbv7em-none-eabihf/release/firmware-h563-demo",
+    "system": "configs/systems/nucleo-h563zi-demo.yaml",
+    "script": "out/golden-reference/dummy_test.yaml"
+  }
+}
