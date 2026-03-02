@@ -84,7 +84,7 @@ impl SimulationObserver for PerformanceMetrics {
         self.instruction_count.fetch_add(1, Ordering::SeqCst);
     }
 
-    fn on_step_end(&self, cycles: u32) {
+    fn on_step_end(&self, cycles: u32, _registers: &[u32]) {
         self.cycle_count.fetch_add(cycles as u64, Ordering::SeqCst);
     }
 

@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use labwired_core::trace::InstructionTrace;
 use crate::adapter::LabwiredAdapter;
 use anyhow::{anyhow, Result};
 // use dap::requests::Request;
@@ -180,7 +181,7 @@ fn parse_address(value: &str) -> Option<u64> {
     }
 }
 
-fn build_profile_tree(traces: Vec<crate::trace::InstructionTrace>) -> ProfileNode {
+fn build_profile_tree(traces: Vec<InstructionTrace>) -> ProfileNode {
     let mut root = ProfileNode::new("root".to_string());
     let mut path: Vec<String> = Vec::new();
     let mut stack_baseline: Option<u32> = None;

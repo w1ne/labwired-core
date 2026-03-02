@@ -102,6 +102,7 @@ impl Cpu for RiscV {
         Ok(())
     }
 
+
     fn step(
         &mut self,
         bus: &mut dyn Bus,
@@ -424,6 +425,17 @@ impl Cpu for RiscV {
         }
 
         self.pc = next_pc;
+
+        let mut registers = [0u32; 33];
+        for i in 0..32 {
+            registers[i] = self.x[i];
+        }
+        registers[32] = self.pc;
+
+        for obs in observers {
+            obs.on_step_end(1, &registers);
+        }
+
         Ok(())
     }
 
