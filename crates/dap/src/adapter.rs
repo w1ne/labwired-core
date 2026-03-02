@@ -4,7 +4,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::trace::{InstructionTrace, TraceBuffer};
+use labwired_core::trace::{InstructionTrace, MemoryWrite};
+use crate::trace::TraceBuffer;
 use anyhow::{anyhow, Result};
 use labwired_core::{DebugControl, Machine};
 use labwired_loader::SymbolProvider;
@@ -78,7 +79,7 @@ pub struct LabwiredAdapter {
 
 #[derive(Debug, Default)]
 struct MemoryTracker {
-    writes: Mutex<Vec<crate::trace::MemoryWrite>>,
+    writes: Mutex<Vec<MemoryWrite>>,
 }
 
 impl labwired_core::SimulationObserver for MemoryTracker {
@@ -88,11 +89,15 @@ impl labwired_core::SimulationObserver for MemoryTracker {
         self.writes.lock().unwrap().clear();
     }
     fn on_memory_write(&self, addr: u64, old: u8, new: u8) {
-        self.writes.lock().unwrap().push(crate::trace::MemoryWrite {
+        self.writes.lock().unwrap().push(MemoryWrite {
             address: addr,
             old_value: old,
             new_value: new,
         });
+    }
+
+    fn on_step_end(&self, _cycles: u32, _registers: &[u32]) {
+        // Implementation here if needed, or leave empty
     }
 }
 

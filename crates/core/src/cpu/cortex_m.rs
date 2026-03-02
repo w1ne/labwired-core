@@ -1595,10 +1595,14 @@ impl CortexM {
 
         self.pc = self.pc.wrapping_add(pc_increment);
 
-        if !_observers.is_empty() {
-            for observer in _observers {
-                observer.on_step_end(_cycles);
-            }
+        let mut registers = [0u32; 17];
+        for i in 0..16 {
+            registers[i] = self.read_reg(i as u8);
+        }
+        registers[16] = self.xpsr;
+
+        for obs in _observers {
+            obs.on_step_end(_cycles, &registers);
         }
 
         Ok(())
