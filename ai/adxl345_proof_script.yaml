@@ -1,0 +1,163 @@
+assertions:
+- memory_value:
+    address: 1073741824
+    expected_value: 229
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741853
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741854
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741855
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741856
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741857
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741858
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741859
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741860
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741861
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741862
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741863
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741864
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741865
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741866
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741867
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741868
+    expected_value: 10
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741869
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741870
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741871
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741872
+    expected_value: 2
+    mask: 127
+    size: 8
+- memory_value:
+    address: 1073741873
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741874
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741875
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741876
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741877
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741878
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741879
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741880
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741881
+    expected_value: 0
+    mask: 255
+    size: 8
+- memory_value:
+    address: 1073741872
+    expected_value: 128
+    mask: 128
+    size: 8
+inputs:
+  firmware: /home/andrii/Projects/labwired/ai/proof_firmware.elf
+  system: /home/andrii/Projects/labwired/ai/proof_system.yaml
+limits:
+  max_steps: 2000
+  wall_time_ms: 10000
+schema_version: '1.0'

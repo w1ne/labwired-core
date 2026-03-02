@@ -12,6 +12,7 @@ from .llm import (
     extract_behavior,
     generate_peripheral_yaml
 )
+from .convert_to_ir import convert as convert_to_ir
 
 # Configure logging
 logging.basicConfig(
@@ -45,6 +46,7 @@ def main(args_list=None):
     ingest_parser.add_argument("--pages", required=True, help="Page ranges for registers & behavior (e.g., '6-12')")
     ingest_parser.add_argument("--name", required=True, help="Peripheral name")
     ingest_parser.add_argument("--output", help="Output YAML file")
+    ingest_parser.add_argument("--strict-ir", help="Output Strict IR JSON file")
 
     args = parser.parse_args(args_list)
 
@@ -104,6 +106,19 @@ def main(args_list=None):
                 logger.info(f"Ingestion complete! Wrote to {args.output}")
             else:
                 print(yaml_content)
+
+            if args.strict_ir:
+                logger.info(f"Converting to Strict IR: {args.strict_ir}...")
+                # We need a temporary file if args.output wasn't provided,
+                # but for simplicity, we'll assume the user provides a YAML path
+                # or we use a default.
+                yaml_path = args.output if args.output else f"{args.name}.yaml"
+                if not args.output:
+                    with open(yaml_path, "w") as f:
+                        f.write(yaml_content)
+
+                convert_to_ir(yaml_path, args.strict_ir)
+                logger.info(f"Strict IR generated at {args.strict_ir}")
 
         else:
             parser.print_help()

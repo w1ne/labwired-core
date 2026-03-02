@@ -1,0 +1,622 @@
+{
+  "name": "adxl345",
+  "arch": "Arm",
+  "description": "AI Generated Device for Codegen",
+  "peripherals": {
+    "adxl345": {
+      "name": "adxl345",
+      "base_address": 1073741824,
+      "description": "AI Generated Peripheral",
+      "registers": [
+        {
+          "name": "devid",
+          "offset": 0,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 229,
+          "fields": [
+            {
+              "name": "device_id",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Fixed device ID code of 0xE5 (345 octal)."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "thresh_tap",
+          "offset": 29,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "thresh_tap",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Tap threshold. Unsigned 8-bit value for tap interrupts. Scale factor is 62.5 mg/LSB (0xFF = +16 g). Magnitude of tap event compared to this value. Value of 0 may result in undesirable behavior if tap/double tap interrupts enabled."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "ofsx",
+          "offset": 30,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "ofsx",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "User-set X-axis offset adjustment in two's complement format with a scale factor of 15.6 mg/LSB (0x7F = +2 g)."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "ofsy",
+          "offset": 31,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "ofsy",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Y-axis offset adjustment in twos complement format with a scale factor of 15.6 mg/LSB (that is, 0x7F = +2 g)."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "ofsz",
+          "offset": 32,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "ofsz",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Z-axis offset adjustment in twos complement format with a scale factor of 15.6 mg/LSB (0x7F = +2 g)."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "dur",
+          "offset": 33,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "tap_dur",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the maximum time that an event must be above the THRESH_TAP threshold to qualify as a tap event. The scale factor is 625 \u03bcs/LSB. A value of 0 disables the tap/double tap functions."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "latent",
+          "offset": 34,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "latent",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the wait time from the detection of a tap event to the start of the time window (defined by the window register) during which a possible second tap event can be detected. The scale factor is 1.25 ms/LSB. A value of 0 disables the double tap function."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "window",
+          "offset": 35,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "window",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the amount of time after the expiration of the latency time (determined by the latent register) during which a second valid tap can begin. The scale factor is 1.25 ms/LSB. A value of 0 disables the double tap function."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "thresh_act",
+          "offset": 36,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "activity_threshold",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Threshold value for detecting activity. The data format is unsigned, so the magnitude of the activity event is compared with the value in the THRESH_ACT register. The scale factor is 62.5 mg/LSB. A value of 0 may result in undesirable behavior if the activity interrupt is enabled."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "thresh_inact",
+          "offset": 37,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "thresh_inact",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Holds the threshold value for detecting inactivity. The data format is unsigned, so the magnitude of the inactivity event is compared with the value in the THRESH_INACT register. The scale factor is 62.5 mg/LSB. A value of 0 mg may result in undesirable behavior if the inactivity interrupt is enabled."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "time_inact",
+          "offset": 38,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "time_inact",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Unsigned time value representing the amount of time that acceleration must be less than the value in the THRESH_INACT register for inactivity to be declared. The scale factor is 1 sec/LSB. Uses filtered output data. A value of 0 results in an interrupt when the output data is less than THRESH_INACT."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "act_inact_ctl",
+          "offset": 39,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "act_acdc",
+              "bit_offset": 7,
+              "bit_width": 1,
+              "access": null,
+              "description": "Activity AC/DC coupling selection. 0 selects DC-coupled operation; 1 enables AC-coupled operation."
+            },
+            {
+              "name": "act_x_en",
+              "bit_offset": 6,
+              "bit_width": 1,
+              "access": null,
+              "description": "Activity detection enable for X-axis. 1 enables X-axis participation; 0 excludes it."
+            },
+            {
+              "name": "act_y_en",
+              "bit_offset": 5,
+              "bit_width": 1,
+              "access": null,
+              "description": "Activity detection enable for Y-axis. 1 enables Y-axis participation; 0 excludes it."
+            },
+            {
+              "name": "act_z_en",
+              "bit_offset": 4,
+              "bit_width": 1,
+              "access": null,
+              "description": "Activity detection enable for Z-axis. 1 enables Z-axis participation; 0 excludes it."
+            },
+            {
+              "name": "inact_acdc",
+              "bit_offset": 3,
+              "bit_width": 1,
+              "access": null,
+              "description": "Inactivity AC/DC coupling selection. 0 selects DC-coupled operation; 1 enables AC-coupled operation."
+            },
+            {
+              "name": "inact_x_en",
+              "bit_offset": 2,
+              "bit_width": 1,
+              "access": null,
+              "description": "Inactivity detection enable for X-axis. 1 enables X-axis participation; 0 excludes it."
+            },
+            {
+              "name": "inact_y_en",
+              "bit_offset": 1,
+              "bit_width": 1,
+              "access": null,
+              "description": "Inactivity detection enable for Y-axis. 1 enables Y-axis participation; 0 excludes it."
+            },
+            {
+              "name": "inact_z_en",
+              "bit_offset": 0,
+              "bit_width": 1,
+              "access": null,
+              "description": "Inactivity detection enable for Z-axis. 1 enables Z-axis participation; 0 excludes it."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "thresh_ff",
+          "offset": 40,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "thresh_ff",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Threshold value, in unsigned format, for free-fall detection. The root-sum-square (RSS) value of all axes is calculated and compared with the value in THRESH_FF to determine if a free-fall event occurred. The scale factor is 62.5 mg/LSB."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "time_ff",
+          "offset": 41,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "free_fall_time",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Holds the free-fall time value."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "tap_axes",
+          "offset": 42,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "axes_control",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Axis control for tap/double tap."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "act_tap_status",
+          "offset": 43,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "source_tap_double_tap",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Source of tap/double tap."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "bw_rate",
+          "offset": 44,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 10,
+          "fields": [
+            {
+              "name": "data_rate_power_mode",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Data rate and power mode control."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "power_ctl",
+          "offset": 45,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "power_saving_features_control",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Power-saving features control."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "int_enable",
+          "offset": 46,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "interrupt_enable_control",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Interrupt enable control."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "int_map",
+          "offset": 47,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "interrupt_mapping_control",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Interrupt mapping control."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "int_source",
+          "offset": 48,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 2,
+          "fields": [
+            {
+              "name": "interrupt_source",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Source of interrupts."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "data_format",
+          "offset": 49,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "datax0",
+          "offset": 50,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "x_axis_data_0",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "X-Axis Data 0 (low byte of 16-bit X-axis measurement)"
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "datax1",
+          "offset": 51,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "x_axis_data_msb",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Most significant 8 bits of the 16-bit X-axis acceleration data (DATAX1 pairs with DATAX0 at 0x32 as LSB)."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "datay0",
+          "offset": 52,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "ydata",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Least significant byte of Y-axis acceleration data"
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "datay1",
+          "offset": 53,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "datay1",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Y-Axis Data 1."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "dataz0",
+          "offset": 54,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "z_axis_data_low",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "Lower 8 bits (LSB) of the 16-bit Z-axis acceleration data value"
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "dataz1",
+          "offset": 55,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "z_15_8_",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "High byte (bits 15:8) of the 16-bit Z-axis accelerometer data output"
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "fifo_ctl",
+          "offset": 56,
+          "size": 8,
+          "access": "ReadWrite",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "fifo_control",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "FIFO control."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        },
+        {
+          "name": "fifo_status",
+          "offset": 57,
+          "size": 8,
+          "access": "ReadOnly",
+          "reset_value": 0,
+          "fields": [
+            {
+              "name": "fifo_status",
+              "bit_offset": 0,
+              "bit_width": 8,
+              "access": null,
+              "description": "FIFO status."
+            }
+          ],
+          "side_effects": null,
+          "description": ""
+        }
+      ],
+      "interrupts": [
+        {
+          "name": "INT_SOURCE_IRQ",
+          "value": 10
+        }
+      ],
+      "timing": [
+        {
+          "id": "synth_int_source_heartbeat",
+          "trigger": {
+            "periodic": {
+              "period_cycles": 10
+            }
+          },
+          "delay_cycles": 0,
+          "action": {
+            "set_bits": {
+              "register": "int_source",
+              "bits": 128
+            }
+          },
+          "interrupt": "INT_SOURCE_IRQ"
+        }
+      ]
+    }
+  },
+  "interrupt_mapping": {
+    "INT_SOURCE_IRQ": 10
+  }
+}

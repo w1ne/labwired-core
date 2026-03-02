@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="32" failures="0" errors="0" time="0.284336">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="2d87f4fa3133207904ac1d353113d7af4adf7d325ab9bef6a058333389fac499"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.284336">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x40000000=0xe5" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x4000001d=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x4000001e=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x4000001f=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40000020=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x40000021=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x40000022=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0x40000023=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: memory_value: @0x40000024=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: memory_value: @0x40000025=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: memory_value: @0x40000026=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: memory_value: @0x40000027=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: memory_value: @0x40000028=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: memory_value: @0x40000029=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 15: memory_value: @0x4000002a=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 16: memory_value: @0x4000002b=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 17: memory_value: @0x4000002c=0xa" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 18: memory_value: @0x4000002d=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 19: memory_value: @0x4000002e=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 20: memory_value: @0x4000002f=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 21: memory_value: @0x40000030=0x2" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 22: memory_value: @0x40000031=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 23: memory_value: @0x40000032=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 24: memory_value: @0x40000033=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 25: memory_value: @0x40000034=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 26: memory_value: @0x40000035=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 27: memory_value: @0x40000036=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 28: memory_value: @0x40000037=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 29: memory_value: @0x40000038=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 30: memory_value: @0x40000039=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 31: memory_value: @0x40000030=0x80" time="0.000000">
+  </testcase>
+</testsuite>

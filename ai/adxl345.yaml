@@ -1,0 +1,615 @@
+name: ADXL345
+registers:
+- name: DEVID
+  offset: '0x00'
+  reset_value: '0xE5'
+  access: ReadOnly
+  fields:
+  - name: DEVICE_ID
+    bit_range:
+    - 0
+    - 7
+    description: Fixed device ID code of 0xE5 (345 octal).
+    evidence: "Address Hex Dec Name Type Reset Value Description 0x00 0 DEVID R 11100101\
+      \ Device ID. ... Register 0x00\u2014DEVID (Read Only) D7 D6 D5 D4 D3 D2 D1 D0\
+      \ 1 1 1 0 0 1 0 1 The DEVID register holds a fixed device ID code of 0xE5 (345\
+      \ octal)."
+    reasoning: The register is explicitly defined as read-only with a fixed 8-bit
+      value of 11100101 (0xE5) across all bits D0 to D7. No subfields, reserved bits,
+      or configurable bits are described; the entire register functions as a single
+      fixed device identifier.
+- name: THRESH_TAP
+  offset: '0x1D'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_TAP
+    bit_range:
+    - 0
+    - 7
+    description: Tap threshold. Unsigned 8-bit value for tap interrupts. Scale factor
+      is 62.5 mg/LSB (0xFF = +16 g). Magnitude of tap event compared to this value.
+      Value of 0 may result in undesirable behavior if tap/double tap interrupts enabled.
+    evidence: "Register 0x1D\u2014THRESH_TAP (Read/Write) The THRESH_TAP register\
+      \ is eight bits and holds the threshold value for tap interrupts. The data format\
+      \ is unsigned, so the magnitude of the tap event is compared with the value\
+      \ in THRESH_TAP. The scale factor is 62.5 mg/LSB (that is, 0xFF = +16 g). A\
+      \ value of 0 may result in undesirable behavior if tap/ double tap interrupts\
+      \ are enabled."
+    reasoning: No bit-level diagram or individual bit descriptions provided. Register
+      explicitly described as eight bits holding a single unsigned threshold value,
+      spanning the full register width [0,7]. Type R/W from register map confirms
+      ReadWrite access. Reset 00000000 (0x00).
+- name: OFSX
+  offset: '0x1E'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: OFSX
+    bit_range:
+    - 0
+    - 7
+    description: User-set X-axis offset adjustment in two's complement format with
+      a scale factor of 15.6 mg/LSB (0x7F = +2 g).
+    evidence: "Address 0x1E 30 OFSX R/W 00000000 X-axis offset. ... Register 0x1E,\
+      \ Register 0x1F, Register 0x20\u2014OFSX, OFSY, OFSZ (Read/Write) The OFSX,\
+      \ OFSY , and OFSZ registers are each eight bits and offer user-set offset adjustments\
+      \ in twos complement format with a scale factor of 15.6 mg/LSB (that is, 0x7F\
+      \ = +2 g)."
+    reasoning: The register is explicitly described as an 8-bit value for the X-axis
+      offset with no subfields, individual bit definitions, reserved bits, or special
+      constraints mentioned; the entire [0,7] range forms a single signed offset field.
+      Reset value 00000000 confirms 0x00. Access is R/W per register map and description.
+- name: OFSY
+  offset: '0x1F'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: OFSY
+    bit_range:
+    - 0
+    - 7
+    description: Y-axis offset adjustment in twos complement format with a scale factor
+      of 15.6 mg/LSB (that is, 0x7F = +2 g).
+    evidence: "Register 0x1E, Register 0x1F, Register 0x20\u2014OFSX, OFSY, OFSZ (Read/Write)\
+      \ The OFSX, OFSY, and OFSZ registers are each eight bits and offer user-set\
+      \ offset adjustments in twos complement format with a scale factor of 15.6 mg/LSB\
+      \ (that is, 0x7F = +2 g)."
+    reasoning: No individual bit or subfield definitions are provided; the entire
+      8-bit register is a single unsigned value in twos complement format for the
+      Y-axis offset. Bit range spans full register [0,7] (D0 to D7). Access is explicitly
+      Read/Write (R/W). Reset value is 00000000 (0x00).
+- name: OFSZ
+  offset: '0x20'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: OFSZ
+    bit_range:
+    - 0
+    - 7
+    description: Z-axis offset adjustment in twos complement format with a scale factor
+      of 15.6 mg/LSB (0x7F = +2 g).
+    evidence: "Register 0x1E, Register 0x1F, Register 0x20\u2014OFSX, OFSY, OFSZ (Read/Write)\
+      \ The OFSX, OFSY , and OFSZ registers are each eight bits and offer user-set\
+      \ offset adjustments in twos complement format with a scale factor of 15.6 mg/LSB\
+      \ (that is, 0x7F = +2 g)."
+    reasoning: The register is an 8-bit value with no individual bit fields or reserved
+      bits specified; the entire register holds the signed offset value. Table lists
+      it as R/W with reset 00000000.
+- name: DUR
+  offset: '0x21'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: TAP_DUR
+    bit_range:
+    - 0
+    - 7
+    description: "Unsigned time value representing the maximum time that an event\
+      \ must be above the THRESH_TAP threshold to qualify as a tap event. The scale\
+      \ factor is 625 \u03BCs/LSB. A value of 0 disables the tap/double tap functions."
+    evidence: "Register 0x21\u2014DUR (Read/Write) The DUR register is eight bits\
+      \ and contains an unsigned time value representing the maximum time that an\
+      \ event must be above the THRESH_TAP threshold to qualify as a tap event. The\
+      \ scale factor is 625 \u03BCs/LSB. A value of 0 disables the tap/double tap\
+      \ functions."
+    reasoning: No individual bit or subfield definitions provided; entire 8-bit register
+      functions as a single unsigned value for tap duration. Reset value 00000000
+      confirms all bits reset to 0. Access is explicitly Read/Write.
+- name: Latent
+  offset: '0x22'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Latent
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the wait time from the detection
+      of a tap event to the start of the time window (defined by the window register)
+      during which a possible second tap event can be detected. The scale factor is
+      1.25 ms/LSB. A value of 0 disables the double tap function.
+    evidence: "Register 0x22\u2014Latent (Read/Write) The latent register is eight\
+      \ bits and contains an unsigned time value representing the wait time from the\
+      \ detection of a tap event to the start of the time window (defined by the window\
+      \ register) during which a possible second tap event can be detected. The scale\
+      \ factor is 1.25 ms/LSB. A value of 0 disables the double tap function."
+    reasoning: No individual bit fields or diagram provided; the register description
+      explicitly states it is an eight-bit unsigned value, so the entire register
+      [0:7] functions as a single field holding the latency time. Reset value 00000000
+      confirms all bits default to 0.
+- name: Window
+  offset: '0x23'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Window
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the amount of time after the expiration
+      of the latency time (determined by the latent register) during which a second
+      valid tap can begin. The scale factor is 1.25 ms/LSB. A value of 0 disables
+      the double tap function.
+    evidence: "Register 0x23\u2014Window (Read/Write) The window register is eight\
+      \ bits and contains an unsigned time value representing the amount of time after\
+      \ the expiration of the latency time (determined by the latent register) during\
+      \ which a second valid tap can begin. The scale factor is 1.25 ms/LSB. A value\
+      \ of 0 disables the double tap function."
+    reasoning: No individual bit diagram or subfields provided in the datasheet excerpt.
+      The register is explicitly described as an eight-bit unsigned value, so the
+      entire register [0,7] forms a single field. Access matches register type R/W.
+      Reset value 00000000 confirms 0x00.
+- name: THRESH_ACT
+  offset: '0x24'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: ACTIVITY_THRESHOLD
+    bit_range:
+    - 0
+    - 7
+    description: Threshold value for detecting activity. The data format is unsigned,
+      so the magnitude of the activity event is compared with the value in the THRESH_ACT
+      register. The scale factor is 62.5 mg/LSB. A value of 0 may result in undesirable
+      behavior if the activity interrupt is enabled.
+    evidence: "Register 0x24\u2014THRESH_ACT (Read/Write) The THRESH_ACT register\
+      \ is eight bits and holds the threshold value for detecting activity. The data\
+      \ format is unsigned, so the magnitude of the activity event is compared with\
+      \ the value in the THRESH_ACT register. The scale factor is 62.5 mg/LSB. A value\
+      \ of 0 may result in undesirable behavior if the activity interrupt is enabled."
+    reasoning: No individual bit definitions or subfields provided in the register
+      description or table. The entire 8-bit register functions as a single unsigned
+      threshold value, as indicated by the description treating it holistically without
+      bit diagrams or named bits (unlike ACT_INACT_CTL which specifies D7-D0). Register
+      map confirms R/W access and 00000000 reset.
+- name: THRESH_INACT
+  offset: '0x25'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_INACT
+    bit_range:
+    - 0
+    - 7
+    description: Holds the threshold value for detecting inactivity. The data format
+      is unsigned, so the magnitude of the inactivity event is compared with the value
+      in the THRESH_INACT register. The scale factor is 62.5 mg/LSB. A value of 0
+      mg may result in undesirable behavior if the inactivity interrupt is enabled.
+    evidence: "Register 0x25\u2014THRESH_INACT (Read/Write) The THRESH_INACT register\
+      \ is eight bits and holds the threshold value for detecting inactivity. The\
+      \ data format is unsigned, so the magnitude of the inactivity event is compared\
+      \ with the value in the THRESH_INACT register. The scale factor is 62.5 mg/LSB.\
+      \ A value of 0 mg may result in undesirable behavior if the inactivity interrupt\
+      \ is enabled."
+    reasoning: The register is explicitly described as an eight-bit value holding
+      a single unsigned threshold; no individual bit or subfield definitions are provided,
+      unlike registers such as ACT_INACT_CTL which include bit diagrams. Thus, the
+      entire register (bits [0,7]) forms one field.
+- name: TIME_INACT
+  offset: '0x26'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: TIME_INACT
+    bit_range:
+    - 0
+    - 7
+    description: Unsigned time value representing the amount of time that acceleration
+      must be less than the value in the THRESH_INACT register for inactivity to be
+      declared. The scale factor is 1 sec/LSB. Uses filtered output data. A value
+      of 0 results in an interrupt when the output data is less than THRESH_INACT.
+    evidence: "Register 0x26\u2014TIME_INACT (Read/Write) The TIME_INACT register\
+      \ is eight bits and contains an unsigned time value representing the amount\
+      \ of time that acceleration must be less than the value in the THRESH_INACT\
+      \ register for inactivity to be declared. The scale factor is 1 sec/LSB. ...\
+      \ A value of 0 results in an interrupt when the output data is less than the\
+      \ value in the THRESH_INACT register."
+    reasoning: No bit-level diagram or named subfields provided; described explicitly
+      as an eight-bit unsigned value, so spans bits [0,7]. Register map confirms R/W
+      access and 00000000 reset.
+- name: ACT_INACT_CTL
+  offset: '0x27'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: ACT_ACDC
+    bit_range:
+    - 7
+    - 7
+    description: Activity AC/DC coupling selection. 0 selects DC-coupled operation;
+      1 enables AC-coupled operation.
+    evidence: 'D7: ACT ac/dc ... A setting of 0 selects dc-coupled operation, and
+      a setting of 1 enables ac-coupled operation.'
+    reasoning: "Explicitly labeled as D7 in the bitfield diagram for Register 0x27\u2014\
+      ACT_INACT_CTL."
+  - name: ACT_X_EN
+    bit_range:
+    - 6
+    - 6
+    description: Activity detection enable for X-axis. 1 enables X-axis participation;
+      0 excludes it.
+    evidence: 'D6: ACT_X enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity. A setting of 0 excludes the selected axis
+      from participation.'
+    reasoning: "Explicitly labeled as D6 (ACT_X enable) in the bitfield diagram for\
+      \ Register 0x27\u2014ACT_INACT_CTL."
+  - name: ACT_Y_EN
+    bit_range:
+    - 5
+    - 5
+    description: Activity detection enable for Y-axis. 1 enables Y-axis participation;
+      0 excludes it.
+    evidence: 'D5: ACT_Y enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity. A setting of 0 excludes the selected axis
+      from participation.'
+    reasoning: "Explicitly labeled as D5 (ACT_Y enable) in the bitfield diagram for\
+      \ Register 0x27\u2014ACT_INACT_CTL."
+  - name: ACT_Z_EN
+    bit_range:
+    - 4
+    - 4
+    description: Activity detection enable for Z-axis. 1 enables Z-axis participation;
+      0 excludes it.
+    evidence: 'D4: ACT_Z enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity. A setting of 0 excludes the selected axis
+      from participation.'
+    reasoning: "Explicitly labeled as D4 (ACT_Z enable) in the bitfield diagram for\
+      \ Register 0x27\u2014ACT_INACT_CTL."
+  - name: INACT_ACDC
+    bit_range:
+    - 3
+    - 3
+    description: Inactivity AC/DC coupling selection. 0 selects DC-coupled operation;
+      1 enables AC-coupled operation.
+    evidence: 'D3: INACT ac/dc ... A setting of 0 selects dc-coupled operation, and
+      a setting of 1 enables ac-coupled operation.'
+    reasoning: "Explicitly labeled as D3 in the bitfield diagram for Register 0x27\u2014\
+      ACT_INACT_CTL."
+  - name: INACT_X_EN
+    bit_range:
+    - 2
+    - 2
+    description: Inactivity detection enable for X-axis. 1 enables X-axis participation;
+      0 excludes it.
+    evidence: 'D2: INACT_X enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity. A setting of 0 excludes the selected axis
+      from participation.'
+    reasoning: "Explicitly labeled as D2 (INACT_X enable) in the bitfield diagram\
+      \ for Register 0x27\u2014ACT_INACT_CTL."
+  - name: INACT_Y_EN
+    bit_range:
+    - 1
+    - 1
+    description: Inactivity detection enable for Y-axis. 1 enables Y-axis participation;
+      0 excludes it.
+    evidence: 'D1: INACT_Y enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity. A setting of 0 excludes the selected axis
+      from participation.'
+    reasoning: "Explicitly labeled as D1 (INACT_Y enable) in the bitfield diagram\
+      \ for Register 0x27\u2014ACT_INACT_CTL."
+  - name: INACT_Z_EN
+    bit_range:
+    - 0
+    - 0
+    description: Inactivity detection enable for Z-axis. 1 enables Z-axis participation;
+      0 excludes it.
+    evidence: 'D0: INACT_Z enable ... A setting of 1 enables x-, y-, or z-axis participation
+      in detecting activity or inactivity. A setting of 0 excludes the selected axis
+      from participation.'
+    reasoning: "Explicitly labeled as D0 (INACT_Z enable) in the bitfield diagram\
+      \ for Register 0x27\u2014ACT_INACT_CTL."
+- name: THRESH_FF
+  offset: '0x28'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: THRESH_FF
+    bit_range:
+    - 0
+    - 7
+    description: Threshold value, in unsigned format, for free-fall detection. The
+      root-sum-square (RSS) value of all axes is calculated and compared with the
+      value in THRESH_FF to determine if a free-fall event occurred. The scale factor
+      is 62.5 mg/LSB.
+    evidence: "Register 0x28\u2014THRESH_FF (Read/Write) The THRESH_FF register is\
+      \ eight bits and holds the threshold value, in unsigned format, for free-fall\
+      \ detection. The root-sum-square (RSS) value of all axes is calculated and compared\
+      \ with the value in THRESH_FF to determine if a free-fall event occurred. The\
+      \ scale factor is 62.5 m g/LSB. Note that a value of 0 mg  may result in undesirable\
+      \ behavior if the free-fall interrupt is enabled. Values between 300 mg and\
+      \ 600 mg (0x05 to 0x09) are recommended."
+    reasoning: No individual bit diagram or subfields described; the register is explicitly
+      an eight-bit unsigned threshold value, consistent with similar threshold registers
+      like THRESH_TAP and THRESH_ACT which have no subfields.
+- name: TIME_FF
+  offset: '0x29'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Free-fall time
+    bit_range:
+    - 0
+    - 7
+    description: Holds the free-fall time value.
+    evidence: 'Register map: ''0x29 41 TIME_FF R/W 00000000 Free-fall time.'' No detailed
+      bit diagram provided, analogous to other time/threshold registers like TIME_INACT
+      (''eight bits and contains an unsigned time value'').'
+    reasoning: No individual bit definitions or reserved bits specified. Entire 8-bit
+      register functions as a single unsigned value for free-fall time, consistent
+      with similar R/W registers (e.g., DUR, TIME_INACT) that lack sub-field breakdowns
+      and reset to 0x00.
+- name: TAP_AXES
+  offset: '0x2A'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: AXES_CONTROL
+    bit_range:
+    - 0
+    - 7
+    description: Axis control for tap/double tap.
+    evidence: 'Table 16. Register Map: 0x2A 42 TAP_AXES R/W 00000000 Axis control
+      for tap/double tap.'
+    reasoning: No detailed bitfield table or per-bit description provided in the register
+      definitions section (descriptions provided up to 0x28 THRESH_FF). All registers
+      in the map are 8-bit. Treated as single field controlling axes for tap/double
+      tap detection. Reset value 00000000 indicates all bits default to 0.
+- name: ACT_TAP_STATUS
+  offset: '0x2B'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: SOURCE_TAP_DOUBLE_TAP
+    bit_range:
+    - 0
+    - 7
+    description: Source of tap/double tap.
+    evidence: 'Table 16. Register Map: 0x2B 43 ACT_TAP_STATUS R 00000000 Source of
+      tap/double tap.'
+    reasoning: No detailed bitfield table or per-bit description provided in the text.
+      The entire 8-bit register is described collectively as the source of tap/double
+      tap events. Type is R (read-only status). Reset value 00000000 indicates all
+      bits default to 0. Bits likely represent individual status flags for tap/double-tap
+      on each axis based on context of related registers (e.g., TAP_AXES), but no
+      explicit mapping given.
+- name: BW_RATE
+  offset: '0x2C'
+  reset_value: '00001010'
+  access: ReadWrite
+  fields:
+  - name: Data_rate_power_mode
+    bit_range:
+    - 0
+    - 7
+    description: Data rate and power mode control.
+    evidence: Address Hex Dec Name Type Reset Value Description 0x2C 44 BW_RATE R/W
+      00001010 Data rate and power mode control.
+    reasoning: No individual bit or subfield definitions are provided in the given
+      text for BW_RATE. The register description indicates the entire 8-bit register
+      controls data rate and power mode. Bit range covers all bits [0,7] matching
+      the reset value format. Access matches register type R/W as ReadWrite.
+- name: POWER_CTL
+  offset: '0x2D'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Power-saving features control
+    bit_range:
+    - 0
+    - 7
+    description: Power-saving features control.
+    evidence: 'Table 16. Register Map: 0x2D 45 POWER_CTL R/W 00000000 Power-saving
+      features control.'
+    reasoning: Detailed bitfield breakdown or table not provided in the REGISTER DEFINITIONS
+      section (definitions stop at Register 0x28). All registers are 8-bit based on
+      format examples (e.g., THRESH_TAP is eight bits). Bit range [0,7] covers full
+      register (D0 to D7). Access R/W from table maps to ReadWrite. Reset 00000000
+      = 0x00. No ambiguous bits like reserved specified.
+- name: INT_ENABLE
+  offset: '0x2E'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Interrupt_enable_control
+    bit_range:
+    - 0
+    - 7
+    description: Interrupt enable control.
+    evidence: 'Table 16. Register Map: 0x2E 46 INT_ENABLE R/W 00000000 Interrupt enable
+      control.'
+    reasoning: No detailed bitfield diagram or individual bit descriptions provided
+      in the text for INT_ENABLE. The register is described holistically as controlling
+      interrupt enables with 8-bit reset value 00000000. Treated as a single 8-bit
+      field spanning [0,7] due to lack of per-bit breakdown, similar to threshold
+      registers like THRESH_TAP.
+- name: INT_MAP
+  offset: '0x2F'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: Interrupt mapping control
+    bit_range:
+    - 0
+    - 7
+    description: Interrupt mapping control.
+    evidence: 'Table 16. Register Map: 0x2F 47 INT_MAP R/W 00000000 Interrupt mapping
+      control.'
+    reasoning: No detailed bitfield table or individual bit descriptions provided
+      in the text for INT_MAP, unlike registers such as ACT_INACT_CTL which include
+      explicit D7-D0 labels. The entire 8-bit register is described uniformly as controlling
+      interrupt mapping with reset value 00000000. Access inferred as ReadWrite from
+      'R/W' type.
+- name: INT_SOURCE
+  offset: '0x30'
+  reset_value: '0x02'
+  access: ReadOnly
+  fields:
+  - name: Interrupt_Source
+    bit_range:
+    - 0
+    - 7
+    description: Source of interrupts.
+    evidence: 'Table 16. Register Map: Address 0x30 48 INT_SOURCE R 00000010 Source
+      of interrupts.'
+    reasoning: No individual bit or subfield definitions provided in the text. The
+      entire 8-bit register functions as a read-only status indicator for interrupt
+      sources. Reset value is explicitly 00000010 (binary) = 0x02, with bit 1 set.
+      Bit numbering assumes standard convention (D0 = bit 0, D7 = bit 7).
+- name: DATA_FORMAT
+  offset: '0x31'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields: []
+- name: DATAX0
+  offset: '0x32'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: X_AXIS_DATA_0
+    bit_range:
+    - 0
+    - 7
+    description: X-Axis Data 0 (low byte of 16-bit X-axis measurement)
+    evidence: 'Table 16. Register Map: 0x32 50 DATAX0 R 00000000 X-Axis Data 0.'
+    reasoning: No detailed bitfield table or per-bit description provided for DATAX0.
+      The entire 8-bit register (D7-D0) is designated as 'X-Axis Data 0', functioning
+      as the LSB of the X-axis acceleration data (paired with DATAX1 at 0x33 as MSB).
+      Access is ReadOnly ('R' in register map). Reset value is 00000000 (0x00). No
+      reserved bits or special functions (e.g., 'must be 1') indicated.
+- name: DATAX1
+  offset: '0x33'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: X_AXIS_DATA_MSB
+    bit_range:
+    - 0
+    - 7
+    description: Most significant 8 bits of the 16-bit X-axis acceleration data (DATAX1
+      pairs with DATAX0 at 0x32 as LSB).
+    evidence: 'Register map: 0x33 51 DATAX1 R 00000000 X-Axis Data 1. Adjacent DATAX0
+      at 0x32 is X-Axis Data 0.'
+    reasoning: No individual bit definitions or subfields provided in the text for
+      DATAX1. The entire 8-bit register functions as the high byte of X-axis data,
+      indicated by naming convention (Data0=LSB, Data1=MSB) and 'R' access type in
+      the register map. Reset value is 0x00 (binary 00000000).
+- name: DATAY0
+  offset: '0x34'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: YDATA
+    bit_range:
+    - 0
+    - 7
+    description: Least significant byte of Y-axis acceleration data
+    evidence: 'Table 16. Register Map: 0x34 52 DATAY0 R 00000000 Y-Axis Data 0.'
+    reasoning: No individual bit definitions provided in the text; the entire 8-bit
+      register is dedicated to Y-Axis Data 0 (low byte), as paired with DATAY1 (0x35)
+      for 16-bit Y-axis value. Type is R (ReadOnly), reset is 00000000. Data format
+      (e.g., resolution, justification) is controlled by DATA_FORMAT (0x31), but this
+      register holds raw LSB data.
+- name: DATAY1
+  offset: '0x35'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: DATAY1
+    bit_range:
+    - 0
+    - 7
+    description: Y-Axis Data 1.
+    evidence: 'Register map: 0x35 53 DATAY1 R 00000000 Y-Axis Data 1.'
+    reasoning: No bit-level table or subfield definitions provided in the text. The
+      entire 8-bit register holds the high byte (MSB) of the Y-axis acceleration data
+      in read-only format, as indicated by the type 'R' and description. Reset value
+      applies to all bits.
+- name: DATAZ0
+  offset: '0x36'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: Z_AXIS_DATA_LOW
+    bit_range:
+    - 0
+    - 7
+    description: Lower 8 bits (LSB) of the 16-bit Z-axis acceleration data value
+    evidence: 0x36 54 DATAZ0 R 00000000 Z-Axis Data 0.
+    reasoning: 'No explicit bitfield table or per-bit description provided in the
+      text for DATAZ0. Register map lists it as an 8-bit Read-only register specifically
+      for ''Z-Axis Data 0'', paired with DATAZ1 (0x37, Z-Axis Data 1) to form the
+      full 16-bit Z-axis measurement (little-endian: DATAZ0=LSB, DATAZ1=MSB). Entire
+      register [7:0] holds this data byte. Reset value 00000000 indicates all bits
+      default to 0. Data format (signed, range, etc.) controlled by DATA_FORMAT register
+      (0x31), but raw bits are uniform data.'
+- name: DATAZ1
+  offset: '0x37'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: Z[15:8]
+    bit_range:
+    - 0
+    - 7
+    description: High byte (bits 15:8) of the 16-bit Z-axis accelerometer data output
+    evidence: 0x37 55 DATAZ1 R 00000000 Z-Axis Data 1.
+    reasoning: Register map lists DATAZ1 (0x37) as 'Z-Axis Data 1' with read-only
+      access and reset 00000000. Paired with DATAZ0 (0x36, 'Z-Axis Data 0'), indicating
+      DATAZ0 holds LSB (bits 7:0) and DATAZ1 holds MSB (bits 15:8) of 16-bit Z-axis
+      value. No individual bit definitions or subfields provided in the text; entire
+      8-bit register is data output. Bit range [0,7] covers D0 (LSB of byte) to D7
+      (MSB of byte).
+- name: FIFO_CTL
+  offset: '0x38'
+  reset_value: '0x00'
+  access: ReadWrite
+  fields:
+  - name: FIFO control
+    bit_range:
+    - 0
+    - 7
+    description: FIFO control.
+    evidence: 'Table 16. Register Map: 0x38 56 FIFO_CTL R/W 00000000 FIFO control.'
+    reasoning: "No detailed bitfield table or per-bit description provided for FIFO_CTL\
+      \ in the text (definitions cover up to Register 0x28\u2014THRESH_FF). Whole\
+      \ 8-bit register treated as single field matching reset value 00000000 and access\
+      \ R/W."
+- name: FIFO_STATUS
+  offset: '0x39'
+  reset_value: '0x00'
+  access: ReadOnly
+  fields:
+  - name: FIFO_STATUS
+    bit_range:
+    - 0
+    - 7
+    description: FIFO status.
+    evidence: 'Table 16. Register Map: 0x39 57 FIFO_STATUS R 00000000 FIFO status.'
+    reasoning: No detailed bitfield table or per-bit description provided in the text
+      for FIFO_STATUS. Treated as a single 8-bit read-only field representing overall
+      FIFO status, consistent with other registers like THRESH_TAP that lack subfields
+      and are described as 8-bit values. Reset value 00000000 confirms all bits reset
+      to 0. Access is R (ReadOnly) per register map.
+side_effects: []

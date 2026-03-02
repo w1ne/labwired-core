@@ -1,0 +1,15 @@
+arch: arm
+flash:
+  base: 134217728
+  size: 128KB
+name: stm32f401
+peripherals:
+- base_address: 1073741824
+  config:
+    path: /home/andrii/Projects/labwired/ai/adxl345.json
+  id: adxl345
+  type: strict_ir
+ram:
+  base: 536870912
+  size: 64KB
+schema_version: '1.0'

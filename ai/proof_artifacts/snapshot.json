@@ -1,0 +1,58 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      5024
+    ],
+    "pc": 5024,
+    "xpsr": 1090519040,
+    "primask": false,
+    "pending_exceptions": 1024,
+    "vtor": 0
+  },
+  "steps_executed": 2000,
+  "cycles": 2000,
+  "instructions": 2000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000
+    }
+  },
+  "limits": {
+    "max_steps": 2000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": 10000,
+    "max_vcd_bytes": null
+  },
+  "firmware_hash": "2d87f4fa3133207904ac1d353113d7af4adf7d325ab9bef6a058333389fac499",
+  "config": {
+    "firmware": "/home/andrii/Projects/labwired/ai/proof_firmware.elf",
+    "system": "/home/andrii/Projects/labwired/ai/proof_system.yaml",
+    "script": "../ai/adxl345_proof_script.yaml"
+  }
+}
