@@ -4,9 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use labwired_core::trace::InstructionTrace;
 use crate::adapter::LabwiredAdapter;
 use anyhow::{anyhow, Result};
+use labwired_core::trace::InstructionTrace;
 // use dap::requests::Request;
 // use dap::responses::ResponseBody;
 use base64::Engine;

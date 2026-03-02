@@ -1596,8 +1596,8 @@ impl CortexM {
         self.pc = self.pc.wrapping_add(pc_increment);
 
         let mut registers = [0u32; 17];
-        for i in 0..16 {
-            registers[i] = self.read_reg(i as u8);
+        for (i, reg) in registers.iter_mut().enumerate().take(16) {
+            *reg = self.get_register(i as u8);
         }
         registers[16] = self.xpsr;
 

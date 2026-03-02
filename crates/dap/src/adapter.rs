@@ -4,9 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use labwired_core::trace::{InstructionTrace, MemoryWrite};
 use crate::trace::TraceBuffer;
 use anyhow::{anyhow, Result};
+use labwired_core::trace::{InstructionTrace, MemoryWrite};
 use labwired_core::{DebugControl, Machine};
 use labwired_loader::SymbolProvider;
 use serde::Serialize;

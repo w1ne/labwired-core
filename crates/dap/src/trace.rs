@@ -46,7 +46,7 @@ impl TraceBuffer {
         self.instructions.push_back(trace);
 
         // Simple checkpointing every 10K cycles
-        if self.current_cycle % 10_000 == 0 {
+        if self.current_cycle.is_multiple_of(10_000) {
             self.checkpoints.push(Checkpoint {
                 cycle: self.current_cycle,
                 trace_index: self.instructions.len() - 1,

@@ -1737,7 +1737,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let start = std::time::Instant::now();
     let mut stop_reason = StopReason::MaxSteps;
     let mut steps_executed: u64 = 0;
-    
+
     let trace_observer = if args.trace {
         let obs = Arc::new(labwired_core::trace::TraceObserver::new(args.trace_max));
         machine.observers.push(obs.clone());
