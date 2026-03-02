@@ -276,6 +276,14 @@ struct TestArgs {
     /// Override max VCD file size limit (bytes)
     #[arg(long)]
     max_vcd_bytes: Option<u64>,
+
+    /// Enable instruction tracing (saved to trace.json)
+    #[arg(long)]
+    trace: bool,
+
+    /// Maximum number of instructions to trace
+    #[arg(long, default_value = "100000")]
+    trace_max: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1703,6 +1711,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         firmware_path,
         system_path,
         std::time::Duration::from_secs(0),
+        &None,
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1728,6 +1737,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let start = std::time::Instant::now();
     let mut stop_reason = StopReason::MaxSteps;
     let mut steps_executed: u64 = 0;
+    
+    let trace_observer = if args.trace {
+        let obs = Arc::new(labwired_core::trace::TraceObserver::new(args.trace_max));
+        machine.observers.push(obs.clone());
+        Some(obs)
+    } else {
+        None
+    };
     let mut sim_error_happened = false;
     let mut prev_pc = machine.cpu.get_pc();
     let mut stuck_counter: u64 = 0;
@@ -1960,6 +1977,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         firmware_path,
         system_path,
         duration,
+        &trace_observer,
     );
 
     if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
@@ -1987,6 +2005,7 @@ fn write_outputs<C: labwired_core::Cpu>(
     firmware_path: &Path,
     system_path: Option<&PathBuf>,
     duration: std::time::Duration,
+    trace_observer: &Option<Arc<labwired_core::trace::TraceObserver>>,
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
@@ -2026,6 +2045,20 @@ fn write_outputs<C: labwired_core::Cpu>(
                     }
                 }
                 Err(e) => error!("Failed to create result.json: {}", e),
+            }
+
+            // trace.json
+            if let Some(obs) = trace_observer {
+                let trace_path = output_dir.join("trace.json");
+                let traces = obs.take_traces();
+                match std::fs::File::create(&trace_path) {
+                    Ok(f) => {
+                        if let Err(e) = serde_json::to_writer_pretty(f, &traces) {
+                            error!("Failed to write trace.json: {}", e);
+                        }
+                    }
+                    Err(e) => error!("Failed to create trace.json: {}", e),
+                }
             }
 
             // result.json handles cpu generically now
