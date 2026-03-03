@@ -55,3 +55,10 @@ Run the tests to verify compliance:
 cargo test -p labwired-ir --features svd
 cargo test -p labwired-cli --test asset_import
 ```
+
+---
+
+## See Also
+- [Foundry Pricing Model](./spec/FOUNDRY_PRICING.md)
+- [Simulation Protocol](../core/docs/simulation_protocol.md)
+- [High-Fidelity Verification Case Study](../core/docs/verification_lessons_adxl345.md)

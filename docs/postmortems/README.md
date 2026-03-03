@@ -14,6 +14,8 @@ This folder contains incident postmortems for reliability, validation, and simul
 2. [2026-02-15: STM32H563 GPIO ODR Failure (io-smoke)](./2026-02-15-io-smoke-failure.md)
 3. [2026-02-16: v0.12.0 Release Regressions & CI Bypass](./2026-02-16-ci-bypass-and-loader-regressions.md)
 4. [2026-02-16: Prefix32 Performance Regression](./2026-02-16-prefix32-performance-regression.md)
+5. [2026-02-18: SPI ADXL345 Connectivity Failures](./2026-02-18-spi-adxl345-connectivity-failures.md)
+6. [2026-02-23: HIL Showcase ISA Gaps](./2026-02-23-hil-showcase-isa-gaps.md)
 
 ## Format
 

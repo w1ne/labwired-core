@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap');
+
+:root {
+  --lw-bg: #ffffff;
+  --lw-bg-alt: #f8f9fa;
+  --lw-black: #000000;
+  --lw-gray: #444444;
+  --lw-pink: #e83e8c;
+  --lw-green: #27c93f;
+  --lw-border: 2px solid #000000;
+  --lw-shadow: 4px 4px 0px #000000;
+  --lw-shadow-lg: 8px 8px 0px #000000;
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--lw-bg);
+  color: var(--lw-black);
+  margin: 0;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-image: radial-gradient(var(--lw-black) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-attachment: fixed;
+}
+
+#root {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Bento Box / Card Styles */
+.bento-card {
+  background: var(--lw-bg);
+  border: var(--lw-border);
+  box-shadow: var(--lw-shadow);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.bento-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--lw-shadow-lg);
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-transform: none;
+}
+
+.text-pink {
+  color: var(--lw-pink);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Buttons */
+button {
+  background: var(--lw-black);
+  color: var(--lw-bg);
+  border: var(--lw-border);
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  box-shadow: var(--lw-shadow);
+}
+
+button:hover {
+  background: var(--lw-bg);
+  color: var(--lw-black);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--lw-shadow-lg);
+}
+
+button.secondary {
+  background: var(--lw-bg);
+  color: var(--lw-black);
+}
+
+button:disabled {
+  background: var(--lw-bg-alt);
+  color: var(--lw-gray);
+  border-color: var(--lw-gray);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Utilities */
+.status-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--lw-bg-alt);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--lw-black);
+  border: 2px solid var(--lw-bg-alt);
+}

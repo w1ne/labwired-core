@@ -17,6 +17,8 @@ This directory contains **platform-level** documentation for the LabWired monore
 - **[NUCLEO-H563ZI Voiceover Script](./NUCLEO_H563ZI_VOICEOVER_SCRIPT.md)** - Ready-to-read narration mapped to terminal/UI moments
 - **[VS Code UI Demo Checklist](./VS_CODE_UI_DEMO_CHECKLIST.md)** - Manual UI validation (breakpoints, step, registers, memory, Docker mode)
 - **[Business Strategy](./spec/)** - Market analysis, business roadmaps, and strategic vision
+- **[Foundry Pricing Model](./spec/FOUNDRY_PRICING.md)** - Pricing tiers, API usage model, and cost structure for LabWired Foundry
+- **[Foundry Product Spec](./spec/FOUNDRY_SPEC.md)** - Architecture, API surface, onboarding UX, and dashboard visual spec
 - **[Digital Twin Simulator Comparison (2026-02-22)](./spec/DIGITAL_TWIN_SIMULATOR_COMPARISON_2026-02-22.md)** - Deep competitive analysis of LabWired vs direct and adjacent simulator platforms
 - **[Top-20 Coverage Matrix](./spec/TOP20_COVERAGE_MATRIX.md)** - Priority target matrix for closing simulation coverage gaps
 
