@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -63,11 +64,14 @@ func (s *Server) quotaMiddleware(next http.Handler) http.Handler {
 
 		apiKey := apiKeyVal.(*db.APIKey)
 
-		// Default tier is Builder (1000 runs).
-		// Enterprise gets 1,000,000.
-		limit := 1000
-		if apiKey.Tier == "enterprise" {
-			limit = 1000000
+		// Read per-workspace quota from DB (set at account creation or topped up via Stripe).
+		limit, err := s.store.GetMonthlyQuota(apiKey.WorkspaceID)
+		if err != nil {
+			// Fall back to sensible tier defaults if DB lookup fails.
+			limit = 1000
+			if apiKey.Tier == "enterprise" {
+				limit = 1000000
+			}
 		}
 
 		count, err := s.store.CountRunsForWorkspace(apiKey.WorkspaceID)
@@ -76,8 +80,9 @@ func (s *Server) quotaMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		log.Printf("[QUOTA] Workspace %s: %d/%d used", apiKey.WorkspaceID, count, limit)
 		if count >= limit {
-			sendError(w, http.StatusTooManyRequests, "QUOTA_EXCEEDED", fmt.Sprintf("Workspace has exceeded its monthly limit of %d runs.", limit), "Upgrade to Enterprise tier for higher volume.")
+			sendError(w, http.StatusTooManyRequests, "QUOTA_EXCEEDED", fmt.Sprintf("Workspace has exceeded its monthly limit of %d runs.", limit), "Purchase more credits or upgrade your tier.")
 			return
 		}
 

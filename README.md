@@ -14,6 +14,8 @@
 Core verification dashboards (coverage, unsupported audit, board model validation, nightly) are owned by `labwired-core`:
 [`./core/README.md`](./core/README.md)
 
+Explore the [Documentation Hub](./docs/README.md) for strategy and platform-level guides.
+
 ## Ownership Model
 
 - Root `labwired` repo owns model delivery and integration packaging for `labwired-core` consumption.
@@ -67,16 +69,13 @@ See [`DEVELOPMENT.md`](./DEVELOPMENT.md) for complete setup instructions for all
 
 ## 📚 Documentation & Demos
 - **🚀 [Demos & Examples](./DEMOS.md)** - Start here to see LabWired in action.
-- **[Core Emulator](./core/README.md)** - Detailed emulator documentation
-- **[Agent Instructions](./AGENTS.md)** - Repository-level instructions for coding agents
-- **[Board Onboarding Playbook](./core/docs/board_onboarding_playbook.md)** - Config-first workflow for adding new board targets
-- **[Postmortems](./docs/postmortems/README.md)** - Incident analysis and prevention records
-- **[NUCLEO-H563ZI Example](./core/examples/nucleo-h563zi/README.md)** - Human-run capability showcase (emulator + real board)
-- **[NUCLEO-H563ZI Demo Story](./docs/NUCLEO_H563ZI_DEMO.md)** - Marketing/demo narrative and live talk track
-- **[VS Code Extension](./vscode/README.md)** - Extension features and usage
-- **[AI Tools](./ai/README.md)** - Asset generation tools
-- **[Development Guide](./DEVELOPMENT.md)** - Contributing and building
-- **[Platform Strategy](./docs/spec/)** - Business roadmaps and market analysis
+- **📖 [Documentation Hub](./docs/README.md)** - Central index for all platform documentation.
+  - [Strategy & Planning](./docs/strategy/plan.md)
+  - [Technical Specs](./docs/specs/DIGITAL_TWIN_SPEC.md)
+  - [Development Guide](./DEVELOPMENT.md)
+- **🤖 [Agent Instructions](./AGENTS.md)** - Repository-level instructions for coding agents.
+- **⚙️ [Core Emulator](./core/README.md)** - Detailed emulator engine documentation.
+- **🔌 [VS Code Extension](./vscode/README.md)** - IDE integration features and usage.
 
 ### CI-Friendly Test Runner (`labwired test`)
 
@@ -148,12 +147,10 @@ We follow **Gitflow** and enforce strict quality gates.
 See [Release & Merging Strategy](core/docs/release_strategy.md) for the full protocol.
 
 ## 📄 Documentation
-- [Platform Docs Index](https://labwired.com/docs.html)
-- [Implementation Plan](https://labwired.com/docs/plan.md)
-- [Core Architecture](https://labwired.com/docs/explanation/architecture/)
-- [Release Strategy](https://labwired.com/docs/development/release_strategy/)
-- [CI Integration Guide](https://labwired.com/docs/how-to-guides/ci-cd-integration/)
-- [Interactive Debugging](https://labwired.com/docs/explanation/debugging-architecture-dap-gdb/)
+- [Platform Documentation Hub](./docs/README.md)
+- [Implementation Plan](./docs/strategy/plan.md)
+- [Core Architecture](./core/docs/architecture.md)
+- [Release Strategy](./core/docs/release_strategy.md)
 
 
 ## ⚖️ License

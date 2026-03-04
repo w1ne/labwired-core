@@ -24,7 +24,7 @@ func (s *Store) CreateKey(workspaceID, plaintextKey string) (*APIKey, error) {
 	id := uuid.New().String()
 	_, err = s.db.Exec(
 		"INSERT INTO api_keys (id, key_hash, workspace_id, tier) VALUES (?, ?, ?, ?)",
-		id, string(hash), workspaceID, "free",
+		id, string(hash), workspaceID, "builder",
 	)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func (s *Store) CreateKey(workspaceID, plaintextKey string) (*APIKey, error) {
 		ID:          id,
 		KeyHash:     string(hash),
 		WorkspaceID: workspaceID,
-		Tier:        "free",
+		Tier:        "builder",
 	}, nil
 }
 

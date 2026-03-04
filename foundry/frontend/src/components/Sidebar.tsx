@@ -4,6 +4,7 @@ const Sidebar = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab:
     const tabs = [
         { id: 'catalog', label: 'Asset Catalog', icon: '📦' },
         { id: 'usage', label: 'Usage & Quota', icon: '📊' },
+        { id: 'health', label: 'Platform Health', icon: '🩺' },
         { id: 'docs', label: 'API Reference', icon: '📕' },
     ];
 

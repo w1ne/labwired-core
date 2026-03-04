@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +17,19 @@ import (
 	"github.com/labwired/foundry-backend/internal/catalog"
 	"github.com/labwired/foundry-backend/internal/db"
 	"github.com/labwired/foundry-backend/internal/verification"
+	stripe "github.com/stripe/stripe-go/v76"
+	"github.com/stripe/stripe-go/v76/webhook"
 )
+
+// maxInputLen caps user-controlled strings before they reach synthesis or the LLM.
+const maxInputLen = 32 * 1024 // 32 KB
+
+func sanitizeInput(s string) string {
+	if len(s) > maxInputLen {
+		return s[:maxInputLen]
+	}
+	return s
+}
 
 type JobStatus string
 
@@ -25,29 +41,32 @@ const (
 	StatusError   JobStatus = "error"
 )
 
+// Job carries the data needed by the background worker to execute a simulation.
 type Job struct {
-	ID        string              `json:"run_id"`
-	Status    JobStatus           `json:"status"`
-	Result    *verification.Result `json:"result,omitempty"`
-	CreatedAt time.Time           `json:"created_at"`
+	ID          string
+	WorkspaceID string
+	IRPath      string // temp file containing the submitted YAML/JSON
+	ArtifactDir string // directory where output files will be written
 }
 
 type Server struct {
-	router      *mux.Router
-	jobs        sync.Map // run_id -> *Job
-	jobQueue    chan *Job
+	router       *mux.Router
+	jobs         sync.Map // run_id -> *Job (in-memory while queued/running)
+	jobQueue     chan *Job
 	orchestrator *verification.Orchestrator
-	store       *db.Store
-	catalog     *catalog.Manager
+	store        *db.Store
+	catalog      *catalog.Manager
+	artifactsDir string
 }
 
-func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Manager) *Server {
+func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Manager, artifactsDir string) *Server {
 	s := &Server{
-		router:      mux.NewRouter(),
-		jobQueue:    make(chan *Job, 100),
+		router:       mux.NewRouter(),
+		jobQueue:     make(chan *Job, 100),
 		orchestrator: orch,
-		store:       store,
-		catalog:     cat,
+		store:        store,
+		catalog:      cat,
+		artifactsDir: artifactsDir,
 	}
 	s.routes()
 	go s.worker()
@@ -55,10 +74,24 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 }
 
 func (s *Server) routes() {
+	// Public endpoints
 	s.router.HandleFunc("/v1/catalog", s.handleListCatalog).Methods("GET")
 	s.router.HandleFunc("/v1/catalog/{id}", s.handleGetCatalogAsset).Methods("GET")
 	s.router.HandleFunc("/v1/info", s.handleInfo).Methods("GET")
+	s.router.HandleFunc("/v1/health", s.handleHealth).Methods("GET")
 	s.router.HandleFunc("/v1/schema/synthesis", s.handleSchemaSynthesis).Methods("GET")
+	s.router.HandleFunc("/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/openapi.yaml")
+	}).Methods("GET")
+	s.router.PathPrefix("/v1/docs").Handler(http.StripPrefix("/v1/docs", http.FileServer(http.Dir("static"))))
+
+	// Artifact file serving (generated VCD / result JSON)
+	s.router.PathPrefix("/artifacts/").Handler(
+		http.StripPrefix("/artifacts/", http.FileServer(http.Dir(s.artifactsDir))),
+	)
+
+	// Stripe webhook (no API key auth — verified by signature)
+	s.router.HandleFunc("/v1/webhooks/stripe", s.handleStripeWebhook).Methods("POST")
 
 	// Protected VaaS Routes (Requires API Key)
 	protected := s.router.PathPrefix("/v1").Subrouter()
@@ -72,19 +105,18 @@ func (s *Server) routes() {
 	protected.Handle("/models/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifyModel))).Methods("POST")
 	protected.Handle("/systems/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifySystem))).Methods("POST")
 
+	// Run polling
+	protected.HandleFunc("/runs/{run_id}", s.handleGetRun).Methods("GET")
+	protected.HandleFunc("/runs", s.handleListRuns).Methods("GET")
+
 	protected.HandleFunc("/usage", s.handleUsage).Methods("GET")
-
-	// Documentation
-	s.router.HandleFunc("/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/openapi.yaml")
-	}).Methods("GET")
-
-	s.router.PathPrefix("/v1/docs").Handler(http.StripPrefix("/v1/docs", http.FileServer(http.Dir("static"))))
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.corsMiddleware(s.router).ServeHTTP(w, r)
 }
+
+// ── Public Catalog ───────────────────────────────────────────────────────────
 
 func (s *Server) handleListCatalog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -113,12 +145,68 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(info)
 }
 
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	status := "healthy"
+	components := map[string]interface{}{
+		"api": map[string]string{"status": "up"},
+	}
+
+	// Check Database
+	dbStatus := "up"
+	if err := s.store.Ping(); err != nil {
+		dbStatus = "down"
+		status = "unhealthy"
+		log.Printf("[health] database connection failed: %v", err)
+	}
+	components["database"] = map[string]string{"status": dbStatus}
+
+	// Check Storage (Artifacts directory)
+	storageStatus := "up"
+	if _, err := os.Stat(s.artifactsDir); os.IsNotExist(err) {
+		storageStatus = "down"
+		status = "unhealthy"
+		log.Printf("[health] artifacts directory does not exist: %s", s.artifactsDir)
+	} else if err := os.MkdirAll(s.artifactsDir, 0755); err != nil {
+		storageStatus = "degraded"
+		status = "degraded"
+		log.Printf("[health] artifacts directory not writable: %v", err)
+	}
+	components["storage"] = map[string]string{"status": storageStatus}
+
+	// Check Worker (Job queue)
+	workerStatus := "up"
+	if cap(s.jobQueue) == len(s.jobQueue) {
+		workerStatus = "saturated"
+		// Not necessarily unhealthy, but worth reporting
+	}
+	components["worker"] = map[string]interface{}{
+		"status": workerStatus,
+		"queue": map[string]int{
+			"length":   len(s.jobQueue),
+			"capacity": cap(s.jobQueue),
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if status == "unhealthy" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":     status,
+		"timestamp":  time.Now().Format(time.RFC3339),
+		"components": components,
+	})
+}
+
+// ── Estimate ─────────────────────────────────────────────────────────────────
+
 func calculateSynthesisCost(componentName, requirements string) int {
-	// Mocking dynamic cost: A simple peripheral might cost 15 runs, a complex MCU 1500 runs.
 	cost := 15
-	if strings.Contains(strings.ToLower(requirements), "mcu") || strings.Contains(strings.ToLower(componentName), "core") {
+	lower := strings.ToLower(componentName + " " + requirements)
+	switch {
+	case strings.Contains(lower, "mcu") || strings.Contains(lower, "core") || strings.Contains(lower, "cpu"):
 		cost = 1500
-	} else if len(requirements) > 500 {
+	case len(requirements) > 500:
 		cost = 50
 	}
 	return cost
@@ -134,21 +222,23 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax.")
 		return
 	}
-
 	if req.ComponentName == "" || req.Requirements == "" {
 		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "component_name and requirements are required.", "")
 		return
 	}
+	req.ComponentName = sanitizeInput(req.ComponentName)
+	req.Requirements = sanitizeInput(req.Requirements)
 
 	cost := calculateSynthesisCost(req.ComponentName, req.Requirements)
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"component_name": req.ComponentName,
+		"component_name":      req.ComponentName,
 		"estimated_cost_runs": cost,
-		"message": fmt.Sprintf("Synthesizing %s will cost approximately %d runs.", req.ComponentName, cost),
+		"message":             fmt.Sprintf("Synthesizing %s will cost approximately %d runs.", req.ComponentName, cost),
 	})
 }
+
+// ── Synthesize ────────────────────────────────────────────────────────────────
 
 func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -160,108 +250,231 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax.")
 		return
 	}
-
 	if req.ComponentName == "" || req.Requirements == "" {
 		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "component_name and requirements are required.", "")
 		return
 	}
+	req.ComponentName = sanitizeInput(req.ComponentName)
+	req.Requirements = sanitizeInput(req.Requirements)
 
 	cost := calculateSynthesisCost(req.ComponentName, req.Requirements)
-
-	// Consume runs for synthesis
-	jobID := "synth-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	jobID := fmt.Sprintf("synth-%d", time.Now().UnixNano())
 	apiKey := r.Context().Value("api_key").(*db.APIKey)
 
+	// Consume the quota runs for this synthesis job.
 	for i := 0; i < cost; i++ {
-		_ = s.store.SaveRun(fmt.Sprintf("%s-%d", jobID, i), apiKey.WorkspaceID, "pass")
+		_ = s.store.SaveRun(fmt.Sprintf("%s-%d", jobID, i), apiKey.WorkspaceID, string(StatusPass))
 	}
 
-	// Return 202 Accepted
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"job_id": jobID,
-		"status": "processing",
+		"job_id":  jobID,
+		"status":  "processing",
 		"message": "Synthesis job started. The internal engine is drafting and formally verifying the model.",
 	})
 }
 
-func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		YAML string `json:"chip_yaml"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax and ensure all required fields are present.")
+// ── Async Verify Handlers ─────────────────────────────────────────────────────
+
+// submitJob writes the YAML body to a temp file, creates the DB row and enqueues the job.
+func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string, body []byte) {
+	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	log.Printf("[%s] Submitting job for workspace %s", prefix, apiKey.WorkspaceID)
+
+	runID := fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	artifactDir := filepath.Join(s.artifactsDir, runID)
+	if err := os.MkdirAll(artifactDir, 0755); err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create artifact directory.", "")
 		return
 	}
 
-	// Synchronously execute verification (mocked for now, but in reality calls Orchestrator)
-	runID := "run-model-" + fmt.Sprintf("%d", time.Now().UnixNano())
-	apiKey := r.Context().Value("api_key").(*db.APIKey)
-	_ = s.store.SaveRun(runID, apiKey.WorkspaceID, "pass") // Consume 1 quota run
+	// Write the submitted YAML to a temp file inside the artifact dir.
+	irPath := filepath.Join(artifactDir, "input.yaml")
+	if err := os.WriteFile(irPath, body, 0644); err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to persist input.", "")
+		return
+	}
 
-	// We return detailed compiler logs and VCD traces.
-	result := map[string]interface{}{
-		"pass":              false, // Mock a failure to show iterative loop
-		"assertions_passed": 1,
-		"assertions_total":  2,
-		"compiler_logs":     "Error: Register 0xD0 mismatch. Expected 0x60, read 0x00.",
-		"vcd_url":           "/v1/docs/trace-model.vcd", // Fake URL
+	// Persist the run as "queued" — consumes one quota slot.
+	if err := s.store.SaveRun(runID, apiKey.WorkspaceID, string(StatusQueued)); err != nil {
+		log.Printf("[%s] ERROR: Failed to record run in DB: %v", prefix, err)
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to record simulation run.", "")
+		return
+	}
+
+	job := &Job{
+		ID:          runID,
+		WorkspaceID: apiKey.WorkspaceID,
+		IRPath:      irPath,
+		ArtifactDir: artifactDir,
+	}
+	s.jobs.Store(runID, job)
+
+	select {
+	case s.jobQueue <- job:
+		log.Printf("[%s] Job enqueued: %s", prefix, runID)
+	default:
+		// Queue full.
+		_ = s.store.UpdateRunStatus(runID, string(StatusError), 0, 0, "")
+		sendError(w, http.StatusServiceUnavailable, "QUEUE_FULL", "The simulation queue is at capacity.", "Retry after 5-10 seconds.")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"run_id":  runID,
+		"status":  string(StatusQueued),
+		"poll_url": fmt.Sprintf("/v1/runs/%s", runID),
+	})
+}
+
+func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_BODY", "Could not read request body.", "")
+		return
+	}
+	s.submitJob(w, r, "run-model", body)
 }
 
 func (s *Server) handleVerifySystem(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		SystemYAML string `json:"system_yaml"`
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_BODY", "Could not read request body.", "")
+		return
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax and ensure all required fields are present.")
+	s.submitJob(w, r, "run-system", body)
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
+
+func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
+	runID := mux.Vars(r)["run_id"]
+	record, err := s.store.GetRun(runID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch run status.", "")
+		return
+	}
+	if record == nil {
+		sendError(w, http.StatusNotFound, "RUN_NOT_FOUND", "No run found with that ID.", "")
 		return
 	}
 
-	// Mocking a powerful system-level verification response.
-	runID := "run-system-" + fmt.Sprintf("%d", time.Now().UnixNano())
-	apiKey := r.Context().Value("api_key").(*db.APIKey)
-	_ = s.store.SaveRun(runID, apiKey.WorkspaceID, "pass") // Consume 1 quota run
-
-	// In reality, it runs the orchestrator with the master system.yaml and returns traces spanning multiple buses.
-	result := map[string]interface{}{
-		"pass":              false, // Mock an integration failure
-		"assertions_passed": 45,
-		"assertions_total":  46,
-		"compiler_logs":     "System Integration Error: Address collision on I2C1 bus. Both BME280_1 and BME280_2 configured with address 0x76.",
-		"vcd_url":           "/v1/docs/trace-system-integration-multi-bus.vcd",
+	resp := map[string]interface{}{
+		"run_id":            record.RunID,
+		"status":            record.Status,
+		"assertions_passed": record.AssertionsPassed,
+		"assertions_total":  record.AssertionsTotal,
+		"created_at":        record.CreatedAt,
+	}
+	if record.ArtifactsPath != "" {
+		baseURL := "/artifacts/" + record.RunID
+		resp["artifacts"] = map[string]string{
+			"ir_url":     baseURL + "/output.json",
+			"vcd_url":    baseURL + "/proof.vcd",
+			"result_url": baseURL + "/result.json",
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(resp)
 }
 
-func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
-	apiKeyVal := r.Context().Value("api_key")
-	if apiKeyVal == nil {
-		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API Key not found.", "")
+func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
+	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	records, err := s.store.ListRunsForWorkspace(apiKey.WorkspaceID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch run list.", "")
 		return
 	}
-	apiKey := apiKeyVal.(*db.APIKey)
-
-	limit := 50
-	if apiKey.Tier == "enterprise" {
-		limit = 1000000
+	if records == nil {
+		records = []db.RunRecord{}
 	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(records)
+}
 
+// ── Usage ─────────────────────────────────────────────────────────────────────
+
+func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
+	apiKey := r.Context().Value("api_key").(*db.APIKey)
 	used, _ := s.store.CountRunsForWorkspace(apiKey.WorkspaceID)
-
+	quota, _ := s.store.GetMonthlyQuota(apiKey.WorkspaceID)
 	json.NewEncoder(w).Encode(map[string]any{
 		"workspace_id":         apiKey.WorkspaceID,
 		"tier":                 apiKey.Tier,
 		"runs_used_this_month": used,
-		"quota":                limit,
+		"quota":                quota,
+		"runs_remaining":       quota - used,
 	})
 }
+
+// ── Stripe Webhook ────────────────────────────────────────────────────────────
+
+func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
+	const maxBodyBytes = int64(65536)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	payload, err := io.ReadAll(r.Body)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_BODY", "Could not read webhook body.", "")
+		return
+	}
+
+	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		log.Println("[stripe] STRIPE_WEBHOOK_SECRET not set — skipping signature verification (dev mode)")
+	} else {
+		sigHeader := r.Header.Get("Stripe-Signature")
+		if _, err := webhook.ConstructEvent(payload, sigHeader, webhookSecret); err != nil {
+			sendError(w, http.StatusBadRequest, "INVALID_SIGNATURE", "Webhook signature verification failed.", "")
+			return
+		}
+	}
+
+	var event stripe.Event
+	if err := json.Unmarshal(payload, &event); err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_JSON", "Could not parse Stripe event.", "")
+		return
+	}
+
+	if event.Type != "checkout.session.completed" {
+		w.WriteHeader(http.StatusOK) // Acknowledge but ignore other event types.
+		return
+	}
+
+	var session stripe.CheckoutSession
+	if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_SESSION", "Could not parse checkout session.", "")
+		return
+	}
+
+	// workspace_id is passed as client_reference_id when creating the Stripe checkout session.
+	workspaceID := session.ClientReferenceID
+	if workspaceID == "" {
+		log.Printf("[stripe] checkout.session.completed missing client_reference_id: %s", session.ID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Map amount_total (in cents) to runs. €49 = 4900 cents → 1000 runs.
+	runsToCredit := int(session.AmountTotal / 49) * 1000
+	if runsToCredit <= 0 {
+		runsToCredit = 1000 // safe fallback for manual or test payments
+	}
+
+	if err := s.store.AddQuotaRuns(workspaceID, runsToCredit); err != nil {
+		log.Printf("[stripe] failed to credit %d runs to workspace %s: %v", runsToCredit, workspaceID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[stripe] credited %d runs to workspace %s (session %s)", runsToCredit, workspaceID, session.ID)
+	w.WriteHeader(http.StatusOK)
+}
+
+// ── Schema ────────────────────────────────────────────────────────────────────
 
 func (s *Server) handleSchemaSynthesis(w http.ResponseWriter, r *http.Request) {
 	schema := `{
@@ -277,25 +490,26 @@ func (s *Server) handleSchemaSynthesis(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(schema))
 }
 
+// ── Background Worker ─────────────────────────────────────────────────────────
+
 func (s *Server) worker() {
 	for job := range s.jobQueue {
-		job.Status = StatusRunning
+		// Mark as running in DB.
+		_ = s.store.UpdateRunStatus(job.ID, string(StatusRunning), 0, 0, "")
 
-		// In a real app, we'd find the IR path or generate it here
-		// Mocking the IR conversion and verification
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		result, err := s.orchestrator.RunSimulation(ctx, job.IRPath, job.ArtifactDir)
+		cancel()
 
-		result, err := s.orchestrator.RunSimulation(ctx, "mock_ir.json")
 		if err != nil {
-			job.Status = StatusError
+			log.Printf("[worker] run %s error: %v", job.ID, err)
+			_ = s.store.UpdateRunStatus(job.ID, string(StatusError), 0, 0, "")
 		} else if result.Pass {
-			job.Status = StatusPass
-			job.Result = result
+			_ = s.store.UpdateRunStatus(job.ID, string(StatusPass), result.AssertionsPassed, result.AssertionsTotal, job.ArtifactDir)
 		} else {
-			job.Status = StatusFail
-			job.Result = result
+			_ = s.store.UpdateRunStatus(job.ID, string(StatusFail), result.AssertionsPassed, result.AssertionsTotal, job.ArtifactDir)
 		}
 
-		cancel()
+		s.jobs.Delete(job.ID)
 	}
 }
