@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: LabWired Foundry API
+  description: |
+    Agent-First API for hardware peripheral synthesis and verification.
+    Designed for seamless integration with AI agents and LLMs.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/v1
+    description: Local development server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code.
+        message:
+          type: string
+          description: Human/Agent-readable description of what went wrong.
+        remediation:
+          type: string
+          description: Actionable suggestion for the calling agent.
+
+    CatalogAsset:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        pass_rate:
+          type: integer
+        registers:
+          type: integer
+        ir_url:
+          type: string
+
+    SimulateRequest:
+      type: object
+      required:
+        - peripheral_id
+        - chip_yaml
+      properties:
+        peripheral_id:
+          type: string
+          description: Unique identifier for the peripheral.
+        chip_yaml:
+          type: string
+          description: LabWired-compatible YAML definition of the peripheral logic.
+
+    SimulateResponse:
+      type: object
+      properties:
+        run_id:
+          type: string
+          format: uuid
+
+    RunStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, pass, fail, error]
+        logs:
+          type: string
+
+paths:
+  /info:
+    get:
+      summary: API Discovery
+      description: Returns metadata about the Foundry engine and current operational limits.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: {type: string}
+                  engine: {type: string}
+                  capabilities: {type: array, items: {type: string}}
+
+  /catalog:
+    get:
+      summary: List "Solid Proven" Assets
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: A list of verified peripherals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogAsset'
+
+  /twins/simulate:
+    post:
+      summary: Start Peripheral Synthesis & Verification
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulateRequest'
+      responses:
+        '202':
+          description: Simulation queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulateResponse'
+
+  /runs/{id}:
+    get:
+      summary: Get Simulation Run Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current status and logs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunStatus'
