@@ -24,3 +24,4 @@ pub mod stub;
 pub mod systick;
 pub mod timer;
 pub mod uart;
+pub mod components;
