@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiUrl, authHeaders } from '../api';
 
 interface Asset {
     id: string;
@@ -9,14 +10,16 @@ interface Asset {
     ir_url: string;
 }
 
-const AssetCatalog = () => {
+interface Props {
+    onSelectAsset?: (id: string) => void;
+}
+
+const AssetCatalog = ({ onSelectAsset }: Props) => {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:8080/v1/catalog', {
-            headers: { 'Authorization': 'Bearer local-dev-token' }
-        })
+        fetch(apiUrl('/v1/catalog'), { headers: authHeaders() })
             .then(res => res.json())
             .then(data => {
                 setAssets(data);
@@ -67,12 +70,19 @@ const AssetCatalog = () => {
                         </div>
 
                         <div style={{ display: 'flex', gap: '12px' }}>
-                            <button style={{ flex: 1 }}>SIMULATE</button>
-                            <button className="secondary" style={{ flex: 1 }}>SPEC</button>
+                            <button style={{ flex: 1 }} onClick={() => onSelectAsset?.(asset.id)}>DETAILS</button>
+                            {asset.ir_url && (
+                                <a href={asset.ir_url} download style={{ flex: 1 }}>
+                                    <button className="secondary" style={{ width: '100%' }}>DOWNLOAD IR</button>
+                                </a>
+                            )}
                         </div>
                     </div>
                 ))}
             </div>
+            {assets.length === 0 && (
+                <p style={{ color: 'var(--lw-gray)', fontStyle: 'italic' }}>No assets found. The backend may not be running.</p>
+            )}
         </div>
     );
 };

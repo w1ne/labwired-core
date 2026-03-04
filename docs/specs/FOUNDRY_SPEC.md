@@ -267,10 +267,20 @@ curl -X POST https://foundry.labwired.dev/v1/models/verify \
 
 ## 10. MVP Scope (v0.1 Deliverables)
 
--   [x] FastAPI skeleton with API Key Authentication.
--   [ ] Async Job Queue (`asyncio.Queue`) for simulation serialization.
--   [ ] Docker-wrapped verification harness.
--   [ ] React-based Catalog & Download Dashboard.
--   [ ] 60-second onboarding: "Signup -> Key -> First Simulation".
--   [ ] WebSocket streaming / Webhooks
--   [ ] Private catalog for Enterprise
+### Backend
+-   [x] Go API server with API Key Authentication & quota middleware.
+-   [x] `/estimate`, `/synthesize`, `/v1/catalog`, `/v1/usage` endpoints.
+-   [/] **Async Job Queue**: `handleVerifyModel` / `handleVerifySystem` → `202 Accepted` + enqueue; `GET /v1/runs/{run_id}` polling endpoint.
+-   [/] **Per-workspace quota**: `monthly_quota` column in `api_keys`; middleware reads DB instead of hardcoded value.
+-   [ ] **Stripe credit top-up**: `POST /v1/webhooks/stripe` — verify signature, parse `checkout.session.completed`, call `AddQuotaRuns`.
+-   [ ] **Artifact serving**: `/artifacts/{run_id}/` static file handler; orchestrator writes real VCD + result to disk.
+
+### Frontend
+-   [/] **Public landing page** (`/`): hero with live `curl` snippet + CTA; catalog grid from `/v1/catalog`.
+-   [ ] **Asset detail page** (`/assets/:id`): proof badge, register map table, download buttons.
+-   [/] **Developer dashboard** (`/dashboard`): quota bar, recent runs table, API key copy/rotate, "Buy More Runs" → Stripe link.
+
+### Infrastructure
+-   [ ] Docker-wrapped verification sandbox (network=none, 512 MB, read-only rootfs).
+-   [ ] Caddy reverse-proxy config (TLS, `/v1/*` → backend, `/artifacts/*` → static).
+-   [ ] Deploy to Hetzner VPS.

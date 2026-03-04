@@ -22,9 +22,9 @@ func main() {
 		labwiredPath = "labwired"
 	}
 
-	workDir := os.Getenv("WORK_DIR")
-	if workDir == "" {
-		workDir = "/tmp/foundry"
+	artifactsDir := os.Getenv("ARTIFACTS_DIR")
+	if artifactsDir == "" {
+		artifactsDir = "/tmp/foundry/artifacts"
 	}
 
 	dbPath := os.Getenv("DB_PATH")
@@ -38,8 +38,8 @@ func main() {
 	}
 
 	cat := catalog.NewManager()
-	orch := verification.NewOrchestrator(labwiredPath, workDir)
-	srv := api.NewServer(orch, store, cat)
+	orch := verification.NewOrchestrator(labwiredPath)
+	srv := api.NewServer(orch, store, cat, artifactsDir)
 
 	log.Printf("Foundry Backend listening on port %s", port)
 	if err := http.ListenAndServe(":"+port, srv); err != nil {

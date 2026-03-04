@@ -1,11 +1,12 @@
 module github.com/labwired/foundry-backend
 
-go 1.24.0
+go 1.23
 
 require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/sashabaranov/go-openai v1.41.2
+	github.com/stripe/stripe-go/v76 v76.25.0
 	golang.org/x/crypto v0.48.0
 	modernc.org/sqlite v1.20.4
 )
