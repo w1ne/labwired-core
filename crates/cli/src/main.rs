@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::str::FromStr;
 // use std::sync::atomic::Ordering; // Removed as unused
-use labwired_core::Cpu;
+use labwired_core::{Bus, Cpu};
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
@@ -126,6 +126,12 @@ pub enum AssetCommands {
 
     /// List available chip descriptors.
     ListChips(asset_validation::ListChipsArgs),
+
+    /// Create a new peripheral asset from a PDF datasheet using AI.
+    Create(CreateArgs),
+
+    /// Verify an AI-generated peripheral model using a simulator loopback.
+    Verify(VerifyArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -137,6 +143,48 @@ pub struct CodegenArgs {
     /// Path to the output Rust file
     #[arg(short, long)]
     pub output: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct CreateArgs {
+    /// Path to the input PDF datasheet
+    #[arg(short = 'd', long)]
+    pub pdf: PathBuf,
+
+    /// Comma-separated list of pages to analyze (e.g. "12,15,20")
+    #[arg(short, long)]
+    pub pages: String,
+
+    /// Name of the peripheral to extract (e.g. "USART1")
+    #[arg(short, long)]
+    pub name: String,
+
+    /// Path to the output YAML file
+    #[arg(short, long)]
+    pub output: PathBuf,
+
+    /// Path to the output Strict IR (JSON) file
+    #[arg(short, long)]
+    pub strict_ir: Option<PathBuf>,
+
+    /// Optional path to a python virtual environment
+    #[arg(long)]
+    pub venv: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug)]
+pub struct VerifyArgs {
+    /// Path to the peripheral IR (JSON) to verify
+    #[arg(short, long)]
+    pub ir: PathBuf,
+
+    /// Optional peripheral ID (defaults to name in IR)
+    #[arg(short = 'n', long)]
+    pub id: Option<String>,
+
+    /// Optional path to a python virtual environment
+    #[arg(long)]
+    pub venv: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug)]
@@ -280,6 +328,10 @@ struct TestArgs {
     /// Enable instruction tracing (saved to trace.json)
     #[arg(long)]
     trace: bool,
+
+    /// Output VCD trace to file
+    #[arg(long)]
+    vcd: Option<PathBuf>,
 
     /// Maximum number of instructions to trace
     #[arg(long, default_value = "100000")]
@@ -550,6 +602,8 @@ fn run_asset(args: AssetArgs) -> ExitCode {
         AssetCommands::AddPeripheral(a) => run_asset_add_peripheral(a),
         AssetCommands::Validate(a) => asset_validation::run_validate(a),
         AssetCommands::ListChips(a) => asset_validation::run_list_chips(a),
+        AssetCommands::Create(a) => run_asset_create(a),
+        AssetCommands::Verify(a) => run_asset_verify(a),
     }
 }
 
@@ -637,6 +691,143 @@ fn resolve_chip_descriptor_path(chip: &str) -> Option<PathBuf> {
     }
 
     None
+}
+
+fn run_asset_verify(args: VerifyArgs) -> ExitCode {
+    info!("Verifying asset from {:?}", args.ir);
+
+    // 1. Locate the 'ai' directory
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ai_dir = manifest_dir.join("../../../ai");
+
+    if !ai_dir.exists() {
+        error!("Could not find 'ai' directory at {:?}", ai_dir);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    // 2. Determine Python Command
+    let python_cmd = if let Some(venv) = args.venv {
+        venv.join("bin/python3")
+    } else {
+        let local_venv = ai_dir.join(".venv/bin/python3");
+        if local_venv.exists() {
+            local_venv
+        } else {
+            PathBuf::from("python3")
+        }
+    };
+
+    info!("Using Python: {:?}", python_cmd);
+
+    // 3. Construct the command
+    let ir_path = args.ir.canonicalize().unwrap_or(args.ir);
+
+    let mut cmd = std::process::Command::new(python_cmd);
+    cmd.current_dir(&ai_dir)
+        .arg("-m")
+        .arg("labwired_ai.verify_harness")
+        .arg("--ir")
+        .arg(&ir_path);
+
+    if let Some(id) = args.id {
+        cmd.arg("--id").arg(id);
+    }
+
+    // Redirect stdout/stderr to inheritance
+    cmd.stdout(std::process::Stdio::inherit());
+    cmd.stderr(std::process::Stdio::inherit());
+
+    info!("Running AI Verification harness...");
+    match cmd.status() {
+        Ok(status) if status.success() => {
+            info!("Verification PASSED for {:?}", ir_path);
+            ExitCode::from(EXIT_PASS)
+        }
+        Ok(status) => {
+            error!("Verification FAILED with status: {}", status);
+            ExitCode::from(EXIT_RUNTIME_ERROR)
+        }
+        Err(e) => {
+            error!("Failed to execute Verification: {}", e);
+            ExitCode::from(EXIT_RUNTIME_ERROR)
+        }
+    }
+}
+
+fn run_asset_create(args: CreateArgs) -> ExitCode {
+    info!(
+        "Creating asset for '{}' from {:?} (Pages: {})",
+        args.name, args.pdf, args.pages
+    );
+
+    // 1. Locate the 'ai' directory
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ai_dir = manifest_dir.join("../../../ai");
+
+    if !ai_dir.exists() {
+        error!("Could not find 'ai' directory at {:?}", ai_dir);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    // 2. Determine Python Command
+    let python_cmd = if let Some(venv) = args.venv {
+        venv.join("bin/python3")
+    } else {
+        let local_venv = ai_dir.join(".venv/bin/python3");
+        if local_venv.exists() {
+            local_venv
+        } else {
+            PathBuf::from("python3")
+        }
+    };
+
+    info!("Using Python: {:?}", python_cmd);
+
+    // 3. Construct the command
+    let pdf_path = args.pdf.canonicalize().unwrap_or(args.pdf);
+    let output_path = args.output.canonicalize().unwrap_or(args.output);
+    let strict_ir_path = args.strict_ir.map(|p| p.canonicalize().unwrap_or(p));
+
+    let mut cmd = std::process::Command::new(python_cmd);
+    cmd.current_dir(&ai_dir)
+        .arg("-m")
+        .arg("labwired_ai")
+        .arg("ingest-datasheet")
+        .arg("--pdf")
+        .arg(&pdf_path)
+        .arg("--pages")
+        .arg(args.pages)
+        .arg("--name")
+        .arg(args.name)
+        .arg("--output")
+        .arg(&output_path);
+
+    if let Some(ref strict_ir) = strict_ir_path {
+        cmd.arg("--strict-ir").arg(strict_ir);
+    }
+
+    // Redirect stdout/stderr to inheritance so the user sees LLM progress
+    cmd.stdout(std::process::Stdio::inherit());
+    cmd.stderr(std::process::Stdio::inherit());
+
+    info!("Running AI Ingestion pipeline...");
+    match cmd.status() {
+        Ok(status) if status.success() => {
+            info!("Successfully created YAML asset at {:?}", output_path);
+            if let Some(ref strict_ir) = strict_ir_path {
+                info!("Successfully created Strict IR at {:?}", strict_ir);
+            }
+            ExitCode::from(EXIT_PASS)
+        }
+        Ok(status) => {
+            error!("AI Ingestion failed with status: {}", status);
+            ExitCode::from(EXIT_RUNTIME_ERROR)
+        }
+        Err(e) => {
+            error!("Failed to execute AI Ingestion: {}", e);
+            ExitCode::from(EXIT_RUNTIME_ERROR)
+        }
+    }
 }
 
 fn run_asset_init(args: InitArgs) -> ExitCode {
@@ -1745,6 +1936,13 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     } else {
         None
     };
+
+    if let Some(vcd_path) = &args.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.observers.push(observer);
+    }
+
     let mut sim_error_happened = false;
     let mut prev_pc = machine.cpu.get_pc();
     let mut stuck_counter: u64 = 0;
@@ -1801,14 +1999,17 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 to_execute,
             ) {
                 Ok(executed) => {
+                    let prev_cycles = machine.total_cycles;
                     step += executed as u64;
                     steps_executed = step;
                     machine.total_cycles += executed as u64;
 
-                    // Manual tick propagation for batch runs
-                    if machine.total_cycles % (machine.config.peripheral_tick_interval as u64)
-                        < executed as u64
-                    {
+                    // Cycle-accurate tick propagation for batch runs
+                    let tick_interval = machine.config.peripheral_tick_interval as u64;
+                    let ticks_before = prev_cycles / tick_interval;
+                    let ticks_after = machine.total_cycles / tick_interval;
+
+                    for _ in ticks_before..ticks_after {
                         let (interrupts, costs) = machine.bus.tick_peripherals_fully();
                         for c in costs {
                             machine.total_cycles += c.cycles as u64;
@@ -1820,7 +2021,6 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         }
                         for irq in interrupts {
                             machine.cpu.set_exception_pending(irq);
-                            tracing::debug!("Exception {} Pend", irq);
                         }
                     }
 
@@ -1900,17 +2100,40 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
             TestAssertion::ExpectedStopReason(a) => a.expected_stop_reason == stop_reason,
             TestAssertion::MemoryValue(a) => {
-                // Read 32-bit value from memory
-                match machine.bus.read_u32(a.memory_value.address) {
+                let size = a.memory_value.size.unwrap_or(32);
+                let result = match size {
+                    8 => machine
+                        .bus
+                        .read_u8(a.memory_value.address)
+                        .map(|v| v as u32),
+                    16 => machine
+                        .bus
+                        .read_u16(a.memory_value.address)
+                        .map(|v| v as u32),
+                    32 => machine.bus.read_u32(a.memory_value.address),
+                    _ => {
+                        error!("Unsupported memory assertion size: {}", size);
+                        Err(labwired_core::SimulationError::Other("Invalid size".into()))
+                    }
+                };
+
+                match result {
                     Ok(val) => {
                         let mask = a.memory_value.mask.unwrap_or(0xFFFFFFFF) as u32;
                         let expected = a.memory_value.expected_value as u32;
-                        (val & mask) == (expected & mask)
+                        let matched = (val & mask) == (expected & mask);
+                        if !matched {
+                            error!(
+                                "Memory assertion failed at {:#x} (size {}): expected {:#x}, got {:#x} (mask {:#x})",
+                                a.memory_value.address, size, expected, val, mask
+                            );
+                        }
+                        matched
                     }
                     Err(e) => {
                         error!(
-                            "Memory assertion failed to read address {:#x}: {}",
-                            a.memory_value.address, e
+                            "Memory assertion failed to read address {:#x} (size {}): {}",
+                            a.memory_value.address, size, e
                         );
                         false
                     }

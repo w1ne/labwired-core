@@ -18,7 +18,7 @@ SECTIONS
   .vector_table 0x08000000 :
   {
     LONG(0x200A0000); /* Initial SP for 640KB SRAM */
-    LONG(Reset + 1);  /* Reset Handler (Thumb) */
+    LONG(Reset | 1);  /* Reset Handler (Thumb bit MUST be set) */
   } > FLASH
 
   .text :
