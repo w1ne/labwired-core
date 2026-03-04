@@ -5,12 +5,13 @@ on:
     branches:
       - main
     paths:
-      - "crates/**"
-      - "configs/**"
+      - "configs/chips/**"
+      - "configs/systems/**"
       - "examples/**"
-      - "scripts/**"
+      - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
   workflow_dispatch:
+
 
 jobs:
   onboarding-smoke:

@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::network::Interconnect;
 use crate::{Cpu, Machine, SimResult};
 use std::collections::HashMap;
 
@@ -14,6 +15,7 @@ use std::collections::HashMap;
 pub struct World {
     pub name: String,
     pub machines: HashMap<String, Box<dyn MachineTrait>>,
+    pub interconnects: Vec<Box<dyn Interconnect>>,
 }
 
 /// Type-erased trait for machines to allow heterogeneous machines in the world.
@@ -48,11 +50,16 @@ impl World {
         Self {
             name,
             machines: HashMap::new(),
+            interconnects: Vec::new(),
         }
     }
 
     pub fn add_machine(&mut self, id: String, machine: Box<dyn MachineTrait>) {
         self.machines.insert(id, machine);
+    }
+
+    pub fn add_interconnect(&mut self, interconnect: Box<dyn Interconnect>) {
+        self.interconnects.push(interconnect);
     }
 
     /// Step all machines in the world.
@@ -64,6 +71,11 @@ impl World {
         let mut results = HashMap::new();
         for (id, machine) in &mut self.machines {
             results.insert(id.clone(), machine.step());
+        }
+        for interconnect in &mut self.interconnects {
+            if let Err(e) = interconnect.tick() {
+                eprintln!("Interconnect error: {:?}", e);
+            }
         }
         results
     }
@@ -119,5 +131,43 @@ mod tests {
 
         assert_eq!(world.machines.get("node1").unwrap().total_cycles(), 1);
         assert_eq!(world.machines.get("node2").unwrap().total_cycles(), 1);
+    }
+
+    use crate::network::CanBus;
+    use crate::peripherals::can::CanController;
+    use crate::Peripheral;
+
+    #[test]
+    fn test_can_bus_transmission() {
+        let mut world = World::new("test-can".to_string());
+
+        let mut can_bus = CanBus::new();
+        let (tx1, rx1) = can_bus.attach();
+        let (tx2, rx2) = can_bus.attach();
+
+        world.add_interconnect(Box::new(can_bus));
+
+        let mut can1 = CanController::new(tx1, rx1);
+        let mut can2 = CanController::new(tx2, rx2);
+
+        can1.write(0x00, 0xAA).unwrap();
+        can1.write(0x04, 0x12).unwrap();
+        can1.write(0x05, 0x34).unwrap();
+        can1.write(0x08, 0x01).unwrap();
+
+        let _ = world.step_all();
+
+        let _ = can2.tick();
+
+        let status = can2.read(0x08).unwrap();
+        assert_eq!(status, 1, "RX pending should be 1");
+
+        let rx_id = can2.read(0x0C).unwrap();
+        assert_eq!(rx_id, 0xAA);
+
+        let rx_data_0 = can2.read(0x10).unwrap();
+        let rx_data_1 = can2.read(0x11).unwrap();
+        assert_eq!(rx_data_0, 0x12);
+        assert_eq!(rx_data_1, 0x34);
     }
 }

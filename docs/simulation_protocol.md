@@ -46,6 +46,11 @@ limits:
 assertions:
   - expected_stop_reason: halt       # Halt instruction (e.g., BKPT, WFI loop)
   - uart_contains: "TEST PASSED"     # Substring match on the UART output stream
+  - memory_value:                    # Assert value at specific address
+      address: 0x40000030
+      expected_value: 0x80
+      size: 8                        # Optional: 8, 16, or 32 (default: 32)
+      mask: 0x80                     # Optional: bitmask for comparison
 ```
 
 ### 2.2 System Manifest (`system.yaml`)

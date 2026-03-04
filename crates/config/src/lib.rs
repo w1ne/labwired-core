@@ -530,6 +530,8 @@ pub struct MemoryValueDetails {
     pub expected_value: u64,
     #[serde(default)]
     pub mask: Option<u64>,
+    #[serde(default)]
+    pub size: Option<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

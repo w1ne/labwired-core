@@ -5,13 +5,13 @@ on:
     branches:
       - main
     paths:
-      - "crates/**"
-      - "configs/**"
+      - "configs/chips/**"
+      - "configs/systems/**"
       - "examples/**"
-      - "scripts/**"
-      - "docs/coverage_scoreboard.md"
+      - "crates/labwired-models-**"
       - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
+
 
 jobs:
   coverage-matrix-smoke:

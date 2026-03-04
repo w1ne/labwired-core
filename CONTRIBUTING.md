@@ -40,9 +40,11 @@ Installed hooks:
 
 ## Pull Request Process
 1. Create a branch from `main`.
-2. Ensure the CI suite passes.
-3. Update relevant documentation.
-4. Your PR will be reviewed by the maintainers.
+2. Ensure the **`core-integrity`** status check passes (formatting, linting, workspace tests).
+3. If you touch board models, configs, or examples, the relevant **Smoke Tests** and **Coverage Matrix** checks will trigger automatically. Ensure they pass if triggered.
+4. Update relevant documentation.
+5. Your PR will be reviewed by the maintainers.
+
 
 ## License
 By contributing, you agree that your contributions will be licensed under the MIT License.
