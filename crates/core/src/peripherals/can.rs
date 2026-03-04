@@ -4,8 +4,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
 use crate::network::CanFrame;
+use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug)]
@@ -38,11 +38,17 @@ impl Peripheral for CanController {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let shift = (offset % 4) * 8;
-        
+
         let val = match reg_offset {
             0x00 => self.tx_id,
             0x04 => self.tx_data,
-            0x08 => if self.rx_pending { 1 } else { 0 },
+            0x08 => {
+                if self.rx_pending {
+                    1
+                } else {
+                    0
+                }
+            }
             0x0C => self.rx_id,
             0x10 => self.rx_data,
             _ => 0,

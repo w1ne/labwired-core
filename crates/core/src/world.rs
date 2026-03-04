@@ -4,9 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::network::Interconnect;
 use crate::{Cpu, Machine, SimResult};
 use std::collections::HashMap;
-use crate::network::Interconnect;
 
 /// The orchestrator for a multi-node simulation environment.
 ///
@@ -140,31 +140,31 @@ mod tests {
     #[test]
     fn test_can_bus_transmission() {
         let mut world = World::new("test-can".to_string());
-        
+
         let mut can_bus = CanBus::new();
         let (tx1, rx1) = can_bus.attach();
         let (tx2, rx2) = can_bus.attach();
-        
+
         world.add_interconnect(Box::new(can_bus));
-        
+
         let mut can1 = CanController::new(tx1, rx1);
         let mut can2 = CanController::new(tx2, rx2);
-        
+
         can1.write(0x00, 0xAA).unwrap();
         can1.write(0x04, 0x12).unwrap();
         can1.write(0x05, 0x34).unwrap();
         can1.write(0x08, 0x01).unwrap();
-        
+
         let _ = world.step_all();
-        
+
         let _ = can2.tick();
-        
+
         let status = can2.read(0x08).unwrap();
         assert_eq!(status, 1, "RX pending should be 1");
-        
+
         let rx_id = can2.read(0x0C).unwrap();
         assert_eq!(rx_id, 0xAA);
-        
+
         let rx_data_0 = can2.read(0x10).unwrap();
         let rx_data_1 = can2.read(0x11).unwrap();
         assert_eq!(rx_data_0, 0x12);
