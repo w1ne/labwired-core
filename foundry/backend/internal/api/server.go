@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/labwired/foundry-backend/internal/catalog"
 	"github.com/labwired/foundry-backend/internal/db"
@@ -56,13 +55,23 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 func (s *Server) routes() {
 	s.router.HandleFunc("/v1/catalog", s.handleListCatalog).Methods("GET")
 	s.router.HandleFunc("/v1/catalog/{id}", s.handleGetCatalogAsset).Methods("GET")
-	s.router.HandleFunc("/v1/twins/simulate", s.handleSimulate).Methods("POST")
-	s.router.HandleFunc("/v1/runs/{id}", s.handleGetRun).Methods("GET")
+	s.router.HandleFunc("/v1/info", s.handleInfo).Methods("GET")
+	s.router.HandleFunc("/v1/tasks/next", s.handleGetNextTask).Methods("GET")
+	s.router.HandleFunc("/v1/tasks/{id}/context", s.handleGetTaskContext).Methods("GET")
+	s.router.HandleFunc("/v1/tasks/{id}/verify", s.handleVerifyTask).Methods("POST")
 	s.router.HandleFunc("/v1/usage", s.handleUsage).Methods("GET")
+	s.router.HandleFunc("/v1/schema/synthesis", s.handleSchemaSynthesis).Methods("GET")
+
+	// Documentation
+	s.router.HandleFunc("/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/openapi.yaml")
+	}).Methods("GET")
+	
+	s.router.PathPrefix("/v1/docs").Handler(http.StripPrefix("/v1/docs", http.FileServer(http.Dir("static"))))
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.router.ServeHTTP(w, r)
+	s.corsMiddleware(s.router).ServeHTTP(w, r)
 }
 
 func (s *Server) handleListCatalog(w http.ResponseWriter, r *http.Request) {
@@ -74,55 +83,84 @@ func (s *Server) handleGetCatalogAsset(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	asset, ok := s.catalog.Get(id)
 	if !ok {
-		http.NotFound(w, r)
+		sendError(w, http.StatusNotFound, "ASSET_NOT_FOUND", "The requested asset ID does not exist in the catalog.", "Check /v1/catalog for a list of valid asset IDs.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(asset)
 }
 
-func (s *Server) handleSimulate(w http.ResponseWriter, r *http.Request) {
-	// 1. Authenticate (MVP: placeholder)
-
-	// 2. Parse request
-	var req struct {
-		PeripheralID string `json:"peripheral_id"`
-		YAML         string `json:"chip_yaml"`
+func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
+	info := map[string]interface{}{
+		"version":      "1.0.0",
+		"engine":       "LabWired Foundry (Go Native)",
+		"capabilities": []string{"synthesis", "solid_proof", "formal_verification"},
+		"docs_url":     "/v1/docs",
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// 3. Create job
-	job := &Job{
-		ID:        uuid.New().String(),
-		Status:    StatusQueued,
-		CreatedAt: time.Now(),
-	}
-	s.jobs.Store(job.ID, job)
-	s.jobQueue <- job
-
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
-		"run_id":   job.ID,
-		"status":   string(job.Status),
-		"poll_url": "/v1/runs/" + job.ID,
-	})
+	json.NewEncoder(w).Encode(info)
 }
 
-func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetNextTask(w http.ResponseWriter, r *http.Request) {
+	// Mock returning a task for the agent
+	task := map[string]interface{}{
+		"id":          "task-bme280-001",
+		"name":        "BME280 Temperature Sensor",
+		"description": "Implement a digital twin for the BME280 focusing strictly on the I2C interface and ID register (0xD0).",
+		"status":      "open",
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(task)
+}
+
+func (s *Server) handleGetTaskContext(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	val, ok := s.jobs.Load(id)
-	if !ok {
-		http.NotFound(w, r)
+	if id != "task-bme280-001" {
+		sendError(w, http.StatusNotFound, "TASK_NOT_FOUND", "The requested task ID does not exist.", "Ensure the task ID is correct.")
 		return
 	}
-	job := val.(*Job)
+
+	ctxResp := map[string]interface{}{
+		"task_id": id,
+		"datasheet_excerpts": []string{
+			"The I2C device address is 0x76 or 0x77.",
+			"Register 0xD0 'id' contains the value 0x60.",
+		},
+		"memory_map_constraints": map[string]string{
+			"0xD0": "Read-only, expected value 0x60",
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ctxResp)
+}
+
+func (s *Server) handleVerifyTask(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if id != "task-bme280-001" {
+		sendError(w, http.StatusNotFound, "TASK_NOT_FOUND", "The requested task ID does not exist.", "Ensure the task ID is correct.")
+		return
+	}
+
+	var req struct {
+		YAML string `json:"chip_yaml"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax and ensure all required fields are present.")
+		return
+	}
+
+	// Synchronously execute verification (mocked for now, but in reality calls Orchestrator)
+	// We return detailed compiler logs and VCD traces.
+	result := map[string]interface{}{
+		"pass":              false, // Mock a failure to show iterative loop
+		"assertions_passed": 1,
+		"assertions_total":  2,
+		"compiler_logs":     "Error: Register 0xD0 mismatch. Expected 0x60, read 0x00.",
+		"vcd_url":           "/v1/docs/trace-bme280.vcd", // Fake URL
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(job)
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +169,20 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		"runs_used_this_month": 12,
 		"quota":                1000,
 	})
+}
+
+func (s *Server) handleSchemaSynthesis(w http.ResponseWriter, r *http.Request) {
+	schema := `{
+		"$schema": "http://json-schema.org/draft-07/schema#",
+		"type": "object",
+		"properties": {
+			"peripheral_id": { "type": "string", "description": "Unique identifier" },
+			"chip_yaml": { "type": "string", "description": "LabWired YAML specification" }
+		},
+		"required": ["peripheral_id", "chip_yaml"]
+	}`
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(schema))
 }
 
 func (s *Server) worker() {
