@@ -177,32 +177,32 @@ mod tests {
     #[test]
     fn test_wireless_bus_transmission() {
         let mut world = World::new("test-wireless".to_string());
-        
+
         let mut wireless_bus = WirelessBus::new();
         let (tx1, rx1) = wireless_bus.attach();
         let (tx2, rx2) = wireless_bus.attach();
-        
+
         world.add_interconnect(Box::new(wireless_bus));
-        
+
         let mut radio1 = RadioController::new(tx1, rx1);
         let mut radio2 = RadioController::new(tx2, rx2);
-        
+
         // Setup channels (Channel 10)
         radio1.write(0x00, 10).unwrap(); // TX CH
         radio2.write(0x00, 10).unwrap(); // Also needs to be on index 10 to receive
-        
+
         // Trigger TX on radio1
         radio1.write(0x08, 0x01).unwrap();
-        
+
         // Step the world
         let _ = world.step_all();
-        
+
         // Tick radio2 to process incoming packet
         let _ = radio2.tick();
-        
+
         let status = radio2.read(0x0C).unwrap();
         assert_eq!(status, 1, "RX pending should be 1");
-        
+
         let rx_ch = radio2.read(0x10).unwrap();
         assert_eq!(rx_ch, 10);
     }

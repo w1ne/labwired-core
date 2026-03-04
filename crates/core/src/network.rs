@@ -85,6 +85,12 @@ pub struct WirelessBus {
     node_txs: Vec<Sender<WirelessPacket>>,
 }
 
+impl Default for WirelessBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WirelessBus {
     pub fn new() -> Self {
         let (tx, rx) = channel();
