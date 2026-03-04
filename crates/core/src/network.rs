@@ -25,6 +25,12 @@ pub struct CanBus {
     node_txs: Vec<Sender<CanFrame>>,
 }
 
+impl Default for CanBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CanBus {
     pub fn new() -> Self {
         let (tx, rx) = channel();
