@@ -164,3 +164,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerificationResult'
+  /systems/verify:
+    post:
+      summary: System-Level Verification
+      description: Submit a multi-component system netlist for formal verification. Returns synchronous execution traces across multiple buses.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - system_yaml
+              properties:
+                system_yaml:
+                  type: string
+                  description: LabWired system YAML linking MCU and peripherals.
+      responses:
+        '200':
+          description: System Verification executed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResult'

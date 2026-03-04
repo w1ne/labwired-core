@@ -59,6 +59,7 @@ func (s *Server) routes() {
 	s.router.HandleFunc("/v1/tasks/next", s.handleGetNextTask).Methods("GET")
 	s.router.HandleFunc("/v1/tasks/{id}/context", s.handleGetTaskContext).Methods("GET")
 	s.router.HandleFunc("/v1/tasks/{id}/verify", s.handleVerifyTask).Methods("POST")
+	s.router.HandleFunc("/v1/systems/verify", s.handleVerifySystem).Methods("POST")
 	s.router.HandleFunc("/v1/usage", s.handleUsage).Methods("GET")
 	s.router.HandleFunc("/v1/schema/synthesis", s.handleSchemaSynthesis).Methods("GET")
 
@@ -66,7 +67,7 @@ func (s *Server) routes() {
 	s.router.HandleFunc("/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/openapi.yaml")
 	}).Methods("GET")
-	
+
 	s.router.PathPrefix("/v1/docs").Handler(http.StripPrefix("/v1/docs", http.FileServer(http.Dir("static"))))
 }
 
@@ -157,6 +158,29 @@ func (s *Server) handleVerifyTask(w http.ResponseWriter, r *http.Request) {
 		"assertions_total":  2,
 		"compiler_logs":     "Error: Register 0xD0 mismatch. Expected 0x60, read 0x00.",
 		"vcd_url":           "/v1/docs/trace-bme280.vcd", // Fake URL
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleVerifySystem(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SystemYAML string `json:"system_yaml"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax and ensure all required fields are present.")
+		return
+	}
+
+	// Mocking a powerful system-level verification response.
+	// In reality, it runs the orchestrator with the master system.yaml and returns traces spanning multiple buses.
+	result := map[string]interface{}{
+		"pass":              false, // Mock an integration failure
+		"assertions_passed": 45,
+		"assertions_total":  46,
+		"compiler_logs":     "System Integration Error: Address collision on I2C1 bus. Both BME280_1 and BME280_2 configured with address 0x76.",
+		"vcd_url":           "/v1/docs/trace-system-integration-multi-bus.vcd",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
