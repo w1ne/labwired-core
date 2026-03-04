@@ -16,6 +16,7 @@ pub mod i2c;
 pub mod i2c_temp_sensor;
 pub mod nvic;
 pub mod pio;
+pub mod radio;
 pub mod rcc;
 pub mod scb;
 pub mod spi;
