@@ -7,7 +7,7 @@ use labwired_core::network::{CanBus, WirelessBus};
 use labwired_core::peripherals::can::CanController;
 use labwired_core::peripherals::radio::RadioController;
 use labwired_core::world::World;
-use labwired_core::{Machine, SimResult};
+use labwired_core::Machine;
 
 #[test]
 fn test_real_world_iot_chain() {
@@ -88,18 +88,18 @@ fn test_real_world_iot_chain() {
         .machines
         .get_mut("actuator")
         .unwrap()
-        .write_u8(radio_base + 0, 15)
+        .write_u8(radio_base, 15)
         .unwrap();
     world
         .machines
         .get_mut("monitor")
         .unwrap()
-        .write_u8(radio_base + 0, 15)
+        .write_u8(radio_base, 15)
         .unwrap();
 
     // 4. Step 1: Controller sends CAN Command (ID=0x55, Data=0x01)
     let controller = world.machines.get_mut("controller").unwrap();
-    controller.write_u8(can_base + 0, 0x55).unwrap(); // TX ID
+    controller.write_u8(can_base, 0x55).unwrap(); // TX ID
     controller.write_u8(can_base + 4, 0x01).unwrap(); // TX Data
     controller.write_u8(can_base + 8, 1).unwrap(); // Trigger TX
 
