@@ -1,10 +1,10 @@
-import React from 'react';
+
 
 const Sidebar = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) => {
     const tabs = [
         { id: 'catalog', label: 'Asset Catalog', icon: '📦' },
-        { id: 'generator', label: 'Foundry Gen', icon: '⚡' },
         { id: 'usage', label: 'Usage & Quota', icon: '📊' },
+        { id: 'docs', label: 'API Reference', icon: '📕' },
     ];
 
     return (
@@ -18,7 +18,13 @@ const Sidebar = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab:
                 {tabs.map((tab) => (
                     <div
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => {
+                            if (tab.id === 'docs') {
+                                window.open('http://localhost:8080/v1/docs', '_blank');
+                            } else {
+                                setActiveTab(tab.id);
+                            }
+                        }}
                         style={{
                             padding: '1rem 1.5rem',
                             margin: '0.5rem 0',

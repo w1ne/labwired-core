@@ -2,7 +2,6 @@ import { useState } from 'react'
 import './App.css'
 import Sidebar from './components/Sidebar'
 import AssetCatalog from './components/AssetCatalog'
-import Generator from './components/Generator'
 import UsageStats from './components/UsageStats'
 
 function App() {
@@ -14,7 +13,6 @@ function App() {
 
       <main style={{ flex: 1, display: 'flex', overflowY: 'auto' }}>
         {activeTab === 'catalog' && <AssetCatalog />}
-        {activeTab === 'generator' && <Generator />}
         {activeTab === 'usage' && <UsageStats />}
       </main>
 
