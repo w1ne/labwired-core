@@ -68,3 +68,12 @@ func (s *Store) UpdateRunStatus(runID, status string, passed, total int) error {
 	)
 	return err
 }
+
+func (s *Store) CountRunsForWorkspace(workspaceID string) (int, error) {
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM simulation_runs
+		WHERE workspace_id = ? AND datetime(created_at) >= datetime('now', '-30 days')
+	`, workspaceID).Scan(&count)
+	return count, err
+}

@@ -56,12 +56,20 @@ func (s *Server) routes() {
 	s.router.HandleFunc("/v1/catalog", s.handleListCatalog).Methods("GET")
 	s.router.HandleFunc("/v1/catalog/{id}", s.handleGetCatalogAsset).Methods("GET")
 	s.router.HandleFunc("/v1/info", s.handleInfo).Methods("GET")
-	s.router.HandleFunc("/v1/tasks/next", s.handleGetNextTask).Methods("GET")
-	s.router.HandleFunc("/v1/tasks/{id}/context", s.handleGetTaskContext).Methods("GET")
-	s.router.HandleFunc("/v1/tasks/{id}/verify", s.handleVerifyTask).Methods("POST")
-	s.router.HandleFunc("/v1/systems/verify", s.handleVerifySystem).Methods("POST")
-	s.router.HandleFunc("/v1/usage", s.handleUsage).Methods("GET")
 	s.router.HandleFunc("/v1/schema/synthesis", s.handleSchemaSynthesis).Methods("GET")
+
+	// Protected VaaS Routes (Requires API Key)
+	protected := s.router.PathPrefix("/v1").Subrouter()
+	protected.Use(s.authMiddleware)
+
+	protected.HandleFunc("/tasks/next", s.handleGetNextTask).Methods("GET")
+	protected.HandleFunc("/tasks/{id}/context", s.handleGetTaskContext).Methods("GET")
+
+	// Quota-protected endpoints (Consume run credits)
+	protected.Handle("/tasks/{id}/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifyTask))).Methods("POST")
+	protected.Handle("/systems/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifySystem))).Methods("POST")
+
+	protected.HandleFunc("/usage", s.handleUsage).Methods("GET")
 
 	// Documentation
 	s.router.HandleFunc("/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -188,10 +196,25 @@ func (s *Server) handleVerifySystem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
-	// Mock usage response
+	apiKeyVal := r.Context().Value("api_key")
+	if apiKeyVal == nil {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API Key not found.", "")
+		return
+	}
+	apiKey := apiKeyVal.(*db.APIKey)
+
+	limit := 1000
+	if apiKey.Tier == "enterprise" {
+		limit = 1000000
+	}
+
+	used, _ := s.store.CountRunsForWorkspace(apiKey.WorkspaceID)
+
 	json.NewEncoder(w).Encode(map[string]any{
-		"runs_used_this_month": 12,
-		"quota":                1000,
+		"workspace_id":         apiKey.WorkspaceID,
+		"tier":                 apiKey.Tier,
+		"runs_used_this_month": used,
+		"quota":                limit,
 	})
 }
 
