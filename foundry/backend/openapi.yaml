@@ -32,33 +32,6 @@ components:
           type: string
           description: Actionable suggestion for the calling agent.
 
-    Task:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-          description: High-level description of the peripheral to be synthesized.
-        status:
-          type: string
-          enum: [open, in_progress, completed, failed]
-
-    TaskContext:
-      type: object
-      properties:
-        task_id:
-          type: string
-        datasheet_excerpts:
-          type: array
-          items:
-            type: string
-        memory_map_constraints:
-          type: object
-          additionalProperties: true
-
     VerificationRequest:
       type: object
       required:
@@ -119,42 +92,6 @@ paths:
         '200':
           description: OK
 
-  /tasks/next:
-    get:
-      summary: Task Ingestion
-      description: Poll for the next available peripheral synthesis task.
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: A new task to be processed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Task'
-        '204':
-          description: No tasks currently available.
-
-  /tasks/{id}/context:
-    get:
-      summary: Context Retrieval
-      description: Fetch detailed specs, constraints, and datasheet excerpts for a specific task.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Detailed task context.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskContext'
-
   /synthesize:
     post:
       summary: Autonomous Synthesis
@@ -180,18 +117,12 @@ paths:
                   status:
                     type: string
 
-  /tasks/{id}/verify:
+  /models/verify:
     post:
-      summary: Iterative Verification
-      description: Submit a peripheral model for formal verification against the task requirements. Returns synchronous execution traces and compiler feedback.
+      summary: Stateless Model Verification
+      description: Submit a peripheral model for formal verification. Returns synchronous execution traces and compiler feedback.
       security:
         - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
       requestBody:
         required: true
         content:

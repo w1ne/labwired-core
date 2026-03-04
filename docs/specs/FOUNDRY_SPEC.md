@@ -25,7 +25,7 @@ Users pay for the expensive, high-fidelity **synthesis and formal proof** proces
 
 ```mermaid
 graph TD
-    A["AI Agent / CI Bot"] -->|"POST /v1/tasks/{id}/verify (API Key)"| B[Go Backend]
+    A["AI Agent / CI Bot"] -->|"POST /v1/models/verify (API Key)"| B[Go Backend]
     B --> C[Job Queue]
     C --> D["LabWired Core (Rust)\nFormal Simulation Engine\n(Docker sandbox)"]
     D --> E[Artifact Storage\nLocal filesystem]
@@ -69,8 +69,9 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 | :--- | :--- | :---: | :--- |
 | `GET` | `/v1/catalog` | Optional | List all public pre-verified peripherals |
 | `GET` | `/v1/catalog/{id}` | Optional | Detail view: register map, proof status, artifact URLs |
-| `POST` | `/v1/twins/simulate` | Required | Enqueue a simulation run; returns `run_id` |
-| `GET` | `/v1/runs/{run_id}` | Required | Poll status and fetch artifact URLs when complete |
+| `POST` | `/v1/models/verify` | Required | Enqueue a verification run for standard component |
+| `POST` | `/v1/systems/verify` | Required | Enqueue an integrated board simulation |
+| `POST` | `/v1/synthesize` | Required | Autonomous synthesis model generation |
 | `GET` | `/v1/usage` | Required | Current-period run count, quota, and tier |
 | `POST` | `/v1/keys/rotate` | Required | Invalidate current key and issue a new one |
 
@@ -80,7 +81,7 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 
 Simulations are long-running (up to 30s). The API uses an **Asynchronous Polling Pattern**:
 
-1.  **Submission**: `POST /v1/twins/simulate` returns `202 Accepted` with a `run_id`.
+1.  **Submission**: `POST /v1/models/verify` returns `202 Accepted` with a `run_id`.
 2.  **Execution**: The job is pushed to the `asyncio.Queue`. A background worker picks it up, spins up the Docker sandbox, and executes the formal proofs.
 3.  **Polling**: The client calls `GET /v1/runs/{run_id}`.
     -   `queued`: Waiting for a worker.
@@ -204,10 +205,10 @@ This is the highest-priority UX moment. A developer (or their agent) must be pro
 Landing page shows a single ready-to-run `curl` command, pre-populated with the user's key:
 
 ```bash
-curl -X POST https://foundry.labwired.dev/v1/twins/simulate \
+curl -X POST https://foundry.labwired.dev/v1/models/verify \
   -H "Authorization: Bearer lw_sk_live_YOUR_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"peripheral_id": "ADXL345", "limits": {"max_steps": 2000}}'
+  -d '{"chip_yaml": "..."}'
 ```
 
 ### Step 3 — Use the Result (20s)

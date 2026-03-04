@@ -63,14 +63,11 @@ func (s *Server) routes() {
 	protected := s.router.PathPrefix("/v1").Subrouter()
 	protected.Use(s.authMiddleware)
 
-	protected.HandleFunc("/tasks/next", s.handleGetNextTask).Methods("GET")
-	protected.HandleFunc("/tasks/{id}/context", s.handleGetTaskContext).Methods("GET")
-
 	// Synthesis-as-a-Service endpoint
 	protected.Handle("/synthesize", s.quotaMiddleware(http.HandlerFunc(s.handleSynthesize))).Methods("POST")
 
 	// Quota-protected endpoints (Consume run credits)
-	protected.Handle("/tasks/{id}/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifyTask))).Methods("POST")
+	protected.Handle("/models/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifyModel))).Methods("POST")
 	protected.Handle("/systems/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifySystem))).Methods("POST")
 
 	protected.HandleFunc("/usage", s.handleUsage).Methods("GET")
@@ -114,39 +111,6 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(info)
 }
 
-func (s *Server) handleGetNextTask(w http.ResponseWriter, r *http.Request) {
-	// Mock returning a task for the agent
-	task := map[string]interface{}{
-		"id":          "task-bme280-001",
-		"name":        "BME280 Temperature Sensor",
-		"description": "Implement a digital twin for the BME280 focusing strictly on the I2C interface and ID register (0xD0).",
-		"status":      "open",
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(task)
-}
-
-func (s *Server) handleGetTaskContext(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	if id != "task-bme280-001" {
-		sendError(w, http.StatusNotFound, "TASK_NOT_FOUND", "The requested task ID does not exist.", "Ensure the task ID is correct.")
-		return
-	}
-
-	ctxResp := map[string]interface{}{
-		"task_id": id,
-		"datasheet_excerpts": []string{
-			"The I2C device address is 0x76 or 0x77.",
-			"Register 0xD0 'id' contains the value 0x60.",
-		},
-		"memory_map_constraints": map[string]string{
-			"0xD0": "Read-only, expected value 0x60",
-		},
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ctxResp)
-}
-
 func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ComponentName string `json:"component_name"`
@@ -181,13 +145,7 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleVerifyTask(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	if id != "task-bme280-001" {
-		sendError(w, http.StatusNotFound, "TASK_NOT_FOUND", "The requested task ID does not exist.", "Ensure the task ID is correct.")
-		return
-	}
-
+func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		YAML string `json:"chip_yaml"`
 	}
@@ -197,7 +155,7 @@ func (s *Server) handleVerifyTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Synchronously execute verification (mocked for now, but in reality calls Orchestrator)
-	runID := "run-" + id + "-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	runID := "run-model-" + fmt.Sprintf("%d", time.Now().UnixNano())
 	apiKey := r.Context().Value("api_key").(*db.APIKey)
 	_ = s.store.SaveRun(runID, apiKey.WorkspaceID, "pass") // Consume 1 quota run
 
@@ -207,7 +165,7 @@ func (s *Server) handleVerifyTask(w http.ResponseWriter, r *http.Request) {
 		"assertions_passed": 1,
 		"assertions_total":  2,
 		"compiler_logs":     "Error: Register 0xD0 mismatch. Expected 0x60, read 0x00.",
-		"vcd_url":           "/v1/docs/trace-bme280.vcd", // Fake URL
+		"vcd_url":           "/v1/docs/trace-model.vcd", // Fake URL
 	}
 
 	w.Header().Set("Content-Type", "application/json")
