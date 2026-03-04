@@ -58,7 +58,7 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 ```
 
 - **Authentication**: API keys are generated via an admin CLI (`cmd/addkey`) and stored as bcrypt hashes in SQLite. The Go backend enforces auth middleware on all Agent API routes.
-- **Quota Management**: A dedicated `quotaMiddleware` intercepts expensive simulation tasks. It queries the `simulation_runs` table in SQLite to ensure the authenticated workspace has not exceeded its monthly run limit (e.g., Free Tier: 50 runs/month). High-usage agents are HTTP 429 rate-limited if they exceed quotas.
+- **Quota Management**: A dedicated `quotaMiddleware` intercepts expensive compute tasks. It queries the `simulation_runs` table in SQLite to ensure the authenticated workspace has not exceeded its monthly run limit (e.g., Builder Tier: 1000 runs/month). High-usage agents are HTTP 429 rate-limited if they exceed quotas.
 - **Revocation**: Keys can be rotated or soft-deleted via the database, instantly blocking further access.
 
 ---
@@ -71,6 +71,7 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 | `GET` | `/v1/catalog/{id}` | Optional | Detail view: register map, proof status, artifact URLs |
 | `POST` | `/v1/models/verify` | Required | Enqueue a verification run for standard component |
 | `POST` | `/v1/systems/verify` | Required | Enqueue an integrated board simulation |
+| `POST` | `/v1/estimate` | Required | Quote the dynamic run cost of a synthesis request |
 | `POST` | `/v1/synthesize` | Required | Autonomous synthesis model generation |
 | `GET` | `/v1/usage` | Required | Current-period run count, quota, and tier |
 | `POST` | `/v1/keys/rotate` | Required | Invalidate current key and issue a new one |
@@ -128,7 +129,7 @@ To protect the host VPS (€7 Hetzner box), all simulation jobs run inside an **
 | `id` | UUID | Primary key |
 | `workspace_id` | UUID | FK to workspace |
 | `key_hash` | TEXT | bcrypt hash of `lw_sk_live_...` |
-| `tier` | ENUM | `free`, `builder`, `team`, `enterprise` |
+| `tier` | ENUM | `builder`, `team`, `enterprise` |
 | `monthly_quota` | INT | Max runs per billing period |
 | `revoked` | BOOL | Soft-delete for rotation |
 
@@ -199,7 +200,7 @@ This is the highest-priority UX moment. A developer (or their agent) must be pro
 ### Step 1 — Signup (10s)
 - Email + password only (GitHub OAuth in v1.1)
 - API key shown immediately on screen, ready to copy
-- No credit card required for Free tier
+- Credit card required (Stripe integration) to access Builder Tier
 
 ### Step 2 — First API Call (30s)
 Landing page shows a single ready-to-run `curl` command, pre-populated with the user's key:
@@ -257,10 +258,10 @@ curl -X POST https://foundry.labwired.dev/v1/models/verify \
 - **"Run New Simulation"** button (redirects to signup if unauthenticated)
 
 #### `/dashboard` — Developer Portal *(auth required)*
-- **Quota bar**: e.g., `12 / 50 runs used this month (Free tier)`
+- **Quota bar**: e.g., `12 / 1000 runs used this month (Builder tier)`
 - **Recent runs table**: run_id, chip, timestamp, status (with PASS/FAIL badge), artifact link
 - **API Key section**: masked key display, "Copy", "Rotate" button
-- **Upgrade CTA** for free users
+- **Upgrade CTA** for Team/Enterprise users
 
 ---
 

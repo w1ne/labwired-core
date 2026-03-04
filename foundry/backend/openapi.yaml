@@ -92,6 +92,33 @@ paths:
         '200':
           description: OK
 
+  /estimate:
+    post:
+      summary: Estimate Synthesis Cost
+      description: Get a quote for how many API runs a synthesis request will consume, based on complexity and novelty.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SynthesisRequest'
+      responses:
+        '200':
+          description: Cost estimate.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  component_name:
+                    type: string
+                  estimated_cost_runs:
+                    type: integer
+                  message:
+                    type: string
+
   /synthesize:
     post:
       summary: Autonomous Synthesis

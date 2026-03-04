@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,7 +64,8 @@ func (s *Server) routes() {
 	protected := s.router.PathPrefix("/v1").Subrouter()
 	protected.Use(s.authMiddleware)
 
-	// Synthesis-as-a-Service endpoint
+	// Synthesis-as-a-Service endpoints
+	protected.Handle("/estimate", s.authMiddleware(http.HandlerFunc(s.handleEstimate))).Methods("POST")
 	protected.Handle("/synthesize", s.quotaMiddleware(http.HandlerFunc(s.handleSynthesize))).Methods("POST")
 
 	// Quota-protected endpoints (Consume run credits)
@@ -111,6 +113,43 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(info)
 }
 
+func calculateSynthesisCost(componentName, requirements string) int {
+	// Mocking dynamic cost: A simple peripheral might cost 15 runs, a complex MCU 1500 runs.
+	cost := 15
+	if strings.Contains(strings.ToLower(requirements), "mcu") || strings.Contains(strings.ToLower(componentName), "core") {
+		cost = 1500
+	} else if len(requirements) > 500 {
+		cost = 50
+	}
+	return cost
+}
+
+func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ComponentName string `json:"component_name"`
+		Requirements  string `json:"requirements"`
+		DatasheetURL  string `json:"datasheet_url,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax.")
+		return
+	}
+
+	if req.ComponentName == "" || req.Requirements == "" {
+		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "component_name and requirements are required.", "")
+		return
+	}
+
+	cost := calculateSynthesisCost(req.ComponentName, req.Requirements)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"component_name": req.ComponentName,
+		"estimated_cost_runs": cost,
+		"message": fmt.Sprintf("Synthesizing %s will cost approximately %d runs.", req.ComponentName, cost),
+	})
+}
+
 func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ComponentName string `json:"component_name"`
@@ -127,11 +166,13 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Consume 10 runs for synthesis (Mock)
+	cost := calculateSynthesisCost(req.ComponentName, req.Requirements)
+
+	// Consume runs for synthesis
 	jobID := "synth-" + fmt.Sprintf("%d", time.Now().UnixNano())
 	apiKey := r.Context().Value("api_key").(*db.APIKey)
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < cost; i++ {
 		_ = s.store.SaveRun(fmt.Sprintf("%s-%d", jobID, i), apiKey.WorkspaceID, "pass")
 	}
 

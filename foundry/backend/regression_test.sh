@@ -12,7 +12,7 @@ SERVER_PID=$!
 sleep 2 # wait for server
 
 # 2. Generate a fresh key
-echo "🔑 [TEST] Generating fresh Free Tier API Key..."
+echo "🔑 [TEST] Generating fresh Builder Tier API Key..."
 KEY_OUTPUT=$(~/opt/go1.22.0-bin/bin/go run ./cmd/addkey -workspace test-workspace -db foundry_test.db)
 API_KEY=$(echo "$KEY_OUTPUT" | grep 'Your API Key' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 echo "🔑 [TEST] Key: $API_KEY"
@@ -37,21 +37,22 @@ if [ "$STATUS_AUTH" != "200" ]; then
 fi
 echo "✅ Passed: Valid key accepted."
 
-# 5. Exhaust Quota (Free tier = 50 runs)
-echo "💸 [TEST] Executing 50 Verification Runs to consume free quota..."
-for i in {1..50}; do
-  curl -s -X POST -o /dev/null -H "Authorization: Bearer $API_KEY" -d '{}' "http://localhost:8081/v1/systems/verify"
+# 5. Exhaust Quota (Builder tier = 1000 runs)
+echo "💸 [TEST] Executing 1000 Verification Runs to consume Builder quota (runs in background for speed)..."
+for i in {1..1000}; do
+  curl -s -X POST -o /dev/null -H "Authorization: Bearer $API_KEY" -d '{"chip_yaml": ""}' "http://localhost:8081/v1/models/verify" &
 done
+wait
 
-echo "💸 [TEST] Asserting 429 Too Many Requests on the 51st run..."
-STATUS_EXHAUSTED=$(curl -s -X POST -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $API_KEY" -d '{}' "http://localhost:8081/v1/systems/verify")
+echo "💸 [TEST] Asserting 429 Too Many Requests on the 1001st run..."
+STATUS_EXHAUSTED=$(curl -s -X POST -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $API_KEY" -d '{"chip_yaml": ""}' "http://localhost:8081/v1/models/verify")
 
 if [ "$STATUS_EXHAUSTED" != "429" ]; then
     echo "❌ FAILED: Expected 429 Quota Exceeded, got $STATUS_EXHAUSTED"
     kill -9 $SERVER_PID
     exit 1
 fi
-echo "✅ Passed: Free tier quota successfully capped at 50 runs!"
+echo "✅ Passed: Builder tier quota successfully capped at 1000 runs!"
 
 kill -9 $SERVER_PID
 echo "🎉 All Regression Tests Passed!"

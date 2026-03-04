@@ -18,9 +18,19 @@ API_KEY=$(echo "$KEY_OUTPUT" | grep 'Your API Key' | awk -F': ' '{print $2}' | t
 echo "🔑 [DEMO] Setup Complete. Key: $API_KEY"
 echo "------------------------------------------------------"
 
-# 3. Simulate an Agent Requesting Synthesis
+# 3. Simulate an Agent Requesting a Quote
 echo "🤖 [AGENT] I need a digital twin for an ADXL345 accelerometer."
-echo "🤖 [AGENT] Submitting prompt to POST /v1/synthesize..."
+echo "🤖 [AGENT] Checking how much it will cost via POST /v1/estimate..."
+
+curl -s -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{
+  "component_name": "ADXL345",
+  "requirements": "I2C interface required. Register 0x00 should return Device ID 0xE5.",
+  "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL345.pdf"
+}' "http://localhost:8082/v1/estimate" | jq .
+
+echo "------------------------------------------------------"
+echo "🤖 [AGENT] Cost accepted. Proceeding with Synthesis..."
+echo "🤖 [AGENT] Submitting payload to POST /v1/synthesize..."
 
 curl -s -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{
   "component_name": "ADXL345",
@@ -30,7 +40,7 @@ curl -s -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: applicatio
 
 echo "------------------------------------------------------"
 echo "⚙️  [FOUNDRY] Job Enqueued. Internal Agents are writing YAML and proving assertions..."
-echo "⚙️  [FOUNDRY] Consumed 10x Simulation Runs from quota."
+echo "⚙️  [FOUNDRY] Consumed Dynamic Simulation Runs from quota."
 
 # 4. Check Quota Usage to prove billing
 echo "💰 [BILLING] Let's verify our Quota usage after the Synthesis Job:"
