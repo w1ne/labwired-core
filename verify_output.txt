@@ -1,0 +1,90 @@
+[2m2026-03-02T19:49:39.771996Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Verifying asset from "../ai/adxl345.json"
+[2m2026-03-02T19:49:39.772085Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Using Python: "/home/andrii/Projects/labwired/core/crates/cli/../../../ai/.venv/bin/python3"
+[2m2026-03-02T19:49:39.772148Z[0m [32m INFO[0m [2mlabwired[0m[2m:[0m Running AI Verification harness...
+INFO: Verifying peripheral: adxl345 @ 0x40000000
+INFO: Total registers: 30
+INFO: Testing devid @ 0x40000000 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0xe5
+INFO: Testing thresh_tap @ 0x4000001d (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing ofsx @ 0x4000001e (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing ofsy @ 0x4000001f (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing ofsz @ 0x40000020 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing dur @ 0x40000021 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing latent @ 0x40000022 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing window @ 0x40000023 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing thresh_act @ 0x40000024 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing thresh_inact @ 0x40000025 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing time_inact @ 0x40000026 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing act_inact_ctl @ 0x40000027 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing thresh_ff @ 0x40000028 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing time_ff @ 0x40000029 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing tap_axes @ 0x4000002a (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing act_tap_status @ 0x4000002b (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: Testing bw_rate @ 0x4000002c (ReadWrite, 8-bit)
+ERROR:   ❌ Reset value mismatch: expected 0x1010, got 0x10
+INFO: Testing power_ctl @ 0x4000002d (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing int_enable @ 0x4000002e (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing int_map @ 0x4000002f (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing int_source @ 0x40000030 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x2
+INFO: Testing data_format @ 0x40000031 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing datax0 @ 0x40000032 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: Testing datax1 @ 0x40000033 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: Testing datay0 @ 0x40000034 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: Testing datay1 @ 0x40000035 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: Testing dataz0 @ 0x40000036 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: Testing dataz1 @ 0x40000037 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: Testing fifo_ctl @ 0x40000038 (ReadWrite, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO:   ✓ Read/Write loopback passed
+INFO: Testing fifo_status @ 0x40000039 (ReadOnly, 8-bit)
+INFO:   ✓ Reset value matched: 0x0
+INFO: ==============================
+INFO: VERIFICATION SUMMARY
+INFO: Passed: 29
+INFO: Failed: 1
+INFO: ==============================
+[2m2026-03-02T19:49:39.854406Z[0m [31mERROR[0m [2mlabwired[0m[2m:[0m Verification FAILED with status: exit status: 1
