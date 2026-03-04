@@ -63,9 +63,9 @@ func (s *Server) quotaMiddleware(next http.Handler) http.Handler {
 
 		apiKey := apiKeyVal.(*db.APIKey)
 
-		// For MVP, Free tier gets 1000 runs per 30 days.
+		// For MVP, Free tier gets 50 runs per 30 days.
 		// Enterprise gets 1,000,000.
-		limit := 1000
+		limit := 50
 		if apiKey.Tier == "enterprise" {
 			limit = 1000000
 		}

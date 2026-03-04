@@ -58,7 +58,7 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 ```
 
 - **Authentication**: API keys are generated via an admin CLI (`cmd/addkey`) and stored as bcrypt hashes in SQLite. The Go backend enforces auth middleware on all Agent API routes.
-- **Quota Management**: A dedicated `quotaMiddleware` intercepts expensive simulation tasks. It queries the `simulation_runs` table in SQLite to ensure the authenticated workspace has not exceeded its monthly run limit (e.g., Free Tier: 1000 runs/month). High-usage agents are HTTP 429 rate-limited if they exceed quotas.
+- **Quota Management**: A dedicated `quotaMiddleware` intercepts expensive simulation tasks. It queries the `simulation_runs` table in SQLite to ensure the authenticated workspace has not exceeded its monthly run limit (e.g., Free Tier: 50 runs/month). High-usage agents are HTTP 429 rate-limited if they exceed quotas.
 - **Revocation**: Keys can be rotated or soft-deleted via the database, instantly blocking further access.
 
 ---
