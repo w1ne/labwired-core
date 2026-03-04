@@ -7,13 +7,13 @@ echo "🚀 [DEMO] Starting Foundry Synthesis-as-a-Service Loop..."
 # 1. Setup DB and Server
 cd $(dirname $0)
 rm -f foundry_demo.db
-PORT=8082 DB_PATH=foundry_demo.db ~/opt/go1.22.0-bin/bin/go run cmd/server/main.go > /tmp/server_demo.log 2>&1 &
+PORT=8082 DB_PATH=foundry_demo.db ~/opt/go1.24.0-bin/bin/go run cmd/server/main.go > /tmp/server_demo.log 2>&1 &
 SERVER_PID=$!
 sleep 2 # wait for server
 
 # 2. Generate a fresh key
 echo "🔑 [DEMO] Generating a fresh Developer API Key..."
-KEY_OUTPUT=$(~/opt/go1.22.0-bin/bin/go run ./cmd/addkey -workspace demo-workspace-2 -db foundry_demo.db)
+KEY_OUTPUT=$(~/opt/go1.24.0-bin/bin/go run ./cmd/addkey -workspace demo-workspace-2 -db foundry_demo.db)
 API_KEY=$(echo "$KEY_OUTPUT" | grep 'Your API Key' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 echo "🔑 [DEMO] Setup Complete. Key: $API_KEY"
 echo "------------------------------------------------------"

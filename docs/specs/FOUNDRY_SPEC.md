@@ -27,7 +27,7 @@ Users pay for the expensive, high-fidelity **synthesis and formal proof** proces
 graph TD
     A["AI Agent / CI Bot"] -->|"POST /v1/models/verify (API Key)"| B[Go Backend]
     B --> C[Job Queue]
-    C --> D["LabWired Core (Rust)\nFormal Simulation Engine\n(Docker sandbox)"]
+    C --> D["LabWired Core (Rust)\nFormal Simulation Engine\n(Host process + timeout)"]
     D --> E[Artifact Storage\nLocal filesystem]
     E -->|"VCD traces + Compiler Logs"| B
     B -->|"Result + Feedback"| A
@@ -74,7 +74,6 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 | `POST` | `/v1/estimate` | Required | Quote the dynamic run cost of a synthesis request |
 | `POST` | `/v1/synthesize` | Required | Autonomous synthesis model generation |
 | `GET` | `/v1/usage` | Required | Current-period run count, quota, and tier |
-| `POST` | `/v1/keys/rotate` | Required | Invalidate current key and issue a new one |
 
 ---
 
@@ -83,7 +82,7 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 Simulations are long-running (up to 30s). The API uses an **Asynchronous Polling Pattern**:
 
 1.  **Submission**: `POST /v1/models/verify` returns `202 Accepted` with a `run_id`.
-2.  **Execution**: The job is pushed to the `asyncio.Queue`. A background worker picks it up, spins up the Docker sandbox, and executes the formal proofs.
+2.  **Execution**: The job is pushed to an in-memory Go channel queue. Background workers execute `labwired test` with bounded timeout and persist artifacts.
 3.  **Polling**: The client calls `GET /v1/runs/{run_id}`.
     -   `queued`: Waiting for a worker.
     -   `running`: Simulation is active.
@@ -99,7 +98,7 @@ Simulations are long-running (up to 30s). The API uses an **Asynchronous Polling
 | HTTP Status | Error Code | Logic | Client Action |
 | :---: | :--- | :--- | :--- |
 | `401` | `unauthorized` | Missing/Invalid API key. | Check key in dashboard. |
-| `403` | `quota_exceeded` | Monthly run limit reached. | Upgrade tier or wait for reset. |
+| `429` | `quota_exceeded` | Monthly run limit reached. | Upgrade tier or wait for reset. |
 | `422` | `invalid_schema` | YAML/JSON failed schema validation. | Check input against [Strict IR Spec](../asset_foundry.md). |
 | `429` | `rate_limited` | Too many requests per second (concurrency). | Implement exponential backoff. |
 | `503` | `queue_full` | System at capacity on the VPS. | Retry after 5-10 seconds. |
@@ -109,15 +108,14 @@ Simulations are long-running (up to 30s). The API uses an **Asynchronous Polling
 
 ### Security & Isolation Constraints
 
-To protect the host VPS (€7 Hetzner box), all simulation jobs run inside an **Isolated Docker Sandbox**:
+Current implementation executes verification as a host subprocess (`labwired test`) with:
 
--   **Networking**: `--network none` (Strictly no egress/ingress).
--   **Resources**: `--cpus=1`, `--memory=512m`.
--   **Filesystem**:
-    -   Read-only rootfs (`--read-only`).
-    -   `/output` mounted as a `tmpfs` (RAM-only) capped at 10MB.
--   **Runtime**: `sysbox` or standard `runc` with a non-root user.
--   **Validation**: User-provided YAML is sanitized and validated against a Pydantic schema **before** reaching the shell/container.
+-   **Input Limits**: request body and field-size caps before persistence.
+-   **Quota Gates**: per-workspace quota checks and atomic run reservation.
+-   **Timeouts**: bounded execution with `context.WithTimeout`.
+-   **Artifact Scoping**: runs are polled by `(run_id, workspace_id)`.
+
+> Planned hardening: container sandboxing (`--network none`, strict CPU/memory caps, read-only rootfs).
 
 ---
 
@@ -158,13 +156,18 @@ To protect the host VPS (€7 Hetzner box), all simulation jobs run inside an **
 
 > **GDPR Compliance**: The Hetzner VPS is hosted in Frankfurt (EU). No personally identifiable information (PII) is included in simulation artifacts.
 
+Retention is enforced by a periodic backend cleanup sweep:
+- `ARTIFACT_RETENTION_DAYS` (default: `14`)
+- `ARTIFACT_CLEANUP_INTERVAL_SECONDS` (default: `3600`)
+- Cleanup removes expired artifact directories and clears `simulation_runs.artifacts_path`.
+
 ---
 
 ## 6. Deployment Layout (Hetzner VPS)
 
 ```bash
 /srv/foundry/
-├── api/            # FastAPI Python backend
+├── api/            # Go backend
 ├── web/            # Dashboard frontend (React build)
 ├── db/             # SQLite (key_store.db)
 ├── artifacts/      # /artifacts/{run_id} storage
@@ -173,8 +176,8 @@ To protect the host VPS (€7 Hetzner box), all simulation jobs run inside an **
 
 **Caddy Proxy**:
 - Port 80/443: Main landing and dashboard.
-- Path `/v1/*`: Proxied to FastAPI (`uvicorn` on port 8000).
-- Path `/artifacts/*`: Directly served static file directory.
+- Path `/v1/*`: Proxied to Go API server.
+- Artifacts are served by authenticated API routes (`/v1/runs/{run_id}/artifacts/{file}`).
 
 ---
 
@@ -272,8 +275,9 @@ curl -X POST https://foundry.labwired.dev/v1/models/verify \
 -   [x] `/estimate`, `/synthesize`, `/v1/catalog`, `/v1/usage` endpoints.
 -   [/] **Async Job Queue**: `handleVerifyModel` / `handleVerifySystem` → `202 Accepted` + enqueue; `GET /v1/runs/{run_id}` polling endpoint.
 -   [/] **Per-workspace quota**: `monthly_quota` column in `api_keys`; middleware reads DB instead of hardcoded value.
--   [ ] **Stripe credit top-up**: `POST /v1/webhooks/stripe` — verify signature, parse `checkout.session.completed`, call `AddQuotaRuns`.
--   [ ] **Artifact serving**: `/artifacts/{run_id}/` static file handler; orchestrator writes real VCD + result to disk.
+-   [x] **Stripe credit top-up**: `POST /v1/webhooks/stripe` signature verification + idempotent credit application (event dedup).
+-   [x] **Artifact serving**: authenticated run-scoped endpoint `/v1/runs/{run_id}/artifacts/{file}`.
+-   [x] **Artifact retention cleanup**: periodic TTL sweep removes expired run artifacts and clears DB pointers.
 
 ### Frontend
 -   [/] **Public landing page** (`/`): hero with live `curl` snippet + CTA; catalog grid from `/v1/catalog`.
@@ -282,5 +286,5 @@ curl -X POST https://foundry.labwired.dev/v1/models/verify \
 
 ### Infrastructure
 -   [ ] Docker-wrapped verification sandbox (network=none, 512 MB, read-only rootfs).
--   [ ] Caddy reverse-proxy config (TLS, `/v1/*` → backend, `/artifacts/*` → static).
+-   [ ] Caddy reverse-proxy config (TLS, `/v1/*` → backend).
 -   [ ] Deploy to Hetzner VPS.

@@ -76,7 +76,7 @@ Keys are scoped to a workspace and can be rotated or revoked at any time from th
 
 ### Key Endpoints
 
-#### `POST /v1/twins/simulate`
+#### `POST /v1/models/verify`
 Run the LabWired Core formal verification pipeline against a peripheral schema.
 
 ```json
@@ -98,14 +98,12 @@ Run the LabWired Core formal verification pipeline against a peripheral schema.
 ```json
 {
   "run_id": "run_abc123",
-  "status": "pass",
-  "assertions_passed": 49,
-  "assertions_total": 49,
-  "cycles_executed": 2000,
+  "status": "queued",
+  "poll_url": "/v1/runs/run_abc123",
   "artifacts": {
-    "ir_url": "https://foundry.labwired.dev/artifacts/run_abc123/adxl345.json",
-    "vcd_url": "https://foundry.labwired.dev/artifacts/run_abc123/proof.vcd",
-    "result_url": "https://foundry.labwired.dev/artifacts/run_abc123/result.json"
+    "ir_url": "https://foundry.labwired.dev/v1/runs/run_abc123/artifacts/output.json",
+    "vcd_url": "https://foundry.labwired.dev/v1/runs/run_abc123/artifacts/proof.vcd",
+    "result_url": "https://foundry.labwired.dev/v1/runs/run_abc123/artifacts/result.json"
   },
   "usage": {
     "runs_used_this_month": 12,
@@ -113,6 +111,9 @@ Run the LabWired Core formal verification pipeline against a peripheral schema.
   }
 }
 ```
+
+Artifact files are served through authenticated run-scoped endpoints and retained according to server policy
+(default: 14 days).
 
 #### `GET /v1/catalog`
 List all pre-verified peripherals in the public catalog.
@@ -133,7 +134,7 @@ An AI agent (Claude, Cursor, GitHub Copilot) can call the Foundry as a tool:
 import requests
 
 response = requests.post(
-    "https://foundry.labwired.dev/v1/twins/simulate",
+    "https://foundry.labwired.dev/v1/models/verify",
     headers={"Authorization": "Bearer lw_sk_live_xxxx"},
     json={
         "peripheral_id": "ADXL345",

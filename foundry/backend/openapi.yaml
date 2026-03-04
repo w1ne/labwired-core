@@ -146,8 +146,8 @@ paths:
 
   /models/verify:
     post:
-      summary: Stateless Model Verification
-      description: Submit a peripheral model for formal verification. Returns synchronous execution traces and compiler feedback.
+      summary: Enqueue Model Verification
+      description: Submit a peripheral model for formal verification. Returns a queued run ID for polling.
       security:
         - BearerAuth: []
       requestBody:
@@ -157,16 +157,23 @@ paths:
             schema:
               $ref: '#/components/schemas/VerificationRequest'
       responses:
-        '200':
-          description: Verification executed. Check `pass` boolean and `compiler_logs` for results.
+        '202':
+          description: Verification queued.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerificationResult'
+                type: object
+                properties:
+                  run_id:
+                    type: string
+                  status:
+                    type: string
+                  poll_url:
+                    type: string
   /systems/verify:
     post:
-      summary: System-Level Verification
-      description: Submit a multi-component system netlist for formal verification. Returns synchronous execution traces across multiple buses.
+      summary: Enqueue System Verification
+      description: Submit a multi-component system netlist for formal verification. Returns a queued run ID for polling.
       security:
         - BearerAuth: []
       requestBody:
@@ -182,9 +189,57 @@ paths:
                   type: string
                   description: LabWired system YAML linking MCU and peripherals.
       responses:
-        '200':
-          description: System Verification executed.
+        '202':
+          description: System Verification queued.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerificationResult'
+                type: object
+                properties:
+                  run_id:
+                    type: string
+                  status:
+                    type: string
+                  poll_url:
+                    type: string
+
+  /runs/{run_id}:
+    get:
+      summary: Get Run Status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current run status.
+
+  /runs/{run_id}/artifacts/{file}:
+    get:
+      summary: Download Run Artifact
+      description: |
+        Downloads one artifact file for a run owned by the authenticated workspace.
+        Artifact availability is retention-policy dependent.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [output.json, proof.vcd, result.json, error.log]
+      responses:
+        '200':
+          description: Artifact file stream.
+        '404':
+          description: Artifact or run not found.

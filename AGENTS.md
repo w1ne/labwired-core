@@ -11,10 +11,10 @@ Repository-level operating manual for AI coding agents working in `labwired`.
 - Core simulator and tooling are open source.
 
 Primary strategy references:
-- `docs/plan.md`
+- `docs/strategy/plan.md`
 - `docs/README.md`
-- `docs/AGENT_INTERFACE.md`
-- `docs/VS_CODE_UI_DEMO_CHECKLIST.md`
+- `docs/strategy/agent/README.md`
+- `docs/ops/VS_CODE_UI_DEMO_CHECKLIST.md`
 
 ## 2) Canonical Documentation Map
 
@@ -39,9 +39,9 @@ Board onboarding and peripheral contribution:
 - `core/docs/CONTRIBUTING_PERIPHERALS.md`
 
 Roadmap and positioning:
-- `docs/plan.md`
-- `docs/vision/AGENT_FIRST_PLATFORM.md`
-- `docs/vision/VISION_COMPLETION_GAPS.md`
+- `docs/strategy/plan.md`
+- `docs/strategy/vision/AGENT_FIRST_PLATFORM.md`
+- `docs/strategy/vision/VISION_COMPLETION_GAPS.md`
 
 ## 3) Repo Layout and Ownership
 

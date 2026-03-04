@@ -7,13 +7,13 @@ echo "🚀 [TEST] Starting API Regression Suite..."
 # 1. Setup DB and Server
 cd $(dirname $0)
 rm -f foundry_test.db
-PORT=8081 DB_PATH=foundry_test.db ~/opt/go1.22.0-bin/bin/go run cmd/server/main.go > /tmp/server_test.log 2>&1 &
+PORT=8081 DB_PATH=foundry_test.db ~/opt/go1.24.0-bin/bin/go run cmd/server/main.go > /tmp/server_test.log 2>&1 &
 SERVER_PID=$!
 sleep 2 # wait for server
 
 # 2. Generate a fresh key
 echo "🔑 [TEST] Generating fresh Builder Tier API Key..."
-KEY_OUTPUT=$(~/opt/go1.22.0-bin/bin/go run ./cmd/addkey -workspace test-workspace -db foundry_test.db)
+KEY_OUTPUT=$(~/opt/go1.24.0-bin/bin/go run ./cmd/addkey -workspace test-workspace -db foundry_test.db)
 API_KEY=$(echo "$KEY_OUTPUT" | grep 'Your API Key' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 echo "🔑 [TEST] Key: $API_KEY"
 

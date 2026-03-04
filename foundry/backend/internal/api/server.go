@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ import (
 
 // maxInputLen caps user-controlled strings before they reach synthesis or the LLM.
 const maxInputLen = 32 * 1024 // 32 KB
+const maxVerifyBodyBytes = int64(1 << 20)
 
 func sanitizeInput(s string) string {
 	if len(s) > maxInputLen {
@@ -53,23 +55,71 @@ type Server struct {
 	router       *mux.Router
 	jobs         sync.Map // run_id -> *Job (in-memory while queued/running)
 	jobQueue     chan *Job
+	workerCount  int
+	queueMu      sync.RWMutex
+	shuttingDown bool
+	workersWG    sync.WaitGroup
 	orchestrator *verification.Orchestrator
 	store        *db.Store
 	catalog      *catalog.Manager
 	artifactsDir string
+
+	maxInflightPerWorkspace int
+	inflightMu              sync.Mutex
+	inflightByWorkspace     map[string]int
+
+	artifactRetentionDays int
+	cleanupInterval       time.Duration
+	cleanupStopCh         chan struct{}
 }
 
 func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Manager, artifactsDir string) *Server {
+	workerCount := 4
+	if raw := os.Getenv("WORKER_CONCURRENCY"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			workerCount = parsed
+		}
+	}
+	maxInflightPerWorkspace := 8
+	if raw := os.Getenv("WORKSPACE_MAX_INFLIGHT"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			maxInflightPerWorkspace = parsed
+		}
+	}
+	artifactRetentionDays := 14
+	if raw := os.Getenv("ARTIFACT_RETENTION_DAYS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			artifactRetentionDays = parsed
+		}
+	}
+	cleanupInterval := time.Hour
+	if raw := os.Getenv("ARTIFACT_CLEANUP_INTERVAL_SECONDS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			cleanupInterval = time.Duration(parsed) * time.Second
+		}
+	}
+
 	s := &Server{
-		router:       mux.NewRouter(),
-		jobQueue:     make(chan *Job, 100),
-		orchestrator: orch,
-		store:        store,
-		catalog:      cat,
-		artifactsDir: artifactsDir,
+		router:                  mux.NewRouter(),
+		jobQueue:                make(chan *Job, 100),
+		workerCount:             workerCount,
+		orchestrator:            orch,
+		store:                   store,
+		catalog:                 cat,
+		artifactsDir:            artifactsDir,
+		maxInflightPerWorkspace: maxInflightPerWorkspace,
+		inflightByWorkspace:     make(map[string]int),
+		artifactRetentionDays:   artifactRetentionDays,
+		cleanupInterval:         cleanupInterval,
+		cleanupStopCh:           make(chan struct{}),
 	}
 	s.routes()
-	go s.worker()
+	for i := 0; i < s.workerCount; i++ {
+		s.workersWG.Add(1)
+		go s.worker(i)
+	}
+	s.workersWG.Add(1)
+	go s.cleanupLoop()
 	return s
 }
 
@@ -85,11 +135,6 @@ func (s *Server) routes() {
 	}).Methods("GET")
 	s.router.PathPrefix("/v1/docs").Handler(http.StripPrefix("/v1/docs", http.FileServer(http.Dir("static"))))
 
-	// Artifact file serving (generated VCD / result JSON)
-	s.router.PathPrefix("/artifacts/").Handler(
-		http.StripPrefix("/artifacts/", http.FileServer(http.Dir(s.artifactsDir))),
-	)
-
 	// Stripe webhook (no API key auth — verified by signature)
 	s.router.HandleFunc("/v1/webhooks/stripe", s.handleStripeWebhook).Methods("POST")
 
@@ -98,7 +143,7 @@ func (s *Server) routes() {
 	protected.Use(s.authMiddleware)
 
 	// Synthesis-as-a-Service endpoints
-	protected.Handle("/estimate", s.authMiddleware(http.HandlerFunc(s.handleEstimate))).Methods("POST")
+	protected.Handle("/estimate", http.HandlerFunc(s.handleEstimate)).Methods("POST")
 	protected.Handle("/synthesize", s.quotaMiddleware(http.HandlerFunc(s.handleSynthesize))).Methods("POST")
 
 	// Quota-protected endpoints (Consume run credits)
@@ -107,6 +152,7 @@ func (s *Server) routes() {
 
 	// Run polling
 	protected.HandleFunc("/runs/{run_id}", s.handleGetRun).Methods("GET")
+	protected.HandleFunc("/runs/{run_id}/artifacts/{file}", s.handleGetRunArtifact).Methods("GET")
 	protected.HandleFunc("/runs", s.handleListRuns).Methods("GET")
 
 	protected.HandleFunc("/usage", s.handleUsage).Methods("GET")
@@ -114,6 +160,109 @@ func (s *Server) routes() {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.corsMiddleware(s.router).ServeHTTP(w, r)
+}
+
+// Shutdown stops accepting new jobs, drains queued work, and waits for workers.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.queueMu.Lock()
+	if !s.shuttingDown {
+		s.shuttingDown = true
+		close(s.jobQueue)
+		close(s.cleanupStopCh)
+	}
+	s.queueMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.workersWG.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Server) cleanupLoop() {
+	defer s.workersWG.Done()
+	ticker := time.NewTicker(s.cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.cleanupStopCh:
+			return
+		case <-ticker.C:
+			if err := s.cleanupExpiredArtifactsOnce(time.Now()); err != nil {
+				log.Printf("[cleanup] artifact cleanup failed: %v", err)
+			}
+		}
+	}
+}
+
+func (s *Server) cleanupExpiredArtifactsOnce(now time.Time) error {
+	cutoff := now.Add(-time.Duration(s.artifactRetentionDays) * 24 * time.Hour)
+	candidates, err := s.store.ListRunsWithArtifactsBefore(cutoff)
+	if err != nil {
+		return err
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	rootAbs, err := filepath.Abs(s.artifactsDir)
+	if err != nil {
+		return err
+	}
+	rootAbs = filepath.Clean(rootAbs)
+
+	for _, c := range candidates {
+		targetAbs, err := filepath.Abs(c.ArtifactsPath)
+		if err != nil {
+			log.Printf("[cleanup] skipping run %s: resolve artifact path failed: %v", c.RunID, err)
+			continue
+		}
+		targetAbs = filepath.Clean(targetAbs)
+		if targetAbs != rootAbs && !strings.HasPrefix(targetAbs, rootAbs+string(os.PathSeparator)) {
+			log.Printf("[cleanup] skipping run %s: artifact path outside root (%s)", c.RunID, targetAbs)
+			continue
+		}
+
+		if err := os.RemoveAll(targetAbs); err != nil {
+			log.Printf("[cleanup] failed to remove artifacts for run %s: %v", c.RunID, err)
+			continue
+		}
+		if err := s.store.ClearRunArtifactsPath(c.RunID); err != nil {
+			log.Printf("[cleanup] removed artifacts but failed to clear DB path for run %s: %v", c.RunID, err)
+			continue
+		}
+	}
+	return nil
+}
+
+func (s *Server) tryAcquireWorkspaceSlot(workspaceID string) bool {
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	n := s.inflightByWorkspace[workspaceID]
+	if n >= s.maxInflightPerWorkspace {
+		return false
+	}
+	s.inflightByWorkspace[workspaceID] = n + 1
+	return true
+}
+
+func (s *Server) releaseWorkspaceSlot(workspaceID string) {
+	s.inflightMu.Lock()
+	defer s.inflightMu.Unlock()
+	n := s.inflightByWorkspace[workspaceID]
+	if n <= 1 {
+		delete(s.inflightByWorkspace, workspaceID)
+		return
+	}
+	s.inflightByWorkspace[workspaceID] = n - 1
 }
 
 // ── Public Catalog ───────────────────────────────────────────────────────────
@@ -185,6 +334,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			"length":   len(s.jobQueue),
 			"capacity": cap(s.jobQueue),
 		},
+		"max_inflight_per_workspace": s.maxInflightPerWorkspace,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -259,11 +409,24 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 
 	cost := calculateSynthesisCost(req.ComponentName, req.Requirements)
 	jobID := fmt.Sprintf("synth-%d", time.Now().UnixNano())
-	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	apiKey, ok := apiKeyFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API key context missing.", "Ensure auth middleware is enabled.")
+		return
+	}
 
-	// Consume the quota runs for this synthesis job.
+	// Reserve all synthesis runs atomically to avoid quota races.
+	runIDs := make([]string, 0, cost)
 	for i := 0; i < cost; i++ {
-		_ = s.store.SaveRun(fmt.Sprintf("%s-%d", jobID, i), apiKey.WorkspaceID, string(StatusPass))
+		runIDs = append(runIDs, fmt.Sprintf("%s-%d", jobID, i))
+	}
+	if err := s.store.ReserveRunsForWorkspace(runIDs, apiKey.WorkspaceID, string(StatusPass)); err != nil {
+		if err == db.ErrQuotaExceeded {
+			sendError(w, http.StatusTooManyRequests, "QUOTA_EXCEEDED", "Workspace has exceeded its monthly run limit.", "Purchase more credits or upgrade your tier.")
+			return
+		}
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to reserve synthesis runs.", "Retry later.")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -279,7 +442,29 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 
 // submitJob writes the YAML body to a temp file, creates the DB row and enqueues the job.
 func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string, body []byte) {
-	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	apiKey, ok := apiKeyFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API key context missing.", "Ensure auth middleware is enabled.")
+		return
+	}
+
+	if !s.tryAcquireWorkspaceSlot(apiKey.WorkspaceID) {
+		sendError(
+			w,
+			http.StatusTooManyRequests,
+			"WORKSPACE_INFLIGHT_LIMIT",
+			fmt.Sprintf("Workspace has reached max in-flight jobs (%d).", s.maxInflightPerWorkspace),
+			"Wait for running jobs to complete before submitting more.",
+		)
+		return
+	}
+	enqueued := false
+	defer func() {
+		if !enqueued {
+			s.releaseWorkspaceSlot(apiKey.WorkspaceID)
+		}
+	}()
+
 	log.Printf("[%s] Submitting job for workspace %s", prefix, apiKey.WorkspaceID)
 
 	runID := fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
@@ -296,8 +481,12 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 		return
 	}
 
-	// Persist the run as "queued" — consumes one quota slot.
-	if err := s.store.SaveRun(runID, apiKey.WorkspaceID, string(StatusQueued)); err != nil {
+	// Persist the run as "queued" with atomic quota reservation.
+	if err := s.store.ReserveRunForWorkspace(runID, apiKey.WorkspaceID, string(StatusQueued)); err != nil {
+		if err == db.ErrQuotaExceeded {
+			sendError(w, http.StatusTooManyRequests, "QUOTA_EXCEEDED", "Workspace has exceeded its monthly run limit.", "Purchase more credits or upgrade your tier.")
+			return
+		}
 		log.Printf("[%s] ERROR: Failed to record run in DB: %v", prefix, err)
 		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to record simulation run.", "")
 		return
@@ -311,26 +500,36 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 	}
 	s.jobs.Store(runID, job)
 
+	s.queueMu.RLock()
+	if s.shuttingDown {
+		s.queueMu.RUnlock()
+		sendError(w, http.StatusServiceUnavailable, "SERVER_SHUTTING_DOWN", "Server is shutting down and not accepting new jobs.", "Retry after the service recovers.")
+		return
+	}
 	select {
 	case s.jobQueue <- job:
 		log.Printf("[%s] Job enqueued: %s", prefix, runID)
+		enqueued = true
 	default:
 		// Queue full.
 		_ = s.store.UpdateRunStatus(runID, string(StatusError), 0, 0, "")
 		sendError(w, http.StatusServiceUnavailable, "QUEUE_FULL", "The simulation queue is at capacity.", "Retry after 5-10 seconds.")
+		s.queueMu.RUnlock()
 		return
 	}
+	s.queueMu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"run_id":  runID,
-		"status":  string(StatusQueued),
+		"run_id":   runID,
+		"status":   string(StatusQueued),
 		"poll_url": fmt.Sprintf("/v1/runs/%s", runID),
 	})
 }
 
 func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxVerifyBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		sendError(w, http.StatusBadRequest, "INVALID_BODY", "Could not read request body.", "")
@@ -340,6 +539,7 @@ func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVerifySystem(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxVerifyBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		sendError(w, http.StatusBadRequest, "INVALID_BODY", "Could not read request body.", "")
@@ -352,7 +552,12 @@ func (s *Server) handleVerifySystem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	runID := mux.Vars(r)["run_id"]
-	record, err := s.store.GetRun(runID)
+	apiKey, ok := apiKeyFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API key context missing.", "Ensure auth middleware is enabled.")
+		return
+	}
+	record, err := s.store.GetRunForWorkspace(runID, apiKey.WorkspaceID)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch run status.", "")
 		return
@@ -370,7 +575,7 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		"created_at":        record.CreatedAt,
 	}
 	if record.ArtifactsPath != "" {
-		baseURL := "/artifacts/" + record.RunID
+		baseURL := "/v1/runs/" + record.RunID + "/artifacts"
 		resp["artifacts"] = map[string]string{
 			"ir_url":     baseURL + "/output.json",
 			"vcd_url":    baseURL + "/proof.vcd",
@@ -382,8 +587,55 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+func (s *Server) handleGetRunArtifact(w http.ResponseWriter, r *http.Request) {
+	apiKey, ok := apiKeyFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API key context missing.", "Ensure auth middleware is enabled.")
+		return
+	}
+
+	runID := mux.Vars(r)["run_id"]
+	record, err := s.store.GetRunForWorkspace(runID, apiKey.WorkspaceID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch run status.", "")
+		return
+	}
+	if record == nil {
+		sendError(w, http.StatusNotFound, "RUN_NOT_FOUND", "No run found with that ID.", "")
+		return
+	}
+	if record.ArtifactsPath == "" {
+		sendError(w, http.StatusNotFound, "ARTIFACT_NOT_FOUND", "No artifacts available for this run.", "")
+		return
+	}
+
+	name := mux.Vars(r)["file"]
+	allowed := map[string]struct{}{
+		"output.json": {},
+		"proof.vcd":   {},
+		"result.json": {},
+		"error.log":   {},
+	}
+	if _, ok := allowed[name]; !ok {
+		sendError(w, http.StatusNotFound, "ARTIFACT_NOT_FOUND", "Requested artifact is not available.", "")
+		return
+	}
+
+	artifactPath := filepath.Join(record.ArtifactsPath, name)
+	if _, err := os.Stat(artifactPath); err != nil {
+		sendError(w, http.StatusNotFound, "ARTIFACT_NOT_FOUND", "Requested artifact was not found.", "")
+		return
+	}
+
+	http.ServeFile(w, r, artifactPath)
+}
+
 func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
-	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	apiKey, ok := apiKeyFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API key context missing.", "Ensure auth middleware is enabled.")
+		return
+	}
 	records, err := s.store.ListRunsForWorkspace(apiKey.WorkspaceID)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch run list.", "")
@@ -399,7 +651,11 @@ func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {
 // ── Usage ─────────────────────────────────────────────────────────────────────
 
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
-	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	apiKey, ok := apiKeyFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API key context missing.", "Ensure auth middleware is enabled.")
+		return
+	}
 	used, _ := s.store.CountRunsForWorkspace(apiKey.WorkspaceID)
 	quota, _ := s.store.GetMonthlyQuota(apiKey.WorkspaceID)
 	json.NewEncoder(w).Encode(map[string]any{
@@ -423,8 +679,20 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
-	if webhookSecret == "" {
-		log.Println("[stripe] STRIPE_WEBHOOK_SECRET not set — skipping signature verification (dev mode)")
+	allowInsecureWebhook := os.Getenv("ALLOW_INSECURE_STRIPE_WEBHOOKS") == "true"
+	if webhookSecret == "" && !allowInsecureWebhook {
+		log.Println("[stripe] STRIPE_WEBHOOK_SECRET not set and insecure mode disabled")
+		sendError(
+			w,
+			http.StatusServiceUnavailable,
+			"WEBHOOK_CONFIG_ERROR",
+			"Stripe webhook secret is not configured.",
+			"Set STRIPE_WEBHOOK_SECRET or explicitly enable ALLOW_INSECURE_STRIPE_WEBHOOKS=true for local development.",
+		)
+		return
+	}
+	if webhookSecret == "" && allowInsecureWebhook {
+		log.Println("[stripe] WARNING: running with insecure webhook mode (signature verification disabled)")
 	} else {
 		sigHeader := r.Header.Get("Stripe-Signature")
 		if _, err := webhook.ConstructEvent(payload, sigHeader, webhookSecret); err != nil {
@@ -458,19 +726,26 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Map amount_total (in cents) to runs. €49 = 4900 cents → 1000 runs.
-	runsToCredit := int(session.AmountTotal / 49) * 1000
+	// Map amount_total (in cents) to runs. €49 = 4900 cents -> 1000 runs.
+	const centsPerCreditPack = 4900
+	runsToCredit := int(session.AmountTotal/int64(centsPerCreditPack)) * 1000
 	if runsToCredit <= 0 {
 		runsToCredit = 1000 // safe fallback for manual or test payments
 	}
 
-	if err := s.store.AddQuotaRuns(workspaceID, runsToCredit); err != nil {
-		log.Printf("[stripe] failed to credit %d runs to workspace %s: %v", runsToCredit, workspaceID, err)
+	applied, err := s.store.ApplyStripeCreditIfNew(event.ID, session.ID, workspaceID, runsToCredit)
+	if err != nil {
+		log.Printf("[stripe] failed to credit %d runs to workspace %s for event %s: %v", runsToCredit, workspaceID, event.ID, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	if !applied {
+		log.Printf("[stripe] duplicate webhook event ignored: event=%s session=%s workspace=%s", event.ID, session.ID, workspaceID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
-	log.Printf("[stripe] credited %d runs to workspace %s (session %s)", runsToCredit, workspaceID, session.ID)
+	log.Printf("[stripe] credited %d runs to workspace %s (session %s, event %s)", runsToCredit, workspaceID, session.ID, event.ID)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -492,7 +767,8 @@ func (s *Server) handleSchemaSynthesis(w http.ResponseWriter, r *http.Request) {
 
 // ── Background Worker ─────────────────────────────────────────────────────────
 
-func (s *Server) worker() {
+func (s *Server) worker(workerID int) {
+	defer s.workersWG.Done()
 	for job := range s.jobQueue {
 		// Mark as running in DB.
 		_ = s.store.UpdateRunStatus(job.ID, string(StatusRunning), 0, 0, "")
@@ -502,7 +778,7 @@ func (s *Server) worker() {
 		cancel()
 
 		if err != nil {
-			log.Printf("[worker] run %s error: %v", job.ID, err)
+			log.Printf("[worker:%d] run %s error: %v", workerID, job.ID, err)
 			_ = s.store.UpdateRunStatus(job.ID, string(StatusError), 0, 0, "")
 		} else if result.Pass {
 			_ = s.store.UpdateRunStatus(job.ID, string(StatusPass), result.AssertionsPassed, result.AssertionsTotal, job.ArtifactDir)
@@ -511,5 +787,6 @@ func (s *Server) worker() {
 		}
 
 		s.jobs.Delete(job.ID)
+		s.releaseWorkspaceSlot(job.WorkspaceID)
 	}
 }

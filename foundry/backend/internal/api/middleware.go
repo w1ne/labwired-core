@@ -10,6 +10,19 @@ import (
 	"github.com/labwired/foundry-backend/internal/db"
 )
 
+type contextKey string
+
+const apiKeyContextKey contextKey = "api_key"
+
+func apiKeyFromContext(ctx context.Context) (*db.APIKey, bool) {
+	v := ctx.Value(apiKeyContextKey)
+	if v == nil {
+		return nil, false
+	}
+	apiKey, ok := v.(*db.APIKey)
+	return apiKey, ok
+}
+
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -27,7 +40,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add API Key info to context
-		ctx := context.WithValue(r.Context(), "api_key", apiKey)
+		ctx := context.WithValue(r.Context(), apiKeyContextKey, apiKey)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -56,13 +69,11 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) quotaMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiKeyVal := r.Context().Value("api_key")
-		if apiKeyVal == nil {
+		apiKey, ok := apiKeyFromContext(r.Context())
+		if !ok {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "API Key not found in context.", "Ensure auth middleware is applied before quota middleware.")
 			return
 		}
-
-		apiKey := apiKeyVal.(*db.APIKey)
 
 		// Read per-workspace quota from DB (set at account creation or topped up via Stripe).
 		limit, err := s.store.GetMonthlyQuota(apiKey.WorkspaceID)

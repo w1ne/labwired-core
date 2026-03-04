@@ -99,8 +99,6 @@ paths:
   /catalog:
     get:
       summary: List "Solid Proven" Assets
-      security:
-        - BearerAuth: []
       responses:
         '200':
           description: A list of verified peripherals.
@@ -111,9 +109,9 @@ paths:
                 items:
                   $ref: '#/components/schemas/CatalogAsset'
 
-  /twins/simulate:
+  /models/verify:
     post:
-      summary: Start Peripheral Synthesis & Verification
+      summary: Enqueue Peripheral Verification
       security:
         - BearerAuth: []
       requestBody:
@@ -124,19 +122,19 @@ paths:
               $ref: '#/components/schemas/SimulateRequest'
       responses:
         '202':
-          description: Simulation queued.
+          description: Verification queued.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulateResponse'
 
-  /runs/{id}:
+  /runs/{run_id}:
     get:
       summary: Get Simulation Run Status
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: run_id
           in: path
           required: true
           schema:
@@ -148,3 +146,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RunStatus'
+
+  /runs/{run_id}/artifacts/{file}:
+    get:
+      summary: Download Run Artifact
+      description: |
+        Downloads one artifact file for a run owned by the authenticated workspace.
+        Artifact availability is retention-policy dependent.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [output.json, proof.vcd, result.json, error.log]
+      responses:
+        '200':
+          description: Artifact file stream.
+        '404':
+          description: Artifact or run not found.
