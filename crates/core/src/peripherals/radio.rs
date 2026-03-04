@@ -4,8 +4,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
 use crate::network::WirelessPacket;
+use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug)]
@@ -15,11 +15,12 @@ pub struct RadioController {
 
     tx_channel: u8,
     tx_power: u8,
-    
+
     rx_pending: bool,
     rx_packet: Option<WirelessPacket>,
-    
+
     // Register shadows
+    #[allow(dead_code)]
     reg_rx_id: u32, // placeholder if we add IDs
     reg_rx_data: u32,
     reg_rx_channel: u8,
@@ -45,12 +46,18 @@ impl Peripheral for RadioController {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let shift = (offset % 4) * 8;
-        
+
         let val = match reg_offset {
             0x00 => self.tx_channel as u32,
             0x04 => self.tx_power as u32,
             0x08 => 0, // TX Trigger is WO
-            0x0C => if self.rx_pending { 1 } else { 0 },
+            0x0C => {
+                if self.rx_pending {
+                    1
+                } else {
+                    0
+                }
+            }
             0x10 => self.reg_rx_channel as u32,
             0x14 => self.reg_rx_data,
             _ => 0,
@@ -65,8 +72,16 @@ impl Peripheral for RadioController {
         // let val_shifted = (value as u32) << shift;
 
         match reg_offset {
-            0x00 => if shift == 0 { self.tx_channel = value },
-            0x04 => if shift == 0 { self.tx_power = value },
+            0x00 => {
+                if shift == 0 {
+                    self.tx_channel = value
+                }
+            }
+            0x04 => {
+                if shift == 0 {
+                    self.tx_power = value
+                }
+            }
             0x08 => {
                 if value == 1 {
                     // Trigger TX
@@ -82,7 +97,7 @@ impl Peripheral for RadioController {
                 }
             }
             0x14 => {
-                // If we want to allow setting TX data via this register too? 
+                // If we want to allow setting TX data via this register too?
                 // For now, let's keep it simple.
             }
             _ => {}
