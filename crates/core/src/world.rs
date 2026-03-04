@@ -5,7 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::network::Interconnect;
-use crate::{Cpu, Machine, SimResult};
+use crate::{Bus, Cpu, Machine, SimResult};
 use std::collections::HashMap;
 
 /// The orchestrator for a multi-node simulation environment.
@@ -24,6 +24,8 @@ pub trait MachineTrait: Send {
     fn step(&mut self) -> SimResult<()>;
     fn reset(&mut self) -> SimResult<()>;
     fn total_cycles(&self) -> u64;
+    fn read_u8(&self, addr: u64) -> SimResult<u8>;
+    fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()>;
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -42,6 +44,14 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn total_cycles(&self) -> u64 {
         self.total_cycles
+    }
+
+    fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        self.bus.read_u8(addr)
+    }
+
+    fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()> {
+        self.bus.write_u8(addr, val)
     }
 }
 
