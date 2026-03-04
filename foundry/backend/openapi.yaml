@@ -68,6 +68,22 @@ components:
           type: string
           description: LabWired-compatible YAML definition of the peripheral logic.
 
+    SynthesisRequest:
+      type: object
+      required:
+        - component_name
+        - requirements
+      properties:
+        component_name:
+          type: string
+          description: Name of the component to synthesize (e.g., "BME280")
+        requirements:
+          type: string
+          description: Natural language requirements or datasheet snippets describing the desired behavior.
+        datasheet_url:
+          type: string
+          description: Optional URL to the component datasheet.
+
     VerificationResult:
       type: object
       properties:
@@ -138,6 +154,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskContext'
+
+  /synthesize:
+    post:
+      summary: Autonomous Synthesis
+      description: Submit high-level requirements. The Foundry's internal agents will autonomously write and formally verify a digital twin, returning the strict IR and proof.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SynthesisRequest'
+      responses:
+        '202':
+          description: Synthesis job accepted. The process will run asynchronously and consume Quota.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status:
+                    type: string
 
   /tasks/{id}/verify:
     post:

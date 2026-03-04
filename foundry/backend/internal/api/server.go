@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -64,6 +65,9 @@ func (s *Server) routes() {
 
 	protected.HandleFunc("/tasks/next", s.handleGetNextTask).Methods("GET")
 	protected.HandleFunc("/tasks/{id}/context", s.handleGetTaskContext).Methods("GET")
+
+	// Synthesis-as-a-Service endpoint
+	protected.Handle("/synthesize", s.quotaMiddleware(http.HandlerFunc(s.handleSynthesize))).Methods("POST")
 
 	// Quota-protected endpoints (Consume run credits)
 	protected.Handle("/tasks/{id}/verify", s.quotaMiddleware(http.HandlerFunc(s.handleVerifyTask))).Methods("POST")
@@ -143,6 +147,40 @@ func (s *Server) handleGetTaskContext(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(ctxResp)
 }
 
+func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ComponentName string `json:"component_name"`
+		Requirements  string `json:"requirements"`
+		DatasheetURL  string `json:"datasheet_url,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax.")
+		return
+	}
+
+	if req.ComponentName == "" || req.Requirements == "" {
+		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "component_name and requirements are required.", "")
+		return
+	}
+
+	// Consume 10 runs for synthesis (Mock)
+	jobID := "synth-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	apiKey := r.Context().Value("api_key").(*db.APIKey)
+
+	for i := 0; i < 10; i++ {
+		_ = s.store.SaveRun(fmt.Sprintf("%s-%d", jobID, i), apiKey.WorkspaceID, "pass")
+	}
+
+	// Return 202 Accepted
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"job_id": jobID,
+		"status": "processing",
+		"message": "Synthesis job started. The internal engine is drafting and formally verifying the model.",
+	})
+}
+
 func (s *Server) handleVerifyTask(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	if id != "task-bme280-001" {
@@ -159,6 +197,10 @@ func (s *Server) handleVerifyTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Synchronously execute verification (mocked for now, but in reality calls Orchestrator)
+	runID := "run-" + id + "-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	_ = s.store.SaveRun(runID, apiKey.WorkspaceID, "pass") // Consume 1 quota run
+
 	// We return detailed compiler logs and VCD traces.
 	result := map[string]interface{}{
 		"pass":              false, // Mock a failure to show iterative loop
@@ -182,6 +224,10 @@ func (s *Server) handleVerifySystem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mocking a powerful system-level verification response.
+	runID := "run-system-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	apiKey := r.Context().Value("api_key").(*db.APIKey)
+	_ = s.store.SaveRun(runID, apiKey.WorkspaceID, "pass") // Consume 1 quota run
+
 	// In reality, it runs the orchestrator with the master system.yaml and returns traces spanning multiple buses.
 	result := map[string]interface{}{
 		"pass":              false, // Mock an integration failure
@@ -203,7 +249,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	apiKey := apiKeyVal.(*db.APIKey)
 
-	limit := 1000
+	limit := 50
 	if apiKey.Tier == "enterprise" {
 		limit = 1000000
 	}
