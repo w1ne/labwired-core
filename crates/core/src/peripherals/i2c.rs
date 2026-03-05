@@ -6,8 +6,16 @@
 
 use crate::SimResult;
 
+pub trait I2cDevice: Send {
+    fn address(&self) -> u8;
+    fn read(&mut self) -> u8;
+    fn write(&mut self, data: u8);
+    fn start(&mut self) {}
+    fn stop(&mut self) {}
+}
+
 /// STM32F1 compatible I2C peripheral (Master mode only)
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(serde::Serialize)]
 pub struct I2c {
     cr1: u16,
     cr2: u16,
@@ -22,6 +30,40 @@ pub struct I2c {
     // Internal state
     state: I2cState,
     cycles_remaining: u32,
+
+    #[serde(skip)]
+    pub attached_devices: Vec<Box<dyn I2cDevice>>,
+    #[serde(skip)]
+    current_target: Option<usize>,
+    #[serde(skip)]
+    is_reading: bool,
+}
+
+impl core::fmt::Debug for I2c {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("I2c").field("state", &self.state).finish()
+    }
+}
+
+impl Default for I2c {
+    fn default() -> Self {
+        Self {
+            cr1: 0,
+            cr2: 0,
+            oar1: 0,
+            oar2: 0,
+            dr: 0,
+            sr1: 0,
+            sr2: 0,
+            ccr: 0,
+            trise: 0,
+            state: I2cState::Idle,
+            cycles_remaining: 0,
+            attached_devices: Vec::new(),
+            current_target: None,
+            is_reading: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, Default)]
@@ -37,6 +79,10 @@ enum I2cState {
 impl I2c {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
+        self.attached_devices.push(device);
     }
 
     fn read_reg(&self, offset: u64) -> u16 {
@@ -80,12 +126,25 @@ impl I2c {
                         // SB set, this is address
                         self.state = I2cState::AddressPending;
                         self.cycles_remaining = 20; // Address phase longer
+                        let addr = (self.dr >> 1) as u8;
+                        self.is_reading = (self.dr & 1) != 0;
+                        self.current_target = self
+                            .attached_devices
+                            .iter()
+                            .position(|d| d.address() == addr);
                     } else {
                         // This is data
                         self.state = I2cState::DataPending;
                         self.cycles_remaining = 20;
                         self.sr1 &= !0x80; // Clear TXE
                         self.sr1 &= !0x04; // Clear BTF
+
+                        // Pass written data to device immediately
+                        if !self.is_reading {
+                            if let Some(idx) = self.current_target {
+                                self.attached_devices[idx].write(self.dr as u8);
+                            }
+                        }
                     }
                 }
             }
@@ -135,23 +194,44 @@ impl crate::Peripheral for I2c {
                     I2cState::StartPending => {
                         self.sr1 |= 0x0001; // Set SB
                         self.state = I2cState::Idle;
+                        if let Some(idx) = self.current_target {
+                            self.attached_devices[idx].start();
+                        }
                     }
                     I2cState::AddressPending => {
                         self.sr1 &= !0x0001; // Clear SB
                         self.sr1 |= 0x0002; // Set ADDR
                         self.sr2 |= 0x0001; // MSL (Master mode) set
                         self.sr2 |= 0x0002; // BUSY set
-                        self.state = I2cState::Idle;
+
+                        // If it's a read, automatically transition to grabbing the first byte
+                        if self.is_reading {
+                            self.state = I2cState::DataPending;
+                            self.cycles_remaining = 20;
+                        } else {
+                            self.state = I2cState::Idle;
+                        }
                     }
                     I2cState::DataPending => {
-                        self.sr1 |= 0x0080; // Set TXE
-                        self.sr1 |= 0x0004; // Set BTF
-                        self.state = I2cState::Idle;
+                        if self.is_reading {
+                            self.sr1 |= 0x0040; // Set RXNE
+                            if let Some(idx) = self.current_target {
+                                self.dr = self.attached_devices[idx].read() as u16;
+                            }
+                            self.state = I2cState::Idle;
+                        } else {
+                            self.sr1 |= 0x0080; // Set TXE
+                            self.sr1 |= 0x0004; // Set BTF
+                            self.state = I2cState::Idle;
+                        }
                     }
                     I2cState::StopPending => {
                         self.sr1 = 0; // Clear SR1
                         self.sr2 = 0; // Clear SR2
                         self.state = I2cState::Idle;
+                        if let Some(idx) = self.current_target {
+                            self.attached_devices[idx].stop();
+                        }
                     }
                     I2cState::Idle => {}
                 }

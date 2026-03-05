@@ -1,0 +1,3 @@
+name: "nrf52840-dk"
+chip: "../chips/nrf52840.yaml"
+peripherals: []

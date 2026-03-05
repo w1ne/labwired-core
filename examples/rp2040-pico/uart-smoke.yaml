@@ -1,0 +1,11 @@
+# LabWired - RP2040 UART smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-rp2040-demo"
+  system: "../../configs/systems/pico.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  # Verify we get the expected output over UART
+  - uart_contains: "RP2040_SMOKE_OK"
+  - expected_stop_reason: max_steps

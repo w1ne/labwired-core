@@ -1,0 +1,4 @@
+# LabWired - Raspberry Pi Pico System Manifest
+name: "pico"
+chip: "../chips/rp2040.yaml"
+peripherals: []
