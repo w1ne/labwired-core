@@ -37,8 +37,10 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                 <div style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: '1.3rem', letterSpacing: '-0.03em' }}>
                     LABWIRED <span style={{ color: 'var(--lw-pink)' }}>FOUNDRY</span>
                 </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <a href="/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
                     <button className="secondary" onClick={() => window.location.hash = '/catalog'}>Catalog</button>
+                    <button className="secondary" onClick={onEnterDashboard}>Login</button>
                     <button onClick={onEnterDashboard}>Dashboard →</button>
                 </div>
             </nav>
