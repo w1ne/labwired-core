@@ -1,4 +1,5 @@
 import { apiUrl, STRIPE_PAYMENT_LINK } from '../api';
+import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
 const CURL_SNIPPET = `curl -X POST https://foundry.labwired.dev/v1/models/verify \\
   -H "Authorization: Bearer lw_sk_live_YOUR_KEY" \\
@@ -40,8 +41,18 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <a href="/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
                     <button className="secondary" onClick={() => window.location.hash = '/catalog'}>Catalog</button>
-                    <button className="secondary" onClick={onEnterDashboard}>Login</button>
-                    <button onClick={onEnterDashboard}>Dashboard →</button>
+                    <Show when="signed-out">
+                        <SignInButton mode="modal" fallbackRedirectUrl="#/dashboard">
+                            <button className="secondary">Login</button>
+                        </SignInButton>
+                        <SignUpButton mode="modal" fallbackRedirectUrl="#/dashboard">
+                            <button>Dashboard →</button>
+                        </SignUpButton>
+                    </Show>
+                    <Show when="signed-in">
+                        <button onClick={onEnterDashboard}>Dashboard →</button>
+                        <UserButton />
+                    </Show>
                 </div>
             </nav>
 

@@ -38,6 +38,8 @@ jobs:
 
       - name: Frontend build
         working-directory: foundry/frontend
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
         run: |
           npm ci
           npm run build
@@ -84,6 +86,8 @@ jobs:
           context: foundry/frontend
           file: foundry/frontend/Dockerfile
           push: true
+          build-args: |
+            VITE_CLERK_PUBLISHABLE_KEY=${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:${{ steps.meta.outputs.image_tag }}
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:latest
