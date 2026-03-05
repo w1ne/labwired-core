@@ -28,6 +28,15 @@ type RunArtifactRecord struct {
 	CreatedAt     string
 }
 
+// HardwareItem represents a Renode-supported board or CPU in the database.
+type HardwareItem struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"` // "board" or "cpu"
+	ReplPath string `json:"repl_path"`
+	Tier     int    `json:"tier"` // 1 (Top 20%) or 2 (Extended)
+}
+
 type Store struct {
 	db *sql.DB
 }
@@ -86,6 +95,13 @@ func (s *Store) migrate() error {
 			workspace_id TEXT NOT NULL,
 			runs_credited INTEGER NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE TABLE IF NOT EXISTS supported_hardware (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			type TEXT NOT NULL,
+			repl_path TEXT NOT NULL,
+			tier INTEGER NOT NULL DEFAULT 2
 		);`,
 		// Non-destructive: add monthly_quota column if it was missing in an older DB.
 		`ALTER TABLE api_keys ADD COLUMN monthly_quota INTEGER NOT NULL DEFAULT 1000;`,
@@ -303,6 +319,26 @@ func (s *Store) ClearRunArtifactsPath(runID string) error {
 	return err
 }
 
+// PruneTerminalRunsBefore deletes old terminal runs with no artifact pointers.
+// Returns number of rows deleted.
+func (s *Store) PruneTerminalRunsBefore(cutoff time.Time) (int64, error) {
+	res, err := s.db.Exec(
+		`DELETE FROM simulation_runs
+		 WHERE datetime(created_at) < datetime(?)
+		   AND artifacts_path = ''
+		   AND status IN ('pass', 'fail', 'error')`,
+		cutoff.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // ListRunsForWorkspace returns the 50 most recent runs for the workspace.
 func (s *Store) ListRunsForWorkspace(workspaceID string) ([]RunRecord, error) {
 	rows, err := s.db.Query(
@@ -410,4 +446,57 @@ func (s *Store) ApplyStripeCreditIfNew(eventID, sessionID, workspaceID string, r
 		return false, err
 	}
 	return true, nil
+}
+
+// SeedHardware replaces the existing supported hardware catalog.
+// It uses a transaction to clear and bulk-insert the new list.
+func (s *Store) SeedHardware(items []HardwareItem) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.Exec(`DELETE FROM supported_hardware`); err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(`INSERT INTO supported_hardware (id, name, type, repl_path, tier) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, item := range items {
+		if _, err := stmt.Exec(item.ID, item.Name, item.Type, item.ReplPath, item.Tier); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// ListHardware returns all supported hardware, sorted by tier, type, and name.
+func (s *Store) ListHardware() ([]HardwareItem, error) {
+	rows, err := s.db.Query(
+		`SELECT id, name, type, repl_path, tier
+		 FROM supported_hardware
+		 ORDER BY tier ASC, type ASC, name ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []HardwareItem
+	for rows.Next() {
+		var item HardwareItem
+		if err := rows.Scan(&item.ID, &item.Name, &item.Type, &item.ReplPath, &item.Tier); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }

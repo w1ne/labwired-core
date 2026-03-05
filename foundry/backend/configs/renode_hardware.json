@@ -1,0 +1,1003 @@
+[
+  {
+    "id": "board-arduino_nano_33_ble",
+    "name": "arduino_nano_33_ble",
+    "type": "board",
+    "repl_path": "platforms/boards/arduino_nano_33_ble.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-arty_litex_vexriscv",
+    "name": "arty_litex_vexriscv",
+    "type": "board",
+    "repl_path": "platforms/boards/arty_litex_vexriscv.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-beaglev_starlight",
+    "name": "beaglev_starlight",
+    "type": "board",
+    "repl_path": "platforms/boards/beaglev_starlight.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-brd4162a",
+    "name": "brd4162a",
+    "type": "board",
+    "repl_path": "platforms/boards/silabs/brd4162a.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-slwstk6220a",
+    "name": "slwstk6220a",
+    "type": "board",
+    "repl_path": "platforms/boards/silabs/slwstk6220a.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-stm32f072b_discovery",
+    "name": "stm32f072b_discovery",
+    "type": "board",
+    "repl_path": "platforms/boards/stm32f072b_discovery.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-stm32f4_discovery",
+    "name": "stm32f4_discovery",
+    "type": "board",
+    "repl_path": "platforms/boards/stm32f4_discovery.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-stm32f7_discovery-bb",
+    "name": "stm32f7_discovery-bb",
+    "type": "board",
+    "repl_path": "platforms/boards/stm32f7_discovery-bb.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-atsamd51g19a",
+    "name": "atsamd51g19a",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/atsamd51g19a.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-imxrt1064",
+    "name": "imxrt1064",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/imxrt1064.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-litex_vexriscv",
+    "name": "litex_vexriscv",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_vexriscv.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-nrf52840",
+    "name": "nrf52840",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/nrf52840.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-nxp-k6xf",
+    "name": "nxp-k6xf",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/nxp-k6xf.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-riscv_virt",
+    "name": "riscv_virt",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/riscv_virt.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-sam_e70",
+    "name": "sam_e70",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/sam_e70.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-sifive-fe310",
+    "name": "sifive-fe310",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/sifive-fe310.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-stm32f103",
+    "name": "stm32f103",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f103.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-stm32f4",
+    "name": "stm32f4",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f4.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-stm32g0",
+    "name": "stm32g0",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32g0.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-stm32h743",
+    "name": "stm32h743",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32h743.repl",
+    "tier": 1
+  },
+  {
+    "id": "cpu-stm32l071",
+    "name": "stm32l071",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32l071.repl",
+    "tier": 1
+  },
+  {
+    "id": "board-A2_CV32E40P",
+    "name": "A2_CV32E40P",
+    "type": "board",
+    "repl_path": "platforms/boards/A2_CV32E40P.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-arduino_101-shield",
+    "name": "arduino_101-shield",
+    "type": "board",
+    "repl_path": "platforms/boards/arduino_101-shield.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-arvsom",
+    "name": "arvsom",
+    "type": "board",
+    "repl_path": "platforms/boards/arvsom.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-colibri-vf61",
+    "name": "colibri-vf61",
+    "type": "board",
+    "repl_path": "platforms/boards/colibri-vf61.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-crosslink-nx-evn",
+    "name": "crosslink-nx-evn",
+    "type": "board",
+    "repl_path": "platforms/boards/crosslink-nx-evn.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-eos-s3-qomu",
+    "name": "eos-s3-qomu",
+    "type": "board",
+    "repl_path": "platforms/boards/eos-s3-qomu.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-eos-s3-quickfeather",
+    "name": "eos-s3-quickfeather",
+    "type": "board",
+    "repl_path": "platforms/boards/eos-s3-quickfeather.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-gr716-devboard",
+    "name": "gr716-devboard",
+    "type": "board",
+    "repl_path": "platforms/boards/gr716-devboard.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-ice40up5k-mdp-evn",
+    "name": "ice40up5k-mdp-evn",
+    "type": "board",
+    "repl_path": "platforms/boards/ice40up5k-mdp-evn.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-leon3",
+    "name": "leon3",
+    "type": "board",
+    "repl_path": "platforms/boards/leon3.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-leon3-externals",
+    "name": "leon3-externals",
+    "type": "board",
+    "repl_path": "platforms/boards/leon3-externals.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-mars_zx3",
+    "name": "mars_zx3",
+    "type": "board",
+    "repl_path": "platforms/boards/mars_zx3.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-mars_zx3-externals",
+    "name": "mars_zx3-externals",
+    "type": "board",
+    "repl_path": "platforms/boards/mars_zx3-externals.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-max32652-evkit",
+    "name": "max32652-evkit",
+    "type": "board",
+    "repl_path": "platforms/boards/max32652-evkit.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-mimxrt1064_evk",
+    "name": "mimxrt1064_evk",
+    "type": "board",
+    "repl_path": "platforms/boards/mimxrt1064_evk.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-miv-board",
+    "name": "miv-board",
+    "type": "board",
+    "repl_path": "platforms/boards/miv-board.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-miv-board-additional-uarts",
+    "name": "miv-board-additional-uarts",
+    "type": "board",
+    "repl_path": "platforms/boards/miv-board-additional-uarts.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-mpfs-icicle-kit",
+    "name": "mpfs-icicle-kit",
+    "type": "board",
+    "repl_path": "platforms/boards/mpfs-icicle-kit.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-quark_c1000-cc2520",
+    "name": "quark_c1000-cc2520",
+    "type": "board",
+    "repl_path": "platforms/boards/quark_c1000-cc2520.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-sltb001a",
+    "name": "sltb001a",
+    "type": "board",
+    "repl_path": "platforms/boards/silabs/sltb001a.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-sltb004a",
+    "name": "sltb004a",
+    "type": "board",
+    "repl_path": "platforms/boards/sltb004a.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-stk3200",
+    "name": "stk3200",
+    "type": "board",
+    "repl_path": "platforms/boards/silabs/stk3200.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-stk3600",
+    "name": "stk3600",
+    "type": "board",
+    "repl_path": "platforms/boards/silabs/stk3600.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-stk3700",
+    "name": "stk3700",
+    "type": "board",
+    "repl_path": "platforms/boards/silabs/stk3700.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-stk3800",
+    "name": "stk3800",
+    "type": "board",
+    "repl_path": "platforms/boards/silabs/stk3800.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-stm32f4_discovery-additional_gpios",
+    "name": "stm32f4_discovery-additional_gpios",
+    "type": "board",
+    "repl_path": "platforms/boards/stm32f4_discovery-additional_gpios.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-stm32f4_discovery-bb",
+    "name": "stm32f4_discovery-bb",
+    "type": "board",
+    "repl_path": "platforms/boards/stm32f4_discovery-bb.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-stm32f4_discovery-kit",
+    "name": "stm32f4_discovery-kit",
+    "type": "board",
+    "repl_path": "platforms/boards/stm32f4_discovery-kit.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-tegra2",
+    "name": "tegra2",
+    "type": "board",
+    "repl_path": "platforms/boards/tegra2.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-tegra3",
+    "name": "tegra3",
+    "type": "board",
+    "repl_path": "platforms/boards/tegra3.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-tegra_externals",
+    "name": "tegra_externals",
+    "type": "board",
+    "repl_path": "platforms/boards/tegra_externals.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-versatile",
+    "name": "versatile",
+    "type": "board",
+    "repl_path": "platforms/boards/versatile.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-vexpress",
+    "name": "vexpress",
+    "type": "board",
+    "repl_path": "platforms/boards/vexpress.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-vexpress-externals",
+    "name": "vexpress-externals",
+    "type": "board",
+    "repl_path": "platforms/boards/vexpress-externals.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-zedboard",
+    "name": "zedboard",
+    "type": "board",
+    "repl_path": "platforms/boards/zedboard.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-zedboard-externals",
+    "name": "zedboard-externals",
+    "type": "board",
+    "repl_path": "platforms/boards/zedboard-externals.repl",
+    "tier": 2
+  },
+  {
+    "id": "board-zolertia-firefly",
+    "name": "zolertia-firefly",
+    "type": "board",
+    "repl_path": "platforms/boards/zolertia-firefly.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-a20",
+    "name": "a20",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/a20.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-ambiq-apollo4",
+    "name": "ambiq-apollo4",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/ambiq-apollo4.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-at91rm9200",
+    "name": "at91rm9200",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/at91rm9200.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-cc2538",
+    "name": "cc2538",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/cc2538.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-core-v-mcu",
+    "name": "core-v-mcu",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/core-v-mcu.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32g210",
+    "name": "efm32g210",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32g210.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32g222",
+    "name": "efm32g222",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32g222.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32g232",
+    "name": "efm32g232",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32g232.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32g842",
+    "name": "efm32g842",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32g842.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32g890",
+    "name": "efm32g890",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32g890.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32gg942",
+    "name": "efm32gg942",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32gg942.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32gg995",
+    "name": "efm32gg995",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32gg995.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32hg350",
+    "name": "efm32hg350",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32hg350.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32jg1",
+    "name": "efm32jg1",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg1x/efm32jg1.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32jg12",
+    "name": "efm32jg12",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg1x/efm32jg12.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32lg942",
+    "name": "efm32lg942",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32lg942.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32lg995",
+    "name": "efm32lg995",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32lg995.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32pg1",
+    "name": "efm32pg1",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg1x/efm32pg1.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32pg12",
+    "name": "efm32pg12",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg1x/efm32pg12.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32tg840",
+    "name": "efm32tg840",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32tg840.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32wg995",
+    "name": "efm32wg995",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32wg995.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efm32zg222",
+    "name": "efm32zg222",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efm32xg/efm32zg222.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efr32mg1",
+    "name": "efr32mg1",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efr32/efr32mg1.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efr32mg12",
+    "name": "efr32mg12",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efr32/efr32mg12.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-efr32mg13",
+    "name": "efr32mg13",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/efr32/efr32mg13.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-eos-s3",
+    "name": "eos-s3",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/eos-s3.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-ezr32hg320",
+    "name": "ezr32hg320",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/ezr32/ezr32hg320.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-ezr32lg330",
+    "name": "ezr32lg330",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/ezr32/ezr32lg330.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-ezr32wg330",
+    "name": "ezr32wg330",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/silabs/ezr32/ezr32wg330.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-fomu",
+    "name": "fomu",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/fomu.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-gr716",
+    "name": "gr716",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/gr716.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-i386",
+    "name": "i386",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/i386.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-kendryte_k210",
+    "name": "kendryte_k210",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/kendryte_k210.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-leon3",
+    "name": "leon3",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/leon3.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_common",
+    "name": "litex_common",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_common.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_ibex",
+    "name": "litex_ibex",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_ibex.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_linux_vexriscv_sdcard",
+    "name": "litex_linux_vexriscv_sdcard",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_linux_vexriscv_sdcard.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_microwatt",
+    "name": "litex_microwatt",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_microwatt.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_minerva",
+    "name": "litex_minerva",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_minerva.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_nexys_video_vexriscv_linux",
+    "name": "litex_nexys_video_vexriscv_linux",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_nexys_video_vexriscv_linux.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_picorv32",
+    "name": "litex_picorv32",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_picorv32.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_tock",
+    "name": "litex_tock",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_tock.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_vexriscv_linux",
+    "name": "litex_vexriscv_linux",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_vexriscv_linux.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_vexriscv_micropython",
+    "name": "litex_vexriscv_micropython",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_vexriscv_micropython.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_vexriscv_smp",
+    "name": "litex_vexriscv_smp",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_vexriscv_smp.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_vexriscv_tftp",
+    "name": "litex_vexriscv_tftp",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_vexriscv_tftp.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_vexriscv_verilated_cfu",
+    "name": "litex_vexriscv_verilated_cfu",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/verilated/litex_vexriscv_verilated_cfu.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_vexriscv_verilated_liteuart",
+    "name": "litex_vexriscv_verilated_liteuart",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/verilated/litex_vexriscv_verilated_liteuart.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_vexriscv_zephyr",
+    "name": "litex_vexriscv_zephyr",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_vexriscv_zephyr.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-litex_zephyr_vexriscv_i2s",
+    "name": "litex_zephyr_vexriscv_i2s",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/litex_zephyr_vexriscv_i2s.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-max32652",
+    "name": "max32652",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/max32652.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-microwatt",
+    "name": "microwatt",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/microwatt.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-miv",
+    "name": "miv",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/miv.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-miv_rv32",
+    "name": "miv_rv32",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/miv_rv32.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-mpc5567",
+    "name": "mpc5567",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/mpc5567.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-murax_vexriscv",
+    "name": "murax_vexriscv",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/murax_vexriscv.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-murax_vexriscv_verilated_uart",
+    "name": "murax_vexriscv_verilated_uart",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/verilated/murax_vexriscv_verilated_uart.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-opentitan-earlgrey",
+    "name": "opentitan-earlgrey",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/opentitan-earlgrey.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-opentitan-earlgrey-cw310",
+    "name": "opentitan-earlgrey-cw310",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/opentitan-earlgrey-cw310.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-picosoc",
+    "name": "picosoc",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/picosoc.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-polarfire-soc",
+    "name": "polarfire-soc",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/polarfire-soc.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-quark-c1000",
+    "name": "quark-c1000",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/quark-c1000.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-ri5cy",
+    "name": "ri5cy",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/ri5cy.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-riscv_verilated_uartlite",
+    "name": "riscv_verilated_uartlite",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/verilated/riscv_verilated_uartlite.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-s32k118",
+    "name": "s32k118",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/s32k118.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-sifive-fu540",
+    "name": "sifive-fu540",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/sifive-fu540.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-starfive-jh7100",
+    "name": "starfive-jh7100",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/starfive-jh7100.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32f0",
+    "name": "stm32f0",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f0.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32f042",
+    "name": "stm32f042",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f042.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32f072",
+    "name": "stm32f072",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f072.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32f412",
+    "name": "stm32f412",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f412.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32f429",
+    "name": "stm32f429",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f429.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32f746",
+    "name": "stm32f746",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32f746.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32l072",
+    "name": "stm32l072",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32l072.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32l151",
+    "name": "stm32l151",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32l151.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32l552",
+    "name": "stm32l552",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32l552.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-stm32w108",
+    "name": "stm32w108",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/stm32w108.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-tegra2",
+    "name": "tegra2",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/tegra2.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-tegra3",
+    "name": "tegra3",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/tegra3.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-verilated_ibex",
+    "name": "verilated_ibex",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/verilated/verilated_ibex.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-versatile",
+    "name": "versatile",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/versatile.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-vexpress",
+    "name": "vexpress",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/vexpress.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-vybrid",
+    "name": "vybrid",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/vybrid.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-xtensa-sample-controller",
+    "name": "xtensa-sample-controller",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/xtensa-sample-controller.repl",
+    "tier": 2
+  },
+  {
+    "id": "cpu-zynq-7000",
+    "name": "zynq-7000",
+    "type": "cpu",
+    "repl_path": "platforms/cpus/zynq-7000.repl",
+    "tier": 2
+  }
+]

@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -43,12 +43,23 @@ const (
 	StatusError   JobStatus = "error"
 )
 
-// Job carries the data needed by the background worker to execute a simulation.
+type JobType string
+
+const (
+	JobTypeVerify     JobType = "verify"
+	JobTypeSynthesize JobType = "synthesize"
+)
+
+// Job carries the data needed by the background worker to execute a simulation or synthesis.
 type Job struct {
-	ID          string
-	WorkspaceID string
-	IRPath      string // temp file containing the submitted YAML/JSON
-	ArtifactDir string // directory where output files will be written
+	ID            string
+	WorkspaceID   string
+	Type          JobType
+	IRPath        string // temp file containing the submitted YAML/JSON (Verify)
+	ArtifactDir   string // directory where output files will be written
+	DatasheetURL  string // (Synthesize) URL to parse
+	ComponentName string // (Synthesize) Name of the component
+	Requirements  string // (Synthesize)
 }
 
 type Server struct {
@@ -68,50 +79,77 @@ type Server struct {
 	inflightMu              sync.Mutex
 	inflightByWorkspace     map[string]int
 
-	artifactRetentionDays int
-	cleanupInterval       time.Duration
-	cleanupStopCh         chan struct{}
+	artifactRetentionDays    int
+	runMetadataRetentionDays int
+	cleanupInterval          time.Duration
+	cleanupStopCh            chan struct{}
+
+	metrics serverMetrics
 }
 
-func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Manager, artifactsDir string) *Server {
-	workerCount := 4
-	if raw := os.Getenv("WORKER_CONCURRENCY"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			workerCount = parsed
-		}
+type ServerOptions struct {
+	WorkerCount              int
+	MaxInflightPerWorkspace  int
+	ArtifactRetentionDays    int
+	RunMetadataRetentionDays int
+	CleanupInterval          time.Duration
+}
+
+func DefaultServerOptions() ServerOptions {
+	return ServerOptions{
+		WorkerCount:              4,
+		MaxInflightPerWorkspace:  8,
+		ArtifactRetentionDays:    14,
+		RunMetadataRetentionDays: 90,
+		CleanupInterval:          time.Hour,
 	}
-	maxInflightPerWorkspace := 8
-	if raw := os.Getenv("WORKSPACE_MAX_INFLIGHT"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			maxInflightPerWorkspace = parsed
-		}
+}
+
+type serverMetrics struct {
+	InflightLimitRejected atomic.Int64
+	QueueFullRejected     atomic.Int64
+	ShuttingDownRejected  atomic.Int64
+
+	CleanupArtifactDeleted       atomic.Int64
+	CleanupArtifactSkippedUnsafe atomic.Int64
+	CleanupArtifactDeleteFailed  atomic.Int64
+	CleanupDBPathClearFailed     atomic.Int64
+	CleanupMetadataRowsDeleted   atomic.Int64
+
+	StripeDuplicateEvents atomic.Int64
+}
+
+func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Manager, artifactsDir string, opts ServerOptions) *Server {
+	if opts.WorkerCount <= 0 {
+		opts.WorkerCount = 1
 	}
-	artifactRetentionDays := 14
-	if raw := os.Getenv("ARTIFACT_RETENTION_DAYS"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			artifactRetentionDays = parsed
-		}
+	if opts.MaxInflightPerWorkspace <= 0 {
+		opts.MaxInflightPerWorkspace = 1
 	}
-	cleanupInterval := time.Hour
-	if raw := os.Getenv("ARTIFACT_CLEANUP_INTERVAL_SECONDS"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			cleanupInterval = time.Duration(parsed) * time.Second
-		}
+	if opts.ArtifactRetentionDays <= 0 {
+		opts.ArtifactRetentionDays = 14
+	}
+	if opts.RunMetadataRetentionDays <= 0 {
+		opts.RunMetadataRetentionDays = 90
+	}
+	if opts.CleanupInterval <= 0 {
+		opts.CleanupInterval = time.Hour
 	}
 
 	s := &Server{
-		router:                  mux.NewRouter(),
-		jobQueue:                make(chan *Job, 100),
-		workerCount:             workerCount,
-		orchestrator:            orch,
-		store:                   store,
-		catalog:                 cat,
-		artifactsDir:            artifactsDir,
-		maxInflightPerWorkspace: maxInflightPerWorkspace,
-		inflightByWorkspace:     make(map[string]int),
-		artifactRetentionDays:   artifactRetentionDays,
-		cleanupInterval:         cleanupInterval,
-		cleanupStopCh:           make(chan struct{}),
+		router:                   mux.NewRouter(),
+		jobQueue:                 make(chan *Job, 100),
+		workerCount:              opts.WorkerCount,
+		orchestrator:             orch,
+		store:                    store,
+		catalog:                  cat,
+		artifactsDir:             artifactsDir,
+		maxInflightPerWorkspace:  opts.MaxInflightPerWorkspace,
+		inflightByWorkspace:      make(map[string]int),
+		artifactRetentionDays:    opts.ArtifactRetentionDays,
+		runMetadataRetentionDays: opts.RunMetadataRetentionDays,
+		cleanupInterval:          opts.CleanupInterval,
+		cleanupStopCh:            make(chan struct{}),
 	}
 	s.routes()
 	for i := 0; i < s.workerCount; i++ {
@@ -128,6 +166,7 @@ func (s *Server) routes() {
 	s.router.HandleFunc("/v1/catalog", s.handleListCatalog).Methods("GET")
 	s.router.HandleFunc("/v1/catalog/{id}", s.handleGetCatalogAsset).Methods("GET")
 	s.router.HandleFunc("/v1/info", s.handleInfo).Methods("GET")
+	s.router.HandleFunc("/v1/hardware", s.handleListHardware).Methods("GET")
 	s.router.HandleFunc("/v1/health", s.handleHealth).Methods("GET")
 	s.router.HandleFunc("/v1/schema/synthesis", s.handleSchemaSynthesis).Methods("GET")
 	s.router.HandleFunc("/v1/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -209,36 +248,47 @@ func (s *Server) cleanupExpiredArtifactsOnce(now time.Time) error {
 	if err != nil {
 		return err
 	}
-	if len(candidates) == 0 {
-		return nil
+	if len(candidates) > 0 {
+		rootAbs, err := filepath.Abs(s.artifactsDir)
+		if err != nil {
+			return err
+		}
+		rootAbs = filepath.Clean(rootAbs)
+
+		for _, c := range candidates {
+			targetAbs, err := filepath.Abs(c.ArtifactsPath)
+			if err != nil {
+				log.Printf("[cleanup] skipping run %s: resolve artifact path failed: %v", c.RunID, err)
+				continue
+			}
+			targetAbs = filepath.Clean(targetAbs)
+			if targetAbs != rootAbs && !strings.HasPrefix(targetAbs, rootAbs+string(os.PathSeparator)) {
+				log.Printf("[cleanup] skipping run %s: artifact path outside root (%s)", c.RunID, targetAbs)
+				s.metrics.CleanupArtifactSkippedUnsafe.Add(1)
+				continue
+			}
+
+			if err := os.RemoveAll(targetAbs); err != nil {
+				log.Printf("[cleanup] failed to remove artifacts for run %s: %v", c.RunID, err)
+				s.metrics.CleanupArtifactDeleteFailed.Add(1)
+				continue
+			}
+			if err := s.store.ClearRunArtifactsPath(c.RunID); err != nil {
+				log.Printf("[cleanup] removed artifacts but failed to clear DB path for run %s: %v", c.RunID, err)
+				s.metrics.CleanupDBPathClearFailed.Add(1)
+				continue
+			}
+			s.metrics.CleanupArtifactDeleted.Add(1)
+		}
 	}
 
-	rootAbs, err := filepath.Abs(s.artifactsDir)
+	metadataCutoff := now.Add(-time.Duration(s.runMetadataRetentionDays) * 24 * time.Hour)
+	deleted, err := s.store.PruneTerminalRunsBefore(metadataCutoff)
 	if err != nil {
 		return err
 	}
-	rootAbs = filepath.Clean(rootAbs)
-
-	for _, c := range candidates {
-		targetAbs, err := filepath.Abs(c.ArtifactsPath)
-		if err != nil {
-			log.Printf("[cleanup] skipping run %s: resolve artifact path failed: %v", c.RunID, err)
-			continue
-		}
-		targetAbs = filepath.Clean(targetAbs)
-		if targetAbs != rootAbs && !strings.HasPrefix(targetAbs, rootAbs+string(os.PathSeparator)) {
-			log.Printf("[cleanup] skipping run %s: artifact path outside root (%s)", c.RunID, targetAbs)
-			continue
-		}
-
-		if err := os.RemoveAll(targetAbs); err != nil {
-			log.Printf("[cleanup] failed to remove artifacts for run %s: %v", c.RunID, err)
-			continue
-		}
-		if err := s.store.ClearRunArtifactsPath(c.RunID); err != nil {
-			log.Printf("[cleanup] removed artifacts but failed to clear DB path for run %s: %v", c.RunID, err)
-			continue
-		}
+	if deleted > 0 {
+		s.metrics.CleanupMetadataRowsDeleted.Add(deleted)
 	}
 	return nil
 }
@@ -248,6 +298,7 @@ func (s *Server) tryAcquireWorkspaceSlot(workspaceID string) bool {
 	defer s.inflightMu.Unlock()
 	n := s.inflightByWorkspace[workspaceID]
 	if n >= s.maxInflightPerWorkspace {
+		s.metrics.InflightLimitRejected.Add(1)
 		return false
 	}
 	s.inflightByWorkspace[workspaceID] = n + 1
@@ -294,6 +345,19 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(info)
 }
 
+func (s *Server) handleListHardware(w http.ResponseWriter, r *http.Request) {
+	items, err := s.store.ListHardware()
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve hardware list.", "")
+		return
+	}
+	if items == nil {
+		items = []db.HardwareItem{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	status := "healthy"
 	components := map[string]interface{}{
@@ -335,6 +399,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			"capacity": cap(s.jobQueue),
 		},
 		"max_inflight_per_workspace": s.maxInflightPerWorkspace,
+	}
+	components["metrics"] = map[string]int64{
+		"inflight_limit_rejected":       s.metrics.InflightLimitRejected.Load(),
+		"queue_full_rejected":           s.metrics.QueueFullRejected.Load(),
+		"shutting_down_rejected":        s.metrics.ShuttingDownRejected.Load(),
+		"cleanup_artifact_deleted":      s.metrics.CleanupArtifactDeleted.Load(),
+		"cleanup_artifact_skipped":      s.metrics.CleanupArtifactSkippedUnsafe.Load(),
+		"cleanup_artifact_failures":     s.metrics.CleanupArtifactDeleteFailed.Load(),
+		"cleanup_db_path_clear_failed":  s.metrics.CleanupDBPathClearFailed.Load(),
+		"cleanup_metadata_rows_deleted": s.metrics.CleanupMetadataRowsDeleted.Load(),
+		"stripe_duplicate_events":       s.metrics.StripeDuplicateEvents.Load(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -415,12 +490,48 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Try to acquire an execution slot for this workspace.
+	if !s.tryAcquireWorkspaceSlot(apiKey.WorkspaceID) {
+		sendError(w, http.StatusTooManyRequests, "WORKSPACE_INFLIGHT_LIMIT", fmt.Sprintf("Workspace has reached max in-flight jobs (%d).", s.maxInflightPerWorkspace), "Wait for running jobs to complete before submitting more.")
+		return
+	}
+	enqueued := false
+	defer func() {
+		if !enqueued {
+			s.releaseWorkspaceSlot(apiKey.WorkspaceID)
+		}
+	}()
+
+	artifactDir := filepath.Join(s.artifactsDir, jobID)
+	if err := os.MkdirAll(artifactDir, 0755); err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create artifact directory.", "")
+		return
+	}
+
+	job := &Job{
+		ID:            jobID,
+		WorkspaceID:   apiKey.WorkspaceID,
+		Type:          JobTypeSynthesize,
+		ArtifactDir:   artifactDir,
+		DatasheetURL:  req.DatasheetURL,
+		ComponentName: req.ComponentName,
+		Requirements:  req.Requirements,
+	}
+	s.jobs.Store(jobID, job)
+
+	s.queueMu.RLock()
+	if s.shuttingDown {
+		s.queueMu.RUnlock()
+		sendError(w, http.StatusServiceUnavailable, "SERVER_SHUTTING_DOWN", "Server is shutting down.", "")
+		return
+	}
 	// Reserve all synthesis runs atomically to avoid quota races.
 	runIDs := make([]string, 0, cost)
 	for i := 0; i < cost; i++ {
 		runIDs = append(runIDs, fmt.Sprintf("%s-%d", jobID, i))
 	}
-	if err := s.store.ReserveRunsForWorkspace(runIDs, apiKey.WorkspaceID, string(StatusPass)); err != nil {
+	if err := s.store.ReserveRunsForWorkspace(runIDs, apiKey.WorkspaceID, string(StatusQueued)); err != nil {
+		s.queueMu.RUnlock()
 		if err == db.ErrQuotaExceeded {
 			sendError(w, http.StatusTooManyRequests, "QUOTA_EXCEEDED", "Workspace has exceeded its monthly run limit.", "Purchase more credits or upgrade your tier.")
 			return
@@ -429,12 +540,27 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	select {
+	case s.jobQueue <- job:
+		enqueued = true
+	default:
+		s.queueMu.RUnlock()
+		// Revert the DB reservation since we couldn't queue it
+		for _, rid := range runIDs {
+			_ = s.store.UpdateRunStatus(rid, string(StatusError), 0, 0, "")
+		}
+		sendError(w, http.StatusServiceUnavailable, "QUEUE_FULL", "The queue is at capacity.", "Retry later.")
+		return
+	}
+	s.queueMu.RUnlock()
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"job_id":  jobID,
-		"status":  "processing",
-		"message": "Synthesis job started. The internal engine is drafting and formally verifying the model.",
+		"job_id":   jobID,
+		"status":   string(StatusQueued),
+		"poll_url": fmt.Sprintf("/v1/runs/%s", jobID),
+		"message":  "Synthesis job queued. The AI engine is analyzing the datasheet and generating the model.",
 	})
 }
 
@@ -495,6 +621,7 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 	job := &Job{
 		ID:          runID,
 		WorkspaceID: apiKey.WorkspaceID,
+		Type:        JobTypeVerify,
 		IRPath:      irPath,
 		ArtifactDir: artifactDir,
 	}
@@ -503,6 +630,7 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 	s.queueMu.RLock()
 	if s.shuttingDown {
 		s.queueMu.RUnlock()
+		s.metrics.ShuttingDownRejected.Add(1)
 		sendError(w, http.StatusServiceUnavailable, "SERVER_SHUTTING_DOWN", "Server is shutting down and not accepting new jobs.", "Retry after the service recovers.")
 		return
 	}
@@ -513,6 +641,7 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 	default:
 		// Queue full.
 		_ = s.store.UpdateRunStatus(runID, string(StatusError), 0, 0, "")
+		s.metrics.QueueFullRejected.Add(1)
 		sendError(w, http.StatusServiceUnavailable, "QUEUE_FULL", "The simulation queue is at capacity.", "Retry after 5-10 seconds.")
 		s.queueMu.RUnlock()
 		return
@@ -740,6 +869,7 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !applied {
+		s.metrics.StripeDuplicateEvents.Add(1)
 		log.Printf("[stripe] duplicate webhook event ignored: event=%s session=%s workspace=%s", event.ID, session.ID, workspaceID)
 		w.WriteHeader(http.StatusOK)
 		return

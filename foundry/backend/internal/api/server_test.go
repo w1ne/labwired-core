@@ -31,7 +31,10 @@ func newTestServer(t *testing.T) (*Server, *db.Store, string) {
 		_ = store.Close()
 	})
 
-	srv := NewServer(verification.NewOrchestrator("labwired"), store, catalog.NewManager(), artifactsDir)
+	orch := verification.NewOrchestrator("labwired")
+	opts := DefaultServerOptions()
+	opts.MaxInflightPerWorkspace = 1
+	srv := NewServer(orch, store, catalog.NewManager(), artifactsDir, opts)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -281,5 +284,108 @@ func TestCleanupExpiredArtifacts_DoesNotDeletePathsOutsideRoot(t *testing.T) {
 	}
 	if record.ArtifactsPath == "" {
 		t.Fatalf("expected artifacts_path to remain for outside path")
+	}
+}
+
+func TestCleanupExpiredArtifacts_PrunesOldTerminalMetadata(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+
+	if err := store.SaveRun("run-old-meta", "ws-meta", "queued"); err != nil {
+		t.Fatalf("SaveRun failed: %v", err)
+	}
+	if err := store.UpdateRunStatus("run-old-meta", "pass", 1, 1, ""); err != nil {
+		t.Fatalf("UpdateRunStatus failed: %v", err)
+	}
+
+	// Force immediate metadata eligibility in test (cutoff becomes now + 24h).
+	srv.runMetadataRetentionDays = -1
+	if err := srv.cleanupExpiredArtifactsOnce(time.Now()); err != nil {
+		t.Fatalf("cleanupExpiredArtifactsOnce failed: %v", err)
+	}
+
+	record, err := store.GetRunForWorkspace("run-old-meta", "ws-meta")
+	if err != nil {
+		t.Fatalf("GetRunForWorkspace failed: %v", err)
+	}
+	if record != nil {
+		t.Fatalf("expected old terminal metadata to be pruned")
+	}
+	if got := srv.metrics.CleanupMetadataRowsDeleted.Load(); got != 1 {
+		t.Fatalf("expected cleanup metadata metric to increment to 1, got %d", got)
+	}
+}
+
+func TestListHardware_ReturnsJSON(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	seed := []db.HardwareItem{
+		{ID: "h1", Name: "h1", Type: "board", ReplPath: "test1", Tier: 1},
+		{ID: "h2", Name: "h2", Type: "cpu", ReplPath: "test2", Tier: 2},
+	}
+	if err := store.SeedHardware(seed); err != nil {
+		t.Fatalf("SeedHardware failed: %v", err)
+	}
+
+	rr := doAuthRequest(t, srv, http.MethodGet, "/v1/hardware", "", nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var items []db.HardwareItem
+	if err := json.Unmarshal(rr.Body.Bytes(), &items); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	if items[0].ID != "h1" || items[1].ID != "h2" {
+		t.Errorf("unexpected ordering or content: %+v", items)
+	}
+}
+
+func TestHealth_ExposesRuntimeMetrics(t *testing.T) {
+	srv, _, artifactsDir := newTestServer(t)
+	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll artifacts dir failed: %v", err)
+	}
+
+	srv.metrics.InflightLimitRejected.Add(2)
+	srv.metrics.QueueFullRejected.Add(3)
+	srv.metrics.ShuttingDownRejected.Add(4)
+	srv.metrics.CleanupArtifactDeleted.Add(5)
+	srv.metrics.CleanupArtifactSkippedUnsafe.Add(6)
+	srv.metrics.CleanupArtifactDeleteFailed.Add(7)
+	srv.metrics.CleanupDBPathClearFailed.Add(8)
+	srv.metrics.CleanupMetadataRowsDeleted.Add(9)
+	srv.metrics.StripeDuplicateEvents.Add(10)
+
+	rr := doAuthRequest(t, srv, http.MethodGet, "/v1/health", "", nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Components map[string]json.RawMessage `json:"components"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode health response: %v", err)
+	}
+	rawMetrics, ok := resp.Components["metrics"]
+	if !ok {
+		t.Fatalf("metrics component missing in health response")
+	}
+
+	var metrics map[string]int64
+	if err := json.Unmarshal(rawMetrics, &metrics); err != nil {
+		t.Fatalf("failed to decode metrics component: %v", err)
+	}
+	if metrics["inflight_limit_rejected"] != 2 {
+		t.Fatalf("unexpected inflight_limit_rejected metric: %d", metrics["inflight_limit_rejected"])
+	}
+	if metrics["cleanup_metadata_rows_deleted"] != 9 {
+		t.Fatalf("unexpected cleanup_metadata_rows_deleted metric: %d", metrics["cleanup_metadata_rows_deleted"])
+	}
+	if metrics["stripe_duplicate_events"] != 10 {
+		t.Fatalf("unexpected stripe_duplicate_events metric: %d", metrics["stripe_duplicate_events"])
 	}
 }

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,27 +20,12 @@ import (
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	cfg, err := loadConfigFromEnv()
+	if err != nil {
+		log.Fatalf("Invalid server configuration: %v", err)
 	}
 
-	labwiredPath := os.Getenv("LABWIRED_PATH")
-	if labwiredPath == "" {
-		labwiredPath = "labwired"
-	}
-
-	artifactsDir := os.Getenv("ARTIFACTS_DIR")
-	if artifactsDir == "" {
-		artifactsDir = "/tmp/foundry/artifacts"
-	}
-
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "foundry.db"
-	}
-
-	store, err := db.NewStore(dbPath)
+	store, err := db.NewStore(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -47,12 +35,40 @@ func main() {
 		}
 	}()
 
+	hwData, err := os.ReadFile(cfg.HardwareJSONPath)
+	if err != nil {
+		log.Printf("Warning: failed to read hardware config from %s: %v", cfg.HardwareJSONPath, err)
+	} else {
+		var hwItems []db.HardwareItem
+		if err := json.Unmarshal(hwData, &hwItems); err != nil {
+			log.Printf("Warning: failed to parse hardware config: %v", err)
+		} else {
+			if err := store.SeedHardware(hwItems); err != nil {
+				log.Printf("Warning: failed to seed hardware catalog: %v", err)
+			} else {
+				log.Printf("Successfully seeded %d hardware items from %s", len(hwItems), cfg.HardwareJSONPath)
+			}
+		}
+	}
+
+	if cfg.KeyPrefixBackfillPath != "" {
+		plaintextKeys, err := readKeyLines(cfg.KeyPrefixBackfillPath)
+		if err != nil {
+			log.Fatalf("Failed to read KEY_PREFIX_BACKFILL_PATH file: %v", err)
+		}
+		updated, err := store.BackfillKeyPrefixes(plaintextKeys)
+		if err != nil {
+			log.Fatalf("Failed key prefix backfill: %v", err)
+		}
+		log.Printf("Key prefix backfill completed: updated %d row(s)", updated)
+	}
+
 	cat := catalog.NewManager()
-	orch := verification.NewOrchestrator(labwiredPath)
-	srv := api.NewServer(orch, store, cat, artifactsDir)
+	orch := verification.NewOrchestrator(cfg.LabWiredPath)
+	srv := api.NewServer(orch, store, cat, cfg.ArtifactsDir, cfg.ServerOptions)
 
 	httpServer := &http.Server{
-		Addr:              ":" + port,
+		Addr:              ":" + cfg.Port,
 		Handler:           srv,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -61,7 +77,7 @@ func main() {
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	log.Printf("Foundry Backend listening on port %s", port)
+	log.Printf("Foundry Backend listening on port %s", cfg.Port)
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Server failed: %v", err)
@@ -85,4 +101,26 @@ func main() {
 		log.Printf("Worker drain shutdown incomplete: %v", err)
 	}
 	log.Println("Server shutdown complete")
+}
+
+func readKeyLines(path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var out []string
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

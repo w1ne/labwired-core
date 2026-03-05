@@ -18,3 +18,11 @@ ai/.env
 .env
 core/demo_chip.json
 __pycache__/
+
+# Foundry local runtime artifacts
+foundry/backend/*.db
+foundry/backend/*.db-shm
+foundry/backend/*.db-wal
+foundry/backend/key*.txt
+foundry/backend/server
+foundry/backend/server.log

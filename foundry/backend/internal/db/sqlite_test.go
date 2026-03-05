@@ -3,6 +3,7 @@ package db
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -92,5 +93,131 @@ func TestApplyStripeCreditIfNew_RollsBackWhenWorkspaceMissing(t *testing.T) {
 	}
 	if eventRows != 0 {
 		t.Fatalf("expected rolled back stripe event insert, got rows=%d", eventRows)
+	}
+}
+
+func TestSeedAndListHardware(t *testing.T) {
+	store := newTestStore(t)
+
+	// Initial list should be empty
+	items, err := store.ListHardware()
+	if err != nil {
+		t.Fatalf("ListHardware failed: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty hardware list, got %d items", len(items))
+	}
+
+	seed := []HardwareItem{
+		{
+			ID:       "stm32f4_discovery",
+			Name:     "stm32f4_discovery",
+			Type:     "board",
+			ReplPath: "platforms/boards/stm32f4_discovery.repl",
+			Tier:     1,
+		},
+		{
+			ID:       "arduino_nano_33_ble",
+			Name:     "arduino_nano_33_ble",
+			Type:     "board",
+			ReplPath: "platforms/boards/arduino_nano_33_ble.repl",
+			Tier:     1,
+		},
+		{
+			ID:       "stm32f4",
+			Name:     "stm32f4",
+			Type:     "cpu",
+			ReplPath: "platforms/cpus/stm32f4.repl",
+			Tier:     2,
+		},
+	}
+
+	if err := store.SeedHardware(seed); err != nil {
+		t.Fatalf("SeedHardware failed: %v", err)
+	}
+
+	items, err = store.ListHardware()
+	if err != nil {
+		t.Fatalf("ListHardware post-seed failed: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(items))
+	}
+
+	// Verify sorting: Tier 1 Boards -> Tier 2 CPUs
+	if items[0].ID != "arduino_nano_33_ble" {
+		t.Errorf("expected arduino_nano_33_ble first (Sort by Tier, Type, Name), got %s", items[0].ID)
+	}
+	if items[1].ID != "stm32f4_discovery" {
+		t.Errorf("expected stm32f4_discovery second, got %s", items[1].ID)
+	}
+	if items[2].ID != "stm32f4" {
+		t.Errorf("expected stm32f4 third (Tier 2), got %s", items[2].ID)
+	}
+
+	// Test overwriting
+	newSeed := []HardwareItem{
+		{
+			ID:       "nrf52840",
+			Name:     "nrf52840",
+			Type:     "cpu",
+			ReplPath: "platforms/cpus/nrf52840.repl",
+			Tier:     1,
+		},
+	}
+
+	if err := store.SeedHardware(newSeed); err != nil {
+		t.Fatalf("SeedHardware full replace failed: %v", err)
+	}
+
+	items, err = store.ListHardware()
+	if err != nil {
+		t.Fatalf("ListHardware post-replace failed: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item after replace, got %d", len(items))
+	}
+	if items[0].ID != "nrf52840" {
+		t.Errorf("expected nrf52840, got %s", items[0].ID)
+	}
+}
+
+func TestPruneTerminalRunsBefore_DeletesOnlyEligibleRows(t *testing.T) {
+	store := newTestStore(t)
+
+	mustRun := func(runID, workspaceID, status, artifactsPath, createdAt string) {
+		t.Helper()
+		_, err := store.db.Exec(
+			`INSERT INTO simulation_runs (run_id, workspace_id, status, assertions_passed, assertions_total, artifacts_path, created_at)
+			 VALUES (?, ?, ?, 0, 0, ?, ?)`,
+			runID, workspaceID, status, artifactsPath, createdAt,
+		)
+		if err != nil {
+			t.Fatalf("insert run %s failed: %v", runID, err)
+		}
+	}
+
+	old := "2000-01-01 00:00:00"
+	recent := time.Now().UTC().Format("2006-01-02 15:04:05")
+
+	mustRun("old-terminal-empty", "ws", "pass", "", old)
+	mustRun("old-terminal-with-artifacts", "ws", "fail", "/tmp/artifacts", old)
+	mustRun("old-non-terminal", "ws", "running", "", old)
+	mustRun("recent-terminal-empty", "ws", "error", "", recent)
+
+	deleted, err := store.PruneTerminalRunsBefore(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("PruneTerminalRunsBefore failed: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected 1 deleted row, got %d", deleted)
+	}
+
+	var remaining int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM simulation_runs`).Scan(&remaining); err != nil {
+		t.Fatalf("count simulation_runs failed: %v", err)
+	}
+	if remaining != 3 {
+		t.Fatalf("expected 3 remaining rows, got %d", remaining)
 	}
 }
