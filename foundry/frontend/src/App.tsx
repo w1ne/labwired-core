@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Show } from '@clerk/react';
 import './App.css';
 import Sidebar from './components/Sidebar';
 import AssetCatalog from './components/AssetCatalog';
@@ -43,22 +42,20 @@ function App() {
   }
 
   return (
-    <Show when="signed-in">
-      <div style={{ display: 'flex', width: '100vw', minHeight: '100vh', background: 'var(--lw-bg-alt)' }}>
-        <Sidebar activeTab={routeState.route} setActiveTab={(tab: string) => navigate(`/${tab}`)} />
-        <main style={{ flex: 1, display: 'flex', overflowY: 'auto' }}>
-          {routeState.route === 'catalog' && <AssetCatalog onSelectAsset={(id) => navigate(`/assets/${id}`)} />}
-          {routeState.route === 'usage' && <UsageStats />}
-          {/* {routeState.route === 'health' && <HealthMonitoring />} */}
-        </main>
-        <div style={{
-          position: 'fixed', top: '5%', right: '5%',
-          width: '300px', height: '300px',
-          background: 'rgba(232, 62, 140, 0.02)',
-          filter: 'blur(80px)', borderRadius: '50%', zIndex: -1,
-        }} />
-      </div>
-    </Show>
+    <div style={{ display: 'flex', width: '100vw', minHeight: '100vh', background: 'var(--lw-bg-alt)' }}>
+      <Sidebar activeTab={routeState.route} setActiveTab={(tab: string) => navigate(`/${tab}`)} />
+      <main style={{ flex: 1, display: 'flex', overflowY: 'auto' }}>
+        {routeState.route === 'catalog' && <AssetCatalog onSelectAsset={(id) => navigate(`/assets/${id}`)} />}
+        {routeState.route === 'usage' && <UsageStats />}
+        {/* {routeState.route === 'health' && <HealthMonitoring />} */}
+      </main>
+      <div style={{
+        position: 'fixed', top: '5%', right: '5%',
+        width: '300px', height: '300px',
+        background: 'rgba(232, 62, 140, 0.02)',
+        filter: 'blur(80px)', borderRadius: '50%', zIndex: -1,
+      }} />
+    </div>
   );
 }
 

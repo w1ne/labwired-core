@@ -1,5 +1,5 @@
 import { apiUrl, STRIPE_PAYMENT_LINK } from '../api';
-import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
+import { Show, SignInButton, UserButton } from '@clerk/react';
 
 const CURL_SNIPPET = `curl -X POST https://foundry.labwired.dev/v1/models/verify \\
   -H "Authorization: Bearer lw_sk_live_YOUR_KEY" \\
@@ -191,7 +191,7 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
             {/* FOOTER */}
             <footer style={{ borderTop: 'var(--lw-border)', padding: '1.5rem 2.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--lw-gray)' }}>
                 <span>© 2026 LabWired</span>
-                <a href="https://foundry.labwired.dev/v1/openapi.yaml" style={{ color: 'var(--lw-gray)', textDecoration: 'none' }}>OpenAPI spec</a>
+                <a href="https://api.labwired.com/v1/openapi.yaml" style={{ color: 'var(--lw-gray)', textDecoration: 'none' }}>OpenAPI spec</a>
             </footer>
         </div>
     );
