@@ -11,11 +11,11 @@ use crate::peripherals::i2c::I2cDevice;
 pub struct Mpu6050 {
     address: u8,
     current_register: u8,
-    
+
     // Core registers
     pwr_mgmt_1: u8,
     who_am_i: u8,
-    
+
     // Sensor data (dummy static values for now, but could be dynamic)
     accel_x: i16,
     accel_y: i16,
@@ -23,7 +23,7 @@ pub struct Mpu6050 {
     gyro_x: i16,
     gyro_y: i16,
     gyro_z: i16,
-    
+
     // Internal state tracking for I2C register pointer
     register_address_written: bool,
 }
@@ -41,7 +41,7 @@ impl Mpu6050 {
             current_register: 0,
             pwr_mgmt_1: 0x40, // Reset value (sleep mode bit set)
             who_am_i: 0x68,
-            
+
             // Dummy calibration/data
             accel_x: 0x0123,
             accel_y: 0x0456,
@@ -49,7 +49,7 @@ impl Mpu6050 {
             gyro_x: 0x0010,
             gyro_y: 0x0020,
             gyro_z: 0x0030,
-            
+
             register_address_written: false,
         }
     }
@@ -62,14 +62,14 @@ impl Mpu6050 {
             0x3E => (self.accel_y & 0xFF) as u8,
             0x3F => (self.accel_z >> 8) as u8,
             0x40 => (self.accel_z & 0xFF) as u8,
-            
+
             0x43 => (self.gyro_x >> 8) as u8,
             0x44 => (self.gyro_x & 0xFF) as u8,
             0x45 => (self.gyro_y >> 8) as u8,
             0x46 => (self.gyro_y & 0xFF) as u8,
             0x47 => (self.gyro_z >> 8) as u8,
             0x48 => (self.gyro_z & 0xFF) as u8,
-            
+
             0x6B => self.pwr_mgmt_1,
             0x75 => self.who_am_i,
             _ => 0,
@@ -81,7 +81,7 @@ impl Mpu6050 {
             self.pwr_mgmt_1 = value;
         }
     }
-    
+
     pub fn simulate_motion(&mut self) {
         // Simple tick function to alter data slightly if needed
         self.accel_x = self.accel_x.wrapping_add(10);

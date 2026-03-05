@@ -7,6 +7,7 @@
 pub mod adc;
 pub mod afio;
 pub mod can;
+pub mod components;
 pub mod declarative;
 pub mod dma;
 pub mod dwt;
@@ -24,4 +25,3 @@ pub mod stub;
 pub mod systick;
 pub mod timer;
 pub mod uart;
-pub mod components;

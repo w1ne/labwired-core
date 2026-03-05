@@ -71,17 +71,17 @@ impl Uart {
 
     fn tx_offset(&self) -> u64 {
         match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x04,  // DR
-            UartRegisterLayout::Stm32V2 => 0x28,  // TDR
-            UartRegisterLayout::Nrf52 => 0x51C, // TXD
+            UartRegisterLayout::Stm32F1 => 0x04, // DR
+            UartRegisterLayout::Stm32V2 => 0x28, // TDR
+            UartRegisterLayout::Nrf52 => 0x51C,  // TXD
         }
     }
 
     fn rx_offset(&self) -> u64 {
         match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x04,  // DR
-            UartRegisterLayout::Stm32V2 => 0x24,  // RDR
-            UartRegisterLayout::Nrf52 => 0x518, // RXD
+            UartRegisterLayout::Stm32F1 => 0x04, // DR
+            UartRegisterLayout::Stm32V2 => 0x24, // RDR
+            UartRegisterLayout::Nrf52 => 0x518,  // RXD
         }
     }
 

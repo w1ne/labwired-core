@@ -41,17 +41,22 @@ pub struct I2c {
 
 impl core::fmt::Debug for I2c {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("I2c")
-            .field("state", &self.state)
-            .finish()
+        f.debug_struct("I2c").field("state", &self.state).finish()
     }
 }
 
 impl Default for I2c {
     fn default() -> Self {
         Self {
-            cr1: 0, cr2: 0, oar1: 0, oar2: 0, dr: 0,
-            sr1: 0, sr2: 0, ccr: 0, trise: 0,
+            cr1: 0,
+            cr2: 0,
+            oar1: 0,
+            oar2: 0,
+            dr: 0,
+            sr1: 0,
+            sr2: 0,
+            ccr: 0,
+            trise: 0,
             state: I2cState::Idle,
             cycles_remaining: 0,
             attached_devices: Vec::new(),
@@ -123,14 +128,17 @@ impl I2c {
                         self.cycles_remaining = 20; // Address phase longer
                         let addr = (self.dr >> 1) as u8;
                         self.is_reading = (self.dr & 1) != 0;
-                        self.current_target = self.attached_devices.iter().position(|d| d.address() == addr);
+                        self.current_target = self
+                            .attached_devices
+                            .iter()
+                            .position(|d| d.address() == addr);
                     } else {
                         // This is data
                         self.state = I2cState::DataPending;
                         self.cycles_remaining = 20;
                         self.sr1 &= !0x80; // Clear TXE
                         self.sr1 &= !0x04; // Clear BTF
-                        
+
                         // Pass written data to device immediately
                         if !self.is_reading {
                             if let Some(idx) = self.current_target {
@@ -195,7 +203,7 @@ impl crate::Peripheral for I2c {
                         self.sr1 |= 0x0002; // Set ADDR
                         self.sr2 |= 0x0001; // MSL (Master mode) set
                         self.sr2 |= 0x0002; // BUSY set
-                        
+
                         // If it's a read, automatically transition to grabbing the first byte
                         if self.is_reading {
                             self.state = I2cState::DataPending;

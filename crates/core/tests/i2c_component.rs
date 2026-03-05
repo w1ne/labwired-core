@@ -21,7 +21,7 @@ fn test_mpu6050_who_am_i() {
         i2c.tick();
     }
     // Check SB is set
-    assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0); 
+    assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0);
 
     // 2. Address (0x68 << 1 = 0xD0, write mode: LSB=0)
     i2c.write(0x10, 0xD0).unwrap(); // DR
@@ -30,7 +30,7 @@ fn test_mpu6050_who_am_i() {
     }
     // Wait, AddressPending transition clears SB, sets ADDR
     // ADDR should be set
-    assert_ne!(i2c.peek(0x14).unwrap() & 0x02, 0); 
+    assert_ne!(i2c.peek(0x14).unwrap() & 0x02, 0);
 
     // 3. Register Address (0x75 = WHO_AM_I)
     i2c.write(0x10, 0x75).unwrap(); // DR
@@ -38,30 +38,34 @@ fn test_mpu6050_who_am_i() {
         i2c.tick();
     }
     // TxE should be set, but the master sent the register address to the component
-    assert_ne!(i2c.peek(0x14).unwrap() & 0x80, 0); 
+    assert_ne!(i2c.peek(0x14).unwrap() & 0x80, 0);
 
     // 4. Repeated START
     i2c.write(0x01, 0x01).unwrap(); // CR1: SB
     for _ in 0..10 {
         i2c.tick();
     }
-    
+
     // 5. Address (0x68 << 1 = 0xD0, read mode: LSB=1 -> 0xD1)
     i2c.write(0x10, 0xD1).unwrap(); // DR
     for _ in 0..40 {
         i2c.tick();
     }
-    
+
     // Wait, in read mode, after Address phase (which sets ADDR), the master starts reading data instantly?
     // In our simplified model, when is_reading is true, we fetch the data into DR and set RXNE
     // So RXNE should be set now!
     let sr1 = i2c.peek(0x14).unwrap();
-    assert_ne!(sr1 & 0x40, 0, "RXNE should be set after address phase in read mode");
-    
+    assert_ne!(
+        sr1 & 0x40,
+        0,
+        "RXNE should be set after address phase in read mode"
+    );
+
     // Read the data
     let data = i2c.read(0x10).unwrap();
     assert_eq!(data, 0x68, "WHO_AM_I should be 0x68");
-    
+
     // 6. STOP
     i2c.write(0x01, 0x02).unwrap(); // CR1: STOP
     for _ in 0..10 {
