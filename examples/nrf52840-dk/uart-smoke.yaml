@@ -1,0 +1,10 @@
+# LabWired - nRF52840 UART smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840-demo"
+  system: "../../configs/systems/nrf52840-dk.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "NRF52840_SMOKE_OK"
+  - expected_stop_reason: max_steps
