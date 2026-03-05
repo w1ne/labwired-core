@@ -1,0 +1,15 @@
+name: "nrf52840"
+arch: "arm"
+flash:
+  base: 0x00000000
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40002000
+    size: "4KB"
+    config:
+      profile: "nrf52"

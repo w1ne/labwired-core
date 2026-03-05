@@ -5,7 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::network::Interconnect;
-use crate::{Cpu, Machine, SimResult};
+use crate::{Bus, Cpu, Machine, SimResult};
 use std::collections::HashMap;
 
 /// The orchestrator for a multi-node simulation environment.
@@ -24,6 +24,8 @@ pub trait MachineTrait: Send {
     fn step(&mut self) -> SimResult<()>;
     fn reset(&mut self) -> SimResult<()>;
     fn total_cycles(&self) -> u64;
+    fn read_u8(&self, addr: u64) -> SimResult<u8>;
+    fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()>;
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -42,6 +44,14 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn total_cycles(&self) -> u64 {
         self.total_cycles
+    }
+
+    fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        self.bus.read_u8(addr)
+    }
+
+    fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()> {
+        self.bus.write_u8(addr, val)
     }
 }
 
@@ -169,5 +179,41 @@ mod tests {
         let rx_data_1 = can2.read(0x11).unwrap();
         assert_eq!(rx_data_0, 0x12);
         assert_eq!(rx_data_1, 0x34);
+    }
+
+    use crate::network::WirelessBus;
+    use crate::peripherals::radio::RadioController;
+
+    #[test]
+    fn test_wireless_bus_transmission() {
+        let mut world = World::new("test-wireless".to_string());
+
+        let mut wireless_bus = WirelessBus::new();
+        let (tx1, rx1) = wireless_bus.attach();
+        let (tx2, rx2) = wireless_bus.attach();
+
+        world.add_interconnect(Box::new(wireless_bus));
+
+        let mut radio1 = RadioController::new(tx1, rx1);
+        let mut radio2 = RadioController::new(tx2, rx2);
+
+        // Setup channels (Channel 10)
+        radio1.write(0x00, 10).unwrap(); // TX CH
+        radio2.write(0x00, 10).unwrap(); // Also needs to be on index 10 to receive
+
+        // Trigger TX on radio1
+        radio1.write(0x08, 0x01).unwrap();
+
+        // Step the world
+        let _ = world.step_all();
+
+        // Tick radio2 to process incoming packet
+        let _ = radio2.tick();
+
+        let status = radio2.read(0x0C).unwrap();
+        assert_eq!(status, 1, "RX pending should be 1");
+
+        let rx_ch = radio2.read(0x10).unwrap();
+        assert_eq!(rx_ch, 10);
     }
 }

@@ -19,6 +19,8 @@ members = [
     "crates/firmware-hil-showcase",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-rp2040-pio-onboarding",
+    "crates/firmware-rp2040-demo",
+    "crates/firmware-nrf52840-demo",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
     "crates/ir",
@@ -100,6 +102,16 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-pio-onboarding]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-nrf52840-demo]
 codegen-units = 1
 debug = true
 opt-level = "s"
