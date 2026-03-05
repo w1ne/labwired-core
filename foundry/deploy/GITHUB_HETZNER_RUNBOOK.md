@@ -49,6 +49,13 @@ cp target/release/labwired-cli /srv/labwired/bin/labwired
 chmod +x /srv/labwired/bin/labwired
 ```
 
+### Apply host hardening baseline
+
+```bash
+cd /srv/labwired/foundry/deploy
+sudo ./scripts/harden_vps.sh
+```
+
 ## VPS Deploy Config
 
 ```bash
@@ -96,6 +103,7 @@ docker compose --env-file .env -f docker-compose.prod.yml logs --tail=200 foundr
 ```bash
 curl -fsS https://<your-domain>/v1/health | jq
 curl -fsS https://<your-domain>/v1/info | jq
+./scripts/verify_foundry.sh https://<your-domain>
 ```
 
 ## Create API Key for Real Testing

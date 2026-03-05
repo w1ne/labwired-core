@@ -21,7 +21,7 @@ const Sidebar = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab:
                         key={tab.id}
                         onClick={() => {
                             if (tab.id === 'docs') {
-                                window.open('http://localhost:8080/v1/docs', '_blank');
+                                window.open('/v1/docs', '_blank');
                             } else {
                                 setActiveTab(tab.id);
                             }

@@ -43,11 +43,8 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                     <button className="secondary" onClick={() => window.location.hash = '/catalog'}>Catalog</button>
                     <Show when="signed-out">
                         <SignInButton mode="modal" fallbackRedirectUrl="#/dashboard">
-                            <button className="secondary">Login</button>
-                        </SignInButton>
-                        <SignUpButton mode="modal" fallbackRedirectUrl="#/dashboard">
                             <button>Dashboard →</button>
-                        </SignUpButton>
+                        </SignInButton>
                     </Show>
                     <Show when="signed-in">
                         <button onClick={onEnterDashboard}>Dashboard →</button>

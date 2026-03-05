@@ -22,12 +22,28 @@ services:
     volumes:
       - foundry_data:/data
       - ${LABWIRED_BINARY_PATH:-/srv/labwired/bin/labwired}:/usr/local/bin/labwired:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
     networks:
       - foundry_net
 
   foundry-frontend:
     image: "${FRONTEND_IMAGE:-ghcr.io/w1ne/foundry-frontend}:${FRONTEND_IMAGE_TAG:-latest}"
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
     networks:
       - foundry_net
 
@@ -41,6 +57,16 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    pids_limit: 128
     depends_on:
       - foundry-backend
       - foundry-frontend
