@@ -1,11 +1,6 @@
-version: "3.9"
-
 services:
   foundry-backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    image: labwired/foundry-backend:prod
+    image: "${BACKEND_IMAGE:-ghcr.io/w1ne/foundry-backend}:${BACKEND_IMAGE_TAG:-latest}"
     restart: unless-stopped
     environment:
       PORT: "8080"
@@ -26,14 +21,12 @@ services:
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
     volumes:
       - foundry_data:/data
+      - ${LABWIRED_BINARY_PATH:-/srv/labwired/bin/labwired}:/usr/local/bin/labwired:ro
     networks:
       - foundry_net
 
   foundry-frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-    image: labwired/foundry-frontend:prod
+    image: "${FRONTEND_IMAGE:-ghcr.io/w1ne/foundry-frontend}:${FRONTEND_IMAGE_TAG:-latest}"
     restart: unless-stopped
     networks:
       - foundry_net

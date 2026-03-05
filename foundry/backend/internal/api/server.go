@@ -977,6 +977,8 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 
 	s.jobs.Store(primaryRunID, job)
 	enqueued = true
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
 	resp := map[string]interface{}{
 		"job_id":   jobID,
 		"run_id":   primaryRunID,
@@ -995,13 +997,9 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		idemCompleted = true
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write(body)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(resp)
 }
 
@@ -1124,6 +1122,8 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 		enqueued = true
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
 	resp := map[string]interface{}{
 		"run_id":   runID,
 		"status":   string(StatusQueued),
@@ -1140,13 +1140,9 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 			return
 		}
 		idemCompleted = true
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write(respBody)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(resp)
 }
 

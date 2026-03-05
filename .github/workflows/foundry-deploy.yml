@@ -1,0 +1,138 @@
+name: Foundry Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "foundry/**"
+      - ".github/workflows/foundry-deploy.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: foundry/backend/go.mod
+          cache-dependency-path: foundry/backend/go.sum
+
+      - name: Backend tests
+        working-directory: foundry/backend
+        run: go test ./cmd/... ./internal/...
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: foundry/frontend/package-lock.json
+
+      - name: Frontend build
+        working-directory: foundry/frontend
+        run: |
+          npm ci
+          npm run build
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      owner_lower: ${{ steps.meta.outputs.owner_lower }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        run: |
+          echo "owner_lower=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: foundry/backend
+          file: foundry/backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-backend:${{ steps.meta.outputs.image_tag }}
+            ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-backend:latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: foundry/frontend
+          file: foundry/frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:${{ steps.meta.outputs.image_tag }}
+            ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
+          GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          OWNER_LOWER: ${{ needs.build-and-push.outputs.owner_lower }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: DEPLOY_PATH,GHCR_PULL_USER,GHCR_PULL_TOKEN,OWNER_LOWER,IMAGE_TAG
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${DEPLOY_PATH:-/srv/labwired/foundry/deploy}"
+            cd "$DEPLOY_PATH"
+
+            if [ ! -f .env ]; then
+              echo "Missing .env in $DEPLOY_PATH"
+              exit 1
+            fi
+
+            echo "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_PULL_USER" --password-stdin
+
+            grep -q '^BACKEND_IMAGE=' .env || echo "BACKEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-backend" >> .env
+            grep -q '^FRONTEND_IMAGE=' .env || echo "FRONTEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-frontend" >> .env
+
+            if grep -q '^BACKEND_IMAGE_TAG=' .env; then
+              sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=$IMAGE_TAG/" .env
+            else
+              echo "BACKEND_IMAGE_TAG=$IMAGE_TAG" >> .env
+            fi
+            if grep -q '^FRONTEND_IMAGE_TAG=' .env; then
+              sed -i "s/^FRONTEND_IMAGE_TAG=.*/FRONTEND_IMAGE_TAG=$IMAGE_TAG/" .env
+            else
+              echo "FRONTEND_IMAGE_TAG=$IMAGE_TAG" >> .env
+            fi
+
+            docker compose --env-file .env -f docker-compose.prod.yml pull
+            docker compose --env-file .env -f docker-compose.prod.yml up -d
+            docker compose --env-file .env -f docker-compose.prod.yml ps
