@@ -1,0 +1,16 @@
+[Unit]
+Description=LabWired Foundry (Docker Compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/labwired/foundry/deploy
+RemainAfterExit=yes
+ExecStart=/usr/bin/docker compose --env-file .env -f docker-compose.prod.yml up -d --build
+ExecStop=/usr/bin/docker compose --env-file .env -f docker-compose.prod.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

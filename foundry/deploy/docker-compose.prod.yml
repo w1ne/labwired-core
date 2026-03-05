@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  foundry-backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: labwired/foundry-backend:prod
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      APP_ENV: "production"
+      LABWIRED_PATH: "labwired"
+      DB_PATH: "/data/foundry.db"
+      ARTIFACTS_DIR: "/data/artifacts"
+      HARDWARE_JSON_PATH: "/app/configs/renode_hardware.json"
+      WORKER_CONCURRENCY: "4"
+      WORKSPACE_MAX_INFLIGHT: "8"
+      ARTIFACT_RETENTION_DAYS: "14"
+      RUN_METADATA_RETENTION_DAYS: "90"
+      ARTIFACT_CLEANUP_INTERVAL_SECONDS: "3600"
+      WORKER_LEASE_TIMEOUT_SECONDS: "45"
+      WORKER_HEARTBEAT_INTERVAL_SECONDS: "10"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
+      ALLOW_INSECURE_STRIPE_WEBHOOKS: "false"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+    volumes:
+      - foundry_data:/data
+    networks:
+      - foundry_net
+
+  foundry-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: labwired/foundry-frontend:prod
+    restart: unless-stopped
+    networks:
+      - foundry_net
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - foundry-backend
+      - foundry-frontend
+    networks:
+      - foundry_net
+
+volumes:
+  foundry_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  foundry_net:
+    driver: bridge

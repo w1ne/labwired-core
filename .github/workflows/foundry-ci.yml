@@ -1,0 +1,86 @@
+name: Foundry CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "foundry/**"
+      - ".github/workflows/foundry-ci.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "foundry/**"
+      - ".github/workflows/foundry-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: foundry-backend-ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: foundry/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: foundry/backend/go.mod
+
+      - name: Go test
+        run: go test ./cmd/... ./internal/...
+
+      - name: Build server
+        run: go build -o foundry-server ./cmd/server
+
+      - name: Backend smoke (health endpoint)
+        env:
+          PORT: "18080"
+          APP_ENV: "development"
+          ALLOW_INSECURE_STRIPE_WEBHOOKS: "false"
+          STRIPE_WEBHOOK_SECRET: ""
+          DB_PATH: "/tmp/foundry-ci.db"
+          ARTIFACTS_DIR: "/tmp/foundry-ci-artifacts"
+        run: |
+          ./foundry-server > /tmp/foundry-server.log 2>&1 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID" EXIT
+
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:18080/v1/health" >/tmp/foundry-health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          cat /tmp/foundry-health.json
+          grep -q '"status"' /tmp/foundry-health.json
+
+  frontend:
+    name: foundry-frontend-ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: foundry/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: foundry/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build

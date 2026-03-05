@@ -1,0 +1,19 @@
+{
+  email ops@example.com
+}
+
+foundry.example.com {
+  encode gzip
+
+  @api path /v1*
+  reverse_proxy @api foundry-backend:8080
+
+  handle {
+    reverse_proxy foundry-frontend:80
+  }
+
+  log {
+    output stdout
+    format console
+  }
+}

@@ -24,6 +24,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid server configuration: %v", err)
 	}
+	if err := validateRuntimeDependencies(cfg); err != nil {
+		log.Fatalf("Runtime dependency validation failed: %v", err)
+	}
 
 	store, err := db.NewStore(cfg.DBPath)
 	if err != nil {
@@ -37,6 +40,9 @@ func main() {
 
 	hwData, err := os.ReadFile(cfg.HardwareJSONPath)
 	if err != nil {
+		if cfg.AppEnv == "production" {
+			log.Fatalf("Failed to read required hardware config from %s: %v", cfg.HardwareJSONPath, err)
+		}
 		log.Printf("Warning: failed to read hardware config from %s: %v", cfg.HardwareJSONPath, err)
 	} else {
 		var hwItems []db.HardwareItem

@@ -28,6 +28,17 @@ type RunArtifactRecord struct {
 	CreatedAt     string
 }
 
+// IdempotencyRecord stores replay-safe response data for idempotent requests.
+type IdempotencyRecord struct {
+	WorkspaceID  string
+	Endpoint     string
+	Key          string
+	RunID        string
+	StatusCode   int
+	ResponseBody string
+	CreatedAt    string
+}
+
 // HardwareItem represents a Renode-supported board or CPU in the database.
 type HardwareItem struct {
 	ID       string `json:"id"`
@@ -42,6 +53,7 @@ type Store struct {
 }
 
 var ErrQuotaExceeded = errors.New("quota exceeded")
+var ErrInflightLimit = errors.New("inflight limit exceeded")
 
 func NewStore(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", path)
@@ -86,6 +98,11 @@ func (s *Store) migrate() error {
 			status TEXT NOT NULL,
 			assertions_passed INTEGER DEFAULT 0,
 			assertions_total INTEGER DEFAULT 0,
+			billable INTEGER NOT NULL DEFAULT 1,
+			attempt_count INTEGER NOT NULL DEFAULT 0,
+			last_error TEXT NOT NULL DEFAULT '',
+			claimed_at TIMESTAMP NULL,
+			worker_id TEXT NOT NULL DEFAULT '',
 			artifacts_path TEXT DEFAULT '',
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,
@@ -95,6 +112,23 @@ func (s *Store) migrate() error {
 			workspace_id TEXT NOT NULL,
 			runs_credited INTEGER NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE TABLE IF NOT EXISTS request_rate_windows (
+			scope TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			window_start TIMESTAMP NOT NULL,
+			request_count INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (scope, subject, window_start)
+		);`,
+		`CREATE TABLE IF NOT EXISTS idempotency_requests (
+			workspace_id TEXT NOT NULL,
+			endpoint TEXT NOT NULL,
+			idempotency_key TEXT NOT NULL,
+			run_id TEXT NOT NULL DEFAULT '',
+			status_code INTEGER NOT NULL DEFAULT 0,
+			response_body TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (workspace_id, endpoint, idempotency_key)
 		);`,
 		`CREATE TABLE IF NOT EXISTS supported_hardware (
 			id TEXT PRIMARY KEY,
@@ -109,8 +143,17 @@ func (s *Store) migrate() error {
 		`ALTER TABLE api_keys ADD COLUMN key_prefix TEXT NOT NULL DEFAULT '';`,
 		// Non-destructive: add artifacts_path column if missing.
 		`ALTER TABLE simulation_runs ADD COLUMN artifacts_path TEXT DEFAULT '';`,
+		// Non-destructive: add billable column if missing.
+		`ALTER TABLE simulation_runs ADD COLUMN billable INTEGER NOT NULL DEFAULT 1;`,
+		// Non-destructive: add worker lifecycle metadata columns if missing.
+		`ALTER TABLE simulation_runs ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE simulation_runs ADD COLUMN last_error TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE simulation_runs ADD COLUMN claimed_at TIMESTAMP NULL;`,
+		`ALTER TABLE simulation_runs ADD COLUMN worker_id TEXT NOT NULL DEFAULT '';`,
 		`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);`,
 		`CREATE INDEX IF NOT EXISTS idx_simulation_runs_workspace_created ON simulation_runs(workspace_id, created_at);`,
+		`CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_requests(created_at);`,
+		`CREATE INDEX IF NOT EXISTS idx_request_rate_windows_window_start ON request_rate_windows(window_start);`,
 	}
 
 	for _, q := range queries {
@@ -124,6 +167,64 @@ func (s *Store) migrate() error {
 	}
 
 	return nil
+}
+
+// IncrementRateWindow increments request count for a scope+subject inside the current window.
+// It returns the updated count and window reset timestamp.
+func (s *Store) IncrementRateWindow(scope, subject string, now time.Time, window time.Duration) (int, time.Time, error) {
+	if window <= 0 {
+		return 0, time.Time{}, fmt.Errorf("window must be > 0")
+	}
+	windowStart := now.UTC().Truncate(window)
+	windowStartStr := windowStart.Format("2006-01-02 15:04:05")
+	resetAt := windowStart.Add(window)
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.Exec(
+		`INSERT OR IGNORE INTO request_rate_windows (scope, subject, window_start, request_count)
+		 VALUES (?, ?, ?, 0)`,
+		scope, subject, windowStartStr,
+	); err != nil {
+		return 0, time.Time{}, err
+	}
+
+	if _, err := tx.Exec(
+		`UPDATE request_rate_windows
+		 SET request_count = request_count + 1
+		 WHERE scope = ? AND subject = ? AND window_start = ?`,
+		scope, subject, windowStartStr,
+	); err != nil {
+		return 0, time.Time{}, err
+	}
+
+	var count int
+	if err := tx.QueryRow(
+		`SELECT request_count FROM request_rate_windows
+		 WHERE scope = ? AND subject = ? AND window_start = ?`,
+		scope, subject, windowStartStr,
+	).Scan(&count); err != nil {
+		return 0, time.Time{}, err
+	}
+
+	cutoff := windowStart.Add(-2 * window).Format("2006-01-02 15:04:05")
+	if _, err := tx.Exec(
+		`DELETE FROM request_rate_windows WHERE datetime(window_start) < datetime(?)`,
+		cutoff,
+	); err != nil {
+		return 0, time.Time{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, time.Time{}, err
+	}
+	return count, resetAt, nil
 }
 
 // isAlreadyExistsErr returns true for SQLite "duplicate column" errors produced
@@ -164,7 +265,7 @@ func (s *Store) ReserveRunForWorkspace(runID, workspaceID, status string) error 
 		`INSERT INTO simulation_runs (run_id, workspace_id, status)
 		 SELECT ?, ?, ?
 		 WHERE (
-		   SELECT COUNT(*) FROM simulation_runs
+		   SELECT COALESCE(SUM(billable), 0) FROM simulation_runs
 		   WHERE workspace_id = ? AND datetime(created_at) >= datetime('now', '-30 days')
 		 ) < COALESCE(
 		   (SELECT monthly_quota FROM api_keys WHERE workspace_id = ? AND revoked = FALSE LIMIT 1),
@@ -185,6 +286,51 @@ func (s *Store) ReserveRunForWorkspace(runID, workspaceID, status string) error 
 	return nil
 }
 
+// ReserveRunForWorkspaceWithInflight atomically inserts a run if workspace quota
+// and workspace active-run inflight limit are both satisfied.
+func (s *Store) ReserveRunForWorkspaceWithInflight(runID, workspaceID, status string, maxInflight int) error {
+	if maxInflight <= 0 {
+		return fmt.Errorf("maxInflight must be > 0")
+	}
+	res, err := s.db.Exec(
+		`INSERT INTO simulation_runs (run_id, workspace_id, status)
+		 SELECT ?, ?, ?
+		 WHERE (
+		   SELECT COUNT(*) FROM simulation_runs
+		   WHERE workspace_id = ? AND status IN ('queued', 'running')
+		 ) < ?
+		 AND (
+		   SELECT COALESCE(SUM(billable), 0) FROM simulation_runs
+		   WHERE workspace_id = ? AND datetime(created_at) >= datetime('now', '-30 days')
+		 ) < COALESCE(
+		   (SELECT monthly_quota FROM api_keys WHERE workspace_id = ? AND revoked = FALSE LIMIT 1),
+		   1000
+		 )`,
+		runID, workspaceID, status,
+		workspaceID, maxInflight,
+		workspaceID, workspaceID,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 1 {
+		return nil
+	}
+
+	var active int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM simulation_runs WHERE workspace_id = ? AND status IN ('queued', 'running')`,
+		workspaceID,
+	).Scan(&active); err == nil && active >= maxInflight {
+		return ErrInflightLimit
+	}
+	return ErrQuotaExceeded
+}
+
 // ReserveRunsForWorkspace atomically inserts multiple runs for a workspace.
 // It either reserves all requested runs or none.
 func (s *Store) ReserveRunsForWorkspace(runIDs []string, workspaceID, status string) error {
@@ -202,7 +348,7 @@ func (s *Store) ReserveRunsForWorkspace(runIDs []string, workspaceID, status str
 
 	var used int
 	if err := tx.QueryRow(
-		`SELECT COUNT(*) FROM simulation_runs
+		`SELECT COALESCE(SUM(billable), 0) FROM simulation_runs
 		 WHERE workspace_id = ? AND datetime(created_at) >= datetime('now', '-30 days')`,
 		workspaceID,
 	).Scan(&used); err != nil {
@@ -245,10 +391,144 @@ func (s *Store) ReserveRunsForWorkspace(runIDs []string, workspaceID, status str
 // UpdateRunStatus updates the terminal status and assertion counts for a run.
 func (s *Store) UpdateRunStatus(runID, status string, passed, total int, artifactsPath string) error {
 	_, err := s.db.Exec(
-		"UPDATE simulation_runs SET status = ?, assertions_passed = ?, assertions_total = ?, artifacts_path = ? WHERE run_id = ?",
+		`UPDATE simulation_runs
+		 SET status = ?, assertions_passed = ?, assertions_total = ?, artifacts_path = ?,
+		     claimed_at = NULL, worker_id = ''
+		 WHERE run_id = ?`,
 		status, passed, total, artifactsPath, runID,
 	)
 	return err
+}
+
+// TryClaimQueuedRun transitions a run from queued -> running for one worker.
+// Returns true only if this caller won the claim.
+func (s *Store) TryClaimQueuedRun(runID, workerID string, now time.Time, maxAttempts int) (bool, error) {
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	res, err := s.db.Exec(
+		`UPDATE simulation_runs
+		 SET status = 'running',
+		     attempt_count = attempt_count + 1,
+		     claimed_at = ?,
+		     worker_id = ?,
+		     last_error = ''
+		 WHERE run_id = ? AND status = 'queued' AND attempt_count < ?`,
+		now.UTC().Format("2006-01-02 15:04:05"),
+		workerID,
+		runID,
+		maxAttempts,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
+// FailExhaustedQueuedRuns marks queued runs with exhausted attempts as terminal errors.
+func (s *Store) FailExhaustedQueuedRuns(maxAttempts int, reason string) (int64, error) {
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	res, err := s.db.Exec(
+		`UPDATE simulation_runs
+		 SET status = 'error',
+		     last_error = ?,
+		     claimed_at = NULL,
+		     worker_id = ''
+		 WHERE status = 'queued' AND attempt_count >= ?`,
+		reason,
+		maxAttempts,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// CompleteClaimedRun writes terminal outcome and clears claim metadata.
+func (s *Store) CompleteClaimedRun(runID, status string, passed, total int, artifactsPath, lastError string) error {
+	_, err := s.db.Exec(
+		`UPDATE simulation_runs
+		 SET status = ?, assertions_passed = ?, assertions_total = ?, artifacts_path = ?,
+		     last_error = ?, claimed_at = NULL, worker_id = ''
+		 WHERE run_id = ?`,
+		status, passed, total, artifactsPath, lastError, runID,
+	)
+	return err
+}
+
+// RequeueRunningRuns sets all running runs back to queued.
+// Deprecated: prefer RequeueStaleRunningRuns for lease-based recovery.
+func (s *Store) RequeueRunningRuns(reason string) (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE simulation_runs
+		 SET status = 'queued',
+		     last_error = ?,
+		     claimed_at = NULL,
+		     worker_id = ''
+		 WHERE status = 'running'`,
+		reason,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// HeartbeatClaimedRun refreshes the lease timestamp for a claimed running job.
+func (s *Store) HeartbeatClaimedRun(runID, workerID string, now time.Time) (bool, error) {
+	res, err := s.db.Exec(
+		`UPDATE simulation_runs
+		 SET claimed_at = ?
+		 WHERE run_id = ? AND status = 'running' AND worker_id = ?`,
+		now.UTC().Format("2006-01-02 15:04:05"),
+		runID,
+		workerID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
+// RequeueStaleRunningRuns requeues only stale running jobs whose lease expired.
+func (s *Store) RequeueStaleRunningRuns(cutoff time.Time, reason string) (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE simulation_runs
+		 SET status = 'queued',
+		     last_error = ?,
+		     claimed_at = NULL,
+		     worker_id = ''
+		 WHERE status = 'running'
+		   AND (claimed_at IS NULL OR datetime(claimed_at) < datetime(?))`,
+		reason,
+		cutoff.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // GetRun returns the full run record for polling.
@@ -339,6 +619,23 @@ func (s *Store) PruneTerminalRunsBefore(cutoff time.Time) (int64, error) {
 	return n, nil
 }
 
+// PruneIdempotencyRequestsBefore deletes old idempotency records.
+func (s *Store) PruneIdempotencyRequestsBefore(cutoff time.Time) (int64, error) {
+	res, err := s.db.Exec(
+		`DELETE FROM idempotency_requests
+		 WHERE datetime(created_at) < datetime(?)`,
+		cutoff.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // ListRunsForWorkspace returns the 50 most recent runs for the workspace.
 func (s *Store) ListRunsForWorkspace(workspaceID string) ([]RunRecord, error) {
 	rows, err := s.db.Query(
@@ -362,14 +659,132 @@ func (s *Store) ListRunsForWorkspace(workspaceID string) ([]RunRecord, error) {
 	return records, nil
 }
 
+// ListRecoverableRuns returns runs that were in-flight during a crash/restart.
+// These rows should be reconstructed and re-queued on process startup.
+func (s *Store) ListRecoverableRuns() ([]RunRecord, error) {
+	rows, err := s.db.Query(
+		`SELECT run_id, workspace_id, status, assertions_passed, assertions_total, artifacts_path, created_at
+		 FROM simulation_runs
+		 WHERE status IN ('queued', 'running')
+		 ORDER BY created_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []RunRecord
+	for rows.Next() {
+		var r RunRecord
+		if err := rows.Scan(&r.RunID, &r.WorkspaceID, &r.Status, &r.AssertionsPassed, &r.AssertionsTotal, &r.ArtifactsPath, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, nil
+}
+
+// ListQueuedRuns returns oldest queued runs up to limit.
+func (s *Store) ListQueuedRuns(limit int) ([]RunRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.Query(
+		`SELECT run_id, workspace_id, status, assertions_passed, assertions_total, artifacts_path, created_at
+		 FROM simulation_runs
+		 WHERE status = 'queued'
+		 ORDER BY created_at ASC
+		 LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []RunRecord
+	for rows.Next() {
+		var r RunRecord
+		if err := rows.Scan(&r.RunID, &r.WorkspaceID, &r.Status, &r.AssertionsPassed, &r.AssertionsTotal, &r.ArtifactsPath, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, nil
+}
+
+// BeginIdempotencyRequest creates a pending idempotency record.
+// Returns:
+// - (new=true, existing=nil) when caller should proceed and later complete/cancel.
+// - (new=false, existing!=nil) when request key already exists.
+func (s *Store) BeginIdempotencyRequest(workspaceID, endpoint, key string) (bool, *IdempotencyRecord, error) {
+	res, err := s.db.Exec(
+		`INSERT OR IGNORE INTO idempotency_requests (workspace_id, endpoint, idempotency_key)
+		 VALUES (?, ?, ?)`,
+		workspaceID, endpoint, key,
+	)
+	if err != nil {
+		return false, nil, err
+	}
+	inserted, err := res.RowsAffected()
+	if err != nil {
+		return false, nil, err
+	}
+	row := s.db.QueryRow(
+		`SELECT run_id, status_code, response_body, created_at
+		 FROM idempotency_requests
+		 WHERE workspace_id = ? AND endpoint = ? AND idempotency_key = ?`,
+		workspaceID, endpoint, key,
+	)
+	var rec IdempotencyRecord
+	rec.WorkspaceID = workspaceID
+	rec.Endpoint = endpoint
+	rec.Key = key
+	if err := row.Scan(&rec.RunID, &rec.StatusCode, &rec.ResponseBody, &rec.CreatedAt); err != nil {
+		return false, nil, err
+	}
+	return inserted == 1, &rec, nil
+}
+
+// CompleteIdempotencyRequest stores the final replay response.
+func (s *Store) CompleteIdempotencyRequest(workspaceID, endpoint, key, runID string, statusCode int, responseBody string) error {
+	_, err := s.db.Exec(
+		`UPDATE idempotency_requests
+		 SET run_id = ?, status_code = ?, response_body = ?
+		 WHERE workspace_id = ? AND endpoint = ? AND idempotency_key = ?`,
+		runID, statusCode, responseBody, workspaceID, endpoint, key,
+	)
+	return err
+}
+
+// CancelPendingIdempotencyRequest removes a pending placeholder.
+func (s *Store) CancelPendingIdempotencyRequest(workspaceID, endpoint, key string) error {
+	_, err := s.db.Exec(
+		`DELETE FROM idempotency_requests
+		 WHERE workspace_id = ? AND endpoint = ? AND idempotency_key = ? AND status_code = 0`,
+		workspaceID, endpoint, key,
+	)
+	return err
+}
+
 // CountRunsForWorkspace returns the number of runs in the last 30 days.
 func (s *Store) CountRunsForWorkspace(workspaceID string) (int, error) {
 	var count int
 	err := s.db.QueryRow(`
-		SELECT COUNT(*) FROM simulation_runs
+		SELECT COALESCE(SUM(billable), 0) FROM simulation_runs
 		WHERE workspace_id = ? AND datetime(created_at) >= datetime('now', '-30 days')
 	`, workspaceID).Scan(&count)
 	return count, err
+}
+
+// SetRunBillable updates quota accounting participation for a run.
+func (s *Store) SetRunBillable(runID string, billable bool) error {
+	v := 0
+	if billable {
+		v = 1
+	}
+	_, err := s.db.Exec(`UPDATE simulation_runs SET billable = ? WHERE run_id = ?`, v, runID)
+	return err
 }
 
 // GetMonthlyQuota returns the monthly_quota for the workspace associated with the API key.

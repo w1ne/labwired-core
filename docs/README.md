@@ -47,6 +47,7 @@ graph TD
 ## ⚙️ [Operations & Release](./ops/)
 *Gatekeeping and runbooks for stable delivery.*
 - **[Release Checklist](./ops/RELEASE_CHECKLIST.md)** - Platform-level quality gates.
+- **[Foundry Production Checklist](./ops/FOUNDRY_PRODUCTION_CHECKLIST.md)** - First-production deployment and cutover gates for Foundry.
 - **[Demo Dry Run](./ops/DEMO_DRY_RUN.md)** - Checklist for external demos.
 - **[VS Code UI Checklist](./ops/VS_CODE_UI_DEMO_CHECKLIST.md)** - Manual UI validation steps.
 

@@ -48,10 +48,10 @@ CI alignment note:
 | 7 | `rp2040-pico` | RP2040 | Raspberry Pi Pico | Cortex-M0+ | `firmware-rp2040-pio-onboarding` | `core/configs/systems/pico.yaml` | `core/examples/rp2040-pio/asm-smoke.yaml` | `pio/gpio/uart` hardware fidelity baseline | `green` | Clock tree depth |
 | 7.5 | `nrf52832-example` | nRF52832 | nRF52 DK (PCA10040) | ARMv7E-M | `firmware-nrf52832-demo` | `core/configs/systems/nrf52832-example.yaml` | `core/examples/nrf52832/uart-smoke.yaml` | `gpio/uart` deterministic smoke path | `green` | Timer/Radio/EasyDMA |
 | 8 | `nrf52840-dk` | nRF52 | PCA10056 DK | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Radio/PPI/EasyDMA |
-| 9 | `stm32g474-nucleo` | STM32G4 | NUCLEO-G474RE | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Advanced timer/ADC paths |
-| 10 | `stm32l476-nucleo` | STM32L4 | NUCLEO-L476RG | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Low-power clock tree |
-| 11 | `stm32wb55-nucleo` | STM32WB | NUCLEO-WB55RG | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Dual-core + radio |
-| 12 | `atsamd21-xplained` | SAMD21 | Xplained Pro | ARMv6-M | planned | planned | planned | Not started | `backlog` | SERCOM/GCLK behavior |
+| 9 | `stm32g474-nucleo` | STM32G4 | NUCLEO-G474RE | ARMv7E-M | `firmware-stm32g474-demo` | `core/configs/systems/nucleo-g474re.yaml` | `core/examples/nucleo-g474re/uart-smoke.yaml` | `rcc/gpio/uart/systick` baseline | `green` | Advanced timer/ADC depth |
+| 10 | `stm32l476-nucleo` | STM32L4 | NUCLEO-L476RG | ARMv7E-M | `firmware-stm32l476-demo` | `core/configs/systems/nucleo-l476rg.yaml` | `core/examples/nucleo-l476rg/uart-smoke.yaml` | `rcc/gpio/uart/systick` baseline | `green` | Low-power clock tree |
+| 11 | `stm32wb55-nucleo` | STM32WB | NUCLEO-WB55RG | ARMv7E-M | `firmware-stm32wb55-demo` | `core/configs/systems/nucleo-wb55rg.yaml` | `core/examples/nucleo-wb55rg/uart-smoke.yaml` | `gpio/uart` app-core baseline | `green` | Dual-core + radio |
+| 12 | `atsamd21-xplained` | SAMD21 | Xplained Pro | ARMv6-M | `firmware-atsamd21-demo` | `core/configs/systems/atsamd21-xplained.yaml` | `core/examples/atsamd21-xplained/uart-smoke.yaml` | `uart` SERCOM baseline | `green` | GCLK/SERCOM depth |
 | 13 | `atsame54-xplained` | SAME54 | Xplained Pro | ARMv7E-M | planned | planned | planned | Not started | `backlog` | Clock/peripheral breadth |
 | 14 | `efr32bg22-dk` | EFR32 | BRD4184 | ARMv8-M | planned | planned | planned | Not started | `backlog` | Radio + low-power modes |
 | 15 | `gd32f103-board` | GD32F1 | Generic dev board | ARMv7-M | planned | planned | planned | Not started | `backlog` | Vendor variant diffs |

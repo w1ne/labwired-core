@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -46,6 +47,20 @@ func loadConfigFromEnv() (config, error) {
 	if cfg.ServerOptions.WorkerCount, err = parsePositiveIntEnv("WORKER_CONCURRENCY", cfg.ServerOptions.WorkerCount); err != nil {
 		return config{}, err
 	}
+	if cfg.ServerOptions.MaxRunAttempts, err = parsePositiveIntEnv("MAX_RUN_ATTEMPTS", cfg.ServerOptions.MaxRunAttempts); err != nil {
+		return config{}, err
+	}
+	if cfg.ServerOptions.RateLimitPerAPIKey, err = parsePositiveIntEnv("RATE_LIMIT_PER_API_KEY", cfg.ServerOptions.RateLimitPerAPIKey); err != nil {
+		return config{}, err
+	}
+	if cfg.ServerOptions.RateLimitPerWorkspace, err = parsePositiveIntEnv("RATE_LIMIT_PER_WORKSPACE", cfg.ServerOptions.RateLimitPerWorkspace); err != nil {
+		return config{}, err
+	}
+	rateWindowSeconds, err := parsePositiveIntEnv("RATE_LIMIT_WINDOW_SECONDS", int(cfg.ServerOptions.RateLimitWindow.Seconds()))
+	if err != nil {
+		return config{}, err
+	}
+	cfg.ServerOptions.RateLimitWindow = time.Duration(rateWindowSeconds) * time.Second
 	if cfg.ServerOptions.MaxInflightPerWorkspace, err = parsePositiveIntEnv("WORKSPACE_MAX_INFLIGHT", cfg.ServerOptions.MaxInflightPerWorkspace); err != nil {
 		return config{}, err
 	}
@@ -60,6 +75,19 @@ func loadConfigFromEnv() (config, error) {
 		return config{}, err
 	}
 	cfg.ServerOptions.CleanupInterval = time.Duration(cleanupSeconds) * time.Second
+	leaseSeconds, err := parsePositiveIntEnv("WORKER_LEASE_TIMEOUT_SECONDS", int(cfg.ServerOptions.WorkerLeaseTimeout.Seconds()))
+	if err != nil {
+		return config{}, err
+	}
+	cfg.ServerOptions.WorkerLeaseTimeout = time.Duration(leaseSeconds) * time.Second
+	heartbeatSeconds, err := parsePositiveIntEnv("WORKER_HEARTBEAT_INTERVAL_SECONDS", int(cfg.ServerOptions.WorkerHeartbeatInterval.Seconds()))
+	if err != nil {
+		return config{}, err
+	}
+	cfg.ServerOptions.WorkerHeartbeatInterval = time.Duration(heartbeatSeconds) * time.Second
+	if cfg.ServerOptions.WorkerHeartbeatInterval >= cfg.ServerOptions.WorkerLeaseTimeout {
+		return config{}, fmt.Errorf("WORKER_HEARTBEAT_INTERVAL_SECONDS must be lower than WORKER_LEASE_TIMEOUT_SECONDS")
+	}
 
 	if err := validateStripeConfig(cfg.AppEnv, cfg.StripeWebhookSecret, cfg.AllowInsecureStripeHook); err != nil {
 		return config{}, err
@@ -112,6 +140,21 @@ func validateStripeConfig(appEnv, webhookSecret string, allowInsecure bool) erro
 	}
 	if webhookSecret == "" {
 		return fmt.Errorf("STRIPE_WEBHOOK_SECRET is required in production")
+	}
+	return nil
+}
+
+func validateRuntimeDependencies(cfg config) error {
+	if _, err := exec.LookPath(cfg.LabWiredPath); err != nil {
+		return fmt.Errorf("LABWIRED_PATH command not found: %w", err)
+	}
+	if err := os.MkdirAll(cfg.ArtifactsDir, 0o755); err != nil {
+		return fmt.Errorf("ARTIFACTS_DIR is not writable: %w", err)
+	}
+	if cfg.AppEnv == "production" {
+		if _, err := os.Stat(cfg.HardwareJSONPath); err != nil {
+			return fmt.Errorf("HARDWARE_JSON_PATH must exist in production: %w", err)
+		}
 	}
 	return nil
 }
