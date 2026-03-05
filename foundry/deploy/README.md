@@ -10,6 +10,8 @@ This folder contains a production deployment baseline for Foundry using:
 - `docker-compose.prod.yml`: backend + frontend + Caddy reverse proxy (image-only).
 - `Caddyfile`: HTTPS reverse proxy and API/frontend routing.
 - `.env.example`: required environment variables template.
+- `scripts/harden_vps.sh`: baseline host hardening (SSH, fail2ban, UFW, unattended upgrades).
+- `scripts/verify_foundry.sh`: post-deploy backend/API health verification.
 - `systemd/foundry-compose.service`: optional service wrapper for VPS boot persistence.
 - `.github/workflows/foundry-deploy.yml`: CI build/push and VPS deploy workflow.
 - `GITHUB_HETZNER_RUNBOOK.md`: full operational runbook (bootstrap, deploy, rollback, troubleshooting).
@@ -80,6 +82,16 @@ Push to `main` (or run workflow manually). The workflow:
 ```bash
 curl -fsS https://<your-domain>/v1/health
 curl -fsS https://<your-domain>/v1/info
+./scripts/verify_foundry.sh https://<your-domain>
+```
+
+## 6.1) Baseline hardening
+
+Run once on the VPS as root:
+
+```bash
+cd /srv/labwired/foundry/deploy
+sudo ./scripts/harden_vps.sh
 ```
 
 ## 7) Optional systemd integration

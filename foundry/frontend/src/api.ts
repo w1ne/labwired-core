@@ -1,5 +1,5 @@
-// Central API config — reads from env in dev, falls back to relative path in prod.
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+// Central API config — reads from env in dev, defaults to same-origin in prod.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export function apiUrl(path: string): string {
     return `${API_BASE}${path}`;

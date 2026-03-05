@@ -39,15 +39,12 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                     LABWIRED <span style={{ color: 'var(--lw-pink)' }}>FOUNDRY</span>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <a href="/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
+                    <a href="https://api.labwired.com/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
                     <button className="secondary" onClick={() => window.location.hash = '/catalog'}>Catalog</button>
                     <Show when="signed-out">
                         <SignInButton mode="modal" fallbackRedirectUrl="#/dashboard">
-                            <button className="secondary">Login</button>
-                        </SignInButton>
-                        <SignUpButton mode="modal" fallbackRedirectUrl="#/dashboard">
                             <button>Dashboard →</button>
-                        </SignUpButton>
+                        </SignInButton>
                     </Show>
                     <Show when="signed-in">
                         <button onClick={onEnterDashboard}>Dashboard →</button>
