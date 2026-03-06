@@ -1,0 +1,365 @@
+peripheral: QDEC
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_READCLRACC
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_RDCLRACC
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_RDCLRDBL
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_SAMPLERDY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REPORTRDY
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ACCOF
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DBLRDY
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STOPPED
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REPORTRDY_READCLRACC
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between REPORTRDY event and READCLRACC task
+  - name: SAMPLERDY_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Shortcut between SAMPLERDY event and STOP task
+  - name: REPORTRDY_RDCLRACC
+    bit_range:
+    - 2
+    - 2
+    description: Shortcut between REPORTRDY event and RDCLRACC task
+  - name: REPORTRDY_STOP
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between REPORTRDY event and STOP task
+  - name: DBLRDY_RDCLRDBL
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between DBLRDY event and RDCLRDBL task
+  - name: DBLRDY_STOP
+    bit_range:
+    - 5
+    - 5
+    description: Shortcut between DBLRDY event and STOP task
+  - name: SAMPLERDY_READCLRACC
+    bit_range:
+    - 6
+    - 6
+    description: Shortcut between SAMPLERDY event and READCLRACC task
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SAMPLERDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for SAMPLERDY event
+  - name: REPORTRDY
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for REPORTRDY event
+  - name: ACCOF
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for ACCOF event
+  - name: DBLRDY
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for DBLRDY event
+  - name: STOPPED
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for STOPPED event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SAMPLERDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for SAMPLERDY event
+  - name: REPORTRDY
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for REPORTRDY event
+  - name: ACCOF
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for ACCOF event
+  - name: DBLRDY
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for DBLRDY event
+  - name: STOPPED
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for STOPPED event
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable the quadrature decoder
+  side_effects: null
+- id: LEDPOL
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LEDPOL
+    bit_range:
+    - 0
+    - 0
+    description: LED output pin polarity
+  side_effects: null
+- id: SAMPLEPER
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SAMPLEPER
+    bit_range:
+    - 3
+    - 0
+    description: Sample period. The SAMPLE register will be updated for every new sample
+  side_effects: null
+- id: SAMPLE
+  address_offset: 1292
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SAMPLE
+    bit_range:
+    - 31
+    - 0
+    description: Last motion sample
+  side_effects: null
+- id: REPORTPER
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REPORTPER
+    bit_range:
+    - 3
+    - 0
+    description: Specifies the number of samples to be accumulated in the ACC register before the REPORTRDY and DBLRDY events can be generated
+  side_effects: null
+- id: ACC
+  address_offset: 1300
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ACC
+    bit_range:
+    - 31
+    - 0
+    description: Register accumulating all valid samples (not double transition) read from the SAMPLE register
+  side_effects: null
+- id: ACCREAD
+  address_offset: 1304
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ACCREAD
+    bit_range:
+    - 31
+    - 0
+    description: Snapshot of the ACC register.
+  side_effects: null
+- id: PSEL_LED
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_A
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_B
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: DBFEN
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBFEN
+    bit_range:
+    - 0
+    - 0
+    description: Enable input debounce filters
+  side_effects: null
+- id: LEDPRE
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: LEDPRE
+    bit_range:
+    - 8
+    - 0
+    description: Period in us the LED is switched on prior to sampling
+  side_effects: null
+- id: ACCDBL
+  address_offset: 1348
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ACCDBL
+    bit_range:
+    - 3
+    - 0
+    description: Register accumulating the number of detected double or illegal transitions. ( SAMPLE = 2 ).
+  side_effects: null
+- id: ACCDBLREAD
+  address_offset: 1352
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ACCDBLREAD
+    bit_range:
+    - 3
+    - 0
+    description: Snapshot of the ACCDBL register. This field is updated when the READCLRACC or RDCLRDBL task is triggered.
+  side_effects: null
+interrupts:
+  QDEC: 18
+timing: null

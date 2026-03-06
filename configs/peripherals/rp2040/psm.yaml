@@ -1,0 +1,373 @@
+peripheral: PSM
+version: 0.1.0
+registers:
+- id: FRCE_ON
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROSC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: XOSC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLOCKS
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: RESETS
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: BUSFABRIC
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: ROM
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: SRAM0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: SRAM1
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: SRAM2
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: SRAM3
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: SRAM4
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: SRAM5
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: XIP
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: VREG_AND_CHIP_RESET
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: SIO
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: PROC0
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: PROC1
+    bit_range:
+    - 16
+    - 16
+    description: null
+  side_effects: null
+- id: FRCE_OFF
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROSC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: XOSC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLOCKS
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: RESETS
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: BUSFABRIC
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: ROM
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: SRAM0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: SRAM1
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: SRAM2
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: SRAM3
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: SRAM4
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: SRAM5
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: XIP
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: VREG_AND_CHIP_RESET
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: SIO
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: PROC0
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: PROC1
+    bit_range:
+    - 16
+    - 16
+    description: null
+  side_effects: null
+- id: WDSEL
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROSC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: XOSC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLOCKS
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: RESETS
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: BUSFABRIC
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: ROM
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: SRAM0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: SRAM1
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: SRAM2
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: SRAM3
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: SRAM4
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: SRAM5
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: XIP
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: VREG_AND_CHIP_RESET
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: SIO
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: PROC0
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: PROC1
+    bit_range:
+    - 16
+    - 16
+    description: null
+  side_effects: null
+- id: DONE
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROSC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: XOSC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLOCKS
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: RESETS
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: BUSFABRIC
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: ROM
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: SRAM0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: SRAM1
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: SRAM2
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: SRAM3
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: SRAM4
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: SRAM5
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: XIP
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: VREG_AND_CHIP_RESET
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: SIO
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: PROC0
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: PROC1
+    bit_range:
+    - 16
+    - 16
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

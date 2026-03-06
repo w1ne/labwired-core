@@ -1,0 +1,2460 @@
+peripheral: PPI
+version: 0.1.0
+registers:
+- id: TASKS_CHG0_EN
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG0_DIS
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG1_EN
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG1_DIS
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG2_EN
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG2_DIS
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG3_EN
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG3_DIS
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG4_EN
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG4_DIS
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG5_EN
+  address_offset: 40
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CHG5_DIS
+  address_offset: 44
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: CHEN
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable channel 0
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable channel 1
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable channel 2
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable channel 3
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable channel 4
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable channel 5
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable channel 6
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable channel 7
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Enable or disable channel 8
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Enable or disable channel 9
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Enable or disable channel 10
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Enable or disable channel 11
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Enable or disable channel 12
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Enable or disable channel 13
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Enable or disable channel 14
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Enable or disable channel 15
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Enable or disable channel 16
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Enable or disable channel 17
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Enable or disable channel 18
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Enable or disable channel 19
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Enable or disable channel 20
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Enable or disable channel 21
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Enable or disable channel 22
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Enable or disable channel 23
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Enable or disable channel 24
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Enable or disable channel 25
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Enable or disable channel 26
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Enable or disable channel 27
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Enable or disable channel 28
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Enable or disable channel 29
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Enable or disable channel 30
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Enable or disable channel 31
+  side_effects: null
+- id: CHENSET
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Channel 0 enable set register.  Writing '0' has no effect
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Channel 1 enable set register.  Writing '0' has no effect
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Channel 2 enable set register.  Writing '0' has no effect
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Channel 3 enable set register.  Writing '0' has no effect
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Channel 4 enable set register.  Writing '0' has no effect
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Channel 5 enable set register.  Writing '0' has no effect
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Channel 6 enable set register.  Writing '0' has no effect
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Channel 7 enable set register.  Writing '0' has no effect
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Channel 8 enable set register.  Writing '0' has no effect
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Channel 9 enable set register.  Writing '0' has no effect
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Channel 10 enable set register.  Writing '0' has no effect
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Channel 11 enable set register.  Writing '0' has no effect
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Channel 12 enable set register.  Writing '0' has no effect
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Channel 13 enable set register.  Writing '0' has no effect
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Channel 14 enable set register.  Writing '0' has no effect
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Channel 15 enable set register.  Writing '0' has no effect
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Channel 16 enable set register.  Writing '0' has no effect
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Channel 17 enable set register.  Writing '0' has no effect
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Channel 18 enable set register.  Writing '0' has no effect
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Channel 19 enable set register.  Writing '0' has no effect
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Channel 20 enable set register.  Writing '0' has no effect
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Channel 21 enable set register.  Writing '0' has no effect
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Channel 22 enable set register.  Writing '0' has no effect
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Channel 23 enable set register.  Writing '0' has no effect
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Channel 24 enable set register.  Writing '0' has no effect
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Channel 25 enable set register.  Writing '0' has no effect
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Channel 26 enable set register.  Writing '0' has no effect
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Channel 27 enable set register.  Writing '0' has no effect
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Channel 28 enable set register.  Writing '0' has no effect
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Channel 29 enable set register.  Writing '0' has no effect
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Channel 30 enable set register.  Writing '0' has no effect
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Channel 31 enable set register.  Writing '0' has no effect
+  side_effects: null
+- id: CHENCLR
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Channel 0 enable clear register.  Writing '0' has no effect
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Channel 1 enable clear register.  Writing '0' has no effect
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Channel 2 enable clear register.  Writing '0' has no effect
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Channel 3 enable clear register.  Writing '0' has no effect
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Channel 4 enable clear register.  Writing '0' has no effect
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Channel 5 enable clear register.  Writing '0' has no effect
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Channel 6 enable clear register.  Writing '0' has no effect
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Channel 7 enable clear register.  Writing '0' has no effect
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Channel 8 enable clear register.  Writing '0' has no effect
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Channel 9 enable clear register.  Writing '0' has no effect
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Channel 10 enable clear register.  Writing '0' has no effect
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Channel 11 enable clear register.  Writing '0' has no effect
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Channel 12 enable clear register.  Writing '0' has no effect
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Channel 13 enable clear register.  Writing '0' has no effect
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Channel 14 enable clear register.  Writing '0' has no effect
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Channel 15 enable clear register.  Writing '0' has no effect
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Channel 16 enable clear register.  Writing '0' has no effect
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Channel 17 enable clear register.  Writing '0' has no effect
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Channel 18 enable clear register.  Writing '0' has no effect
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Channel 19 enable clear register.  Writing '0' has no effect
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Channel 20 enable clear register.  Writing '0' has no effect
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Channel 21 enable clear register.  Writing '0' has no effect
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Channel 22 enable clear register.  Writing '0' has no effect
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Channel 23 enable clear register.  Writing '0' has no effect
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Channel 24 enable clear register.  Writing '0' has no effect
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Channel 25 enable clear register.  Writing '0' has no effect
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Channel 26 enable clear register.  Writing '0' has no effect
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Channel 27 enable clear register.  Writing '0' has no effect
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Channel 28 enable clear register.  Writing '0' has no effect
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Channel 29 enable clear register.  Writing '0' has no effect
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Channel 30 enable clear register.  Writing '0' has no effect
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Channel 31 enable clear register.  Writing '0' has no effect
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: CH0_EEP
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH0_TEP
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH1_EEP
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH1_TEP
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH2_EEP
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH2_TEP
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH3_EEP
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH3_TEP
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH4_EEP
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH4_TEP
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH5_EEP
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH5_TEP
+  address_offset: 1340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH6_EEP
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH6_TEP
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH7_EEP
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH7_TEP
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH8_EEP
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH8_TEP
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH9_EEP
+  address_offset: 1368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH9_TEP
+  address_offset: 1372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH10_EEP
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH10_TEP
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH11_EEP
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH11_TEP
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH12_EEP
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH12_TEP
+  address_offset: 1396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH13_EEP
+  address_offset: 1400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH13_TEP
+  address_offset: 1404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH14_EEP
+  address_offset: 1408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH14_TEP
+  address_offset: 1412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH15_EEP
+  address_offset: 1416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH15_TEP
+  address_offset: 1420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH16_EEP
+  address_offset: 1424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH16_TEP
+  address_offset: 1428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH17_EEP
+  address_offset: 1432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH17_TEP
+  address_offset: 1436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH18_EEP
+  address_offset: 1440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH18_TEP
+  address_offset: 1444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CH19_EEP
+  address_offset: 1448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to event register. Accepts only addresses to registers from the Event group.
+  side_effects: null
+- id: CH19_TEP
+  address_offset: 1452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register. Accepts only addresses to registers from the Task group.
+  side_effects: null
+- id: CHG0
+  address_offset: 2048
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude channel 0
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude channel 1
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude channel 2
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude channel 3
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude channel 4
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude channel 5
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude channel 6
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude channel 7
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude channel 8
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude channel 9
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude channel 10
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude channel 11
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude channel 12
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude channel 13
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude channel 14
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude channel 15
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude channel 16
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude channel 17
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude channel 18
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude channel 19
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude channel 20
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude channel 21
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude channel 22
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude channel 23
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude channel 24
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude channel 25
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude channel 26
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude channel 27
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude channel 28
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude channel 29
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude channel 30
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude channel 31
+  side_effects: null
+- id: CHG1
+  address_offset: 2052
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude channel 0
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude channel 1
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude channel 2
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude channel 3
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude channel 4
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude channel 5
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude channel 6
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude channel 7
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude channel 8
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude channel 9
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude channel 10
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude channel 11
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude channel 12
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude channel 13
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude channel 14
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude channel 15
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude channel 16
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude channel 17
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude channel 18
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude channel 19
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude channel 20
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude channel 21
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude channel 22
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude channel 23
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude channel 24
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude channel 25
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude channel 26
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude channel 27
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude channel 28
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude channel 29
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude channel 30
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude channel 31
+  side_effects: null
+- id: CHG2
+  address_offset: 2056
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude channel 0
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude channel 1
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude channel 2
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude channel 3
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude channel 4
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude channel 5
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude channel 6
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude channel 7
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude channel 8
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude channel 9
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude channel 10
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude channel 11
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude channel 12
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude channel 13
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude channel 14
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude channel 15
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude channel 16
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude channel 17
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude channel 18
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude channel 19
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude channel 20
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude channel 21
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude channel 22
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude channel 23
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude channel 24
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude channel 25
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude channel 26
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude channel 27
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude channel 28
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude channel 29
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude channel 30
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude channel 31
+  side_effects: null
+- id: CHG3
+  address_offset: 2060
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude channel 0
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude channel 1
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude channel 2
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude channel 3
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude channel 4
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude channel 5
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude channel 6
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude channel 7
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude channel 8
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude channel 9
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude channel 10
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude channel 11
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude channel 12
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude channel 13
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude channel 14
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude channel 15
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude channel 16
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude channel 17
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude channel 18
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude channel 19
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude channel 20
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude channel 21
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude channel 22
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude channel 23
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude channel 24
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude channel 25
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude channel 26
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude channel 27
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude channel 28
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude channel 29
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude channel 30
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude channel 31
+  side_effects: null
+- id: CHG4
+  address_offset: 2064
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude channel 0
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude channel 1
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude channel 2
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude channel 3
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude channel 4
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude channel 5
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude channel 6
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude channel 7
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude channel 8
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude channel 9
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude channel 10
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude channel 11
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude channel 12
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude channel 13
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude channel 14
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude channel 15
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude channel 16
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude channel 17
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude channel 18
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude channel 19
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude channel 20
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude channel 21
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude channel 22
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude channel 23
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude channel 24
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude channel 25
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude channel 26
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude channel 27
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude channel 28
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude channel 29
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude channel 30
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude channel 31
+  side_effects: null
+- id: CHG5
+  address_offset: 2068
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude channel 0
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude channel 1
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude channel 2
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude channel 3
+  - name: CH4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude channel 4
+  - name: CH5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude channel 5
+  - name: CH6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude channel 6
+  - name: CH7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude channel 7
+  - name: CH8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude channel 8
+  - name: CH9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude channel 9
+  - name: CH10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude channel 10
+  - name: CH11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude channel 11
+  - name: CH12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude channel 12
+  - name: CH13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude channel 13
+  - name: CH14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude channel 14
+  - name: CH15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude channel 15
+  - name: CH16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude channel 16
+  - name: CH17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude channel 17
+  - name: CH18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude channel 18
+  - name: CH19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude channel 19
+  - name: CH20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude channel 20
+  - name: CH21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude channel 21
+  - name: CH22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude channel 22
+  - name: CH23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude channel 23
+  - name: CH24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude channel 24
+  - name: CH25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude channel 25
+  - name: CH26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude channel 26
+  - name: CH27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude channel 27
+  - name: CH28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude channel 28
+  - name: CH29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude channel 29
+  - name: CH30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude channel 30
+  - name: CH31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude channel 31
+  side_effects: null
+- id: FORK0_TEP
+  address_offset: 2320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK1_TEP
+  address_offset: 2324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK2_TEP
+  address_offset: 2328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK3_TEP
+  address_offset: 2332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK4_TEP
+  address_offset: 2336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK5_TEP
+  address_offset: 2340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK6_TEP
+  address_offset: 2344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK7_TEP
+  address_offset: 2348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK8_TEP
+  address_offset: 2352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK9_TEP
+  address_offset: 2356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK10_TEP
+  address_offset: 2360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK11_TEP
+  address_offset: 2364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK12_TEP
+  address_offset: 2368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK13_TEP
+  address_offset: 2372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK14_TEP
+  address_offset: 2376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK15_TEP
+  address_offset: 2380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK16_TEP
+  address_offset: 2384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK17_TEP
+  address_offset: 2388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK18_TEP
+  address_offset: 2392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK19_TEP
+  address_offset: 2396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK20_TEP
+  address_offset: 2400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK21_TEP
+  address_offset: 2404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK22_TEP
+  address_offset: 2408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK23_TEP
+  address_offset: 2412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK24_TEP
+  address_offset: 2416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK25_TEP
+  address_offset: 2420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK26_TEP
+  address_offset: 2424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK27_TEP
+  address_offset: 2428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK28_TEP
+  address_offset: 2432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK29_TEP
+  address_offset: 2436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK30_TEP
+  address_offset: 2440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+- id: FORK31_TEP
+  address_offset: 2444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEP
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to task register
+  side_effects: null
+interrupts: null
+timing: null

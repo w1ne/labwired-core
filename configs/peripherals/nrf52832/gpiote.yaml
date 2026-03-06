@@ -1,0 +1,557 @@
+peripheral: GPIOTE
+version: 0.1.0
+registers:
+- id: TASKS_OUT0
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_OUT1
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_OUT2
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_OUT3
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_OUT4
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_OUT5
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_OUT6
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_OUT7
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET0
+  address_offset: 48
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET1
+  address_offset: 52
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET2
+  address_offset: 56
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET3
+  address_offset: 60
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET4
+  address_offset: 64
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET5
+  address_offset: 68
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET6
+  address_offset: 72
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SET7
+  address_offset: 76
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR0
+  address_offset: 96
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR1
+  address_offset: 100
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR2
+  address_offset: 104
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR3
+  address_offset: 108
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR4
+  address_offset: 112
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR5
+  address_offset: 116
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR6
+  address_offset: 120
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLR7
+  address_offset: 124
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN0
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN1
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN2
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN3
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN4
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN5
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN6
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_IN7
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_PORT
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN0
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for IN[0] event
+  - name: IN1
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for IN[1] event
+  - name: IN2
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for IN[2] event
+  - name: IN3
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for IN[3] event
+  - name: IN4
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for IN[4] event
+  - name: IN5
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable interrupt for IN[5] event
+  - name: IN6
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Enable interrupt for IN[6] event
+  - name: IN7
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable interrupt for IN[7] event
+  - name: PORT
+    bit_range:
+    - 31
+    - 31
+    description: Write '1' to Enable interrupt for PORT event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN0
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for IN[0] event
+  - name: IN1
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for IN[1] event
+  - name: IN2
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for IN[2] event
+  - name: IN3
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for IN[3] event
+  - name: IN4
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for IN[4] event
+  - name: IN5
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable interrupt for IN[5] event
+  - name: IN6
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Disable interrupt for IN[6] event
+  - name: IN7
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable interrupt for IN[7] event
+  - name: PORT
+    bit_range:
+    - 31
+    - 31
+    description: Write '1' to Disable interrupt for PORT event
+  side_effects: null
+- id: CONFIG0
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+- id: CONFIG1
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+- id: CONFIG2
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+- id: CONFIG3
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+- id: CONFIG4
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+- id: CONFIG5
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+- id: CONFIG6
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+- id: CONFIG7
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Mode
+  - name: PSEL
+    bit_range:
+    - 12
+    - 8
+    description: GPIO number associated with SET[n], CLR[n] and OUT[n] tasks and IN[n] event
+  - name: POLARITY
+    bit_range:
+    - 17
+    - 16
+    description: 'When In task mode: Operation to be performed on output when OUT[n] task is triggered. When In event mode: Operation on input that shall trigger IN[n] event.'
+  - name: OUTINIT
+    bit_range:
+    - 20
+    - 20
+    description: 'When in task mode: Initial value of the output when the GPIOTE channel is configured. When in event mode: No effect.'
+  side_effects: null
+interrupts:
+  GPIOTE: 6
+timing: null

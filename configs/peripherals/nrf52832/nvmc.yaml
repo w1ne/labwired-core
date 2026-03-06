@@ -1,0 +1,130 @@
+peripheral: NVMC
+version: 0.1.0
+registers:
+- id: READY
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: NVMC is ready or busy
+  side_effects: null
+- id: CONFIG
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WEN
+    bit_range:
+    - 1
+    - 0
+    description: Program memory access mode. It is strongly recommended to only activate erase and write modes when they are actively used. Enabling write or erase will invalidate the cache and keep it invalidated.
+  side_effects: null
+- id: ERASEPCR1
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ERASEPCR1
+    bit_range:
+    - 31
+    - 0
+    description: Register for erasing a page in Code area. Equivalent to ERASEPAGE.
+  side_effects: null
+- id: ERASEPAGE
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ERASEPAGE
+    bit_range:
+    - 31
+    - 0
+    description: Register for starting erase of a page in Code area
+  side_effects: null
+- id: ERASEALL
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ERASEALL
+    bit_range:
+    - 0
+    - 0
+    description: Erase all non-volatile memory including UICR registers. Note that code erase has to be enabled by CONFIG.EEN before the UICR can be erased.
+  side_effects: null
+- id: ERASEPCR0
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ERASEPCR0
+    bit_range:
+    - 31
+    - 0
+    description: Register for starting erase of a page in Code area. Equivalent to ERASEPAGE.
+  side_effects: null
+- id: ERASEUICR
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ERASEUICR
+    bit_range:
+    - 0
+    - 0
+    description: Register starting erase of all User Information Configuration Registers. Note that code erase has to be enabled by CONFIG.EEN before the UICR can be erased.
+  side_effects: null
+- id: ICACHECNF
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHEEN
+    bit_range:
+    - 0
+    - 0
+    description: Cache enable
+  - name: CACHEPROFEN
+    bit_range:
+    - 8
+    - 8
+    description: Cache profiling enable
+  side_effects: null
+- id: IHIT
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HITS
+    bit_range:
+    - 31
+    - 0
+    description: Number of cache hits
+  side_effects: null
+- id: IMISS
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MISSES
+    bit_range:
+    - 31
+    - 0
+    description: Number of cache misses
+  side_effects: null
+interrupts: null
+timing: null

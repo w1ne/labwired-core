@@ -1,0 +1,782 @@
+peripheral: NFCT
+version: 0.1.0
+registers:
+- id: TASKS_ACTIVATE
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_DISABLE
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SENSE
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STARTTX
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_ENABLERXDATA
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_GOIDLE
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_GOSLEEP
+  address_offset: 40
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_READY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_FIELDDETECTED
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_FIELDLOST
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TXFRAMESTART
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TXFRAMEEND
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RXFRAMESTART
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RXFRAMEEND
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ERROR
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RXERROR
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ENDRX
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ENDTX
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_AUTOCOLRESSTARTED
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_COLLISION
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_SELECTED
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STARTED
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIELDDETECTED_ACTIVATE
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between FIELDDETECTED event and ACTIVATE task
+  - name: FIELDLOST_SENSE
+    bit_range:
+    - 1
+    - 1
+    description: Shortcut between FIELDLOST event and SENSE task
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for READY event
+  - name: FIELDDETECTED
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for FIELDDETECTED event
+  - name: FIELDLOST
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for FIELDLOST event
+  - name: TXFRAMESTART
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable interrupt for TXFRAMESTART event
+  - name: TXFRAMEEND
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable interrupt for TXFRAMEEND event
+  - name: RXFRAMESTART
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable interrupt for RXFRAMESTART event
+  - name: RXFRAMEEND
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable interrupt for RXFRAMEEND event
+  - name: ERROR
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable interrupt for ERROR event
+  - name: RXERROR
+    bit_range:
+    - 10
+    - 10
+    description: Enable or disable interrupt for RXERROR event
+  - name: ENDRX
+    bit_range:
+    - 11
+    - 11
+    description: Enable or disable interrupt for ENDRX event
+  - name: ENDTX
+    bit_range:
+    - 12
+    - 12
+    description: Enable or disable interrupt for ENDTX event
+  - name: AUTOCOLRESSTARTED
+    bit_range:
+    - 14
+    - 14
+    description: Enable or disable interrupt for AUTOCOLRESSTARTED event
+  - name: COLLISION
+    bit_range:
+    - 18
+    - 18
+    description: Enable or disable interrupt for COLLISION event
+  - name: SELECTED
+    bit_range:
+    - 19
+    - 19
+    description: Enable or disable interrupt for SELECTED event
+  - name: STARTED
+    bit_range:
+    - 20
+    - 20
+    description: Enable or disable interrupt for STARTED event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for READY event
+  - name: FIELDDETECTED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for FIELDDETECTED event
+  - name: FIELDLOST
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for FIELDLOST event
+  - name: TXFRAMESTART
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for TXFRAMESTART event
+  - name: TXFRAMEEND
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for TXFRAMEEND event
+  - name: RXFRAMESTART
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable interrupt for RXFRAMESTART event
+  - name: RXFRAMEEND
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Enable interrupt for RXFRAMEEND event
+  - name: ERROR
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable interrupt for ERROR event
+  - name: RXERROR
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Enable interrupt for RXERROR event
+  - name: ENDRX
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to Enable interrupt for ENDRX event
+  - name: ENDTX
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Enable interrupt for ENDTX event
+  - name: AUTOCOLRESSTARTED
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to Enable interrupt for AUTOCOLRESSTARTED event
+  - name: COLLISION
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to Enable interrupt for COLLISION event
+  - name: SELECTED
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Enable interrupt for SELECTED event
+  - name: STARTED
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Enable interrupt for STARTED event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for READY event
+  - name: FIELDDETECTED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for FIELDDETECTED event
+  - name: FIELDLOST
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for FIELDLOST event
+  - name: TXFRAMESTART
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for TXFRAMESTART event
+  - name: TXFRAMEEND
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for TXFRAMEEND event
+  - name: RXFRAMESTART
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable interrupt for RXFRAMESTART event
+  - name: RXFRAMEEND
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Disable interrupt for RXFRAMEEND event
+  - name: ERROR
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable interrupt for ERROR event
+  - name: RXERROR
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Disable interrupt for RXERROR event
+  - name: ENDRX
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to Disable interrupt for ENDRX event
+  - name: ENDTX
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Disable interrupt for ENDTX event
+  - name: AUTOCOLRESSTARTED
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to Disable interrupt for AUTOCOLRESSTARTED event
+  - name: COLLISION
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to Disable interrupt for COLLISION event
+  - name: SELECTED
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Disable interrupt for SELECTED event
+  - name: STARTED
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Disable interrupt for STARTED event
+  side_effects: null
+- id: ERRORSTATUS
+  address_offset: 1028
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FRAMEDELAYTIMEOUT
+    bit_range:
+    - 0
+    - 0
+    description: No STARTTX task triggered before expiration of the time set in FRAMEDELAYMAX
+  - name: NFCFIELDTOOSTRONG
+    bit_range:
+    - 2
+    - 2
+    description: Field level is too high at max load resistance
+  - name: NFCFIELDTOOWEAK
+    bit_range:
+    - 3
+    - 3
+    description: Field level is too low at min load resistance
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: FRAMESTATUS_RX
+  address_offset: 1036
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CRCERROR
+    bit_range:
+    - 0
+    - 0
+    description: No valid End of Frame detected
+  - name: PARITYSTATUS
+    bit_range:
+    - 2
+    - 2
+    description: Parity status of received frame
+  - name: OVERRUN
+    bit_range:
+    - 3
+    - 3
+    description: Overrun detected
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: CURRENTLOADCTRL
+  address_offset: 1072
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CURRENTLOADCTRL
+    bit_range:
+    - 5
+    - 0
+    description: Current value driven to the NFC Load Control
+  side_effects: null
+- id: FIELDPRESENT
+  address_offset: 1084
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: FIELDPRESENT
+    bit_range:
+    - 0
+    - 0
+    description: Indicates the presence or not of a valid field. Available only in the activated state.
+  - name: LOCKDETECT
+    bit_range:
+    - 1
+    - 1
+    description: Indicates if the low level has locked to the field
+  side_effects: null
+- id: FRAMEDELAYMIN
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 1152
+  fields:
+  - name: FRAMEDELAYMIN
+    bit_range:
+    - 15
+    - 0
+    description: Minimum frame delay in number of 13.56 MHz clocks
+  side_effects: null
+- id: FRAMEDELAYMAX
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4096
+  fields:
+  - name: FRAMEDELAYMAX
+    bit_range:
+    - 15
+    - 0
+    description: Maximum frame delay in number of 13.56 MHz clocks
+  side_effects: null
+- id: FRAMEDELAYMODE
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: FRAMEDELAYMODE
+    bit_range:
+    - 1
+    - 0
+    description: Configuration register for the Frame Delay Timer
+  side_effects: null
+- id: PACKETPTR
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Packet pointer for TXD and RXD data storage in Data RAM. This address is a byte aligned RAM address.
+  side_effects: null
+- id: MAXLEN
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXLEN
+    bit_range:
+    - 8
+    - 0
+    description: Size of allocated for TXD and RXD data storage buffer in Data RAM
+  side_effects: null
+- id: TXD_FRAMECONFIG
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 23
+  fields:
+  - name: PARITY
+    bit_range:
+    - 0
+    - 0
+    description: Adding parity or not in the frame
+  - name: DISCARDMODE
+    bit_range:
+    - 1
+    - 1
+    description: Discarding unused bits in start or at end of a Frame
+  - name: SOF
+    bit_range:
+    - 2
+    - 2
+    description: Adding SoF or not in TX frames
+  - name: CRCMODETX
+    bit_range:
+    - 4
+    - 4
+    description: CRC mode for outgoing frames
+  side_effects: null
+- id: TXD_AMOUNT
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXDATABITS
+    bit_range:
+    - 2
+    - 0
+    description: Number of bits in the last or first byte read from RAM that shall be included in the frame (excluding parity bit).
+  - name: TXDATABYTES
+    bit_range:
+    - 11
+    - 3
+    description: Number of complete bytes that shall be included in the frame, excluding CRC, parity and framing
+  side_effects: null
+- id: RXD_FRAMECONFIG
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 21
+  fields:
+  - name: PARITY
+    bit_range:
+    - 0
+    - 0
+    description: Parity expected or not in RX frame
+  - name: SOF
+    bit_range:
+    - 2
+    - 2
+    description: SoF expected or not in RX frames
+  - name: CRCMODERX
+    bit_range:
+    - 4
+    - 4
+    description: CRC mode for incoming frames
+  side_effects: null
+- id: RXD_AMOUNT
+  address_offset: 1316
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDATABITS
+    bit_range:
+    - 2
+    - 0
+    description: Number of bits in the last byte in the frame, if less than 8 (including CRC, but excluding parity and SoF/EoF framing).
+  - name: RXDATABYTES
+    bit_range:
+    - 11
+    - 3
+    description: Number of complete bytes received in the frame (including CRC, but excluding parity and SoF/EoF framing)
+  side_effects: null
+- id: NFCID1_LAST
+  address_offset: 1424
+  size: 32
+  access: READ_WRITE
+  reset_value: 25443
+  fields:
+  - name: NFCID1_Z
+    bit_range:
+    - 7
+    - 0
+    description: NFCID1 byte Z (very last byte sent)
+  - name: NFCID1_Y
+    bit_range:
+    - 15
+    - 8
+    description: NFCID1 byte Y
+  - name: NFCID1_X
+    bit_range:
+    - 23
+    - 16
+    description: NFCID1 byte X
+  - name: NFCID1_W
+    bit_range:
+    - 31
+    - 24
+    description: NFCID1 byte W
+  side_effects: null
+- id: NFCID1_2ND_LAST
+  address_offset: 1428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NFCID1_V
+    bit_range:
+    - 7
+    - 0
+    description: NFCID1 byte V
+  - name: NFCID1_U
+    bit_range:
+    - 15
+    - 8
+    description: NFCID1 byte U
+  - name: NFCID1_T
+    bit_range:
+    - 23
+    - 16
+    description: NFCID1 byte T
+  side_effects: null
+- id: NFCID1_3RD_LAST
+  address_offset: 1432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NFCID1_S
+    bit_range:
+    - 7
+    - 0
+    description: NFCID1 byte S
+  - name: NFCID1_R
+    bit_range:
+    - 15
+    - 8
+    description: NFCID1 byte R
+  - name: NFCID1_Q
+    bit_range:
+    - 23
+    - 16
+    description: NFCID1 byte Q
+  side_effects: null
+- id: SENSRES
+  address_offset: 1440
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: BITFRAMESDD
+    bit_range:
+    - 4
+    - 0
+    description: Bit frame SDD as defined by the b5:b1 of byte 1 in SENS_RES response in the NFC Forum, NFC Digital Protocol Technical Specification
+  - name: RFU5
+    bit_range:
+    - 5
+    - 5
+    description: Reserved for future use. Shall be 0.
+  - name: NFCIDSIZE
+    bit_range:
+    - 7
+    - 6
+    description: NFCID1 size. This value is used by the Auto collision resolution engine.
+  - name: PLATFCONFIG
+    bit_range:
+    - 11
+    - 8
+    description: Tag platform configuration as defined by the b4:b1 of byte 2 in SENS_RES response in the NFC Forum, NFC Digital Protocol Technical Specification
+  - name: RFU74
+    bit_range:
+    - 15
+    - 12
+    description: Reserved for future use. Shall be 0.
+  side_effects: null
+- id: SELRES
+  address_offset: 1444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RFU10
+    bit_range:
+    - 1
+    - 0
+    description: Reserved for future use. Shall be 0.
+  - name: CASCADE
+    bit_range:
+    - 2
+    - 2
+    description: Cascade bit (controlled by hardware, write has no effect)
+  - name: RFU43
+    bit_range:
+    - 4
+    - 3
+    description: Reserved for future use. Shall be 0.
+  - name: PROTOCOL
+    bit_range:
+    - 6
+    - 5
+    description: Protocol as defined by the b7:b6 of SEL_RES response in the NFC Forum, NFC Digital Protocol Technical Specification
+  - name: RFU7
+    bit_range:
+    - 7
+    - 7
+    description: Reserved for future use. Shall be 0.
+  side_effects: null
+interrupts:
+  NFCT: 5
+timing: null

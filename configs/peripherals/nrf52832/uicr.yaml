@@ -1,0 +1,799 @@
+peripheral: UICR
+version: 0.1.0
+registers:
+- id: UNUSED0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: UNUSED1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: UNUSED2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: UNUSED3
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: NRFFW0
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW1
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW2
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW3
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW4
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW5
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW6
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW7
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW8
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW9
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW10
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW11
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW12
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW13
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFFW14
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFFW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic firmware design
+  side_effects: null
+- id: NRFHW0
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW1
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW2
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW3
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW4
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW5
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW6
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW7
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW8
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW9
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW10
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: NRFHW11
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: NRFHW
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for Nordic hardware design
+  side_effects: null
+- id: CUSTOMER0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER1
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER2
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER3
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER4
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER5
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER6
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER7
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER8
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER9
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER10
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER11
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER12
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER13
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER14
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER15
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER16
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER17
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER18
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER19
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER20
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER21
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER22
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER23
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER24
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER25
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER26
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER27
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER28
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER29
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER30
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: CUSTOMER31
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CUSTOMER
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for customer
+  side_effects: null
+- id: PSELRESET0
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 5
+    - 0
+    description: GPIO number P0.n onto which Reset is exposed
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSELRESET1
+  address_offset: 516
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 5
+    - 0
+    description: GPIO number P0.n onto which Reset is exposed
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: APPROTECT
+  address_offset: 520
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PALL
+    bit_range:
+    - 7
+    - 0
+    description: Enable or disable Access Port protection. Any other value than 0xFF being written to this field will enable protection.
+  side_effects: null
+- id: NFCPINS
+  address_offset: 524
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PROTECT
+    bit_range:
+    - 0
+    - 0
+    description: Setting of pins dedicated to NFC functionality
+  side_effects: null
+interrupts: null
+timing: null

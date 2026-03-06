@@ -1,0 +1,157 @@
+peripheral: AAR
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_END
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RESOLVED
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_NOTRESOLVED
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for END event
+  - name: RESOLVED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for RESOLVED event
+  - name: NOTRESOLVED
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for NOTRESOLVED event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for END event
+  - name: RESOLVED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for RESOLVED event
+  - name: NOTRESOLVED
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for NOTRESOLVED event
+  side_effects: null
+- id: STATUS
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: STATUS
+    bit_range:
+    - 3
+    - 0
+    description: The IRK that was used last time an address was resolved
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 0
+    description: Enable or disable AAR
+  side_effects: null
+- id: NIRK
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: NIRK
+    bit_range:
+    - 4
+    - 0
+    description: Number of Identity root keys available in the IRK data structure
+  side_effects: null
+- id: IRKPTR
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IRKPTR
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to the IRK data structure
+  side_effects: null
+- id: ADDRPTR
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRPTR
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to the resolvable address (6-bytes)
+  side_effects: null
+- id: SCRATCHPTR
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCRATCHPTR
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to a scratch data area used for temporary storage during resolution.A space of minimum 3 bytes must be reserved.
+  side_effects: null
+interrupts:
+  CCM_AAR: 15
+timing: null

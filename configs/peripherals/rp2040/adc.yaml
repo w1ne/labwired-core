@@ -1,0 +1,209 @@
+peripheral: ADC
+version: 0.1.0
+registers:
+- id: CS
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "Power on ADC and enable its clock. \n                            1 - enabled. 0 - disabled."
+  - name: TS_EN
+    bit_range:
+    - 1
+    - 1
+    description: Power on temperature sensor. 1 - enabled. 0 - disabled.
+  - name: START_ONCE
+    bit_range:
+    - 2
+    - 2
+    description: Start a single conversion. Self-clearing. Ignored if start_many is asserted.
+  - name: START_MANY
+    bit_range:
+    - 3
+    - 3
+    description: Continuously perform conversions whilst this bit is 1. A new conversion will start immediately after the previous finishes.
+  - name: READY
+    bit_range:
+    - 8
+    - 8
+    description: "1 if the ADC is ready to start a new conversion. Implies any previous conversion has completed. \n                            0 whilst conversion in progress."
+  - name: ERR
+    bit_range:
+    - 9
+    - 9
+    description: The most recent ADC conversion encountered an error; result is undefined or noisy.
+  - name: ERR_STICKY
+    bit_range:
+    - 10
+    - 10
+    description: Some past ADC conversion encountered an error. Write 1 to clear.
+  - name: AINSEL
+    bit_range:
+    - 14
+    - 12
+    description: Select analog mux input. Updated automatically in round-robin mode.
+  - name: RROBIN
+    bit_range:
+    - 20
+    - 16
+    description: "Round-robin sampling. 1 bit per channel. Set all bits to 0 to disable. \n                            Otherwise, the ADC will cycle through each enabled channel in a round-robin fashion. \n                            The first channel to be sampled will be the one currently indicated by AINSEL. \n                            AINSEL will be updated after each conversion with the newly-selected channel."
+  side_effects: null
+- id: RESULT
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RESULT
+    bit_range:
+    - 11
+    - 0
+    description: null
+  side_effects: null
+- id: FCS
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: 'If 1: write result to the FIFO after each conversion.'
+  - name: SHIFT
+    bit_range:
+    - 1
+    - 1
+    description: 'If 1: FIFO results are right-shifted to be one byte in size. Enables DMA to byte buffers.'
+  - name: ERR
+    bit_range:
+    - 2
+    - 2
+    description: 'If 1: conversion error bit appears in the FIFO alongside the result'
+  - name: DREQ_EN
+    bit_range:
+    - 3
+    - 3
+    description: 'If 1: assert DMA requests when FIFO contains data'
+  - name: EMPTY
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: FULL
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: UNDER
+    bit_range:
+    - 10
+    - 10
+    description: 1 if the FIFO has been underflowed. Write 1 to clear.
+  - name: OVER
+    bit_range:
+    - 11
+    - 11
+    description: 1 if the FIFO has been overflowed. Write 1 to clear.
+  - name: LEVEL
+    bit_range:
+    - 19
+    - 16
+    description: The number of conversion results currently waiting in the FIFO
+  - name: THRESH
+    bit_range:
+    - 27
+    - 24
+    description: DREQ/IRQ asserted when level >= threshold
+  side_effects: null
+- id: FIFO
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VAL
+    bit_range:
+    - 11
+    - 0
+    description: null
+  - name: ERR
+    bit_range:
+    - 15
+    - 15
+    description: 1 if this particular sample experienced a conversion error. Remains in the same location if the sample is shifted.
+  side_effects: null
+- id: DIV
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional part of clock divisor. First-order delta-sigma.
+  - name: INT
+    bit_range:
+    - 23
+    - 8
+    description: Integer part of clock divisor.
+  side_effects: null
+- id: INTR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFO
+    bit_range:
+    - 0
+    - 0
+    description: "Triggered when the sample FIFO reaches a certain level. \n                            This level can be programmed via the FCS_THRESH field."
+  side_effects: null
+- id: INTE
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFO
+    bit_range:
+    - 0
+    - 0
+    description: "Triggered when the sample FIFO reaches a certain level. \n                            This level can be programmed via the FCS_THRESH field."
+  side_effects: null
+- id: INTF
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFO
+    bit_range:
+    - 0
+    - 0
+    description: "Triggered when the sample FIFO reaches a certain level. \n                            This level can be programmed via the FCS_THRESH field."
+  side_effects: null
+- id: INTS
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFO
+    bit_range:
+    - 0
+    - 0
+    description: "Triggered when the sample FIFO reaches a certain level. \n                            This level can be programmed via the FCS_THRESH field."
+  side_effects: null
+interrupts:
+  ADC_IRQ_FIFO: 22
+timing: null

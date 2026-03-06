@@ -1,0 +1,143 @@
+peripheral: SPI0
+version: 0.1.0
+registers:
+- id: EVENTS_READY
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for READY event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for READY event
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 3
+    - 0
+    description: Enable or disable SPI
+  side_effects: null
+- id: PSEL_SCK
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PSELSCK
+    bit_range:
+    - 31
+    - 0
+    description: Pin number configuration for SPI SCK signal
+  side_effects: null
+- id: PSEL_MOSI
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PSELMOSI
+    bit_range:
+    - 31
+    - 0
+    description: Pin number configuration for SPI MOSI signal
+  side_effects: null
+- id: PSEL_MISO
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PSELMISO
+    bit_range:
+    - 31
+    - 0
+    description: Pin number configuration for SPI MISO signal
+  side_effects: null
+- id: RXD
+  address_offset: 1304
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXD
+    bit_range:
+    - 7
+    - 0
+    description: RX data received. Double buffered
+  side_effects: null
+- id: TXD
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXD
+    bit_range:
+    - 7
+    - 0
+    description: TX data to send. Double buffered
+  side_effects: null
+- id: FREQUENCY
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: FREQUENCY
+    bit_range:
+    - 31
+    - 0
+    description: SPI master data rate
+  side_effects: null
+- id: CONFIG
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ORDER
+    bit_range:
+    - 0
+    - 0
+    description: Bit order
+  - name: CPHA
+    bit_range:
+    - 1
+    - 1
+    description: Serial clock (SCK) phase
+  - name: CPOL
+    bit_range:
+    - 2
+    - 2
+    description: Serial clock (SCK) polarity
+  side_effects: null
+interrupts:
+  SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0: 3
+timing: null

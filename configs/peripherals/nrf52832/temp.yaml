@@ -1,0 +1,267 @@
+peripheral: TEMP
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DATARDY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATARDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for DATARDY event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATARDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for DATARDY event
+  side_effects: null
+- id: TEMP
+  address_offset: 1288
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TEMP
+    bit_range:
+    - 31
+    - 0
+    description: Temperature in degC (0.25deg steps)
+  side_effects: null
+- id: A0
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 800
+  fields:
+  - name: A0
+    bit_range:
+    - 11
+    - 0
+    description: Slope of 1st piece wise linear function
+  side_effects: null
+- id: A1
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 835
+  fields:
+  - name: A1
+    bit_range:
+    - 11
+    - 0
+    description: Slope of 2nd piece wise linear function
+  side_effects: null
+- id: A2
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 861
+  fields:
+  - name: A2
+    bit_range:
+    - 11
+    - 0
+    description: Slope of 3rd piece wise linear function
+  side_effects: null
+- id: A3
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 1024
+  fields:
+  - name: A3
+    bit_range:
+    - 11
+    - 0
+    description: Slope of 4th piece wise linear function
+  side_effects: null
+- id: A4
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 1151
+  fields:
+  - name: A4
+    bit_range:
+    - 11
+    - 0
+    description: Slope of 5th piece wise linear function
+  side_effects: null
+- id: A5
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 891
+  fields:
+  - name: A5
+    bit_range:
+    - 11
+    - 0
+    description: Slope of 6th piece wise linear function
+  side_effects: null
+- id: B0
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 16332
+  fields:
+  - name: B0
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of 1st piece wise linear function
+  side_effects: null
+- id: B1
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 16280
+  fields:
+  - name: B1
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of 2nd piece wise linear function
+  side_effects: null
+- id: B2
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 16280
+  fields:
+  - name: B2
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of 3rd piece wise linear function
+  side_effects: null
+- id: B3
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 18
+  fields:
+  - name: B3
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of 4th piece wise linear function
+  side_effects: null
+- id: B4
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 106
+  fields:
+  - name: B4
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of 5th piece wise linear function
+  side_effects: null
+- id: B5
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 15824
+  fields:
+  - name: B5
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of 6th piece wise linear function
+  side_effects: null
+- id: T0
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 226
+  fields:
+  - name: T0
+    bit_range:
+    - 7
+    - 0
+    description: End point of 1st piece wise linear function
+  side_effects: null
+- id: T1
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T1
+    bit_range:
+    - 7
+    - 0
+    description: End point of 2nd piece wise linear function
+  side_effects: null
+- id: T2
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 20
+  fields:
+  - name: T2
+    bit_range:
+    - 7
+    - 0
+    description: End point of 3rd piece wise linear function
+  side_effects: null
+- id: T3
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 25
+  fields:
+  - name: T3
+    bit_range:
+    - 7
+    - 0
+    description: End point of 4th piece wise linear function
+  side_effects: null
+- id: T4
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 80
+  fields:
+  - name: T4
+    bit_range:
+    - 7
+    - 0
+    description: End point of 5th piece wise linear function
+  side_effects: null
+interrupts:
+  TEMP: 12
+timing: null
