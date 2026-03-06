@@ -1,0 +1,1069 @@
+peripheral: I2C0
+version: 0.1.0
+registers:
+- id: SCL_LOW_PERIOD
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCL_LOW_PERIOD
+    bit_range:
+    - 8
+    - 0
+    description: reg_scl_low_period
+  side_effects: null
+- id: CTR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 523
+  fields:
+  - name: SDA_FORCE_OUT
+    bit_range:
+    - 0
+    - 0
+    description: reg_sda_force_out
+  - name: SCL_FORCE_OUT
+    bit_range:
+    - 1
+    - 1
+    description: reg_scl_force_out
+  - name: SAMPLE_SCL_LEVEL
+    bit_range:
+    - 2
+    - 2
+    description: reg_sample_scl_level
+  - name: RX_FULL_ACK_LEVEL
+    bit_range:
+    - 3
+    - 3
+    description: reg_rx_full_ack_level
+  - name: MS_MODE
+    bit_range:
+    - 4
+    - 4
+    description: reg_ms_mode
+  - name: TRANS_START
+    bit_range:
+    - 5
+    - 5
+    description: reg_trans_start
+  - name: TX_LSB_FIRST
+    bit_range:
+    - 6
+    - 6
+    description: reg_tx_lsb_first
+  - name: RX_LSB_FIRST
+    bit_range:
+    - 7
+    - 7
+    description: reg_rx_lsb_first
+  - name: CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: reg_clk_en
+  - name: ARBITRATION_EN
+    bit_range:
+    - 9
+    - 9
+    description: reg_arbitration_en
+  - name: FSM_RST
+    bit_range:
+    - 10
+    - 10
+    description: reg_fsm_rst
+  - name: CONF_UPGATE
+    bit_range:
+    - 11
+    - 11
+    description: reg_conf_upgate
+  - name: SLV_TX_AUTO_START_EN
+    bit_range:
+    - 12
+    - 12
+    description: reg_slv_tx_auto_start_en
+  - name: ADDR_10BIT_RW_CHECK_EN
+    bit_range:
+    - 13
+    - 13
+    description: reg_addr_10bit_rw_check_en
+  - name: ADDR_BROADCASTING_EN
+    bit_range:
+    - 14
+    - 14
+    description: reg_addr_broadcasting_en
+  side_effects: null
+- id: SR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 49152
+  fields:
+  - name: RESP_REC
+    bit_range:
+    - 0
+    - 0
+    description: reg_resp_rec
+  - name: SLAVE_RW
+    bit_range:
+    - 1
+    - 1
+    description: reg_slave_rw
+  - name: ARB_LOST
+    bit_range:
+    - 3
+    - 3
+    description: reg_arb_lost
+  - name: BUS_BUSY
+    bit_range:
+    - 4
+    - 4
+    description: reg_bus_busy
+  - name: SLAVE_ADDRESSED
+    bit_range:
+    - 5
+    - 5
+    description: reg_slave_addressed
+  - name: RXFIFO_CNT
+    bit_range:
+    - 13
+    - 8
+    description: reg_rxfifo_cnt
+  - name: STRETCH_CAUSE
+    bit_range:
+    - 15
+    - 14
+    description: reg_stretch_cause
+  - name: TXFIFO_CNT
+    bit_range:
+    - 23
+    - 18
+    description: reg_txfifo_cnt
+  - name: SCL_MAIN_STATE_LAST
+    bit_range:
+    - 26
+    - 24
+    description: reg_scl_main_state_last
+  - name: SCL_STATE_LAST
+    bit_range:
+    - 30
+    - 28
+    description: reg_scl_state_last
+  side_effects: null
+- id: TO
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: TIME_OUT_VALUE
+    bit_range:
+    - 4
+    - 0
+    description: reg_time_out_value
+  - name: TIME_OUT_EN
+    bit_range:
+    - 5
+    - 5
+    description: reg_time_out_en
+  side_effects: null
+- id: SLAVE_ADDR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLAVE_ADDR
+    bit_range:
+    - 14
+    - 0
+    description: reg_slave_addr
+  - name: ADDR_10BIT_EN
+    bit_range:
+    - 31
+    - 31
+    description: reg_addr_10bit_en
+  side_effects: null
+- id: FIFO_ST
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXFIFO_RADDR
+    bit_range:
+    - 4
+    - 0
+    description: reg_rxfifo_raddr
+  - name: RXFIFO_WADDR
+    bit_range:
+    - 9
+    - 5
+    description: reg_rxfifo_waddr
+  - name: TXFIFO_RADDR
+    bit_range:
+    - 14
+    - 10
+    description: reg_txfifo_raddr
+  - name: TXFIFO_WADDR
+    bit_range:
+    - 19
+    - 15
+    description: reg_txfifo_waddr
+  - name: SLAVE_RW_POINT
+    bit_range:
+    - 29
+    - 22
+    description: reg_slave_rw_point
+  side_effects: null
+- id: FIFO_CONF
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 16523
+  fields:
+  - name: RXFIFO_WM_THRHD
+    bit_range:
+    - 4
+    - 0
+    description: reg_rxfifo_wm_thrhd
+  - name: TXFIFO_WM_THRHD
+    bit_range:
+    - 9
+    - 5
+    description: reg_txfifo_wm_thrhd
+  - name: NONFIFO_EN
+    bit_range:
+    - 10
+    - 10
+    description: reg_nonfifo_en
+  - name: FIFO_ADDR_CFG_EN
+    bit_range:
+    - 11
+    - 11
+    description: reg_fifo_addr_cfg_en
+  - name: RX_FIFO_RST
+    bit_range:
+    - 12
+    - 12
+    description: reg_rx_fifo_rst
+  - name: TX_FIFO_RST
+    bit_range:
+    - 13
+    - 13
+    description: reg_tx_fifo_rst
+  - name: FIFO_PRT_EN
+    bit_range:
+    - 14
+    - 14
+    description: reg_fifo_prt_en
+  side_effects: null
+- id: DATA
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFO_RDATA
+    bit_range:
+    - 7
+    - 0
+    description: reg_fifo_rdata
+  side_effects: null
+- id: INT_RAW
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: RXFIFO_WM_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: reg_rxfifo_wm_int_raw
+  - name: TXFIFO_WM_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: reg_txfifo_wm_int_raw
+  - name: RXFIFO_OVF_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: reg_rxfifo_ovf_int_raw
+  - name: END_DETECT_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: reg_end_detect_int_raw
+  - name: BYTE_TRANS_DONE_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: reg_byte_trans_done_int_raw
+  - name: ARBITRATION_LOST_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: reg_arbitration_lost_int_raw
+  - name: MST_TXFIFO_UDF_INT_RAW
+    bit_range:
+    - 6
+    - 6
+    description: reg_mst_txfifo_udf_int_raw
+  - name: TRANS_COMPLETE_INT_RAW
+    bit_range:
+    - 7
+    - 7
+    description: reg_trans_complete_int_raw
+  - name: TIME_OUT_INT_RAW
+    bit_range:
+    - 8
+    - 8
+    description: reg_time_out_int_raw
+  - name: TRANS_START_INT_RAW
+    bit_range:
+    - 9
+    - 9
+    description: reg_trans_start_int_raw
+  - name: NACK_INT_RAW
+    bit_range:
+    - 10
+    - 10
+    description: reg_nack_int_raw
+  - name: TXFIFO_OVF_INT_RAW
+    bit_range:
+    - 11
+    - 11
+    description: reg_txfifo_ovf_int_raw
+  - name: RXFIFO_UDF_INT_RAW
+    bit_range:
+    - 12
+    - 12
+    description: reg_rxfifo_udf_int_raw
+  - name: SCL_ST_TO_INT_RAW
+    bit_range:
+    - 13
+    - 13
+    description: reg_scl_st_to_int_raw
+  - name: SCL_MAIN_ST_TO_INT_RAW
+    bit_range:
+    - 14
+    - 14
+    description: reg_scl_main_st_to_int_raw
+  - name: DET_START_INT_RAW
+    bit_range:
+    - 15
+    - 15
+    description: reg_det_start_int_raw
+  - name: SLAVE_STRETCH_INT_RAW
+    bit_range:
+    - 16
+    - 16
+    description: reg_slave_stretch_int_raw
+  - name: GENERAL_CALL_INT_RAW
+    bit_range:
+    - 17
+    - 17
+    description: reg_general_call_int_raw
+  side_effects: null
+- id: INT_CLR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXFIFO_WM_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: reg_rxfifo_wm_int_clr
+  - name: TXFIFO_WM_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: reg_txfifo_wm_int_clr
+  - name: RXFIFO_OVF_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: reg_rxfifo_ovf_int_clr
+  - name: END_DETECT_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: reg_end_detect_int_clr
+  - name: BYTE_TRANS_DONE_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: reg_byte_trans_done_int_clr
+  - name: ARBITRATION_LOST_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: reg_arbitration_lost_int_clr
+  - name: MST_TXFIFO_UDF_INT_CLR
+    bit_range:
+    - 6
+    - 6
+    description: reg_mst_txfifo_udf_int_clr
+  - name: TRANS_COMPLETE_INT_CLR
+    bit_range:
+    - 7
+    - 7
+    description: reg_trans_complete_int_clr
+  - name: TIME_OUT_INT_CLR
+    bit_range:
+    - 8
+    - 8
+    description: reg_time_out_int_clr
+  - name: TRANS_START_INT_CLR
+    bit_range:
+    - 9
+    - 9
+    description: reg_trans_start_int_clr
+  - name: NACK_INT_CLR
+    bit_range:
+    - 10
+    - 10
+    description: reg_nack_int_clr
+  - name: TXFIFO_OVF_INT_CLR
+    bit_range:
+    - 11
+    - 11
+    description: reg_txfifo_ovf_int_clr
+  - name: RXFIFO_UDF_INT_CLR
+    bit_range:
+    - 12
+    - 12
+    description: reg_rxfifo_udf_int_clr
+  - name: SCL_ST_TO_INT_CLR
+    bit_range:
+    - 13
+    - 13
+    description: reg_scl_st_to_int_clr
+  - name: SCL_MAIN_ST_TO_INT_CLR
+    bit_range:
+    - 14
+    - 14
+    description: reg_scl_main_st_to_int_clr
+  - name: DET_START_INT_CLR
+    bit_range:
+    - 15
+    - 15
+    description: reg_det_start_int_clr
+  - name: SLAVE_STRETCH_INT_CLR
+    bit_range:
+    - 16
+    - 16
+    description: reg_slave_stretch_int_clr
+  - name: GENERAL_CALL_INT_CLR
+    bit_range:
+    - 17
+    - 17
+    description: reg_general_call_int_clr
+  side_effects: null
+- id: INT_ENA
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXFIFO_WM_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: reg_rxfifo_wm_int_ena
+  - name: TXFIFO_WM_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: reg_txfifo_wm_int_ena
+  - name: RXFIFO_OVF_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: reg_rxfifo_ovf_int_ena
+  - name: END_DETECT_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: reg_end_detect_int_ena
+  - name: BYTE_TRANS_DONE_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: reg_byte_trans_done_int_ena
+  - name: ARBITRATION_LOST_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: reg_arbitration_lost_int_ena
+  - name: MST_TXFIFO_UDF_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: reg_mst_txfifo_udf_int_ena
+  - name: TRANS_COMPLETE_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: reg_trans_complete_int_ena
+  - name: TIME_OUT_INT_ENA
+    bit_range:
+    - 8
+    - 8
+    description: reg_time_out_int_ena
+  - name: TRANS_START_INT_ENA
+    bit_range:
+    - 9
+    - 9
+    description: reg_trans_start_int_ena
+  - name: NACK_INT_ENA
+    bit_range:
+    - 10
+    - 10
+    description: reg_nack_int_ena
+  - name: TXFIFO_OVF_INT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: reg_txfifo_ovf_int_ena
+  - name: RXFIFO_UDF_INT_ENA
+    bit_range:
+    - 12
+    - 12
+    description: reg_rxfifo_udf_int_ena
+  - name: SCL_ST_TO_INT_ENA
+    bit_range:
+    - 13
+    - 13
+    description: reg_scl_st_to_int_ena
+  - name: SCL_MAIN_ST_TO_INT_ENA
+    bit_range:
+    - 14
+    - 14
+    description: reg_scl_main_st_to_int_ena
+  - name: DET_START_INT_ENA
+    bit_range:
+    - 15
+    - 15
+    description: reg_det_start_int_ena
+  - name: SLAVE_STRETCH_INT_ENA
+    bit_range:
+    - 16
+    - 16
+    description: reg_slave_stretch_int_ena
+  - name: GENERAL_CALL_INT_ENA
+    bit_range:
+    - 17
+    - 17
+    description: reg_general_call_int_ena
+  side_effects: null
+- id: INT_STATUS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXFIFO_WM_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: reg_rxfifo_wm_int_st
+  - name: TXFIFO_WM_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: reg_txfifo_wm_int_st
+  - name: RXFIFO_OVF_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: reg_rxfifo_ovf_int_st
+  - name: END_DETECT_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: reg_end_detect_int_st
+  - name: BYTE_TRANS_DONE_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: reg_byte_trans_done_int_st
+  - name: ARBITRATION_LOST_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: reg_arbitration_lost_int_st
+  - name: MST_TXFIFO_UDF_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: reg_mst_txfifo_udf_int_st
+  - name: TRANS_COMPLETE_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: reg_trans_complete_int_st
+  - name: TIME_OUT_INT_ST
+    bit_range:
+    - 8
+    - 8
+    description: reg_time_out_int_st
+  - name: TRANS_START_INT_ST
+    bit_range:
+    - 9
+    - 9
+    description: reg_trans_start_int_st
+  - name: NACK_INT_ST
+    bit_range:
+    - 10
+    - 10
+    description: reg_nack_int_st
+  - name: TXFIFO_OVF_INT_ST
+    bit_range:
+    - 11
+    - 11
+    description: reg_txfifo_ovf_int_st
+  - name: RXFIFO_UDF_INT_ST
+    bit_range:
+    - 12
+    - 12
+    description: reg_rxfifo_udf_int_st
+  - name: SCL_ST_TO_INT_ST
+    bit_range:
+    - 13
+    - 13
+    description: reg_scl_st_to_int_st
+  - name: SCL_MAIN_ST_TO_INT_ST
+    bit_range:
+    - 14
+    - 14
+    description: reg_scl_main_st_to_int_st
+  - name: DET_START_INT_ST
+    bit_range:
+    - 15
+    - 15
+    description: reg_det_start_int_st
+  - name: SLAVE_STRETCH_INT_ST
+    bit_range:
+    - 16
+    - 16
+    description: reg_slave_stretch_int_st
+  - name: GENERAL_CALL_INT_ST
+    bit_range:
+    - 17
+    - 17
+    description: reg_general_call_int_st
+  side_effects: null
+- id: SDA_HOLD
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIME
+    bit_range:
+    - 8
+    - 0
+    description: reg_sda_hold_time
+  side_effects: null
+- id: SDA_SAMPLE
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIME
+    bit_range:
+    - 8
+    - 0
+    description: reg_sda_sample_time
+  side_effects: null
+- id: SCL_HIGH_PERIOD
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCL_HIGH_PERIOD
+    bit_range:
+    - 8
+    - 0
+    description: reg_scl_high_period
+  - name: SCL_WAIT_HIGH_PERIOD
+    bit_range:
+    - 15
+    - 9
+    description: reg_scl_wait_high_period
+  side_effects: null
+- id: SCL_START_HOLD
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: TIME
+    bit_range:
+    - 8
+    - 0
+    description: reg_scl_start_hold_time
+  side_effects: null
+- id: SCL_RSTART_SETUP
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: TIME
+    bit_range:
+    - 8
+    - 0
+    description: reg_scl_rstart_setup_time
+  side_effects: null
+- id: SCL_STOP_HOLD
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: TIME
+    bit_range:
+    - 8
+    - 0
+    description: reg_scl_stop_hold_time
+  side_effects: null
+- id: SCL_STOP_SETUP
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: TIME
+    bit_range:
+    - 8
+    - 0
+    description: reg_scl_stop_setup_time
+  side_effects: null
+- id: FILTER_CFG
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 768
+  fields:
+  - name: SCL_FILTER_THRES
+    bit_range:
+    - 3
+    - 0
+    description: reg_scl_filter_thres
+  - name: SDA_FILTER_THRES
+    bit_range:
+    - 7
+    - 4
+    description: reg_sda_filter_thres
+  - name: SCL_FILTER_EN
+    bit_range:
+    - 8
+    - 8
+    description: reg_scl_filter_en
+  - name: SDA_FILTER_EN
+    bit_range:
+    - 9
+    - 9
+    description: reg_sda_filter_en
+  side_effects: null
+- id: CLK_CONF
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 2097152
+  fields:
+  - name: SCLK_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: reg_sclk_div_num
+  - name: SCLK_DIV_A
+    bit_range:
+    - 13
+    - 8
+    description: reg_sclk_div_a
+  - name: SCLK_DIV_B
+    bit_range:
+    - 19
+    - 14
+    description: reg_sclk_div_b
+  - name: SCLK_SEL
+    bit_range:
+    - 20
+    - 20
+    description: reg_sclk_sel
+  - name: SCLK_ACTIVE
+    bit_range:
+    - 21
+    - 21
+    description: reg_sclk_active
+  side_effects: null
+- id: COMD0
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: COMD1
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: COMD2
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: COMD3
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: COMD4
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: COMD5
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: COMD6
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: COMD7
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMMAND
+    bit_range:
+    - 13
+    - 0
+    description: reg_command
+  - name: COMMAND_DONE
+    bit_range:
+    - 31
+    - 31
+    description: reg_command_done
+  side_effects: null
+- id: SCL_ST_TIME_OUT
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: SCL_ST_TO_I2C
+    bit_range:
+    - 4
+    - 0
+    description: reg_scl_st_to_regno more than 23
+  side_effects: null
+- id: SCL_MAIN_ST_TIME_OUT
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: SCL_MAIN_ST_TO_I2C
+    bit_range:
+    - 4
+    - 0
+    description: reg_scl_main_st_to_regno more than 23
+  side_effects: null
+- id: SCL_SP_CONF
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCL_RST_SLV_EN
+    bit_range:
+    - 0
+    - 0
+    description: reg_scl_rst_slv_en
+  - name: SCL_RST_SLV_NUM
+    bit_range:
+    - 5
+    - 1
+    description: reg_scl_rst_slv_num
+  - name: SCL_PD_EN
+    bit_range:
+    - 6
+    - 6
+    description: reg_scl_pd_en
+  - name: SDA_PD_EN
+    bit_range:
+    - 7
+    - 7
+    description: reg_sda_pd_en
+  side_effects: null
+- id: SCL_STRETCH_CONF
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STRETCH_PROTECT_NUM
+    bit_range:
+    - 9
+    - 0
+    description: reg_stretch_protect_num
+  - name: SLAVE_SCL_STRETCH_EN
+    bit_range:
+    - 10
+    - 10
+    description: reg_slave_scl_stretch_en
+  - name: SLAVE_SCL_STRETCH_CLR
+    bit_range:
+    - 11
+    - 11
+    description: reg_slave_scl_stretch_clr
+  - name: SLAVE_BYTE_ACK_CTL_EN
+    bit_range:
+    - 12
+    - 12
+    description: reg_slave_byte_ack_ctl_en
+  - name: SLAVE_BYTE_ACK_LVL
+    bit_range:
+    - 13
+    - 13
+    description: reg_slave_byte_ack_lvl
+  side_effects: null
+- id: DATE
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 537330177
+  fields:
+  - name: DATE
+    bit_range:
+    - 31
+    - 0
+    description: reg_date
+  side_effects: null
+- id: TXFIFO_START_ADDR
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXFIFO_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: reg_txfifo_start_addr.
+  side_effects: null
+- id: RXFIFO_START_ADDR
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXFIFO_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: reg_rxfifo_start_addr.
+  side_effects: null
+interrupts:
+  I2C_EXT0: 29
+  I2C_MASTER: 11
+timing: null

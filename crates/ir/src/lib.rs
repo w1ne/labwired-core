@@ -10,7 +10,7 @@
 #![warn(missing_docs)]
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 #[cfg(feature = "svd")]
 pub mod svd_transform;
