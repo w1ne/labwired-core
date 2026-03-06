@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
           npm run build
 
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: test
     outputs:
       owner_lower: ${{ steps.meta.outputs.owner_lower }}
@@ -93,7 +93,7 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:latest
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
