@@ -1,5 +1,5 @@
 import { apiUrl, STRIPE_PAYMENT_LINK } from '../api';
-import { Show, SignInButton, UserButton } from '@clerk/react';
+import { UserButton, useAuth, useClerk } from '@clerk/react';
 
 const CURL_SNIPPET = `curl -X POST https://foundry.labwired.com/v1/models/verify \\
   -H "Authorization: Bearer lw_sk_live_YOUR_KEY" \\
@@ -11,6 +11,8 @@ interface Props {
 }
 
 const LandingPage = ({ onEnterDashboard }: Props) => {
+    const { isSignedIn } = useAuth();
+    const clerk = useClerk();
     const [copied, setCopied] = useState(false);
     const [assets, setAssets] = useState<any[]>([]);
 
@@ -27,6 +29,14 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const openDashboard = () => {
+        if (isSignedIn) {
+            onEnterDashboard();
+            return;
+        }
+        clerk.openSignIn({ fallbackRedirectUrl: '#/dashboard' });
+    };
+
     return (
         <div style={{ minHeight: '100vh', background: 'var(--lw-bg)', fontFamily: 'Inter, sans-serif' }}>
             {/* NAV */}
@@ -39,17 +49,10 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                     LABWIRED <span style={{ color: 'var(--lw-pink)' }}>FOUNDRY</span>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <a href="https://api.labwired.com/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
+                    <a href="/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
                     <button className="secondary" onClick={() => window.location.hash = '/catalog'}>Catalog</button>
-                    <Show when="signed-out">
-                        <SignInButton mode="modal" fallbackRedirectUrl="#/dashboard">
-                            <button>Dashboard →</button>
-                        </SignInButton>
-                    </Show>
-                    <Show when="signed-in">
-                        <button onClick={onEnterDashboard}>Dashboard →</button>
-                        <UserButton />
-                    </Show>
+                    <button onClick={openDashboard}>Dashboard →</button>
+                    {isSignedIn && <UserButton />}
                 </div>
             </nav>
 
@@ -80,7 +83,7 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                 </p>
 
                 <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <button onClick={onEnterDashboard} style={{ fontSize: '1rem', padding: '1rem 2.5rem' }}>
+                    <button onClick={openDashboard} style={{ fontSize: '1rem', padding: '1rem 2.5rem' }}>
                         Get your free API key →
                     </button>
                     <button className="secondary" onClick={() => window.location.hash = '/catalog'} style={{ fontSize: '1rem', padding: '1rem 2.5rem' }}>
@@ -177,7 +180,7 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                     1,000 runs / €49 · burst at €0.05/run
                 </p>
                 <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <button onClick={onEnterDashboard} style={{ background: 'var(--lw-pink)', border: 'none', color: '#fff', padding: '1rem 2.5rem', fontSize: '1rem' }}>
+                    <button onClick={openDashboard} style={{ background: 'var(--lw-pink)', border: 'none', color: '#fff', padding: '1rem 2.5rem', fontSize: '1rem' }}>
                         Start free
                     </button>
                     <a href={STRIPE_PAYMENT_LINK} target="_blank" rel="noopener noreferrer">
