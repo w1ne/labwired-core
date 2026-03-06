@@ -97,6 +97,9 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Deploy to Local Host
         env:
           DEPLOY_PATH: /home/w1ne/labwired/foundry/deploy
@@ -104,6 +107,11 @@ jobs:
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
           set -euo pipefail
+          
+          # Sync deployment files from repository to deploy path
+          cp foundry/deploy/docker-compose.prod.yml "$DEPLOY_PATH/"
+          cp foundry/deploy/Caddyfile "$DEPLOY_PATH/"
+          
           cd "$DEPLOY_PATH"
 
           if [ ! -f .env ]; then
