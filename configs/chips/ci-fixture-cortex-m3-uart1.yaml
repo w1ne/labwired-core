@@ -6,6 +6,7 @@
 
 name: "ci-fixture-cortex-m3-uart1"
 arch: "cortex-m3"
+registers_count: 50
 flash:
   base: 0x00000000
   size: "128KB"

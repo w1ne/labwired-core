@@ -6,6 +6,7 @@
 
 name: "stm32f401re"
 arch: "arm"
+registers_count: 150
 flash:
   base: 0x08000000
   size: "512KB"
