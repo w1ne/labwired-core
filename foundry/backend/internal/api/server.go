@@ -94,6 +94,7 @@ type Server struct {
 	store        *db.Store
 	catalog      *catalog.Manager
 	artifactsDir string
+	dataDir      string
 
 	scheduleMu         sync.Mutex
 	scheduleCond       *sync.Cond
@@ -178,7 +179,7 @@ const (
 	enqueueQueueFull
 )
 
-func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Manager, artifactsDir string, opts ServerOptions) *Server {
+func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Manager, artifactsDir, dataDir string, opts ServerOptions) *Server {
 	if opts.WorkerCount <= 0 {
 		opts.WorkerCount = 1
 	}
@@ -226,6 +227,7 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 		store:                    store,
 		catalog:                  cat,
 		artifactsDir:             artifactsDir,
+		dataDir:                  dataDir,
 		pendingByWorkspace:       make(map[string][]*Job),
 		maxPendingJobs:           100,
 		maxInflightPerWorkspace:  opts.MaxInflightPerWorkspace,
@@ -1454,6 +1456,28 @@ func (s *Server) worker(workerID int) {
 			_ = s.store.CompleteClaimedRun(job.ID, string(StatusError), 0, 0, "", runErr.Error())
 		} else if result.Pass {
 			_ = s.store.CompleteClaimedRun(job.ID, string(StatusPass), result.AssertionsPassed, result.AssertionsTotal, job.ArtifactDir, "")
+
+			// If this was a successful synthesis, promote to catalog
+			if job.Type == JobTypeSynthesize {
+				modelPath := filepath.Join(job.ArtifactDir, "output.json")
+				modelData, err := os.ReadFile(modelPath)
+				if err != nil {
+					log.Printf("[worker:%d] failed to read generated model for promotion: %v", workerID, err)
+				} else {
+					asset := db.CatalogAsset{
+						ID:          job.ID,
+						Name:        job.ComponentName,
+						Description: fmt.Sprintf("AI-synthesized model for %s.", job.ComponentName),
+						PassRate:    100, // It just passed verification
+						Registers:   0,   // Could be parsed from output.json if schema allows
+					}
+					if err := s.catalog.PromoteToCatalog(asset, modelData, s.dataDir); err != nil {
+						log.Printf("[worker:%d] failed to promote synthesized model to catalog: %v", workerID, err)
+					} else {
+						log.Printf("[worker:%d] successfully promoted synthesized model %s to catalog", workerID, job.ID)
+					}
+				}
+			}
 		} else {
 			_ = s.store.CompleteClaimedRun(job.ID, string(StatusFail), result.AssertionsPassed, result.AssertionsTotal, job.ArtifactDir, result.Error)
 		}

@@ -1,62 +1,125 @@
 package catalog
 
-type Asset struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	PassRate    int    `json:"pass_rate"`
-	Registers   int    `json:"registers"`
-	IrURL       string `json:"ir_url"`
-}
+import (
+	"fmt"
+	"io/fs"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/labwired/foundry-backend/internal/db"
+	"gopkg.in/yaml.v3"
+)
 
 type Manager struct {
-	assets map[string]Asset
+	store *db.Store
 }
 
-func NewManager() *Manager {
-	m := &Manager{
-		assets: make(map[string]Asset),
-	}
-	m.seed()
-	return m
-}
-
-func (m *Manager) seed() {
-	m.assets["ADXL345"] = Asset{
-		ID:          "ADXL345",
-		Name:        "Analog Devices ADXL345",
-		Description: "3-Axis Digital Accelerometer with I2C/SPI interface.",
-		PassRate:    100,
-		Registers:   29,
-		IrURL:       "/artifacts/catalog/adxl345.json",
-	}
-	m.assets["BME280"] = Asset{
-		ID:          "BME280",
-		Name:        "Bosch BME280",
-		Description: "Digital Humidity, Pressure and Temperature Sensor.",
-		PassRate:    100,
-		Registers:   18,
-		IrURL:       "/artifacts/catalog/bme280.json",
-	}
-	m.assets["MCP2515"] = Asset{
-		ID:          "MCP2515",
-		Name:        "Microchip MCP2515",
-		Description: "Stand-Alone CAN Controller with SPI Interface.",
-		PassRate:    98,
-		Registers:   52,
-		IrURL:       "/artifacts/catalog/mcp2515.json",
+func NewManager(store *db.Store) *Manager {
+	return &Manager{
+		store: store,
 	}
 }
 
-func (m *Manager) List() []Asset {
-	res := make([]Asset, 0, len(m.assets))
-	for _, a := range m.assets {
-		res = append(res, a)
-	}
-	return res
+// SyncFromDisk scans the provided directory for YAML models and upserts them to the DB.
+func (m *Manager) SyncFromDisk(configsDir string) error {
+	log.Printf("[catalog] syncing models from disk: %s", configsDir)
+
+	err := filepath.WalkDir(configsDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || (!strings.HasSuffix(path, ".yaml") && !strings.HasSuffix(path, ".yml")) {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("[catalog] failed to read model %s: %v", path, err)
+			return nil
+		}
+
+		var model struct {
+			Name        string `yaml:"name"`
+			Description string `yaml:"description"`
+		}
+		if err := yaml.Unmarshal(data, &model); err != nil {
+			log.Printf("[catalog] failed to parse model %s: %v", path, err)
+			return nil
+		}
+
+		id := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+		name := model.Name
+		if name == "" {
+			name = id
+		}
+
+		asset := db.CatalogAsset{
+			ID:          id,
+			Name:        name,
+			Description: model.Description,
+			PassRate:    100, // Default for pre-verified repo models
+			Registers:   0,   // Could be parsed if needed
+			IrURL:       "",  // TBD: how to resolve URLs for GitHub models
+		}
+
+		if model.Description == "" {
+			if strings.Contains(path, "/chips/") {
+				asset.Description = fmt.Sprintf("Hardware model for %s chip.", name)
+			} else if strings.Contains(path, "/peripherals/") {
+				asset.Description = fmt.Sprintf("Peripheral model for %s.", name)
+			} else {
+				asset.Description = fmt.Sprintf("LabWired hardware model: %s", name)
+			}
+		}
+
+		if err := m.store.UpsertCatalogAsset(asset); err != nil {
+			log.Printf("[catalog] failed to upsert asset %s: %v", id, err)
+		}
+
+		return nil
+	})
+
+	return err
 }
 
-func (m *Manager) Get(id string) (Asset, bool) {
-	a, ok := m.assets[id]
-	return a, ok
+// PromoteToCatalog saves a synthesized model to persistent storage and adds it to the catalog.
+func (m *Manager) PromoteToCatalog(asset db.CatalogAsset, modelData []byte, dataDir string) error {
+	// 1. Ensure persistent directory exists
+	catalogDir := filepath.Join(dataDir, "catalog")
+	if err := os.MkdirAll(catalogDir, 0755); err != nil {
+		return fmt.Errorf("failed to create catalog directory: %w", err)
+	}
+
+	// 2. Save model file
+	fileName := fmt.Sprintf("%s.json", asset.ID)
+	filePath := filepath.Join(catalogDir, fileName)
+	if err := os.WriteFile(filePath, modelData, 0644); err != nil {
+		return fmt.Errorf("failed to save model file: %w", err)
+	}
+
+	// 3. Update asset with local URL
+	asset.IrURL = fmt.Sprintf("/data/catalog/%s", fileName)
+
+	// 4. Upsert to DB
+	return m.store.UpsertCatalogAsset(asset)
+}
+
+func (m *Manager) List() []db.CatalogAsset {
+	assets, err := m.store.ListCatalogAssets()
+	if err != nil {
+		log.Printf("[catalog] failed to list assets: %v", err)
+		return []db.CatalogAsset{}
+	}
+	return assets
+}
+
+func (m *Manager) Get(id string) (db.CatalogAsset, bool) {
+	asset, ok, err := m.store.GetCatalogAsset(id)
+	if err != nil {
+		log.Printf("[catalog] failed to get asset %s: %v", id, err)
+		return db.CatalogAsset{}, false
+	}
+	return asset, ok
 }
