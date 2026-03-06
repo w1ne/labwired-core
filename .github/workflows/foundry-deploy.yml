@@ -97,46 +97,39 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.0.3
+    steps:
+      - name: Deploy to Local Host
         env:
-          DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
-          GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER }}
-          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          DEPLOY_PATH: /home/w1ne/labwired/foundry/deploy
           OWNER_LOWER: ${{ needs.build-and-push.outputs.owner_lower }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          envs: DEPLOY_PATH,GHCR_PULL_USER,GHCR_PULL_TOKEN,OWNER_LOWER,IMAGE_TAG
-          script_stop: true
-          script: |
-            set -euo pipefail
-            DEPLOY_PATH="${DEPLOY_PATH:-/srv/labwired/foundry/deploy}"
-            cd "$DEPLOY_PATH"
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
 
-            if [ ! -f .env ]; then
-              echo "Missing .env in $DEPLOY_PATH"
-              exit 1
-            fi
+          if [ ! -f .env ]; then
+            echo "Missing .env in $DEPLOY_PATH"
+            exit 1
+          fi
 
-            echo "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_PULL_USER" --password-stdin
+          # Since it's a self-hosted runner on the same host, we assume docker access.
+          # We don't need to login if the images are public or already accessible, 
+          # but we keep the logic for image tagging.
 
-            grep -q '^BACKEND_IMAGE=' .env || echo "BACKEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-backend" >> .env
-            grep -q '^FRONTEND_IMAGE=' .env || echo "FRONTEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-frontend" >> .env
+          grep -q '^BACKEND_IMAGE=' .env || echo "BACKEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-backend" >> .env
+          grep -q '^FRONTEND_IMAGE=' .env || echo "FRONTEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-frontend" >> .env
 
-            if grep -q '^BACKEND_IMAGE_TAG=' .env; then
-              sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=$IMAGE_TAG/" .env
-            else
-              echo "BACKEND_IMAGE_TAG=$IMAGE_TAG" >> .env
-            fi
-            if grep -q '^FRONTEND_IMAGE_TAG=' .env; then
-              sed -i "s/^FRONTEND_IMAGE_TAG=.*/FRONTEND_IMAGE_TAG=$IMAGE_TAG/" .env
-            else
-              echo "FRONTEND_IMAGE_TAG=$IMAGE_TAG" >> .env
-            fi
+          if grep -q '^BACKEND_IMAGE_TAG=' .env; then
+            sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=$IMAGE_TAG/" .env
+          else
+            echo "BACKEND_IMAGE_TAG=$IMAGE_TAG" >> .env
+          fi
+          if grep -q '^FRONTEND_IMAGE_TAG=' .env; then
+            sed -i "s/^FRONTEND_IMAGE_TAG=.*/FRONTEND_IMAGE_TAG=$IMAGE_TAG/" .env
+          else
+            echo "FRONTEND_IMAGE_TAG=$IMAGE_TAG" >> .env
+          fi
 
-            docker compose --env-file .env -f docker-compose.prod.yml pull
-            docker compose --env-file .env -f docker-compose.prod.yml up -d
+          docker compose --env-file .env -f docker-compose.prod.yml pull
+          docker compose --env-file .env -f docker-compose.prod.yml up -d
             docker compose --env-file .env -f docker-compose.prod.yml ps
