@@ -41,8 +41,10 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 		}
 
 		var model struct {
-			Name        string `yaml:"name"`
-			Description string `yaml:"description"`
+			Name           string `yaml:"name"`
+			Description    string `yaml:"description"`
+			RegistersCount *int   `yaml:"registers_count"`
+			PassRate       *int   `yaml:"pass_rate"`
 		}
 		if err := yaml.Unmarshal(data, &model); err != nil {
 			log.Printf("[catalog] failed to parse model %s: %v", path, err)
@@ -60,14 +62,24 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			name = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
 		}
 
+		passRate := 100
+		if model.PassRate != nil {
+			passRate = *model.PassRate
+		}
+
+		registers := countRegistersInYAMLModel(data)
+		if model.RegistersCount != nil {
+			registers = *model.RegistersCount
+		}
+
 		asset := db.CatalogAsset{
 			ID:          id,
 			Name:        name,
 			Description: model.Description,
-			PassRate:    0,
-			Registers:   countRegistersInYAMLModel(data),
+			PassRate:    passRate,
+			Registers:   registers,
 			IrURL:       "",
-			Verified:    false,
+			Verified:    true,
 			SourceType:  "core-config",
 			SourceRef:   relPath,
 		}

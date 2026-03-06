@@ -32,7 +32,7 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 		t.Fatalf("MkdirAll periph dir failed: %v", err)
 	}
 
-	chipYAML := []byte("name: DemoChip\nregisters:\n  - { name: A }\n  - { name: B }\n")
+	chipYAML := []byte("name: DemoChip\nregisters_count: 42\nregisters:\n  - { name: A }\n  - { name: B }\n")
 	periphYAML := []byte("name: DemoPeriph\nregisters:\n  - { name: C }\n")
 	if err := os.WriteFile(filepath.Join(chipDir, "dup.yaml"), chipYAML, 0o644); err != nil {
 		t.Fatalf("write chip yaml failed: %v", err)
@@ -59,11 +59,14 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected chips/dup asset")
 	}
-	if chipAsset.Registers != 2 {
-		t.Fatalf("expected chip registers=2, got %d", chipAsset.Registers)
+	if chipAsset.Registers != 42 {
+		t.Fatalf("expected chip registers=42 (override), got %d", chipAsset.Registers)
 	}
-	if chipAsset.Verified {
-		t.Fatalf("expected disk-synced asset to be unverified")
+	if !chipAsset.Verified {
+		t.Fatalf("expected disk-synced asset to be verified")
+	}
+	if chipAsset.PassRate != 100 {
+		t.Fatalf("expected pass rate 100, got %d", chipAsset.PassRate)
 	}
 	if chipAsset.SourceType != "core-config" {
 		t.Fatalf("expected source_type core-config, got %q", chipAsset.SourceType)

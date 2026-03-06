@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { apiUrl, authHeaders, STRIPE_PAYMENT_LINK } from '../api';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@clerk/react';
+import { apiUrl, getApiKey, setApiKey, STRIPE_PAYMENT_LINK } from '../api';
 
 interface UsageData {
     workspace_id: string;
@@ -38,23 +39,41 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 const UsageStats = () => {
+    const { getToken } = useAuth();
     const [usage, setUsage] = useState<UsageData | null>(null);
     const [runs, setRuns] = useState<RunRecord[]>([]);
-    const [apiKeyDisplay, setApiKeyDisplay] = useState(localStorage.getItem('lw_api_key') || '');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [apiKeyDisplay, setApiKeyDisplay] = useState(getApiKey());
     const [keyCopied, setKeyCopied] = useState(false);
 
-    useEffect(() => {
-        const headers = authHeaders();
-        fetch(apiUrl('/v1/usage'), { headers })
-            .then(r => r.json())
-            .then(setUsage)
-            .catch(console.error);
+    const loadData = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const token = await getToken();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        fetch(apiUrl('/v1/runs'), { headers })
-            .then(r => r.json())
-            .then(data => setRuns(Array.isArray(data) ? data : []))
-            .catch(console.error);
-    }, []);
+            const [usageRes, runsRes] = await Promise.all([
+                fetch(apiUrl('/v1/usage'), { headers }),
+                fetch(apiUrl('/v1/runs'), { headers }),
+            ]);
+
+            if (!usageRes.ok) throw new Error(`Usage: ${usageRes.status} ${usageRes.statusText}`);
+            if (!runsRes.ok) throw new Error(`Runs: ${runsRes.status} ${runsRes.statusText}`);
+
+            const [usageData, runsData] = await Promise.all([usageRes.json(), runsRes.json()]);
+            setUsage(usageData);
+            setRuns(Array.isArray(runsData) ? runsData : []);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+        } finally {
+            setLoading(false);
+        }
+    }, [getToken]);
+
+    useEffect(() => { loadData(); }, [loadData]);
 
     const handleCopyKey = () => {
         navigator.clipboard.writeText(apiKeyDisplay);
@@ -67,12 +86,23 @@ const UsageStats = () => {
 
     return (
         <div style={{ padding: '2rem', flex: 1, maxWidth: '1000px' }}>
-            <header style={{ marginBottom: '3rem' }}>
-                <h1 style={{ fontSize: '3rem', color: 'var(--lw-black)' }}>DASHBOARD</h1>
-                <p style={{ color: 'var(--lw-gray)', marginTop: '0.5rem', fontSize: '1.1rem' }}>
-                    Your workspace quota, recent runs, and API key.
-                </p>
+            <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                    <h1 style={{ fontSize: '3rem', color: 'var(--lw-black)' }}>DASHBOARD</h1>
+                    <p style={{ color: 'var(--lw-gray)', marginTop: '0.5rem', fontSize: '1.1rem' }}>
+                        Your workspace quota, recent runs, and API key.
+                    </p>
+                </div>
+                <button className="secondary" onClick={loadData} disabled={loading} style={{ marginTop: '0.5rem' }}>
+                    {loading ? '...' : '↻ REFRESH'}
+                </button>
             </header>
+
+            {error && (
+                <div className="bento-card" style={{ marginBottom: '2rem', borderColor: '#ff4444' }}>
+                    <p style={{ color: '#b42318', fontWeight: 700, margin: 0 }}>{error}</p>
+                </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
 
@@ -81,7 +111,9 @@ const UsageStats = () => {
                     <h4 style={{ fontSize: '0.7rem', color: 'var(--lw-gray)', marginBottom: '1.5rem', fontWeight: 900, letterSpacing: '0.1em' }}>
                         SIMULATION QUOTA
                     </h4>
-                    {usage ? (
+                    {loading ? (
+                        <p style={{ color: 'var(--lw-gray)' }}>Loading...</p>
+                    ) : usage ? (
                         <>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                 <span style={{ fontSize: '0.85rem', color: 'var(--lw-gray)', fontWeight: 600 }}>RUNS CONSUMED</span>
@@ -108,7 +140,7 @@ const UsageStats = () => {
                             </div>
                         </>
                     ) : (
-                        <p style={{ color: 'var(--lw-gray)' }}>Set your API key to see usage.</p>
+                        <p style={{ color: 'var(--lw-gray)' }}>No usage data available.</p>
                     )}
                 </div>
 
@@ -131,7 +163,7 @@ const UsageStats = () => {
                             value={apiKeyDisplay}
                             onChange={e => {
                                 setApiKeyDisplay(e.target.value);
-                                localStorage.setItem('lw_api_key', e.target.value);
+                                setApiKey(e.target.value);
                             }}
                             style={{
                                 flex: 1, background: 'var(--lw-bg-alt)', border: 'var(--lw-border)',
@@ -151,7 +183,9 @@ const UsageStats = () => {
                 <h4 style={{ fontSize: '0.7rem', color: 'var(--lw-gray)', marginBottom: '1.5rem', fontWeight: 900, letterSpacing: '0.1em' }}>
                     RECENT RUNS
                 </h4>
-                {runs.length === 0 ? (
+                {loading ? (
+                    <p style={{ color: 'var(--lw-gray)', fontSize: '0.9rem' }}>Loading...</p>
+                ) : runs.length === 0 ? (
                     <p style={{ color: 'var(--lw-gray)', fontStyle: 'italic', fontSize: '0.9rem' }}>
                         No runs yet. Submit your first simulation via the API.
                     </p>
