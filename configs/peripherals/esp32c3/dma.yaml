@@ -1,0 +1,2415 @@
+peripheral: DMA
+version: 0.1.0
+registers:
+- id: INT_RAW_CH0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received for Rx channel 0.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received for Rx channel 0. For UHCI0, the raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received and no data error is detected for Rx channel 0.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt bit turns to high level when data error is detected only in the case that the peripheral is UHCI0 for Rx channel 0. For other peripherals, this raw interrupt is reserved.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt bit turns to high level when the last data pointed by one outlink descriptor has been transmitted to peripherals for Tx channel 0.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt bit turns to high level when the last data pointed by one outlink descriptor has been read from memory for Tx channel 0.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt bit turns to high level when detecting inlink descriptor error, including owner error, the second and third word error of inlink descriptor for Rx channel 0.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt bit turns to high level when detecting outlink descriptor error, including owner error, the second and third word error of outlink descriptor for Tx channel 0.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt bit turns to high level when Rx buffer pointed by inlink is full and receiving data is not completed, but there is no more inlink for Rx channel 0.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt bit turns to high level when data corresponding a outlink (includes one link descriptor or few link descriptors) is transmitted out for Tx channel 0.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: This raw interrupt bit turns to high level when level 1 fifo of Rx channel 0 is overflow.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: This raw interrupt bit turns to high level when level 1 fifo of Rx channel 0 is underflow.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: This raw interrupt bit turns to high level when level 1 fifo of Tx channel 0 is overflow.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: This raw interrupt bit turns to high level when level 1 fifo of Tx channel 0 is underflow.
+  side_effects: null
+- id: INT_ST_CH0
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt status bit for the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt status bit for the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt status bit for the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt status bit for the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt status bit for the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt status bit for the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt status bit for the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt status bit for the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt status bit for the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: The raw interrupt status bit for the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: The raw interrupt status bit for the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: The raw interrupt status bit for the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: The raw interrupt status bit for the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_ENA_CH0
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The interrupt enable bit for the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The interrupt enable bit for the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The interrupt enable bit for the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The interrupt enable bit for the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The interrupt enable bit for the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The interrupt enable bit for the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The interrupt enable bit for the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The interrupt enable bit for the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The interrupt enable bit for the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: The interrupt enable bit for the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: The interrupt enable bit for the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: The interrupt enable bit for the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: The interrupt enable bit for the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_CLR_CH0
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to clear the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to clear the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to clear the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to clear the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to clear the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to clear the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: Set this bit to clear the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to clear the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: Set this bit to clear the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to clear the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: Set this bit to clear the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: Set this bit to clear the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to clear the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_RAW_CH1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received for Rx channel 0.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received for Rx channel 0. For UHCI0, the raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received and no data error is detected for Rx channel 0.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt bit turns to high level when data error is detected only in the case that the peripheral is UHCI0 for Rx channel 0. For other peripherals, this raw interrupt is reserved.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt bit turns to high level when the last data pointed by one outlink descriptor has been transmitted to peripherals for Tx channel 0.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt bit turns to high level when the last data pointed by one outlink descriptor has been read from memory for Tx channel 0.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt bit turns to high level when detecting inlink descriptor error, including owner error, the second and third word error of inlink descriptor for Rx channel 0.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt bit turns to high level when detecting outlink descriptor error, including owner error, the second and third word error of outlink descriptor for Tx channel 0.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt bit turns to high level when Rx buffer pointed by inlink is full and receiving data is not completed, but there is no more inlink for Rx channel 0.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt bit turns to high level when data corresponding a outlink (includes one link descriptor or few link descriptors) is transmitted out for Tx channel 0.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: This raw interrupt bit turns to high level when level 1 fifo of Rx channel 0 is overflow.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: This raw interrupt bit turns to high level when level 1 fifo of Rx channel 0 is underflow.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: This raw interrupt bit turns to high level when level 1 fifo of Tx channel 0 is overflow.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: This raw interrupt bit turns to high level when level 1 fifo of Tx channel 0 is underflow.
+  side_effects: null
+- id: INT_ST_CH1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt status bit for the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt status bit for the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt status bit for the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt status bit for the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt status bit for the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt status bit for the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt status bit for the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt status bit for the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt status bit for the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: The raw interrupt status bit for the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: The raw interrupt status bit for the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: The raw interrupt status bit for the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: The raw interrupt status bit for the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_ENA_CH1
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The interrupt enable bit for the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The interrupt enable bit for the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The interrupt enable bit for the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The interrupt enable bit for the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The interrupt enable bit for the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The interrupt enable bit for the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The interrupt enable bit for the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The interrupt enable bit for the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The interrupt enable bit for the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: The interrupt enable bit for the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: The interrupt enable bit for the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: The interrupt enable bit for the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: The interrupt enable bit for the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_CLR_CH1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to clear the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to clear the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to clear the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to clear the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to clear the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to clear the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: Set this bit to clear the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to clear the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: Set this bit to clear the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to clear the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: Set this bit to clear the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: Set this bit to clear the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to clear the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_RAW_CH2
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received for Rx channel 0.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received for Rx channel 0. For UHCI0, the raw interrupt bit turns to high level when the last data pointed by one inlink descriptor has been received and no data error is detected for Rx channel 0.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt bit turns to high level when data error is detected only in the case that the peripheral is UHCI0 for Rx channel 0. For other peripherals, this raw interrupt is reserved.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt bit turns to high level when the last data pointed by one outlink descriptor has been transmitted to peripherals for Tx channel 0.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt bit turns to high level when the last data pointed by one outlink descriptor has been read from memory for Tx channel 0.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt bit turns to high level when detecting inlink descriptor error, including owner error, the second and third word error of inlink descriptor for Rx channel 0.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt bit turns to high level when detecting outlink descriptor error, including owner error, the second and third word error of outlink descriptor for Tx channel 0.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt bit turns to high level when Rx buffer pointed by inlink is full and receiving data is not completed, but there is no more inlink for Rx channel 0.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt bit turns to high level when data corresponding a outlink (includes one link descriptor or few link descriptors) is transmitted out for Tx channel 0.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: This raw interrupt bit turns to high level when level 1 fifo of Rx channel 0 is overflow.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: This raw interrupt bit turns to high level when level 1 fifo of Rx channel 0 is underflow.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: This raw interrupt bit turns to high level when level 1 fifo of Tx channel 0 is overflow.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: This raw interrupt bit turns to high level when level 1 fifo of Tx channel 0 is underflow.
+  side_effects: null
+- id: INT_ST_CH2
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt status bit for the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt status bit for the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt status bit for the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt status bit for the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt status bit for the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt status bit for the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt status bit for the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt status bit for the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt status bit for the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: The raw interrupt status bit for the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: The raw interrupt status bit for the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: The raw interrupt status bit for the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: The raw interrupt status bit for the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_ENA_CH2
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: The interrupt enable bit for the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: The interrupt enable bit for the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: The interrupt enable bit for the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: The interrupt enable bit for the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: The interrupt enable bit for the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: The interrupt enable bit for the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: The interrupt enable bit for the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: The interrupt enable bit for the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: The interrupt enable bit for the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: The interrupt enable bit for the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: The interrupt enable bit for the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: The interrupt enable bit for the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: The interrupt enable bit for the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: INT_CLR_CH2
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_DONE
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to clear the IN_DONE_CH_INT interrupt.
+  - name: IN_SUC_EOF
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to clear the IN_SUC_EOF_CH_INT interrupt.
+  - name: IN_ERR_EOF
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to clear the IN_ERR_EOF_CH_INT interrupt.
+  - name: OUT_DONE
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to clear the OUT_DONE_CH_INT interrupt.
+  - name: OUT_EOF
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to clear the OUT_EOF_CH_INT interrupt.
+  - name: IN_DSCR_ERR
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to clear the IN_DSCR_ERR_CH_INT interrupt.
+  - name: OUT_DSCR_ERR
+    bit_range:
+    - 6
+    - 6
+    description: Set this bit to clear the OUT_DSCR_ERR_CH_INT interrupt.
+  - name: IN_DSCR_EMPTY
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to clear the IN_DSCR_EMPTY_CH_INT interrupt.
+  - name: OUT_TOTAL_EOF
+    bit_range:
+    - 8
+    - 8
+    description: Set this bit to clear the OUT_TOTAL_EOF_CH_INT interrupt.
+  - name: INFIFO_OVF
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to clear the INFIFO_OVF_L1_CH_INT interrupt.
+  - name: INFIFO_UDF
+    bit_range:
+    - 10
+    - 10
+    description: Set this bit to clear the INFIFO_UDF_L1_CH_INT interrupt.
+  - name: OUTFIFO_OVF
+    bit_range:
+    - 11
+    - 11
+    description: Set this bit to clear the OUTFIFO_OVF_L1_CH_INT interrupt.
+  - name: OUTFIFO_UDF
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to clear the OUTFIFO_UDF_L1_CH_INT interrupt.
+  side_effects: null
+- id: AHB_TEST
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AHB_TESTMODE
+    bit_range:
+    - 2
+    - 0
+    description: reserved
+  - name: AHB_TESTADDR
+    bit_range:
+    - 5
+    - 4
+    description: reserved
+  side_effects: null
+- id: MISC_CONF
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AHBM_RST_INTER
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit, then clear this bit to reset the internal ahb FSM.
+  - name: ARB_PRI_DIS
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to disable priority arbitration function.
+  - name: CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: reg_clk_en
+  side_effects: null
+- id: DATE
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 33587792
+  fields:
+  - name: DATE
+    bit_range:
+    - 31
+    - 0
+    description: register version.
+  side_effects: null
+- id: IN_CONF0_CH0
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_RST
+    bit_range:
+    - 0
+    - 0
+    description: This bit is used to reset DMA channel 0 Rx FSM and Rx FIFO pointer.
+  - name: IN_LOOP_TEST
+    bit_range:
+    - 1
+    - 1
+    description: reserved
+  - name: INDSCR_BURST_EN
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to 1 to enable INCR burst transfer for Rx channel 0 reading link descriptor when accessing internal SRAM.
+  - name: IN_DATA_BURST_EN
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to 1 to enable INCR burst transfer for Rx channel 0 receiving data when accessing internal SRAM.
+  - name: MEM_TRANS_EN
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit 1 to enable automatic transmitting data from memory to memory via DMA.
+  side_effects: null
+- id: IN_CONF1_CH0
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_CHECK_OWNER
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to enable checking the owner attribute of the link descriptor.
+  side_effects: null
+- id: INFIFO_STATUS_CH0
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 125829123
+  fields:
+  - name: INFIFO_FULL
+    bit_range:
+    - 0
+    - 0
+    description: L1 Rx FIFO full signal for Rx channel 0.
+  - name: INFIFO_EMPTY
+    bit_range:
+    - 1
+    - 1
+    description: L1 Rx FIFO empty signal for Rx channel 0.
+  - name: INFIFO_CNT
+    bit_range:
+    - 7
+    - 2
+    description: The register stores the byte number of the data in L1 Rx FIFO for Rx channel 0.
+  - name: IN_REMAIN_UNDER_1B
+    bit_range:
+    - 23
+    - 23
+    description: reserved
+  - name: IN_REMAIN_UNDER_2B
+    bit_range:
+    - 24
+    - 24
+    description: reserved
+  - name: IN_REMAIN_UNDER_3B
+    bit_range:
+    - 25
+    - 25
+    description: reserved
+  - name: IN_REMAIN_UNDER_4B
+    bit_range:
+    - 26
+    - 26
+    description: reserved
+  - name: IN_BUF_HUNGRY
+    bit_range:
+    - 27
+    - 27
+    description: reserved
+  side_effects: null
+- id: IN_POP_CH0
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 2048
+  fields:
+  - name: INFIFO_RDATA
+    bit_range:
+    - 11
+    - 0
+    description: This register stores the data popping from DMA FIFO.
+  - name: INFIFO_POP
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to pop data from DMA FIFO.
+  side_effects: null
+- id: IN_LINK_CH0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 17825792
+  fields:
+  - name: INLINK_ADDR
+    bit_range:
+    - 19
+    - 0
+    description: This register stores the 20 least significant bits of the first inlink descriptor's address.
+  - name: INLINK_AUTO_RET
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to return to current inlink descriptor's address, when there are some errors in current receiving data.
+  - name: INLINK_STOP
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to stop dealing with the inlink descriptors.
+  - name: INLINK_START
+    bit_range:
+    - 22
+    - 22
+    description: Set this bit to start dealing with the inlink descriptors.
+  - name: INLINK_RESTART
+    bit_range:
+    - 23
+    - 23
+    description: Set this bit to mount a new inlink descriptor.
+  - name: INLINK_PARK
+    bit_range:
+    - 24
+    - 24
+    description: '1: the inlink descriptor''s FSM is in idle state.  0: the inlink descriptor''s FSM is working.'
+  side_effects: null
+- id: IN_STATE_CH0
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_ADDR
+    bit_range:
+    - 17
+    - 0
+    description: This register stores the current inlink descriptor's address.
+  - name: IN_DSCR_STATE
+    bit_range:
+    - 19
+    - 18
+    description: reserved
+  - name: IN_STATE
+    bit_range:
+    - 22
+    - 20
+    description: reserved
+  side_effects: null
+- id: IN_SUC_EOF_DES_ADDR_CH0
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SUC_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the inlink descriptor when the EOF bit in this descriptor is 1.
+  side_effects: null
+- id: IN_ERR_EOF_DES_ADDR_CH0
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_ERR_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the inlink descriptor when there are some errors in current receiving data. Only used when peripheral is UHCI0.
+  side_effects: null
+- id: IN_DSCR_CH0
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR
+    bit_range:
+    - 31
+    - 0
+    description: The address of the current inlink descriptor x.
+  side_effects: null
+- id: IN_DSCR_BF0_CH0
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_BF0
+    bit_range:
+    - 31
+    - 0
+    description: The address of the last inlink descriptor x-1.
+  side_effects: null
+- id: IN_DSCR_BF1_CH0
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_BF1
+    bit_range:
+    - 31
+    - 0
+    description: The address of the second-to-last inlink descriptor x-2.
+  side_effects: null
+- id: IN_PRI_CH0
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_PRI
+    bit_range:
+    - 3
+    - 0
+    description: The priority of Rx channel 0. The larger of the value, the higher of the priority.
+  side_effects: null
+- id: IN_PERI_SEL_CH0
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: PERI_IN_SEL
+    bit_range:
+    - 5
+    - 0
+    description: 'This register is used to select peripheral for Rx channel 0. 0:SPI2. 1: reserved. 2: UHCI0. 3: I2S0. 4: reserved. 5: reserved. 6: AES. 7: SHA. 8: ADC_DAC.'
+  side_effects: null
+- id: OUT_CONF0_CH0
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: OUT_RST
+    bit_range:
+    - 0
+    - 0
+    description: This bit is used to reset DMA channel 0 Tx FSM and Tx FIFO pointer.
+  - name: OUT_LOOP_TEST
+    bit_range:
+    - 1
+    - 1
+    description: reserved
+  - name: OUT_AUTO_WRBACK
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to enable automatic outlink-writeback when all the data in tx buffer has been transmitted.
+  - name: OUT_EOF_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'EOF flag generation mode when transmitting data. 1: EOF flag for Tx channel 0 is generated when data need to transmit has been popped from FIFO in DMA'
+  - name: OUTDSCR_BURST_EN
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to 1 to enable INCR burst transfer for Tx channel 0 reading link descriptor when accessing internal SRAM.
+  - name: OUT_DATA_BURST_EN
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to 1 to enable INCR burst transfer for Tx channel 0 transmitting data when accessing internal SRAM.
+  side_effects: null
+- id: OUT_CONF1_CH0
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_CHECK_OWNER
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to enable checking the owner attribute of the link descriptor.
+  side_effects: null
+- id: OUTFIFO_STATUS_CH0
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 125829122
+  fields:
+  - name: OUTFIFO_FULL
+    bit_range:
+    - 0
+    - 0
+    description: L1 Tx FIFO full signal for Tx channel 0.
+  - name: OUTFIFO_EMPTY
+    bit_range:
+    - 1
+    - 1
+    description: L1 Tx FIFO empty signal for Tx channel 0.
+  - name: OUTFIFO_CNT
+    bit_range:
+    - 7
+    - 2
+    description: The register stores the byte number of the data in L1 Tx FIFO for Tx channel 0.
+  - name: OUT_REMAIN_UNDER_1B
+    bit_range:
+    - 23
+    - 23
+    description: reserved
+  - name: OUT_REMAIN_UNDER_2B
+    bit_range:
+    - 24
+    - 24
+    description: reserved
+  - name: OUT_REMAIN_UNDER_3B
+    bit_range:
+    - 25
+    - 25
+    description: reserved
+  - name: OUT_REMAIN_UNDER_4B
+    bit_range:
+    - 26
+    - 26
+    description: reserved
+  side_effects: null
+- id: OUT_PUSH_CH0
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFIFO_WDATA
+    bit_range:
+    - 8
+    - 0
+    description: This register stores the data that need to be pushed into DMA FIFO.
+  - name: OUTFIFO_PUSH
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to push data into DMA FIFO.
+  side_effects: null
+- id: OUT_LINK_CH0
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 8388608
+  fields:
+  - name: OUTLINK_ADDR
+    bit_range:
+    - 19
+    - 0
+    description: This register stores the 20 least significant bits of the first outlink descriptor's address.
+  - name: OUTLINK_STOP
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to stop dealing with the outlink descriptors.
+  - name: OUTLINK_START
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to start dealing with the outlink descriptors.
+  - name: OUTLINK_RESTART
+    bit_range:
+    - 22
+    - 22
+    description: Set this bit to restart a new outlink from the last address.
+  - name: OUTLINK_PARK
+    bit_range:
+    - 23
+    - 23
+    description: '1: the outlink descriptor''s FSM is in idle state.  0: the outlink descriptor''s FSM is working.'
+  side_effects: null
+- id: OUT_STATE_CH0
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_ADDR
+    bit_range:
+    - 17
+    - 0
+    description: This register stores the current outlink descriptor's address.
+  - name: OUT_DSCR_STATE
+    bit_range:
+    - 19
+    - 18
+    description: reserved
+  - name: OUT_STATE
+    bit_range:
+    - 22
+    - 20
+    description: reserved
+  side_effects: null
+- id: OUT_EOF_DES_ADDR_CH0
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the outlink descriptor when the EOF bit in this descriptor is 1.
+  side_effects: null
+- id: OUT_EOF_BFR_DES_ADDR_CH0
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EOF_BFR_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the outlink descriptor before the last outlink descriptor.
+  side_effects: null
+- id: OUT_DSCR_CH0
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR
+    bit_range:
+    - 31
+    - 0
+    description: The address of the current outlink descriptor y.
+  side_effects: null
+- id: OUT_DSCR_BF0_CH0
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_BF0
+    bit_range:
+    - 31
+    - 0
+    description: The address of the last outlink descriptor y-1.
+  side_effects: null
+- id: OUT_DSCR_BF1_CH0
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_BF1
+    bit_range:
+    - 31
+    - 0
+    description: The address of the second-to-last inlink descriptor x-2.
+  side_effects: null
+- id: OUT_PRI_CH0
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_PRI
+    bit_range:
+    - 3
+    - 0
+    description: The priority of Tx channel 0. The larger of the value, the higher of the priority.
+  side_effects: null
+- id: OUT_PERI_SEL_CH0
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: PERI_OUT_SEL
+    bit_range:
+    - 5
+    - 0
+    description: 'This register is used to select peripheral for Tx channel 0. 0:SPI2. 1: reserved. 2: UHCI0. 3: I2S0. 4: reserved. 5: reserved. 6: AES. 7: SHA. 8: ADC_DAC.'
+  side_effects: null
+- id: IN_CONF0_CH1
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_RST
+    bit_range:
+    - 0
+    - 0
+    description: This bit is used to reset DMA channel 0 Rx FSM and Rx FIFO pointer.
+  - name: IN_LOOP_TEST
+    bit_range:
+    - 1
+    - 1
+    description: reserved
+  - name: INDSCR_BURST_EN
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to 1 to enable INCR burst transfer for Rx channel 0 reading link descriptor when accessing internal SRAM.
+  - name: IN_DATA_BURST_EN
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to 1 to enable INCR burst transfer for Rx channel 0 receiving data when accessing internal SRAM.
+  - name: MEM_TRANS_EN
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit 1 to enable automatic transmitting data from memory to memory via DMA.
+  side_effects: null
+- id: IN_CONF1_CH1
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_CHECK_OWNER
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to enable checking the owner attribute of the link descriptor.
+  side_effects: null
+- id: INFIFO_STATUS_CH1
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 125829123
+  fields:
+  - name: INFIFO_FULL
+    bit_range:
+    - 0
+    - 0
+    description: L1 Rx FIFO full signal for Rx channel 1.
+  - name: INFIFO_EMPTY
+    bit_range:
+    - 1
+    - 1
+    description: L1 Rx FIFO empty signal for Rx channel 1.
+  - name: INFIFO_CNT
+    bit_range:
+    - 7
+    - 2
+    description: The register stores the byte number of the data in L1 Rx FIFO for Rx channel 1.
+  - name: IN_REMAIN_UNDER_1B
+    bit_range:
+    - 23
+    - 23
+    description: reserved
+  - name: IN_REMAIN_UNDER_2B
+    bit_range:
+    - 24
+    - 24
+    description: reserved
+  - name: IN_REMAIN_UNDER_3B
+    bit_range:
+    - 25
+    - 25
+    description: reserved
+  - name: IN_REMAIN_UNDER_4B
+    bit_range:
+    - 26
+    - 26
+    description: reserved
+  - name: IN_BUF_HUNGRY
+    bit_range:
+    - 27
+    - 27
+    description: reserved
+  side_effects: null
+- id: IN_POP_CH1
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 2048
+  fields:
+  - name: INFIFO_RDATA
+    bit_range:
+    - 11
+    - 0
+    description: This register stores the data popping from DMA FIFO.
+  - name: INFIFO_POP
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to pop data from DMA FIFO.
+  side_effects: null
+- id: IN_LINK_CH1
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 17825792
+  fields:
+  - name: INLINK_ADDR
+    bit_range:
+    - 19
+    - 0
+    description: This register stores the 20 least significant bits of the first inlink descriptor's address.
+  - name: INLINK_AUTO_RET
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to return to current inlink descriptor's address, when there are some errors in current receiving data.
+  - name: INLINK_STOP
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to stop dealing with the inlink descriptors.
+  - name: INLINK_START
+    bit_range:
+    - 22
+    - 22
+    description: Set this bit to start dealing with the inlink descriptors.
+  - name: INLINK_RESTART
+    bit_range:
+    - 23
+    - 23
+    description: Set this bit to mount a new inlink descriptor.
+  - name: INLINK_PARK
+    bit_range:
+    - 24
+    - 24
+    description: '1: the inlink descriptor''s FSM is in idle state.  0: the inlink descriptor''s FSM is working.'
+  side_effects: null
+- id: IN_STATE_CH1
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_ADDR
+    bit_range:
+    - 17
+    - 0
+    description: This register stores the current inlink descriptor's address.
+  - name: IN_DSCR_STATE
+    bit_range:
+    - 19
+    - 18
+    description: reserved
+  - name: IN_STATE
+    bit_range:
+    - 22
+    - 20
+    description: reserved
+  side_effects: null
+- id: IN_SUC_EOF_DES_ADDR_CH1
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SUC_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the inlink descriptor when the EOF bit in this descriptor is 1.
+  side_effects: null
+- id: IN_ERR_EOF_DES_ADDR_CH1
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_ERR_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the inlink descriptor when there are some errors in current receiving data. Only used when peripheral is UHCI0.
+  side_effects: null
+- id: IN_DSCR_CH1
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR
+    bit_range:
+    - 31
+    - 0
+    description: The address of the current inlink descriptor x.
+  side_effects: null
+- id: IN_DSCR_BF0_CH1
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_BF0
+    bit_range:
+    - 31
+    - 0
+    description: The address of the last inlink descriptor x-1.
+  side_effects: null
+- id: IN_DSCR_BF1_CH1
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_BF1
+    bit_range:
+    - 31
+    - 0
+    description: The address of the second-to-last inlink descriptor x-2.
+  side_effects: null
+- id: IN_PRI_CH1
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_PRI
+    bit_range:
+    - 3
+    - 0
+    description: The priority of Rx channel 0. The larger of the value, the higher of the priority.
+  side_effects: null
+- id: IN_PERI_SEL_CH1
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: PERI_IN_SEL
+    bit_range:
+    - 5
+    - 0
+    description: 'This register is used to select peripheral for Rx channel 0. 0:SPI2. 1: reserved. 2: UHCI0. 3: I2S0. 4: reserved. 5: reserved. 6: AES. 7: SHA. 8: ADC_DAC.'
+  side_effects: null
+- id: OUT_CONF0_CH1
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: OUT_RST
+    bit_range:
+    - 0
+    - 0
+    description: This bit is used to reset DMA channel 0 Tx FSM and Tx FIFO pointer.
+  - name: OUT_LOOP_TEST
+    bit_range:
+    - 1
+    - 1
+    description: reserved
+  - name: OUT_AUTO_WRBACK
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to enable automatic outlink-writeback when all the data in tx buffer has been transmitted.
+  - name: OUT_EOF_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'EOF flag generation mode when transmitting data. 1: EOF flag for Tx channel 0 is generated when data need to transmit has been popped from FIFO in DMA'
+  - name: OUTDSCR_BURST_EN
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to 1 to enable INCR burst transfer for Tx channel 0 reading link descriptor when accessing internal SRAM.
+  - name: OUT_DATA_BURST_EN
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to 1 to enable INCR burst transfer for Tx channel 0 transmitting data when accessing internal SRAM.
+  side_effects: null
+- id: OUT_CONF1_CH1
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_CHECK_OWNER
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to enable checking the owner attribute of the link descriptor.
+  side_effects: null
+- id: OUTFIFO_STATUS_CH1
+  address_offset: 408
+  size: 32
+  access: READ_WRITE
+  reset_value: 125829122
+  fields:
+  - name: OUTFIFO_FULL
+    bit_range:
+    - 0
+    - 0
+    description: L1 Tx FIFO full signal for Tx channel 1.
+  - name: OUTFIFO_EMPTY
+    bit_range:
+    - 1
+    - 1
+    description: L1 Tx FIFO empty signal for Tx channel 1.
+  - name: OUTFIFO_CNT
+    bit_range:
+    - 7
+    - 2
+    description: The register stores the byte number of the data in L1 Tx FIFO for Tx channel 1.
+  - name: OUT_REMAIN_UNDER_1B
+    bit_range:
+    - 23
+    - 23
+    description: reserved
+  - name: OUT_REMAIN_UNDER_2B
+    bit_range:
+    - 24
+    - 24
+    description: reserved
+  - name: OUT_REMAIN_UNDER_3B
+    bit_range:
+    - 25
+    - 25
+    description: reserved
+  - name: OUT_REMAIN_UNDER_4B
+    bit_range:
+    - 26
+    - 26
+    description: reserved
+  side_effects: null
+- id: OUT_PUSH_CH1
+  address_offset: 412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFIFO_WDATA
+    bit_range:
+    - 8
+    - 0
+    description: This register stores the data that need to be pushed into DMA FIFO.
+  - name: OUTFIFO_PUSH
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to push data into DMA FIFO.
+  side_effects: null
+- id: OUT_LINK_CH1
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 8388608
+  fields:
+  - name: OUTLINK_ADDR
+    bit_range:
+    - 19
+    - 0
+    description: This register stores the 20 least significant bits of the first outlink descriptor's address.
+  - name: OUTLINK_STOP
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to stop dealing with the outlink descriptors.
+  - name: OUTLINK_START
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to start dealing with the outlink descriptors.
+  - name: OUTLINK_RESTART
+    bit_range:
+    - 22
+    - 22
+    description: Set this bit to restart a new outlink from the last address.
+  - name: OUTLINK_PARK
+    bit_range:
+    - 23
+    - 23
+    description: '1: the outlink descriptor''s FSM is in idle state.  0: the outlink descriptor''s FSM is working.'
+  side_effects: null
+- id: OUT_STATE_CH1
+  address_offset: 420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_ADDR
+    bit_range:
+    - 17
+    - 0
+    description: This register stores the current outlink descriptor's address.
+  - name: OUT_DSCR_STATE
+    bit_range:
+    - 19
+    - 18
+    description: reserved
+  - name: OUT_STATE
+    bit_range:
+    - 22
+    - 20
+    description: reserved
+  side_effects: null
+- id: OUT_EOF_DES_ADDR_CH1
+  address_offset: 424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the outlink descriptor when the EOF bit in this descriptor is 1.
+  side_effects: null
+- id: OUT_EOF_BFR_DES_ADDR_CH1
+  address_offset: 428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EOF_BFR_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the outlink descriptor before the last outlink descriptor.
+  side_effects: null
+- id: OUT_DSCR_CH1
+  address_offset: 432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR
+    bit_range:
+    - 31
+    - 0
+    description: The address of the current outlink descriptor y.
+  side_effects: null
+- id: OUT_DSCR_BF0_CH1
+  address_offset: 436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_BF0
+    bit_range:
+    - 31
+    - 0
+    description: The address of the last outlink descriptor y-1.
+  side_effects: null
+- id: OUT_DSCR_BF1_CH1
+  address_offset: 440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_BF1
+    bit_range:
+    - 31
+    - 0
+    description: The address of the second-to-last inlink descriptor x-2.
+  side_effects: null
+- id: OUT_PRI_CH1
+  address_offset: 444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_PRI
+    bit_range:
+    - 3
+    - 0
+    description: The priority of Tx channel 0. The larger of the value, the higher of the priority.
+  side_effects: null
+- id: OUT_PERI_SEL_CH1
+  address_offset: 448
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: PERI_OUT_SEL
+    bit_range:
+    - 5
+    - 0
+    description: 'This register is used to select peripheral for Tx channel 0. 0:SPI2. 1: reserved. 2: UHCI0. 3: I2S0. 4: reserved. 5: reserved. 6: AES. 7: SHA. 8: ADC_DAC.'
+  side_effects: null
+- id: IN_CONF0_CH2
+  address_offset: 496
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_RST
+    bit_range:
+    - 0
+    - 0
+    description: This bit is used to reset DMA channel 0 Rx FSM and Rx FIFO pointer.
+  - name: IN_LOOP_TEST
+    bit_range:
+    - 1
+    - 1
+    description: reserved
+  - name: INDSCR_BURST_EN
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to 1 to enable INCR burst transfer for Rx channel 0 reading link descriptor when accessing internal SRAM.
+  - name: IN_DATA_BURST_EN
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to 1 to enable INCR burst transfer for Rx channel 0 receiving data when accessing internal SRAM.
+  - name: MEM_TRANS_EN
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit 1 to enable automatic transmitting data from memory to memory via DMA.
+  side_effects: null
+- id: IN_CONF1_CH2
+  address_offset: 500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_CHECK_OWNER
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to enable checking the owner attribute of the link descriptor.
+  side_effects: null
+- id: INFIFO_STATUS_CH2
+  address_offset: 504
+  size: 32
+  access: READ_WRITE
+  reset_value: 125829123
+  fields:
+  - name: INFIFO_FULL
+    bit_range:
+    - 0
+    - 0
+    description: L1 Rx FIFO full signal for Rx channel 2.
+  - name: INFIFO_EMPTY
+    bit_range:
+    - 1
+    - 1
+    description: L1 Rx FIFO empty signal for Rx channel 2.
+  - name: INFIFO_CNT
+    bit_range:
+    - 7
+    - 2
+    description: The register stores the byte number of the data in L1 Rx FIFO for Rx channel 2.
+  - name: IN_REMAIN_UNDER_1B
+    bit_range:
+    - 23
+    - 23
+    description: reserved
+  - name: IN_REMAIN_UNDER_2B
+    bit_range:
+    - 24
+    - 24
+    description: reserved
+  - name: IN_REMAIN_UNDER_3B
+    bit_range:
+    - 25
+    - 25
+    description: reserved
+  - name: IN_REMAIN_UNDER_4B
+    bit_range:
+    - 26
+    - 26
+    description: reserved
+  - name: IN_BUF_HUNGRY
+    bit_range:
+    - 27
+    - 27
+    description: reserved
+  side_effects: null
+- id: IN_POP_CH2
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 2048
+  fields:
+  - name: INFIFO_RDATA
+    bit_range:
+    - 11
+    - 0
+    description: This register stores the data popping from DMA FIFO.
+  - name: INFIFO_POP
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to pop data from DMA FIFO.
+  side_effects: null
+- id: IN_LINK_CH2
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 17825792
+  fields:
+  - name: INLINK_ADDR
+    bit_range:
+    - 19
+    - 0
+    description: This register stores the 20 least significant bits of the first inlink descriptor's address.
+  - name: INLINK_AUTO_RET
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to return to current inlink descriptor's address, when there are some errors in current receiving data.
+  - name: INLINK_STOP
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to stop dealing with the inlink descriptors.
+  - name: INLINK_START
+    bit_range:
+    - 22
+    - 22
+    description: Set this bit to start dealing with the inlink descriptors.
+  - name: INLINK_RESTART
+    bit_range:
+    - 23
+    - 23
+    description: Set this bit to mount a new inlink descriptor.
+  - name: INLINK_PARK
+    bit_range:
+    - 24
+    - 24
+    description: '1: the inlink descriptor''s FSM is in idle state.  0: the inlink descriptor''s FSM is working.'
+  side_effects: null
+- id: IN_STATE_CH2
+  address_offset: 516
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_ADDR
+    bit_range:
+    - 17
+    - 0
+    description: This register stores the current inlink descriptor's address.
+  - name: IN_DSCR_STATE
+    bit_range:
+    - 19
+    - 18
+    description: reserved
+  - name: IN_STATE
+    bit_range:
+    - 22
+    - 20
+    description: reserved
+  side_effects: null
+- id: IN_SUC_EOF_DES_ADDR_CH2
+  address_offset: 520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SUC_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the inlink descriptor when the EOF bit in this descriptor is 1.
+  side_effects: null
+- id: IN_ERR_EOF_DES_ADDR_CH2
+  address_offset: 524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_ERR_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the inlink descriptor when there are some errors in current receiving data. Only used when peripheral is UHCI0.
+  side_effects: null
+- id: IN_DSCR_CH2
+  address_offset: 528
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR
+    bit_range:
+    - 31
+    - 0
+    description: The address of the current inlink descriptor x.
+  side_effects: null
+- id: IN_DSCR_BF0_CH2
+  address_offset: 532
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_BF0
+    bit_range:
+    - 31
+    - 0
+    description: The address of the last inlink descriptor x-1.
+  side_effects: null
+- id: IN_DSCR_BF1_CH2
+  address_offset: 536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INLINK_DSCR_BF1
+    bit_range:
+    - 31
+    - 0
+    description: The address of the second-to-last inlink descriptor x-2.
+  side_effects: null
+- id: IN_PRI_CH2
+  address_offset: 540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_PRI
+    bit_range:
+    - 3
+    - 0
+    description: The priority of Rx channel 0. The larger of the value, the higher of the priority.
+  side_effects: null
+- id: IN_PERI_SEL_CH2
+  address_offset: 544
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: PERI_IN_SEL
+    bit_range:
+    - 5
+    - 0
+    description: 'This register is used to select peripheral for Rx channel 0. 0:SPI2. 1: reserved. 2: UHCI0. 3: I2S0. 4: reserved. 5: reserved. 6: AES. 7: SHA. 8: ADC_DAC.'
+  side_effects: null
+- id: OUT_CONF0_CH2
+  address_offset: 592
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: OUT_RST
+    bit_range:
+    - 0
+    - 0
+    description: This bit is used to reset DMA channel 0 Tx FSM and Tx FIFO pointer.
+  - name: OUT_LOOP_TEST
+    bit_range:
+    - 1
+    - 1
+    description: reserved
+  - name: OUT_AUTO_WRBACK
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to enable automatic outlink-writeback when all the data in tx buffer has been transmitted.
+  - name: OUT_EOF_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'EOF flag generation mode when transmitting data. 1: EOF flag for Tx channel 0 is generated when data need to transmit has been popped from FIFO in DMA'
+  - name: OUTDSCR_BURST_EN
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to 1 to enable INCR burst transfer for Tx channel 0 reading link descriptor when accessing internal SRAM.
+  - name: OUT_DATA_BURST_EN
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to 1 to enable INCR burst transfer for Tx channel 0 transmitting data when accessing internal SRAM.
+  side_effects: null
+- id: OUT_CONF1_CH2
+  address_offset: 596
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_CHECK_OWNER
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to enable checking the owner attribute of the link descriptor.
+  side_effects: null
+- id: OUTFIFO_STATUS_CH2
+  address_offset: 600
+  size: 32
+  access: READ_WRITE
+  reset_value: 125829122
+  fields:
+  - name: OUTFIFO_FULL
+    bit_range:
+    - 0
+    - 0
+    description: L1 Tx FIFO full signal for Tx channel 2.
+  - name: OUTFIFO_EMPTY
+    bit_range:
+    - 1
+    - 1
+    description: L1 Tx FIFO empty signal for Tx channel 2.
+  - name: OUTFIFO_CNT
+    bit_range:
+    - 7
+    - 2
+    description: The register stores the byte number of the data in L1 Tx FIFO for Tx channel 2.
+  - name: OUT_REMAIN_UNDER_1B
+    bit_range:
+    - 23
+    - 23
+    description: reserved
+  - name: OUT_REMAIN_UNDER_2B
+    bit_range:
+    - 24
+    - 24
+    description: reserved
+  - name: OUT_REMAIN_UNDER_3B
+    bit_range:
+    - 25
+    - 25
+    description: reserved
+  - name: OUT_REMAIN_UNDER_4B
+    bit_range:
+    - 26
+    - 26
+    description: reserved
+  side_effects: null
+- id: OUT_PUSH_CH2
+  address_offset: 604
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFIFO_WDATA
+    bit_range:
+    - 8
+    - 0
+    description: This register stores the data that need to be pushed into DMA FIFO.
+  - name: OUTFIFO_PUSH
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to push data into DMA FIFO.
+  side_effects: null
+- id: OUT_LINK_CH2
+  address_offset: 608
+  size: 32
+  access: READ_WRITE
+  reset_value: 8388608
+  fields:
+  - name: OUTLINK_ADDR
+    bit_range:
+    - 19
+    - 0
+    description: This register stores the 20 least significant bits of the first outlink descriptor's address.
+  - name: OUTLINK_STOP
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to stop dealing with the outlink descriptors.
+  - name: OUTLINK_START
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to start dealing with the outlink descriptors.
+  - name: OUTLINK_RESTART
+    bit_range:
+    - 22
+    - 22
+    description: Set this bit to restart a new outlink from the last address.
+  - name: OUTLINK_PARK
+    bit_range:
+    - 23
+    - 23
+    description: '1: the outlink descriptor''s FSM is in idle state.  0: the outlink descriptor''s FSM is working.'
+  side_effects: null
+- id: OUT_STATE_CH2
+  address_offset: 612
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_ADDR
+    bit_range:
+    - 17
+    - 0
+    description: This register stores the current outlink descriptor's address.
+  - name: OUT_DSCR_STATE
+    bit_range:
+    - 19
+    - 18
+    description: reserved
+  - name: OUT_STATE
+    bit_range:
+    - 22
+    - 20
+    description: reserved
+  side_effects: null
+- id: OUT_EOF_DES_ADDR_CH2
+  address_offset: 616
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EOF_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the outlink descriptor when the EOF bit in this descriptor is 1.
+  side_effects: null
+- id: OUT_EOF_BFR_DES_ADDR_CH2
+  address_offset: 620
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EOF_BFR_DES_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register stores the address of the outlink descriptor before the last outlink descriptor.
+  side_effects: null
+- id: OUT_DSCR_CH2
+  address_offset: 624
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR
+    bit_range:
+    - 31
+    - 0
+    description: The address of the current outlink descriptor y.
+  side_effects: null
+- id: OUT_DSCR_BF0_CH2
+  address_offset: 628
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_BF0
+    bit_range:
+    - 31
+    - 0
+    description: The address of the last outlink descriptor y-1.
+  side_effects: null
+- id: OUT_DSCR_BF1_CH2
+  address_offset: 632
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTLINK_DSCR_BF1
+    bit_range:
+    - 31
+    - 0
+    description: The address of the second-to-last inlink descriptor x-2.
+  side_effects: null
+- id: OUT_PRI_CH2
+  address_offset: 636
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_PRI
+    bit_range:
+    - 3
+    - 0
+    description: The priority of Tx channel 0. The larger of the value, the higher of the priority.
+  side_effects: null
+- id: OUT_PERI_SEL_CH2
+  address_offset: 640
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: PERI_OUT_SEL
+    bit_range:
+    - 5
+    - 0
+    description: 'This register is used to select peripheral for Tx channel 0. 0:SPI2. 1: reserved. 2: UHCI0. 3: I2S0. 4: reserved. 5: reserved. 6: AES. 7: SHA. 8: ADC_DAC.'
+  side_effects: null
+interrupts:
+  DMA_CH0: 44
+  DMA_CH1: 45
+  DMA_CH2: 46
+  DMA_APBPERI_PMS: 55
+timing: null

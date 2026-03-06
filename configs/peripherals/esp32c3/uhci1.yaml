@@ -1,0 +1,777 @@
+peripheral: UHCI1
+version: 0.1.0
+registers:
+- id: CONF0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1760
+  fields:
+  - name: TX_RST
+    bit_range:
+    - 0
+    - 0
+    description: Write 1, then write 0 to this bit to reset decode state machine.
+  - name: RX_RST
+    bit_range:
+    - 1
+    - 1
+    description: Write 1, then write 0 to this bit to reset encode state machine.
+  - name: UART0_CE
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to link up HCI and UART0.
+  - name: UART1_CE
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to link up HCI and UART1.
+  - name: SEPER_EN
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to separate the data frame using a special char.
+  - name: HEAD_EN
+    bit_range:
+    - 6
+    - 6
+    description: Set this bit to encode the data packet with a formatting header.
+  - name: CRC_REC_EN
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to enable UHCI to receive the 16 bit CRC.
+  - name: UART_IDLE_EOF_EN
+    bit_range:
+    - 8
+    - 8
+    description: If this bit is set to 1, UHCI will end the payload receiving process when UART has been in idle state.
+  - name: LEN_EOF_EN
+    bit_range:
+    - 9
+    - 9
+    description: If this bit is set to 1, UHCI decoder receiving payload data is end when the receiving byte count has reached the specified value. The value is payload length indicated by UHCI packet header when UHCI_HEAD_EN is 1 or the value is configuration value when UHCI_HEAD_EN is 0. If this bit is set to 0, UHCI decoder receiving payload data is end when 0xc0 is received.
+  - name: ENCODE_CRC_EN
+    bit_range:
+    - 10
+    - 10
+    description: Set this bit to enable data integrity checking by appending a 16 bit CCITT-CRC to end of the payload.
+  - name: CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: '1''b1: Force clock on for register. 1''b0: Support clock only when application writes registers.'
+  - name: UART_RX_BRK_EOF_EN
+    bit_range:
+    - 12
+    - 12
+    description: If this bit is set to 1, UHCI will end payload receive process when NULL frame is received by UART.
+  side_effects: null
+- id: INT_RAW
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_START_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: a
+  - name: TX_START_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: a
+  - name: RX_HUNG_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: a
+  - name: TX_HUNG_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: a
+  - name: SEND_S_REG_Q_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: a
+  - name: SEND_A_REG_Q_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: a
+  - name: OUT_EOF_INT_RAW
+    bit_range:
+    - 6
+    - 6
+    description: This is the interrupt raw bit. Triggered when there are some errors in EOF in the
+  - name: APP_CTRL0_INT_RAW
+    bit_range:
+    - 7
+    - 7
+    description: Soft control int raw bit.
+  - name: APP_CTRL1_INT_RAW
+    bit_range:
+    - 8
+    - 8
+    description: Soft control int raw bit.
+  side_effects: null
+- id: INT_ST
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_START_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: a
+  - name: TX_START_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: a
+  - name: RX_HUNG_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: a
+  - name: TX_HUNG_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: a
+  - name: SEND_S_REG_Q_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: a
+  - name: SEND_A_REG_Q_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: a
+  - name: OUTLINK_EOF_ERR_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: a
+  - name: APP_CTRL0_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: a
+  - name: APP_CTRL1_INT_ST
+    bit_range:
+    - 8
+    - 8
+    description: a
+  side_effects: null
+- id: INT_ENA
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_START_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: a
+  - name: TX_START_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: a
+  - name: RX_HUNG_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: a
+  - name: TX_HUNG_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: a
+  - name: SEND_S_REG_Q_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: a
+  - name: SEND_A_REG_Q_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: a
+  - name: OUTLINK_EOF_ERR_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: a
+  - name: APP_CTRL0_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: a
+  - name: APP_CTRL1_INT_ENA
+    bit_range:
+    - 8
+    - 8
+    description: a
+  side_effects: null
+- id: INT_CLR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_START_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: a
+  - name: TX_START_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: a
+  - name: RX_HUNG_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: a
+  - name: TX_HUNG_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: a
+  - name: SEND_S_REG_Q_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: a
+  - name: SEND_A_REG_Q_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: a
+  - name: OUTLINK_EOF_ERR_INT_CLR
+    bit_range:
+    - 6
+    - 6
+    description: a
+  - name: APP_CTRL0_INT_CLR
+    bit_range:
+    - 7
+    - 7
+    description: a
+  - name: APP_CTRL1_INT_CLR
+    bit_range:
+    - 8
+    - 8
+    description: a
+  side_effects: null
+- id: CONF1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 51
+  fields:
+  - name: CHECK_SUM_EN
+    bit_range:
+    - 0
+    - 0
+    description: a
+  - name: CHECK_SEQ_EN
+    bit_range:
+    - 1
+    - 1
+    description: a
+  - name: CRC_DISABLE
+    bit_range:
+    - 2
+    - 2
+    description: a
+  - name: SAVE_HEAD
+    bit_range:
+    - 3
+    - 3
+    description: a
+  - name: TX_CHECK_SUM_RE
+    bit_range:
+    - 4
+    - 4
+    description: a
+  - name: TX_ACK_NUM_RE
+    bit_range:
+    - 5
+    - 5
+    description: a
+  - name: WAIT_SW_START
+    bit_range:
+    - 7
+    - 7
+    description: a
+  - name: SW_START
+    bit_range:
+    - 8
+    - 8
+    description: a
+  side_effects: null
+- id: STATE0
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_ERR_CAUSE
+    bit_range:
+    - 2
+    - 0
+    description: a
+  - name: DECODE_STATE
+    bit_range:
+    - 5
+    - 3
+    description: a
+  side_effects: null
+- id: STATE1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENCODE_STATE
+    bit_range:
+    - 2
+    - 0
+    description: a
+  side_effects: null
+- id: ESCAPE_CONF
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 51
+  fields:
+  - name: TX_C0_ESC_EN
+    bit_range:
+    - 0
+    - 0
+    description: a
+  - name: TX_DB_ESC_EN
+    bit_range:
+    - 1
+    - 1
+    description: a
+  - name: TX_11_ESC_EN
+    bit_range:
+    - 2
+    - 2
+    description: a
+  - name: TX_13_ESC_EN
+    bit_range:
+    - 3
+    - 3
+    description: a
+  - name: RX_C0_ESC_EN
+    bit_range:
+    - 4
+    - 4
+    description: a
+  - name: RX_DB_ESC_EN
+    bit_range:
+    - 5
+    - 5
+    description: a
+  - name: RX_11_ESC_EN
+    bit_range:
+    - 6
+    - 6
+    description: a
+  - name: RX_13_ESC_EN
+    bit_range:
+    - 7
+    - 7
+    description: a
+  side_effects: null
+- id: HUNG_CONF
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 8456208
+  fields:
+  - name: TXFIFO_TIMEOUT
+    bit_range:
+    - 7
+    - 0
+    description: a
+  - name: TXFIFO_TIMEOUT_SHIFT
+    bit_range:
+    - 10
+    - 8
+    description: a
+  - name: TXFIFO_TIMEOUT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: a
+  - name: RXFIFO_TIMEOUT
+    bit_range:
+    - 19
+    - 12
+    description: a
+  - name: RXFIFO_TIMEOUT_SHIFT
+    bit_range:
+    - 22
+    - 20
+    description: a
+  - name: RXFIFO_TIMEOUT_ENA
+    bit_range:
+    - 23
+    - 23
+    description: a
+  side_effects: null
+- id: ACK_NUM
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: ACK_NUM
+    bit_range:
+    - 2
+    - 0
+    description: a
+  - name: LOAD
+    bit_range:
+    - 3
+    - 3
+    description: a
+  side_effects: null
+- id: RX_HEAD
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_HEAD
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: QUICK_SENT
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SINGLE_SEND_NUM
+    bit_range:
+    - 2
+    - 0
+    description: a
+  - name: SINGLE_SEND_EN
+    bit_range:
+    - 3
+    - 3
+    description: a
+  - name: ALWAYS_SEND_NUM
+    bit_range:
+    - 6
+    - 4
+    description: a
+  - name: ALWAYS_SEND_EN
+    bit_range:
+    - 7
+    - 7
+    description: a
+  side_effects: null
+- id: REG_Q0_WORD0
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q0_WORD0
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q0_WORD1
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q0_WORD1
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q1_WORD0
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q1_WORD0
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q1_WORD1
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q1_WORD1
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q2_WORD0
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q2_WORD0
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q2_WORD1
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q2_WORD1
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q3_WORD0
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q3_WORD0
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q3_WORD1
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q3_WORD1
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q4_WORD0
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q4_WORD0
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q4_WORD1
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q4_WORD1
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q5_WORD0
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q5_WORD0
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q5_WORD1
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q5_WORD1
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q6_WORD0
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q6_WORD0
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: REG_Q6_WORD1
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEND_Q6_WORD1
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+- id: ESC_CONF0
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 14474176
+  fields:
+  - name: SEPER_CHAR
+    bit_range:
+    - 7
+    - 0
+    description: a
+  - name: SEPER_ESC_CHAR0
+    bit_range:
+    - 15
+    - 8
+    description: a
+  - name: SEPER_ESC_CHAR1
+    bit_range:
+    - 23
+    - 16
+    description: a
+  side_effects: null
+- id: ESC_CONF1
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 14539739
+  fields:
+  - name: ESC_SEQ0
+    bit_range:
+    - 7
+    - 0
+    description: a
+  - name: ESC_SEQ0_CHAR0
+    bit_range:
+    - 15
+    - 8
+    description: a
+  - name: ESC_SEQ0_CHAR1
+    bit_range:
+    - 23
+    - 16
+    description: a
+  side_effects: null
+- id: ESC_CONF2
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 14605073
+  fields:
+  - name: ESC_SEQ1
+    bit_range:
+    - 7
+    - 0
+    description: a
+  - name: ESC_SEQ1_CHAR0
+    bit_range:
+    - 15
+    - 8
+    description: a
+  - name: ESC_SEQ1_CHAR1
+    bit_range:
+    - 23
+    - 16
+    description: a
+  side_effects: null
+- id: ESC_CONF3
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 14670611
+  fields:
+  - name: ESC_SEQ2
+    bit_range:
+    - 7
+    - 0
+    description: a
+  - name: ESC_SEQ2_CHAR0
+    bit_range:
+    - 15
+    - 8
+    description: a
+  - name: ESC_SEQ2_CHAR1
+    bit_range:
+    - 23
+    - 16
+    description: a
+  side_effects: null
+- id: PKT_THRES
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: PKT_THRS
+    bit_range:
+    - 12
+    - 0
+    description: a
+  side_effects: null
+- id: DATE
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583472
+  fields:
+  - name: DATE
+    bit_range:
+    - 31
+    - 0
+    description: a
+  side_effects: null
+interrupts:
+  UHCI0: 15
+timing: null

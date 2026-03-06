@@ -1,0 +1,1116 @@
+peripheral: RMT
+version: 0.1.0
+registers:
+- id: CH0DATA
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: Reserved.
+  side_effects: null
+- id: CH1DATA
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: Reserved.
+  side_effects: null
+- id: CH2DATA
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: Reserved.
+  side_effects: null
+- id: CH3DATA
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: Reserved.
+  side_effects: null
+- id: CH0_TX_CONF0
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 7406080
+  fields:
+  - name: TX_START
+    bit_range:
+    - 0
+    - 0
+    description: reg_tx_start_ch0.
+  - name: MEM_RD_RST
+    bit_range:
+    - 1
+    - 1
+    description: reg_mem_rd_rst_ch0.
+  - name: APB_MEM_RST
+    bit_range:
+    - 2
+    - 2
+    description: reg_apb_mem_rst_ch0.
+  - name: TX_CONTI_MODE
+    bit_range:
+    - 3
+    - 3
+    description: reg_tx_conti_mode_ch0.
+  - name: MEM_TX_WRAP_EN
+    bit_range:
+    - 4
+    - 4
+    description: reg_mem_tx_wrap_en_ch0.
+  - name: IDLE_OUT_LV
+    bit_range:
+    - 5
+    - 5
+    description: reg_idle_out_lv_ch0.
+  - name: IDLE_OUT_EN
+    bit_range:
+    - 6
+    - 6
+    description: reg_idle_out_en_ch0.
+  - name: TX_STOP
+    bit_range:
+    - 7
+    - 7
+    description: reg_tx_stop_ch0.
+  - name: DIV_CNT
+    bit_range:
+    - 15
+    - 8
+    description: reg_div_cnt_ch0.
+  - name: MEM_SIZE
+    bit_range:
+    - 18
+    - 16
+    description: reg_mem_size_ch0.
+  - name: CARRIER_EFF_EN
+    bit_range:
+    - 20
+    - 20
+    description: reg_carrier_eff_en_ch0.
+  - name: CARRIER_EN
+    bit_range:
+    - 21
+    - 21
+    description: reg_carrier_en_ch0.
+  - name: CARRIER_OUT_LV
+    bit_range:
+    - 22
+    - 22
+    description: reg_carrier_out_lv_ch0.
+  - name: AFIFO_RST
+    bit_range:
+    - 23
+    - 23
+    description: reg_afifo_rst_ch0.
+  - name: CONF_UPDATE
+    bit_range:
+    - 24
+    - 24
+    description: reg_reg_conf_update_ch0.
+  side_effects: null
+- id: CH1_TX_CONF0
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 7406080
+  fields:
+  - name: TX_START
+    bit_range:
+    - 0
+    - 0
+    description: reg_tx_start_ch0.
+  - name: MEM_RD_RST
+    bit_range:
+    - 1
+    - 1
+    description: reg_mem_rd_rst_ch0.
+  - name: APB_MEM_RST
+    bit_range:
+    - 2
+    - 2
+    description: reg_apb_mem_rst_ch0.
+  - name: TX_CONTI_MODE
+    bit_range:
+    - 3
+    - 3
+    description: reg_tx_conti_mode_ch0.
+  - name: MEM_TX_WRAP_EN
+    bit_range:
+    - 4
+    - 4
+    description: reg_mem_tx_wrap_en_ch0.
+  - name: IDLE_OUT_LV
+    bit_range:
+    - 5
+    - 5
+    description: reg_idle_out_lv_ch0.
+  - name: IDLE_OUT_EN
+    bit_range:
+    - 6
+    - 6
+    description: reg_idle_out_en_ch0.
+  - name: TX_STOP
+    bit_range:
+    - 7
+    - 7
+    description: reg_tx_stop_ch0.
+  - name: DIV_CNT
+    bit_range:
+    - 15
+    - 8
+    description: reg_div_cnt_ch0.
+  - name: MEM_SIZE
+    bit_range:
+    - 18
+    - 16
+    description: reg_mem_size_ch0.
+  - name: CARRIER_EFF_EN
+    bit_range:
+    - 20
+    - 20
+    description: reg_carrier_eff_en_ch0.
+  - name: CARRIER_EN
+    bit_range:
+    - 21
+    - 21
+    description: reg_carrier_en_ch0.
+  - name: CARRIER_OUT_LV
+    bit_range:
+    - 22
+    - 22
+    description: reg_carrier_out_lv_ch0.
+  - name: AFIFO_RST
+    bit_range:
+    - 23
+    - 23
+    description: reg_afifo_rst_ch0.
+  - name: CONF_UPDATE
+    bit_range:
+    - 24
+    - 24
+    description: reg_reg_conf_update_ch0.
+  side_effects: null
+- id: CH2_RX_CONF0
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 822083330
+  fields:
+  - name: DIV_CNT
+    bit_range:
+    - 7
+    - 0
+    description: reg_div_cnt_ch2.
+  - name: IDLE_THRES
+    bit_range:
+    - 22
+    - 8
+    description: reg_idle_thres_ch2.
+  - name: MEM_SIZE
+    bit_range:
+    - 25
+    - 23
+    description: reg_mem_size_ch2.
+  - name: CARRIER_EN
+    bit_range:
+    - 28
+    - 28
+    description: reg_carrier_en_ch2.
+  - name: CARRIER_OUT_LV
+    bit_range:
+    - 29
+    - 29
+    description: reg_carrier_out_lv_ch2.
+  side_effects: null
+- id: CH2_RX_CONF1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 488
+  fields:
+  - name: RX_EN
+    bit_range:
+    - 0
+    - 0
+    description: reg_rx_en_ch2.
+  - name: MEM_WR_RST
+    bit_range:
+    - 1
+    - 1
+    description: reg_mem_wr_rst_ch2.
+  - name: APB_MEM_RST
+    bit_range:
+    - 2
+    - 2
+    description: reg_apb_mem_rst_ch2.
+  - name: MEM_OWNER
+    bit_range:
+    - 3
+    - 3
+    description: reg_mem_owner_ch2.
+  - name: RX_FILTER_EN
+    bit_range:
+    - 4
+    - 4
+    description: reg_rx_filter_en_ch2.
+  - name: RX_FILTER_THRES
+    bit_range:
+    - 12
+    - 5
+    description: reg_rx_filter_thres_ch2.
+  - name: MEM_RX_WRAP_EN
+    bit_range:
+    - 13
+    - 13
+    description: reg_mem_rx_wrap_en_ch2.
+  - name: AFIFO_RST
+    bit_range:
+    - 14
+    - 14
+    description: reg_afifo_rst_ch2.
+  - name: CONF_UPDATE
+    bit_range:
+    - 15
+    - 15
+    description: reg_conf_update_ch2.
+  side_effects: null
+- id: CH3_RX_CONF0
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 822083330
+  fields:
+  - name: DIV_CNT
+    bit_range:
+    - 7
+    - 0
+    description: reg_div_cnt_ch2.
+  - name: IDLE_THRES
+    bit_range:
+    - 22
+    - 8
+    description: reg_idle_thres_ch2.
+  - name: MEM_SIZE
+    bit_range:
+    - 25
+    - 23
+    description: reg_mem_size_ch2.
+  - name: CARRIER_EN
+    bit_range:
+    - 28
+    - 28
+    description: reg_carrier_en_ch2.
+  - name: CARRIER_OUT_LV
+    bit_range:
+    - 29
+    - 29
+    description: reg_carrier_out_lv_ch2.
+  side_effects: null
+- id: CH3_RX_CONF1
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 488
+  fields:
+  - name: RX_EN
+    bit_range:
+    - 0
+    - 0
+    description: reg_rx_en_ch2.
+  - name: MEM_WR_RST
+    bit_range:
+    - 1
+    - 1
+    description: reg_mem_wr_rst_ch2.
+  - name: APB_MEM_RST
+    bit_range:
+    - 2
+    - 2
+    description: reg_apb_mem_rst_ch2.
+  - name: MEM_OWNER
+    bit_range:
+    - 3
+    - 3
+    description: reg_mem_owner_ch2.
+  - name: RX_FILTER_EN
+    bit_range:
+    - 4
+    - 4
+    description: reg_rx_filter_en_ch2.
+  - name: RX_FILTER_THRES
+    bit_range:
+    - 12
+    - 5
+    description: reg_rx_filter_thres_ch2.
+  - name: MEM_RX_WRAP_EN
+    bit_range:
+    - 13
+    - 13
+    description: reg_mem_rx_wrap_en_ch2.
+  - name: AFIFO_RST
+    bit_range:
+    - 14
+    - 14
+    description: reg_afifo_rst_ch2.
+  - name: CONF_UPDATE
+    bit_range:
+    - 15
+    - 15
+    description: reg_conf_update_ch2.
+  side_effects: null
+- id: CH0_TX_STATUS
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MEM_RADDR_EX
+    bit_range:
+    - 8
+    - 0
+    description: reg_mem_raddr_ex_ch0.
+  - name: STATE
+    bit_range:
+    - 11
+    - 9
+    description: reg_state_ch0.
+  - name: APB_MEM_WADDR
+    bit_range:
+    - 20
+    - 12
+    description: reg_apb_mem_waddr_ch0.
+  - name: APB_MEM_RD_ERR
+    bit_range:
+    - 21
+    - 21
+    description: reg_apb_mem_rd_err_ch0.
+  - name: MEM_EMPTY
+    bit_range:
+    - 22
+    - 22
+    description: reg_mem_empty_ch0.
+  - name: APB_MEM_WR_ERR
+    bit_range:
+    - 23
+    - 23
+    description: reg_apb_mem_wr_err_ch0.
+  - name: APB_MEM_RADDR
+    bit_range:
+    - 31
+    - 24
+    description: reg_apb_mem_raddr_ch0.
+  side_effects: null
+- id: CH1_TX_STATUS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MEM_RADDR_EX
+    bit_range:
+    - 8
+    - 0
+    description: reg_mem_raddr_ex_ch0.
+  - name: STATE
+    bit_range:
+    - 11
+    - 9
+    description: reg_state_ch0.
+  - name: APB_MEM_WADDR
+    bit_range:
+    - 20
+    - 12
+    description: reg_apb_mem_waddr_ch0.
+  - name: APB_MEM_RD_ERR
+    bit_range:
+    - 21
+    - 21
+    description: reg_apb_mem_rd_err_ch0.
+  - name: MEM_EMPTY
+    bit_range:
+    - 22
+    - 22
+    description: reg_mem_empty_ch0.
+  - name: APB_MEM_WR_ERR
+    bit_range:
+    - 23
+    - 23
+    description: reg_apb_mem_wr_err_ch0.
+  - name: APB_MEM_RADDR
+    bit_range:
+    - 31
+    - 24
+    description: reg_apb_mem_raddr_ch0.
+  side_effects: null
+- id: CH2_RX_STATUS
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MEM_WADDR_EX
+    bit_range:
+    - 8
+    - 0
+    description: reg_mem_waddr_ex_ch2.
+  - name: APB_MEM_RADDR
+    bit_range:
+    - 20
+    - 12
+    description: reg_apb_mem_raddr_ch2.
+  - name: STATE
+    bit_range:
+    - 24
+    - 22
+    description: reg_state_ch2.
+  - name: MEM_OWNER_ERR
+    bit_range:
+    - 25
+    - 25
+    description: reg_mem_owner_err_ch2.
+  - name: MEM_FULL
+    bit_range:
+    - 26
+    - 26
+    description: reg_mem_full_ch2.
+  - name: APB_MEM_RD_ERR
+    bit_range:
+    - 27
+    - 27
+    description: reg_apb_mem_rd_err_ch2.
+  side_effects: null
+- id: CH3_RX_STATUS
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MEM_WADDR_EX
+    bit_range:
+    - 8
+    - 0
+    description: reg_mem_waddr_ex_ch2.
+  - name: APB_MEM_RADDR
+    bit_range:
+    - 20
+    - 12
+    description: reg_apb_mem_raddr_ch2.
+  - name: STATE
+    bit_range:
+    - 24
+    - 22
+    description: reg_state_ch2.
+  - name: MEM_OWNER_ERR
+    bit_range:
+    - 25
+    - 25
+    description: reg_mem_owner_err_ch2.
+  - name: MEM_FULL
+    bit_range:
+    - 26
+    - 26
+    description: reg_mem_full_ch2.
+  - name: APB_MEM_RD_ERR
+    bit_range:
+    - 27
+    - 27
+    description: reg_apb_mem_rd_err_ch2.
+  side_effects: null
+- id: INT_RAW
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_TX_END
+    bit_range:
+    - 0
+    - 0
+    description: reg_ch%s_tx_end_int_raw.
+  - name: CH1_TX_END
+    bit_range:
+    - 1
+    - 1
+    description: reg_ch%s_tx_end_int_raw.
+  - name: CH2_RX_END
+    bit_range:
+    - 2
+    - 2
+    description: reg_ch2_rx_end_int_raw.
+  - name: CH3_RX_END
+    bit_range:
+    - 3
+    - 3
+    description: reg_ch2_rx_end_int_raw.
+  - name: CH0_TX_ERR
+    bit_range:
+    - 4
+    - 4
+    description: reg_ch%s_err_int_raw.
+  - name: CH1_TX_ERR
+    bit_range:
+    - 5
+    - 5
+    description: reg_ch%s_err_int_raw.
+  - name: CH2_RX_ERR
+    bit_range:
+    - 6
+    - 6
+    description: reg_ch2_err_int_raw.
+  - name: CH3_RX_ERR
+    bit_range:
+    - 7
+    - 7
+    description: reg_ch2_err_int_raw.
+  - name: CH0_TX_THR_EVENT
+    bit_range:
+    - 8
+    - 8
+    description: reg_ch%s_tx_thr_event_int_raw.
+  - name: CH1_TX_THR_EVENT
+    bit_range:
+    - 9
+    - 9
+    description: reg_ch%s_tx_thr_event_int_raw.
+  - name: CH2_RX_THR_EVENT
+    bit_range:
+    - 10
+    - 10
+    description: reg_ch2_rx_thr_event_int_raw.
+  - name: CH3_RX_THR_EVENT
+    bit_range:
+    - 11
+    - 11
+    description: reg_ch2_rx_thr_event_int_raw.
+  - name: CH0_TX_LOOP
+    bit_range:
+    - 12
+    - 12
+    description: reg_ch%s_tx_loop_int_raw.
+  - name: CH1_TX_LOOP
+    bit_range:
+    - 13
+    - 13
+    description: reg_ch%s_tx_loop_int_raw.
+  side_effects: null
+- id: INT_ST
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_TX_END
+    bit_range:
+    - 0
+    - 0
+    description: reg_ch%s_tx_end_int_st.
+  - name: CH1_TX_END
+    bit_range:
+    - 1
+    - 1
+    description: reg_ch%s_tx_end_int_st.
+  - name: CH2_RX_END
+    bit_range:
+    - 2
+    - 2
+    description: reg_ch2_rx_end_int_st.
+  - name: CH3_RX_END
+    bit_range:
+    - 3
+    - 3
+    description: reg_ch2_rx_end_int_st.
+  - name: CH0_TX_ERR
+    bit_range:
+    - 4
+    - 4
+    description: reg_ch%s_err_int_st.
+  - name: CH1_TX_ERR
+    bit_range:
+    - 5
+    - 5
+    description: reg_ch%s_err_int_st.
+  - name: CH2_RX_ERR
+    bit_range:
+    - 6
+    - 6
+    description: reg_ch2_err_int_st.
+  - name: CH3_RX_ERR
+    bit_range:
+    - 7
+    - 7
+    description: reg_ch2_err_int_st.
+  - name: CH0_TX_THR_EVENT
+    bit_range:
+    - 8
+    - 8
+    description: reg_ch%s_tx_thr_event_int_st.
+  - name: CH1_TX_THR_EVENT
+    bit_range:
+    - 9
+    - 9
+    description: reg_ch%s_tx_thr_event_int_st.
+  - name: CH2_RX_THR_EVENT
+    bit_range:
+    - 10
+    - 10
+    description: reg_ch2_rx_thr_event_int_st.
+  - name: CH3_RX_THR_EVENT
+    bit_range:
+    - 11
+    - 11
+    description: reg_ch2_rx_thr_event_int_st.
+  - name: CH0_TX_LOOP
+    bit_range:
+    - 12
+    - 12
+    description: reg_ch%s_tx_loop_int_st.
+  - name: CH1_TX_LOOP
+    bit_range:
+    - 13
+    - 13
+    description: reg_ch%s_tx_loop_int_st.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_TX_END
+    bit_range:
+    - 0
+    - 0
+    description: reg_ch%s_tx_end_int_ena.
+  - name: CH1_TX_END
+    bit_range:
+    - 1
+    - 1
+    description: reg_ch%s_tx_end_int_ena.
+  - name: CH2_RX_END
+    bit_range:
+    - 2
+    - 2
+    description: reg_ch2_rx_end_int_ena.
+  - name: CH3_RX_END
+    bit_range:
+    - 3
+    - 3
+    description: reg_ch2_rx_end_int_ena.
+  - name: CH0_TX_ERR
+    bit_range:
+    - 4
+    - 4
+    description: reg_ch%s_err_int_ena.
+  - name: CH1_TX_ERR
+    bit_range:
+    - 5
+    - 5
+    description: reg_ch%s_err_int_ena.
+  - name: CH2_RX_ERR
+    bit_range:
+    - 6
+    - 6
+    description: reg_ch2_err_int_ena.
+  - name: CH3_RX_ERR
+    bit_range:
+    - 7
+    - 7
+    description: reg_ch2_err_int_ena.
+  - name: CH0_TX_THR_EVENT
+    bit_range:
+    - 8
+    - 8
+    description: reg_ch%s_tx_thr_event_int_ena.
+  - name: CH1_TX_THR_EVENT
+    bit_range:
+    - 9
+    - 9
+    description: reg_ch%s_tx_thr_event_int_ena.
+  - name: CH2_RX_THR_EVENT
+    bit_range:
+    - 10
+    - 10
+    description: reg_ch2_rx_thr_event_int_ena.
+  - name: CH3_RX_THR_EVENT
+    bit_range:
+    - 11
+    - 11
+    description: reg_ch2_rx_thr_event_int_ena.
+  - name: CH0_TX_LOOP
+    bit_range:
+    - 12
+    - 12
+    description: reg_ch%s_tx_loop_int_ena.
+  - name: CH1_TX_LOOP
+    bit_range:
+    - 13
+    - 13
+    description: reg_ch%s_tx_loop_int_ena.
+  side_effects: null
+- id: INT_CLR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_TX_END
+    bit_range:
+    - 0
+    - 0
+    description: reg_ch%s_tx_end_int_clr.
+  - name: CH1_TX_END
+    bit_range:
+    - 1
+    - 1
+    description: reg_ch%s_tx_end_int_clr.
+  - name: CH2_RX_END
+    bit_range:
+    - 2
+    - 2
+    description: reg_ch2_rx_end_int_clr.
+  - name: CH3_RX_END
+    bit_range:
+    - 3
+    - 3
+    description: reg_ch2_rx_end_int_clr.
+  - name: CH0_TX_ERR
+    bit_range:
+    - 4
+    - 4
+    description: reg_ch%s_err_int_clr.
+  - name: CH1_TX_ERR
+    bit_range:
+    - 5
+    - 5
+    description: reg_ch%s_err_int_clr.
+  - name: CH2_RX_ERR
+    bit_range:
+    - 6
+    - 6
+    description: reg_ch2_err_int_clr.
+  - name: CH3_RX_ERR
+    bit_range:
+    - 7
+    - 7
+    description: reg_ch2_err_int_clr.
+  - name: CH0_TX_THR_EVENT
+    bit_range:
+    - 8
+    - 8
+    description: reg_ch%s_tx_thr_event_int_clr.
+  - name: CH1_TX_THR_EVENT
+    bit_range:
+    - 9
+    - 9
+    description: reg_ch%s_tx_thr_event_int_clr.
+  - name: CH2_RX_THR_EVENT
+    bit_range:
+    - 10
+    - 10
+    description: reg_ch2_rx_thr_event_int_clr.
+  - name: CH3_RX_THR_EVENT
+    bit_range:
+    - 11
+    - 11
+    description: reg_ch2_rx_thr_event_int_clr.
+  - name: CH0_TX_LOOP
+    bit_range:
+    - 12
+    - 12
+    description: reg_ch%s_tx_loop_int_clr.
+  - name: CH1_TX_LOOP
+    bit_range:
+    - 13
+    - 13
+    description: reg_ch%s_tx_loop_int_clr.
+  side_effects: null
+- id: CH0CARRIER_DUTY
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 4194368
+  fields:
+  - name: CARRIER_LOW
+    bit_range:
+    - 15
+    - 0
+    description: reg_carrier_low_ch0.
+  - name: CARRIER_HIGH
+    bit_range:
+    - 31
+    - 16
+    description: reg_carrier_high_ch0.
+  side_effects: null
+- id: CH1CARRIER_DUTY
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 4194368
+  fields:
+  - name: CARRIER_LOW
+    bit_range:
+    - 15
+    - 0
+    description: reg_carrier_low_ch0.
+  - name: CARRIER_HIGH
+    bit_range:
+    - 31
+    - 16
+    description: reg_carrier_high_ch0.
+  side_effects: null
+- id: CH2_RX_CARRIER_RM
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CARRIER_LOW_THRES
+    bit_range:
+    - 15
+    - 0
+    description: reg_carrier_low_thres_ch2.
+  - name: CARRIER_HIGH_THRES
+    bit_range:
+    - 31
+    - 16
+    description: reg_carrier_high_thres_ch2.
+  side_effects: null
+- id: CH3_RX_CARRIER_RM
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CARRIER_LOW_THRES
+    bit_range:
+    - 15
+    - 0
+    description: reg_carrier_low_thres_ch2.
+  - name: CARRIER_HIGH_THRES
+    bit_range:
+    - 31
+    - 16
+    description: reg_carrier_high_thres_ch2.
+  side_effects: null
+- id: CH0_TX_LIM
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: TX_LIM
+    bit_range:
+    - 8
+    - 0
+    description: reg_rmt_tx_lim_ch0.
+  - name: TX_LOOP_NUM
+    bit_range:
+    - 18
+    - 9
+    description: reg_rmt_tx_loop_num_ch0.
+  - name: TX_LOOP_CNT_EN
+    bit_range:
+    - 19
+    - 19
+    description: reg_rmt_tx_loop_cnt_en_ch0.
+  - name: LOOP_COUNT_RESET
+    bit_range:
+    - 20
+    - 20
+    description: reg_loop_count_reset_ch0.
+  side_effects: null
+- id: CH1_TX_LIM
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: TX_LIM
+    bit_range:
+    - 8
+    - 0
+    description: reg_rmt_tx_lim_ch0.
+  - name: TX_LOOP_NUM
+    bit_range:
+    - 18
+    - 9
+    description: reg_rmt_tx_loop_num_ch0.
+  - name: TX_LOOP_CNT_EN
+    bit_range:
+    - 19
+    - 19
+    description: reg_rmt_tx_loop_cnt_en_ch0.
+  - name: LOOP_COUNT_RESET
+    bit_range:
+    - 20
+    - 20
+    description: reg_loop_count_reset_ch0.
+  side_effects: null
+- id: CH2_RX_LIM
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: RX_LIM
+    bit_range:
+    - 8
+    - 0
+    description: reg_rmt_rx_lim_ch2.
+  side_effects: null
+- id: CH3_RX_LIM
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: RX_LIM
+    bit_range:
+    - 8
+    - 0
+    description: reg_rmt_rx_lim_ch2.
+  side_effects: null
+- id: SYS_CONF
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 83886096
+  fields:
+  - name: APB_FIFO_MASK
+    bit_range:
+    - 0
+    - 0
+    description: reg_apb_fifo_mask.
+  - name: MEM_CLK_FORCE_ON
+    bit_range:
+    - 1
+    - 1
+    description: reg_mem_clk_force_on.
+  - name: MEM_FORCE_PD
+    bit_range:
+    - 2
+    - 2
+    description: reg_rmt_mem_force_pd.
+  - name: MEM_FORCE_PU
+    bit_range:
+    - 3
+    - 3
+    description: reg_rmt_mem_force_pu.
+  - name: SCLK_DIV_NUM
+    bit_range:
+    - 11
+    - 4
+    description: reg_rmt_sclk_div_num.
+  - name: SCLK_DIV_A
+    bit_range:
+    - 17
+    - 12
+    description: reg_rmt_sclk_div_a.
+  - name: SCLK_DIV_B
+    bit_range:
+    - 23
+    - 18
+    description: reg_rmt_sclk_div_b.
+  - name: SCLK_SEL
+    bit_range:
+    - 25
+    - 24
+    description: reg_rmt_sclk_sel.
+  - name: SCLK_ACTIVE
+    bit_range:
+    - 26
+    - 26
+    description: reg_rmt_sclk_active.
+  - name: CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: reg_clk_en.
+  side_effects: null
+- id: TX_SIM
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_SIM_CH0
+    bit_range:
+    - 0
+    - 0
+    description: reg_rmt_tx_sim_ch0.
+  - name: TX_SIM_CH1
+    bit_range:
+    - 1
+    - 1
+    description: reg_rmt_tx_sim_ch1.
+  - name: TX_SIM_EN
+    bit_range:
+    - 2
+    - 2
+    description: reg_rmt_tx_sim_en.
+  side_effects: null
+- id: REF_CNT_RST
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0
+    bit_range:
+    - 0
+    - 0
+    description: reg_ref_cnt_rst_ch0.
+  - name: CH1
+    bit_range:
+    - 1
+    - 1
+    description: reg_ref_cnt_rst_ch1.
+  - name: CH2
+    bit_range:
+    - 2
+    - 2
+    description: reg_ref_cnt_rst_ch2.
+  - name: CH3
+    bit_range:
+    - 3
+    - 3
+    description: reg_ref_cnt_rst_ch3.
+  side_effects: null
+- id: DATE
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 33579569
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: reg_rmt_date.
+  side_effects: null
+interrupts:
+  RMT: 28
+timing: null

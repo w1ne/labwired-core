@@ -1,0 +1,467 @@
+peripheral: SPI0
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 2891776
+  fields:
+  - name: FDUMMY_OUT
+    bit_range:
+    - 3
+    - 3
+    description: In the dummy phase the signal level of spi is output by the spi controller.
+  - name: FCMD_DUAL
+    bit_range:
+    - 7
+    - 7
+    description: 'Apply 2 signals during command phase 1:enable 0: disable'
+  - name: FCMD_QUAD
+    bit_range:
+    - 8
+    - 8
+    description: 'Apply 4 signals during command phase 1:enable 0: disable'
+  - name: FASTRD_MODE
+    bit_range:
+    - 13
+    - 13
+    description: 'This bit enable the bits: spi_mem_fread_qio, spi_mem_fread_dio, spi_mem_fread_qout and spi_mem_fread_dout. 1: enable 0: disable.'
+  - name: FREAD_DUAL
+    bit_range:
+    - 14
+    - 14
+    description: 'In the read operations, read-data phase apply 2 signals. 1: enable 0: disable.'
+  - name: Q_POL
+    bit_range:
+    - 18
+    - 18
+    description: 'The bit is used to set MISO line polarity, 1: high 0, low'
+  - name: D_POL
+    bit_range:
+    - 19
+    - 19
+    description: 'The bit is used to set MOSI line polarity, 1: high 0, low'
+  - name: FREAD_QUAD
+    bit_range:
+    - 20
+    - 20
+    description: 'In the read operations read-data phase apply 4 signals. 1: enable 0: disable.'
+  - name: WP
+    bit_range:
+    - 21
+    - 21
+    description: 'Write protect signal output when SPI is idle.  1: output high, 0: output low.'
+  - name: FREAD_DIO
+    bit_range:
+    - 23
+    - 23
+    description: 'In the read operations address phase and read-data phase apply 2 signals. 1: enable 0: disable.'
+  - name: FREAD_QIO
+    bit_range:
+    - 24
+    - 24
+    description: 'In the read operations address phase and read-data phase apply 4 signals. 1: enable 0: disable.'
+  side_effects: null
+- id: CTRL1
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_MODE
+    bit_range:
+    - 1
+    - 0
+    description: 'SPI clock mode bits. 0: SPI clock is off when CS inactive 1: SPI clock is delayed one cycle after CS inactive 2: SPI clock is delayed two cycles after CS inactive 3: SPI clock is alwasy on.'
+  - name: RXFIFO_RST
+    bit_range:
+    - 30
+    - 30
+    description: SPI0 RX FIFO reset signal.
+  side_effects: null
+- id: CTRL2
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 33
+  fields:
+  - name: CS_SETUP_TIME
+    bit_range:
+    - 4
+    - 0
+    description: (cycles-1) of prepare phase by spi clock this bits are combined with spi_mem_cs_setup bit.
+  - name: CS_HOLD_TIME
+    bit_range:
+    - 9
+    - 5
+    description: Spi cs signal is delayed to inactive by spi clock this bits are combined with spi_mem_cs_hold bit.
+  - name: CS_HOLD_DELAY
+    bit_range:
+    - 30
+    - 25
+    description: These bits are used to set the minimum CS high time tSHSL between SPI burst transfer when accesses to flash. tSHSL is (SPI_MEM_CS_HOLD_DELAY[5:0] + 1) MSPI core clock cycles.
+  - name: SYNC_RESET
+    bit_range:
+    - 31
+    - 31
+    description: The FSM will be reset.
+  side_effects: null
+- id: CLOCK
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 196867
+  fields:
+  - name: CLKCNT_L
+    bit_range:
+    - 7
+    - 0
+    description: In the master mode it must be equal to spi_mem_clkcnt_N.
+  - name: CLKCNT_H
+    bit_range:
+    - 15
+    - 8
+    description: In the master mode it must be floor((spi_mem_clkcnt_N+1)/2-1).
+  - name: CLKCNT_N
+    bit_range:
+    - 23
+    - 16
+    description: In the master mode it is the divider of spi_mem_clk. So spi_mem_clk frequency is system/(spi_mem_clkcnt_N+1)
+  - name: CLK_EQU_SYSCLK
+    bit_range:
+    - 31
+    - 31
+    description: Set this bit in 1-division mode.
+  side_effects: null
+- id: USER
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CS_HOLD
+    bit_range:
+    - 6
+    - 6
+    description: 'spi cs keep low when spi is in  done  phase. 1: enable 0: disable.'
+  - name: CS_SETUP
+    bit_range:
+    - 7
+    - 7
+    description: 'spi cs is enable when spi is in  prepare  phase. 1: enable 0: disable.'
+  - name: CK_OUT_EDGE
+    bit_range:
+    - 9
+    - 9
+    description: the bit combined with spi_mem_mosi_delay_mode bits to set mosi signal delay mode.
+  - name: USR_DUMMY_IDLE
+    bit_range:
+    - 26
+    - 26
+    description: spi clock is disable in dummy phase when the bit is enable.
+  - name: USR_DUMMY
+    bit_range:
+    - 29
+    - 29
+    description: This bit enable the dummy phase of an operation.
+  side_effects: null
+- id: USER1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 1543503879
+  fields:
+  - name: USR_DUMMY_CYCLELEN
+    bit_range:
+    - 5
+    - 0
+    description: The length in spi_mem_clk cycles of dummy phase. The register value shall be (cycle_num-1).
+  - name: USR_ADDR_BITLEN
+    bit_range:
+    - 31
+    - 26
+    description: The length in bits of address phase. The register value shall be (bit_num-1).
+  side_effects: null
+- id: USER2
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 1879048192
+  fields:
+  - name: USR_COMMAND_VALUE
+    bit_range:
+    - 15
+    - 0
+    description: The value of  command.
+  - name: USR_COMMAND_BITLEN
+    bit_range:
+    - 31
+    - 28
+    description: The length in bits of command phase. The register value shall be (bit_num-1)
+  side_effects: null
+- id: RD_STATUS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WB_MODE
+    bit_range:
+    - 23
+    - 16
+    description: Mode bits in the flash fast read mode  it is combined with spi_mem_fastrd_mode bit.
+  side_effects: null
+- id: MISC
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRANS_END
+    bit_range:
+    - 3
+    - 3
+    description: The bit is used to indicate the  spi0_mst_st controlled transmitting is done.
+  - name: TRANS_END_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The bit is used to enable the interrupt of  spi0_mst_st controlled transmitting is done.
+  - name: CSPI_ST_TRANS_END
+    bit_range:
+    - 5
+    - 5
+    description: The bit is used to indicate the  spi0_slv_st controlled transmitting is done.
+  - name: CSPI_ST_TRANS_END_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: The bit is used to enable the interrupt of spi0_slv_st controlled transmitting is done.
+  - name: CK_IDLE_EDGE
+    bit_range:
+    - 9
+    - 9
+    description: '1: spi clk line is high when idle     0: spi clk line is low when idle'
+  - name: CS_KEEP_ACTIVE
+    bit_range:
+    - 10
+    - 10
+    description: spi cs line keep low when the bit is set.
+  side_effects: null
+- id: CACHE_FCTRL
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_REQ_EN
+    bit_range:
+    - 0
+    - 0
+    description: 'For SPI0, Cache access enable, 1: enable, 0:disable.'
+  - name: CACHE_USR_ADDR_4BYTE
+    bit_range:
+    - 1
+    - 1
+    description: 'For SPI0,  cache  read flash with 4 bytes address, 1: enable, 0:disable.'
+  - name: CACHE_FLASH_USR_CMD
+    bit_range:
+    - 2
+    - 2
+    description: 'For SPI0,  cache  read flash for user define command, 1: enable, 0:disable.'
+  - name: FDIN_DUAL
+    bit_range:
+    - 3
+    - 3
+    description: 'For SPI0 flash, din phase apply 2 signals. 1: enable 0: disable. The bit is the same with spi_mem_fread_dio.'
+  - name: FDOUT_DUAL
+    bit_range:
+    - 4
+    - 4
+    description: 'For SPI0 flash, dout phase apply 2 signals. 1: enable 0: disable. The bit is the same with spi_mem_fread_dio.'
+  - name: FADDR_DUAL
+    bit_range:
+    - 5
+    - 5
+    description: 'For SPI0 flash, address phase apply 2 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_dio.'
+  - name: FDIN_QUAD
+    bit_range:
+    - 6
+    - 6
+    description: 'For SPI0 flash, din phase apply 4 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_qio.'
+  - name: FDOUT_QUAD
+    bit_range:
+    - 7
+    - 7
+    description: 'For SPI0 flash, dout phase apply 4 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_qio.'
+  - name: FADDR_QUAD
+    bit_range:
+    - 8
+    - 8
+    description: 'For SPI0 flash, address phase apply 4 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_qio.'
+  side_effects: null
+- id: FSM
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: CSPI_ST
+    bit_range:
+    - 3
+    - 0
+    description: 'The current status of SPI0 slave FSM: spi0_slv_st. 0: idle state, 1: preparation state, 2: send command state, 3: send address state, 4: wait state, 5: read data state, 6:write data state, 7: done state, 8: read data end state.'
+  - name: EM_ST
+    bit_range:
+    - 6
+    - 4
+    description: 'The current status of SPI0 master FSM: spi0_mst_st. 0: idle state, 1:EM_CACHE_GRANT , 2: program/erase suspend state, 3: SPI0 read data state, 4: wait cache/EDMA sent data is stored in SPI0 TX FIFO, 5: SPI0 write data state.'
+  - name: CSPI_LOCK_DELAY_TIME
+    bit_range:
+    - 11
+    - 7
+    description: The lock delay time of SPI0/1 arbiter by spi0_slv_st, after PER is sent by SPI1.
+  side_effects: null
+- id: TIMING_CALI
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: TIMING_CLK_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The bit is used to enable timing adjust clock for all reading operations.
+  - name: TIMING_CALI
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable timing auto-calibration for all reading operations.
+  - name: EXTRA_DUMMY_CYCLELEN
+    bit_range:
+    - 4
+    - 2
+    description: add extra dummy spi clock cycle length for spi clock calibration.
+  side_effects: null
+- id: DIN_MODE
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIN0_MODE
+    bit_range:
+    - 1
+    - 0
+    description: 'the input signals are delayed by system clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb,  3: input with the posedge of clk_160, 4 input with the negedge of clk_160, 5: input with the spi_clk high edge,  6: input with the spi_clk low edge'
+  - name: DIN1_MODE
+    bit_range:
+    - 3
+    - 2
+    description: 'the input signals are delayed by system clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb,  3: input with the posedge of clk_160, 4 input with the negedge of clk_160, 5: input with the spi_clk high edge,  6: input with the spi_clk low edge'
+  - name: DIN2_MODE
+    bit_range:
+    - 5
+    - 4
+    description: 'the input signals are delayed by system clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb,  3: input with the posedge of clk_160, 4 input with the negedge of clk_160, 5: input with the spi_clk high edge,  6: input with the spi_clk low edge'
+  - name: DIN3_MODE
+    bit_range:
+    - 7
+    - 6
+    description: 'the input signals are delayed by system clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb,  3: input with the posedge of clk_160, 4 input with the negedge of clk_160, 5: input with the spi_clk high edge,  6: input with the spi_clk low edge'
+  side_effects: null
+- id: DIN_NUM
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIN0_NUM
+    bit_range:
+    - 1
+    - 0
+    description: 'the input signals are delayed by system clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...'
+  - name: DIN1_NUM
+    bit_range:
+    - 3
+    - 2
+    description: 'the input signals are delayed by system clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...'
+  - name: DIN2_NUM
+    bit_range:
+    - 5
+    - 4
+    description: 'the input signals are delayed by system clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...'
+  - name: DIN3_NUM
+    bit_range:
+    - 7
+    - 6
+    description: 'the input signals are delayed by system clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...'
+  side_effects: null
+- id: DOUT_MODE
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DOUT0_MODE
+    bit_range:
+    - 0
+    - 0
+    description: 'the output signals are delayed by system clock cycles, 0: output without delayed, 1: output with the posedge of clk_apb,2 output with the negedge of clk_apb, 3: output with the posedge of clk_160,4 output with the negedge of clk_160,5: output with the spi_clk high edge ,6: output with the spi_clk low edge'
+  - name: DOUT1_MODE
+    bit_range:
+    - 1
+    - 1
+    description: 'the output signals are delayed by system clock cycles, 0: output without delayed, 1: output with the posedge of clk_apb,2 output with the negedge of clk_apb, 3: output with the posedge of clk_160,4 output with the negedge of clk_160,5: output with the spi_clk high edge ,6: output with the spi_clk low edge'
+  - name: DOUT2_MODE
+    bit_range:
+    - 2
+    - 2
+    description: 'the output signals are delayed by system clock cycles, 0: output without delayed, 1: output with the posedge of clk_apb,2 output with the negedge of clk_apb, 3: output with the posedge of clk_160,4 output with the negedge of clk_160,5: output with the spi_clk high edge ,6: output with the spi_clk low edge'
+  - name: DOUT3_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'the output signals are delayed by system clock cycles, 0: output without delayed, 1: output with the posedge of clk_apb,2 output with the negedge of clk_apb, 3: output with the posedge of clk_160,4 output with the negedge of clk_160,5: output with the spi_clk high edge ,6: output with the spi_clk low edge'
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: 'Register clock gate enable signal. 1: Enable. 0: Disable.'
+  side_effects: null
+- id: CORE_CLK_SEL
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI01_CLK_SEL
+    bit_range:
+    - 1
+    - 0
+    description: 'When the digital system clock selects PLL clock and the frequency of PLL clock is 480MHz, the value of reg_spi01_clk_sel:  0: SPI0/1 module clock (clk) is 80MHz. 1: SPI0/1 module clock (clk) is 120MHz.  2: SPI0/1 module clock (clk) 160MHz. 3: Not used. When the digital system clock selects PLL clock and the frequency of PLL clock is 320MHz, the value of reg_spi01_clk_sel:  0: SPI0/1 module clock (clk) is 80MHz. 1: SPI0/1 module clock (clk) is 80MHz.  2: SPI0/1 module clock (clk) 160MHz. 3: Not used.'
+  side_effects: null
+- id: DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583408
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: SPI register version.
+  side_effects: null
+interrupts:
+  SPI_MEM_REJECT_CACHE: 40
+timing: null

@@ -1,0 +1,11 @@
+# LabWired - ESP32-C3 DevKit System Configuration
+name: "esp32c3-devkit"
+chip: "../chips/esp32c3.yaml"
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 8
+    signal: "output"
+    active_high: true

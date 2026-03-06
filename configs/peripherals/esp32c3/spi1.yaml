@@ -1,0 +1,990 @@
+peripheral: SPI1
+version: 0.1.0
+registers:
+- id: CMD
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI1_MST_ST
+    bit_range:
+    - 3
+    - 0
+    description: The current status of SPI1 master FSM.
+  - name: MSPI_ST
+    bit_range:
+    - 7
+    - 4
+    description: 'The current status of SPI1 slave FSM: mspi_st. 0: idle state, 1: preparation state, 2: send command state, 3: send address state, 4: wait state, 5: read data state, 6:write data state, 7: done state, 8: read data end state.'
+  - name: FLASH_PE
+    bit_range:
+    - 17
+    - 17
+    description: 'In user mode, it is set to indicate that program/erase operation will be triggered. The bit is combined with spi_mem_usr bit. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: USR
+    bit_range:
+    - 18
+    - 18
+    description: 'User define command enable.  An operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_HPM
+    bit_range:
+    - 19
+    - 19
+    description: 'Drive Flash into high performance mode.  The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_RES
+    bit_range:
+    - 20
+    - 20
+    description: 'This bit combined with reg_resandres bit releases Flash from the power-down state or high performance mode and obtains the devices ID. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_DP
+    bit_range:
+    - 21
+    - 21
+    description: 'Drive Flash into power down.  An operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_CE
+    bit_range:
+    - 22
+    - 22
+    description: 'Chip erase enable. Chip erase operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_BE
+    bit_range:
+    - 23
+    - 23
+    description: 'Block erase enable(32KB) .  Block erase operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_SE
+    bit_range:
+    - 24
+    - 24
+    description: 'Sector erase enable(4KB). Sector erase operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_PP
+    bit_range:
+    - 25
+    - 25
+    description: 'Page program enable(1 byte ~256 bytes data to be programmed). Page program operation  will be triggered when the bit is set. The bit will be cleared once the operation done .1: enable 0: disable.'
+  - name: FLASH_WRSR
+    bit_range:
+    - 26
+    - 26
+    description: 'Write status register enable.   Write status operation  will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_RDSR
+    bit_range:
+    - 27
+    - 27
+    description: 'Read status register-1.  Read status operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_RDID
+    bit_range:
+    - 28
+    - 28
+    description: 'Read JEDEC ID . Read ID command will be sent when the bit is set. The bit will be cleared once the operation done. 1: enable 0: disable.'
+  - name: FLASH_WRDI
+    bit_range:
+    - 29
+    - 29
+    description: 'Write flash disable. Write disable command will be sent when the bit is set. The bit will be cleared once the operation done. 1: enable 0: disable.'
+  - name: FLASH_WREN
+    bit_range:
+    - 30
+    - 30
+    description: 'Write flash enable.  Write enable command will be sent when the bit is set. The bit will be cleared once the operation done. 1: enable 0: disable.'
+  - name: FLASH_READ
+    bit_range:
+    - 31
+    - 31
+    description: 'Read flash enable. Read flash operation will be triggered when the bit is set. The bit will be cleared once the operation done. 1: enable 0: disable.'
+  side_effects: null
+- id: ADDR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_ADDR_VALUE
+    bit_range:
+    - 31
+    - 0
+    description: In user mode, it is the memory address. other then the bit0-bit23 is the memory address, the bit24-bit31 are the byte length of a transfer.
+  side_effects: null
+- id: CTRL
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 2924544
+  fields:
+  - name: FDUMMY_OUT
+    bit_range:
+    - 3
+    - 3
+    description: In the dummy phase the signal level of spi is output by the spi controller.
+  - name: FCMD_DUAL
+    bit_range:
+    - 7
+    - 7
+    description: 'Apply 2 signals during command phase 1:enable 0: disable'
+  - name: FCMD_QUAD
+    bit_range:
+    - 8
+    - 8
+    description: 'Apply 4 signals during command phase 1:enable 0: disable'
+  - name: FCS_CRC_EN
+    bit_range:
+    - 10
+    - 10
+    description: For SPI1,  initialize crc32 module before writing encrypted data to flash. Active low.
+  - name: TX_CRC_EN
+    bit_range:
+    - 11
+    - 11
+    description: 'For SPI1,  enable crc32 when writing encrypted data to flash. 1: enable 0:disable'
+  - name: FASTRD_MODE
+    bit_range:
+    - 13
+    - 13
+    description: 'This bit enable the bits: spi_mem_fread_qio, spi_mem_fread_dio, spi_mem_fread_qout and spi_mem_fread_dout. 1: enable 0: disable.'
+  - name: FREAD_DUAL
+    bit_range:
+    - 14
+    - 14
+    description: 'In the read operations, read-data phase apply 2 signals. 1: enable 0: disable.'
+  - name: RESANDRES
+    bit_range:
+    - 15
+    - 15
+    description: 'The Device ID is read out to SPI_MEM_RD_STATUS register,  this bit combine with spi_mem_flash_res bit. 1: enable 0: disable.'
+  - name: Q_POL
+    bit_range:
+    - 18
+    - 18
+    description: 'The bit is used to set MISO line polarity, 1: high 0, low'
+  - name: D_POL
+    bit_range:
+    - 19
+    - 19
+    description: 'The bit is used to set MOSI line polarity, 1: high 0, low'
+  - name: FREAD_QUAD
+    bit_range:
+    - 20
+    - 20
+    description: 'In the read operations read-data phase apply 4 signals. 1: enable 0: disable.'
+  - name: WP
+    bit_range:
+    - 21
+    - 21
+    description: 'Write protect signal output when SPI is idle.  1: output high, 0: output low.'
+  - name: WRSR_2B
+    bit_range:
+    - 22
+    - 22
+    description: 'two bytes data will be written to status register when it is set. 1: enable 0: disable.'
+  - name: FREAD_DIO
+    bit_range:
+    - 23
+    - 23
+    description: 'In the read operations address phase and read-data phase apply 2 signals. 1: enable 0: disable.'
+  - name: FREAD_QIO
+    bit_range:
+    - 24
+    - 24
+    description: 'In the read operations address phase and read-data phase apply 4 signals. 1: enable 0: disable.'
+  side_effects: null
+- id: CTRL1
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 4092
+  fields:
+  - name: CLK_MODE
+    bit_range:
+    - 1
+    - 0
+    description: 'SPI clock mode bits. 0: SPI clock is off when CS inactive 1: SPI clock is delayed one cycle after CS inactive 2: SPI clock is delayed two cycles after CS inactive 3: SPI clock is alwasy on.'
+  - name: CS_HOLD_DLY_RES
+    bit_range:
+    - 11
+    - 2
+    description: After RES/DP/HPM command is sent, SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 512) SPI_CLK cycles.
+  side_effects: null
+- id: CTRL2
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC_RESET
+    bit_range:
+    - 31
+    - 31
+    description: The FSM will be reset.
+  side_effects: null
+- id: CLOCK
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 196867
+  fields:
+  - name: CLKCNT_L
+    bit_range:
+    - 7
+    - 0
+    description: In the master mode it must be equal to spi_mem_clkcnt_N.
+  - name: CLKCNT_H
+    bit_range:
+    - 15
+    - 8
+    description: In the master mode it must be floor((spi_mem_clkcnt_N+1)/2-1).
+  - name: CLKCNT_N
+    bit_range:
+    - 23
+    - 16
+    description: In the master mode it is the divider of spi_mem_clk. So spi_mem_clk frequency is system/(spi_mem_clkcnt_N+1)
+  - name: CLK_EQU_SYSCLK
+    bit_range:
+    - 31
+    - 31
+    description: reserved
+  side_effects: null
+- id: USER
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483648
+  fields:
+  - name: CK_OUT_EDGE
+    bit_range:
+    - 9
+    - 9
+    description: the bit combined with spi_mem_mosi_delay_mode bits to set mosi signal delay mode.
+  - name: FWRITE_DUAL
+    bit_range:
+    - 12
+    - 12
+    description: In the write operations read-data phase apply 2 signals
+  - name: FWRITE_QUAD
+    bit_range:
+    - 13
+    - 13
+    description: In the write operations read-data phase apply 4 signals
+  - name: FWRITE_DIO
+    bit_range:
+    - 14
+    - 14
+    description: In the write operations address phase and read-data phase apply 2 signals.
+  - name: FWRITE_QIO
+    bit_range:
+    - 15
+    - 15
+    description: In the write operations address phase and read-data phase apply 4 signals.
+  - name: USR_MISO_HIGHPART
+    bit_range:
+    - 24
+    - 24
+    description: 'read-data phase only access to high-part of the buffer spi_mem_w8~spi_mem_w15. 1: enable 0: disable.'
+  - name: USR_MOSI_HIGHPART
+    bit_range:
+    - 25
+    - 25
+    description: 'write-data phase only access to high-part of the buffer spi_mem_w8~spi_mem_w15. 1: enable 0: disable.'
+  - name: USR_DUMMY_IDLE
+    bit_range:
+    - 26
+    - 26
+    description: SPI clock is disable in dummy phase when the bit is enable.
+  - name: USR_MOSI
+    bit_range:
+    - 27
+    - 27
+    description: This bit enable the write-data phase of an operation.
+  - name: USR_MISO
+    bit_range:
+    - 28
+    - 28
+    description: This bit enable the read-data phase of an operation.
+  - name: USR_DUMMY
+    bit_range:
+    - 29
+    - 29
+    description: This bit enable the dummy phase of an operation.
+  - name: USR_ADDR
+    bit_range:
+    - 30
+    - 30
+    description: This bit enable the address phase of an operation.
+  - name: USR_COMMAND
+    bit_range:
+    - 31
+    - 31
+    description: This bit enable the command phase of an operation.
+  side_effects: null
+- id: USER1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 1543503879
+  fields:
+  - name: USR_DUMMY_CYCLELEN
+    bit_range:
+    - 5
+    - 0
+    description: The length in spi_mem_clk cycles of dummy phase. The register value shall be (cycle_num-1).
+  - name: USR_ADDR_BITLEN
+    bit_range:
+    - 31
+    - 26
+    description: The length in bits of address phase. The register value shall be (bit_num-1).
+  side_effects: null
+- id: USER2
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 1879048192
+  fields:
+  - name: USR_COMMAND_VALUE
+    bit_range:
+    - 15
+    - 0
+    description: The value of  command.
+  - name: USR_COMMAND_BITLEN
+    bit_range:
+    - 31
+    - 28
+    description: The length in bits of command phase. The register value shall be (bit_num-1)
+  side_effects: null
+- id: MOSI_DLEN
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_MOSI_DBITLEN
+    bit_range:
+    - 9
+    - 0
+    description: The length in bits of write-data. The register value shall be (bit_num-1).
+  side_effects: null
+- id: MISO_DLEN
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_MISO_DBITLEN
+    bit_range:
+    - 9
+    - 0
+    description: The length in bits of  read-data. The register value shall be (bit_num-1).
+  side_effects: null
+- id: RD_STATUS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS
+    bit_range:
+    - 15
+    - 0
+    description: The value is stored when set spi_mem_flash_rdsr bit and spi_mem_flash_res bit.
+  - name: WB_MODE
+    bit_range:
+    - 23
+    - 16
+    description: Mode bits in the flash fast read mode  it is combined with spi_mem_fastrd_mode bit.
+  side_effects: null
+- id: MISC
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: CS0_DIS
+    bit_range:
+    - 0
+    - 0
+    description: 'SPI_CS0 pin enable, 1: disable SPI_CS0, 0: SPI_CS0 pin is active to select SPI device, such as flash, external RAM and so on.'
+  - name: CS1_DIS
+    bit_range:
+    - 1
+    - 1
+    description: 'SPI_CS1 pin enable, 1: disable SPI_CS1, 0: SPI_CS1 pin is active to select SPI device, such as flash, external RAM and so on.'
+  - name: CK_IDLE_EDGE
+    bit_range:
+    - 9
+    - 9
+    description: '1: spi clk line is high when idle     0: spi clk line is low when idle'
+  - name: CS_KEEP_ACTIVE
+    bit_range:
+    - 10
+    - 10
+    description: spi cs line keep low when the bit is set.
+  side_effects: null
+- id: TX_CRC
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: DATA
+    bit_range:
+    - 31
+    - 0
+    description: For SPI1, the value of crc32.
+  side_effects: null
+- id: CACHE_FCTRL
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_USR_ADDR_4BYTE
+    bit_range:
+    - 1
+    - 1
+    description: 'For SPI1,  cache  read flash with 4 bytes address, 1: enable, 0:disable.'
+  - name: FDIN_DUAL
+    bit_range:
+    - 3
+    - 3
+    description: 'For SPI1, din phase apply 2 signals. 1: enable 0: disable. The bit is the same with spi_mem_fread_dio.'
+  - name: FDOUT_DUAL
+    bit_range:
+    - 4
+    - 4
+    description: 'For SPI1, dout phase apply 2 signals. 1: enable 0: disable. The bit is the same with spi_mem_fread_dio.'
+  - name: FADDR_DUAL
+    bit_range:
+    - 5
+    - 5
+    description: 'For SPI1, address phase apply 2 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_dio.'
+  - name: FDIN_QUAD
+    bit_range:
+    - 6
+    - 6
+    description: 'For SPI1, din phase apply 4 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_qio.'
+  - name: FDOUT_QUAD
+    bit_range:
+    - 7
+    - 7
+    description: 'For SPI1, dout phase apply 4 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_qio.'
+  - name: FADDR_QUAD
+    bit_range:
+    - 8
+    - 8
+    description: 'For SPI1, address phase apply 4 signals. 1: enable 0: disable.  The bit is the same with spi_mem_fread_qio.'
+  side_effects: null
+- id: W0
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF0
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W1
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF1
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W2
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF2
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W3
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF3
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W4
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF4
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W5
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF5
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W6
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF6
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W7
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF7
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W8
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF8
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W9
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF9
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W10
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF10
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W11
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF11
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W12
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF12
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W13
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF13
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W14
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF14
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W15
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF15
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: FLASH_WAITI_CTRL
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 20
+  fields:
+  - name: WAITI_DUMMY
+    bit_range:
+    - 1
+    - 1
+    description: The dummy phase enable when wait flash idle (RDSR)
+  - name: WAITI_CMD
+    bit_range:
+    - 9
+    - 2
+    description: The command to wait flash idle(RDSR).
+  - name: WAITI_DUMMY_CYCLELEN
+    bit_range:
+    - 15
+    - 10
+    description: The dummy cycle length when wait flash idle(RDSR).
+  side_effects: null
+- id: FLASH_SUS_CTRL
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 134225920
+  fields:
+  - name: FLASH_PER
+    bit_range:
+    - 0
+    - 0
+    description: 'program erase resume bit, program erase suspend operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_PES
+    bit_range:
+    - 1
+    - 1
+    description: 'program erase suspend bit, program erase suspend operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable.'
+  - name: FLASH_PER_WAIT_EN
+    bit_range:
+    - 2
+    - 2
+    description: '1: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 4 or *128) SPI_CLK cycles after program erase resume command is sent. 0: SPI1 does not wait after program erase resume command is sent.'
+  - name: FLASH_PES_WAIT_EN
+    bit_range:
+    - 3
+    - 3
+    description: '1: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 4 or *128) SPI_CLK cycles after program erase suspend command is sent. 0: SPI1 does not wait after program erase suspend command is sent.'
+  - name: PES_PER_EN
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to enable PES end triggers PER transfer option. If this bit is 0, application should send PER after PES is done.
+  - name: FLASH_PES_EN
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to enable Auto-suspending function.
+  - name: PESR_END_MSK
+    bit_range:
+    - 21
+    - 6
+    description: The mask value when check SUS/SUS1/SUS2 status bit. If the read status value is status_in[15:0](only status_in[7:0] is valid when only one byte of data is read out, status_in[15:0] is valid when two bytes of data are read out), SUS/SUS1/SUS2 = status_in[15:0]^ SPI_MEM_PESR_END_MSK[15:0].
+  - name: RD_SUS_2B
+    bit_range:
+    - 22
+    - 22
+    description: '1: Read two bytes when check flash SUS/SUS1/SUS2 status bit. 0:  Read one byte when check flash SUS/SUS1/SUS2 status bit'
+  - name: PER_END_EN
+    bit_range:
+    - 23
+    - 23
+    description: '1: Both WIP and SUS/SUS1/SUS2 bits should be checked to insure the resume status of flash. 0: Only need to check WIP is 0.'
+  - name: PES_END_EN
+    bit_range:
+    - 24
+    - 24
+    description: '1: Both WIP and SUS/SUS1/SUS2 bits should be checked to insure the suspend status of flash. 0: Only need to check WIP is 0.'
+  - name: SUS_TIMEOUT_CNT
+    bit_range:
+    - 31
+    - 25
+    description: When SPI1 checks SUS/SUS1/SUS2 bits fail for SPI_MEM_SUS_TIMEOUT_CNT[6:0] times, it will be treated as check pass.
+  side_effects: null
+- id: FLASH_SUS_CMD
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 357754
+  fields:
+  - name: FLASH_PER_COMMAND
+    bit_range:
+    - 7
+    - 0
+    description: Program/Erase resume command.
+  - name: FLASH_PES_COMMAND
+    bit_range:
+    - 15
+    - 8
+    description: Program/Erase suspend command.
+  - name: WAIT_PESR_COMMAND
+    bit_range:
+    - 31
+    - 16
+    description: Flash SUS/SUS1/SUS2 status bit read command. The command should be sent when SUS/SUS1/SUS2 bit should be checked to insure the suspend or resume status of flash.
+  side_effects: null
+- id: SUS_STATUS
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FLASH_SUS
+    bit_range:
+    - 0
+    - 0
+    description: The status of flash suspend, only used in SPI1.
+  - name: WAIT_PESR_CMD_2B
+    bit_range:
+    - 1
+    - 1
+    description: '1: SPI1 sends out SPI_MEM_WAIT_PESR_COMMAND[15:0] to check SUS/SUS1/SUS2 bit. 0: SPI1 sends out SPI_MEM_WAIT_PESR_COMMAND[7:0] to check SUS/SUS1/SUS2 bit.'
+  - name: FLASH_HPM_DLY_128
+    bit_range:
+    - 2
+    - 2
+    description: '1: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 128) SPI_CLK cycles after HPM command is sent. 0: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 4) SPI_CLK cycles after HPM command is sent.'
+  - name: FLASH_RES_DLY_128
+    bit_range:
+    - 3
+    - 3
+    description: '1: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 128) SPI_CLK cycles after RES command is sent. 0: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 4) SPI_CLK cycles after RES command is sent.'
+  - name: FLASH_DP_DLY_128
+    bit_range:
+    - 4
+    - 4
+    description: '1: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 128) SPI_CLK cycles after DP command is sent. 0: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 4) SPI_CLK cycles after DP command is sent.'
+  - name: FLASH_PER_DLY_128
+    bit_range:
+    - 5
+    - 5
+    description: 'Valid when SPI_MEM_FLASH_PER_WAIT_EN is 1. 1: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 128) SPI_CLK cycles after PER command is sent. 0: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 4) SPI_CLK cycles after PER command is sent.'
+  - name: FLASH_PES_DLY_128
+    bit_range:
+    - 6
+    - 6
+    description: 'Valid when SPI_MEM_FLASH_PES_WAIT_EN is 1. 1: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 128) SPI_CLK cycles after PES command is sent. 0: SPI1 waits (SPI_MEM_CS_HOLD_DELAY_RES[9:0] * 4) SPI_CLK cycles after PES command is sent.'
+  - name: SPI0_LOCK_EN
+    bit_range:
+    - 7
+    - 7
+    description: '1: Enable SPI0 lock SPI0/1 arbiter option. 0: Disable it.'
+  side_effects: null
+- id: TIMING_CALI
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMING_CALI
+    bit_range:
+    - 1
+    - 1
+    description: The bit is used to enable timing auto-calibration for all reading operations.
+  - name: EXTRA_DUMMY_CYCLELEN
+    bit_range:
+    - 4
+    - 2
+    description: add extra dummy spi clock cycle length for spi clock calibration.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PER_END_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The enable bit for SPI_MEM_PER_END_INT interrupt.
+  - name: PES_END_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The enable bit for SPI_MEM_PES_END_INT interrupt.
+  - name: WPE_END_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: The enable bit for SPI_MEM_WPE_END_INT interrupt.
+  - name: SLV_ST_END_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: The enable bit for SPI_MEM_SLV_ST_END_INT interrupt.
+  - name: MST_ST_END_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The enable bit for SPI_MEM_MST_ST_END_INT interrupt.
+  side_effects: null
+- id: INT_CLR
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PER_END_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The clear bit for SPI_MEM_PER_END_INT interrupt.
+  - name: PES_END_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The clear bit for SPI_MEM_PES_END_INT interrupt.
+  - name: WPE_END_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: The clear bit for SPI_MEM_WPE_END_INT interrupt.
+  - name: SLV_ST_END_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: The clear bit for SPI_MEM_SLV_ST_END_INT interrupt.
+  - name: MST_ST_END_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: The clear bit for SPI_MEM_MST_ST_END_INT interrupt.
+  side_effects: null
+- id: INT_RAW
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PER_END_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: 'The raw bit for SPI_MEM_PER_END_INT interrupt. 1: Triggered when Auto Resume command (0x7A) is sent and flash is resumed. 0: Others.'
+  - name: PES_END_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: 'The raw bit for SPI_MEM_PES_END_INT interrupt.1: Triggered when Auto Suspend command (0x75) is sent and flash is suspended. 0: Others.'
+  - name: WPE_END_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: 'The raw bit for SPI_MEM_WPE_END_INT interrupt. 1: Triggered when WRSR/PP/SE/BE/CE is sent and flash is already idle. 0: Others.'
+  - name: SLV_ST_END_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: 'The raw bit for SPI_MEM_SLV_ST_END_INT interrupt. 1: Triggered when spi1_slv_st is changed from non idle state to idle state. It means that SPI_CS raises high. 0: Others'
+  - name: MST_ST_END_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: 'The raw bit for SPI_MEM_MST_ST_END_INT interrupt. 1: Triggered when spi1_mst_st is changed from non idle state to idle state. 0: Others.'
+  side_effects: null
+- id: INT_ST
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PER_END_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The status bit for SPI_MEM_PER_END_INT interrupt.
+  - name: PES_END_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The status bit for SPI_MEM_PES_END_INT interrupt.
+  - name: WPE_END_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: The status bit for SPI_MEM_WPE_END_INT interrupt.
+  - name: SLV_ST_END_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: The status bit for SPI_MEM_SLV_ST_END_INT interrupt.
+  - name: MST_ST_END_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: The status bit for SPI_MEM_MST_ST_END_INT interrupt.
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: 'Register clock gate enable signal. 1: Enable. 0: Disable.'
+  side_effects: null
+- id: DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583472
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: Version control register
+  side_effects: null
+interrupts:
+  SPI1: 18
+timing: null
