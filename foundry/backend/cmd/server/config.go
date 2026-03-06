@@ -16,8 +16,10 @@ type config struct {
 	Port                    string
 	LabWiredPath            string
 	ArtifactsDir            string
+	DataDir                 string
 	DBPath                  string
 	HardwareJSONPath        string
+	CoreConfigsDir          string
 	KeyPrefixBackfillPath   string
 	AllowInsecureStripeHook bool
 	StripeWebhookSecret     string
@@ -30,8 +32,10 @@ func loadConfigFromEnv() (config, error) {
 		Port:                  envOrDefault("PORT", "8080"),
 		LabWiredPath:          envOrDefault("LABWIRED_PATH", "labwired"),
 		ArtifactsDir:          envOrDefault("ARTIFACTS_DIR", "/tmp/foundry/artifacts"),
+		DataDir:               envOrDefault("DATA_DIR", "data"),
 		DBPath:                envOrDefault("DB_PATH", "foundry.db"),
 		HardwareJSONPath:      envOrDefault("HARDWARE_JSON_PATH", "configs/renode_hardware.json"),
+		CoreConfigsDir:        envOrDefault("CORE_CONFIGS_DIR", "../../core/configs"),
 		KeyPrefixBackfillPath: strings.TrimSpace(os.Getenv("KEY_PREFIX_BACKFILL_PATH")),
 		StripeWebhookSecret:   strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		AppEnv:                strings.ToLower(strings.TrimSpace(envOrDefault("APP_ENV", "development"))),

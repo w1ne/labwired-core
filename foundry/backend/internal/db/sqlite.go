@@ -48,6 +48,16 @@ type HardwareItem struct {
 	Tier     int    `json:"tier"` // 1 (Top 20%) or 2 (Extended)
 }
 
+// CatalogAsset represents a verified hardware model in the catalog.
+type CatalogAsset struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	PassRate    int    `json:"pass_rate"`
+	Registers   int    `json:"registers"`
+	IrURL       string `json:"ir_url"`
+}
+
 type Store struct {
 	db *sql.DB
 }
@@ -136,6 +146,14 @@ func (s *Store) migrate() error {
 			type TEXT NOT NULL,
 			repl_path TEXT NOT NULL,
 			tier INTEGER NOT NULL DEFAULT 2
+		);`,
+		`CREATE TABLE IF NOT EXISTS catalog_assets (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL,
+			pass_rate INTEGER DEFAULT 0,
+			registers INTEGER DEFAULT 0,
+			ir_url TEXT DEFAULT ''
 		);`,
 		// Non-destructive: add monthly_quota column if it was missing in an older DB.
 		`ALTER TABLE api_keys ADD COLUMN monthly_quota INTEGER NOT NULL DEFAULT 1000;`,
@@ -914,4 +932,55 @@ func (s *Store) ListHardware() ([]HardwareItem, error) {
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+// UpsertCatalogAsset inserts or updates a catalog asset.
+func (s *Store) UpsertCatalogAsset(asset CatalogAsset) error {
+	_, err := s.db.Exec(
+		`INSERT INTO catalog_assets (id, name, description, pass_rate, registers, ir_url)
+		 VALUES (?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   name = excluded.name,
+		   description = excluded.description,
+		   pass_rate = excluded.pass_rate,
+		   registers = excluded.registers,
+		   ir_url = excluded.ir_url`,
+		asset.ID, asset.Name, asset.Description, asset.PassRate, asset.Registers, asset.IrURL,
+	)
+	return err
+}
+
+// ListCatalogAssets returns all assets in the catalog.
+func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
+	rows, err := s.db.Query(`SELECT id, name, description, pass_rate, registers, ir_url FROM catalog_assets ORDER BY id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var assets []CatalogAsset
+	for rows.Next() {
+		var a CatalogAsset
+		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.PassRate, &a.Registers, &a.IrURL); err != nil {
+			return nil, err
+		}
+		assets = append(assets, a)
+	}
+	return assets, nil
+}
+
+// GetCatalogAsset returns a single asset by ID.
+func (s *Store) GetCatalogAsset(id string) (CatalogAsset, bool, error) {
+	var a CatalogAsset
+	err := s.db.QueryRow(
+		`SELECT id, name, description, pass_rate, registers, ir_url FROM catalog_assets WHERE id = ?`,
+		id,
+	).Scan(&a.ID, &a.Name, &a.Description, &a.PassRate, &a.Registers, &a.IrURL)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return a, false, nil
+		}
+		return a, false, err
+	}
+	return a, true, nil
 }

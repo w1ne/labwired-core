@@ -69,9 +69,13 @@ func main() {
 		log.Printf("Key prefix backfill completed: updated %d row(s)", updated)
 	}
 
-	cat := catalog.NewManager()
+	cat := catalog.NewManager(store)
+	if err := cat.SyncFromDisk(cfg.CoreConfigsDir); err != nil {
+		log.Printf("Warning: failed to sync catalog from disk: %v", err)
+	}
+
 	orch := verification.NewOrchestrator(cfg.LabWiredPath)
-	srv := api.NewServer(orch, store, cat, cfg.ArtifactsDir, cfg.ServerOptions)
+	srv := api.NewServer(orch, store, cat, cfg.ArtifactsDir, cfg.DataDir, cfg.ServerOptions)
 
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
