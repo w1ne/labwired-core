@@ -41,6 +41,10 @@ jobs:
         env:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
         run: |
+          if [ -z "${VITE_CLERK_PUBLISHABLE_KEY}" ]; then
+            echo "Missing required secret: VITE_CLERK_PUBLISHABLE_KEY"
+            exit 1
+          fi
           npm ci
           npm run build
 
@@ -69,6 +73,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate frontend build secret present
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "${VITE_CLERK_PUBLISHABLE_KEY}" ]; then
+            echo "Missing required secret: VITE_CLERK_PUBLISHABLE_KEY"
+            exit 1
+          fi
 
       - name: Build and push backend image
         uses: docker/build-push-action@v6
