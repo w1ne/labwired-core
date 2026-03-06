@@ -29,6 +29,7 @@ func newTestServerWithOptions(t *testing.T, mutate func(*ServerOptions)) (*Serve
 	root := t.TempDir()
 	dbPath := filepath.Join(root, "foundry_test.db")
 	artifactsDir := filepath.Join(root, "artifacts")
+	dataDir := filepath.Join(root, "data")
 
 	store, err := db.NewStore(dbPath)
 	if err != nil {
@@ -44,7 +45,7 @@ func newTestServerWithOptions(t *testing.T, mutate func(*ServerOptions)) (*Serve
 	if mutate != nil {
 		mutate(&opts)
 	}
-	srv := NewServer(orch, store, catalog.NewManager(), artifactsDir, opts)
+	srv := NewServer(orch, store, catalog.NewManager(store), artifactsDir, dataDir, opts)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
