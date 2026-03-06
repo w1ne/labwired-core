@@ -11,6 +11,7 @@ interface Props {
 }
 
 const LandingPage = ({ onEnterDashboard }: Props) => {
+    const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
     const { isSignedIn } = useAuth();
     const clerk = useClerk();
     const [copied, setCopied] = useState(false);
@@ -30,6 +31,10 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
     };
 
     const openDashboard = () => {
+        if (!clerkPublishableKey) {
+            window.alert('Dashboard login is not configured yet. Missing VITE_CLERK_PUBLISHABLE_KEY in frontend build.');
+            return;
+        }
         if (isSignedIn) {
             onEnterDashboard();
             return;
