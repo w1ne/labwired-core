@@ -1,0 +1,498 @@
+peripheral: SYSTIMER
+version: 0.1.0
+registers:
+- id: CONF
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1174405120
+  fields:
+  - name: SYSTIMER_CLK_FO
+    bit_range:
+    - 0
+    - 0
+    description: systimer clock force on
+  - name: TARGET2_WORK_EN
+    bit_range:
+    - 22
+    - 22
+    description: target2 work enable
+  - name: TARGET1_WORK_EN
+    bit_range:
+    - 23
+    - 23
+    description: target1 work enable
+  - name: TARGET0_WORK_EN
+    bit_range:
+    - 24
+    - 24
+    description: target0 work enable
+  - name: TIMER_UNIT1_CORE1_STALL_EN
+    bit_range:
+    - 25
+    - 25
+    description: If timer unit1 is stalled when core1 stalled
+  - name: TIMER_UNIT1_CORE0_STALL_EN
+    bit_range:
+    - 26
+    - 26
+    description: If timer unit1 is stalled when core0 stalled
+  - name: TIMER_UNIT0_CORE1_STALL_EN
+    bit_range:
+    - 27
+    - 27
+    description: If timer unit0 is stalled when core1 stalled
+  - name: TIMER_UNIT0_CORE0_STALL_EN
+    bit_range:
+    - 28
+    - 28
+    description: If timer unit0 is stalled when core0 stalled
+  - name: TIMER_UNIT1_WORK_EN
+    bit_range:
+    - 29
+    - 29
+    description: timer unit1 work enable
+  - name: TIMER_UNIT0_WORK_EN
+    bit_range:
+    - 30
+    - 30
+    description: timer unit0 work enable
+  - name: CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: register file clk gating
+  side_effects: null
+- id: UNIT0_OP
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT0_VALUE_VALID
+    bit_range:
+    - 29
+    - 29
+    description: reg_timer_unit0_value_valid
+  - name: TIMER_UNIT0_UPDATE
+    bit_range:
+    - 30
+    - 30
+    description: update timer_unit0
+  side_effects: null
+- id: UNIT1_OP
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT1_VALUE_VALID
+    bit_range:
+    - 29
+    - 29
+    description: timer value is sync and valid
+  - name: TIMER_UNIT1_UPDATE
+    bit_range:
+    - 30
+    - 30
+    description: update timer unit1
+  side_effects: null
+- id: UNIT0_LOAD_HI
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT0_LOAD_HI
+    bit_range:
+    - 19
+    - 0
+    description: timer unit0 load high 32 bit
+  side_effects: null
+- id: UNIT0_LOAD_LO
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT0_LOAD_LO
+    bit_range:
+    - 31
+    - 0
+    description: timer unit0 load low 32 bit
+  side_effects: null
+- id: UNIT1_LOAD_HI
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT1_LOAD_HI
+    bit_range:
+    - 19
+    - 0
+    description: timer unit1 load high 32 bit
+  side_effects: null
+- id: UNIT1_LOAD_LO
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT1_LOAD_LO
+    bit_range:
+    - 31
+    - 0
+    description: timer unit1 load low 32 bit
+  side_effects: null
+- id: TARGET0_HI
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_TARGET0_HI
+    bit_range:
+    - 19
+    - 0
+    description: timer taget0 high 32 bit
+  side_effects: null
+- id: TARGET0_LO
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_TARGET0_LO
+    bit_range:
+    - 31
+    - 0
+    description: timer taget0 low 32 bit
+  side_effects: null
+- id: TARGET1_HI
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_TARGET1_HI
+    bit_range:
+    - 19
+    - 0
+    description: timer taget1 high 32 bit
+  side_effects: null
+- id: TARGET1_LO
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_TARGET1_LO
+    bit_range:
+    - 31
+    - 0
+    description: timer taget1 low 32 bit
+  side_effects: null
+- id: TARGET2_HI
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_TARGET2_HI
+    bit_range:
+    - 19
+    - 0
+    description: timer taget2 high 32 bit
+  side_effects: null
+- id: TARGET2_LO
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_TARGET2_LO
+    bit_range:
+    - 31
+    - 0
+    description: timer taget2 low 32 bit
+  side_effects: null
+- id: TARGET0_CONF
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TARGET0_PERIOD
+    bit_range:
+    - 25
+    - 0
+    description: target0 period
+  - name: TARGET0_PERIOD_MODE
+    bit_range:
+    - 30
+    - 30
+    description: Set target0 to period mode
+  - name: TARGET0_TIMER_UNIT_SEL
+    bit_range:
+    - 31
+    - 31
+    description: select which unit to compare
+  side_effects: null
+- id: TARGET1_CONF
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TARGET1_PERIOD
+    bit_range:
+    - 25
+    - 0
+    description: target1 period
+  - name: TARGET1_PERIOD_MODE
+    bit_range:
+    - 30
+    - 30
+    description: Set target1 to period mode
+  - name: TARGET1_TIMER_UNIT_SEL
+    bit_range:
+    - 31
+    - 31
+    description: select which unit to compare
+  side_effects: null
+- id: TARGET2_CONF
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TARGET2_PERIOD
+    bit_range:
+    - 25
+    - 0
+    description: target2 period
+  - name: TARGET2_PERIOD_MODE
+    bit_range:
+    - 30
+    - 30
+    description: Set target2 to period mode
+  - name: TARGET2_TIMER_UNIT_SEL
+    bit_range:
+    - 31
+    - 31
+    description: select which unit to compare
+  side_effects: null
+- id: UNIT0_VALUE_HI
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT0_VALUE_HI
+    bit_range:
+    - 19
+    - 0
+    description: timer read value high 32bit
+  side_effects: null
+- id: UNIT0_VALUE_LO
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT0_VALUE_LO
+    bit_range:
+    - 31
+    - 0
+    description: timer read value low 32bit
+  side_effects: null
+- id: UNIT1_VALUE_HI
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT1_VALUE_HI
+    bit_range:
+    - 19
+    - 0
+    description: timer read value high 32bit
+  side_effects: null
+- id: UNIT1_VALUE_LO
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT1_VALUE_LO
+    bit_range:
+    - 31
+    - 0
+    description: timer read value low 32bit
+  side_effects: null
+- id: COMP0_LOAD
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_COMP0_LOAD
+    bit_range:
+    - 0
+    - 0
+    description: timer comp0 load value
+  side_effects: null
+- id: COMP1_LOAD
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_COMP1_LOAD
+    bit_range:
+    - 0
+    - 0
+    description: timer comp1 load value
+  side_effects: null
+- id: COMP2_LOAD
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_COMP2_LOAD
+    bit_range:
+    - 0
+    - 0
+    description: timer comp2 load value
+  side_effects: null
+- id: UNIT0_LOAD
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT0_LOAD
+    bit_range:
+    - 0
+    - 0
+    description: timer unit0 load value
+  side_effects: null
+- id: UNIT1_LOAD
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_UNIT1_LOAD
+    bit_range:
+    - 0
+    - 0
+    description: timer unit1 load value
+  side_effects: null
+- id: INT_ENA
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TARGET0_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: interupt0 enable
+  - name: TARGET1_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: interupt1 enable
+  - name: TARGET2_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: interupt2 enable
+  side_effects: null
+- id: INT_RAW
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TARGET0_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: interupt0 raw
+  - name: TARGET1_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: interupt1 raw
+  - name: TARGET2_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: interupt2 raw
+  side_effects: null
+- id: INT_CLR
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TARGET0_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: interupt0 clear
+  - name: TARGET1_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: interupt1 clear
+  - name: TARGET2_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: interupt2 clear
+  side_effects: null
+- id: INT_ST
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TARGET0_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: reg_target0_int_st
+  - name: TARGET1_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: reg_target1_int_st
+  - name: TARGET2_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: reg_target2_int_st
+  side_effects: null
+- id: DATE
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 33579377
+  fields:
+  - name: DATE
+    bit_range:
+    - 31
+    - 0
+    description: reg_date
+  side_effects: null
+interrupts:
+  SYSTIMER_TARGET0: 37
+  SYSTIMER_TARGET2: 39
+  SYSTIMER_TARGET1: 38
+timing: null

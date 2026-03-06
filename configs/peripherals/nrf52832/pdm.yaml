@@ -1,0 +1,230 @@
+peripheral: PDM
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STARTED
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STOPPED
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_END
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STARTED
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for STARTED event
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for STOPPED event
+  - name: END
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for END event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STARTED
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for STARTED event
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for STOPPED event
+  - name: END
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for END event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STARTED
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for STARTED event
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for STOPPED event
+  - name: END
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for END event
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable PDM module
+  side_effects: null
+- id: PDMCLKCTRL
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 138412032
+  fields:
+  - name: FREQ
+    bit_range:
+    - 31
+    - 0
+    description: PDM_CLK frequency
+  side_effects: null
+- id: MODE
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OPERATION
+    bit_range:
+    - 0
+    - 0
+    description: Mono or stereo operation
+  - name: EDGE
+    bit_range:
+    - 1
+    - 1
+    description: Defines on which PDM_CLK edge Left (or mono) is sampled
+  side_effects: null
+- id: GAINL
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 40
+  fields:
+  - name: GAINL
+    bit_range:
+    - 6
+    - 0
+    description: Left output gain adjustment, in 0.5 dB steps, around the default module gain (see electrical parameters) 0x00    -20 dB gain adjust 0x01  -19.5 dB gain adjust (...) 0x27   -0.5 dB gain adjust 0x28      0 dB gain adjust 0x29   +0.5 dB gain adjust (...) 0x4F  +19.5 dB gain adjust 0x50    +20 dB gain adjust
+  side_effects: null
+- id: GAINR
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 40
+  fields:
+  - name: GAINR
+    bit_range:
+    - 7
+    - 0
+    description: Right output gain adjustment, in 0.5 dB steps, around the default module gain (see electrical parameters)
+  side_effects: null
+- id: PSEL_CLK
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_DIN
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: SAMPLE_PTR
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SAMPLEPTR
+    bit_range:
+    - 31
+    - 0
+    description: Address to write PDM samples to over DMA
+  side_effects: null
+- id: SAMPLE_MAXCNT
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFSIZE
+    bit_range:
+    - 14
+    - 0
+    description: Length of DMA RAM allocation in number of samples
+  side_effects: null
+interrupts:
+  PDM: 29
+timing: null

@@ -12,6 +12,7 @@
 
 name: "stm32h563zi"
 arch: "arm"
+registers_count: 220
 flash:
   base: 0x08000000
   size: "2MB"

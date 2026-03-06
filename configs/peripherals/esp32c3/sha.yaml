@@ -1,0 +1,318 @@
+peripheral: SHA
+version: 0.1.0
+registers:
+- id: MODE
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 2
+    - 0
+    description: Sha mode.
+  side_effects: null
+- id: T_STRING
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T_STRING
+    bit_range:
+    - 31
+    - 0
+    description: Sha t_string (used if and only if mode == SHA_512/t).
+  side_effects: null
+- id: T_LENGTH
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T_LENGTH
+    bit_range:
+    - 5
+    - 0
+    description: Sha t_length (used if and only if mode == SHA_512/t).
+  side_effects: null
+- id: DMA_BLOCK_NUM
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_BLOCK_NUM
+    bit_range:
+    - 5
+    - 0
+    description: Dma-sha block number.
+  side_effects: null
+- id: START
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 1
+    description: Reserved.
+  side_effects: null
+- id: CONTINUE
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CONTINUE
+    bit_range:
+    - 31
+    - 1
+    description: Reserved.
+  side_effects: null
+- id: BUSY
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATE
+    bit_range:
+    - 0
+    - 0
+    description: 'Sha busy state. 1''b0: idle. 1''b1: busy.'
+  side_effects: null
+- id: DMA_START
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_START
+    bit_range:
+    - 0
+    - 0
+    description: Start dma-sha.
+  side_effects: null
+- id: DMA_CONTINUE
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_CONTINUE
+    bit_range:
+    - 0
+    - 0
+    description: Continue dma-sha.
+  side_effects: null
+- id: CLEAR_IRQ
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLEAR_INTERRUPT
+    bit_range:
+    - 0
+    - 0
+    description: Clear sha interrupt.
+  side_effects: null
+- id: IRQ_ENA
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERRUPT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: 'Sha interrupt enable register. 1''b0: disable(default). 1''b1: enable.'
+  side_effects: null
+- id: DATE
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 538969622
+  fields:
+  - name: DATE
+    bit_range:
+    - 29
+    - 0
+    description: Sha date information/ sha version information.
+  side_effects: null
+- id: H_MEM0
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM1
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM2
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM3
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM4
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM5
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM6
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM7
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM1
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM2
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM3
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM4
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM5
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM6
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM7
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM8
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM9
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM10
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM11
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM12
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM13
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM14
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: M_MEM15
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+interrupts:
+  SHA: 49
+timing: null

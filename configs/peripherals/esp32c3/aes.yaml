@@ -1,0 +1,490 @@
+peripheral: AES
+version: 0.1.0
+registers:
+- id: KEY_0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_0
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_0 that is a part of key material.
+  side_effects: null
+- id: KEY_1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_1
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_1 that is a part of key material.
+  side_effects: null
+- id: KEY_2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_2
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_2 that is a part of key material.
+  side_effects: null
+- id: KEY_3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_3
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_3 that is a part of key material.
+  side_effects: null
+- id: KEY_4
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_4
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_4 that is a part of key material.
+  side_effects: null
+- id: KEY_5
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_5
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_5 that is a part of key material.
+  side_effects: null
+- id: KEY_6
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_6
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_6 that is a part of key material.
+  side_effects: null
+- id: KEY_7
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_7
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores key_7 that is a part of key material.
+  side_effects: null
+- id: TEXT_IN_0
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_IN_0
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_in_0 that is a part of source text material.
+  side_effects: null
+- id: TEXT_IN_1
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_IN_1
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_in_1 that is a part of source text material.
+  side_effects: null
+- id: TEXT_IN_2
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_IN_2
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_in_2 that is a part of source text material.
+  side_effects: null
+- id: TEXT_IN_3
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_IN_3
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_in_3 that is a part of source text material.
+  side_effects: null
+- id: TEXT_OUT_0
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_OUT_0
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_out_0 that is a part of result text material.
+  side_effects: null
+- id: TEXT_OUT_1
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_OUT_1
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_out_1 that is a part of result text material.
+  side_effects: null
+- id: TEXT_OUT_2
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_OUT_2
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_out_2 that is a part of result text material.
+  side_effects: null
+- id: TEXT_OUT_3
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEXT_OUT_3
+    bit_range:
+    - 31
+    - 0
+    description: This bits stores text_out_3 that is a part of result text material.
+  side_effects: null
+- id: MODE
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 2
+    - 0
+    description: 'This bits decides which one operation mode will be used. 3''d0: AES-EN-128, 3''d1: AES-EN-192, 3''d2: AES-EN-256, 3''d4: AES-DE-128, 3''d5: AES-DE-192, 3''d6: AES-DE-256.'
+  side_effects: null
+- id: ENDIAN
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDIAN
+    bit_range:
+    - 5
+    - 0
+    description: endian. [1:0] key endian, [3:2] text_in endian or in_stream endian,  [5:4] text_out endian or out_stream endian
+  side_effects: null
+- id: TRIGGER
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGGER
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to start AES calculation.
+  side_effects: null
+- id: STATE
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATE
+    bit_range:
+    - 1
+    - 0
+    description: 'Those bits shows AES status. For typical AES, 0: idle, 1: busy. For DMA-AES, 0: idle, 1: busy, 2: calculation_done.'
+  side_effects: null
+- id: IV_MEM0
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: IV_MEM1
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: IV_MEM2
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: IV_MEM3
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM0
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM1
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM2
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: H_MEM3
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: J0_MEM0
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: J0_MEM1
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: J0_MEM2
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: J0_MEM3
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: T0_MEM0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: T0_MEM1
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: T0_MEM2
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: T0_MEM3
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: DMA_ENABLE
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: '1''b0: typical AES working mode, 1''b1: DMA-AES working mode.'
+  side_effects: null
+- id: BLOCK_MODE
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLOCK_MODE
+    bit_range:
+    - 2
+    - 0
+    description: 'Those bits decides which block mode will be used. 0x0: ECB, 0x1: CBC, 0x2: OFB, 0x3: CTR, 0x4: CFB-8, 0x5: CFB-128, 0x6: GCM, 0x7: reserved.'
+  side_effects: null
+- id: BLOCK_NUM
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BLOCK_NUM
+    bit_range:
+    - 31
+    - 0
+    description: Those bits stores the number of Plaintext/ciphertext block.
+  side_effects: null
+- id: INC_SEL
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INC_SEL
+    bit_range:
+    - 0
+    - 0
+    description: 'This bit decides the standard incrementing function. 0: INC32. 1: INC128.'
+  side_effects: null
+- id: AAD_BLOCK_NUM
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AAD_BLOCK_NUM
+    bit_range:
+    - 31
+    - 0
+    description: Those bits stores the number of AAD block.
+  side_effects: null
+- id: REMAINDER_BIT_NUM
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REMAINDER_BIT_NUM
+    bit_range:
+    - 6
+    - 0
+    description: Those bits stores the number of remainder bit.
+  side_effects: null
+- id: CONTINUE
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CONTINUE
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to continue GCM operation.
+  side_effects: null
+- id: INT_CLEAR
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT_CLEAR
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to clear the AES interrupt.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to enable interrupt that occurs when DMA-AES calculation is done.
+  side_effects: null
+- id: DATE
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 538513936
+  fields:
+  - name: DATE
+    bit_range:
+    - 29
+    - 0
+    description: This bits stores the version information of AES.
+  side_effects: null
+- id: DMA_EXIT
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_EXIT
+    bit_range:
+    - 0
+    - 0
+    description: Set this register to leave calculation done stage. Recommend to use it after software finishes reading DMA's output buffer.
+  side_effects: null
+interrupts:
+  AES: 48
+timing: null

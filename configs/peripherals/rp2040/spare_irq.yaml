@@ -1,0 +1,11 @@
+peripheral: SPARE_IRQ
+version: 0.1.0
+registers: []
+interrupts:
+  SPARE_IRQ_0: 26
+  SPARE_IRQ_2: 28
+  SPARE_IRQ_3: 29
+  SPARE_IRQ_1: 27
+  SPARE_IRQ_4: 30
+  SPARE_IRQ_5: 31
+timing: null

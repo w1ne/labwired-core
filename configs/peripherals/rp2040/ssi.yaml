@@ -1,0 +1,546 @@
+peripheral: SSI
+version: 0.1.0
+registers:
+- id: CTRLR0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DFS
+    bit_range:
+    - 3
+    - 0
+    description: Data frame size
+  - name: FRF
+    bit_range:
+    - 5
+    - 4
+    description: Frame format
+  - name: SCPH
+    bit_range:
+    - 6
+    - 6
+    description: Serial clock phase
+  - name: SCPOL
+    bit_range:
+    - 7
+    - 7
+    description: Serial clock polarity
+  - name: TMOD
+    bit_range:
+    - 9
+    - 8
+    description: Transfer mode
+  - name: SLV_OE
+    bit_range:
+    - 10
+    - 10
+    description: Slave output enable
+  - name: SRL
+    bit_range:
+    - 11
+    - 11
+    description: Shift register loop (test mode)
+  - name: CFS
+    bit_range:
+    - 15
+    - 12
+    description: "Control frame size \n                            Value of n -> n+1 clocks per frame."
+  - name: DFS_32
+    bit_range:
+    - 20
+    - 16
+    description: "Data frame size in 32b transfer mode \n                            Value of n -> n+1 clocks per frame."
+  - name: SPI_FRF
+    bit_range:
+    - 22
+    - 21
+    description: SPI frame format
+  - name: SSTE
+    bit_range:
+    - 24
+    - 24
+    description: Slave select toggle enable
+  side_effects: null
+- id: CTRLR1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NDF
+    bit_range:
+    - 15
+    - 0
+    description: Number of data frames
+  side_effects: null
+- id: SSIENR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SSI_EN
+    bit_range:
+    - 0
+    - 0
+    description: SSI enable
+  side_effects: null
+- id: MWCR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MWMOD
+    bit_range:
+    - 0
+    - 0
+    description: Microwire transfer mode
+  - name: MDD
+    bit_range:
+    - 1
+    - 1
+    description: Microwire control
+  - name: MHS
+    bit_range:
+    - 2
+    - 2
+    description: Microwire handshaking
+  side_effects: null
+- id: SER
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SER
+    bit_range:
+    - 0
+    - 0
+    description: "For each bit: \n                            0 -> slave not selected \n                            1 -> slave selected"
+  side_effects: null
+- id: BAUDR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCKDV
+    bit_range:
+    - 15
+    - 0
+    description: SSI clock divider
+  side_effects: null
+- id: TXFTLR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TFT
+    bit_range:
+    - 7
+    - 0
+    description: Transmit FIFO threshold
+  side_effects: null
+- id: RXFTLR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RFT
+    bit_range:
+    - 7
+    - 0
+    description: Receive FIFO threshold
+  side_effects: null
+- id: TXFLR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TFTFL
+    bit_range:
+    - 7
+    - 0
+    description: Transmit FIFO level
+  side_effects: null
+- id: RXFLR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXTFL
+    bit_range:
+    - 7
+    - 0
+    description: Receive FIFO level
+  side_effects: null
+- id: SR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUSY
+    bit_range:
+    - 0
+    - 0
+    description: SSI busy flag
+  - name: TFNF
+    bit_range:
+    - 1
+    - 1
+    description: Transmit FIFO not full
+  - name: TFE
+    bit_range:
+    - 2
+    - 2
+    description: Transmit FIFO empty
+  - name: RFNE
+    bit_range:
+    - 3
+    - 3
+    description: Receive FIFO not empty
+  - name: RFF
+    bit_range:
+    - 4
+    - 4
+    description: Receive FIFO full
+  - name: TXE
+    bit_range:
+    - 5
+    - 5
+    description: Transmission error
+  - name: DCOL
+    bit_range:
+    - 6
+    - 6
+    description: Data collision error
+  side_effects: null
+- id: IMR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXEIM
+    bit_range:
+    - 0
+    - 0
+    description: Transmit FIFO empty interrupt mask
+  - name: TXOIM
+    bit_range:
+    - 1
+    - 1
+    description: Transmit FIFO overflow interrupt mask
+  - name: RXUIM
+    bit_range:
+    - 2
+    - 2
+    description: Receive FIFO underflow interrupt mask
+  - name: RXOIM
+    bit_range:
+    - 3
+    - 3
+    description: Receive FIFO overflow interrupt mask
+  - name: RXFIM
+    bit_range:
+    - 4
+    - 4
+    description: Receive FIFO full interrupt mask
+  - name: MSTIM
+    bit_range:
+    - 5
+    - 5
+    description: Multi-master contention interrupt mask
+  side_effects: null
+- id: ISR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXEIS
+    bit_range:
+    - 0
+    - 0
+    description: Transmit FIFO empty interrupt status
+  - name: TXOIS
+    bit_range:
+    - 1
+    - 1
+    description: Transmit FIFO overflow interrupt status
+  - name: RXUIS
+    bit_range:
+    - 2
+    - 2
+    description: Receive FIFO underflow interrupt status
+  - name: RXOIS
+    bit_range:
+    - 3
+    - 3
+    description: Receive FIFO overflow interrupt status
+  - name: RXFIS
+    bit_range:
+    - 4
+    - 4
+    description: Receive FIFO full interrupt status
+  - name: MSTIS
+    bit_range:
+    - 5
+    - 5
+    description: Multi-master contention interrupt status
+  side_effects: null
+- id: RISR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXEIR
+    bit_range:
+    - 0
+    - 0
+    description: Transmit FIFO empty raw interrupt status
+  - name: TXOIR
+    bit_range:
+    - 1
+    - 1
+    description: Transmit FIFO overflow raw interrupt status
+  - name: RXUIR
+    bit_range:
+    - 2
+    - 2
+    description: Receive FIFO underflow raw interrupt status
+  - name: RXOIR
+    bit_range:
+    - 3
+    - 3
+    description: Receive FIFO overflow raw interrupt status
+  - name: RXFIR
+    bit_range:
+    - 4
+    - 4
+    description: Receive FIFO full raw interrupt status
+  - name: MSTIR
+    bit_range:
+    - 5
+    - 5
+    description: Multi-master contention raw interrupt status
+  side_effects: null
+- id: TXOICR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXOICR
+    bit_range:
+    - 0
+    - 0
+    description: Clear-on-read transmit FIFO overflow interrupt
+  side_effects: null
+- id: RXOICR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXOICR
+    bit_range:
+    - 0
+    - 0
+    description: Clear-on-read receive FIFO overflow interrupt
+  side_effects: null
+- id: RXUICR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXUICR
+    bit_range:
+    - 0
+    - 0
+    description: Clear-on-read receive FIFO underflow interrupt
+  side_effects: null
+- id: MSTICR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MSTICR
+    bit_range:
+    - 0
+    - 0
+    description: Clear-on-read multi-master contention interrupt
+  side_effects: null
+- id: ICR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ICR
+    bit_range:
+    - 0
+    - 0
+    description: Clear-on-read all active interrupts
+  side_effects: null
+- id: DMACR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RDMAE
+    bit_range:
+    - 0
+    - 0
+    description: Receive DMA enable
+  - name: TDMAE
+    bit_range:
+    - 1
+    - 1
+    description: Transmit DMA enable
+  side_effects: null
+- id: DMATDLR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMATDL
+    bit_range:
+    - 7
+    - 0
+    description: Transmit data watermark level
+  side_effects: null
+- id: DMARDLR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMARDL
+    bit_range:
+    - 7
+    - 0
+    description: Receive data watermark level (DMARDLR+1)
+  side_effects: null
+- id: IDR
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 1364414537
+  fields:
+  - name: IDCODE
+    bit_range:
+    - 31
+    - 0
+    description: Peripheral dentification code
+  side_effects: null
+- id: SSI_VERSION_ID
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 875573546
+  fields:
+  - name: SSI_COMP_VERSION
+    bit_range:
+    - 31
+    - 0
+    description: SNPS component version (format X.YY)
+  side_effects: null
+- id: DR0
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DR
+    bit_range:
+    - 31
+    - 0
+    description: First data register of 36
+  side_effects: null
+- id: RX_SAMPLE_DLY
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RSD
+    bit_range:
+    - 7
+    - 0
+    description: RXD sample delay (in SCLK cycles)
+  side_effects: null
+- id: SPI_CTRLR0
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 50331648
+  fields:
+  - name: TRANS_TYPE
+    bit_range:
+    - 1
+    - 0
+    description: Address and instruction transfer format
+  - name: ADDR_L
+    bit_range:
+    - 5
+    - 2
+    description: Address length (0b-60b in 4b increments)
+  - name: INST_L
+    bit_range:
+    - 9
+    - 8
+    description: Instruction length (0/4/8/16b)
+  - name: WAIT_CYCLES
+    bit_range:
+    - 15
+    - 11
+    description: Wait cycles between control frame transmit and data reception (in SCLK cycles)
+  - name: SPI_DDR_EN
+    bit_range:
+    - 16
+    - 16
+    description: SPI DDR transfer enable
+  - name: INST_DDR_EN
+    bit_range:
+    - 17
+    - 17
+    description: Instruction DDR transfer enable
+  - name: SPI_RXDS_EN
+    bit_range:
+    - 18
+    - 18
+    description: Read data strobe enable
+  - name: XIP_CMD
+    bit_range:
+    - 31
+    - 24
+    description: SPI Command to send in XIP mode (INST_L = 8-bit) or to append to Address (INST_L = 0-bit)
+  side_effects: null
+- id: TXD_DRIVE_EDGE
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TDE
+    bit_range:
+    - 7
+    - 0
+    description: TXD drive edge
+  side_effects: null
+interrupts: null
+timing: null

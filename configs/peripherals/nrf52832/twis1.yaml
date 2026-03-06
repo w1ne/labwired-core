@@ -1,0 +1,421 @@
+peripheral: TWIS1
+version: 0.1.0
+registers:
+- id: TASKS_STOP
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SUSPEND
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_RESUME
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_PREPARERX
+  address_offset: 48
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_PREPARETX
+  address_offset: 52
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STOPPED
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ERROR
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RXSTARTED
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TXSTARTED
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_WRITE
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_READ
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE_SUSPEND
+    bit_range:
+    - 13
+    - 13
+    description: Shortcut between WRITE event and SUSPEND task
+  - name: READ_SUSPEND
+    bit_range:
+    - 14
+    - 14
+    description: Shortcut between READ event and SUSPEND task
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for STOPPED event
+  - name: ERROR
+    bit_range:
+    - 9
+    - 9
+    description: Enable or disable interrupt for ERROR event
+  - name: RXSTARTED
+    bit_range:
+    - 19
+    - 19
+    description: Enable or disable interrupt for RXSTARTED event
+  - name: TXSTARTED
+    bit_range:
+    - 20
+    - 20
+    description: Enable or disable interrupt for TXSTARTED event
+  - name: WRITE
+    bit_range:
+    - 25
+    - 25
+    description: Enable or disable interrupt for WRITE event
+  - name: READ
+    bit_range:
+    - 26
+    - 26
+    description: Enable or disable interrupt for READ event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for STOPPED event
+  - name: ERROR
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Enable interrupt for ERROR event
+  - name: RXSTARTED
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Enable interrupt for RXSTARTED event
+  - name: TXSTARTED
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Enable interrupt for TXSTARTED event
+  - name: WRITE
+    bit_range:
+    - 25
+    - 25
+    description: Write '1' to Enable interrupt for WRITE event
+  - name: READ
+    bit_range:
+    - 26
+    - 26
+    description: Write '1' to Enable interrupt for READ event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for STOPPED event
+  - name: ERROR
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Disable interrupt for ERROR event
+  - name: RXSTARTED
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Disable interrupt for RXSTARTED event
+  - name: TXSTARTED
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Disable interrupt for TXSTARTED event
+  - name: WRITE
+    bit_range:
+    - 25
+    - 25
+    description: Write '1' to Disable interrupt for WRITE event
+  - name: READ
+    bit_range:
+    - 26
+    - 26
+    description: Write '1' to Disable interrupt for READ event
+  side_effects: null
+- id: ERRORSRC
+  address_offset: 1232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OVERFLOW
+    bit_range:
+    - 0
+    - 0
+    description: RX buffer overflow detected, and prevented
+  - name: DNACK
+    bit_range:
+    - 2
+    - 2
+    description: NACK sent after receiving a data byte
+  - name: OVERREAD
+    bit_range:
+    - 3
+    - 3
+    description: TX buffer over-read detected, and prevented
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: MATCH
+  address_offset: 1236
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MATCH
+    bit_range:
+    - 0
+    - 0
+    description: Which of the addresses in {ADDRESS} matched the incoming address
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 3
+    - 0
+    description: Enable or disable TWIS
+  side_effects: null
+- id: PSEL_SCL
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_SDA
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: RXD_PTR
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: RXD Data pointer
+  side_effects: null
+- id: RXD_MAXCNT
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 7
+    - 0
+    description: Maximum number of bytes in RXD buffer
+  side_effects: null
+- id: RXD_AMOUNT
+  address_offset: 1340
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 7
+    - 0
+    description: Number of bytes transferred in the last RXD transaction
+  side_effects: null
+- id: TXD_PTR
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: TXD Data pointer
+  side_effects: null
+- id: TXD_MAXCNT
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 7
+    - 0
+    description: Maximum number of bytes in TXD buffer
+  side_effects: null
+- id: TXD_AMOUNT
+  address_offset: 1356
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 7
+    - 0
+    description: Number of bytes transferred in the last TXD transaction
+  side_effects: null
+- id: ADDRESS0
+  address_offset: 1416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRESS
+    bit_range:
+    - 6
+    - 0
+    description: TWI slave address
+  side_effects: null
+- id: ADDRESS1
+  address_offset: 1420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDRESS
+    bit_range:
+    - 6
+    - 0
+    description: TWI slave address
+  side_effects: null
+- id: CONFIG
+  address_offset: 1428
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: ADDRESS0
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable address matching on ADDRESS[0]
+  - name: ADDRESS1
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable address matching on ADDRESS[1]
+  side_effects: null
+- id: ORC
+  address_offset: 1472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ORC
+    bit_range:
+    - 7
+    - 0
+    description: Over-read character. Character sent out in case of an over-read of the transmit buffer.
+  side_effects: null
+interrupts:
+  SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0: 3
+  SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1: 4
+timing: null

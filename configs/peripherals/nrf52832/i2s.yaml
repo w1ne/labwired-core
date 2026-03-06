@@ -1,0 +1,360 @@
+peripheral: I2S
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RXPTRUPD
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STOPPED
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TXPTRUPD
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXPTRUPD
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for RXPTRUPD event
+  - name: STOPPED
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for STOPPED event
+  - name: TXPTRUPD
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable interrupt for TXPTRUPD event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXPTRUPD
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for RXPTRUPD event
+  - name: STOPPED
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for STOPPED event
+  - name: TXPTRUPD
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable interrupt for TXPTRUPD event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXPTRUPD
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for RXPTRUPD event
+  - name: STOPPED
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for STOPPED event
+  - name: TXPTRUPD
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable interrupt for TXPTRUPD event
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable I2S module.
+  side_effects: null
+- id: CONFIG_MODE
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 0
+    - 0
+    description: I2S mode.
+  side_effects: null
+- id: CONFIG_RXEN
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXEN
+    bit_range:
+    - 0
+    - 0
+    description: Reception (RX) enable.
+  side_effects: null
+- id: CONFIG_TXEN
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: TXEN
+    bit_range:
+    - 0
+    - 0
+    description: Transmission (TX) enable.
+  side_effects: null
+- id: CONFIG_MCKEN
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: MCKEN
+    bit_range:
+    - 0
+    - 0
+    description: Master clock generator enable.
+  side_effects: null
+- id: CONFIG_MCKFREQ
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 536870912
+  fields:
+  - name: MCKFREQ
+    bit_range:
+    - 31
+    - 0
+    description: Master clock generator frequency.
+  side_effects: null
+- id: CONFIG_RATIO
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 6
+  fields:
+  - name: RATIO
+    bit_range:
+    - 3
+    - 0
+    description: MCK / LRCK ratio.
+  side_effects: null
+- id: CONFIG_SWIDTH
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: SWIDTH
+    bit_range:
+    - 1
+    - 0
+    description: Sample width.
+  side_effects: null
+- id: CONFIG_ALIGN
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALIGN
+    bit_range:
+    - 0
+    - 0
+    description: Alignment of sample within a frame.
+  side_effects: null
+- id: CONFIG_FORMAT
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FORMAT
+    bit_range:
+    - 0
+    - 0
+    description: Frame format.
+  side_effects: null
+- id: CONFIG_CHANNELS
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CHANNELS
+    bit_range:
+    - 1
+    - 0
+    description: Enable channels.
+  side_effects: null
+- id: RXD_PTR
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Receive buffer Data RAM start address. When receiving, words containing samples will be written to this address. This address is a word aligned Data RAM address.
+  side_effects: null
+- id: TXD_PTR
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Transmit buffer Data RAM start address. When transmitting, words containing samples will be fetched from this address. This address is a word aligned Data RAM address.
+  side_effects: null
+- id: RXTXD_MAXCNT
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 13
+    - 0
+    description: Size of RXD and TXD buffers in number of 32 bit words.
+  side_effects: null
+- id: PSEL_MCK
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_SCK
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_LRCK
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_SDIN
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_SDOUT
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+interrupts:
+  I2S: 37
+timing: null

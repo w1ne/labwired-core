@@ -1,0 +1,32 @@
+peripheral: BB
+version: 0.1.0
+registers:
+- id: BBPD_CTRL
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DC_EST_FORCE_PD
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: DC_EST_FORCE_PU
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: FFT_FORCE_PD
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: FFT_FORCE_PU
+    bit_range:
+    - 3
+    - 3
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

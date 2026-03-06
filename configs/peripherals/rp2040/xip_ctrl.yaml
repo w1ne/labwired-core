@@ -1,0 +1,122 @@
+peripheral: XIP_CTRL
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "When 1, enable the cache. When the cache is disabled, all XIP accesses \n                            will go straight to the flash, without querying the cache. When enabled, \n                            cacheable XIP accesses will query the cache, and the flash will \n                            not be accessed if the tag matches and the valid bit is set.\n\n                            If the cache is enabled, cache-as-SRAM accesses have no effect on the \n                            cache data RAM, and will produce a bus error response."
+  - name: ERR_BADWRITE
+    bit_range:
+    - 1
+    - 1
+    description: "When 1, writes to any alias other than 0x0 (caching, allocating) \n                            will produce a bus fault. When 0, these writes are silently ignored. \n                            In either case, writes to the 0x0 alias will deallocate on tag match, \n                            as usual."
+  - name: POWER_DOWN
+    bit_range:
+    - 3
+    - 3
+    description: "When 1, the cache memories are powered down. They retain state, \n                            but can not be accessed. This reduces static power dissipation. \n                            Writing 1 to this bit forces CTRL_EN to 0, i.e. the cache cannot \n                            be enabled when powered down. \n                            Cache-as-SRAM accesses will produce a bus error response when \n                            the cache is powered down."
+  side_effects: null
+- id: FLUSH
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FLUSH
+    bit_range:
+    - 0
+    - 0
+    description: "Write 1 to flush the cache. This clears the tag memory, but \n                            the data memory retains its contents. (This means cache-as-SRAM \n                            contents is not affected by flush or reset.) \n                            Reading will hold the bus (stall the processor) until the flush \n                            completes. Alternatively STAT can be polled until completion."
+  side_effects: null
+- id: STAT
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: FLUSH_READY
+    bit_range:
+    - 0
+    - 0
+    description: "Reads as 0 while a cache flush is in progress, and 1 otherwise. \n                            The cache is flushed whenever the XIP block is reset, and also \n                            when requested via the FLUSH register."
+  - name: FIFO_EMPTY
+    bit_range:
+    - 1
+    - 1
+    description: When 1, indicates the XIP streaming FIFO is completely empty.
+  - name: FIFO_FULL
+    bit_range:
+    - 2
+    - 2
+    description: "When 1, indicates the XIP streaming FIFO is completely full. \n                            The streaming FIFO is 2 entries deep, so the full and empty \n                            flag allow its level to be ascertained."
+  side_effects: null
+- id: CTR_HIT
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTR_HIT
+    bit_range:
+    - 31
+    - 0
+    description: "A 32 bit saturating counter that increments upon each cache hit, \n                            i.e. when an XIP access is serviced directly from cached data. \n                            Write any value to clear."
+  side_effects: null
+- id: CTR_ACC
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTR_ACC
+    bit_range:
+    - 31
+    - 0
+    description: "A 32 bit saturating counter that increments upon each XIP access, \n                            whether the cache is hit or not. This includes noncacheable accesses. \n                            Write any value to clear."
+  side_effects: null
+- id: STREAM_ADDR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STREAM_ADDR
+    bit_range:
+    - 31
+    - 2
+    description: "The address of the next word to be streamed from flash to the streaming FIFO. \n                            Increments automatically after each flash access. \n                            Write the initial access address here before starting a streaming read."
+  side_effects: null
+- id: STREAM_CTR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STREAM_CTR
+    bit_range:
+    - 21
+    - 0
+    description: "Write a nonzero value to start a streaming read. This will then \n                            progress in the background, using flash idle cycles to transfer \n                            a linear data block from flash to the streaming FIFO. \n                            Decrements automatically (1 at a time) as the stream \n                            progresses, and halts on reaching 0. \n                            Write 0 to halt an in-progress stream, and discard any in-flight \n                            read, so that a new stream can immediately be started (after \n                            draining the FIFO and reinitialising STREAM_ADDR)"
+  side_effects: null
+- id: STREAM_FIFO
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STREAM_FIFO
+    bit_range:
+    - 31
+    - 0
+    description: "Streamed data is buffered here, for retrieval by the system DMA. \n                            This FIFO can also be accessed via the XIP_AUX slave, to avoid exposing \n                            the DMA to bus stalls caused by other XIP traffic."
+  side_effects: null
+interrupts:
+  XIP_IRQ: 6
+timing: null
