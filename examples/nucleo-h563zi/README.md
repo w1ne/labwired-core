@@ -15,7 +15,7 @@ For a presentation-ready narrative, see `../../../docs/NUCLEO_H563ZI_DEMO.md`.
 3. Board IO behavior for LEDs (`PB0`, `PF4`, `PG4`) and button (`PC13`).
 4. Full-chip smoke path for currently modeled H563 peripherals (`RCC`, `SYSTICK`, `UART`, `GPIOA..GPIOG`).
 5. Hardware-in-the-loop parity: blink + UART output on a physical NUCLEO-H563ZI board.
-
+6. **Golden Reference**: Standardized determinism proof between hardware and simulation.
 ## Quick Start
 
 Run from `core/`.
@@ -88,7 +88,10 @@ Real board checks:
 - `scripts/run_blink_uart_hardware.sh`: hardware-only flash + UART check
 - `scripts/run_blink_uart_emulator.sh`: emulator-only blink check
 - `scripts/run_video_demo.sh`: concise recording-oriented end-to-end run
-
+- `golden-reference/`: determinism proof artifacts
+  - `determinism_report_h563.json`: PASS/FAIL evidence
+  - `hw_trace.json`: hardware instruction trace
+  - `sim_trace.json`: simulation instruction trace
 Repository hygiene note:
 - Recording artifacts/logs are written to `/tmp` unless `--artifacts-dir` is provided.
 

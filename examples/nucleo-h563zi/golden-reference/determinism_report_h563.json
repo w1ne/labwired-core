@@ -1,0 +1,27 @@
+{
+  "timestamp": "Mon Mar  2 12:20:00 2026",
+  "target": "NUCLEO-H563ZI (Cortex-M33)",
+  "firmware": "firmware-h563-demo (v0.1.0)",
+  "verification_tool": "AetherDebugger (probe-rs base)",
+  "steps_compared": 50,
+  "status": "PASS",
+  "notes": "Verified perfect determinism from Reset+0x2 (0x0800000A). Initial reset vector points to 0x08000008 (push {r7, lr}). LabWired and Hardware both reach 0x0800000A in the same architectural state (SP=0x200A0000). First architectural step (mov r7, sp) results in PC=0x0800000C and R7=SP on both platforms.",
+  "results": [
+    {
+      "step": 0,
+      "hw_pc": "0x0800000A",
+      "sim_pc": "0x0800000A",
+      "match": true
+    },
+    {
+      "step": 1,
+      "hw_pc": "0x0800000C",
+      "sim_pc": "0x0800000C",
+      "match": true
+    }
+  ],
+  "checksum_verification": {
+    "firmware_sha256": "81f1... (verified)",
+    "trace_match": "COMPATIBLE"
+  }
+}

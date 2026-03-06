@@ -148,6 +148,8 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
 
     let status = Command::new("cargo")
         .current_dir(project_root)
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
         .args(args)
         .status()?;
 

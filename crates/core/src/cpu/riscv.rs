@@ -424,6 +424,15 @@ impl Cpu for RiscV {
         }
 
         self.pc = next_pc;
+
+        let mut registers = [0u32; 33];
+        registers[..32].copy_from_slice(&self.x);
+        registers[32] = self.pc;
+
+        for obs in observers {
+            obs.on_step_end(1, &registers);
+        }
+
         Ok(())
     }
 

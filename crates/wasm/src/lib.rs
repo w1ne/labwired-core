@@ -26,7 +26,7 @@ impl std::error::Error for WasmGdbError {}
 // Thread-local output buffer that WasmGdbConn writes into, allowing retrieval after
 // GdbStub consumes the connection.
 thread_local! {
-    static GDB_OUTPUT: RefCell<Vec<u8>> = RefCell::new(Vec::new());
+    static GDB_OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
 struct WasmGdbConn {

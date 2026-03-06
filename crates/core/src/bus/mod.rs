@@ -1023,6 +1023,7 @@ mod tests {
         }
 
         impl crate::SimulationObserver for MockObserver {
+            fn on_step_end(&self, _cycles: u32, _registers: &[u32]) {}
             fn on_memory_write(&self, addr: u64, old: u8, new: u8) {
                 self.writes.lock().unwrap().push((addr, old, new));
             }

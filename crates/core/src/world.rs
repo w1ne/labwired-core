@@ -4,7 +4,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::{Cpu, Machine, SimResult};
+use crate::network::Interconnect;
+use crate::{Bus, Cpu, Machine, SimResult};
 use std::collections::HashMap;
 
 /// The orchestrator for a multi-node simulation environment.
@@ -14,6 +15,7 @@ use std::collections::HashMap;
 pub struct World {
     pub name: String,
     pub machines: HashMap<String, Box<dyn MachineTrait>>,
+    pub interconnects: Vec<Box<dyn Interconnect>>,
 }
 
 /// Type-erased trait for machines to allow heterogeneous machines in the world.
@@ -22,6 +24,8 @@ pub trait MachineTrait: Send {
     fn step(&mut self) -> SimResult<()>;
     fn reset(&mut self) -> SimResult<()>;
     fn total_cycles(&self) -> u64;
+    fn read_u8(&self, addr: u64) -> SimResult<u8>;
+    fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()>;
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -41,6 +45,14 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
     fn total_cycles(&self) -> u64 {
         self.total_cycles
     }
+
+    fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        self.bus.read_u8(addr)
+    }
+
+    fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()> {
+        self.bus.write_u8(addr, val)
+    }
 }
 
 impl World {
@@ -48,11 +60,16 @@ impl World {
         Self {
             name,
             machines: HashMap::new(),
+            interconnects: Vec::new(),
         }
     }
 
     pub fn add_machine(&mut self, id: String, machine: Box<dyn MachineTrait>) {
         self.machines.insert(id, machine);
+    }
+
+    pub fn add_interconnect(&mut self, interconnect: Box<dyn Interconnect>) {
+        self.interconnects.push(interconnect);
     }
 
     /// Step all machines in the world.
@@ -64,6 +81,11 @@ impl World {
         let mut results = HashMap::new();
         for (id, machine) in &mut self.machines {
             results.insert(id.clone(), machine.step());
+        }
+        for interconnect in &mut self.interconnects {
+            if let Err(e) = interconnect.tick() {
+                eprintln!("Interconnect error: {:?}", e);
+            }
         }
         results
     }
@@ -119,5 +141,79 @@ mod tests {
 
         assert_eq!(world.machines.get("node1").unwrap().total_cycles(), 1);
         assert_eq!(world.machines.get("node2").unwrap().total_cycles(), 1);
+    }
+
+    use crate::network::CanBus;
+    use crate::peripherals::can::CanController;
+    use crate::Peripheral;
+
+    #[test]
+    fn test_can_bus_transmission() {
+        let mut world = World::new("test-can".to_string());
+
+        let mut can_bus = CanBus::new();
+        let (tx1, rx1) = can_bus.attach();
+        let (tx2, rx2) = can_bus.attach();
+
+        world.add_interconnect(Box::new(can_bus));
+
+        let mut can1 = CanController::new(tx1, rx1);
+        let mut can2 = CanController::new(tx2, rx2);
+
+        can1.write(0x00, 0xAA).unwrap();
+        can1.write(0x04, 0x12).unwrap();
+        can1.write(0x05, 0x34).unwrap();
+        can1.write(0x08, 0x01).unwrap();
+
+        let _ = world.step_all();
+
+        let _ = can2.tick();
+
+        let status = can2.read(0x08).unwrap();
+        assert_eq!(status, 1, "RX pending should be 1");
+
+        let rx_id = can2.read(0x0C).unwrap();
+        assert_eq!(rx_id, 0xAA);
+
+        let rx_data_0 = can2.read(0x10).unwrap();
+        let rx_data_1 = can2.read(0x11).unwrap();
+        assert_eq!(rx_data_0, 0x12);
+        assert_eq!(rx_data_1, 0x34);
+    }
+
+    use crate::network::WirelessBus;
+    use crate::peripherals::radio::RadioController;
+
+    #[test]
+    fn test_wireless_bus_transmission() {
+        let mut world = World::new("test-wireless".to_string());
+
+        let mut wireless_bus = WirelessBus::new();
+        let (tx1, rx1) = wireless_bus.attach();
+        let (tx2, rx2) = wireless_bus.attach();
+
+        world.add_interconnect(Box::new(wireless_bus));
+
+        let mut radio1 = RadioController::new(tx1, rx1);
+        let mut radio2 = RadioController::new(tx2, rx2);
+
+        // Setup channels (Channel 10)
+        radio1.write(0x00, 10).unwrap(); // TX CH
+        radio2.write(0x00, 10).unwrap(); // Also needs to be on index 10 to receive
+
+        // Trigger TX on radio1
+        radio1.write(0x08, 0x01).unwrap();
+
+        // Step the world
+        let _ = world.step_all();
+
+        // Tick radio2 to process incoming packet
+        let _ = radio2.tick();
+
+        let status = radio2.read(0x0C).unwrap();
+        assert_eq!(status, 1, "RX pending should be 1");
+
+        let rx_ch = radio2.read(0x10).unwrap();
+        assert_eq!(rx_ch, 10);
     }
 }
