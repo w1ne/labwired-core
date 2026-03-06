@@ -9,12 +9,25 @@ import (
 	"strings"
 	"time"
 
+	clerk "github.com/clerk/clerk-sdk-go/v2"
+	clerkjwt "github.com/clerk/clerk-sdk-go/v2/jwt"
+	"github.com/clerk/clerk-sdk-go/v2/jwks"
 	"github.com/labwired/foundry-backend/internal/db"
 )
 
 type contextKey string
 
 const apiKeyContextKey contextKey = "api_key"
+const clerkUserIDKey contextKey = "clerk_user_id"
+
+func clerkUserIDFromContext(ctx context.Context) (string, bool) {
+	v := ctx.Value(clerkUserIDKey)
+	if v == nil {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok && s != ""
+}
 
 func apiKeyFromContext(ctx context.Context) (*db.APIKey, bool) {
 	v := ctx.Value(apiKeyContextKey)
@@ -47,6 +60,30 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 
 		// Add API Key info to context
 		ctx := context.WithValue(r.Context(), apiKeyContextKey, apiKey)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (s *Server) clerkAuthMiddleware(next http.Handler) http.Handler {
+	jwksClient := jwks.NewClient(&clerk.ClientConfig{
+		BackendConfig: clerk.BackendConfig{Key: &s.clerkSecretKey},
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Missing or invalid Authorization header.", "Use Authorization: Bearer <clerk_session_token>.")
+			return
+		}
+		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		claims, err := clerkjwt.Verify(r.Context(), &clerkjwt.VerifyParams{
+			Token:      token,
+			JWKSClient: jwksClient,
+		})
+		if err != nil {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or expired session token.", err.Error())
+			return
+		}
+		ctx := context.WithValue(r.Context(), clerkUserIDKey, claims.Subject)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

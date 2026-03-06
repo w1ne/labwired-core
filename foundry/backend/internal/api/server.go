@@ -94,8 +94,9 @@ type Server struct {
 	orchestrator *verification.Orchestrator
 	store        *db.Store
 	catalog      *catalog.Manager
-	artifactsDir string
-	dataDir      string
+	artifactsDir   string
+	dataDir        string
+	clerkSecretKey string
 
 	scheduleMu         sync.Mutex
 	scheduleCond       *sync.Cond
@@ -136,6 +137,7 @@ type ServerOptions struct {
 	RateLimitPerAPIKey       int
 	RateLimitPerWorkspace    int
 	RateLimitWindow          time.Duration
+	ClerkSecretKey           string
 }
 
 func DefaultServerOptions() ServerOptions {
@@ -243,6 +245,7 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 		rateLimitPerWorkspace:    opts.RateLimitPerWorkspace,
 		rateLimitWindow:          opts.RateLimitWindow,
 		cleanupStopCh:            make(chan struct{}),
+		clerkSecretKey:           opts.ClerkSecretKey,
 	}
 	s.scheduleCond = sync.NewCond(&s.scheduleMu)
 	s.routes()
@@ -523,6 +526,17 @@ func (s *Server) routes() {
 	protected.HandleFunc("/runs", s.handleListRuns).Methods("GET")
 
 	protected.HandleFunc("/usage", s.handleUsage).Methods("GET")
+
+	// Account routes (Clerk JWT auth — personal cabinet)
+	if s.clerkSecretKey != "" {
+		account := s.router.PathPrefix("/v1/account").Subrouter()
+		account.Use(s.clerkAuthMiddleware)
+		account.HandleFunc("/usage", s.handleAccountUsage).Methods("GET")
+		account.HandleFunc("/runs", s.handleAccountRuns).Methods("GET")
+		account.HandleFunc("/keys", s.handleListAccountKeys).Methods("GET")
+		account.HandleFunc("/keys", s.handleCreateAccountKey).Methods("POST")
+		account.HandleFunc("/keys/{key_id}", s.handleRevokeAccountKey).Methods("DELETE")
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

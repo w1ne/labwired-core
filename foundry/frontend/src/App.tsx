@@ -27,7 +27,7 @@ export function parseRoute(): { route: Route; assetId?: string; runId?: string }
 }
 
 function App() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
   const [routeState, setRouteState] = useState(parseRoute());
 
   useEffect(() => {
@@ -39,6 +39,8 @@ function App() {
   const navigate = (hash: string) => {
     window.location.hash = hash;
   };
+
+  if (!isLoaded) return null;
 
   if (routeState.route === 'landing') {
     return <LandingPage onEnterDashboard={() => navigate('/dashboard')} />;

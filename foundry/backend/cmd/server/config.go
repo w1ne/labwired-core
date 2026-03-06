@@ -25,6 +25,7 @@ type config struct {
 	StripeWebhookSecret     string
 	AppEnv                  string
 	ServerOptions           api.ServerOptions
+	ClerkSecretKey          string
 }
 
 func loadConfigFromEnv() (config, error) {
@@ -39,6 +40,7 @@ func loadConfigFromEnv() (config, error) {
 		KeyPrefixBackfillPath: strings.TrimSpace(os.Getenv("KEY_PREFIX_BACKFILL_PATH")),
 		StripeWebhookSecret:   strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		AppEnv:                strings.ToLower(strings.TrimSpace(envOrDefault("APP_ENV", "development"))),
+		ClerkSecretKey:        strings.TrimSpace(os.Getenv("CLERK_SECRET_KEY")),
 		ServerOptions:         api.DefaultServerOptions(),
 	}
 
@@ -96,6 +98,8 @@ func loadConfigFromEnv() (config, error) {
 	if err := validateStripeConfig(cfg.AppEnv, cfg.StripeWebhookSecret, cfg.AllowInsecureStripeHook); err != nil {
 		return config{}, err
 	}
+
+	cfg.ServerOptions.ClerkSecretKey = cfg.ClerkSecretKey
 
 	return cfg, nil
 }

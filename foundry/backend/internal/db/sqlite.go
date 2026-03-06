@@ -177,7 +177,10 @@ func (s *Store) migrate() error {
 		`ALTER TABLE simulation_runs ADD COLUMN last_error TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE simulation_runs ADD COLUMN claimed_at TIMESTAMP NULL;`,
 		`ALTER TABLE simulation_runs ADD COLUMN worker_id TEXT NOT NULL DEFAULT '';`,
+		// Non-destructive: add clerk_user_id column if missing.
+		`ALTER TABLE api_keys ADD COLUMN clerk_user_id TEXT NOT NULL DEFAULT '';`,
 		`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);`,
+		`CREATE INDEX IF NOT EXISTS idx_api_keys_clerk_user ON api_keys(clerk_user_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_simulation_runs_workspace_created ON simulation_runs(workspace_id, created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_requests(created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_request_rate_windows_window_start ON request_rate_windows(window_start);`,
@@ -985,6 +988,74 @@ func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
 		assets = append(assets, a)
 	}
 	return assets, nil
+}
+
+// AccountUsage holds aggregated quota/usage for a Clerk account.
+type AccountUsage struct {
+	ClerkUserID        string `json:"clerk_user_id"`
+	Tier               string `json:"tier"`
+	RunsUsedThisMonth  int    `json:"runs_used_this_month"`
+	Quota              int    `json:"quota"`
+	RunsRemaining      int    `json:"runs_remaining"`
+}
+
+// GetAccountUsage returns aggregated usage across all non-revoked API keys for a Clerk user.
+func (s *Store) GetAccountUsage(clerkUserID string) (AccountUsage, error) {
+	var used, quota int
+	var tier string
+	err := s.db.QueryRow(`
+		SELECT
+			COALESCE(SUM(r.billable), 0),
+			COALESCE(SUM(k.monthly_quota), 0),
+			COALESCE(MAX(k.tier), 'builder')
+		FROM api_keys k
+		LEFT JOIN simulation_runs r
+			ON r.workspace_id = k.workspace_id
+			AND datetime(r.created_at) >= datetime('now', '-30 days')
+		WHERE k.clerk_user_id = ? AND k.revoked = FALSE
+	`, clerkUserID).Scan(&used, &quota, &tier)
+	if err != nil {
+		return AccountUsage{}, err
+	}
+	if quota == 0 {
+		quota = 1000
+	}
+	remaining := quota - used
+	if remaining < 0 {
+		remaining = 0
+	}
+	return AccountUsage{
+		ClerkUserID:       clerkUserID,
+		Tier:              tier,
+		RunsUsedThisMonth: used,
+		Quota:             quota,
+		RunsRemaining:     remaining,
+	}, nil
+}
+
+// ListRunsForClerkUser returns the 50 most recent runs across all API keys for a Clerk user.
+func (s *Store) ListRunsForClerkUser(clerkUserID string) ([]RunRecord, error) {
+	rows, err := s.db.Query(`
+		SELECT r.run_id, r.workspace_id, r.status, r.assertions_passed, r.assertions_total, r.artifacts_path, r.created_at
+		FROM simulation_runs r
+		JOIN api_keys k ON k.workspace_id = r.workspace_id
+		WHERE k.clerk_user_id = ? AND k.revoked = FALSE
+		ORDER BY r.created_at DESC LIMIT 50
+	`, clerkUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []RunRecord
+	for rows.Next() {
+		var r RunRecord
+		if err := rows.Scan(&r.RunID, &r.WorkspaceID, &r.Status, &r.AssertionsPassed, &r.AssertionsTotal, &r.ArtifactsPath, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, nil
 }
 
 // GetCatalogAsset returns a single asset by ID.
