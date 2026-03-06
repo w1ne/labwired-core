@@ -3,6 +3,7 @@ use crate::cpu::cortex_m::CortexM;
 use crate::{Bus, Cpu, Machine};
 use labwired_config::{ChipDescriptor, SystemManifest};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_rp2040_full_smoke() {
@@ -22,6 +23,9 @@ fn test_rp2040_full_smoke() {
     manifest.chip = anchored_chip.to_str().unwrap().to_string();
 
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("Failed to build bus");
+
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
 
     // Thumb-1 Code for Cortex-M0+ (RP2040)
     // ldr r0, [pc, #8]  -> 4802 (loads 0x40034000 into r0)
@@ -51,15 +55,10 @@ fn test_rp2040_full_smoke() {
         machine.step().expect("Simulation failed");
     }
 
-    // Verify UART0 UARTDR contains 'K' (the last value written)
-    // The UART in RP2040 is a PL011. Data register is at offset 0.
-    let uart0_idx = machine
-        .bus
-        .find_peripheral_index_by_name("uart0")
-        .expect("UART0 not found");
-    let uart0 = &machine.bus.peripherals[uart0_idx].dev;
-
-    // Peek the data register offset 0
-    let last_val = uart0.peek(0).expect("Failed to peek UART0");
-    assert_eq!(last_val, 75, "UART0 should contain 'K' (75)");
+    let data = sink.lock().unwrap();
+    assert_eq!(
+        *data.last().expect("UART output empty"),
+        75,
+        "UART0 should contain 'K' (75)"
+    );
 }

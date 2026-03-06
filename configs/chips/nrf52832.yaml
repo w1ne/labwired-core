@@ -10,7 +10,7 @@ ram:
   size: "64KB"
 peripherals:
   - id: "uart0"
-    type: "declarative"
+    type: "uart"
     base_address: 0x40002000
     config:
-      path: "../peripherals/nrf52832/uart0.yaml"
+      profile: "nrf52"

@@ -3,6 +3,7 @@ use crate::cpu::cortex_m::CortexM;
 use crate::{Bus, Cpu, Machine};
 use labwired_config::{ChipDescriptor, SystemManifest};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_nrf52_full_smoke() {
@@ -21,6 +22,9 @@ fn test_nrf52_full_smoke() {
     manifest.chip = anchored_chip.to_str().unwrap().to_string();
 
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("Failed to build bus");
+
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
 
     // Thumb-1 Code for Cortex-M4F (nRF52)
     let code = vec![
@@ -47,16 +51,10 @@ fn test_nrf52_full_smoke() {
         machine.step().expect("Simulation failed");
     }
 
-    let uart0_idx = machine
-        .bus
-        .find_peripheral_index_by_name("uart0")
-        .expect("UART0 not found");
-    let uart0 = &machine.bus.peripherals[uart0_idx].dev;
-
-    // The UART in nRF52. TXD is at offset 0x51C.
-    // Since it's WRITE_ONLY, peek() returns 0. We check the raw data via snapshot.
-    let snap = uart0.snapshot();
-    let data_array = snap.get("data").unwrap().as_array().unwrap();
-    let last_val = data_array[0x51C].as_u64().unwrap() as u8;
-    assert_eq!(last_val, 75, "UART0 TXD should contain 'K' (75)");
+    let data = sink.lock().unwrap();
+    assert_eq!(
+        *data.last().expect("UART output empty"),
+        75,
+        "UART0 TXD should contain 'K' (75)"
+    );
 }

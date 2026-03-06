@@ -10,12 +10,11 @@ ram:
   size: "256KB"
 peripherals:
   - id: "pio0"
-    type: "declarative"
+    type: "pio"
     base_address: 0x50200000
-    config:
-      path: "../peripherals/rp2040/pio0.yaml"
+    size: "4KB"
   - id: "uart0"
-    type: "declarative"
+    type: "uart"
     base_address: 0x40034000
     config:
-      path: "../peripherals/rp2040/uart0.yaml"
+      profile: "stm32f1"
