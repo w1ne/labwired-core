@@ -12,6 +12,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  VITE_CLERK_PUBLISHABLE_KEY_REPO: pk_test_ZmFjdHVhbC11bmljb3JuLTk0LmNsZXJrLmFjY291bnRzLmRldiQ
+
 jobs:
   test:
     runs-on: self-hosted
@@ -39,7 +42,7 @@ jobs:
       - name: Frontend build
         working-directory: foundry/frontend
         env:
-          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY != '' && secrets.VITE_CLERK_PUBLISHABLE_KEY || env.VITE_CLERK_PUBLISHABLE_KEY_REPO }}
         run: |
           if [ -z "${VITE_CLERK_PUBLISHABLE_KEY}" ]; then
             echo "Missing required secret: VITE_CLERK_PUBLISHABLE_KEY"
@@ -76,7 +79,7 @@ jobs:
 
       - name: Validate frontend build secret present
         env:
-          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY != '' && secrets.VITE_CLERK_PUBLISHABLE_KEY || env.VITE_CLERK_PUBLISHABLE_KEY_REPO }}
         run: |
           if [ -z "${VITE_CLERK_PUBLISHABLE_KEY}" ]; then
             echo "Missing required secret: VITE_CLERK_PUBLISHABLE_KEY"
@@ -100,7 +103,7 @@ jobs:
           file: foundry/frontend/Dockerfile
           push: true
           build-args: |
-            VITE_CLERK_PUBLISHABLE_KEY=${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+            VITE_CLERK_PUBLISHABLE_KEY=${{ secrets.VITE_CLERK_PUBLISHABLE_KEY != '' && secrets.VITE_CLERK_PUBLISHABLE_KEY || env.VITE_CLERK_PUBLISHABLE_KEY_REPO }}
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:${{ steps.meta.outputs.image_tag }}
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:latest
