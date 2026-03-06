@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/react';
 import './App.css';
 import Sidebar from './components/Sidebar';
 import AssetCatalog from './components/AssetCatalog';
@@ -14,13 +15,15 @@ function parseRoute(): { route: Route; assetId?: string } {
   if (hash.startsWith('/assets/')) {
     return { route: 'asset', assetId: hash.replace('/assets/', '') };
   }
-  if (hash === '/dashboard' || hash === '/catalog') return { route: 'catalog' };
+  if (hash === '/dashboard') return { route: 'usage' };
+  if (hash === '/catalog') return { route: 'catalog' };
   if (hash === '/usage') return { route: 'usage' };
   if (hash === '/health') return { route: 'health' };
   return { route: 'landing' };
 }
 
 function App() {
+  const { isSignedIn } = useAuth();
   const [routeState, setRouteState] = useState(parseRoute());
 
   useEffect(() => {
@@ -39,6 +42,11 @@ function App() {
 
   if (routeState.route === 'asset' && routeState.assetId) {
     return <AssetDetail id={routeState.assetId} onBack={() => navigate('/dashboard')} />;
+  }
+
+  // Keep catalog public, but require auth for dashboard/usage/health routes.
+  if (!isSignedIn && (routeState.route === 'usage' || routeState.route === 'health')) {
+    return <LandingPage onEnterDashboard={() => navigate('/dashboard')} />;
   }
 
   return (

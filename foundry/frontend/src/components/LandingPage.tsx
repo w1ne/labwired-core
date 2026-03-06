@@ -1,7 +1,7 @@
 import { apiUrl, STRIPE_PAYMENT_LINK } from '../api';
 import { Show, SignInButton, UserButton } from '@clerk/react';
 
-const CURL_SNIPPET = `curl -X POST https://foundry.labwired.dev/v1/models/verify \\
+const CURL_SNIPPET = `curl -X POST https://foundry.labwired.com/v1/models/verify \\
   -H "Authorization: Bearer lw_sk_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"chip_yaml": "device: ADXL345\\nregisters: ..."}'`;
@@ -39,7 +39,7 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                     LABWIRED <span style={{ color: 'var(--lw-pink)' }}>FOUNDRY</span>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <a href="https://api.labwired.com/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
+                    <a href="/v1/docs" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--lw-gray)', textDecoration: 'none', fontWeight: 600, marginRight: '0.5rem' }}>API Docs</a>
                     <button className="secondary" onClick={() => window.location.hash = '/catalog'}>Catalog</button>
                     <Show when="signed-out">
                         <SignInButton mode="modal" fallbackRedirectUrl="#/dashboard">
@@ -191,7 +191,7 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
             {/* FOOTER */}
             <footer style={{ borderTop: 'var(--lw-border)', padding: '1.5rem 2.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--lw-gray)' }}>
                 <span>© 2026 LabWired</span>
-                <a href="https://api.labwired.com/v1/openapi.yaml" style={{ color: 'var(--lw-gray)', textDecoration: 'none' }}>OpenAPI spec</a>
+                <a href="/v1/openapi.yaml" style={{ color: 'var(--lw-gray)', textDecoration: 'none' }}>OpenAPI spec</a>
             </footer>
         </div>
     );
