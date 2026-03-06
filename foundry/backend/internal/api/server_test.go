@@ -567,6 +567,85 @@ func TestEstimate_PayloadTooLargeReturns413(t *testing.T) {
 	}
 }
 
+func TestVerifyModel_JSONChipYAMLIsPersistedAsRawYAML(t *testing.T) {
+	srv, store, artifactsDir := newTestServer(t)
+	key := createKey(t, store, "ws-verify-json")
+
+	body := []byte(`{"peripheral_id":"demo","chip_yaml":"registers: []"}`)
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/models/verify", key, body)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		RunID string `json:"run_id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.RunID == "" {
+		t.Fatalf("expected run_id in response")
+	}
+
+	inputPath := filepath.Join(artifactsDir, resp.RunID, "input.yaml")
+	got, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("failed reading persisted input.yaml: %v", err)
+	}
+	if string(got) != "registers: []" {
+		t.Fatalf("unexpected persisted yaml: got=%q want=%q", string(got), "registers: []")
+	}
+}
+
+func TestVerifyModel_InvalidJSONReturns400(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-verify-invalid-json")
+
+	body := []byte(`{"chip_yaml":`)
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/models/verify", key, body)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var apiErr APIError
+	if err := json.Unmarshal(rr.Body.Bytes(), &apiErr); err != nil {
+		t.Fatalf("failed to decode APIError: %v", err)
+	}
+	if apiErr.Code != "INVALID_JSON" {
+		t.Fatalf("unexpected error code: %s", apiErr.Code)
+	}
+}
+
+func TestVerifySystem_SystemYAMLIsAccepted(t *testing.T) {
+	srv, store, artifactsDir := newTestServer(t)
+	key := createKey(t, store, "ws-verify-system-json")
+
+	body := []byte(`{"system_yaml":"mcu: demo"}`)
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/systems/verify", key, body)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		RunID string `json:"run_id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.RunID == "" {
+		t.Fatalf("expected run_id in response")
+	}
+
+	inputPath := filepath.Join(artifactsDir, resp.RunID, "input.yaml")
+	got, err := os.ReadFile(inputPath)
+	if err != nil {
+		t.Fatalf("failed reading persisted input.yaml: %v", err)
+	}
+	if string(got) != "mcu: demo" {
+		t.Fatalf("unexpected persisted yaml: got=%q want=%q", string(got), "mcu: demo")
+	}
+}
+
 func TestCleanupExpiredArtifacts_RemovesDirAndClearsDBPath(t *testing.T) {
 	srv, store, artifactsDir := newTestServer(t)
 
@@ -731,6 +810,53 @@ func TestListHardware_ReturnsJSON(t *testing.T) {
 	}
 	if items[0].ID != "h1" || items[1].ID != "h2" {
 		t.Errorf("unexpected ordering or content: %+v", items)
+	}
+}
+
+func TestDataCatalogArtifact_IsServedFromDataDir(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+
+	modelData := []byte(`{"device":"demo"}`)
+	err := srv.catalog.PromoteToCatalog(
+		db.CatalogAsset{
+			ID:          "demo-asset",
+			Name:        "demo-asset",
+			Description: "demo",
+			PassRate:    100,
+			Registers:   1,
+		},
+		modelData,
+		srv.dataDir,
+	)
+	if err != nil {
+		t.Fatalf("PromoteToCatalog failed: %v", err)
+	}
+
+	rrCatalog := httptest.NewRecorder()
+	reqCatalog := httptest.NewRequest(http.MethodGet, "/v1/catalog/demo-asset", nil)
+	srv.ServeHTTP(rrCatalog, reqCatalog)
+	if rrCatalog.Code != http.StatusOK {
+		t.Fatalf("expected 200 catalog response, got %d body=%s", rrCatalog.Code, rrCatalog.Body.String())
+	}
+
+	var asset struct {
+		IrURL string `json:"ir_url"`
+	}
+	if err := json.Unmarshal(rrCatalog.Body.Bytes(), &asset); err != nil {
+		t.Fatalf("failed to decode catalog asset: %v", err)
+	}
+	if asset.IrURL == "" {
+		t.Fatalf("expected ir_url in catalog response")
+	}
+
+	rrFile := httptest.NewRecorder()
+	reqFile := httptest.NewRequest(http.MethodGet, asset.IrURL, nil)
+	srv.ServeHTTP(rrFile, reqFile)
+	if rrFile.Code != http.StatusOK {
+		t.Fatalf("expected 200 data artifact response, got %d body=%s", rrFile.Code, rrFile.Body.String())
+	}
+	if rrFile.Body.String() != string(modelData) {
+		t.Fatalf("unexpected artifact body: got=%q want=%q", rrFile.Body.String(), string(modelData))
 	}
 }
 

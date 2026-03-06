@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -498,6 +499,7 @@ func (s *Server) routes() {
 		http.ServeFile(w, r, "static/openapi.yaml")
 	}).Methods("GET")
 	s.router.PathPrefix("/v1/docs").Handler(http.StripPrefix("/v1/docs", http.FileServer(http.Dir("static"))))
+	s.router.PathPrefix("/data/").Handler(http.StripPrefix("/data/", http.FileServer(http.Dir(s.dataDir))))
 
 	// Stripe webhook (no API key auth — verified by signature)
 	s.router.HandleFunc("/v1/webhooks/stripe", s.handleStripeWebhook).Methods("POST")
@@ -979,8 +981,6 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 
 	s.jobs.Store(primaryRunID, job)
 	enqueued = true
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
 	resp := map[string]interface{}{
 		"job_id":   jobID,
 		"run_id":   primaryRunID,
@@ -988,20 +988,23 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 		"poll_url": fmt.Sprintf("/v1/runs/%s", primaryRunID),
 		"message":  "Synthesis job queued. The AI engine is analyzing the datasheet and generating the model.",
 	}
+	w.Header().Set("Content-Type", "application/json")
 	if idempotencyKey != "" {
 		body, err := json.Marshal(resp)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to persist idempotency response.", "Retry later.")
 			return
 		}
-		if err := s.store.CompleteIdempotencyRequest(apiKey.WorkspaceID, "/v1/synthesize", idempotencyKey, primaryRunID, http.StatusAccepted, string(body)); err != nil {
+		if err := s.completeIdempotencyWithRetry(apiKey.WorkspaceID, "/v1/synthesize", idempotencyKey, primaryRunID, http.StatusAccepted, string(body)); err != nil {
 			sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to persist idempotency response.", "Retry later.")
 			return
 		}
 		idemCompleted = true
+		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write(body)
 		return
 	}
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(resp)
 }
 
@@ -1124,27 +1127,28 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, prefix string
 		enqueued = true
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
 	resp := map[string]interface{}{
 		"run_id":   runID,
 		"status":   string(StatusQueued),
 		"poll_url": fmt.Sprintf("/v1/runs/%s", runID),
 	}
+	w.Header().Set("Content-Type", "application/json")
 	if idempotencyKey != "" {
 		respBody, err := json.Marshal(resp)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to persist idempotency response.", "Retry later.")
 			return
 		}
-		if err := s.store.CompleteIdempotencyRequest(apiKey.WorkspaceID, endpoint, idempotencyKey, runID, http.StatusAccepted, string(respBody)); err != nil {
+		if err := s.completeIdempotencyWithRetry(apiKey.WorkspaceID, endpoint, idempotencyKey, runID, http.StatusAccepted, string(respBody)); err != nil {
 			sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to persist idempotency response.", "Retry later.")
 			return
 		}
 		idemCompleted = true
+		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write(respBody)
 		return
 	}
+	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(resp)
 }
 
@@ -1152,20 +1156,68 @@ func (s *Server) handleVerifyModel(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxVerifyBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		if strings.Contains(err.Error(), "http: request body too large") {
+			sendError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Request body exceeds size limit.", "Reduce request size and retry.")
+			return
+		}
 		sendError(w, http.StatusBadRequest, "INVALID_BODY", "Could not read request body.", "")
 		return
 	}
-	s.submitJob(w, r, "run-model", body)
+	normalized, ok := parseVerifyPayload(w, body)
+	if !ok {
+		return
+	}
+	s.submitJob(w, r, "run-model", normalized)
 }
 
 func (s *Server) handleVerifySystem(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxVerifyBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		if strings.Contains(err.Error(), "http: request body too large") {
+			sendError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Request body exceeds size limit.", "Reduce request size and retry.")
+			return
+		}
 		sendError(w, http.StatusBadRequest, "INVALID_BODY", "Could not read request body.", "")
 		return
 	}
-	s.submitJob(w, r, "run-system", body)
+	normalized, ok := parseVerifyPayload(w, body)
+	if !ok {
+		return
+	}
+	s.submitJob(w, r, "run-system", normalized)
+}
+
+func parseVerifyPayload(w http.ResponseWriter, body []byte) ([]byte, bool) {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "chip_yaml is required.", "Provide raw YAML body or JSON with chip_yaml.")
+		return nil, false
+	}
+
+	// Accept the documented JSON wrapper: {"chip_yaml":"...","peripheral_id":"optional"}
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		var req struct {
+			ChipYAML   string `json:"chip_yaml"`
+			SystemYAML string `json:"system_yaml"`
+		}
+		if err := json.Unmarshal(trimmed, &req); err != nil {
+			sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax.")
+			return nil, false
+		}
+		payload := strings.TrimSpace(req.ChipYAML)
+		if payload == "" {
+			payload = strings.TrimSpace(req.SystemYAML)
+		}
+		if payload == "" {
+			sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "chip_yaml or system_yaml is required.", "Provide a non-empty chip_yaml (model) or system_yaml (system) field.")
+			return nil, false
+		}
+		return []byte(sanitizeInput(payload)), true
+	}
+
+	// Backward-compatible path: raw YAML body.
+	return []byte(sanitizeInput(string(trimmed))), true
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
@@ -1377,13 +1429,30 @@ func (s *Server) handleSchemaSynthesis(w http.ResponseWriter, r *http.Request) {
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"type": "object",
 		"properties": {
-			"peripheral_id": { "type": "string", "description": "Unique identifier" },
+			"peripheral_id": { "type": "string", "description": "Optional identifier for your peripheral model" },
 			"chip_yaml": { "type": "string", "description": "LabWired YAML specification" }
 		},
-		"required": ["peripheral_id", "chip_yaml"]
+		"required": ["chip_yaml"]
 	}`
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(schema))
+}
+
+func (s *Server) completeIdempotencyWithRetry(workspaceID, endpoint, key, runID string, statusCode int, responseBody string) error {
+	var lastErr error
+	for i := 0; i < 5; i++ {
+		err := s.store.CompleteIdempotencyRequest(workspaceID, endpoint, key, runID, statusCode, responseBody)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		msg := strings.ToLower(err.Error())
+		if !strings.Contains(msg, "database is locked") && !strings.Contains(msg, "sqlite_busy") {
+			return err
+		}
+		time.Sleep(time.Duration(i+1) * 10 * time.Millisecond)
+	}
+	return lastErr
 }
 
 // ── Background Worker ─────────────────────────────────────────────────────────

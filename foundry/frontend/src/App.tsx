@@ -6,14 +6,18 @@ import AssetCatalog from './components/AssetCatalog';
 import UsageStats from './components/UsageStats';
 import LandingPage from './components/LandingPage';
 import AssetDetail from './components/AssetDetail';
-// import HealthMonitoring from './components/HealthMonitoring';
+import HealthMonitoring from './components/HealthMonitoring';
+import RunDetail from './components/RunDetail';
 
-type Route = 'landing' | 'catalog' | 'usage' | 'asset' | 'health';
+type Route = 'landing' | 'catalog' | 'usage' | 'asset' | 'health' | 'run';
 
-function parseRoute(): { route: Route; assetId?: string } {
+export function parseRoute(): { route: Route; assetId?: string; runId?: string } {
   const hash = window.location.hash.replace('#', '');
   if (hash.startsWith('/assets/')) {
     return { route: 'asset', assetId: hash.replace('/assets/', '') };
+  }
+  if (hash.startsWith('/runs/')) {
+    return { route: 'run', runId: hash.replace('/runs/', '') };
   }
   if (hash === '/dashboard') return { route: 'usage' };
   if (hash === '/catalog') return { route: 'catalog' };
@@ -41,21 +45,25 @@ function App() {
   }
 
   if (routeState.route === 'asset' && routeState.assetId) {
-    return <AssetDetail id={routeState.assetId} onBack={() => navigate('/dashboard')} />;
+    return <AssetDetail id={routeState.assetId} onBack={() => navigate('/catalog')} />;
   }
 
-  // Keep catalog public, but require auth for dashboard/usage/health routes.
-  if (!isSignedIn && (routeState.route === 'usage' || routeState.route === 'health')) {
+  // Keep catalog public, but require auth for dashboard/usage/health/run routes.
+  if (!isSignedIn && (routeState.route === 'usage' || routeState.route === 'health' || routeState.route === 'run')) {
     return <LandingPage onEnterDashboard={() => navigate('/dashboard')} />;
+  }
+
+  if (routeState.route === 'run' && routeState.runId) {
+    return <RunDetail runId={routeState.runId} onBack={() => navigate('/usage')} />;
   }
 
   return (
     <div style={{ display: 'flex', width: '100vw', minHeight: '100vh', background: 'var(--lw-bg-alt)' }}>
-      <Sidebar activeTab={routeState.route} setActiveTab={(tab: string) => navigate(`/${tab}`)} />
+      <Sidebar activeTab={routeState.route === 'run' ? 'usage' : routeState.route} setActiveTab={(tab: string) => navigate(`/${tab}`)} />
       <main style={{ flex: 1, display: 'flex', overflowY: 'auto' }}>
         {routeState.route === 'catalog' && <AssetCatalog onSelectAsset={(id) => navigate(`/assets/${id}`)} />}
         {routeState.route === 'usage' && <UsageStats />}
-        {/* {routeState.route === 'health' && <HealthMonitoring />} */}
+        {routeState.route === 'health' && <HealthMonitoring />}
       </main>
       <div style={{
         position: 'fixed', top: '5%', right: '5%',

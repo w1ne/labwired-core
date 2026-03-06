@@ -1,10 +1,10 @@
 openapi: 3.0.3
 info:
-  title: LabWired Foundry VaaS API
+  title: LabWired Foundry API
   description: |
     Verification-as-a-Service (VaaS) for autonomous AI hardware agents.
-    Provides a standardized loop for task ingestion, context retrieval, and iterative formal verification.
-  version: 1.1.0
+    Includes synthesis, verification, polling, catalog, and usage endpoints.
+  version: 1.1.1
 servers:
   - url: http://localhost:8080/v1
     description: Local development server
@@ -24,22 +24,47 @@ components:
       properties:
         code:
           type: string
-          description: Machine-readable error code.
         message:
           type: string
-          description: Human/Agent-readable description of what went wrong.
         remediation:
           type: string
-          description: Actionable suggestion for the calling agent.
+
+    CatalogAsset:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        pass_rate:
+          type: integer
+        registers:
+          type: integer
+        ir_url:
+          type: string
 
     VerificationRequest:
       type: object
       required:
         - chip_yaml
       properties:
+        peripheral_id:
+          type: string
+          description: Optional identifier for your model.
         chip_yaml:
           type: string
           description: LabWired-compatible YAML definition of the peripheral logic.
+
+    SystemVerificationRequest:
+      type: object
+      required:
+        - system_yaml
+      properties:
+        system_yaml:
+          type: string
+          description: LabWired system YAML linking MCU and peripherals.
 
     SynthesisRequest:
       type: object
@@ -49,53 +74,112 @@ components:
       properties:
         component_name:
           type: string
-          description: Name of the component to synthesize (e.g., "BME280")
         requirements:
           type: string
-          description: Natural language requirements or datasheet snippets describing the desired behavior.
         datasheet_url:
           type: string
-          description: Optional URL to the component datasheet.
 
-    VerificationResult:
+    QueuedRunResponse:
       type: object
       properties:
-        pass:
-          type: boolean
+        run_id:
+          type: string
+        status:
+          type: string
+          enum: [queued]
+        poll_url:
+          type: string
+
+    SynthesisQueuedResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        run_id:
+          type: string
+        status:
+          type: string
+          enum: [queued]
+        poll_url:
+          type: string
+
+    RunArtifacts:
+      type: object
+      properties:
+        ir_url:
+          type: string
+        vcd_url:
+          type: string
+        result_url:
+          type: string
+
+    RunStatus:
+      type: object
+      properties:
+        run_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, pass, fail, error]
         assertions_passed:
           type: integer
         assertions_total:
           type: integer
-        compiler_logs:
+        created_at:
           type: string
-        vcd_url:
-          type: string
-          description: URL to download the Value Change Dump (VCD) trace.
-        error:
-          type: string
-          description: Detailed error stack trace if verification failed.
-
-  responses:
-    UnauthorizedError:
-      description: API key is missing or invalid.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
+        artifacts:
+          $ref: '#/components/schemas/RunArtifacts'
 
 paths:
   /info:
     get:
       summary: API Discovery
-      description: Returns metadata about the Foundry engine capabilities.
       responses:
         '200':
-          description: OK
+          description: API info
+
+  /health:
+    get:
+      summary: Health status
+      responses:
+        '200':
+          description: Healthy or degraded status
+
+  /catalog:
+    get:
+      summary: List verified assets
+      responses:
+        '200':
+          description: A list of catalog assets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogAsset'
+
+  /catalog/{id}:
+    get:
+      summary: Get catalog asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Catalog asset details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogAsset'
+        '404':
+          description: Asset not found.
 
   /estimate:
     post:
-      summary: Estimate Synthesis Cost
-      description: Get a quote for how many API runs a synthesis request will consume, based on complexity and novelty.
+      summary: Estimate synthesis cost
       security:
         - BearerAuth: []
       requestBody:
@@ -107,22 +191,10 @@ paths:
       responses:
         '200':
           description: Cost estimate.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  component_name:
-                    type: string
-                  estimated_cost_runs:
-                    type: integer
-                  message:
-                    type: string
 
   /synthesize:
     post:
-      summary: Autonomous Synthesis
-      description: Submit high-level requirements. The Foundry's internal agents will autonomously write and formally verify a digital twin, returning the strict IR and proof.
+      summary: Submit synthesis job
       security:
         - BearerAuth: []
       requestBody:
@@ -133,21 +205,15 @@ paths:
               $ref: '#/components/schemas/SynthesisRequest'
       responses:
         '202':
-          description: Synthesis job accepted. The process will run asynchronously and consume Quota.
+          description: Synthesis queued.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  job_id:
-                    type: string
-                  status:
-                    type: string
+                $ref: '#/components/schemas/SynthesisQueuedResponse'
 
   /models/verify:
     post:
-      summary: Enqueue Model Verification
-      description: Submit a peripheral model for formal verification. Returns a queued run ID for polling.
+      summary: Enqueue model verification
       security:
         - BearerAuth: []
       requestBody:
@@ -162,18 +228,11 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  run_id:
-                    type: string
-                  status:
-                    type: string
-                  poll_url:
-                    type: string
+                $ref: '#/components/schemas/QueuedRunResponse'
+
   /systems/verify:
     post:
-      summary: Enqueue System Verification
-      description: Submit a multi-component system netlist for formal verification. Returns a queued run ID for polling.
+      summary: Enqueue system verification
       security:
         - BearerAuth: []
       requestBody:
@@ -181,31 +240,27 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - system_yaml
-              properties:
-                system_yaml:
-                  type: string
-                  description: LabWired system YAML linking MCU and peripherals.
+              $ref: '#/components/schemas/SystemVerificationRequest'
       responses:
         '202':
-          description: System Verification queued.
+          description: Verification queued.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  run_id:
-                    type: string
-                  status:
-                    type: string
-                  poll_url:
-                    type: string
+                $ref: '#/components/schemas/QueuedRunResponse'
+
+  /runs:
+    get:
+      summary: List runs for workspace
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Run list.
 
   /runs/{run_id}:
     get:
-      summary: Get Run Status
+      summary: Get run status
       security:
         - BearerAuth: []
       parameters:
@@ -217,13 +272,16 @@ paths:
       responses:
         '200':
           description: Current run status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunStatus'
+        '404':
+          description: Run not found.
 
   /runs/{run_id}/artifacts/{file}:
     get:
-      summary: Download Run Artifact
-      description: |
-        Downloads one artifact file for a run owned by the authenticated workspace.
-        Artifact availability is retention-policy dependent.
+      summary: Download run artifact
       security:
         - BearerAuth: []
       parameters:
@@ -243,3 +301,19 @@ paths:
           description: Artifact file stream.
         '404':
           description: Artifact or run not found.
+
+  /usage:
+    get:
+      summary: Get workspace usage/quota
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Usage payload.
+
+  /hardware:
+    get:
+      summary: List supported hardware items
+      responses:
+        '200':
+          description: Hardware list.
