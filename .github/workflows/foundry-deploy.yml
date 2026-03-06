@@ -97,7 +97,6 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
-    steps:
       - name: Deploy to Local Host
         env:
           DEPLOY_PATH: /home/w1ne/labwired/foundry/deploy
@@ -132,4 +131,4 @@ jobs:
 
           docker compose --env-file .env -f docker-compose.prod.yml pull
           docker compose --env-file .env -f docker-compose.prod.yml up -d
-            docker compose --env-file .env -f docker-compose.prod.yml ps
+          docker compose --env-file .env -f docker-compose.prod.yml ps
