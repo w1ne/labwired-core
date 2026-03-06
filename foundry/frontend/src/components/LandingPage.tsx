@@ -151,8 +151,8 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                                 <h3 style={{ fontSize: '1.25rem' }}>{asset.id}</h3>
-                                <span className="status-pill" style={{ color: 'var(--lw-green)', borderColor: 'var(--lw-green)', fontSize: '0.65rem' }}>
-                                    ✓ PROVEN
+                                <span className="status-pill" style={{ color: asset.verified ? 'var(--lw-green)' : 'var(--lw-gray)', borderColor: asset.verified ? 'var(--lw-green)' : 'var(--lw-gray)', fontSize: '0.65rem' }}>
+                                    {asset.verified ? '✓ VERIFIED' : 'MODELED'}
                                 </span>
                             </div>
                             <p style={{ color: 'var(--lw-gray)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
@@ -160,7 +160,11 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                             </p>
                             <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem', color: 'var(--lw-gray)' }}>
                                 <span><strong style={{ color: 'var(--lw-black)' }}>{asset.registers ?? '—'}</strong> registers</span>
-                                <span><strong style={{ color: 'var(--lw-pink)' }}>{asset.pass_rate ?? 100}%</strong> pass rate</span>
+                                <span>
+                                    <strong style={{ color: asset.verified ? 'var(--lw-pink)' : 'var(--lw-gray)' }}>
+                                        {asset.verified ? `${asset.pass_rate ?? 0}%` : 'N/A'}
+                                    </strong> pass rate
+                                </span>
                             </div>
                         </div>
                     ))}

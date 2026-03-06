@@ -56,6 +56,9 @@ type CatalogAsset struct {
 	PassRate    int    `json:"pass_rate"`
 	Registers   int    `json:"registers"`
 	IrURL       string `json:"ir_url"`
+	Verified    bool   `json:"verified"`
+	SourceType  string `json:"source_type"`
+	SourceRef   string `json:"source_ref"`
 }
 
 type Store struct {
@@ -153,8 +156,14 @@ func (s *Store) migrate() error {
 			description TEXT NOT NULL,
 			pass_rate INTEGER DEFAULT 0,
 			registers INTEGER DEFAULT 0,
-			ir_url TEXT DEFAULT ''
+			ir_url TEXT DEFAULT '',
+			verified INTEGER NOT NULL DEFAULT 0,
+			source_type TEXT NOT NULL DEFAULT 'unknown',
+			source_ref TEXT NOT NULL DEFAULT ''
 		);`,
+		`ALTER TABLE catalog_assets ADD COLUMN verified INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE catalog_assets ADD COLUMN source_type TEXT NOT NULL DEFAULT 'unknown';`,
+		`ALTER TABLE catalog_assets ADD COLUMN source_ref TEXT NOT NULL DEFAULT '';`,
 		// Non-destructive: add monthly_quota column if it was missing in an older DB.
 		`ALTER TABLE api_keys ADD COLUMN monthly_quota INTEGER NOT NULL DEFAULT 1000;`,
 		// Non-destructive: add key_prefix column if missing.
@@ -936,23 +945,30 @@ func (s *Store) ListHardware() ([]HardwareItem, error) {
 
 // UpsertCatalogAsset inserts or updates a catalog asset.
 func (s *Store) UpsertCatalogAsset(asset CatalogAsset) error {
+	verified := 0
+	if asset.Verified {
+		verified = 1
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO catalog_assets (id, name, description, pass_rate, registers, ir_url)
-		 VALUES (?, ?, ?, ?, ?, ?)
+		`INSERT INTO catalog_assets (id, name, description, pass_rate, registers, ir_url, verified, source_type, source_ref)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   name = excluded.name,
 		   description = excluded.description,
 		   pass_rate = excluded.pass_rate,
 		   registers = excluded.registers,
-		   ir_url = excluded.ir_url`,
-		asset.ID, asset.Name, asset.Description, asset.PassRate, asset.Registers, asset.IrURL,
+		   ir_url = excluded.ir_url,
+		   verified = excluded.verified,
+		   source_type = excluded.source_type,
+		   source_ref = excluded.source_ref`,
+		asset.ID, asset.Name, asset.Description, asset.PassRate, asset.Registers, asset.IrURL, verified, asset.SourceType, asset.SourceRef,
 	)
 	return err
 }
 
 // ListCatalogAssets returns all assets in the catalog.
 func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
-	rows, err := s.db.Query(`SELECT id, name, description, pass_rate, registers, ir_url FROM catalog_assets ORDER BY id ASC`)
+	rows, err := s.db.Query(`SELECT id, name, description, pass_rate, registers, ir_url, verified, source_type, source_ref FROM catalog_assets ORDER BY id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -961,9 +977,11 @@ func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
 	var assets []CatalogAsset
 	for rows.Next() {
 		var a CatalogAsset
-		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.PassRate, &a.Registers, &a.IrURL); err != nil {
+		var verified int
+		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.PassRate, &a.Registers, &a.IrURL, &verified, &a.SourceType, &a.SourceRef); err != nil {
 			return nil, err
 		}
+		a.Verified = verified == 1
 		assets = append(assets, a)
 	}
 	return assets, nil
@@ -972,15 +990,17 @@ func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
 // GetCatalogAsset returns a single asset by ID.
 func (s *Store) GetCatalogAsset(id string) (CatalogAsset, bool, error) {
 	var a CatalogAsset
+	var verified int
 	err := s.db.QueryRow(
-		`SELECT id, name, description, pass_rate, registers, ir_url FROM catalog_assets WHERE id = ?`,
+		`SELECT id, name, description, pass_rate, registers, ir_url, verified, source_type, source_ref FROM catalog_assets WHERE id = ?`,
 		id,
-	).Scan(&a.ID, &a.Name, &a.Description, &a.PassRate, &a.Registers, &a.IrURL)
+	).Scan(&a.ID, &a.Name, &a.Description, &a.PassRate, &a.Registers, &a.IrURL, &verified, &a.SourceType, &a.SourceRef)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return a, false, nil
 		}
 		return a, false, err
 	}
+	a.Verified = verified == 1
 	return a, true, nil
 }

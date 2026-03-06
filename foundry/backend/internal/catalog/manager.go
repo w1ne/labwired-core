@@ -49,19 +49,27 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			return nil
 		}
 
-		id := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+		relPath, relErr := filepath.Rel(configsDir, path)
+		if relErr != nil {
+			relPath = d.Name()
+		}
+		relPath = filepath.ToSlash(relPath)
+		id := strings.TrimSuffix(relPath, filepath.Ext(relPath))
 		name := model.Name
 		if name == "" {
-			name = id
+			name = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
 		}
 
 		asset := db.CatalogAsset{
 			ID:          id,
 			Name:        name,
 			Description: model.Description,
-			PassRate:    100, // Default for pre-verified repo models
-			Registers:   0,   // Could be parsed if needed
-			IrURL:       "",  // TBD: how to resolve URLs for GitHub models
+			PassRate:    0,
+			Registers:   countRegistersInYAMLModel(data),
+			IrURL:       "",
+			Verified:    false,
+			SourceType:  "core-config",
+			SourceRef:   relPath,
 		}
 
 		if model.Description == "" {
@@ -101,6 +109,13 @@ func (m *Manager) PromoteToCatalog(asset db.CatalogAsset, modelData []byte, data
 
 	// 3. Update asset with local URL
 	asset.IrURL = fmt.Sprintf("/data/catalog/%s", fileName)
+	asset.Verified = true
+	if asset.SourceType == "" {
+		asset.SourceType = "synthesized"
+	}
+	if asset.SourceRef == "" {
+		asset.SourceRef = filePath
+	}
 
 	// 4. Upsert to DB
 	return m.store.UpsertCatalogAsset(asset)
@@ -122,4 +137,49 @@ func (m *Manager) Get(id string) (db.CatalogAsset, bool) {
 		return db.CatalogAsset{}, false
 	}
 	return asset, ok
+}
+
+func countRegistersInYAMLModel(data []byte) int {
+	var parsed any
+	if err := yaml.Unmarshal(data, &parsed); err != nil {
+		return 0
+	}
+	return countRegistersInNode(parsed)
+}
+
+func countRegistersInNode(v any) int {
+	switch node := v.(type) {
+	case map[string]any:
+		total := 0
+		for k, child := range node {
+			if k == "registers" {
+				if regs, ok := child.([]any); ok {
+					total += len(regs)
+					continue
+				}
+			}
+			total += countRegistersInNode(child)
+		}
+		return total
+	case map[any]any:
+		total := 0
+		for k, child := range node {
+			if ks, ok := k.(string); ok && ks == "registers" {
+				if regs, ok := child.([]any); ok {
+					total += len(regs)
+					continue
+				}
+			}
+			total += countRegistersInNode(child)
+		}
+		return total
+	case []any:
+		total := 0
+		for _, child := range node {
+			total += countRegistersInNode(child)
+		}
+		return total
+	default:
+		return 0
+	}
 }

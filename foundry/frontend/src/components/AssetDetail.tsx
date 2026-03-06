@@ -30,8 +30,9 @@ const AssetDetail = ({ id, onBack }: Props) => {
         </div>
     );
 
-    const passRate = asset.pass_rate ?? 100;
+    const passRate = asset.pass_rate ?? 0;
     const registers = asset.registers ?? 0;
+    const isVerified = !!asset.verified;
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--lw-bg)', padding: '2rem 2.5rem', maxWidth: '960px', margin: '0 auto' }}>
@@ -41,13 +42,13 @@ const AssetDetail = ({ id, onBack }: Props) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
                 <h1 style={{ fontFamily: 'Outfit', fontSize: '2.5rem', fontWeight: 900 }}>{asset.id || asset.name}</h1>
                 <div style={{
-                    background: 'var(--lw-green)', color: '#000', padding: '6px 16px',
+                    background: isVerified ? 'var(--lw-green)' : 'var(--lw-gray)', color: '#000', padding: '6px 16px',
                     borderRadius: '6px', fontWeight: 900, fontSize: '0.85rem',
                     fontFamily: 'JetBrains Mono, monospace',
-                    boxShadow: '0 0 12px rgba(39, 201, 63, 0.4)',
-                    animation: 'pulse 2s infinite',
+                    boxShadow: isVerified ? '0 0 12px rgba(39, 201, 63, 0.4)' : 'none',
+                    animation: isVerified ? 'pulse 2s infinite' : 'none',
                 }}>
-                    ✓ SOLID PROVEN
+                    {isVerified ? '✓ VERIFIED' : 'MODELED'}
                 </div>
             </div>
 
@@ -57,10 +58,10 @@ const AssetDetail = ({ id, onBack }: Props) => {
 
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '3rem', maxWidth: '600px' }}>
-                {[
-                    { label: 'Registers', value: registers },
-                    { label: 'Pass Rate', value: `${passRate}%` },
-                    { label: 'Proof Level', value: 'Solid' },
+                    {[
+                        { label: 'Registers', value: registers },
+                    { label: 'Pass Rate', value: isVerified ? `${passRate}%` : 'N/A' },
+                    { label: 'Status', value: isVerified ? 'Verified' : 'Modeled' },
                 ].map(stat => (
                     <div key={stat.label} className="bento-card" style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '0.65rem', color: 'var(--lw-gray)', fontWeight: 800, letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
@@ -102,6 +103,9 @@ const AssetDetail = ({ id, onBack }: Props) => {
 
             {/* Downloads */}
             <h2 style={{ fontFamily: 'Outfit', fontSize: '1.5rem', marginBottom: '1rem' }}>Artifacts</h2>
+            <p style={{ color: 'var(--lw-gray)', marginTop: '-0.25rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                Source: {asset.source_type || 'unknown'} {asset.source_ref ? `(${asset.source_ref})` : ''}
+            </p>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                 {asset.ir_url && (
                     <a href={asset.ir_url} download>

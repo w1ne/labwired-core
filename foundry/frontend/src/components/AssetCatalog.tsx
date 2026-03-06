@@ -8,6 +8,9 @@ interface Asset {
     pass_rate: number;
     registers: number;
     ir_url: string;
+    verified: boolean;
+    source_type: string;
+    source_ref: string;
 }
 
 interface Props {
@@ -49,8 +52,8 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
                     <div key={asset.id} className="bento-card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
                             <h3 style={{ fontSize: '1.5rem', color: 'var(--lw-black)' }}>{asset.id}</h3>
-                            <div className="status-pill" style={{ color: 'var(--lw-green)', borderColor: 'var(--lw-black)', background: 'var(--lw-bg)' }}>
-                                SOLID PROVEN
+                            <div className="status-pill" style={{ color: asset.verified ? 'var(--lw-green)' : 'var(--lw-gray)', borderColor: 'var(--lw-black)', background: 'var(--lw-bg)' }}>
+                                {asset.verified ? 'VERIFIED' : 'MODELED'}
                             </div>
                         </div>
 
@@ -65,9 +68,15 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
                             </div>
                             <div>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--lw-gray)', textTransform: 'uppercase', fontWeight: 800 }}>Pass Rate</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'Outfit', color: 'var(--lw-pink)' }}>{asset.pass_rate}%</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'Outfit', color: asset.verified ? 'var(--lw-pink)' : 'var(--lw-gray)' }}>
+                                    {asset.verified ? `${asset.pass_rate}%` : 'N/A'}
+                                </div>
                             </div>
                         </div>
+
+                        <p style={{ margin: '0 0 1rem', color: 'var(--lw-gray)', fontSize: '0.75rem' }}>
+                            Source: {asset.source_type || 'unknown'} {asset.source_ref ? `(${asset.source_ref})` : ''}
+                        </p>
 
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <button style={{ flex: 1 }} onClick={() => onSelectAsset?.(asset.id)}>DETAILS</button>

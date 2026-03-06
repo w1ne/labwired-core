@@ -44,6 +44,12 @@ components:
           type: integer
         ir_url:
           type: string
+        verified:
+          type: boolean
+        source_type:
+          type: string
+        source_ref:
+          type: string
 
     VerificationRequest:
       type: object

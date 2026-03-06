@@ -1,0 +1,10 @@
+:80 {
+  @api path /v1*
+  handle @api {
+    reverse_proxy foundry-backend:8080
+  }
+
+  handle {
+    reverse_proxy foundry-frontend:80
+  }
+}

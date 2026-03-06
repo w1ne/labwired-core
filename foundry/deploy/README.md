@@ -8,10 +8,13 @@ This folder contains a production deployment baseline for Foundry using:
 ## Files
 
 - `docker-compose.prod.yml`: backend + frontend + Caddy reverse proxy (image-only).
+- `docker-compose.smoke.yml`: local smoke stack (backend + frontend + Caddy) for UI/API click-path checks.
 - `Caddyfile`: HTTPS reverse proxy and API/frontend routing.
+- `Caddyfile.smoke`: local HTTP reverse proxy for smoke stack.
 - `.env.example`: required environment variables template.
 - `scripts/harden_vps.sh`: baseline host hardening (SSH, fail2ban, UFW, unattended upgrades).
 - `scripts/verify_foundry.sh`: post-deploy backend/API health verification.
+- `scripts/smoke_frontend_e2e.sh`: dockerized frontend click-smoke via Playwright.
 - `systemd/foundry-compose.service`: optional service wrapper for VPS boot persistence.
 - `.github/workflows/foundry-deploy.yml`: CI build/push and VPS deploy workflow.
 - `GITHUB_HETZNER_RUNBOOK.md`: full operational runbook (bootstrap, deploy, rollback, troubleshooting).
@@ -114,3 +117,13 @@ Then:
 docker compose --env-file .env -f docker-compose.prod.yml pull
 docker compose --env-file .env -f docker-compose.prod.yml up -d
 ```
+
+## Local Docker Smoke (Playwright)
+
+From repo root:
+
+```bash
+foundry/deploy/scripts/smoke_frontend_e2e.sh
+```
+
+This starts `docker-compose.smoke.yml` on `http://127.0.0.1:8088`, waits for `/v1/health`, then runs frontend Playwright smoke tests.
