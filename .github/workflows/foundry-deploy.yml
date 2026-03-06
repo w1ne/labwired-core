@@ -111,6 +111,8 @@ jobs:
             exit 1
           fi
 
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
           # Since it's a self-hosted runner on the same host, we assume docker access.
           # We don't need to login if the images are public or already accessible, 
           # but we keep the logic for image tagging.
