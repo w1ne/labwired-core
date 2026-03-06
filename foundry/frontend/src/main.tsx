@@ -4,10 +4,11 @@ import './index.css'
 import App from './App.tsx'
 import { ClerkProvider } from '@clerk/react'
 
+const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* @ts-ignore */}
-    <ClerkProvider afterSignOutUrl="/">
+    <ClerkProvider publishableKey={clerkPublishableKey || ''} afterSignOutUrl="/">
       <App />
     </ClerkProvider>
   </StrictMode>,
