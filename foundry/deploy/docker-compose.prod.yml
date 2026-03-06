@@ -19,9 +19,12 @@ services:
       STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
       ALLOW_INSECURE_STRIPE_WEBHOOKS: "false"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      CORE_CONFIGS_DIR: "/app/core/configs"
+      DATA_DIR: "/data"
     volumes:
       - foundry_data:/data
       - ${LABWIRED_BINARY_PATH:-/srv/labwired/bin/labwired}:/usr/local/bin/labwired:ro
+      - ${CORE_DIR:-/home/w1ne/labwired}/core/configs:/app/core/configs:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -77,6 +80,7 @@ volumes:
   foundry_data:
   caddy_data:
   caddy_config:
+
 
 networks:
   foundry_net:
