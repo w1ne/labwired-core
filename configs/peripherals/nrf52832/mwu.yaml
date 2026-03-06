@@ -1,0 +1,1855 @@
+peripheral: MWU
+version: 0.1.0
+registers:
+- id: EVENTS_REGION0_WA
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REGION0_RA
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REGION1_WA
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REGION1_RA
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REGION2_WA
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REGION2_RA
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REGION3_WA
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_REGION3_RA
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_PREGION0_WA
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_PREGION0_RA
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_PREGION1_WA
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_PREGION1_RA
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION0WA
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for REGION[0].WA event
+  - name: REGION0RA
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for REGION[0].RA event
+  - name: REGION1WA
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for REGION[1].WA event
+  - name: REGION1RA
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable interrupt for REGION[1].RA event
+  - name: REGION2WA
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable interrupt for REGION[2].WA event
+  - name: REGION2RA
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable interrupt for REGION[2].RA event
+  - name: REGION3WA
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable interrupt for REGION[3].WA event
+  - name: REGION3RA
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable interrupt for REGION[3].RA event
+  - name: PREGION0WA
+    bit_range:
+    - 24
+    - 24
+    description: Enable or disable interrupt for PREGION[0].WA event
+  - name: PREGION0RA
+    bit_range:
+    - 25
+    - 25
+    description: Enable or disable interrupt for PREGION[0].RA event
+  - name: PREGION1WA
+    bit_range:
+    - 26
+    - 26
+    description: Enable or disable interrupt for PREGION[1].WA event
+  - name: PREGION1RA
+    bit_range:
+    - 27
+    - 27
+    description: Enable or disable interrupt for PREGION[1].RA event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION0WA
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for REGION[0].WA event
+  - name: REGION0RA
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for REGION[0].RA event
+  - name: REGION1WA
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for REGION[1].WA event
+  - name: REGION1RA
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for REGION[1].RA event
+  - name: REGION2WA
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for REGION[2].WA event
+  - name: REGION2RA
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable interrupt for REGION[2].RA event
+  - name: REGION3WA
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Enable interrupt for REGION[3].WA event
+  - name: REGION3RA
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable interrupt for REGION[3].RA event
+  - name: PREGION0WA
+    bit_range:
+    - 24
+    - 24
+    description: Write '1' to Enable interrupt for PREGION[0].WA event
+  - name: PREGION0RA
+    bit_range:
+    - 25
+    - 25
+    description: Write '1' to Enable interrupt for PREGION[0].RA event
+  - name: PREGION1WA
+    bit_range:
+    - 26
+    - 26
+    description: Write '1' to Enable interrupt for PREGION[1].WA event
+  - name: PREGION1RA
+    bit_range:
+    - 27
+    - 27
+    description: Write '1' to Enable interrupt for PREGION[1].RA event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION0WA
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for REGION[0].WA event
+  - name: REGION0RA
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for REGION[0].RA event
+  - name: REGION1WA
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for REGION[1].WA event
+  - name: REGION1RA
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for REGION[1].RA event
+  - name: REGION2WA
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for REGION[2].WA event
+  - name: REGION2RA
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable interrupt for REGION[2].RA event
+  - name: REGION3WA
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Disable interrupt for REGION[3].WA event
+  - name: REGION3RA
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable interrupt for REGION[3].RA event
+  - name: PREGION0WA
+    bit_range:
+    - 24
+    - 24
+    description: Write '1' to Disable interrupt for PREGION[0].WA event
+  - name: PREGION0RA
+    bit_range:
+    - 25
+    - 25
+    description: Write '1' to Disable interrupt for PREGION[0].RA event
+  - name: PREGION1WA
+    bit_range:
+    - 26
+    - 26
+    description: Write '1' to Disable interrupt for PREGION[1].WA event
+  - name: PREGION1RA
+    bit_range:
+    - 27
+    - 27
+    description: Write '1' to Disable interrupt for PREGION[1].RA event
+  side_effects: null
+- id: NMIEN
+  address_offset: 800
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION0WA
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable non-maskable interrupt for REGION[0].WA event
+  - name: REGION0RA
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable non-maskable interrupt for REGION[0].RA event
+  - name: REGION1WA
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable non-maskable interrupt for REGION[1].WA event
+  - name: REGION1RA
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable non-maskable interrupt for REGION[1].RA event
+  - name: REGION2WA
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable non-maskable interrupt for REGION[2].WA event
+  - name: REGION2RA
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable non-maskable interrupt for REGION[2].RA event
+  - name: REGION3WA
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable non-maskable interrupt for REGION[3].WA event
+  - name: REGION3RA
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable non-maskable interrupt for REGION[3].RA event
+  - name: PREGION0WA
+    bit_range:
+    - 24
+    - 24
+    description: Enable or disable non-maskable interrupt for PREGION[0].WA event
+  - name: PREGION0RA
+    bit_range:
+    - 25
+    - 25
+    description: Enable or disable non-maskable interrupt for PREGION[0].RA event
+  - name: PREGION1WA
+    bit_range:
+    - 26
+    - 26
+    description: Enable or disable non-maskable interrupt for PREGION[1].WA event
+  - name: PREGION1RA
+    bit_range:
+    - 27
+    - 27
+    description: Enable or disable non-maskable interrupt for PREGION[1].RA event
+  side_effects: null
+- id: NMIENSET
+  address_offset: 804
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION0WA
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable non-maskable interrupt for REGION[0].WA event
+  - name: REGION0RA
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable non-maskable interrupt for REGION[0].RA event
+  - name: REGION1WA
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable non-maskable interrupt for REGION[1].WA event
+  - name: REGION1RA
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable non-maskable interrupt for REGION[1].RA event
+  - name: REGION2WA
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable non-maskable interrupt for REGION[2].WA event
+  - name: REGION2RA
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable non-maskable interrupt for REGION[2].RA event
+  - name: REGION3WA
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Enable non-maskable interrupt for REGION[3].WA event
+  - name: REGION3RA
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable non-maskable interrupt for REGION[3].RA event
+  - name: PREGION0WA
+    bit_range:
+    - 24
+    - 24
+    description: Write '1' to Enable non-maskable interrupt for PREGION[0].WA event
+  - name: PREGION0RA
+    bit_range:
+    - 25
+    - 25
+    description: Write '1' to Enable non-maskable interrupt for PREGION[0].RA event
+  - name: PREGION1WA
+    bit_range:
+    - 26
+    - 26
+    description: Write '1' to Enable non-maskable interrupt for PREGION[1].WA event
+  - name: PREGION1RA
+    bit_range:
+    - 27
+    - 27
+    description: Write '1' to Enable non-maskable interrupt for PREGION[1].RA event
+  side_effects: null
+- id: NMIENCLR
+  address_offset: 808
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION0WA
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable non-maskable interrupt for REGION[0].WA event
+  - name: REGION0RA
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable non-maskable interrupt for REGION[0].RA event
+  - name: REGION1WA
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable non-maskable interrupt for REGION[1].WA event
+  - name: REGION1RA
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable non-maskable interrupt for REGION[1].RA event
+  - name: REGION2WA
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable non-maskable interrupt for REGION[2].WA event
+  - name: REGION2RA
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable non-maskable interrupt for REGION[2].RA event
+  - name: REGION3WA
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Disable non-maskable interrupt for REGION[3].WA event
+  - name: REGION3RA
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable non-maskable interrupt for REGION[3].RA event
+  - name: PREGION0WA
+    bit_range:
+    - 24
+    - 24
+    description: Write '1' to Disable non-maskable interrupt for PREGION[0].WA event
+  - name: PREGION0RA
+    bit_range:
+    - 25
+    - 25
+    description: Write '1' to Disable non-maskable interrupt for PREGION[0].RA event
+  - name: PREGION1WA
+    bit_range:
+    - 26
+    - 26
+    description: Write '1' to Disable non-maskable interrupt for PREGION[1].WA event
+  - name: PREGION1RA
+    bit_range:
+    - 27
+    - 27
+    description: Write '1' to Disable non-maskable interrupt for PREGION[1].RA event
+  side_effects: null
+- id: PERREGION0_SUBSTATWA
+  address_offset: 1024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SR0
+    bit_range:
+    - 0
+    - 0
+    description: Subregion 0 in region 0 (write '1' to clear)
+  - name: SR1
+    bit_range:
+    - 1
+    - 1
+    description: Subregion 1 in region 0 (write '1' to clear)
+  - name: SR2
+    bit_range:
+    - 2
+    - 2
+    description: Subregion 2 in region 0 (write '1' to clear)
+  - name: SR3
+    bit_range:
+    - 3
+    - 3
+    description: Subregion 3 in region 0 (write '1' to clear)
+  - name: SR4
+    bit_range:
+    - 4
+    - 4
+    description: Subregion 4 in region 0 (write '1' to clear)
+  - name: SR5
+    bit_range:
+    - 5
+    - 5
+    description: Subregion 5 in region 0 (write '1' to clear)
+  - name: SR6
+    bit_range:
+    - 6
+    - 6
+    description: Subregion 6 in region 0 (write '1' to clear)
+  - name: SR7
+    bit_range:
+    - 7
+    - 7
+    description: Subregion 7 in region 0 (write '1' to clear)
+  - name: SR8
+    bit_range:
+    - 8
+    - 8
+    description: Subregion 8 in region 0 (write '1' to clear)
+  - name: SR9
+    bit_range:
+    - 9
+    - 9
+    description: Subregion 9 in region 0 (write '1' to clear)
+  - name: SR10
+    bit_range:
+    - 10
+    - 10
+    description: Subregion 10 in region 0 (write '1' to clear)
+  - name: SR11
+    bit_range:
+    - 11
+    - 11
+    description: Subregion 11 in region 0 (write '1' to clear)
+  - name: SR12
+    bit_range:
+    - 12
+    - 12
+    description: Subregion 12 in region 0 (write '1' to clear)
+  - name: SR13
+    bit_range:
+    - 13
+    - 13
+    description: Subregion 13 in region 0 (write '1' to clear)
+  - name: SR14
+    bit_range:
+    - 14
+    - 14
+    description: Subregion 14 in region 0 (write '1' to clear)
+  - name: SR15
+    bit_range:
+    - 15
+    - 15
+    description: Subregion 15 in region 0 (write '1' to clear)
+  - name: SR16
+    bit_range:
+    - 16
+    - 16
+    description: Subregion 16 in region 0 (write '1' to clear)
+  - name: SR17
+    bit_range:
+    - 17
+    - 17
+    description: Subregion 17 in region 0 (write '1' to clear)
+  - name: SR18
+    bit_range:
+    - 18
+    - 18
+    description: Subregion 18 in region 0 (write '1' to clear)
+  - name: SR19
+    bit_range:
+    - 19
+    - 19
+    description: Subregion 19 in region 0 (write '1' to clear)
+  - name: SR20
+    bit_range:
+    - 20
+    - 20
+    description: Subregion 20 in region 0 (write '1' to clear)
+  - name: SR21
+    bit_range:
+    - 21
+    - 21
+    description: Subregion 21 in region 0 (write '1' to clear)
+  - name: SR22
+    bit_range:
+    - 22
+    - 22
+    description: Subregion 22 in region 0 (write '1' to clear)
+  - name: SR23
+    bit_range:
+    - 23
+    - 23
+    description: Subregion 23 in region 0 (write '1' to clear)
+  - name: SR24
+    bit_range:
+    - 24
+    - 24
+    description: Subregion 24 in region 0 (write '1' to clear)
+  - name: SR25
+    bit_range:
+    - 25
+    - 25
+    description: Subregion 25 in region 0 (write '1' to clear)
+  - name: SR26
+    bit_range:
+    - 26
+    - 26
+    description: Subregion 26 in region 0 (write '1' to clear)
+  - name: SR27
+    bit_range:
+    - 27
+    - 27
+    description: Subregion 27 in region 0 (write '1' to clear)
+  - name: SR28
+    bit_range:
+    - 28
+    - 28
+    description: Subregion 28 in region 0 (write '1' to clear)
+  - name: SR29
+    bit_range:
+    - 29
+    - 29
+    description: Subregion 29 in region 0 (write '1' to clear)
+  - name: SR30
+    bit_range:
+    - 30
+    - 30
+    description: Subregion 30 in region 0 (write '1' to clear)
+  - name: SR31
+    bit_range:
+    - 31
+    - 31
+    description: Subregion 31 in region 0 (write '1' to clear)
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: PERREGION0_SUBSTATRA
+  address_offset: 1028
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SR0
+    bit_range:
+    - 0
+    - 0
+    description: Subregion 0 in region 0 (write '1' to clear)
+  - name: SR1
+    bit_range:
+    - 1
+    - 1
+    description: Subregion 1 in region 0 (write '1' to clear)
+  - name: SR2
+    bit_range:
+    - 2
+    - 2
+    description: Subregion 2 in region 0 (write '1' to clear)
+  - name: SR3
+    bit_range:
+    - 3
+    - 3
+    description: Subregion 3 in region 0 (write '1' to clear)
+  - name: SR4
+    bit_range:
+    - 4
+    - 4
+    description: Subregion 4 in region 0 (write '1' to clear)
+  - name: SR5
+    bit_range:
+    - 5
+    - 5
+    description: Subregion 5 in region 0 (write '1' to clear)
+  - name: SR6
+    bit_range:
+    - 6
+    - 6
+    description: Subregion 6 in region 0 (write '1' to clear)
+  - name: SR7
+    bit_range:
+    - 7
+    - 7
+    description: Subregion 7 in region 0 (write '1' to clear)
+  - name: SR8
+    bit_range:
+    - 8
+    - 8
+    description: Subregion 8 in region 0 (write '1' to clear)
+  - name: SR9
+    bit_range:
+    - 9
+    - 9
+    description: Subregion 9 in region 0 (write '1' to clear)
+  - name: SR10
+    bit_range:
+    - 10
+    - 10
+    description: Subregion 10 in region 0 (write '1' to clear)
+  - name: SR11
+    bit_range:
+    - 11
+    - 11
+    description: Subregion 11 in region 0 (write '1' to clear)
+  - name: SR12
+    bit_range:
+    - 12
+    - 12
+    description: Subregion 12 in region 0 (write '1' to clear)
+  - name: SR13
+    bit_range:
+    - 13
+    - 13
+    description: Subregion 13 in region 0 (write '1' to clear)
+  - name: SR14
+    bit_range:
+    - 14
+    - 14
+    description: Subregion 14 in region 0 (write '1' to clear)
+  - name: SR15
+    bit_range:
+    - 15
+    - 15
+    description: Subregion 15 in region 0 (write '1' to clear)
+  - name: SR16
+    bit_range:
+    - 16
+    - 16
+    description: Subregion 16 in region 0 (write '1' to clear)
+  - name: SR17
+    bit_range:
+    - 17
+    - 17
+    description: Subregion 17 in region 0 (write '1' to clear)
+  - name: SR18
+    bit_range:
+    - 18
+    - 18
+    description: Subregion 18 in region 0 (write '1' to clear)
+  - name: SR19
+    bit_range:
+    - 19
+    - 19
+    description: Subregion 19 in region 0 (write '1' to clear)
+  - name: SR20
+    bit_range:
+    - 20
+    - 20
+    description: Subregion 20 in region 0 (write '1' to clear)
+  - name: SR21
+    bit_range:
+    - 21
+    - 21
+    description: Subregion 21 in region 0 (write '1' to clear)
+  - name: SR22
+    bit_range:
+    - 22
+    - 22
+    description: Subregion 22 in region 0 (write '1' to clear)
+  - name: SR23
+    bit_range:
+    - 23
+    - 23
+    description: Subregion 23 in region 0 (write '1' to clear)
+  - name: SR24
+    bit_range:
+    - 24
+    - 24
+    description: Subregion 24 in region 0 (write '1' to clear)
+  - name: SR25
+    bit_range:
+    - 25
+    - 25
+    description: Subregion 25 in region 0 (write '1' to clear)
+  - name: SR26
+    bit_range:
+    - 26
+    - 26
+    description: Subregion 26 in region 0 (write '1' to clear)
+  - name: SR27
+    bit_range:
+    - 27
+    - 27
+    description: Subregion 27 in region 0 (write '1' to clear)
+  - name: SR28
+    bit_range:
+    - 28
+    - 28
+    description: Subregion 28 in region 0 (write '1' to clear)
+  - name: SR29
+    bit_range:
+    - 29
+    - 29
+    description: Subregion 29 in region 0 (write '1' to clear)
+  - name: SR30
+    bit_range:
+    - 30
+    - 30
+    description: Subregion 30 in region 0 (write '1' to clear)
+  - name: SR31
+    bit_range:
+    - 31
+    - 31
+    description: Subregion 31 in region 0 (write '1' to clear)
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: PERREGION1_SUBSTATWA
+  address_offset: 1032
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SR0
+    bit_range:
+    - 0
+    - 0
+    description: Subregion 0 in region 0 (write '1' to clear)
+  - name: SR1
+    bit_range:
+    - 1
+    - 1
+    description: Subregion 1 in region 0 (write '1' to clear)
+  - name: SR2
+    bit_range:
+    - 2
+    - 2
+    description: Subregion 2 in region 0 (write '1' to clear)
+  - name: SR3
+    bit_range:
+    - 3
+    - 3
+    description: Subregion 3 in region 0 (write '1' to clear)
+  - name: SR4
+    bit_range:
+    - 4
+    - 4
+    description: Subregion 4 in region 0 (write '1' to clear)
+  - name: SR5
+    bit_range:
+    - 5
+    - 5
+    description: Subregion 5 in region 0 (write '1' to clear)
+  - name: SR6
+    bit_range:
+    - 6
+    - 6
+    description: Subregion 6 in region 0 (write '1' to clear)
+  - name: SR7
+    bit_range:
+    - 7
+    - 7
+    description: Subregion 7 in region 0 (write '1' to clear)
+  - name: SR8
+    bit_range:
+    - 8
+    - 8
+    description: Subregion 8 in region 0 (write '1' to clear)
+  - name: SR9
+    bit_range:
+    - 9
+    - 9
+    description: Subregion 9 in region 0 (write '1' to clear)
+  - name: SR10
+    bit_range:
+    - 10
+    - 10
+    description: Subregion 10 in region 0 (write '1' to clear)
+  - name: SR11
+    bit_range:
+    - 11
+    - 11
+    description: Subregion 11 in region 0 (write '1' to clear)
+  - name: SR12
+    bit_range:
+    - 12
+    - 12
+    description: Subregion 12 in region 0 (write '1' to clear)
+  - name: SR13
+    bit_range:
+    - 13
+    - 13
+    description: Subregion 13 in region 0 (write '1' to clear)
+  - name: SR14
+    bit_range:
+    - 14
+    - 14
+    description: Subregion 14 in region 0 (write '1' to clear)
+  - name: SR15
+    bit_range:
+    - 15
+    - 15
+    description: Subregion 15 in region 0 (write '1' to clear)
+  - name: SR16
+    bit_range:
+    - 16
+    - 16
+    description: Subregion 16 in region 0 (write '1' to clear)
+  - name: SR17
+    bit_range:
+    - 17
+    - 17
+    description: Subregion 17 in region 0 (write '1' to clear)
+  - name: SR18
+    bit_range:
+    - 18
+    - 18
+    description: Subregion 18 in region 0 (write '1' to clear)
+  - name: SR19
+    bit_range:
+    - 19
+    - 19
+    description: Subregion 19 in region 0 (write '1' to clear)
+  - name: SR20
+    bit_range:
+    - 20
+    - 20
+    description: Subregion 20 in region 0 (write '1' to clear)
+  - name: SR21
+    bit_range:
+    - 21
+    - 21
+    description: Subregion 21 in region 0 (write '1' to clear)
+  - name: SR22
+    bit_range:
+    - 22
+    - 22
+    description: Subregion 22 in region 0 (write '1' to clear)
+  - name: SR23
+    bit_range:
+    - 23
+    - 23
+    description: Subregion 23 in region 0 (write '1' to clear)
+  - name: SR24
+    bit_range:
+    - 24
+    - 24
+    description: Subregion 24 in region 0 (write '1' to clear)
+  - name: SR25
+    bit_range:
+    - 25
+    - 25
+    description: Subregion 25 in region 0 (write '1' to clear)
+  - name: SR26
+    bit_range:
+    - 26
+    - 26
+    description: Subregion 26 in region 0 (write '1' to clear)
+  - name: SR27
+    bit_range:
+    - 27
+    - 27
+    description: Subregion 27 in region 0 (write '1' to clear)
+  - name: SR28
+    bit_range:
+    - 28
+    - 28
+    description: Subregion 28 in region 0 (write '1' to clear)
+  - name: SR29
+    bit_range:
+    - 29
+    - 29
+    description: Subregion 29 in region 0 (write '1' to clear)
+  - name: SR30
+    bit_range:
+    - 30
+    - 30
+    description: Subregion 30 in region 0 (write '1' to clear)
+  - name: SR31
+    bit_range:
+    - 31
+    - 31
+    description: Subregion 31 in region 0 (write '1' to clear)
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: PERREGION1_SUBSTATRA
+  address_offset: 1036
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SR0
+    bit_range:
+    - 0
+    - 0
+    description: Subregion 0 in region 0 (write '1' to clear)
+  - name: SR1
+    bit_range:
+    - 1
+    - 1
+    description: Subregion 1 in region 0 (write '1' to clear)
+  - name: SR2
+    bit_range:
+    - 2
+    - 2
+    description: Subregion 2 in region 0 (write '1' to clear)
+  - name: SR3
+    bit_range:
+    - 3
+    - 3
+    description: Subregion 3 in region 0 (write '1' to clear)
+  - name: SR4
+    bit_range:
+    - 4
+    - 4
+    description: Subregion 4 in region 0 (write '1' to clear)
+  - name: SR5
+    bit_range:
+    - 5
+    - 5
+    description: Subregion 5 in region 0 (write '1' to clear)
+  - name: SR6
+    bit_range:
+    - 6
+    - 6
+    description: Subregion 6 in region 0 (write '1' to clear)
+  - name: SR7
+    bit_range:
+    - 7
+    - 7
+    description: Subregion 7 in region 0 (write '1' to clear)
+  - name: SR8
+    bit_range:
+    - 8
+    - 8
+    description: Subregion 8 in region 0 (write '1' to clear)
+  - name: SR9
+    bit_range:
+    - 9
+    - 9
+    description: Subregion 9 in region 0 (write '1' to clear)
+  - name: SR10
+    bit_range:
+    - 10
+    - 10
+    description: Subregion 10 in region 0 (write '1' to clear)
+  - name: SR11
+    bit_range:
+    - 11
+    - 11
+    description: Subregion 11 in region 0 (write '1' to clear)
+  - name: SR12
+    bit_range:
+    - 12
+    - 12
+    description: Subregion 12 in region 0 (write '1' to clear)
+  - name: SR13
+    bit_range:
+    - 13
+    - 13
+    description: Subregion 13 in region 0 (write '1' to clear)
+  - name: SR14
+    bit_range:
+    - 14
+    - 14
+    description: Subregion 14 in region 0 (write '1' to clear)
+  - name: SR15
+    bit_range:
+    - 15
+    - 15
+    description: Subregion 15 in region 0 (write '1' to clear)
+  - name: SR16
+    bit_range:
+    - 16
+    - 16
+    description: Subregion 16 in region 0 (write '1' to clear)
+  - name: SR17
+    bit_range:
+    - 17
+    - 17
+    description: Subregion 17 in region 0 (write '1' to clear)
+  - name: SR18
+    bit_range:
+    - 18
+    - 18
+    description: Subregion 18 in region 0 (write '1' to clear)
+  - name: SR19
+    bit_range:
+    - 19
+    - 19
+    description: Subregion 19 in region 0 (write '1' to clear)
+  - name: SR20
+    bit_range:
+    - 20
+    - 20
+    description: Subregion 20 in region 0 (write '1' to clear)
+  - name: SR21
+    bit_range:
+    - 21
+    - 21
+    description: Subregion 21 in region 0 (write '1' to clear)
+  - name: SR22
+    bit_range:
+    - 22
+    - 22
+    description: Subregion 22 in region 0 (write '1' to clear)
+  - name: SR23
+    bit_range:
+    - 23
+    - 23
+    description: Subregion 23 in region 0 (write '1' to clear)
+  - name: SR24
+    bit_range:
+    - 24
+    - 24
+    description: Subregion 24 in region 0 (write '1' to clear)
+  - name: SR25
+    bit_range:
+    - 25
+    - 25
+    description: Subregion 25 in region 0 (write '1' to clear)
+  - name: SR26
+    bit_range:
+    - 26
+    - 26
+    description: Subregion 26 in region 0 (write '1' to clear)
+  - name: SR27
+    bit_range:
+    - 27
+    - 27
+    description: Subregion 27 in region 0 (write '1' to clear)
+  - name: SR28
+    bit_range:
+    - 28
+    - 28
+    description: Subregion 28 in region 0 (write '1' to clear)
+  - name: SR29
+    bit_range:
+    - 29
+    - 29
+    description: Subregion 29 in region 0 (write '1' to clear)
+  - name: SR30
+    bit_range:
+    - 30
+    - 30
+    description: Subregion 30 in region 0 (write '1' to clear)
+  - name: SR31
+    bit_range:
+    - 31
+    - 31
+    description: Subregion 31 in region 0 (write '1' to clear)
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: REGIONEN
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RGN0WA
+    bit_range:
+    - 0
+    - 0
+    description: Enable/disable write access watch in region[0]
+  - name: RGN0RA
+    bit_range:
+    - 1
+    - 1
+    description: Enable/disable read access watch in region[0]
+  - name: RGN1WA
+    bit_range:
+    - 2
+    - 2
+    description: Enable/disable write access watch in region[1]
+  - name: RGN1RA
+    bit_range:
+    - 3
+    - 3
+    description: Enable/disable read access watch in region[1]
+  - name: RGN2WA
+    bit_range:
+    - 4
+    - 4
+    description: Enable/disable write access watch in region[2]
+  - name: RGN2RA
+    bit_range:
+    - 5
+    - 5
+    description: Enable/disable read access watch in region[2]
+  - name: RGN3WA
+    bit_range:
+    - 6
+    - 6
+    description: Enable/disable write access watch in region[3]
+  - name: RGN3RA
+    bit_range:
+    - 7
+    - 7
+    description: Enable/disable read access watch in region[3]
+  - name: PRGN0WA
+    bit_range:
+    - 24
+    - 24
+    description: Enable/disable write access watch in PREGION[0]
+  - name: PRGN0RA
+    bit_range:
+    - 25
+    - 25
+    description: Enable/disable read access watch in PREGION[0]
+  - name: PRGN1WA
+    bit_range:
+    - 26
+    - 26
+    description: Enable/disable write access watch in PREGION[1]
+  - name: PRGN1RA
+    bit_range:
+    - 27
+    - 27
+    description: Enable/disable read access watch in PREGION[1]
+  side_effects: null
+- id: REGIONENSET
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RGN0WA
+    bit_range:
+    - 0
+    - 0
+    description: Enable write access watch in region[0]
+  - name: RGN0RA
+    bit_range:
+    - 1
+    - 1
+    description: Enable read access watch in region[0]
+  - name: RGN1WA
+    bit_range:
+    - 2
+    - 2
+    description: Enable write access watch in region[1]
+  - name: RGN1RA
+    bit_range:
+    - 3
+    - 3
+    description: Enable read access watch in region[1]
+  - name: RGN2WA
+    bit_range:
+    - 4
+    - 4
+    description: Enable write access watch in region[2]
+  - name: RGN2RA
+    bit_range:
+    - 5
+    - 5
+    description: Enable read access watch in region[2]
+  - name: RGN3WA
+    bit_range:
+    - 6
+    - 6
+    description: Enable write access watch in region[3]
+  - name: RGN3RA
+    bit_range:
+    - 7
+    - 7
+    description: Enable read access watch in region[3]
+  - name: PRGN0WA
+    bit_range:
+    - 24
+    - 24
+    description: Enable write access watch in PREGION[0]
+  - name: PRGN0RA
+    bit_range:
+    - 25
+    - 25
+    description: Enable read access watch in PREGION[0]
+  - name: PRGN1WA
+    bit_range:
+    - 26
+    - 26
+    description: Enable write access watch in PREGION[1]
+  - name: PRGN1RA
+    bit_range:
+    - 27
+    - 27
+    description: Enable read access watch in PREGION[1]
+  side_effects: null
+- id: REGIONENCLR
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RGN0WA
+    bit_range:
+    - 0
+    - 0
+    description: Disable write access watch in region[0]
+  - name: RGN0RA
+    bit_range:
+    - 1
+    - 1
+    description: Disable read access watch in region[0]
+  - name: RGN1WA
+    bit_range:
+    - 2
+    - 2
+    description: Disable write access watch in region[1]
+  - name: RGN1RA
+    bit_range:
+    - 3
+    - 3
+    description: Disable read access watch in region[1]
+  - name: RGN2WA
+    bit_range:
+    - 4
+    - 4
+    description: Disable write access watch in region[2]
+  - name: RGN2RA
+    bit_range:
+    - 5
+    - 5
+    description: Disable read access watch in region[2]
+  - name: RGN3WA
+    bit_range:
+    - 6
+    - 6
+    description: Disable write access watch in region[3]
+  - name: RGN3RA
+    bit_range:
+    - 7
+    - 7
+    description: Disable read access watch in region[3]
+  - name: PRGN0WA
+    bit_range:
+    - 24
+    - 24
+    description: Disable write access watch in PREGION[0]
+  - name: PRGN0RA
+    bit_range:
+    - 25
+    - 25
+    description: Disable read access watch in PREGION[0]
+  - name: PRGN1WA
+    bit_range:
+    - 26
+    - 26
+    description: Disable write access watch in PREGION[1]
+  - name: PRGN1RA
+    bit_range:
+    - 27
+    - 27
+    description: Disable read access watch in PREGION[1]
+  side_effects: null
+- id: REGION0_START
+  address_offset: 1536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 0
+    description: Start address for region
+  side_effects: null
+- id: REGION0_END
+  address_offset: 1540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 31
+    - 0
+    description: End address of region.
+  side_effects: null
+- id: REGION1_START
+  address_offset: 1552
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 0
+    description: Start address for region
+  side_effects: null
+- id: REGION1_END
+  address_offset: 1556
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 31
+    - 0
+    description: End address of region.
+  side_effects: null
+- id: REGION2_START
+  address_offset: 1568
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 0
+    description: Start address for region
+  side_effects: null
+- id: REGION2_END
+  address_offset: 1572
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 31
+    - 0
+    description: End address of region.
+  side_effects: null
+- id: REGION3_START
+  address_offset: 1584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 0
+    description: Start address for region
+  side_effects: null
+- id: REGION3_END
+  address_offset: 1588
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 31
+    - 0
+    description: End address of region.
+  side_effects: null
+- id: PREGION0_START
+  address_offset: 1728
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for future use
+  side_effects: null
+- id: PREGION0_END
+  address_offset: 1732
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for future use
+  side_effects: null
+- id: PREGION0_SUBS
+  address_offset: 1736
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SR0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude subregion 0 in region
+  - name: SR1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude subregion 1 in region
+  - name: SR2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude subregion 2 in region
+  - name: SR3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude subregion 3 in region
+  - name: SR4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude subregion 4 in region
+  - name: SR5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude subregion 5 in region
+  - name: SR6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude subregion 6 in region
+  - name: SR7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude subregion 7 in region
+  - name: SR8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude subregion 8 in region
+  - name: SR9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude subregion 9 in region
+  - name: SR10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude subregion 10 in region
+  - name: SR11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude subregion 11 in region
+  - name: SR12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude subregion 12 in region
+  - name: SR13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude subregion 13 in region
+  - name: SR14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude subregion 14 in region
+  - name: SR15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude subregion 15 in region
+  - name: SR16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude subregion 16 in region
+  - name: SR17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude subregion 17 in region
+  - name: SR18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude subregion 18 in region
+  - name: SR19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude subregion 19 in region
+  - name: SR20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude subregion 20 in region
+  - name: SR21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude subregion 21 in region
+  - name: SR22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude subregion 22 in region
+  - name: SR23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude subregion 23 in region
+  - name: SR24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude subregion 24 in region
+  - name: SR25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude subregion 25 in region
+  - name: SR26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude subregion 26 in region
+  - name: SR27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude subregion 27 in region
+  - name: SR28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude subregion 28 in region
+  - name: SR29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude subregion 29 in region
+  - name: SR30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude subregion 30 in region
+  - name: SR31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude subregion 31 in region
+  side_effects: null
+- id: PREGION1_START
+  address_offset: 1744
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: START
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for future use
+  side_effects: null
+- id: PREGION1_END
+  address_offset: 1748
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 31
+    - 0
+    description: Reserved for future use
+  side_effects: null
+- id: PREGION1_SUBS
+  address_offset: 1752
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SR0
+    bit_range:
+    - 0
+    - 0
+    description: Include or exclude subregion 0 in region
+  - name: SR1
+    bit_range:
+    - 1
+    - 1
+    description: Include or exclude subregion 1 in region
+  - name: SR2
+    bit_range:
+    - 2
+    - 2
+    description: Include or exclude subregion 2 in region
+  - name: SR3
+    bit_range:
+    - 3
+    - 3
+    description: Include or exclude subregion 3 in region
+  - name: SR4
+    bit_range:
+    - 4
+    - 4
+    description: Include or exclude subregion 4 in region
+  - name: SR5
+    bit_range:
+    - 5
+    - 5
+    description: Include or exclude subregion 5 in region
+  - name: SR6
+    bit_range:
+    - 6
+    - 6
+    description: Include or exclude subregion 6 in region
+  - name: SR7
+    bit_range:
+    - 7
+    - 7
+    description: Include or exclude subregion 7 in region
+  - name: SR8
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude subregion 8 in region
+  - name: SR9
+    bit_range:
+    - 9
+    - 9
+    description: Include or exclude subregion 9 in region
+  - name: SR10
+    bit_range:
+    - 10
+    - 10
+    description: Include or exclude subregion 10 in region
+  - name: SR11
+    bit_range:
+    - 11
+    - 11
+    description: Include or exclude subregion 11 in region
+  - name: SR12
+    bit_range:
+    - 12
+    - 12
+    description: Include or exclude subregion 12 in region
+  - name: SR13
+    bit_range:
+    - 13
+    - 13
+    description: Include or exclude subregion 13 in region
+  - name: SR14
+    bit_range:
+    - 14
+    - 14
+    description: Include or exclude subregion 14 in region
+  - name: SR15
+    bit_range:
+    - 15
+    - 15
+    description: Include or exclude subregion 15 in region
+  - name: SR16
+    bit_range:
+    - 16
+    - 16
+    description: Include or exclude subregion 16 in region
+  - name: SR17
+    bit_range:
+    - 17
+    - 17
+    description: Include or exclude subregion 17 in region
+  - name: SR18
+    bit_range:
+    - 18
+    - 18
+    description: Include or exclude subregion 18 in region
+  - name: SR19
+    bit_range:
+    - 19
+    - 19
+    description: Include or exclude subregion 19 in region
+  - name: SR20
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude subregion 20 in region
+  - name: SR21
+    bit_range:
+    - 21
+    - 21
+    description: Include or exclude subregion 21 in region
+  - name: SR22
+    bit_range:
+    - 22
+    - 22
+    description: Include or exclude subregion 22 in region
+  - name: SR23
+    bit_range:
+    - 23
+    - 23
+    description: Include or exclude subregion 23 in region
+  - name: SR24
+    bit_range:
+    - 24
+    - 24
+    description: Include or exclude subregion 24 in region
+  - name: SR25
+    bit_range:
+    - 25
+    - 25
+    description: Include or exclude subregion 25 in region
+  - name: SR26
+    bit_range:
+    - 26
+    - 26
+    description: Include or exclude subregion 26 in region
+  - name: SR27
+    bit_range:
+    - 27
+    - 27
+    description: Include or exclude subregion 27 in region
+  - name: SR28
+    bit_range:
+    - 28
+    - 28
+    description: Include or exclude subregion 28 in region
+  - name: SR29
+    bit_range:
+    - 29
+    - 29
+    description: Include or exclude subregion 29 in region
+  - name: SR30
+    bit_range:
+    - 30
+    - 30
+    description: Include or exclude subregion 30 in region
+  - name: SR31
+    bit_range:
+    - 31
+    - 31
+    description: Include or exclude subregion 31 in region
+  side_effects: null
+interrupts:
+  MWU: 32
+timing: null

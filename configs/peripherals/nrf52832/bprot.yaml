@@ -1,0 +1,692 @@
+peripheral: BPROT
+version: 0.1.0
+registers:
+- id: CONFIG0
+  address_offset: 1536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION0
+    bit_range:
+    - 0
+    - 0
+    description: Enable protection for region 0. Write '0' has no effect.
+  - name: REGION1
+    bit_range:
+    - 1
+    - 1
+    description: Enable protection for region 1. Write '0' has no effect.
+  - name: REGION2
+    bit_range:
+    - 2
+    - 2
+    description: Enable protection for region 2. Write '0' has no effect.
+  - name: REGION3
+    bit_range:
+    - 3
+    - 3
+    description: Enable protection for region 3. Write '0' has no effect.
+  - name: REGION4
+    bit_range:
+    - 4
+    - 4
+    description: Enable protection for region 4. Write '0' has no effect.
+  - name: REGION5
+    bit_range:
+    - 5
+    - 5
+    description: Enable protection for region 5. Write '0' has no effect.
+  - name: REGION6
+    bit_range:
+    - 6
+    - 6
+    description: Enable protection for region 6. Write '0' has no effect.
+  - name: REGION7
+    bit_range:
+    - 7
+    - 7
+    description: Enable protection for region 7. Write '0' has no effect.
+  - name: REGION8
+    bit_range:
+    - 8
+    - 8
+    description: Enable protection for region 8. Write '0' has no effect.
+  - name: REGION9
+    bit_range:
+    - 9
+    - 9
+    description: Enable protection for region 9. Write '0' has no effect.
+  - name: REGION10
+    bit_range:
+    - 10
+    - 10
+    description: Enable protection for region 10. Write '0' has no effect.
+  - name: REGION11
+    bit_range:
+    - 11
+    - 11
+    description: Enable protection for region 11. Write '0' has no effect.
+  - name: REGION12
+    bit_range:
+    - 12
+    - 12
+    description: Enable protection for region 12. Write '0' has no effect.
+  - name: REGION13
+    bit_range:
+    - 13
+    - 13
+    description: Enable protection for region 13. Write '0' has no effect.
+  - name: REGION14
+    bit_range:
+    - 14
+    - 14
+    description: Enable protection for region 14. Write '0' has no effect.
+  - name: REGION15
+    bit_range:
+    - 15
+    - 15
+    description: Enable protection for region 15. Write '0' has no effect.
+  - name: REGION16
+    bit_range:
+    - 16
+    - 16
+    description: Enable protection for region 16. Write '0' has no effect.
+  - name: REGION17
+    bit_range:
+    - 17
+    - 17
+    description: Enable protection for region 17. Write '0' has no effect.
+  - name: REGION18
+    bit_range:
+    - 18
+    - 18
+    description: Enable protection for region 18. Write '0' has no effect.
+  - name: REGION19
+    bit_range:
+    - 19
+    - 19
+    description: Enable protection for region 19. Write '0' has no effect.
+  - name: REGION20
+    bit_range:
+    - 20
+    - 20
+    description: Enable protection for region 20. Write '0' has no effect.
+  - name: REGION21
+    bit_range:
+    - 21
+    - 21
+    description: Enable protection for region 21. Write '0' has no effect.
+  - name: REGION22
+    bit_range:
+    - 22
+    - 22
+    description: Enable protection for region 22. Write '0' has no effect.
+  - name: REGION23
+    bit_range:
+    - 23
+    - 23
+    description: Enable protection for region 23. Write '0' has no effect.
+  - name: REGION24
+    bit_range:
+    - 24
+    - 24
+    description: Enable protection for region 24. Write '0' has no effect.
+  - name: REGION25
+    bit_range:
+    - 25
+    - 25
+    description: Enable protection for region 25. Write '0' has no effect.
+  - name: REGION26
+    bit_range:
+    - 26
+    - 26
+    description: Enable protection for region 26. Write '0' has no effect.
+  - name: REGION27
+    bit_range:
+    - 27
+    - 27
+    description: Enable protection for region 27. Write '0' has no effect.
+  - name: REGION28
+    bit_range:
+    - 28
+    - 28
+    description: Enable protection for region 28. Write '0' has no effect.
+  - name: REGION29
+    bit_range:
+    - 29
+    - 29
+    description: Enable protection for region 29. Write '0' has no effect.
+  - name: REGION30
+    bit_range:
+    - 30
+    - 30
+    description: Enable protection for region 30. Write '0' has no effect.
+  - name: REGION31
+    bit_range:
+    - 31
+    - 31
+    description: Enable protection for region 31. Write '0' has no effect.
+  side_effects: null
+- id: CONFIG1
+  address_offset: 1540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION32
+    bit_range:
+    - 0
+    - 0
+    description: Enable protection for region 32. Write '0' has no effect.
+  - name: REGION33
+    bit_range:
+    - 1
+    - 1
+    description: Enable protection for region 33. Write '0' has no effect.
+  - name: REGION34
+    bit_range:
+    - 2
+    - 2
+    description: Enable protection for region 34. Write '0' has no effect.
+  - name: REGION35
+    bit_range:
+    - 3
+    - 3
+    description: Enable protection for region 35. Write '0' has no effect.
+  - name: REGION36
+    bit_range:
+    - 4
+    - 4
+    description: Enable protection for region 36. Write '0' has no effect.
+  - name: REGION37
+    bit_range:
+    - 5
+    - 5
+    description: Enable protection for region 37. Write '0' has no effect.
+  - name: REGION38
+    bit_range:
+    - 6
+    - 6
+    description: Enable protection for region 38. Write '0' has no effect.
+  - name: REGION39
+    bit_range:
+    - 7
+    - 7
+    description: Enable protection for region 39. Write '0' has no effect.
+  - name: REGION40
+    bit_range:
+    - 8
+    - 8
+    description: Enable protection for region 40. Write '0' has no effect.
+  - name: REGION41
+    bit_range:
+    - 9
+    - 9
+    description: Enable protection for region 41. Write '0' has no effect.
+  - name: REGION42
+    bit_range:
+    - 10
+    - 10
+    description: Enable protection for region 42. Write '0' has no effect.
+  - name: REGION43
+    bit_range:
+    - 11
+    - 11
+    description: Enable protection for region 43. Write '0' has no effect.
+  - name: REGION44
+    bit_range:
+    - 12
+    - 12
+    description: Enable protection for region 44. Write '0' has no effect.
+  - name: REGION45
+    bit_range:
+    - 13
+    - 13
+    description: Enable protection for region 45. Write '0' has no effect.
+  - name: REGION46
+    bit_range:
+    - 14
+    - 14
+    description: Enable protection for region 46. Write '0' has no effect.
+  - name: REGION47
+    bit_range:
+    - 15
+    - 15
+    description: Enable protection for region 47. Write '0' has no effect.
+  - name: REGION48
+    bit_range:
+    - 16
+    - 16
+    description: Enable protection for region 48. Write '0' has no effect.
+  - name: REGION49
+    bit_range:
+    - 17
+    - 17
+    description: Enable protection for region 49. Write '0' has no effect.
+  - name: REGION50
+    bit_range:
+    - 18
+    - 18
+    description: Enable protection for region 50. Write '0' has no effect.
+  - name: REGION51
+    bit_range:
+    - 19
+    - 19
+    description: Enable protection for region 51. Write '0' has no effect.
+  - name: REGION52
+    bit_range:
+    - 20
+    - 20
+    description: Enable protection for region 52. Write '0' has no effect.
+  - name: REGION53
+    bit_range:
+    - 21
+    - 21
+    description: Enable protection for region 53. Write '0' has no effect.
+  - name: REGION54
+    bit_range:
+    - 22
+    - 22
+    description: Enable protection for region 54. Write '0' has no effect.
+  - name: REGION55
+    bit_range:
+    - 23
+    - 23
+    description: Enable protection for region 55. Write '0' has no effect.
+  - name: REGION56
+    bit_range:
+    - 24
+    - 24
+    description: Enable protection for region 56. Write '0' has no effect.
+  - name: REGION57
+    bit_range:
+    - 25
+    - 25
+    description: Enable protection for region 57. Write '0' has no effect.
+  - name: REGION58
+    bit_range:
+    - 26
+    - 26
+    description: Enable protection for region 58. Write '0' has no effect.
+  - name: REGION59
+    bit_range:
+    - 27
+    - 27
+    description: Enable protection for region 59. Write '0' has no effect.
+  - name: REGION60
+    bit_range:
+    - 28
+    - 28
+    description: Enable protection for region 60. Write '0' has no effect.
+  - name: REGION61
+    bit_range:
+    - 29
+    - 29
+    description: Enable protection for region 61. Write '0' has no effect.
+  - name: REGION62
+    bit_range:
+    - 30
+    - 30
+    description: Enable protection for region 62. Write '0' has no effect.
+  - name: REGION63
+    bit_range:
+    - 31
+    - 31
+    description: Enable protection for region 63. Write '0' has no effect.
+  side_effects: null
+- id: DISABLEINDEBUG
+  address_offset: 1544
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: DISABLEINDEBUG
+    bit_range:
+    - 0
+    - 0
+    description: Disable the protection mechanism for NVM regions while in debug interface mode. This register will only disable the protection mechanism if the device is in debug interface mode.
+  side_effects: null
+- id: UNUSED0
+  address_offset: 1548
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: CONFIG2
+  address_offset: 1552
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION64
+    bit_range:
+    - 0
+    - 0
+    description: Enable protection for region 64. Write '0' has no effect.
+  - name: REGION65
+    bit_range:
+    - 1
+    - 1
+    description: Enable protection for region 65. Write '0' has no effect.
+  - name: REGION66
+    bit_range:
+    - 2
+    - 2
+    description: Enable protection for region 66. Write '0' has no effect.
+  - name: REGION67
+    bit_range:
+    - 3
+    - 3
+    description: Enable protection for region 67. Write '0' has no effect.
+  - name: REGION68
+    bit_range:
+    - 4
+    - 4
+    description: Enable protection for region 68. Write '0' has no effect.
+  - name: REGION69
+    bit_range:
+    - 5
+    - 5
+    description: Enable protection for region 69. Write '0' has no effect.
+  - name: REGION70
+    bit_range:
+    - 6
+    - 6
+    description: Enable protection for region 70. Write '0' has no effect.
+  - name: REGION71
+    bit_range:
+    - 7
+    - 7
+    description: Enable protection for region 71. Write '0' has no effect.
+  - name: REGION72
+    bit_range:
+    - 8
+    - 8
+    description: Enable protection for region 72. Write '0' has no effect.
+  - name: REGION73
+    bit_range:
+    - 9
+    - 9
+    description: Enable protection for region 73. Write '0' has no effect.
+  - name: REGION74
+    bit_range:
+    - 10
+    - 10
+    description: Enable protection for region 74. Write '0' has no effect.
+  - name: REGION75
+    bit_range:
+    - 11
+    - 11
+    description: Enable protection for region 75. Write '0' has no effect.
+  - name: REGION76
+    bit_range:
+    - 12
+    - 12
+    description: Enable protection for region 76. Write '0' has no effect.
+  - name: REGION77
+    bit_range:
+    - 13
+    - 13
+    description: Enable protection for region 77. Write '0' has no effect.
+  - name: REGION78
+    bit_range:
+    - 14
+    - 14
+    description: Enable protection for region 78. Write '0' has no effect.
+  - name: REGION79
+    bit_range:
+    - 15
+    - 15
+    description: Enable protection for region 79. Write '0' has no effect.
+  - name: REGION80
+    bit_range:
+    - 16
+    - 16
+    description: Enable protection for region 80. Write '0' has no effect.
+  - name: REGION81
+    bit_range:
+    - 17
+    - 17
+    description: Enable protection for region 81. Write '0' has no effect.
+  - name: REGION82
+    bit_range:
+    - 18
+    - 18
+    description: Enable protection for region 82. Write '0' has no effect.
+  - name: REGION83
+    bit_range:
+    - 19
+    - 19
+    description: Enable protection for region 83. Write '0' has no effect.
+  - name: REGION84
+    bit_range:
+    - 20
+    - 20
+    description: Enable protection for region 84. Write '0' has no effect.
+  - name: REGION85
+    bit_range:
+    - 21
+    - 21
+    description: Enable protection for region 85. Write '0' has no effect.
+  - name: REGION86
+    bit_range:
+    - 22
+    - 22
+    description: Enable protection for region 86. Write '0' has no effect.
+  - name: REGION87
+    bit_range:
+    - 23
+    - 23
+    description: Enable protection for region 87. Write '0' has no effect.
+  - name: REGION88
+    bit_range:
+    - 24
+    - 24
+    description: Enable protection for region 88. Write '0' has no effect.
+  - name: REGION89
+    bit_range:
+    - 25
+    - 25
+    description: Enable protection for region 89. Write '0' has no effect.
+  - name: REGION90
+    bit_range:
+    - 26
+    - 26
+    description: Enable protection for region 90. Write '0' has no effect.
+  - name: REGION91
+    bit_range:
+    - 27
+    - 27
+    description: Enable protection for region 91. Write '0' has no effect.
+  - name: REGION92
+    bit_range:
+    - 28
+    - 28
+    description: Enable protection for region 92. Write '0' has no effect.
+  - name: REGION93
+    bit_range:
+    - 29
+    - 29
+    description: Enable protection for region 93. Write '0' has no effect.
+  - name: REGION94
+    bit_range:
+    - 30
+    - 30
+    description: Enable protection for region 94. Write '0' has no effect.
+  - name: REGION95
+    bit_range:
+    - 31
+    - 31
+    description: Enable protection for region 95. Write '0' has no effect.
+  side_effects: null
+- id: CONFIG3
+  address_offset: 1556
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION96
+    bit_range:
+    - 0
+    - 0
+    description: Enable protection for region 96. Write '0' has no effect.
+  - name: REGION97
+    bit_range:
+    - 1
+    - 1
+    description: Enable protection for region 97. Write '0' has no effect.
+  - name: REGION98
+    bit_range:
+    - 2
+    - 2
+    description: Enable protection for region 98. Write '0' has no effect.
+  - name: REGION99
+    bit_range:
+    - 3
+    - 3
+    description: Enable protection for region 99. Write '0' has no effect.
+  - name: REGION100
+    bit_range:
+    - 4
+    - 4
+    description: Enable protection for region 100. Write '0' has no effect.
+  - name: REGION101
+    bit_range:
+    - 5
+    - 5
+    description: Enable protection for region 101. Write '0' has no effect.
+  - name: REGION102
+    bit_range:
+    - 6
+    - 6
+    description: Enable protection for region 102. Write '0' has no effect.
+  - name: REGION103
+    bit_range:
+    - 7
+    - 7
+    description: Enable protection for region 103. Write '0' has no effect.
+  - name: REGION104
+    bit_range:
+    - 8
+    - 8
+    description: Enable protection for region 104. Write '0' has no effect.
+  - name: REGION105
+    bit_range:
+    - 9
+    - 9
+    description: Enable protection for region 105. Write '0' has no effect.
+  - name: REGION106
+    bit_range:
+    - 10
+    - 10
+    description: Enable protection for region 106. Write '0' has no effect.
+  - name: REGION107
+    bit_range:
+    - 11
+    - 11
+    description: Enable protection for region 107. Write '0' has no effect.
+  - name: REGION108
+    bit_range:
+    - 12
+    - 12
+    description: Enable protection for region 108. Write '0' has no effect.
+  - name: REGION109
+    bit_range:
+    - 13
+    - 13
+    description: Enable protection for region 109. Write '0' has no effect.
+  - name: REGION110
+    bit_range:
+    - 14
+    - 14
+    description: Enable protection for region 110. Write '0' has no effect.
+  - name: REGION111
+    bit_range:
+    - 15
+    - 15
+    description: Enable protection for region 111. Write '0' has no effect.
+  - name: REGION112
+    bit_range:
+    - 16
+    - 16
+    description: Enable protection for region 112. Write '0' has no effect.
+  - name: REGION113
+    bit_range:
+    - 17
+    - 17
+    description: Enable protection for region 113. Write '0' has no effect.
+  - name: REGION114
+    bit_range:
+    - 18
+    - 18
+    description: Enable protection for region 114. Write '0' has no effect.
+  - name: REGION115
+    bit_range:
+    - 19
+    - 19
+    description: Enable protection for region 115. Write '0' has no effect.
+  - name: REGION116
+    bit_range:
+    - 20
+    - 20
+    description: Enable protection for region 116. Write '0' has no effect.
+  - name: REGION117
+    bit_range:
+    - 21
+    - 21
+    description: Enable protection for region 117. Write '0' has no effect.
+  - name: REGION118
+    bit_range:
+    - 22
+    - 22
+    description: Enable protection for region 118. Write '0' has no effect.
+  - name: REGION119
+    bit_range:
+    - 23
+    - 23
+    description: Enable protection for region 119. Write '0' has no effect.
+  - name: REGION120
+    bit_range:
+    - 24
+    - 24
+    description: Enable protection for region 120. Write '0' has no effect.
+  - name: REGION121
+    bit_range:
+    - 25
+    - 25
+    description: Enable protection for region 121. Write '0' has no effect.
+  - name: REGION122
+    bit_range:
+    - 26
+    - 26
+    description: Enable protection for region 122. Write '0' has no effect.
+  - name: REGION123
+    bit_range:
+    - 27
+    - 27
+    description: Enable protection for region 123. Write '0' has no effect.
+  - name: REGION124
+    bit_range:
+    - 28
+    - 28
+    description: Enable protection for region 124. Write '0' has no effect.
+  - name: REGION125
+    bit_range:
+    - 29
+    - 29
+    description: Enable protection for region 125. Write '0' has no effect.
+  - name: REGION126
+    bit_range:
+    - 30
+    - 30
+    description: Enable protection for region 126. Write '0' has no effect.
+  - name: REGION127
+    bit_range:
+    - 31
+    - 31
+    description: Enable protection for region 127. Write '0' has no effect.
+  side_effects: null
+interrupts: null
+timing: null

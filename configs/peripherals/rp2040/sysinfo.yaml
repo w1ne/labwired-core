@@ -1,0 +1,56 @@
+peripheral: SYSINFO
+version: 0.1.0
+registers:
+- id: CHIP_ID
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MANUFACTURER
+    bit_range:
+    - 11
+    - 0
+    description: null
+  - name: PART
+    bit_range:
+    - 27
+    - 12
+    description: null
+  - name: REVISION
+    bit_range:
+    - 31
+    - 28
+    description: null
+  side_effects: null
+- id: PLATFORM
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FPGA
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: ASIC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  side_effects: null
+- id: GITREF_RP2040
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GITREF_RP2040
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

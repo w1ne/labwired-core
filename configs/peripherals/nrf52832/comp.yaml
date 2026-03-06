@@ -1,0 +1,286 @@
+peripheral: COMP
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SAMPLE
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_READY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DOWN
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_UP
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CROSS
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY_SAMPLE
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between READY event and SAMPLE task
+  - name: READY_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Shortcut between READY event and STOP task
+  - name: DOWN_STOP
+    bit_range:
+    - 2
+    - 2
+    description: Shortcut between DOWN event and STOP task
+  - name: UP_STOP
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between UP event and STOP task
+  - name: CROSS_STOP
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between CROSS event and STOP task
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for READY event
+  - name: DOWN
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for DOWN event
+  - name: UP
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for UP event
+  - name: CROSS
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable interrupt for CROSS event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for READY event
+  - name: DOWN
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for DOWN event
+  - name: UP
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for UP event
+  - name: CROSS
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for CROSS event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for READY event
+  - name: DOWN
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for DOWN event
+  - name: UP
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for UP event
+  - name: CROSS
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for CROSS event
+  side_effects: null
+- id: RESULT
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RESULT
+    bit_range:
+    - 0
+    - 0
+    description: Result of last compare. Decision point SAMPLE task.
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 0
+    description: Enable or disable COMP
+  side_effects: null
+- id: PSEL
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSEL
+    bit_range:
+    - 2
+    - 0
+    description: Analog pin select
+  side_effects: null
+- id: REFSEL
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: REFSEL
+    bit_range:
+    - 2
+    - 0
+    description: Reference select
+  side_effects: null
+- id: EXTREFSEL
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTREFSEL
+    bit_range:
+    - 2
+    - 0
+    description: External analog reference select
+  side_effects: null
+- id: TH
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: THDOWN
+    bit_range:
+    - 5
+    - 0
+    description: VDOWN = (THDOWN+1)/64*VREF
+  - name: THUP
+    bit_range:
+    - 13
+    - 8
+    description: VUP = (THUP+1)/64*VREF
+  side_effects: null
+- id: MODE
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SP
+    bit_range:
+    - 1
+    - 0
+    description: Speed and power modes
+  - name: MAIN
+    bit_range:
+    - 8
+    - 8
+    description: Main operation modes
+  side_effects: null
+- id: HYST
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HYST
+    bit_range:
+    - 0
+    - 0
+    description: Comparator hysteresis
+  side_effects: null
+- id: ISOURCE
+  address_offset: 1340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ISOURCE
+    bit_range:
+    - 1
+    - 0
+    description: Comparator hysteresis
+  side_effects: null
+interrupts:
+  COMP_LPCOMP: 19
+timing: null

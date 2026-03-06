@@ -1,0 +1,8656 @@
+peripheral: IO_BANK0
+version: 0.1.0
+registers:
+- id: GPIO0_STATUS
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO0_CTRL
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO1_STATUS
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO1_CTRL
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO2_STATUS
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO2_CTRL
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO3_STATUS
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO3_CTRL
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO4_STATUS
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO4_CTRL
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO5_STATUS
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO5_CTRL
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO6_STATUS
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO6_CTRL
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO7_STATUS
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO7_CTRL
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO8_STATUS
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO8_CTRL
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO9_STATUS
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO9_CTRL
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO10_STATUS
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO10_CTRL
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO11_STATUS
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO11_CTRL
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO12_STATUS
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO12_CTRL
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO13_STATUS
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO13_CTRL
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO14_STATUS
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO14_CTRL
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO15_STATUS
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO15_CTRL
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO16_STATUS
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO16_CTRL
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO17_STATUS
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO17_CTRL
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO18_STATUS
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO18_CTRL
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO19_STATUS
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO19_CTRL
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO20_STATUS
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO20_CTRL
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO21_STATUS
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO21_CTRL
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO22_STATUS
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO22_CTRL
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO23_STATUS
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO23_CTRL
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO24_STATUS
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO24_CTRL
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO25_STATUS
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO25_CTRL
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO26_STATUS
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO26_CTRL
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO27_STATUS
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO27_CTRL
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO28_STATUS
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO28_CTRL
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: GPIO29_STATUS
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTFROMPERI
+    bit_range:
+    - 8
+    - 8
+    description: output signal from selected peripheral, before register override is applied
+  - name: OUTTOPAD
+    bit_range:
+    - 9
+    - 9
+    description: output signal to pad after register override is applied
+  - name: OEFROMPERI
+    bit_range:
+    - 12
+    - 12
+    description: output enable from selected peripheral, before register override is applied
+  - name: OETOPAD
+    bit_range:
+    - 13
+    - 13
+    description: output enable to pad after register override is applied
+  - name: INFROMPAD
+    bit_range:
+    - 17
+    - 17
+    description: input signal from pad, before override is applied
+  - name: INTOPERI
+    bit_range:
+    - 19
+    - 19
+    description: input signal to peripheral, after override is applied
+  - name: IRQFROMPAD
+    bit_range:
+    - 24
+    - 24
+    description: interrupt from pad before override is applied
+  - name: IRQTOPROC
+    bit_range:
+    - 26
+    - 26
+    description: interrupt to processors, after override is applied
+  side_effects: null
+- id: GPIO29_CTRL
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: FUNCSEL
+    bit_range:
+    - 4
+    - 0
+    description: "0-31 -> selects pin function according to the gpio table \n                            31 == NULL"
+  - name: OUTOVER
+    bit_range:
+    - 9
+    - 8
+    description: null
+  - name: OEOVER
+    bit_range:
+    - 13
+    - 12
+    description: null
+  - name: INOVER
+    bit_range:
+    - 17
+    - 16
+    description: null
+  - name: IRQOVER
+    bit_range:
+    - 29
+    - 28
+    description: null
+  side_effects: null
+- id: INTR0
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: INTR1
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: INTR2
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: INTR3
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: PROC0_INTE0
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTE1
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTE2
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTE3
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: PROC0_INTF0
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTF1
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTF2
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTF3
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: PROC0_INTS0
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTS1
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTS2
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC0_INTS3
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: PROC1_INTE0
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTE1
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTE2
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTE3
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: PROC1_INTF0
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTF1
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTF2
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTF3
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: PROC1_INTS0
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTS1
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTS2
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: PROC1_INTS3
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTE0
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTE1
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTE2
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTE3
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTF0
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTF1
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTF2
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTF3
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTS0
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO0_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO0_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO0_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO0_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO1_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO1_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO1_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO1_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO2_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO2_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO2_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO2_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO3_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO3_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO3_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO3_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO4_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO4_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO4_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO4_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO5_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO5_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO5_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO5_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO6_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO6_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO6_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO6_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO7_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO7_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO7_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO7_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTS1
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO8_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO8_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO8_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO8_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO9_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO9_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO9_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO9_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO10_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO10_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO10_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO10_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO11_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO11_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO11_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO11_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO12_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO12_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO12_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO12_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO13_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO13_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO13_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO13_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO14_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO14_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO14_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO14_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO15_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO15_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO15_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO15_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTS2
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO16_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO16_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO16_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO16_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO17_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO17_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO17_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO17_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO18_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO18_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO18_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO18_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO19_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO19_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO19_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO19_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO20_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO20_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO20_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO20_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO21_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO21_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO21_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO21_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: GPIO22_LEVEL_LOW
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: GPIO22_LEVEL_HIGH
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: GPIO22_EDGE_LOW
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: GPIO22_EDGE_HIGH
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: GPIO23_LEVEL_LOW
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: GPIO23_LEVEL_HIGH
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: GPIO23_EDGE_LOW
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: GPIO23_EDGE_HIGH
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: DORMANT_WAKE_INTS3
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO24_LEVEL_LOW
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: GPIO24_LEVEL_HIGH
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: GPIO24_EDGE_LOW
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: GPIO24_EDGE_HIGH
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GPIO25_LEVEL_LOW
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: GPIO25_LEVEL_HIGH
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: GPIO25_EDGE_LOW
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: GPIO25_EDGE_HIGH
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: GPIO26_LEVEL_LOW
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: GPIO26_LEVEL_HIGH
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: GPIO26_EDGE_LOW
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: GPIO26_EDGE_HIGH
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: GPIO27_LEVEL_LOW
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: GPIO27_LEVEL_HIGH
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: GPIO27_EDGE_LOW
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: GPIO27_EDGE_HIGH
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: GPIO28_LEVEL_LOW
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: GPIO28_LEVEL_HIGH
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: GPIO28_EDGE_LOW
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: GPIO28_EDGE_HIGH
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: GPIO29_LEVEL_LOW
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: GPIO29_LEVEL_HIGH
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: GPIO29_EDGE_LOW
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: GPIO29_EDGE_HIGH
+    bit_range:
+    - 23
+    - 23
+    description: null
+  side_effects: null
+interrupts:
+  IO_IRQ_BANK0: 13
+timing: null

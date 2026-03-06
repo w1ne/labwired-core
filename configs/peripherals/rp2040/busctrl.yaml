@@ -1,0 +1,140 @@
+peripheral: BUSCTRL
+version: 0.1.0
+registers:
+- id: BUS_PRIORITY
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PROC0
+    bit_range:
+    - 0
+    - 0
+    description: 0 - low priority, 1 - high priority
+  - name: PROC1
+    bit_range:
+    - 4
+    - 4
+    description: 0 - low priority, 1 - high priority
+  - name: DMA_R
+    bit_range:
+    - 8
+    - 8
+    description: 0 - low priority, 1 - high priority
+  - name: DMA_W
+    bit_range:
+    - 12
+    - 12
+    description: 0 - low priority, 1 - high priority
+  side_effects: null
+- id: BUS_PRIORITY_ACK
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUS_PRIORITY_ACK
+    bit_range:
+    - 0
+    - 0
+    description: "Goes to 1 once all arbiters have registered the new global priority levels. \n                            Arbiters update their local priority when servicing a new nonsequential access. \n                            In normal circumstances this will happen almost immediately."
+  side_effects: null
+- id: PERFCTR0
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERFCTR0
+    bit_range:
+    - 23
+    - 0
+    description: "Busfabric saturating performance counter 0 \n                            Count some event signal from the busfabric arbiters. \n                            Write any value to clear. Select an event to count using PERFSEL0"
+  side_effects: null
+- id: PERFSEL0
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: PERFSEL0
+    bit_range:
+    - 4
+    - 0
+    description: Select an event for PERFCTR0. Count either contested accesses, or all accesses, on a downstream port of the main crossbar.
+  side_effects: null
+- id: PERFCTR1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERFCTR1
+    bit_range:
+    - 23
+    - 0
+    description: "Busfabric saturating performance counter 1 \n                            Count some event signal from the busfabric arbiters. \n                            Write any value to clear. Select an event to count using PERFSEL1"
+  side_effects: null
+- id: PERFSEL1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: PERFSEL1
+    bit_range:
+    - 4
+    - 0
+    description: Select an event for PERFCTR1. Count either contested accesses, or all accesses, on a downstream port of the main crossbar.
+  side_effects: null
+- id: PERFCTR2
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERFCTR2
+    bit_range:
+    - 23
+    - 0
+    description: "Busfabric saturating performance counter 2 \n                            Count some event signal from the busfabric arbiters. \n                            Write any value to clear. Select an event to count using PERFSEL2"
+  side_effects: null
+- id: PERFSEL2
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: PERFSEL2
+    bit_range:
+    - 4
+    - 0
+    description: Select an event for PERFCTR2. Count either contested accesses, or all accesses, on a downstream port of the main crossbar.
+  side_effects: null
+- id: PERFCTR3
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERFCTR3
+    bit_range:
+    - 23
+    - 0
+    description: "Busfabric saturating performance counter 3 \n                            Count some event signal from the busfabric arbiters. \n                            Write any value to clear. Select an event to count using PERFSEL3"
+  side_effects: null
+- id: PERFSEL3
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: PERFSEL3
+    bit_range:
+    - 4
+    - 0
+    description: Select an event for PERFCTR3. Count either contested accesses, or all accesses, on a downstream port of the main crossbar.
+  side_effects: null
+interrupts: null
+timing: null

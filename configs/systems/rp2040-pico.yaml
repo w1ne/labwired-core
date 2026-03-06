@@ -1,0 +1,5 @@
+# LabWired - Raspberry Pi Pico System Configuration
+name: "rp2040-pico"
+chip: "../chips/rp2040.yaml"
+external_devices: []
+board_io: []

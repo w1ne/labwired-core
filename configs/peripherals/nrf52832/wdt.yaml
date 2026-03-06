@@ -1,0 +1,275 @@
+peripheral: WDT
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TIMEOUT
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMEOUT
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for TIMEOUT event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMEOUT
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for TIMEOUT event
+  side_effects: null
+- id: RUNSTATUS
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RUNSTATUS
+    bit_range:
+    - 0
+    - 0
+    description: Indicates whether or not the watchdog is running
+  side_effects: null
+- id: REQSTATUS
+  address_offset: 1028
+  size: 32
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: RR0
+    bit_range:
+    - 0
+    - 0
+    description: Request status for RR[0] register
+  - name: RR1
+    bit_range:
+    - 1
+    - 1
+    description: Request status for RR[1] register
+  - name: RR2
+    bit_range:
+    - 2
+    - 2
+    description: Request status for RR[2] register
+  - name: RR3
+    bit_range:
+    - 3
+    - 3
+    description: Request status for RR[3] register
+  - name: RR4
+    bit_range:
+    - 4
+    - 4
+    description: Request status for RR[4] register
+  - name: RR5
+    bit_range:
+    - 5
+    - 5
+    description: Request status for RR[5] register
+  - name: RR6
+    bit_range:
+    - 6
+    - 6
+    description: Request status for RR[6] register
+  - name: RR7
+    bit_range:
+    - 7
+    - 7
+    description: Request status for RR[7] register
+  side_effects: null
+- id: CRV
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CRV
+    bit_range:
+    - 31
+    - 0
+    description: Counter reload value in number of cycles of the 32.768 kHz clock
+  side_effects: null
+- id: RREN
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: RR0
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable RR[0] register
+  - name: RR1
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable RR[1] register
+  - name: RR2
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable RR[2] register
+  - name: RR3
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable RR[3] register
+  - name: RR4
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable RR[4] register
+  - name: RR5
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable RR[5] register
+  - name: RR6
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable RR[6] register
+  - name: RR7
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable RR[7] register
+  side_effects: null
+- id: CONFIG
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: SLEEP
+    bit_range:
+    - 0
+    - 0
+    description: Configure the watchdog to either be paused, or kept running, while the CPU is sleeping
+  - name: HALT
+    bit_range:
+    - 3
+    - 3
+    description: Configure the watchdog to either be paused, or kept running, while the CPU is halted by the debugger
+  side_effects: null
+- id: RR0
+  address_offset: 1536
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+- id: RR1
+  address_offset: 1540
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+- id: RR2
+  address_offset: 1544
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+- id: RR3
+  address_offset: 1548
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+- id: RR4
+  address_offset: 1552
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+- id: RR5
+  address_offset: 1556
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+- id: RR6
+  address_offset: 1560
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+- id: RR7
+  address_offset: 1564
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: RR
+    bit_range:
+    - 31
+    - 0
+    description: Reload request register
+  side_effects: null
+interrupts:
+  WDT: 16
+timing: null

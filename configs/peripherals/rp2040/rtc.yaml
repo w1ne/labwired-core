@@ -1,0 +1,285 @@
+peripheral: RTC
+version: 0.1.0
+registers:
+- id: CLKDIV_M1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLKDIV_M1
+    bit_range:
+    - 15
+    - 0
+    description: null
+  side_effects: null
+- id: SETUP_0
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAY
+    bit_range:
+    - 4
+    - 0
+    description: Day of the month (1..31)
+  - name: MONTH
+    bit_range:
+    - 11
+    - 8
+    description: Month (1..12)
+  - name: YEAR
+    bit_range:
+    - 23
+    - 12
+    description: Year
+  side_effects: null
+- id: SETUP_1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEC
+    bit_range:
+    - 5
+    - 0
+    description: Seconds
+  - name: MIN
+    bit_range:
+    - 13
+    - 8
+    description: Minutes
+  - name: HOUR
+    bit_range:
+    - 20
+    - 16
+    description: Hours
+  - name: DOTW
+    bit_range:
+    - 26
+    - 24
+    description: 'Day of the week: 1-Monday...0-Sunday ISO 8601 mod 7'
+  side_effects: null
+- id: CTRL
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC_ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable RTC
+  - name: RTC_ACTIVE
+    bit_range:
+    - 1
+    - 1
+    description: RTC enabled (running)
+  - name: LOAD
+    bit_range:
+    - 4
+    - 4
+    description: Load RTC
+  - name: FORCE_NOTLEAPYEAR
+    bit_range:
+    - 8
+    - 8
+    description: "If set, leapyear is forced off. \n                            Useful for years divisible by 100 but not by 400"
+  side_effects: null
+- id: IRQ_SETUP_0
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAY
+    bit_range:
+    - 4
+    - 0
+    description: Day of the month (1..31)
+  - name: MONTH
+    bit_range:
+    - 11
+    - 8
+    description: Month (1..12)
+  - name: YEAR
+    bit_range:
+    - 23
+    - 12
+    description: Year
+  - name: DAY_ENA
+    bit_range:
+    - 24
+    - 24
+    description: Enable day matching
+  - name: MONTH_ENA
+    bit_range:
+    - 25
+    - 25
+    description: Enable month matching
+  - name: YEAR_ENA
+    bit_range:
+    - 26
+    - 26
+    description: Enable year matching
+  - name: MATCH_ENA
+    bit_range:
+    - 28
+    - 28
+    description: Global match enable. Don't change any other value while this one is enabled
+  - name: MATCH_ACTIVE
+    bit_range:
+    - 29
+    - 29
+    description: null
+  side_effects: null
+- id: IRQ_SETUP_1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEC
+    bit_range:
+    - 5
+    - 0
+    description: Seconds
+  - name: MIN
+    bit_range:
+    - 13
+    - 8
+    description: Minutes
+  - name: HOUR
+    bit_range:
+    - 20
+    - 16
+    description: Hours
+  - name: DOTW
+    bit_range:
+    - 26
+    - 24
+    description: Day of the week
+  - name: SEC_ENA
+    bit_range:
+    - 28
+    - 28
+    description: Enable second matching
+  - name: MIN_ENA
+    bit_range:
+    - 29
+    - 29
+    description: Enable minute matching
+  - name: HOUR_ENA
+    bit_range:
+    - 30
+    - 30
+    description: Enable hour matching
+  - name: DOTW_ENA
+    bit_range:
+    - 31
+    - 31
+    description: Enable day of the week matching
+  side_effects: null
+- id: RTC_1
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAY
+    bit_range:
+    - 4
+    - 0
+    description: Day of the month (1..31)
+  - name: MONTH
+    bit_range:
+    - 11
+    - 8
+    description: Month (1..12)
+  - name: YEAR
+    bit_range:
+    - 23
+    - 12
+    description: Year
+  side_effects: null
+- id: RTC_0
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEC
+    bit_range:
+    - 5
+    - 0
+    description: Seconds
+  - name: MIN
+    bit_range:
+    - 13
+    - 8
+    description: Minutes
+  - name: HOUR
+    bit_range:
+    - 20
+    - 16
+    description: Hours
+  - name: DOTW
+    bit_range:
+    - 26
+    - 24
+    description: Day of the week
+  side_effects: null
+- id: INTR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: INTE
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: INTF
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: INTS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+interrupts:
+  RTC_IRQ: 25
+timing: null
