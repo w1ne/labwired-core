@@ -1,4 +1,4 @@
-name: Foundry Deploy
+# Foundry Deploy Workflow - Triggered via self-hosted runner
 
 on:
   workflow_dispatch:
