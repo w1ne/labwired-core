@@ -8,8 +8,9 @@ import LandingPage from './components/LandingPage';
 import AssetDetail from './components/AssetDetail';
 import HealthMonitoring from './components/HealthMonitoring';
 import RunDetail from './components/RunDetail';
+import PrivateModels from './components/PrivateModels';
 
-type Route = 'landing' | 'catalog' | 'usage' | 'asset' | 'health' | 'run';
+type Route = 'landing' | 'catalog' | 'usage' | 'asset' | 'health' | 'run' | 'private-models';
 
 export function parseRoute(): { route: Route; assetId?: string; runId?: string } {
   const hash = window.location.hash.replace('#', '');
@@ -21,6 +22,7 @@ export function parseRoute(): { route: Route; assetId?: string; runId?: string }
   }
   if (hash === '/dashboard') return { route: 'usage' };
   if (hash === '/catalog') return { route: 'catalog' };
+  if (hash === '/private-models') return { route: 'private-models' };
   if (hash === '/usage') return { route: 'usage' };
   if (hash === '/health') return { route: 'health' };
   return { route: 'landing' };
@@ -50,8 +52,8 @@ function App() {
     return <AssetDetail id={routeState.assetId} onBack={() => navigate('/catalog')} />;
   }
 
-  // Keep catalog public, but require auth for dashboard/usage/health/run routes.
-  if (!isSignedIn && (routeState.route === 'usage' || routeState.route === 'health' || routeState.route === 'run')) {
+  // Keep catalog public, but require auth for dashboard/usage/health/run/private-models routes.
+  if (!isSignedIn && (routeState.route === 'usage' || routeState.route === 'health' || routeState.route === 'run' || routeState.route === 'private-models')) {
     return <LandingPage onEnterDashboard={() => navigate('/dashboard')} />;
   }
 
@@ -59,11 +61,33 @@ function App() {
     return <RunDetail runId={routeState.runId} onBack={() => navigate('/usage')} />;
   }
 
+  if (routeState.route === 'catalog') {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--lw-bg)', display: 'flex', flexDirection: 'column' }}>
+        <nav style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '1.2rem 2.5rem', borderBottom: 'var(--lw-border)',
+          background: 'var(--lw-bg)', position: 'sticky', top: 0, zIndex: 100,
+        }}>
+          <div style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: '1.3rem', letterSpacing: '-0.03em', cursor: 'pointer' }} onClick={() => navigate('/')}>
+            LABWIRED <span style={{ color: 'var(--lw-pink)' }}>FOUNDRY</span>
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <button onClick={() => navigate('/dashboard')} className="secondary" style={{ padding: '0.5rem 1rem' }}>Dashboard →</button>
+          </div>
+        </nav>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+          <AssetCatalog onSelectAsset={(id) => navigate(`/assets/${id}`)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', width: '100vw', minHeight: '100vh', background: 'var(--lw-bg-alt)' }}>
       <Sidebar activeTab={routeState.route === 'run' ? 'usage' : routeState.route} setActiveTab={(tab: string) => navigate(`/${tab}`)} />
       <main style={{ flex: 1, display: 'flex', overflowY: 'auto' }}>
-        {routeState.route === 'catalog' && <AssetCatalog onSelectAsset={(id) => navigate(`/assets/${id}`)} />}
+        {routeState.route === 'private-models' && <PrivateModels />}
         {routeState.route === 'usage' && <UsageStats />}
         {routeState.route === 'health' && <HealthMonitoring />}
       </main>
