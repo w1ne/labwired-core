@@ -1,0 +1,174 @@
+peripheral: SYSCFG
+version: 0.1.0
+registers:
+- id: PROC0_NMI_MASK
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PROC0_NMI_MASK
+    bit_range:
+    - 31
+    - 0
+    description: Set a bit high to enable NMI from that IRQ
+  side_effects: null
+- id: PROC1_NMI_MASK
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PROC1_NMI_MASK
+    bit_range:
+    - 31
+    - 0
+    description: Set a bit high to enable NMI from that IRQ
+  side_effects: null
+- id: PROC_CONFIG
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 268435456
+  fields:
+  - name: PROC0_HALTED
+    bit_range:
+    - 0
+    - 0
+    description: Indication that proc0 has halted
+  - name: PROC1_HALTED
+    bit_range:
+    - 1
+    - 1
+    description: Indication that proc1 has halted
+  - name: PROC0_DAP_INSTID
+    bit_range:
+    - 27
+    - 24
+    description: "Configure proc0 DAP instance ID. \n                            Recommend that this is NOT changed until you require debug access in multi-chip environment \n                            WARNING: do not set to 15 as this is reserved for RescueDP"
+  - name: PROC1_DAP_INSTID
+    bit_range:
+    - 31
+    - 28
+    description: "Configure proc1 DAP instance ID. \n                            Recommend that this is NOT changed until you require debug access in multi-chip environment \n                            WARNING: do not set to 15 as this is reserved for RescueDP"
+  side_effects: null
+- id: PROC_IN_SYNC_BYPASS
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PROC_IN_SYNC_BYPASS
+    bit_range:
+    - 29
+    - 0
+    description: null
+  side_effects: null
+- id: PROC_IN_SYNC_BYPASS_HI
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PROC_IN_SYNC_BYPASS_HI
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: DBGFORCE
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 102
+  fields:
+  - name: PROC0_SWDO
+    bit_range:
+    - 0
+    - 0
+    description: Observe the value of processor 0 SWDIO output.
+  - name: PROC0_SWDI
+    bit_range:
+    - 1
+    - 1
+    description: Directly drive processor 0 SWDIO input, if PROC0_ATTACH is set
+  - name: PROC0_SWCLK
+    bit_range:
+    - 2
+    - 2
+    description: Directly drive processor 0 SWCLK, if PROC0_ATTACH is set
+  - name: PROC0_ATTACH
+    bit_range:
+    - 3
+    - 3
+    description: Attach processor 0 debug port to syscfg controls, and disconnect it from external SWD pads.
+  - name: PROC1_SWDO
+    bit_range:
+    - 4
+    - 4
+    description: Observe the value of processor 1 SWDIO output.
+  - name: PROC1_SWDI
+    bit_range:
+    - 5
+    - 5
+    description: Directly drive processor 1 SWDIO input, if PROC1_ATTACH is set
+  - name: PROC1_SWCLK
+    bit_range:
+    - 6
+    - 6
+    description: Directly drive processor 1 SWCLK, if PROC1_ATTACH is set
+  - name: PROC1_ATTACH
+    bit_range:
+    - 7
+    - 7
+    description: Attach processor 1 debug port to syscfg controls, and disconnect it from external SWD pads.
+  side_effects: null
+- id: MEMPOWERDOWN
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRAM0
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: SRAM1
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: SRAM2
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: SRAM3
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: SRAM4
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: SRAM5
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: USB
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: ROM
+    bit_range:
+    - 7
+    - 7
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

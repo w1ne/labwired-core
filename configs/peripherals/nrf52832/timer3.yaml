@@ -1,0 +1,375 @@
+peripheral: TIMER3
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_COUNT
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CLEAR
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SHUTDOWN
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CAPTURE0
+  address_offset: 64
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CAPTURE1
+  address_offset: 68
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CAPTURE2
+  address_offset: 72
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CAPTURE3
+  address_offset: 76
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CAPTURE4
+  address_offset: 80
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CAPTURE5
+  address_offset: 84
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_COMPARE0
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_COMPARE1
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_COMPARE2
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_COMPARE3
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_COMPARE4
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_COMPARE5
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMPARE0_CLEAR
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between COMPARE[0] event and CLEAR task
+  - name: COMPARE1_CLEAR
+    bit_range:
+    - 1
+    - 1
+    description: Shortcut between COMPARE[1] event and CLEAR task
+  - name: COMPARE2_CLEAR
+    bit_range:
+    - 2
+    - 2
+    description: Shortcut between COMPARE[2] event and CLEAR task
+  - name: COMPARE3_CLEAR
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between COMPARE[3] event and CLEAR task
+  - name: COMPARE4_CLEAR
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between COMPARE[4] event and CLEAR task
+  - name: COMPARE5_CLEAR
+    bit_range:
+    - 5
+    - 5
+    description: Shortcut between COMPARE[5] event and CLEAR task
+  - name: COMPARE0_STOP
+    bit_range:
+    - 8
+    - 8
+    description: Shortcut between COMPARE[0] event and STOP task
+  - name: COMPARE1_STOP
+    bit_range:
+    - 9
+    - 9
+    description: Shortcut between COMPARE[1] event and STOP task
+  - name: COMPARE2_STOP
+    bit_range:
+    - 10
+    - 10
+    description: Shortcut between COMPARE[2] event and STOP task
+  - name: COMPARE3_STOP
+    bit_range:
+    - 11
+    - 11
+    description: Shortcut between COMPARE[3] event and STOP task
+  - name: COMPARE4_STOP
+    bit_range:
+    - 12
+    - 12
+    description: Shortcut between COMPARE[4] event and STOP task
+  - name: COMPARE5_STOP
+    bit_range:
+    - 13
+    - 13
+    description: Shortcut between COMPARE[5] event and STOP task
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMPARE0
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to Enable interrupt for COMPARE[0] event
+  - name: COMPARE1
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to Enable interrupt for COMPARE[1] event
+  - name: COMPARE2
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to Enable interrupt for COMPARE[2] event
+  - name: COMPARE3
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Enable interrupt for COMPARE[3] event
+  - name: COMPARE4
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Enable interrupt for COMPARE[4] event
+  - name: COMPARE5
+    bit_range:
+    - 21
+    - 21
+    description: Write '1' to Enable interrupt for COMPARE[5] event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMPARE0
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to Disable interrupt for COMPARE[0] event
+  - name: COMPARE1
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to Disable interrupt for COMPARE[1] event
+  - name: COMPARE2
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to Disable interrupt for COMPARE[2] event
+  - name: COMPARE3
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Disable interrupt for COMPARE[3] event
+  - name: COMPARE4
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Disable interrupt for COMPARE[4] event
+  - name: COMPARE5
+    bit_range:
+    - 21
+    - 21
+    description: Write '1' to Disable interrupt for COMPARE[5] event
+  side_effects: null
+- id: MODE
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 1
+    - 0
+    description: Timer mode
+  side_effects: null
+- id: BITMODE
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BITMODE
+    bit_range:
+    - 1
+    - 0
+    description: Timer bit width
+  side_effects: null
+- id: PRESCALER
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: PRESCALER
+    bit_range:
+    - 3
+    - 0
+    description: Prescaler value
+  side_effects: null
+- id: CC0
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC
+    bit_range:
+    - 31
+    - 0
+    description: Capture/Compare value
+  side_effects: null
+- id: CC1
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC
+    bit_range:
+    - 31
+    - 0
+    description: Capture/Compare value
+  side_effects: null
+- id: CC2
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC
+    bit_range:
+    - 31
+    - 0
+    description: Capture/Compare value
+  side_effects: null
+- id: CC3
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC
+    bit_range:
+    - 31
+    - 0
+    description: Capture/Compare value
+  side_effects: null
+- id: CC4
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC
+    bit_range:
+    - 31
+    - 0
+    description: Capture/Compare value
+  side_effects: null
+- id: CC5
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC
+    bit_range:
+    - 31
+    - 0
+    description: Capture/Compare value
+  side_effects: null
+interrupts:
+  TIMER3: 26
+  TIMER0: 8
+timing: null

@@ -16,6 +16,5 @@ peripherals:
   - id: "uart0"
     type: "uart"
     base_address: 0x40034000
-    size: "4KB"
     config:
-      profile: "stm32v2"
+      profile: "stm32f1"

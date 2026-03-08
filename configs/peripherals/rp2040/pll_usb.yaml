@@ -1,0 +1,83 @@
+peripheral: PLL_USB
+version: 0.1.0
+registers:
+- id: CS
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: REFDIV
+    bit_range:
+    - 5
+    - 0
+    description: "Divides the PLL input reference clock. \n                            Behaviour is undefined for div=0. \n                            PLL output will be unpredictable during refdiv changes, wait for lock=1 before using it."
+  - name: BYPASS
+    bit_range:
+    - 8
+    - 8
+    description: Passes the reference clock to the output instead of the divided VCO. The VCO continues to run so the user can switch between the reference clock and the divided VCO but the output will glitch when doing so.
+  - name: LOCK
+    bit_range:
+    - 31
+    - 31
+    description: PLL is locked
+  side_effects: null
+- id: PWR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 45
+  fields:
+  - name: PD
+    bit_range:
+    - 0
+    - 0
+    description: "PLL powerdown \n                            To save power set high when PLL output not required."
+  - name: DSMPD
+    bit_range:
+    - 2
+    - 2
+    description: "PLL DSM powerdown \n                            Nothing is achieved by setting this low."
+  - name: POSTDIVPD
+    bit_range:
+    - 3
+    - 3
+    description: "PLL post divider powerdown \n                            To save power set high when PLL output not required or bypass=1."
+  - name: VCOPD
+    bit_range:
+    - 5
+    - 5
+    description: "PLL VCO powerdown \n                            To save power set high when PLL output not required or bypass=1."
+  side_effects: null
+- id: FBDIV_INT
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FBDIV_INT
+    bit_range:
+    - 11
+    - 0
+    description: see ctrl reg description for constraints
+  side_effects: null
+- id: PRIM
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 487424
+  fields:
+  - name: POSTDIV2
+    bit_range:
+    - 14
+    - 12
+    description: divide by 1-7
+  - name: POSTDIV1
+    bit_range:
+    - 18
+    - 16
+    description: divide by 1-7
+  side_effects: null
+interrupts: null
+timing: null

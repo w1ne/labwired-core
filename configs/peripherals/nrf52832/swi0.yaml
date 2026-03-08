@@ -1,0 +1,13 @@
+peripheral: SWI0
+version: 0.1.0
+registers:
+- id: UNUSED
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+interrupts:
+  SWI0_EGU0: 20
+timing: null

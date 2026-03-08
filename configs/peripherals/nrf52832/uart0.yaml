@@ -1,0 +1,318 @@
+peripheral: UART0
+version: 0.1.0
+registers:
+- id: TASKS_STARTRX
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOPRX
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STARTTX
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOPTX
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SUSPEND
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CTS
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_NCTS
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RXDRDY
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TXDRDY
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ERROR
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RXTO
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTS_STARTRX
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between CTS event and STARTRX task
+  - name: NCTS_STOPRX
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between NCTS event and STOPRX task
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTS
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for CTS event
+  - name: NCTS
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for NCTS event
+  - name: RXDRDY
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for RXDRDY event
+  - name: TXDRDY
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable interrupt for TXDRDY event
+  - name: ERROR
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Enable interrupt for ERROR event
+  - name: RXTO
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to Enable interrupt for RXTO event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTS
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for CTS event
+  - name: NCTS
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for NCTS event
+  - name: RXDRDY
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for RXDRDY event
+  - name: TXDRDY
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable interrupt for TXDRDY event
+  - name: ERROR
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Disable interrupt for ERROR event
+  - name: RXTO
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to Disable interrupt for RXTO event
+  side_effects: null
+- id: ERRORSRC
+  address_offset: 1152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OVERRUN
+    bit_range:
+    - 0
+    - 0
+    description: Overrun error
+  - name: PARITY
+    bit_range:
+    - 1
+    - 1
+    description: Parity error
+  - name: FRAMING
+    bit_range:
+    - 2
+    - 2
+    description: Framing error occurred
+  - name: BREAK
+    bit_range:
+    - 3
+    - 3
+    description: Break condition
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 3
+    - 0
+    description: Enable or disable UART
+  side_effects: null
+- id: PSELRTS
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PSELRTS
+    bit_range:
+    - 31
+    - 0
+    description: Pin number configuration for UART RTS signal
+  side_effects: null
+- id: PSELTXD
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PSELTXD
+    bit_range:
+    - 31
+    - 0
+    description: Pin number configuration for UART TXD signal
+  side_effects: null
+- id: PSELCTS
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PSELCTS
+    bit_range:
+    - 31
+    - 0
+    description: Pin number configuration for UART CTS signal
+  side_effects: null
+- id: PSELRXD
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PSELRXD
+    bit_range:
+    - 31
+    - 0
+    description: Pin number configuration for UART RXD signal
+  side_effects: null
+- id: RXD
+  address_offset: 1304
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXD
+    bit_range:
+    - 7
+    - 0
+    description: RX data received in previous transfers, double buffered
+  side_effects: null
+- id: TXD
+  address_offset: 1308
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TXD
+    bit_range:
+    - 7
+    - 0
+    description: TX data to be transferred
+  side_effects: null
+- id: BAUDRATE
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: BAUDRATE
+    bit_range:
+    - 31
+    - 0
+    description: Baud rate
+  side_effects: null
+- id: CONFIG
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HWFC
+    bit_range:
+    - 0
+    - 0
+    description: Hardware flow control
+  - name: PARITY
+    bit_range:
+    - 3
+    - 1
+    description: Parity
+  side_effects: null
+interrupts:
+  UARTE0_UART0: 2
+timing: null

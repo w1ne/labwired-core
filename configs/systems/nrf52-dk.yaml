@@ -1,0 +1,5 @@
+# LabWired - nRF52-DK System Configuration
+name: "nrf52-dk"
+chip: "../chips/nrf52832.yaml"
+external_devices: []
+board_io: []

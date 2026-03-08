@@ -1,0 +1,258 @@
+peripheral: CLOCK
+version: 0.1.0
+registers:
+- id: TASKS_HFCLKSTART
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_HFCLKSTOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_LFCLKSTART
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_LFCLKSTOP
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CAL
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CTSTART
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CTSTOP
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_HFCLKSTARTED
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_LFCLKSTARTED
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DONE
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CTTO
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HFCLKSTARTED
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for HFCLKSTARTED event
+  - name: LFCLKSTARTED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for LFCLKSTARTED event
+  - name: DONE
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for DONE event
+  - name: CTTO
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for CTTO event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HFCLKSTARTED
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for HFCLKSTARTED event
+  - name: LFCLKSTARTED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for LFCLKSTARTED event
+  - name: DONE
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for DONE event
+  - name: CTTO
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for CTTO event
+  side_effects: null
+- id: HFCLKRUN
+  address_offset: 1032
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: STATUS
+    bit_range:
+    - 0
+    - 0
+    description: HFCLKSTART task triggered or not
+  side_effects: null
+- id: HFCLKSTAT
+  address_offset: 1036
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 0
+    - 0
+    description: Source of HFCLK
+  - name: STATE
+    bit_range:
+    - 16
+    - 16
+    description: HFCLK state
+  side_effects: null
+- id: LFCLKRUN
+  address_offset: 1044
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: STATUS
+    bit_range:
+    - 0
+    - 0
+    description: LFCLKSTART task triggered or not
+  side_effects: null
+- id: LFCLKSTAT
+  address_offset: 1048
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 1
+    - 0
+    description: Source of LFCLK
+  - name: STATE
+    bit_range:
+    - 16
+    - 16
+    description: LFCLK state
+  side_effects: null
+- id: LFCLKSRCCOPY
+  address_offset: 1052
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 1
+    - 0
+    description: Clock source
+  side_effects: null
+- id: LFCLKSRC
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 1
+    - 0
+    description: Clock source
+  - name: BYPASS
+    bit_range:
+    - 16
+    - 16
+    description: Enable or disable bypass of LFCLK crystal oscillator with external clock source
+  - name: EXTERNAL
+    bit_range:
+    - 17
+    - 17
+    description: Enable or disable external source for LFCLK
+  side_effects: null
+- id: CTIV
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTIV
+    bit_range:
+    - 6
+    - 0
+    description: 'Calibration timer interval in multiple of 0.25 seconds. Range: 0.25 seconds to 31.75 seconds.'
+  side_effects: null
+- id: TRACECONFIG
+  address_offset: 1372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRACEPORTSPEED
+    bit_range:
+    - 1
+    - 0
+    description: Speed of Trace Port clock. Note that the TRACECLK pin will output this clock divided by two.
+  - name: TRACEMUX
+    bit_range:
+    - 17
+    - 16
+    description: Pin multiplexing of trace signals.
+  side_effects: null
+interrupts:
+  POWER_CLOCK: 0
+timing: null

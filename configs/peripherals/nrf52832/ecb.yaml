@@ -1,0 +1,80 @@
+peripheral: ECB
+version: 0.1.0
+registers:
+- id: TASKS_STARTECB
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOPECB
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ENDECB
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ERRORECB
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDECB
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for ENDECB event
+  - name: ERRORECB
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for ERRORECB event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDECB
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for ENDECB event
+  - name: ERRORECB
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for ERRORECB event
+  side_effects: null
+- id: ECBDATAPTR
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECBDATAPTR
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to the ECB data structure (see Table 1 ECB data structure overview)
+  side_effects: null
+interrupts:
+  ECB: 14
+timing: null

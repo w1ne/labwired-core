@@ -1,0 +1,90 @@
+peripheral: XOSC
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FREQ_RANGE
+    bit_range:
+    - 11
+    - 0
+    description: Frequency range. An invalid setting will retain the previous value. The actual value being used can be read from STATUS_FREQ_RANGE. This resets to 0xAA0 and cannot be changed.
+  - name: ENABLE
+    bit_range:
+    - 23
+    - 12
+    description: "On power-up this field is initialised to DISABLE and the chip runs from the ROSC. \n                            If the chip has subsequently been programmed to run from the XOSC then DISABLE may lock-up the chip. If this is a concern then run the clk_ref from the ROSC and enable the clk_sys RESUS feature. \n                            The 12-bit code is intended to give some protection against accidental writes. An invalid setting will enable the oscillator."
+  side_effects: null
+- id: STATUS
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FREQ_RANGE
+    bit_range:
+    - 1
+    - 0
+    description: The current frequency range setting, always reads 0
+  - name: ENABLED
+    bit_range:
+    - 12
+    - 12
+    description: Oscillator is enabled but not necessarily running and stable, resets to 0
+  - name: BADWRITE
+    bit_range:
+    - 24
+    - 24
+    description: An invalid value has been written to CTRL_ENABLE or CTRL_FREQ_RANGE or DORMANT
+  - name: STABLE
+    bit_range:
+    - 31
+    - 31
+    description: Oscillator is running and stable
+  side_effects: null
+- id: DORMANT
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DORMANT
+    bit_range:
+    - 31
+    - 0
+    description: "This is used to save power by pausing the XOSC \n                            On power-up this field is initialised to WAKE \n                            An invalid write will also select WAKE \n                            Warning: stop the PLLs before selecting dormant mode \n                            Warning: setup the irq before selecting dormant mode"
+  side_effects: null
+- id: STARTUP
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DELAY
+    bit_range:
+    - 13
+    - 0
+    description: in multiples of 256*xtal_period. The reset value of 0xc4 corresponds to approx 50 000 cycles.
+  - name: X4
+    bit_range:
+    - 20
+    - 20
+    description: Multiplies the startup_delay by 4. This is of little value to the user given that the delay can be programmed directly.
+  side_effects: null
+- id: COUNT
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COUNT
+    bit_range:
+    - 7
+    - 0
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

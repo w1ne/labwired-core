@@ -1,0 +1,1551 @@
+peripheral: CLOCKS
+version: 0.1.0
+registers:
+- id: CLK_GPOUT0_CTRL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 8
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  - name: DC50
+    bit_range:
+    - 12
+    - 12
+    description: Enables duty cycle correction for odd divisors
+  - name: PHASE
+    bit_range:
+    - 17
+    - 16
+    description: "This delays the enable signal by up to 3 cycles of the input clock \n                            This must be set before the clock is enabled to have any effect"
+  - name: NUDGE
+    bit_range:
+    - 20
+    - 20
+    description: "An edge on this signal shifts the phase of the output by 1 cycle of the input clock \n                            This can be done at any time"
+  side_effects: null
+- id: CLK_GPOUT0_DIV
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional component of the divisor
+  - name: INT
+    bit_range:
+    - 31
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_GPOUT0_SELECTED
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_GPOUT0_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_GPOUT1_CTRL
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 8
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  - name: DC50
+    bit_range:
+    - 12
+    - 12
+    description: Enables duty cycle correction for odd divisors
+  - name: PHASE
+    bit_range:
+    - 17
+    - 16
+    description: "This delays the enable signal by up to 3 cycles of the input clock \n                            This must be set before the clock is enabled to have any effect"
+  - name: NUDGE
+    bit_range:
+    - 20
+    - 20
+    description: "An edge on this signal shifts the phase of the output by 1 cycle of the input clock \n                            This can be done at any time"
+  side_effects: null
+- id: CLK_GPOUT1_DIV
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional component of the divisor
+  - name: INT
+    bit_range:
+    - 31
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_GPOUT1_SELECTED
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_GPOUT1_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_GPOUT2_CTRL
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 8
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  - name: DC50
+    bit_range:
+    - 12
+    - 12
+    description: Enables duty cycle correction for odd divisors
+  - name: PHASE
+    bit_range:
+    - 17
+    - 16
+    description: "This delays the enable signal by up to 3 cycles of the input clock \n                            This must be set before the clock is enabled to have any effect"
+  - name: NUDGE
+    bit_range:
+    - 20
+    - 20
+    description: "An edge on this signal shifts the phase of the output by 1 cycle of the input clock \n                            This can be done at any time"
+  side_effects: null
+- id: CLK_GPOUT2_DIV
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional component of the divisor
+  - name: INT
+    bit_range:
+    - 31
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_GPOUT2_SELECTED
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_GPOUT2_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_GPOUT3_CTRL
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 8
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  - name: DC50
+    bit_range:
+    - 12
+    - 12
+    description: Enables duty cycle correction for odd divisors
+  - name: PHASE
+    bit_range:
+    - 17
+    - 16
+    description: "This delays the enable signal by up to 3 cycles of the input clock \n                            This must be set before the clock is enabled to have any effect"
+  - name: NUDGE
+    bit_range:
+    - 20
+    - 20
+    description: "An edge on this signal shifts the phase of the output by 1 cycle of the input clock \n                            This can be done at any time"
+  side_effects: null
+- id: CLK_GPOUT3_DIV
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional component of the divisor
+  - name: INT
+    bit_range:
+    - 31
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_GPOUT3_SELECTED
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_GPOUT3_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_REF_CTRL
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 1
+    - 0
+    description: Selects the clock source glitchlessly, can be changed on-the-fly
+  - name: AUXSRC
+    bit_range:
+    - 6
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  side_effects: null
+- id: CLK_REF_DIV
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: INT
+    bit_range:
+    - 9
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_REF_SELECTED
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_REF_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: The glitchless multiplexer does not switch instantaneously (to avoid glitches), so software should poll this register to wait for the switch to complete. This register contains one decoded bit for each of the clock sources enumerated in the CTRL SRC field. At most one of these bits will be set at any time, indicating that clock is currently present at the output of the glitchless mux. Whilst switching is in progress, this register may briefly show all-0s.
+  side_effects: null
+- id: CLK_SYS_CTRL
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 0
+    - 0
+    description: Selects the clock source glitchlessly, can be changed on-the-fly
+  - name: AUXSRC
+    bit_range:
+    - 7
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  side_effects: null
+- id: CLK_SYS_DIV
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional component of the divisor
+  - name: INT
+    bit_range:
+    - 31
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_SYS_SELECTED
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_SYS_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: The glitchless multiplexer does not switch instantaneously (to avoid glitches), so software should poll this register to wait for the switch to complete. This register contains one decoded bit for each of the clock sources enumerated in the CTRL SRC field. At most one of these bits will be set at any time, indicating that clock is currently present at the output of the glitchless mux. Whilst switching is in progress, this register may briefly show all-0s.
+  side_effects: null
+- id: CLK_PERI_CTRL
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 7
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  side_effects: null
+- id: CLK_PERI_DIV
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional component of the divisor
+  - name: INT
+    bit_range:
+    - 31
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_PERI_SELECTED
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_PERI_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_USB_CTRL
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 7
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  - name: PHASE
+    bit_range:
+    - 17
+    - 16
+    description: "This delays the enable signal by up to 3 cycles of the input clock \n                            This must be set before the clock is enabled to have any effect"
+  - name: NUDGE
+    bit_range:
+    - 20
+    - 20
+    description: "An edge on this signal shifts the phase of the output by 1 cycle of the input clock \n                            This can be done at any time"
+  side_effects: null
+- id: CLK_USB_DIV
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: INT
+    bit_range:
+    - 9
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_USB_SELECTED
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_USB_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_ADC_CTRL
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 7
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  - name: PHASE
+    bit_range:
+    - 17
+    - 16
+    description: "This delays the enable signal by up to 3 cycles of the input clock \n                            This must be set before the clock is enabled to have any effect"
+  - name: NUDGE
+    bit_range:
+    - 20
+    - 20
+    description: "An edge on this signal shifts the phase of the output by 1 cycle of the input clock \n                            This can be done at any time"
+  side_effects: null
+- id: CLK_ADC_DIV
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: INT
+    bit_range:
+    - 9
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_ADC_SELECTED
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_ADC_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_RTC_CTRL
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AUXSRC
+    bit_range:
+    - 7
+    - 5
+    description: Selects the auxiliary clock source, will glitch when switching
+  - name: KILL
+    bit_range:
+    - 10
+    - 10
+    description: Asynchronously kills the clock generator
+  - name: ENABLE
+    bit_range:
+    - 11
+    - 11
+    description: Starts and stops the clock generator cleanly
+  - name: PHASE
+    bit_range:
+    - 17
+    - 16
+    description: "This delays the enable signal by up to 3 cycles of the input clock \n                            This must be set before the clock is enabled to have any effect"
+  - name: NUDGE
+    bit_range:
+    - 20
+    - 20
+    description: "An edge on this signal shifts the phase of the output by 1 cycle of the input clock \n                            This can be done at any time"
+  side_effects: null
+- id: CLK_RTC_DIV
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: FRAC
+    bit_range:
+    - 7
+    - 0
+    description: Fractional component of the divisor
+  - name: INT
+    bit_range:
+    - 31
+    - 8
+    description: Integer component of the divisor, 0 -> divide by 2^16
+  side_effects: null
+- id: CLK_RTC_SELECTED
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_RTC_SELECTED
+    bit_range:
+    - 31
+    - 0
+    description: This slice does not have a glitchless mux (only the AUX_SRC field is present, not SRC) so this register is hardwired to 0x1.
+  side_effects: null
+- id: CLK_SYS_RESUS_CTRL
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 255
+  fields:
+  - name: TIMEOUT
+    bit_range:
+    - 7
+    - 0
+    description: "This is expressed as a number of clk_ref cycles \n                            and must be >= 2x clk_ref_freq/min_clk_tst_freq"
+  - name: ENABLE
+    bit_range:
+    - 8
+    - 8
+    description: Enable resus
+  - name: FRCE
+    bit_range:
+    - 12
+    - 12
+    description: Force a resus, for test purposes only
+  - name: CLEAR
+    bit_range:
+    - 16
+    - 16
+    description: For clearing the resus after the fault that triggered it has been corrected
+  side_effects: null
+- id: CLK_SYS_RESUS_STATUS
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RESUSSED
+    bit_range:
+    - 0
+    - 0
+    description: Clock has been resuscitated, correct the error then send ctrl_clear=1
+  side_effects: null
+- id: FC0_REF_KHZ
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FC0_REF_KHZ
+    bit_range:
+    - 19
+    - 0
+    description: null
+  side_effects: null
+- id: FC0_MIN_KHZ
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FC0_MIN_KHZ
+    bit_range:
+    - 24
+    - 0
+    description: null
+  side_effects: null
+- id: FC0_MAX_KHZ
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 33554431
+  fields:
+  - name: FC0_MAX_KHZ
+    bit_range:
+    - 24
+    - 0
+    description: null
+  side_effects: null
+- id: FC0_DELAY
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: FC0_DELAY
+    bit_range:
+    - 2
+    - 0
+    description: null
+  side_effects: null
+- id: FC0_INTERVAL
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: FC0_INTERVAL
+    bit_range:
+    - 3
+    - 0
+    description: null
+  side_effects: null
+- id: FC0_SRC
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FC0_SRC
+    bit_range:
+    - 7
+    - 0
+    description: null
+  side_effects: null
+- id: FC0_STATUS
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PASS
+    bit_range:
+    - 0
+    - 0
+    description: Test passed
+  - name: DONE
+    bit_range:
+    - 4
+    - 4
+    description: Test complete
+  - name: RUNNING
+    bit_range:
+    - 8
+    - 8
+    description: Test running
+  - name: WAITING
+    bit_range:
+    - 12
+    - 12
+    description: Waiting for test clock to start
+  - name: FAIL
+    bit_range:
+    - 16
+    - 16
+    description: Test failed
+  - name: SLOW
+    bit_range:
+    - 20
+    - 20
+    description: Test clock slower than expected, only valid when status_done=1
+  - name: FAST
+    bit_range:
+    - 24
+    - 24
+    description: Test clock faster than expected, only valid when status_done=1
+  - name: DIED
+    bit_range:
+    - 28
+    - 28
+    description: Test clock stopped during test
+  side_effects: null
+- id: FC0_RESULT
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FRAC
+    bit_range:
+    - 4
+    - 0
+    description: null
+  - name: KHZ
+    bit_range:
+    - 29
+    - 5
+    description: null
+  side_effects: null
+- id: WAKE_EN0
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CLK_SYS_CLOCKS
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: CLK_ADC_ADC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLK_SYS_ADC
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: CLK_SYS_BUSCTRL
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: CLK_SYS_BUSFABRIC
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: CLK_SYS_DMA
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: CLK_SYS_I2C0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: CLK_SYS_I2C1
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: CLK_SYS_IO
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: CLK_SYS_JTAG
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: CLK_SYS_VREG_AND_CHIP_RESET
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: CLK_SYS_PADS
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: CLK_SYS_PIO0
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: CLK_SYS_PIO1
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: CLK_SYS_PLL_SYS
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: CLK_SYS_PLL_USB
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: CLK_SYS_PSM
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: CLK_SYS_PWM
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: CLK_SYS_RESETS
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: CLK_SYS_ROM
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: CLK_SYS_ROSC
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: CLK_RTC_RTC
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: CLK_SYS_RTC
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: CLK_SYS_SIO
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: CLK_PERI_SPI0
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: CLK_SYS_SPI0
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: CLK_PERI_SPI1
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: CLK_SYS_SPI1
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: CLK_SYS_SRAM0
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: CLK_SYS_SRAM1
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: CLK_SYS_SRAM2
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: CLK_SYS_SRAM3
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: WAKE_EN1
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 32767
+  fields:
+  - name: CLK_SYS_SRAM4
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: CLK_SYS_SRAM5
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLK_SYS_SYSCFG
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: CLK_SYS_SYSINFO
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: CLK_SYS_TBMAN
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: CLK_SYS_TIMER
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: CLK_PERI_UART0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: CLK_SYS_UART0
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: CLK_PERI_UART1
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: CLK_SYS_UART1
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: CLK_SYS_USBCTRL
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: CLK_USB_USBCTRL
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: CLK_SYS_WATCHDOG
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: CLK_SYS_XIP
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: CLK_SYS_XOSC
+    bit_range:
+    - 14
+    - 14
+    description: null
+  side_effects: null
+- id: SLEEP_EN0
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CLK_SYS_CLOCKS
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: CLK_ADC_ADC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLK_SYS_ADC
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: CLK_SYS_BUSCTRL
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: CLK_SYS_BUSFABRIC
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: CLK_SYS_DMA
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: CLK_SYS_I2C0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: CLK_SYS_I2C1
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: CLK_SYS_IO
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: CLK_SYS_JTAG
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: CLK_SYS_VREG_AND_CHIP_RESET
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: CLK_SYS_PADS
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: CLK_SYS_PIO0
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: CLK_SYS_PIO1
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: CLK_SYS_PLL_SYS
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: CLK_SYS_PLL_USB
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: CLK_SYS_PSM
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: CLK_SYS_PWM
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: CLK_SYS_RESETS
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: CLK_SYS_ROM
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: CLK_SYS_ROSC
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: CLK_RTC_RTC
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: CLK_SYS_RTC
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: CLK_SYS_SIO
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: CLK_PERI_SPI0
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: CLK_SYS_SPI0
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: CLK_PERI_SPI1
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: CLK_SYS_SPI1
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: CLK_SYS_SRAM0
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: CLK_SYS_SRAM1
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: CLK_SYS_SRAM2
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: CLK_SYS_SRAM3
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: SLEEP_EN1
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 32767
+  fields:
+  - name: CLK_SYS_SRAM4
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: CLK_SYS_SRAM5
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLK_SYS_SYSCFG
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: CLK_SYS_SYSINFO
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: CLK_SYS_TBMAN
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: CLK_SYS_TIMER
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: CLK_PERI_UART0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: CLK_SYS_UART0
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: CLK_PERI_UART1
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: CLK_SYS_UART1
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: CLK_SYS_USBCTRL
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: CLK_USB_USBCTRL
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: CLK_SYS_WATCHDOG
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: CLK_SYS_XIP
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: CLK_SYS_XOSC
+    bit_range:
+    - 14
+    - 14
+    description: null
+  side_effects: null
+- id: ENABLED0
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_SYS_CLOCKS
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: CLK_ADC_ADC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLK_SYS_ADC
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: CLK_SYS_BUSCTRL
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: CLK_SYS_BUSFABRIC
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: CLK_SYS_DMA
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: CLK_SYS_I2C0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: CLK_SYS_I2C1
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: CLK_SYS_IO
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: CLK_SYS_JTAG
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: CLK_SYS_VREG_AND_CHIP_RESET
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: CLK_SYS_PADS
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: CLK_SYS_PIO0
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: CLK_SYS_PIO1
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: CLK_SYS_PLL_SYS
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: CLK_SYS_PLL_USB
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: CLK_SYS_PSM
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: CLK_SYS_PWM
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: CLK_SYS_RESETS
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: CLK_SYS_ROM
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: CLK_SYS_ROSC
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: CLK_RTC_RTC
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: CLK_SYS_RTC
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: CLK_SYS_SIO
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: CLK_PERI_SPI0
+    bit_range:
+    - 24
+    - 24
+    description: null
+  - name: CLK_SYS_SPI0
+    bit_range:
+    - 25
+    - 25
+    description: null
+  - name: CLK_PERI_SPI1
+    bit_range:
+    - 26
+    - 26
+    description: null
+  - name: CLK_SYS_SPI1
+    bit_range:
+    - 27
+    - 27
+    description: null
+  - name: CLK_SYS_SRAM0
+    bit_range:
+    - 28
+    - 28
+    description: null
+  - name: CLK_SYS_SRAM1
+    bit_range:
+    - 29
+    - 29
+    description: null
+  - name: CLK_SYS_SRAM2
+    bit_range:
+    - 30
+    - 30
+    description: null
+  - name: CLK_SYS_SRAM3
+    bit_range:
+    - 31
+    - 31
+    description: null
+  side_effects: null
+- id: ENABLED1
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_SYS_SRAM4
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: CLK_SYS_SRAM5
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: CLK_SYS_SYSCFG
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: CLK_SYS_SYSINFO
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: CLK_SYS_TBMAN
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: CLK_SYS_TIMER
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: CLK_PERI_UART0
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: CLK_SYS_UART0
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: CLK_PERI_UART1
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: CLK_SYS_UART1
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: CLK_SYS_USBCTRL
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: CLK_USB_USBCTRL
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: CLK_SYS_WATCHDOG
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: CLK_SYS_XIP
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: CLK_SYS_XOSC
+    bit_range:
+    - 14
+    - 14
+    description: null
+  side_effects: null
+- id: INTR
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_SYS_RESUS
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: INTE
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_SYS_RESUS
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: INTF
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_SYS_RESUS
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: INTS
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_SYS_RESUS
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+interrupts:
+  CLOCKS_IRQ: 17
+timing: null

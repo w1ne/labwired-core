@@ -1,0 +1,1035 @@
+peripheral: RADIO
+version: 0.1.0
+registers:
+- id: TASKS_TXEN
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_RXEN
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_START
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_DISABLE
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_RSSISTART
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_RSSISTOP
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_BCSTART
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_BCSTOP
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_READY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ADDRESS
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_PAYLOAD
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_END
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DISABLED
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DEVMATCH
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DEVMISS
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RSSIEND
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_BCMATCH
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CRCOK
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CRCERROR
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY_START
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between READY event and START task
+  - name: END_DISABLE
+    bit_range:
+    - 1
+    - 1
+    description: Shortcut between END event and DISABLE task
+  - name: DISABLED_TXEN
+    bit_range:
+    - 2
+    - 2
+    description: Shortcut between DISABLED event and TXEN task
+  - name: DISABLED_RXEN
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between DISABLED event and RXEN task
+  - name: ADDRESS_RSSISTART
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between ADDRESS event and RSSISTART task
+  - name: END_START
+    bit_range:
+    - 5
+    - 5
+    description: Shortcut between END event and START task
+  - name: ADDRESS_BCSTART
+    bit_range:
+    - 6
+    - 6
+    description: Shortcut between ADDRESS event and BCSTART task
+  - name: DISABLED_RSSISTOP
+    bit_range:
+    - 8
+    - 8
+    description: Shortcut between DISABLED event and RSSISTOP task
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for READY event
+  - name: ADDRESS
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for ADDRESS event
+  - name: PAYLOAD
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for PAYLOAD event
+  - name: END
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for END event
+  - name: DISABLED
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for DISABLED event
+  - name: DEVMATCH
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable interrupt for DEVMATCH event
+  - name: DEVMISS
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Enable interrupt for DEVMISS event
+  - name: RSSIEND
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable interrupt for RSSIEND event
+  - name: BCMATCH
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Enable interrupt for BCMATCH event
+  - name: CRCOK
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Enable interrupt for CRCOK event
+  - name: CRCERROR
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to Enable interrupt for CRCERROR event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for READY event
+  - name: ADDRESS
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for ADDRESS event
+  - name: PAYLOAD
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for PAYLOAD event
+  - name: END
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for END event
+  - name: DISABLED
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for DISABLED event
+  - name: DEVMATCH
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable interrupt for DEVMATCH event
+  - name: DEVMISS
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Disable interrupt for DEVMISS event
+  - name: RSSIEND
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable interrupt for RSSIEND event
+  - name: BCMATCH
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Disable interrupt for BCMATCH event
+  - name: CRCOK
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Disable interrupt for CRCOK event
+  - name: CRCERROR
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to Disable interrupt for CRCERROR event
+  side_effects: null
+- id: CRCSTATUS
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CRCSTATUS
+    bit_range:
+    - 0
+    - 0
+    description: CRC status of packet received
+  side_effects: null
+- id: RXMATCH
+  address_offset: 1032
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXMATCH
+    bit_range:
+    - 2
+    - 0
+    description: Received address
+  side_effects: null
+- id: RXCRC
+  address_offset: 1036
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXCRC
+    bit_range:
+    - 23
+    - 0
+    description: CRC field of previously received packet
+  side_effects: null
+- id: DAI
+  address_offset: 1040
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DAI
+    bit_range:
+    - 2
+    - 0
+    description: Device address match index
+  side_effects: null
+- id: PACKETPTR
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PACKETPTR
+    bit_range:
+    - 31
+    - 0
+    description: Packet pointer
+  side_effects: null
+- id: FREQUENCY
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: FREQUENCY
+    bit_range:
+    - 6
+    - 0
+    description: Radio channel frequency
+  - name: MAP
+    bit_range:
+    - 8
+    - 8
+    description: Channel map selection.
+  side_effects: null
+- id: TXPOWER
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXPOWER
+    bit_range:
+    - 7
+    - 0
+    description: RADIO output power.
+  side_effects: null
+- id: MODE
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MODE
+    bit_range:
+    - 3
+    - 0
+    description: Radio data rate and modulation setting. The radio supports Frequency-shift Keying (FSK) modulation.
+  side_effects: null
+- id: PCNF0
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LFLEN
+    bit_range:
+    - 3
+    - 0
+    description: Length on air of LENGTH field in number of bits.
+  - name: S0LEN
+    bit_range:
+    - 8
+    - 8
+    description: Length on air of S0 field in number of bytes.
+  - name: S1LEN
+    bit_range:
+    - 19
+    - 16
+    description: Length on air of S1 field in number of bits.
+  - name: S1INCL
+    bit_range:
+    - 20
+    - 20
+    description: Include or exclude S1 field in RAM
+  - name: PLEN
+    bit_range:
+    - 24
+    - 24
+    description: 'Length of preamble on air. Decision point: TASKS_START task'
+  side_effects: null
+- id: PCNF1
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXLEN
+    bit_range:
+    - 7
+    - 0
+    description: Maximum length of packet payload. If the packet payload is larger than MAXLEN, the radio will truncate the payload to MAXLEN.
+  - name: STATLEN
+    bit_range:
+    - 15
+    - 8
+    description: Static length in number of bytes
+  - name: BALEN
+    bit_range:
+    - 18
+    - 16
+    description: Base address length in number of bytes
+  - name: ENDIAN
+    bit_range:
+    - 24
+    - 24
+    description: On air endianness of packet, this applies to the S0, LENGTH, S1 and the PAYLOAD fields.
+  - name: WHITEEN
+    bit_range:
+    - 25
+    - 25
+    description: Enable or disable packet whitening
+  side_effects: null
+- id: BASE0
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BASE0
+    bit_range:
+    - 31
+    - 0
+    description: Base address 0
+  side_effects: null
+- id: BASE1
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BASE1
+    bit_range:
+    - 31
+    - 0
+    description: Base address 1
+  side_effects: null
+- id: PREFIX0
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AP0
+    bit_range:
+    - 7
+    - 0
+    description: Address prefix 0.
+  - name: AP1
+    bit_range:
+    - 15
+    - 8
+    description: Address prefix 1.
+  - name: AP2
+    bit_range:
+    - 23
+    - 16
+    description: Address prefix 2.
+  - name: AP3
+    bit_range:
+    - 31
+    - 24
+    description: Address prefix 3.
+  side_effects: null
+- id: PREFIX1
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AP4
+    bit_range:
+    - 7
+    - 0
+    description: Address prefix 4.
+  - name: AP5
+    bit_range:
+    - 15
+    - 8
+    description: Address prefix 5.
+  - name: AP6
+    bit_range:
+    - 23
+    - 16
+    description: Address prefix 6.
+  - name: AP7
+    bit_range:
+    - 31
+    - 24
+    description: Address prefix 7.
+  side_effects: null
+- id: TXADDRESS
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXADDRESS
+    bit_range:
+    - 2
+    - 0
+    description: Transmit address select
+  side_effects: null
+- id: RXADDRESSES
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR0
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable reception on logical address 0.
+  - name: ADDR1
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable reception on logical address 1.
+  - name: ADDR2
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable reception on logical address 2.
+  - name: ADDR3
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable reception on logical address 3.
+  - name: ADDR4
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable reception on logical address 4.
+  - name: ADDR5
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable reception on logical address 5.
+  - name: ADDR6
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable reception on logical address 6.
+  - name: ADDR7
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable reception on logical address 7.
+  side_effects: null
+- id: CRCCNF
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LEN
+    bit_range:
+    - 1
+    - 0
+    description: CRC length in number of bytes.
+  - name: SKIPADDR
+    bit_range:
+    - 8
+    - 8
+    description: Include or exclude packet address field out of CRC calculation.
+  side_effects: null
+- id: CRCPOLY
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CRCPOLY
+    bit_range:
+    - 23
+    - 0
+    description: CRC polynomial
+  side_effects: null
+- id: CRCINIT
+  address_offset: 1340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CRCINIT
+    bit_range:
+    - 23
+    - 0
+    description: CRC initial value
+  side_effects: null
+- id: UNUSED0
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TIFS
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIFS
+    bit_range:
+    - 7
+    - 0
+    description: Inter Frame Spacing in us
+  side_effects: null
+- id: RSSISAMPLE
+  address_offset: 1352
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RSSISAMPLE
+    bit_range:
+    - 6
+    - 0
+    description: RSSI sample
+  side_effects: null
+- id: STATE
+  address_offset: 1360
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: STATE
+    bit_range:
+    - 3
+    - 0
+    description: Current radio state
+  side_effects: null
+- id: DATAWHITEIV
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 64
+  fields:
+  - name: DATAWHITEIV
+    bit_range:
+    - 6
+    - 0
+    description: Data whitening initial value. Bit 6 is hard-wired to '1', writing '0' to it has no effect, and it will always be read back and used by the device as '1'.
+  side_effects: null
+- id: BCC
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BCC
+    bit_range:
+    - 31
+    - 0
+    description: Bit counter compare
+  side_effects: null
+- id: DAB0
+  address_offset: 1536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAB1
+  address_offset: 1540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAB2
+  address_offset: 1544
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAB3
+  address_offset: 1548
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAB4
+  address_offset: 1552
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAB5
+  address_offset: 1556
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAB6
+  address_offset: 1560
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAB7
+  address_offset: 1564
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAB
+    bit_range:
+    - 31
+    - 0
+    description: Device address base segment 0
+  side_effects: null
+- id: DAP0
+  address_offset: 1568
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DAP1
+  address_offset: 1572
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DAP2
+  address_offset: 1576
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DAP3
+  address_offset: 1580
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DAP4
+  address_offset: 1584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DAP5
+  address_offset: 1588
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DAP6
+  address_offset: 1592
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DAP7
+  address_offset: 1596
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DAP
+    bit_range:
+    - 15
+    - 0
+    description: Device address prefix 0
+  side_effects: null
+- id: DACNF
+  address_offset: 1600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENA0
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable device address matching using device address 0
+  - name: ENA1
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable device address matching using device address 1
+  - name: ENA2
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable device address matching using device address 2
+  - name: ENA3
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable device address matching using device address 3
+  - name: ENA4
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable device address matching using device address 4
+  - name: ENA5
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable device address matching using device address 5
+  - name: ENA6
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable device address matching using device address 6
+  - name: ENA7
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable device address matching using device address 7
+  - name: TXADD0
+    bit_range:
+    - 8
+    - 8
+    description: TxAdd for device address 0
+  - name: TXADD1
+    bit_range:
+    - 9
+    - 9
+    description: TxAdd for device address 1
+  - name: TXADD2
+    bit_range:
+    - 10
+    - 10
+    description: TxAdd for device address 2
+  - name: TXADD3
+    bit_range:
+    - 11
+    - 11
+    description: TxAdd for device address 3
+  - name: TXADD4
+    bit_range:
+    - 12
+    - 12
+    description: TxAdd for device address 4
+  - name: TXADD5
+    bit_range:
+    - 13
+    - 13
+    description: TxAdd for device address 5
+  - name: TXADD6
+    bit_range:
+    - 14
+    - 14
+    description: TxAdd for device address 6
+  - name: TXADD7
+    bit_range:
+    - 15
+    - 15
+    description: TxAdd for device address 7
+  side_effects: null
+- id: MODECNF0
+  address_offset: 1616
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: RU
+    bit_range:
+    - 0
+    - 0
+    description: Radio ramp-up time
+  - name: DTX
+    bit_range:
+    - 9
+    - 8
+    description: Default TX value
+  side_effects: null
+- id: POWER
+  address_offset: 4092
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: POWER
+    bit_range:
+    - 0
+    - 0
+    description: Peripheral power control. The peripheral and its registers will be reset to its initial state by switching the peripheral off and then back on again.
+  side_effects: null
+interrupts:
+  RADIO: 1
+timing: null

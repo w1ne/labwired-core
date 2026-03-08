@@ -1,0 +1,4126 @@
+peripheral: DMA
+version: 0.1.0
+registers:
+- id: CH0_READ_ADDR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH0_WRITE_ADDR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH0_TRANS_COUNT
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH0_CTRL_TRIG
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH0_AL1_CTRL
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL1_READ_ADDR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL1_WRITE_ADDR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL1_TRANS_COUNT_TRIG
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL2_CTRL
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL2_TRANS_COUNT
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL2_READ_ADDR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL2_WRITE_ADDR_TRIG
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL3_CTRL
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL3_WRITE_ADDR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL3_TRANS_COUNT
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_AL3_READ_ADDR_TRIG
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_READ_ADDR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH1_WRITE_ADDR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH1_TRANS_COUNT
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH1_CTRL_TRIG
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH1_AL1_CTRL
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL1_READ_ADDR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL1_WRITE_ADDR
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL1_TRANS_COUNT_TRIG
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL2_CTRL
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL2_TRANS_COUNT
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL2_READ_ADDR
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL2_WRITE_ADDR_TRIG
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL3_CTRL
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL3_WRITE_ADDR
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL3_TRANS_COUNT
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_AL3_READ_ADDR_TRIG
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_READ_ADDR
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH2_WRITE_ADDR
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH2_TRANS_COUNT
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH2_CTRL_TRIG
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH2_AL1_CTRL
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL1_READ_ADDR
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL1_WRITE_ADDR
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL1_TRANS_COUNT_TRIG
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL2_CTRL
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL2_TRANS_COUNT
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL2_READ_ADDR
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL2_WRITE_ADDR_TRIG
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL3_CTRL
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL3_WRITE_ADDR
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL3_TRANS_COUNT
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_AL3_READ_ADDR_TRIG
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_READ_ADDR
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH3_WRITE_ADDR
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH3_TRANS_COUNT
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH3_CTRL_TRIG
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH3_AL1_CTRL
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL1_READ_ADDR
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL1_WRITE_ADDR
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL1_TRANS_COUNT_TRIG
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL2_CTRL
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL2_TRANS_COUNT
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL2_READ_ADDR
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL2_WRITE_ADDR_TRIG
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL3_CTRL
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL3_WRITE_ADDR
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL3_TRANS_COUNT
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_AL3_READ_ADDR_TRIG
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_READ_ADDR
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH4_WRITE_ADDR
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH4_TRANS_COUNT
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH4_CTRL_TRIG
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH4_AL1_CTRL
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL1_READ_ADDR
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL1_WRITE_ADDR
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL1_TRANS_COUNT_TRIG
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL2_CTRL
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL2_TRANS_COUNT
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL2_READ_ADDR
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL2_WRITE_ADDR_TRIG
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL3_CTRL
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL3_WRITE_ADDR
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL3_TRANS_COUNT
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_AL3_READ_ADDR_TRIG
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_READ_ADDR
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH5_WRITE_ADDR
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH5_TRANS_COUNT
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH5_CTRL_TRIG
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH5_AL1_CTRL
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL1_READ_ADDR
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL1_WRITE_ADDR
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL1_TRANS_COUNT_TRIG
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL2_CTRL
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL2_TRANS_COUNT
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL2_READ_ADDR
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL2_WRITE_ADDR_TRIG
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL3_CTRL
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL3_WRITE_ADDR
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL3_TRANS_COUNT
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_AL3_READ_ADDR_TRIG
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_READ_ADDR
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH6_WRITE_ADDR
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH6_TRANS_COUNT
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH6_CTRL_TRIG
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH6_AL1_CTRL
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL1_READ_ADDR
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL1_WRITE_ADDR
+  address_offset: 408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL1_TRANS_COUNT_TRIG
+  address_offset: 412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL2_CTRL
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL2_TRANS_COUNT
+  address_offset: 420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL2_READ_ADDR
+  address_offset: 424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL2_WRITE_ADDR_TRIG
+  address_offset: 428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL3_CTRL
+  address_offset: 432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL3_WRITE_ADDR
+  address_offset: 436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL3_TRANS_COUNT
+  address_offset: 440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_AL3_READ_ADDR_TRIG
+  address_offset: 444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_READ_ADDR
+  address_offset: 448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH7_WRITE_ADDR
+  address_offset: 452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH7_TRANS_COUNT
+  address_offset: 456
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH7_CTRL_TRIG
+  address_offset: 460
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH7_AL1_CTRL
+  address_offset: 464
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL1_READ_ADDR
+  address_offset: 468
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL1_WRITE_ADDR
+  address_offset: 472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL1_TRANS_COUNT_TRIG
+  address_offset: 476
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL2_CTRL
+  address_offset: 480
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL2_TRANS_COUNT
+  address_offset: 484
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL2_READ_ADDR
+  address_offset: 488
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL2_WRITE_ADDR_TRIG
+  address_offset: 492
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL3_CTRL
+  address_offset: 496
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL3_WRITE_ADDR
+  address_offset: 500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL3_TRANS_COUNT
+  address_offset: 504
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_AL3_READ_ADDR_TRIG
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_READ_ADDR
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH8_WRITE_ADDR
+  address_offset: 516
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH8_TRANS_COUNT
+  address_offset: 520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH8_CTRL_TRIG
+  address_offset: 524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH8_AL1_CTRL
+  address_offset: 528
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL1_READ_ADDR
+  address_offset: 532
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL1_WRITE_ADDR
+  address_offset: 536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL1_TRANS_COUNT_TRIG
+  address_offset: 540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL2_CTRL
+  address_offset: 544
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL2_TRANS_COUNT
+  address_offset: 548
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL2_READ_ADDR
+  address_offset: 552
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL2_WRITE_ADDR_TRIG
+  address_offset: 556
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL3_CTRL
+  address_offset: 560
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL3_WRITE_ADDR
+  address_offset: 564
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL3_TRANS_COUNT
+  address_offset: 568
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_AL3_READ_ADDR_TRIG
+  address_offset: 572
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_READ_ADDR
+  address_offset: 576
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH9_WRITE_ADDR
+  address_offset: 580
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH9_TRANS_COUNT
+  address_offset: 584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH9_CTRL_TRIG
+  address_offset: 588
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH9_AL1_CTRL
+  address_offset: 592
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL1_READ_ADDR
+  address_offset: 596
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL1_WRITE_ADDR
+  address_offset: 600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL1_TRANS_COUNT_TRIG
+  address_offset: 604
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL2_CTRL
+  address_offset: 608
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL2_TRANS_COUNT
+  address_offset: 612
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL2_READ_ADDR
+  address_offset: 616
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL2_WRITE_ADDR_TRIG
+  address_offset: 620
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL3_CTRL
+  address_offset: 624
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL3_WRITE_ADDR
+  address_offset: 628
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL3_TRANS_COUNT
+  address_offset: 632
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_AL3_READ_ADDR_TRIG
+  address_offset: 636
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_READ_ADDR
+  address_offset: 640
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH10_WRITE_ADDR
+  address_offset: 644
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH10_TRANS_COUNT
+  address_offset: 648
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH10_CTRL_TRIG
+  address_offset: 652
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH10_AL1_CTRL
+  address_offset: 656
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL1_READ_ADDR
+  address_offset: 660
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL1_WRITE_ADDR
+  address_offset: 664
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL1_TRANS_COUNT_TRIG
+  address_offset: 668
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL2_CTRL
+  address_offset: 672
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL2_TRANS_COUNT
+  address_offset: 676
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL2_READ_ADDR
+  address_offset: 680
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL2_WRITE_ADDR_TRIG
+  address_offset: 684
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL3_CTRL
+  address_offset: 688
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL3_WRITE_ADDR
+  address_offset: 692
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL3_TRANS_COUNT
+  address_offset: 696
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_AL3_READ_ADDR_TRIG
+  address_offset: 700
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_READ_ADDR
+  address_offset: 704
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a read completes. The current value is the next address to be read by this channel.
+  side_effects: null
+- id: CH11_WRITE_ADDR
+  address_offset: 708
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: This register updates automatically each time a write completes. The current value is the next address to be written by this channel.
+  side_effects: null
+- id: CH11_TRANS_COUNT
+  address_offset: 712
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte in size, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+
+                                  When the channel is active, reading this register shows the number of transfers remaining, updating automatically each time a write transfer completes.
+
+                                  Writing this register sets the RELOAD value for the transfer counter. Each time this channel is triggered, the RELOAD value is copied into the live transfer counter. The channel can be started multiple times, and will perform the same number of transfers each time, as programmed by most recent write.
+
+                                  The RELOAD value can be observed at CHx_DBG_TCR. If TRANS_COUNT is used as a trigger, the written value is used immediately as the length of the new transfer sequence, as well as being written to RELOAD.
+  side_effects: null
+- id: CH11_CTRL_TRIG
+  address_offset: 716
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "DMA Channel Enable. \n                            When 1, the channel will respond to triggering events, which will cause it to become BUSY and start transferring data. When 0, the channel will ignore triggers, stop issuing transfers, and pause the current transfer sequence (i.e. BUSY will remain high if already high)"
+  - name: HIGH_PRIORITY
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      HIGH_PRIORITY gives a channel preferential treatment in issue scheduling: in each scheduling round, all high priority channels are considered first, and then only a single low priority channel, before returning to the high priority channels.
+
+                                  This only affects the order in which the DMA schedules channels. The DMA's bus priority is not changed. If the DMA is not saturated then a low priority channel will see no loss of throughput.
+  - name: DATA_SIZE
+    bit_range:
+    - 3
+    - 2
+    description: Set the size of each bus transfer (byte/halfword/word). READ_ADDR and WRITE_ADDR advance by this amount (1/2/4 bytes) with each transfer.
+  - name: INCR_READ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      If 1, the read address increments with each transfer. If 0, each read is directed to the same, initial address.
+
+                                  Generally this should be disabled for peripheral-to-memory transfers.
+  - name: INCR_WRITE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      If 1, the write address increments with each transfer. If 0, each write is directed to the same, initial address.
+
+                                  Generally this should be disabled for memory-to-peripheral transfers.
+  - name: RING_SIZE
+    bit_range:
+    - 9
+    - 6
+    description: |-
+      Size of address wrap region. If 0, don't wrap. For values n > 0, only the lower n bits of the address will change. This wraps the address on a (1 << n) byte boundary, facilitating access to naturally-aligned ring buffers.
+
+                                  Ring sizes between 2 and 32768 bytes are possible. This can apply to either read or write addresses, based on value of RING_SEL.
+  - name: RING_SEL
+    bit_range:
+    - 10
+    - 10
+    description: "Select whether RING_SIZE applies to read or write addresses. \n                            If 0, read addresses are wrapped on a (1 << RING_SIZE) boundary. If 1, write addresses are wrapped."
+  - name: CHAIN_TO
+    bit_range:
+    - 14
+    - 11
+    description: When this channel completes, it will trigger the channel indicated by CHAIN_TO. Disable by setting CHAIN_TO = _(this channel)_.
+  - name: TREQ_SEL
+    bit_range:
+    - 20
+    - 15
+    description: "Select a Transfer Request signal. \n                            The channel uses the transfer request signal to pace its data transfer rate. Sources for TREQ signals are internal (TIMERS) or external (DREQ, a Data Request from the system). \n                            0x0 to 0x3a -> select DREQ n as TREQ"
+  - name: IRQ_QUIET
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      In QUIET mode, the channel does not generate IRQs at the end of every transfer block. Instead, an IRQ is raised when NULL is written to a trigger register, indicating the end of a control block chain.
+
+                                  This reduces the number of interrupts to be serviced by the CPU when transferring a DMA chain of many small control blocks.
+  - name: BSWAP
+    bit_range:
+    - 22
+    - 22
+    description: "Apply byte-swap transformation to DMA data. \n                            For byte data, this has no effect. For halfword data, the two bytes of each halfword are swapped. For word data, the four bytes of each word are swapped to reverse order."
+  - name: SNIFF_EN
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      If 1, this channel's data transfers are visible to the sniff hardware, and each transfer will advance the state of the checksum. This only applies if the sniff hardware is enabled, and has this channel selected.
+
+                                  This allows checksum to be enabled or disabled on a per-control- block basis.
+  - name: BUSY
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      This flag goes high when the channel starts a new transfer sequence, and low when the last transfer of that sequence completes. Clearing EN while BUSY is high pauses the channel, and BUSY will stay high while paused.
+
+                                  To terminate a sequence early (and clear the BUSY flag), see CHAN_ABORT.
+  - name: WRITE_ERROR
+    bit_range:
+    - 29
+    - 29
+    description: "If 1, the channel received a write bus error. Write one to clear. \n                            WRITE_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 5 transfers later)"
+  - name: READ_ERROR
+    bit_range:
+    - 30
+    - 30
+    description: "If 1, the channel received a read bus error. Write one to clear. \n                            READ_ADDR shows the approximate address where the bus error was encountered (will not be earlier, or more than 3 transfers later)"
+  - name: AHB_ERROR
+    bit_range:
+    - 31
+    - 31
+    description: Logical OR of the READ_ERROR and WRITE_ERROR flags. The channel halts when it encounters any bus error, and always raises its channel IRQ flag.
+  side_effects: null
+- id: CH11_AL1_CTRL
+  address_offset: 720
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL1_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL1_READ_ADDR
+  address_offset: 724
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL1_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL1_WRITE_ADDR
+  address_offset: 728
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL1_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL1_TRANS_COUNT_TRIG
+  address_offset: 732
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL1_TRANS_COUNT_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL2_CTRL
+  address_offset: 736
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL2_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL2_TRANS_COUNT
+  address_offset: 740
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL2_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL2_READ_ADDR
+  address_offset: 744
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL2_READ_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL2_WRITE_ADDR_TRIG
+  address_offset: 748
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL2_WRITE_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL3_CTRL
+  address_offset: 752
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL3_CTRL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL3_WRITE_ADDR
+  address_offset: 756
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL3_WRITE_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL3_TRANS_COUNT
+  address_offset: 760
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL3_TRANS_COUNT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_AL3_READ_ADDR_TRIG
+  address_offset: 764
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_AL3_READ_ADDR_TRIG
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTR
+  address_offset: 1024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTR
+    bit_range:
+    - 15
+    - 0
+    description: |-
+      Raw interrupt status for DMA Channels 0..15. Bit n corresponds to channel n. Ignores any masking or forcing. Channel interrupts can be cleared by writing a bit mask to INTR, INTS0 or INTS1.
+
+                                  Channel interrupts can be routed to either of two system-level IRQs based on INTE0 and INTE1.
+
+                                  This can be used vector different channel interrupts to different ISRs: this might be done to allow NVIC IRQ preemption for more time-critical channels, or to spread IRQ load across different cores.
+
+                                  It is also valid to ignore this behaviour and just use INTE0/INTS0/IRQ 0.
+  side_effects: null
+- id: INTE0
+  address_offset: 1028
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTE0
+    bit_range:
+    - 15
+    - 0
+    description: Set bit n to pass interrupts from channel n to DMA IRQ 0.
+  side_effects: null
+- id: INTF0
+  address_offset: 1032
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTF0
+    bit_range:
+    - 15
+    - 0
+    description: Write 1s to force the corresponding bits in INTE0. The interrupt remains asserted until INTF0 is cleared.
+  side_effects: null
+- id: INTS0
+  address_offset: 1036
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTS0
+    bit_range:
+    - 15
+    - 0
+    description: "Indicates active channel interrupt requests which are currently causing IRQ 0 to be asserted. \n                            Channel interrupts can be cleared by writing a bit mask here."
+  side_effects: null
+- id: INTR1
+  address_offset: 1040
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTR1
+    bit_range:
+    - 15
+    - 0
+    description: |-
+      Raw interrupt status for DMA Channels 0..15. Bit n corresponds to channel n. Ignores any masking or forcing. Channel interrupts can be cleared by writing a bit mask to INTR, INTS0 or INTS1.
+
+                                  Channel interrupts can be routed to either of two system-level IRQs based on INTE0 and INTE1.
+
+                                  This can be used vector different channel interrupts to different ISRs: this might be done to allow NVIC IRQ preemption for more time-critical channels, or to spread IRQ load across different cores.
+
+                                  It is also valid to ignore this behaviour and just use INTE0/INTS0/IRQ 0.
+  side_effects: null
+- id: INTE1
+  address_offset: 1044
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTE1
+    bit_range:
+    - 15
+    - 0
+    description: Set bit n to pass interrupts from channel n to DMA IRQ 1.
+  side_effects: null
+- id: INTF1
+  address_offset: 1048
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTF1
+    bit_range:
+    - 15
+    - 0
+    description: Write 1s to force the corresponding bits in INTE0. The interrupt remains asserted until INTF0 is cleared.
+  side_effects: null
+- id: INTS1
+  address_offset: 1052
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTS1
+    bit_range:
+    - 15
+    - 0
+    description: "Indicates active channel interrupt requests which are currently causing IRQ 1 to be asserted. \n                            Channel interrupts can be cleared by writing a bit mask here."
+  side_effects: null
+- id: TIMER0
+  address_offset: 1056
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: Y
+    bit_range:
+    - 15
+    - 0
+    description: Pacing Timer Divisor. Specifies the Y value for the (X/Y) fractional timer.
+  - name: X
+    bit_range:
+    - 31
+    - 16
+    description: Pacing Timer Dividend. Specifies the X value for the (X/Y) fractional timer.
+  side_effects: null
+- id: TIMER1
+  address_offset: 1060
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: Y
+    bit_range:
+    - 15
+    - 0
+    description: Pacing Timer Divisor. Specifies the Y value for the (X/Y) fractional timer.
+  - name: X
+    bit_range:
+    - 31
+    - 16
+    description: Pacing Timer Dividend. Specifies the X value for the (X/Y) fractional timer.
+  side_effects: null
+- id: TIMER2
+  address_offset: 1064
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: Y
+    bit_range:
+    - 15
+    - 0
+    description: Pacing Timer Divisor. Specifies the Y value for the (X/Y) fractional timer.
+  - name: X
+    bit_range:
+    - 31
+    - 16
+    description: Pacing Timer Dividend. Specifies the X value for the (X/Y) fractional timer.
+  side_effects: null
+- id: TIMER3
+  address_offset: 1068
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: Y
+    bit_range:
+    - 15
+    - 0
+    description: Pacing Timer Divisor. Specifies the Y value for the (X/Y) fractional timer.
+  - name: X
+    bit_range:
+    - 31
+    - 16
+    description: Pacing Timer Dividend. Specifies the X value for the (X/Y) fractional timer.
+  side_effects: null
+- id: MULTI_CHAN_TRIGGER
+  address_offset: 1072
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MULTI_CHAN_TRIGGER
+    bit_range:
+    - 15
+    - 0
+    description: Each bit in this register corresponds to a DMA channel. Writing a 1 to the relevant bit is the same as writing to that channel's trigger register; the channel will start if it is currently enabled and not already busy.
+  side_effects: null
+- id: SNIFF_CTRL
+  address_offset: 1076
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: Enable sniffer
+  - name: DMACH
+    bit_range:
+    - 4
+    - 1
+    description: DMA channel for Sniffer to observe
+  - name: CALC
+    bit_range:
+    - 8
+    - 5
+    description: null
+  - name: BSWAP
+    bit_range:
+    - 9
+    - 9
+    description: |-
+      Locally perform a byte reverse on the sniffed data, before feeding into checksum.
+
+                                  Note that the sniff hardware is downstream of the DMA channel byteswap performed in the read master: if channel CTRL_BSWAP and SNIFF_CTRL_BSWAP are both enabled, their effects cancel from the sniffer's point of view.
+  - name: OUT_REV
+    bit_range:
+    - 10
+    - 10
+    description: If set, the result appears bit-reversed when read. This does not affect the way the checksum is calculated; the result is transformed on-the-fly between the result register and the bus.
+  - name: OUT_INV
+    bit_range:
+    - 11
+    - 11
+    description: If set, the result appears inverted (bitwise complement) when read. This does not affect the way the checksum is calculated; the result is transformed on-the-fly between the result register and the bus.
+  side_effects: null
+- id: SNIFF_DATA
+  address_offset: 1080
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SNIFF_DATA
+    bit_range:
+    - 31
+    - 0
+    description: Write an initial seed value here before starting a DMA transfer on the channel indicated by SNIFF_CTRL_DMACH. The hardware will update this register each time it observes a read from the indicated channel. Once the channel completes, the final result can be read from this register.
+  side_effects: null
+- id: FIFO_LEVELS
+  address_offset: 1088
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TDF_LVL
+    bit_range:
+    - 7
+    - 0
+    description: Current Transfer-Data-FIFO fill level
+  - name: WAF_LVL
+    bit_range:
+    - 15
+    - 8
+    description: Current Write-Address-FIFO fill level
+  - name: RAF_LVL
+    bit_range:
+    - 23
+    - 16
+    description: Current Read-Address-FIFO fill level
+  side_effects: null
+- id: CHAN_ABORT
+  address_offset: 1092
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CHAN_ABORT
+    bit_range:
+    - 15
+    - 0
+    description: |-
+      Each bit corresponds to a channel. Writing a 1 aborts whatever transfer sequence is in progress on that channel. The bit will remain high until any in-flight transfers have been flushed through the address and data FIFOs.
+
+                                  After writing, this register must be polled until it returns all-zero. Until this point, it is unsafe to restart the channel.
+  side_effects: null
+- id: N_CHANNELS
+  address_offset: 1096
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: N_CHANNELS
+    bit_range:
+    - 4
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_DBG_CTDREQ
+  address_offset: 2048
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH0_DBG_TCR
+  address_offset: 2052
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_DBG_CTDREQ
+  address_offset: 2112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH1_DBG_TCR
+  address_offset: 2116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH1_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_DBG_CTDREQ
+  address_offset: 2176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH2_DBG_TCR
+  address_offset: 2180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH2_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_DBG_CTDREQ
+  address_offset: 2240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH3_DBG_TCR
+  address_offset: 2244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH3_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_DBG_CTDREQ
+  address_offset: 2304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH4_DBG_TCR
+  address_offset: 2308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH4_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_DBG_CTDREQ
+  address_offset: 2368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH5_DBG_TCR
+  address_offset: 2372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH5_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_DBG_CTDREQ
+  address_offset: 2432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH6_DBG_TCR
+  address_offset: 2436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH6_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_DBG_CTDREQ
+  address_offset: 2496
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH7_DBG_TCR
+  address_offset: 2500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH7_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_DBG_CTDREQ
+  address_offset: 2560
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH8_DBG_TCR
+  address_offset: 2564
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH8_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_DBG_CTDREQ
+  address_offset: 2624
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH9_DBG_TCR
+  address_offset: 2628
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH9_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_DBG_CTDREQ
+  address_offset: 2688
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH10_DBG_TCR
+  address_offset: 2692
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH10_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_DBG_CTDREQ
+  address_offset: 2752
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_DBG_CTDREQ
+    bit_range:
+    - 5
+    - 0
+    description: null
+  side_effects: null
+- id: CH11_DBG_TCR
+  address_offset: 2756
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH11_DBG_TCR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+interrupts:
+  DMA_IRQ_1: 12
+  DMA_IRQ_0: 11
+timing: null
