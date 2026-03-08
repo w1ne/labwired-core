@@ -6,6 +6,7 @@
 
 name: "ci-fixture-riscv"
 arch: "riscv"
+registers_count: 50
 flash:
   base: 0x80000000
   size: "128KB"

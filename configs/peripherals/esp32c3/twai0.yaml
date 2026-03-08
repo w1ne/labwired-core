@@ -1,0 +1,495 @@
+peripheral: TWAI0
+version: 0.1.0
+registers:
+- id: MODE
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: RESET_MODE
+    bit_range:
+    - 0
+    - 0
+    description: 'This bit is used to configure the operating mode of the TWAI Controller. 1: Reset mode; 0: Operating mode.'
+  - name: LISTEN_ONLY_MODE
+    bit_range:
+    - 1
+    - 1
+    description: '1: Listen only mode. In this mode the nodes will only receive messages from the bus, without generating the acknowledge signal nor updating the RX error counter.'
+  - name: SELF_TEST_MODE
+    bit_range:
+    - 2
+    - 2
+    description: '1: Self test mode. In this mode the TX nodes can perform a successful transmission without receiving the acknowledge signal. This mode is often used to test a single node with the self reception request command.'
+  - name: RX_FILTER_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'This bit is used to configure the filter mode. 0: Dual filter mode; 1: Single filter mode.'
+  side_effects: null
+- id: CMD
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_REQ
+    bit_range:
+    - 0
+    - 0
+    description: Set the bit to 1 to allow the driving nodes start transmission.
+  - name: ABORT_TX
+    bit_range:
+    - 1
+    - 1
+    description: Set the bit to 1 to cancel a pending transmission request.
+  - name: RELEASE_BUF
+    bit_range:
+    - 2
+    - 2
+    description: Set the bit to 1 to release the RX buffer.
+  - name: CLR_OVERRUN
+    bit_range:
+    - 3
+    - 3
+    description: Set the bit to 1 to clear the data overrun status bit.
+  - name: SELF_RX_REQ
+    bit_range:
+    - 4
+    - 4
+    description: Self reception request command. Set the bit to 1 to allow a message be transmitted and received simultaneously.
+  side_effects: null
+- id: STATUS
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_BUF_ST
+    bit_range:
+    - 0
+    - 0
+    description: '1: The data in the RX buffer is not empty, with at least one received data packet.'
+  - name: OVERRUN_ST
+    bit_range:
+    - 1
+    - 1
+    description: '1: The RX FIFO is full and data overrun has occurred.'
+  - name: TX_BUF_ST
+    bit_range:
+    - 2
+    - 2
+    description: '1: The TX buffer is empty, the CPU may write a message into it.'
+  - name: TX_COMPLETE
+    bit_range:
+    - 3
+    - 3
+    description: '1: The TWAI controller has successfully received a packet from the bus.'
+  - name: RX_ST
+    bit_range:
+    - 4
+    - 4
+    description: '1: The TWAI Controller is receiving a message from the bus.'
+  - name: TX_ST
+    bit_range:
+    - 5
+    - 5
+    description: '1: The TWAI Controller is transmitting a message to the bus.'
+  - name: ERR_ST
+    bit_range:
+    - 6
+    - 6
+    description: '1: At least one of the RX/TX error counter has reached or exceeded the value set in register TWAI_ERR_WARNING_LIMIT_REG.'
+  - name: BUS_OFF_ST
+    bit_range:
+    - 7
+    - 7
+    description: '1: In bus-off status, the TWAI Controller is no longer involved in bus activities.'
+  - name: MISS_ST
+    bit_range:
+    - 8
+    - 8
+    description: 'This bit reflects whether the data packet in the RX FIFO is complete. 1: The current packet is missing; 0: The current packet is complete'
+  side_effects: null
+- id: INT_RAW
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: Receive interrupt. If this bit is set to 1, it indicates there are messages to be handled in the RX FIFO.
+  - name: TX_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: Transmit interrupt. If this bit is set to 1, it indicates the message transmitting mis- sion is finished and a new transmission is able to execute.
+  - name: ERR_WARN_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: Error warning interrupt. If this bit is set to 1, it indicates the error status signal and the bus-off status signal of Status register have changed (e.g., switched from 0 to 1 or from 1 to 0).
+  - name: OVERRUN_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: Data overrun interrupt. If this bit is set to 1, it indicates a data overrun interrupt is generated in the RX FIFO.
+  - name: ERR_PASSIVE_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: Error passive interrupt. If this bit is set to 1, it indicates the TWAI Controller is switched between error active status and error passive status due to the change of error counters.
+  - name: ARB_LOST_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: Arbitration lost interrupt. If this bit is set to 1, it indicates an arbitration lost interrupt is generated.
+  - name: BUS_ERR_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: Error interrupt. If this bit is set to 1, it indicates an error is detected on the bus.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to 1 to enable receive interrupt.
+  - name: TX_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to 1 to enable transmit interrupt.
+  - name: ERR_WARN_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to 1 to enable error warning interrupt.
+  - name: OVERRUN_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to 1 to enable data overrun interrupt.
+  - name: ERR_PASSIVE_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to 1 to enable error passive interrupt.
+  - name: ARB_LOST_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: Set this bit to 1 to enable arbitration lost interrupt.
+  - name: BUS_ERR_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to 1 to enable error interrupt.
+  side_effects: null
+- id: BUS_TIMING_0
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BAUD_PRESC
+    bit_range:
+    - 13
+    - 0
+    description: Baud Rate Prescaler, determines the frequency dividing ratio.
+  - name: SYNC_JUMP_WIDTH
+    bit_range:
+    - 15
+    - 14
+    description: Synchronization Jump Width (SJW), 1 \verb+~+ 14 Tq wide.
+  side_effects: null
+- id: BUS_TIMING_1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIME_SEG1
+    bit_range:
+    - 3
+    - 0
+    description: The width of PBS1.
+  - name: TIME_SEG2
+    bit_range:
+    - 6
+    - 4
+    description: The width of PBS2.
+  - name: TIME_SAMP
+    bit_range:
+    - 7
+    - 7
+    description: 'The number of sample points. 0: the bus is sampled once; 1: the bus is sampled three times'
+  side_effects: null
+- id: ARB_LOST_CAP
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ARB_LOST_CAP
+    bit_range:
+    - 4
+    - 0
+    description: This register contains information about the bit position of lost arbitration.
+  side_effects: null
+- id: ERR_CODE_CAP
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECC_SEGMENT
+    bit_range:
+    - 4
+    - 0
+    description: This register contains information about the location of errors, see Table 181 for details.
+  - name: ECC_DIRECTION
+    bit_range:
+    - 5
+    - 5
+    description: 'This register contains information about transmission direction of the node when error occurs. 1: Error occurs when receiving a message; 0: Error occurs when transmitting a message'
+  - name: ECC_TYPE
+    bit_range:
+    - 7
+    - 6
+    description: 'This register contains information about error types: 00: bit error; 01: form error; 10: stuff error; 11: other type of error'
+  side_effects: null
+- id: ERR_WARNING_LIMIT
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 96
+  fields:
+  - name: ERR_WARNING_LIMIT
+    bit_range:
+    - 7
+    - 0
+    description: Error warning threshold. In the case when any of a error counter value exceeds the threshold, or all the error counter values are below the threshold, an error warning interrupt will be triggered (given the enable signal is valid).
+  side_effects: null
+- id: RX_ERR_CNT
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_ERR_CNT
+    bit_range:
+    - 7
+    - 0
+    description: The RX error counter register, reflects value changes under reception status.
+  side_effects: null
+- id: TX_ERR_CNT
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_ERR_CNT
+    bit_range:
+    - 7
+    - 0
+    description: The TX error counter register, reflects value changes under transmission status.
+  side_effects: null
+- id: DATA_0
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_0
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 0 with R/W Permission. In operation mode, it stores the 0th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_1
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_1
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 1 with R/W Permission. In operation mode, it stores the 1st byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_2
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_2
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 2 with R/W Permission. In operation mode, it stores the 2nd byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_3
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_3
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 3 with R/W Permission. In operation mode, it stores the 3rd byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_4
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_4
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 4 with R/W Permission. In operation mode, it stores the 4th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_5
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_5
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 5 with R/W Permission. In operation mode, it stores the 5th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_6
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_6
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 6 with R/W Permission. In operation mode, it stores the 6th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_7
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_7
+    bit_range:
+    - 7
+    - 0
+    description: In reset mode, it is acceptance code register 7 with R/W Permission. In operation mode, it stores the 7th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_8
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_8
+    bit_range:
+    - 7
+    - 0
+    description: In operation mode, it stores the 8th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_9
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_9
+    bit_range:
+    - 7
+    - 0
+    description: In operation mode, it stores the 9th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_10
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_10
+    bit_range:
+    - 7
+    - 0
+    description: In operation mode, it stores the 10th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_11
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_11
+    bit_range:
+    - 7
+    - 0
+    description: In operation mode, it stores the 11th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: DATA_12
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_BYTE_12
+    bit_range:
+    - 7
+    - 0
+    description: In operation mode, it stores the 12th byte of the data to be transmitted or received. In operation mode, writing writes to the transmit buffer while reading reads from the receive buffer.
+  side_effects: null
+- id: RX_MESSAGE_CNT
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_MESSAGE_COUNTER
+    bit_range:
+    - 6
+    - 0
+    description: This register reflects the number of messages available within the RX FIFO.
+  side_effects: null
+- id: CLOCK_DIVIDER
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CD
+    bit_range:
+    - 7
+    - 0
+    description: These bits are used to configure frequency dividing coefficients of the external CLKOUT pin.
+  - name: CLOCK_OFF
+    bit_range:
+    - 8
+    - 8
+    description: 'This bit can be configured under reset mode. 1: Disable the external CLKOUT pin; 0: Enable the external CLKOUT pin'
+  side_effects: null
+interrupts:
+  TWAI0: 25
+timing: null

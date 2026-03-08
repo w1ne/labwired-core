@@ -1,0 +1,4845 @@
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: BT_SELECT
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BT_SEL
+    bit_range:
+    - 31
+    - 0
+    description: GPIO bit select register
+  side_effects: null
+- id: OUT
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA_ORIG
+    bit_range:
+    - 25
+    - 0
+    description: GPIO output register for GPIO0-25
+  side_effects: null
+- id: OUT_W1TS
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_W1TS
+    bit_range:
+    - 25
+    - 0
+    description: GPIO output set register for GPIO0-25
+  side_effects: null
+- id: OUT_W1TC
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_W1TC
+    bit_range:
+    - 25
+    - 0
+    description: GPIO output clear register for GPIO0-25
+  side_effects: null
+- id: SDIO_SELECT
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SDIO_SEL
+    bit_range:
+    - 7
+    - 0
+    description: GPIO sdio select register
+  side_effects: null
+- id: ENABLE
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 25
+    - 0
+    description: GPIO output enable register for GPIO0-25
+  side_effects: null
+- id: ENABLE_W1TS
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE_W1TS
+    bit_range:
+    - 25
+    - 0
+    description: GPIO output enable set register for GPIO0-25
+  side_effects: null
+- id: ENABLE_W1TC
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE_W1TC
+    bit_range:
+    - 25
+    - 0
+    description: GPIO output enable clear register for GPIO0-25
+  side_effects: null
+- id: STRAP
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STRAPPING
+    bit_range:
+    - 15
+    - 0
+    description: pad strapping register
+  side_effects: null
+- id: IN
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA_NEXT
+    bit_range:
+    - 25
+    - 0
+    description: GPIO input register for GPIO0-25
+  side_effects: null
+- id: STATUS
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERRUPT
+    bit_range:
+    - 25
+    - 0
+    description: GPIO interrupt status register for GPIO0-25
+  side_effects: null
+- id: STATUS_W1TS
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS_W1TS
+    bit_range:
+    - 25
+    - 0
+    description: GPIO interrupt status set register for GPIO0-25
+  side_effects: null
+- id: STATUS_W1TC
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS_W1TC
+    bit_range:
+    - 25
+    - 0
+    description: GPIO interrupt status clear register for GPIO0-25
+  side_effects: null
+- id: PCPU_INT
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PROCPU_INT
+    bit_range:
+    - 25
+    - 0
+    description: GPIO PRO_CPU interrupt status register for GPIO0-25
+  side_effects: null
+- id: PCPU_NMI_INT
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PROCPU_NMI_INT
+    bit_range:
+    - 25
+    - 0
+    description: GPIO PRO_CPU(not shielded) interrupt status register for GPIO0-25
+  side_effects: null
+- id: CPUSDIO_INT
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SDIO_INT
+    bit_range:
+    - 25
+    - 0
+    description: GPIO CPUSDIO interrupt status register for GPIO0-25
+  side_effects: null
+- id: PIN0
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN1
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN2
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN3
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN4
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN5
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN6
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN7
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN8
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN9
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN10
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN11
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN12
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN13
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN14
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN15
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN16
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN17
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN18
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN19
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN20
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN21
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN22
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN23
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN24
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: PIN25
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYNC2_BYPASS
+    bit_range:
+    - 1
+    - 0
+    description: set GPIO input_sync2 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: PAD_DRIVER
+    bit_range:
+    - 2
+    - 2
+    description: set this bit to select pad driver. 1:open-drain. 0:normal.
+  - name: SYNC1_BYPASS
+    bit_range:
+    - 4
+    - 3
+    description: set GPIO input_sync1 signal mode. 0:disable. 1:trigger at negedge. 2or3:trigger at posedge.
+  - name: INT_TYPE
+    bit_range:
+    - 9
+    - 7
+    description: set this value to choose interrupt mode. 0:disable GPIO interrupt. 1:trigger at posedge. 2:trigger at negedge. 3:trigger at any edge. 4:valid at low level. 5:valid at high level
+  - name: WAKEUP_ENABLE
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to enable GPIO wakeup.(can only wakeup CPU from Light-sleep Mode)
+  - name: CONFIG
+    bit_range:
+    - 12
+    - 11
+    description: reserved
+  - name: INT_ENA
+    bit_range:
+    - 17
+    - 13
+    description: set bit 13 to enable CPU interrupt. set bit 14 to enable CPU(not shielded) interrupt.
+  side_effects: null
+- id: STATUS_NEXT
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATUS_INTERRUPT_NEXT
+    bit_range:
+    - 25
+    - 0
+    description: GPIO interrupt source register for GPIO0-25
+  side_effects: null
+- id: FUNC0_IN_SEL_CFG
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC1_IN_SEL_CFG
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC2_IN_SEL_CFG
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC3_IN_SEL_CFG
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC4_IN_SEL_CFG
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC5_IN_SEL_CFG
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC6_IN_SEL_CFG
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC7_IN_SEL_CFG
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC8_IN_SEL_CFG
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC9_IN_SEL_CFG
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC10_IN_SEL_CFG
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC11_IN_SEL_CFG
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC12_IN_SEL_CFG
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC13_IN_SEL_CFG
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC14_IN_SEL_CFG
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC15_IN_SEL_CFG
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC16_IN_SEL_CFG
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC17_IN_SEL_CFG
+  address_offset: 408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC18_IN_SEL_CFG
+  address_offset: 412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC19_IN_SEL_CFG
+  address_offset: 416
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC20_IN_SEL_CFG
+  address_offset: 420
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC21_IN_SEL_CFG
+  address_offset: 424
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC22_IN_SEL_CFG
+  address_offset: 428
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC23_IN_SEL_CFG
+  address_offset: 432
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC24_IN_SEL_CFG
+  address_offset: 436
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC25_IN_SEL_CFG
+  address_offset: 440
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC26_IN_SEL_CFG
+  address_offset: 444
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC27_IN_SEL_CFG
+  address_offset: 448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC28_IN_SEL_CFG
+  address_offset: 452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC29_IN_SEL_CFG
+  address_offset: 456
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC30_IN_SEL_CFG
+  address_offset: 460
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC31_IN_SEL_CFG
+  address_offset: 464
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC32_IN_SEL_CFG
+  address_offset: 468
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC33_IN_SEL_CFG
+  address_offset: 472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC34_IN_SEL_CFG
+  address_offset: 476
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC35_IN_SEL_CFG
+  address_offset: 480
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC36_IN_SEL_CFG
+  address_offset: 484
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC37_IN_SEL_CFG
+  address_offset: 488
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC38_IN_SEL_CFG
+  address_offset: 492
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC39_IN_SEL_CFG
+  address_offset: 496
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC40_IN_SEL_CFG
+  address_offset: 500
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC41_IN_SEL_CFG
+  address_offset: 504
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC42_IN_SEL_CFG
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC43_IN_SEL_CFG
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC44_IN_SEL_CFG
+  address_offset: 516
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC45_IN_SEL_CFG
+  address_offset: 520
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC46_IN_SEL_CFG
+  address_offset: 524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC47_IN_SEL_CFG
+  address_offset: 528
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC48_IN_SEL_CFG
+  address_offset: 532
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC49_IN_SEL_CFG
+  address_offset: 536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC50_IN_SEL_CFG
+  address_offset: 540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC51_IN_SEL_CFG
+  address_offset: 544
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC52_IN_SEL_CFG
+  address_offset: 548
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC53_IN_SEL_CFG
+  address_offset: 552
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC54_IN_SEL_CFG
+  address_offset: 556
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC55_IN_SEL_CFG
+  address_offset: 560
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC56_IN_SEL_CFG
+  address_offset: 564
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC57_IN_SEL_CFG
+  address_offset: 568
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC58_IN_SEL_CFG
+  address_offset: 572
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC59_IN_SEL_CFG
+  address_offset: 576
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC60_IN_SEL_CFG
+  address_offset: 580
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC61_IN_SEL_CFG
+  address_offset: 584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC62_IN_SEL_CFG
+  address_offset: 588
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC63_IN_SEL_CFG
+  address_offset: 592
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC64_IN_SEL_CFG
+  address_offset: 596
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC65_IN_SEL_CFG
+  address_offset: 600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC66_IN_SEL_CFG
+  address_offset: 604
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC67_IN_SEL_CFG
+  address_offset: 608
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC68_IN_SEL_CFG
+  address_offset: 612
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC69_IN_SEL_CFG
+  address_offset: 616
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC70_IN_SEL_CFG
+  address_offset: 620
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC71_IN_SEL_CFG
+  address_offset: 624
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC72_IN_SEL_CFG
+  address_offset: 628
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC73_IN_SEL_CFG
+  address_offset: 632
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC74_IN_SEL_CFG
+  address_offset: 636
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC75_IN_SEL_CFG
+  address_offset: 640
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC76_IN_SEL_CFG
+  address_offset: 644
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC77_IN_SEL_CFG
+  address_offset: 648
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC78_IN_SEL_CFG
+  address_offset: 652
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC79_IN_SEL_CFG
+  address_offset: 656
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC80_IN_SEL_CFG
+  address_offset: 660
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC81_IN_SEL_CFG
+  address_offset: 664
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC82_IN_SEL_CFG
+  address_offset: 668
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC83_IN_SEL_CFG
+  address_offset: 672
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC84_IN_SEL_CFG
+  address_offset: 676
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC85_IN_SEL_CFG
+  address_offset: 680
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC86_IN_SEL_CFG
+  address_offset: 684
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC87_IN_SEL_CFG
+  address_offset: 688
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC88_IN_SEL_CFG
+  address_offset: 692
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC89_IN_SEL_CFG
+  address_offset: 696
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC90_IN_SEL_CFG
+  address_offset: 700
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC91_IN_SEL_CFG
+  address_offset: 704
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC92_IN_SEL_CFG
+  address_offset: 708
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC93_IN_SEL_CFG
+  address_offset: 712
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC94_IN_SEL_CFG
+  address_offset: 716
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC95_IN_SEL_CFG
+  address_offset: 720
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC96_IN_SEL_CFG
+  address_offset: 724
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC97_IN_SEL_CFG
+  address_offset: 728
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC98_IN_SEL_CFG
+  address_offset: 732
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC99_IN_SEL_CFG
+  address_offset: 736
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC100_IN_SEL_CFG
+  address_offset: 740
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC101_IN_SEL_CFG
+  address_offset: 744
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC102_IN_SEL_CFG
+  address_offset: 748
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC103_IN_SEL_CFG
+  address_offset: 752
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC104_IN_SEL_CFG
+  address_offset: 756
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC105_IN_SEL_CFG
+  address_offset: 760
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC106_IN_SEL_CFG
+  address_offset: 764
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC107_IN_SEL_CFG
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC108_IN_SEL_CFG
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC109_IN_SEL_CFG
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC110_IN_SEL_CFG
+  address_offset: 780
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC111_IN_SEL_CFG
+  address_offset: 784
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC112_IN_SEL_CFG
+  address_offset: 788
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC113_IN_SEL_CFG
+  address_offset: 792
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC114_IN_SEL_CFG
+  address_offset: 796
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC115_IN_SEL_CFG
+  address_offset: 800
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC116_IN_SEL_CFG
+  address_offset: 804
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC117_IN_SEL_CFG
+  address_offset: 808
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC118_IN_SEL_CFG
+  address_offset: 812
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC119_IN_SEL_CFG
+  address_offset: 816
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC120_IN_SEL_CFG
+  address_offset: 820
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC121_IN_SEL_CFG
+  address_offset: 824
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC122_IN_SEL_CFG
+  address_offset: 828
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC123_IN_SEL_CFG
+  address_offset: 832
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC124_IN_SEL_CFG
+  address_offset: 836
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC125_IN_SEL_CFG
+  address_offset: 840
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC126_IN_SEL_CFG
+  address_offset: 844
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC127_IN_SEL_CFG
+  address_offset: 848
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IN_SEL
+    bit_range:
+    - 4
+    - 0
+    description: 'set this value: s=0-53: connect GPIO[s] to this port. s=0x38: set this port always high level. s=0x3C: set this port always low level.'
+  - name: IN_INV_SEL
+    bit_range:
+    - 5
+    - 5
+    description: set this bit to invert input signal. 1:invert. 0:not invert.
+  - name: SEL
+    bit_range:
+    - 6
+    - 6
+    description: set this bit to bypass GPIO. 1:do not bypass GPIO. 0:bypass GPIO.
+  side_effects: null
+- id: FUNC0_OUT_SEL_CFG
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC1_OUT_SEL_CFG
+  address_offset: 1368
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC2_OUT_SEL_CFG
+  address_offset: 1372
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC3_OUT_SEL_CFG
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC4_OUT_SEL_CFG
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC5_OUT_SEL_CFG
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC6_OUT_SEL_CFG
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC7_OUT_SEL_CFG
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC8_OUT_SEL_CFG
+  address_offset: 1396
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC9_OUT_SEL_CFG
+  address_offset: 1400
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC10_OUT_SEL_CFG
+  address_offset: 1404
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC11_OUT_SEL_CFG
+  address_offset: 1408
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC12_OUT_SEL_CFG
+  address_offset: 1412
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC13_OUT_SEL_CFG
+  address_offset: 1416
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC14_OUT_SEL_CFG
+  address_offset: 1420
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC15_OUT_SEL_CFG
+  address_offset: 1424
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC16_OUT_SEL_CFG
+  address_offset: 1428
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC17_OUT_SEL_CFG
+  address_offset: 1432
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC18_OUT_SEL_CFG
+  address_offset: 1436
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC19_OUT_SEL_CFG
+  address_offset: 1440
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC20_OUT_SEL_CFG
+  address_offset: 1444
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC21_OUT_SEL_CFG
+  address_offset: 1448
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC22_OUT_SEL_CFG
+  address_offset: 1452
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC23_OUT_SEL_CFG
+  address_offset: 1456
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC24_OUT_SEL_CFG
+  address_offset: 1460
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: FUNC25_OUT_SEL_CFG
+  address_offset: 1464
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: OUT_SEL
+    bit_range:
+    - 7
+    - 0
+    description: 'The value of the bits: 0<=s<=256. Set the value to select output signal. s=0-255: output of GPIO[n] equals input of peripheral[s]. s=256: output of GPIO[n] equals GPIO_OUT_REG[n].'
+  - name: INV_SEL
+    bit_range:
+    - 8
+    - 8
+    description: set this bit to invert output signal.1:invert.0:not invert.
+  - name: OEN_SEL
+    bit_range:
+    - 9
+    - 9
+    description: set this bit to select output enable signal.1:use GPIO_ENABLE_REG[n] as output enable signal.0:use peripheral output enable signal.
+  - name: OEN_INV_SEL
+    bit_range:
+    - 10
+    - 10
+    description: set this bit to invert output enable signal.1:invert.0:not invert.
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 1580
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: set this bit to enable GPIO clock gate
+  side_effects: null
+- id: REG_DATE
+  address_offset: 1788
+  size: 32
+  access: READ_WRITE
+  reset_value: 33579312
+  fields:
+  - name: REG_DATE
+    bit_range:
+    - 27
+    - 0
+    description: version register
+  side_effects: null
+interrupts:
+  GPIO_NMI: 17
+  GPIO: 16
+timing: null

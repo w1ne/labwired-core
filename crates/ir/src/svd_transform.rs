@@ -1,6 +1,7 @@
 //! SVD to Strict IR Transformation Logic
 
 use super::*;
+use std::collections::HashMap;
 use svd_parser::svd::{self, Access, RegisterCluster};
 
 impl IrDevice {

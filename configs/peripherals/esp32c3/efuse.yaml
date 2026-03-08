@@ -1,0 +1,2051 @@
+peripheral: EFUSE
+version: 0.1.0
+registers:
+- id: PGM_DATA0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_0
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 0th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_1
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 1st 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_2
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 2nd 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_3
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 3rd 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA4
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_4
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 4th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA5
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_5
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 5th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA6
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_6
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 6th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_DATA7
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_DATA_7
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 7th 32-bit data to be programmed.
+  side_effects: null
+- id: PGM_CHECK_VALUE0
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_RS_DATA_0
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 0th 32-bit RS code to be programmed.
+  side_effects: null
+- id: PGM_CHECK_VALUE1
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_RS_DATA_1
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 1st 32-bit RS code to be programmed.
+  side_effects: null
+- id: PGM_CHECK_VALUE2
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PGM_RS_DATA_2
+    bit_range:
+    - 31
+    - 0
+    description: The content of the 2nd 32-bit RS code to be programmed.
+  side_effects: null
+- id: RD_WR_DIS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WR_DIS
+    bit_range:
+    - 31
+    - 0
+    description: Disable programming of individual eFuses.
+  side_effects: null
+- id: RD_REPEAT_DATA0
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RD_DIS
+    bit_range:
+    - 6
+    - 0
+    description: Set this bit to disable reading from BlOCK4-10.
+  - name: DIS_RTC_RAM_BOOT
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to disable boot from RTC RAM.
+  - name: DIS_ICACHE
+    bit_range:
+    - 8
+    - 8
+    description: Set this bit to disable Icache.
+  - name: DIS_USB_JTAG
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to disable function of usb switch to jtag in module of usb device.
+  - name: DIS_DOWNLOAD_ICACHE
+    bit_range:
+    - 10
+    - 10
+    description: Set this bit to disable Icache in download mode (boot_mode[3:0] is 0, 1, 2, 3, 6, 7).
+  - name: DIS_USB_DEVICE
+    bit_range:
+    - 11
+    - 11
+    description: Set this bit to disable usb device.
+  - name: DIS_FORCE_DOWNLOAD
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to disable the function that forces chip into download mode.
+  - name: RPT4_RESERVED6
+    bit_range:
+    - 13
+    - 13
+    description: Reserved (used for four backups method).
+  - name: DIS_CAN
+    bit_range:
+    - 14
+    - 14
+    description: Set this bit to disable CAN function.
+  - name: JTAG_SEL_ENABLE
+    bit_range:
+    - 15
+    - 15
+    description: Set this bit to enable selection between usb_to_jtag and pad_to_jtag through strapping gpio10 when both reg_dis_usb_jtag and reg_dis_pad_jtag are equal to 0.
+  - name: SOFT_DIS_JTAG
+    bit_range:
+    - 18
+    - 16
+    description: Set these bits to disable JTAG in the soft way (odd number 1 means disable ). JTAG can be enabled in HMAC module.
+  - name: DIS_PAD_JTAG
+    bit_range:
+    - 19
+    - 19
+    description: Set this bit to disable JTAG in the hard way. JTAG is disabled permanently.
+  - name: DIS_DOWNLOAD_MANUAL_ENCRYPT
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to disable flash encryption when in download boot modes.
+  - name: USB_DREFH
+    bit_range:
+    - 22
+    - 21
+    description: Controls single-end input threshold vrefh, 1.76 V to 2 V with step of 80 mV, stored in eFuse.
+  - name: USB_DREFL
+    bit_range:
+    - 24
+    - 23
+    description: Controls single-end input threshold vrefl, 0.8 V to 1.04 V with step of 80 mV, stored in eFuse.
+  - name: USB_EXCHG_PINS
+    bit_range:
+    - 25
+    - 25
+    description: Set this bit to exchange USB D+ and D- pins.
+  - name: VDD_SPI_AS_GPIO
+    bit_range:
+    - 26
+    - 26
+    description: Set this bit to vdd spi pin function as gpio.
+  - name: BTLC_GPIO_ENABLE
+    bit_range:
+    - 28
+    - 27
+    description: Enable btlc gpio.
+  - name: POWERGLITCH_EN
+    bit_range:
+    - 29
+    - 29
+    description: Set this bit to enable power glitch function.
+  - name: POWER_GLITCH_DSENSE
+    bit_range:
+    - 31
+    - 30
+    description: Sample delay configuration of power glitch.
+  side_effects: null
+- id: RD_REPEAT_DATA1
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RPT4_RESERVED2
+    bit_range:
+    - 15
+    - 0
+    description: Reserved (used for four backups method).
+  - name: WDT_DELAY_SEL
+    bit_range:
+    - 17
+    - 16
+    description: 'Selects RTC watchdog timeout threshold, in unit of slow clock cycle. 0: 40000. 1: 80000. 2: 160000. 3:320000.'
+  - name: SPI_BOOT_CRYPT_CNT
+    bit_range:
+    - 20
+    - 18
+    description: 'Set this bit to enable SPI boot encrypt/decrypt. Odd number of 1: enable. even number of 1: disable.'
+  - name: SECURE_BOOT_KEY_REVOKE0
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to enable revoking first secure boot key.
+  - name: SECURE_BOOT_KEY_REVOKE1
+    bit_range:
+    - 22
+    - 22
+    description: Set this bit to enable revoking second secure boot key.
+  - name: SECURE_BOOT_KEY_REVOKE2
+    bit_range:
+    - 23
+    - 23
+    description: Set this bit to enable revoking third secure boot key.
+  - name: KEY_PURPOSE_0
+    bit_range:
+    - 27
+    - 24
+    description: Purpose of Key0.
+  - name: KEY_PURPOSE_1
+    bit_range:
+    - 31
+    - 28
+    description: Purpose of Key1.
+  side_effects: null
+- id: RD_REPEAT_DATA2
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_PURPOSE_2
+    bit_range:
+    - 3
+    - 0
+    description: Purpose of Key2.
+  - name: KEY_PURPOSE_3
+    bit_range:
+    - 7
+    - 4
+    description: Purpose of Key3.
+  - name: KEY_PURPOSE_4
+    bit_range:
+    - 11
+    - 8
+    description: Purpose of Key4.
+  - name: KEY_PURPOSE_5
+    bit_range:
+    - 15
+    - 12
+    description: Purpose of Key5.
+  - name: RPT4_RESERVED3
+    bit_range:
+    - 19
+    - 16
+    description: Reserved (used for four backups method).
+  - name: SECURE_BOOT_EN
+    bit_range:
+    - 20
+    - 20
+    description: Set this bit to enable secure boot.
+  - name: SECURE_BOOT_AGGRESSIVE_REVOKE
+    bit_range:
+    - 21
+    - 21
+    description: Set this bit to enable revoking aggressive secure boot.
+  - name: RPT4_RESERVED0
+    bit_range:
+    - 27
+    - 22
+    description: Reserved (used for four backups method).
+  - name: FLASH_TPUW
+    bit_range:
+    - 31
+    - 28
+    description: Configures flash waiting time after power-up, in unit of ms. If the value is less than 15, the waiting time is the configurable value; Otherwise, the waiting time is twice the configurable value.
+  side_effects: null
+- id: RD_REPEAT_DATA3
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIS_DOWNLOAD_MODE
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to disable download mode (boot_mode[3:0] = 0, 1, 2, 3, 6, 7).
+  - name: DIS_LEGACY_SPI_BOOT
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to disable Legacy SPI boot mode (boot_mode[3:0] = 4).
+  - name: UART_PRINT_CHANNEL
+    bit_range:
+    - 2
+    - 2
+    description: 'Selectes the default UART print channel. 0: UART0. 1: UART1.'
+  - name: FLASH_ECC_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'Set ECC mode in ROM, 0: ROM would Enable Flash ECC 16to18 byte mode. 1:ROM would use 16to17 byte mode.'
+  - name: DIS_USB_DOWNLOAD_MODE
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to disable UART download mode through USB.
+  - name: ENABLE_SECURITY_DOWNLOAD
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to enable secure UART download mode.
+  - name: UART_PRINT_CONTROL
+    bit_range:
+    - 7
+    - 6
+    description: 'Set the default UARTboot message output mode. 00: Enabled. 01: Enabled when GPIO8 is low at reset. 10: Enabled when GPIO8 is high at reset. 11:disabled.'
+  - name: PIN_POWER_SELECTION
+    bit_range:
+    - 8
+    - 8
+    description: 'GPIO33-GPIO37 power supply selection in ROM code. 0: VDD3P3_CPU. 1: VDD_SPI.'
+  - name: FLASH_TYPE
+    bit_range:
+    - 9
+    - 9
+    description: 'Set the maximum lines of SPI flash. 0: four lines. 1: eight lines.'
+  - name: FLASH_PAGE_SIZE
+    bit_range:
+    - 11
+    - 10
+    description: Set Flash page size.
+  - name: FLASH_ECC_EN
+    bit_range:
+    - 12
+    - 12
+    description: Set 1 to enable ECC for flash boot.
+  - name: FORCE_SEND_RESUME
+    bit_range:
+    - 13
+    - 13
+    description: Set this bit to force ROM code to send a resume command during SPI boot.
+  - name: SECURE_VERSION
+    bit_range:
+    - 29
+    - 14
+    description: Secure version (used by ESP-IDF anti-rollback feature).
+  - name: RPT4_RESERVED1
+    bit_range:
+    - 31
+    - 30
+    description: Reserved (used for four backups method).
+  side_effects: null
+- id: RD_REPEAT_DATA4
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RPT4_RESERVED4
+    bit_range:
+    - 23
+    - 0
+    description: Reserved (used for four backups method).
+  side_effects: null
+- id: RD_MAC_SPI_SYS_0
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAC_0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the low 32 bits of MAC address.
+  side_effects: null
+- id: RD_MAC_SPI_SYS_1
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAC_1
+    bit_range:
+    - 15
+    - 0
+    description: Stores the high 16 bits of MAC address.
+  - name: SPI_PAD_CONF_0
+    bit_range:
+    - 31
+    - 16
+    description: Stores the zeroth part of SPI_PAD_CONF.
+  side_effects: null
+- id: RD_MAC_SPI_SYS_2
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_PAD_CONF_1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first part of SPI_PAD_CONF.
+  side_effects: null
+- id: RD_MAC_SPI_SYS_3
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_PAD_CONF_2
+    bit_range:
+    - 17
+    - 0
+    description: Stores the second part of SPI_PAD_CONF.
+  - name: SYS_DATA_PART0_0
+    bit_range:
+    - 31
+    - 18
+    description: Stores the fist 14 bits of the zeroth part of system data.
+  side_effects: null
+- id: RD_MAC_SPI_SYS_4
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART0_1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fist 32 bits of the zeroth part of system data.
+  side_effects: null
+- id: RD_MAC_SPI_SYS_5
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART0_2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of the zeroth part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA0
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA1
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA2
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA3
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA4
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA5
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA6
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_SYS_PART1_DATA7
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART1_7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of the first part of system data.
+  side_effects: null
+- id: RD_USR_DATA0
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_USR_DATA1
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_USR_DATA2
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_USR_DATA3
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_USR_DATA4
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_USR_DATA5
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_USR_DATA6
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_USR_DATA7
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of BLOCK3 (user).
+  side_effects: null
+- id: RD_KEY0_DATA0
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY0_DATA1
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY0_DATA2
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY0_DATA3
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY0_DATA4
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY0_DATA5
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY0_DATA6
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY0_DATA7
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY0_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of KEY0.
+  side_effects: null
+- id: RD_KEY1_DATA0
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY1_DATA1
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY1_DATA2
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY1_DATA3
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY1_DATA4
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY1_DATA5
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY1_DATA6
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY1_DATA7
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY1_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of KEY1.
+  side_effects: null
+- id: RD_KEY2_DATA0
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY2_DATA1
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY2_DATA2
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY2_DATA3
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY2_DATA4
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY2_DATA5
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY2_DATA6
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY2_DATA7
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY2_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of KEY2.
+  side_effects: null
+- id: RD_KEY3_DATA0
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY3_DATA1
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY3_DATA2
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY3_DATA3
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY3_DATA4
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY3_DATA5
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY3_DATA6
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY3_DATA7
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY3_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of KEY3.
+  side_effects: null
+- id: RD_KEY4_DATA0
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY4_DATA1
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY4_DATA2
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY4_DATA3
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY4_DATA4
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY4_DATA5
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY4_DATA6
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY4_DATA7
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY4_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of KEY4.
+  side_effects: null
+- id: RD_KEY5_DATA0
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the zeroth 32 bits of KEY5.
+  side_effects: null
+- id: RD_KEY5_DATA1
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the first 32 bits of KEY5.
+  side_effects: null
+- id: RD_KEY5_DATA2
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the second 32 bits of KEY5.
+  side_effects: null
+- id: RD_KEY5_DATA3
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the third 32 bits of KEY5.
+  side_effects: null
+- id: RD_KEY5_DATA4
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fourth 32 bits of KEY5.
+  side_effects: null
+- id: RD_KEY5_DATA5
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the fifth 32 bits of KEY5.
+  side_effects: null
+- id: RD_KEY5_DATA6
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the sixth 32 bits of KEY5.
+  side_effects: null
+- id: RD_KEY5_DATA7
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_DATA7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the seventh 32 bits of KEY5.
+  side_effects: null
+- id: RD_SYS_PART2_DATA0
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_0
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 0th 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_SYS_PART2_DATA1
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_1
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 1st 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_SYS_PART2_DATA2
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_2
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 2nd 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_SYS_PART2_DATA3
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_3
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 3rd 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_SYS_PART2_DATA4
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_4
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 4th 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_SYS_PART2_DATA5
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_5
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 5th 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_SYS_PART2_DATA6
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_6
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 6th 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_SYS_PART2_DATA7
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYS_DATA_PART2_7
+    bit_range:
+    - 31
+    - 0
+    description: Stores the 7th 32 bits of the 2nd part of system data.
+  side_effects: null
+- id: RD_REPEAT_ERR0
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RD_DIS_ERR
+    bit_range:
+    - 6
+    - 0
+    description: If any bit in RD_DIS is 1, then it indicates a programming error.
+  - name: DIS_RTC_RAM_BOOT_ERR
+    bit_range:
+    - 7
+    - 7
+    description: If DIS_RTC_RAM_BOOT is 1, then it indicates a programming error.
+  - name: DIS_ICACHE_ERR
+    bit_range:
+    - 8
+    - 8
+    description: If DIS_ICACHE is 1, then it indicates a programming error.
+  - name: DIS_USB_JTAG_ERR
+    bit_range:
+    - 9
+    - 9
+    description: If DIS_USB_JTAG is 1, then it indicates a programming error.
+  - name: DIS_DOWNLOAD_ICACHE_ERR
+    bit_range:
+    - 10
+    - 10
+    description: If DIS_DOWNLOAD_ICACHE is 1, then it indicates a programming error.
+  - name: DIS_USB_DEVICE_ERR
+    bit_range:
+    - 11
+    - 11
+    description: If DIS_USB_DEVICE is 1, then it indicates a programming error.
+  - name: DIS_FORCE_DOWNLOAD_ERR
+    bit_range:
+    - 12
+    - 12
+    description: If DIS_FORCE_DOWNLOAD is 1, then it indicates a programming error.
+  - name: RPT4_RESERVED6_ERR
+    bit_range:
+    - 13
+    - 13
+    description: Reserved.
+  - name: DIS_CAN_ERR
+    bit_range:
+    - 14
+    - 14
+    description: If DIS_CAN is 1, then it indicates a programming error.
+  - name: JTAG_SEL_ENABLE_ERR
+    bit_range:
+    - 15
+    - 15
+    description: If JTAG_SEL_ENABLE is 1, then it indicates a programming error.
+  - name: SOFT_DIS_JTAG_ERR
+    bit_range:
+    - 18
+    - 16
+    description: If SOFT_DIS_JTAG is 1, then it indicates a programming error.
+  - name: DIS_PAD_JTAG_ERR
+    bit_range:
+    - 19
+    - 19
+    description: If DIS_PAD_JTAG is 1, then it indicates a programming error.
+  - name: DIS_DOWNLOAD_MANUAL_ENCRYPT_ERR
+    bit_range:
+    - 20
+    - 20
+    description: If DIS_DOWNLOAD_MANUAL_ENCRYPT is 1, then it indicates a programming error.
+  - name: USB_DREFH_ERR
+    bit_range:
+    - 22
+    - 21
+    description: If any bit in USB_DREFH is 1, then it indicates a programming error.
+  - name: USB_DREFL_ERR
+    bit_range:
+    - 24
+    - 23
+    description: If any bit in USB_DREFL is 1, then it indicates a programming error.
+  - name: USB_EXCHG_PINS_ERR
+    bit_range:
+    - 25
+    - 25
+    description: If USB_EXCHG_PINS is 1, then it indicates a programming error.
+  - name: VDD_SPI_AS_GPIO_ERR
+    bit_range:
+    - 26
+    - 26
+    description: If VDD_SPI_AS_GPIO is 1, then it indicates a programming error.
+  - name: BTLC_GPIO_ENABLE_ERR
+    bit_range:
+    - 28
+    - 27
+    description: If any bit in BTLC_GPIO_ENABLE is 1, then it indicates a programming error.
+  - name: POWERGLITCH_EN_ERR
+    bit_range:
+    - 29
+    - 29
+    description: If POWERGLITCH_EN is 1, then it indicates a programming error.
+  - name: POWER_GLITCH_DSENSE_ERR
+    bit_range:
+    - 31
+    - 30
+    description: If any bit in POWER_GLITCH_DSENSE is 1, then it indicates a programming error.
+  side_effects: null
+- id: RD_REPEAT_ERR1
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RPT4_RESERVED2_ERR
+    bit_range:
+    - 15
+    - 0
+    description: Reserved.
+  - name: WDT_DELAY_SEL_ERR
+    bit_range:
+    - 17
+    - 16
+    description: If any bit in WDT_DELAY_SEL is 1, then it indicates a programming error.
+  - name: SPI_BOOT_CRYPT_CNT_ERR
+    bit_range:
+    - 20
+    - 18
+    description: If any bit in SPI_BOOT_CRYPT_CNT is 1, then it indicates a programming error.
+  - name: SECURE_BOOT_KEY_REVOKE0_ERR
+    bit_range:
+    - 21
+    - 21
+    description: If SECURE_BOOT_KEY_REVOKE0 is 1, then it indicates a programming error.
+  - name: SECURE_BOOT_KEY_REVOKE1_ERR
+    bit_range:
+    - 22
+    - 22
+    description: If SECURE_BOOT_KEY_REVOKE1 is 1, then it indicates a programming error.
+  - name: SECURE_BOOT_KEY_REVOKE2_ERR
+    bit_range:
+    - 23
+    - 23
+    description: If SECURE_BOOT_KEY_REVOKE2 is 1, then it indicates a programming error.
+  - name: KEY_PURPOSE_0_ERR
+    bit_range:
+    - 27
+    - 24
+    description: If any bit in KEY_PURPOSE_0 is 1, then it indicates a programming error.
+  - name: KEY_PURPOSE_1_ERR
+    bit_range:
+    - 31
+    - 28
+    description: If any bit in KEY_PURPOSE_1 is 1, then it indicates a programming error.
+  side_effects: null
+- id: RD_REPEAT_ERR2
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_PURPOSE_2_ERR
+    bit_range:
+    - 3
+    - 0
+    description: If any bit in KEY_PURPOSE_2 is 1, then it indicates a programming error.
+  - name: KEY_PURPOSE_3_ERR
+    bit_range:
+    - 7
+    - 4
+    description: If any bit in KEY_PURPOSE_3 is 1, then it indicates a programming error.
+  - name: KEY_PURPOSE_4_ERR
+    bit_range:
+    - 11
+    - 8
+    description: If any bit in KEY_PURPOSE_4 is 1, then it indicates a programming error.
+  - name: KEY_PURPOSE_5_ERR
+    bit_range:
+    - 15
+    - 12
+    description: If any bit in KEY_PURPOSE_5 is 1, then it indicates a programming error.
+  - name: RPT4_RESERVED3_ERR
+    bit_range:
+    - 19
+    - 16
+    description: Reserved.
+  - name: SECURE_BOOT_EN_ERR
+    bit_range:
+    - 20
+    - 20
+    description: If SECURE_BOOT_EN is 1, then it indicates a programming error.
+  - name: SECURE_BOOT_AGGRESSIVE_REVOKE_ERR
+    bit_range:
+    - 21
+    - 21
+    description: If SECURE_BOOT_AGGRESSIVE_REVOKE is 1, then it indicates a programming error.
+  - name: RPT4_RESERVED0_ERR
+    bit_range:
+    - 27
+    - 22
+    description: Reserved.
+  - name: FLASH_TPUW_ERR
+    bit_range:
+    - 31
+    - 28
+    description: If any bit in FLASH_TPUM is 1, then it indicates a programming error.
+  side_effects: null
+- id: RD_REPEAT_ERR3
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIS_DOWNLOAD_MODE_ERR
+    bit_range:
+    - 0
+    - 0
+    description: If DIS_DOWNLOAD_MODE is 1, then it indicates a programming error.
+  - name: DIS_LEGACY_SPI_BOOT_ERR
+    bit_range:
+    - 1
+    - 1
+    description: If DIS_LEGACY_SPI_BOOT is 1, then it indicates a programming error.
+  - name: UART_PRINT_CHANNEL_ERR
+    bit_range:
+    - 2
+    - 2
+    description: If UART_PRINT_CHANNEL is 1, then it indicates a programming error.
+  - name: FLASH_ECC_MODE_ERR
+    bit_range:
+    - 3
+    - 3
+    description: If FLASH_ECC_MODE is 1, then it indicates a programming error.
+  - name: DIS_USB_DOWNLOAD_MODE_ERR
+    bit_range:
+    - 4
+    - 4
+    description: If DIS_USB_DOWNLOAD_MODE is 1, then it indicates a programming error.
+  - name: ENABLE_SECURITY_DOWNLOAD_ERR
+    bit_range:
+    - 5
+    - 5
+    description: If ENABLE_SECURITY_DOWNLOAD is 1, then it indicates a programming error.
+  - name: UART_PRINT_CONTROL_ERR
+    bit_range:
+    - 7
+    - 6
+    description: If any bit in UART_PRINT_CONTROL is 1, then it indicates a programming error.
+  - name: PIN_POWER_SELECTION_ERR
+    bit_range:
+    - 8
+    - 8
+    description: If PIN_POWER_SELECTION is 1, then it indicates a programming error.
+  - name: FLASH_TYPE_ERR
+    bit_range:
+    - 9
+    - 9
+    description: If FLASH_TYPE is 1, then it indicates a programming error.
+  - name: FLASH_PAGE_SIZE_ERR
+    bit_range:
+    - 11
+    - 10
+    description: If any bits in FLASH_PAGE_SIZE is 1, then it indicates a programming error.
+  - name: FLASH_ECC_EN_ERR
+    bit_range:
+    - 12
+    - 12
+    description: If FLASH_ECC_EN_ERR is 1, then it indicates a programming error.
+  - name: FORCE_SEND_RESUME_ERR
+    bit_range:
+    - 13
+    - 13
+    description: If FORCE_SEND_RESUME is 1, then it indicates a programming error.
+  - name: SECURE_VERSION_ERR
+    bit_range:
+    - 29
+    - 14
+    description: If any bit in SECURE_VERSION is 1, then it indicates a programming error.
+  - name: RPT4_RESERVED1_ERR
+    bit_range:
+    - 31
+    - 30
+    description: Reserved.
+  side_effects: null
+- id: RD_REPEAT_ERR4
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RPT4_RESERVED4_ERR
+    bit_range:
+    - 23
+    - 0
+    description: Reserved.
+  side_effects: null
+- id: RD_RS_ERR0
+  address_offset: 448
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAC_SPI_8M_ERR_NUM
+    bit_range:
+    - 2
+    - 0
+    description: The value of this signal means the number of error bytes.
+  - name: MAC_SPI_8M_FAIL
+    bit_range:
+    - 3
+    - 3
+    description: '0: Means no failure and that the data of MAC_SPI_8M is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  - name: SYS_PART1_NUM
+    bit_range:
+    - 6
+    - 4
+    description: The value of this signal means the number of error bytes.
+  - name: SYS_PART1_FAIL
+    bit_range:
+    - 7
+    - 7
+    description: '0: Means no failure and that the data of system part1 is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  - name: USR_DATA_ERR_NUM
+    bit_range:
+    - 10
+    - 8
+    description: The value of this signal means the number of error bytes.
+  - name: USR_DATA_FAIL
+    bit_range:
+    - 11
+    - 11
+    description: '0: Means no failure and that the user data is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  - name: KEY0_ERR_NUM
+    bit_range:
+    - 14
+    - 12
+    description: The value of this signal means the number of error bytes.
+  - name: KEY0_FAIL
+    bit_range:
+    - 15
+    - 15
+    description: '0: Means no failure and that the data of key0 is reliable 1: Means that programming key0 failed and the number of error bytes is over 6.'
+  - name: KEY1_ERR_NUM
+    bit_range:
+    - 18
+    - 16
+    description: The value of this signal means the number of error bytes.
+  - name: KEY1_FAIL
+    bit_range:
+    - 19
+    - 19
+    description: '0: Means no failure and that the data of key1 is reliable 1: Means that programming key1 failed and the number of error bytes is over 6.'
+  - name: KEY2_ERR_NUM
+    bit_range:
+    - 22
+    - 20
+    description: The value of this signal means the number of error bytes.
+  - name: KEY2_FAIL
+    bit_range:
+    - 23
+    - 23
+    description: '0: Means no failure and that the data of key2 is reliable 1: Means that programming key2 failed and the number of error bytes is over 6.'
+  - name: KEY3_ERR_NUM
+    bit_range:
+    - 26
+    - 24
+    description: The value of this signal means the number of error bytes.
+  - name: KEY3_FAIL
+    bit_range:
+    - 27
+    - 27
+    description: '0: Means no failure and that the data of key3 is reliable 1: Means that programming key3 failed and the number of error bytes is over 6.'
+  - name: KEY4_ERR_NUM
+    bit_range:
+    - 30
+    - 28
+    description: The value of this signal means the number of error bytes.
+  - name: KEY4_FAIL
+    bit_range:
+    - 31
+    - 31
+    description: '0: Means no failure and that the data of key4 is reliable 1: Means that programming key4 failed and the number of error bytes is over 6.'
+  side_effects: null
+- id: RD_RS_ERR1
+  address_offset: 452
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY5_ERR_NUM
+    bit_range:
+    - 2
+    - 0
+    description: The value of this signal means the number of error bytes.
+  - name: KEY5_FAIL
+    bit_range:
+    - 3
+    - 3
+    description: '0: Means no failure and that the data of KEY5 is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  - name: SYS_PART2_ERR_NUM
+    bit_range:
+    - 6
+    - 4
+    description: The value of this signal means the number of error bytes.
+  - name: SYS_PART2_FAIL
+    bit_range:
+    - 7
+    - 7
+    description: '0: Means no failure and that the data of system part2 is reliable 1: Means that programming user data failed and the number of error bytes is over 6.'
+  side_effects: null
+- id: CLK
+  address_offset: 456
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: EFUSE_MEM_FORCE_PD
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to force eFuse SRAM into power-saving mode.
+  - name: MEM_CLK_FORCE_ON
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit and force to activate clock signal of eFuse SRAM.
+  - name: EFUSE_MEM_FORCE_PU
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to force eFuse SRAM into working mode.
+  - name: EN
+    bit_range:
+    - 16
+    - 16
+    description: Set this bit and force to enable clock signal of eFuse memory.
+  side_effects: null
+- id: CONF
+  address_offset: 460
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OP_CODE
+    bit_range:
+    - 15
+    - 0
+    description: '0x5A5A: Operate programming command 0x5AA5: Operate read command.'
+  side_effects: null
+- id: STATUS
+  address_offset: 464
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATE
+    bit_range:
+    - 3
+    - 0
+    description: Indicates the state of the eFuse state machine.
+  - name: OTP_LOAD_SW
+    bit_range:
+    - 4
+    - 4
+    description: The value of OTP_LOAD_SW.
+  - name: OTP_VDDQ_C_SYNC2
+    bit_range:
+    - 5
+    - 5
+    description: The value of OTP_VDDQ_C_SYNC2.
+  - name: OTP_STROBE_SW
+    bit_range:
+    - 6
+    - 6
+    description: The value of OTP_STROBE_SW.
+  - name: OTP_CSB_SW
+    bit_range:
+    - 7
+    - 7
+    description: The value of OTP_CSB_SW.
+  - name: OTP_PGENB_SW
+    bit_range:
+    - 8
+    - 8
+    description: The value of OTP_PGENB_SW.
+  - name: OTP_VDDQ_IS_SW
+    bit_range:
+    - 9
+    - 9
+    description: The value of OTP_VDDQ_IS_SW.
+  - name: REPEAT_ERR_CNT
+    bit_range:
+    - 17
+    - 10
+    description: Indicates the number of error bits during programming BLOCK0.
+  side_effects: null
+- id: CMD
+  address_offset: 468
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_CMD
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to send read command.
+  - name: PGM_CMD
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to send programming command.
+  - name: BLK_NUM
+    bit_range:
+    - 5
+    - 2
+    description: The serial number of the block to be programmed. Value 0-10 corresponds to block number 0-10, respectively.
+  side_effects: null
+- id: INT_RAW
+  address_offset: 472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw bit signal for read_done interrupt.
+  - name: PGM_DONE_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw bit signal for pgm_done interrupt.
+  side_effects: null
+- id: INT_ST
+  address_offset: 476
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The status signal for read_done interrupt.
+  - name: PGM_DONE_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The status signal for pgm_done interrupt.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 480
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The enable signal for read_done interrupt.
+  - name: PGM_DONE_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The enable signal for pgm_done interrupt.
+  side_effects: null
+- id: INT_CLR
+  address_offset: 484
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READ_DONE_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The clear signal for read_done interrupt.
+  - name: PGM_DONE_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The clear signal for pgm_done interrupt.
+  side_effects: null
+- id: DAC_CONF
+  address_offset: 488
+  size: 32
+  access: READ_WRITE
+  reset_value: 130588
+  fields:
+  - name: DAC_CLK_DIV
+    bit_range:
+    - 7
+    - 0
+    description: Controls the division factor of the rising clock of the programming voltage.
+  - name: DAC_CLK_PAD_SEL
+    bit_range:
+    - 8
+    - 8
+    description: Don't care.
+  - name: DAC_NUM
+    bit_range:
+    - 16
+    - 9
+    description: Controls the rising period of the programming voltage.
+  - name: OE_CLR
+    bit_range:
+    - 17
+    - 17
+    description: Reduces the power supply of the programming voltage.
+  side_effects: null
+- id: RD_TIM_CONF
+  address_offset: 492
+  size: 32
+  access: READ_WRITE
+  reset_value: 301989888
+  fields:
+  - name: READ_INIT_NUM
+    bit_range:
+    - 31
+    - 24
+    description: Configures the initial read time of eFuse.
+  side_effects: null
+- id: WR_TIM_CONF1
+  address_offset: 496
+  size: 32
+  access: READ_WRITE
+  reset_value: 2654208
+  fields:
+  - name: PWR_ON_NUM
+    bit_range:
+    - 23
+    - 8
+    description: Configures the power up time for VDDQ.
+  side_effects: null
+- id: WR_TIM_CONF2
+  address_offset: 500
+  size: 32
+  access: READ_WRITE
+  reset_value: 400
+  fields:
+  - name: PWR_OFF_NUM
+    bit_range:
+    - 15
+    - 0
+    description: Configures the power outage time for VDDQ.
+  side_effects: null
+- id: DATE
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583616
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: Stores eFuse version.
+  side_effects: null
+interrupts:
+  EFUSE: 24
+timing: null

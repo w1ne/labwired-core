@@ -1,0 +1,676 @@
+peripheral: APB_CTRL
+version: 0.1.0
+registers:
+- id: SYSCLK_CONF
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: PRE_DIV_CNT
+    bit_range:
+    - 9
+    - 0
+    description: reg_pre_div_cnt
+  - name: CLK_320M_EN
+    bit_range:
+    - 10
+    - 10
+    description: reg_clk_320m_en
+  - name: CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: reg_clk_en
+  - name: RST_TICK_CNT
+    bit_range:
+    - 12
+    - 12
+    description: reg_rst_tick_cnt
+  side_effects: null
+- id: TICK_CONF
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 67367
+  fields:
+  - name: XTAL_TICK_NUM
+    bit_range:
+    - 7
+    - 0
+    description: reg_xtal_tick_num
+  - name: CK8M_TICK_NUM
+    bit_range:
+    - 15
+    - 8
+    description: reg_ck8m_tick_num
+  - name: TICK_ENABLE
+    bit_range:
+    - 16
+    - 16
+    description: reg_tick_enable
+  side_effects: null
+- id: CLK_OUT_EN
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 2047
+  fields:
+  - name: CLK20_OEN
+    bit_range:
+    - 0
+    - 0
+    description: reg_clk20_oen
+  - name: CLK22_OEN
+    bit_range:
+    - 1
+    - 1
+    description: reg_clk22_oen
+  - name: CLK44_OEN
+    bit_range:
+    - 2
+    - 2
+    description: reg_clk44_oen
+  - name: CLK_BB_OEN
+    bit_range:
+    - 3
+    - 3
+    description: reg_clk_bb_oen
+  - name: CLK80_OEN
+    bit_range:
+    - 4
+    - 4
+    description: reg_clk80_oen
+  - name: CLK160_OEN
+    bit_range:
+    - 5
+    - 5
+    description: reg_clk160_oen
+  - name: CLK_320M_OEN
+    bit_range:
+    - 6
+    - 6
+    description: reg_clk_320m_oen
+  - name: CLK_ADC_INF_OEN
+    bit_range:
+    - 7
+    - 7
+    description: reg_clk_adc_inf_oen
+  - name: CLK_DAC_CPU_OEN
+    bit_range:
+    - 8
+    - 8
+    description: reg_clk_dac_cpu_oen
+  - name: CLK40X_BB_OEN
+    bit_range:
+    - 9
+    - 9
+    description: reg_clk40x_bb_oen
+  - name: CLK_XTAL_OEN
+    bit_range:
+    - 10
+    - 10
+    description: reg_clk_xtal_oen
+  side_effects: null
+- id: WIFI_BB_CFG
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WIFI_BB_CFG
+    bit_range:
+    - 31
+    - 0
+    description: reg_wifi_bb_cfg
+  side_effects: null
+- id: WIFI_BB_CFG_2
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WIFI_BB_CFG_2
+    bit_range:
+    - 31
+    - 0
+    description: reg_wifi_bb_cfg_2
+  side_effects: null
+- id: WIFI_CLK_EN
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294762544
+  fields:
+  - name: WIFI_CLK_EN
+    bit_range:
+    - 31
+    - 0
+    description: reg_wifi_clk_en
+  side_effects: null
+- id: WIFI_RST_EN
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WIFI_RST
+    bit_range:
+    - 31
+    - 0
+    description: reg_wifi_rst
+  side_effects: null
+- id: HOST_INF_SEL
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERI_IO_SWAP
+    bit_range:
+    - 7
+    - 0
+    description: reg_peri_io_swap
+  side_effects: null
+- id: EXT_MEM_PMS_LOCK
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXT_MEM_PMS_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: reg_ext_mem_pms_lock
+  side_effects: null
+- id: FLASH_ACE0_ATTR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: FLASH_ACE0_ATTR
+    bit_range:
+    - 1
+    - 0
+    description: reg_flash_ace0_attr
+  side_effects: null
+- id: FLASH_ACE1_ATTR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: FLASH_ACE1_ATTR
+    bit_range:
+    - 1
+    - 0
+    description: reg_flash_ace1_attr
+  side_effects: null
+- id: FLASH_ACE2_ATTR
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: FLASH_ACE2_ATTR
+    bit_range:
+    - 1
+    - 0
+    description: reg_flash_ace2_attr
+  side_effects: null
+- id: FLASH_ACE3_ATTR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: FLASH_ACE3_ATTR
+    bit_range:
+    - 1
+    - 0
+    description: reg_flash_ace3_attr
+  side_effects: null
+- id: FLASH_ACE0_ADDR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: S
+    bit_range:
+    - 31
+    - 0
+    description: reg_flash_ace0_addr_s
+  side_effects: null
+- id: FLASH_ACE1_ADDR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 4194304
+  fields:
+  - name: S
+    bit_range:
+    - 31
+    - 0
+    description: reg_flash_ace1_addr_s
+  side_effects: null
+- id: FLASH_ACE2_ADDR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 8388608
+  fields:
+  - name: S
+    bit_range:
+    - 31
+    - 0
+    description: reg_flash_ace2_addr_s
+  side_effects: null
+- id: FLASH_ACE3_ADDR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 12582912
+  fields:
+  - name: S
+    bit_range:
+    - 31
+    - 0
+    description: reg_flash_ace3_addr_s
+  side_effects: null
+- id: FLASH_ACE0_SIZE
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 1024
+  fields:
+  - name: FLASH_ACE0_SIZE
+    bit_range:
+    - 12
+    - 0
+    description: reg_flash_ace0_size
+  side_effects: null
+- id: FLASH_ACE1_SIZE
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 1024
+  fields:
+  - name: FLASH_ACE1_SIZE
+    bit_range:
+    - 12
+    - 0
+    description: reg_flash_ace1_size
+  side_effects: null
+- id: FLASH_ACE2_SIZE
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 1024
+  fields:
+  - name: FLASH_ACE2_SIZE
+    bit_range:
+    - 12
+    - 0
+    description: reg_flash_ace2_size
+  side_effects: null
+- id: FLASH_ACE3_SIZE
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 1024
+  fields:
+  - name: FLASH_ACE3_SIZE
+    bit_range:
+    - 12
+    - 0
+    description: reg_flash_ace3_size
+  side_effects: null
+- id: SPI_MEM_PMS_CTRL
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_MEM_REJECT_INT
+    bit_range:
+    - 0
+    - 0
+    description: reg_spi_mem_reject_int
+  - name: SPI_MEM_REJECT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: reg_spi_mem_reject_clr
+  - name: SPI_MEM_REJECT_CDE
+    bit_range:
+    - 6
+    - 2
+    description: reg_spi_mem_reject_cde
+  side_effects: null
+- id: SPI_MEM_REJECT_ADDR
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_MEM_REJECT_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: reg_spi_mem_reject_addr
+  side_effects: null
+- id: SDIO_CTRL
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SDIO_WIN_ACCESS_EN
+    bit_range:
+    - 0
+    - 0
+    description: reg_sdio_win_access_en
+  side_effects: null
+- id: REDCY_SIG0
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REDCY_SIG0
+    bit_range:
+    - 30
+    - 0
+    description: reg_redcy_sig0
+  - name: REDCY_ANDOR
+    bit_range:
+    - 31
+    - 31
+    description: reg_redcy_andor
+  side_effects: null
+- id: REDCY_SIG1
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REDCY_SIG1
+    bit_range:
+    - 30
+    - 0
+    description: reg_redcy_sig1
+  - name: REDCY_NANDOR
+    bit_range:
+    - 31
+    - 31
+    description: reg_redcy_nandor
+  side_effects: null
+- id: FRONT_END_MEM_PD
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 21
+  fields:
+  - name: AGC_MEM_FORCE_PU
+    bit_range:
+    - 0
+    - 0
+    description: reg_agc_mem_force_pu
+  - name: AGC_MEM_FORCE_PD
+    bit_range:
+    - 1
+    - 1
+    description: reg_agc_mem_force_pd
+  - name: PBUS_MEM_FORCE_PU
+    bit_range:
+    - 2
+    - 2
+    description: reg_pbus_mem_force_pu
+  - name: PBUS_MEM_FORCE_PD
+    bit_range:
+    - 3
+    - 3
+    description: reg_pbus_mem_force_pd
+  - name: DC_MEM_FORCE_PU
+    bit_range:
+    - 4
+    - 4
+    description: reg_dc_mem_force_pu
+  - name: DC_MEM_FORCE_PD
+    bit_range:
+    - 5
+    - 5
+    description: reg_dc_mem_force_pd
+  side_effects: null
+- id: RETENTION_CTRL
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RETENTION_LINK_ADDR
+    bit_range:
+    - 26
+    - 0
+    description: reg_retention_link_addr
+  - name: NOBYPASS_CPU_ISO_RST
+    bit_range:
+    - 27
+    - 27
+    description: reg_nobypass_cpu_iso_rst
+  side_effects: null
+- id: CLKGATE_FORCE_ON
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: ROM_CLKGATE_FORCE_ON
+    bit_range:
+    - 1
+    - 0
+    description: reg_rom_clkgate_force_on
+  - name: SRAM_CLKGATE_FORCE_ON
+    bit_range:
+    - 5
+    - 2
+    description: reg_sram_clkgate_force_on
+  side_effects: null
+- id: MEM_POWER_DOWN
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROM_POWER_DOWN
+    bit_range:
+    - 1
+    - 0
+    description: reg_rom_power_down
+  - name: SRAM_POWER_DOWN
+    bit_range:
+    - 5
+    - 2
+    description: reg_sram_power_down
+  side_effects: null
+- id: MEM_POWER_UP
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: ROM_POWER_UP
+    bit_range:
+    - 1
+    - 0
+    description: reg_rom_power_up
+  - name: SRAM_POWER_UP
+    bit_range:
+    - 5
+    - 2
+    description: reg_sram_power_up
+  side_effects: null
+- id: RND_DATA
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RND_DATA
+    bit_range:
+    - 31
+    - 0
+    description: reg_rnd_data
+  side_effects: null
+- id: PERI_BACKUP_CONFIG
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 25728
+  fields:
+  - name: PERI_BACKUP_FLOW_ERR
+    bit_range:
+    - 2
+    - 1
+    description: reg_peri_backup_flow_err
+  - name: PERI_BACKUP_BURST_LIMIT
+    bit_range:
+    - 8
+    - 4
+    description: reg_peri_backup_burst_limit
+  - name: PERI_BACKUP_TOUT_THRES
+    bit_range:
+    - 18
+    - 9
+    description: reg_peri_backup_tout_thres
+  - name: PERI_BACKUP_SIZE
+    bit_range:
+    - 28
+    - 19
+    description: reg_peri_backup_size
+  - name: PERI_BACKUP_START
+    bit_range:
+    - 29
+    - 29
+    description: reg_peri_backup_start
+  - name: PERI_BACKUP_TO_MEM
+    bit_range:
+    - 30
+    - 30
+    description: reg_peri_backup_to_mem
+  - name: PERI_BACKUP_ENA
+    bit_range:
+    - 31
+    - 31
+    description: reg_peri_backup_ena
+  side_effects: null
+- id: PERI_BACKUP_APB_ADDR
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BACKUP_APB_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: reg_backup_apb_start_addr
+  side_effects: null
+- id: PERI_BACKUP_MEM_ADDR
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BACKUP_MEM_START_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: reg_backup_mem_start_addr
+  side_effects: null
+- id: PERI_BACKUP_INT_RAW
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERI_BACKUP_DONE_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: reg_peri_backup_done_int_raw
+  - name: PERI_BACKUP_ERR_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: reg_peri_backup_err_int_raw
+  side_effects: null
+- id: PERI_BACKUP_INT_ST
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERI_BACKUP_DONE_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: reg_peri_backup_done_int_st
+  - name: PERI_BACKUP_ERR_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: reg_peri_backup_err_int_st
+  side_effects: null
+- id: PERI_BACKUP_INT_ENA
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERI_BACKUP_DONE_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: reg_peri_backup_done_int_ena
+  - name: PERI_BACKUP_ERR_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: reg_peri_backup_err_int_ena
+  side_effects: null
+- id: PERI_BACKUP_INT_CLR
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PERI_BACKUP_DONE_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: reg_peri_backup_done_int_clr
+  - name: PERI_BACKUP_ERR_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: reg_peri_backup_err_int_clr
+  side_effects: null
+- id: DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583632
+  fields:
+  - name: DATE
+    bit_range:
+    - 31
+    - 0
+    description: reg_dateVersion control
+  side_effects: null
+interrupts:
+  APB_CTRL: 14
+timing: null

@@ -54,10 +54,40 @@ pub enum Instruction {
     Csrrwi { rd: u8, imm: u8, csr: u16 }, // CSRRWI
     Csrrsi { rd: u8, imm: u8, csr: u16 }, // CSRRSI
     Csrrci { rd: u8, imm: u8, csr: u16 }, // CSRRCI
+    // RV32M Extension
+    Mul { rd: u8, rs1: u8, rs2: u8 },
+    Mulh { rd: u8, rs1: u8, rs2: u8 },
+    Mulhsu { rd: u8, rs1: u8, rs2: u8 },
+    Mulhu { rd: u8, rs1: u8, rs2: u8 },
+    Div { rd: u8, rs1: u8, rs2: u8 },
+    Divu { rd: u8, rs1: u8, rs2: u8 },
+    Rem { rd: u8, rs1: u8, rs2: u8 },
+    Remu { rd: u8, rs1: u8, rs2: u8 },
+
+    // RV32C Extension (Selection of common ones)
+    CAddi { rd: u8, imm: i32 },
+    CLw { rd: u8, rs1: u8, imm: u32 },
+    CSw { rs2: u8, rs1: u8, imm: u32 },
+    CJr { rs1: u8 },
+    CJalr { rs1: u8 },
+    CLi { rd: u8, imm: i32 },
+    CMv { rd: u8, rs2: u8 },
+    CAddi16sp { imm: i32 },
+    CAddi4spn { rd: u8, imm: u32 },
+    CSli { rd: u8, shamt: u8 },
+    CLwsp { rd: u8, imm: u32 },
+    CSwsp { rs2: u8, imm: u32 },
+    CJ { imm: i32 },
+    CBeqz { rs1: u8, imm: i32 },
+    CBnez { rs1: u8, imm: i32 },
+
     Unknown(u32),
 }
 
 pub fn decode_rv32(inst: u32) -> Instruction {
+    if (inst & 0x3) != 0x3 {
+        return decode_rv32c((inst & 0xFFFF) as u16);
+    }
     let opcode = inst & 0x7F;
     let rd = ((inst >> 7) & 0x1F) as u8;
     let funct3 = ((inst >> 12) & 0x7) as u8;
@@ -230,6 +260,15 @@ pub fn decode_rv32(inst: u32) -> Instruction {
                 (5, 0x20) => Instruction::Sra { rd, rs1, rs2 },
                 (6, 0x00) => Instruction::Or { rd, rs1, rs2 },
                 (7, 0x00) => Instruction::And { rd, rs1, rs2 },
+                // RV32M Extension
+                (0, 0x01) => Instruction::Mul { rd, rs1, rs2 },
+                (1, 0x01) => Instruction::Mulh { rd, rs1, rs2 },
+                (2, 0x01) => Instruction::Mulhsu { rd, rs1, rs2 },
+                (3, 0x01) => Instruction::Mulhu { rd, rs1, rs2 },
+                (4, 0x01) => Instruction::Div { rd, rs1, rs2 },
+                (5, 0x01) => Instruction::Divu { rd, rs1, rs2 },
+                (6, 0x01) => Instruction::Rem { rd, rs1, rs2 },
+                (7, 0x01) => Instruction::Remu { rd, rs1, rs2 },
                 _ => Instruction::Unknown(inst),
             }
         }
@@ -257,5 +296,251 @@ pub fn decode_rv32(inst: u32) -> Instruction {
             }
         }
         _ => Instruction::Unknown(inst),
+    }
+}
+
+pub fn decode_rv32c(inst: u16) -> Instruction {
+    let op = inst & 0x3;
+    let funct3 = (inst >> 13) & 0x7;
+
+    match op {
+        0 => {
+            // Quadrant 0
+            match funct3 {
+                0 => {
+                    // C.ADDI4SPN
+                    let imm = ((inst >> 7) & 0x30) << 4 | // imm[5:4]
+                              ((inst >> 1) & 0x3C0) |      // imm[9:6]
+                              ((inst >> 4) & 0x4) |       // imm[2]
+                              ((inst >> 2) & 0x8); // imm[3]
+                    let rd = (((inst >> 2) & 0x7) + 8) as u8;
+                    Instruction::CAddi4spn {
+                        rd,
+                        imm: imm as u32,
+                    }
+                }
+                2 => {
+                    // C.LW
+                    let imm = ((inst >> 4) & 0x4) |    // imm[2]
+                              ((inst >> 7) & 0x38) |   // imm[5:3]
+                              ((inst << 1) & 0x40); // imm[6]
+                    let rs1 = (((inst >> 7) & 0x7) + 8) as u8;
+                    let rd = (((inst >> 2) & 0x7) + 8) as u8;
+                    Instruction::CLw {
+                        rd,
+                        rs1,
+                        imm: imm as u32,
+                    }
+                }
+                6 => {
+                    // C.SW
+                    let imm = ((inst >> 4) & 0x4) |    // imm[2]
+                              ((inst >> 7) & 0x38) |   // imm[5:3]
+                              ((inst << 1) & 0x40); // imm[6]
+                    let rs1 = (((inst >> 7) & 0x7) + 8) as u8;
+                    let rs2 = (((inst >> 2) & 0x7) + 8) as u8;
+                    Instruction::CSw {
+                        rs2,
+                        rs1,
+                        imm: imm as u32,
+                    }
+                }
+                _ => Instruction::Unknown(inst as u32),
+            }
+        }
+        1 => {
+            // Quadrant 1
+            match funct3 {
+                0 => {
+                    // C.ADDI / C.NOP
+                    let rd = ((inst >> 7) & 0x1F) as u8;
+                    let imm = (((inst >> 12) & 1) << 5) | ((inst >> 2) & 0x1F);
+                    let signed_imm = if (imm & 0x20) != 0 {
+                        (imm as i32) | !0x3F
+                    } else {
+                        imm as i32
+                    };
+                    Instruction::CAddi {
+                        rd,
+                        imm: signed_imm,
+                    }
+                }
+                1 => {
+                    // C.JAL (RV32C only)
+                    let imm = ((inst >> 2) & 0xE) |     // imm[3:1]
+                              ((inst >> 7) & 0x10) |    // imm[4]
+                              ((inst >> 2) & 0x20) |    // imm[5]
+                              ((inst >> 1) & 0x40) |    // imm[6]
+                              ((inst >> 11) & 0x80) |   // imm[7]
+                              ((inst >> 1) & 0x300) |   // imm[9:8]
+                              ((inst >> 1) & 0x400) |   // imm[10]
+                              ((inst >> 1) & 0x800); // imm[11]
+                    let signed_imm = if (imm & 0x800) != 0 {
+                        (imm as i32) | !0xFFF
+                    } else {
+                        imm as i32
+                    };
+                    Instruction::Jal {
+                        rd: 1,
+                        imm: signed_imm,
+                    }
+                }
+                2 => {
+                    // C.LI
+                    let rd = ((inst >> 7) & 0x1F) as u8;
+                    let imm = ((inst >> 2) & 0x1F) | (((inst >> 12) & 1) << 5);
+                    let signed_imm = if (imm & 0x20) != 0 {
+                        (imm as i32) | !0x3F
+                    } else {
+                        imm as i32
+                    };
+                    Instruction::CLi {
+                        rd,
+                        imm: signed_imm,
+                    }
+                }
+                3 => {
+                    let rd = ((inst >> 7) & 0x1F) as u8;
+                    if rd == 2 {
+                        // C.ADDI16SP
+                        let imm = ((inst >> 3) & 0x180) | // imm[8:7]
+                                  ((inst >> 2) & 0x40) |  // imm[6]
+                                  ((inst >> 1) & 0x20) |  // imm[5]
+                                  ((inst >> 4) & 0x10) |  // imm[4]
+                                  (((inst >> 12) & 1) << 9); // imm[9]
+                        let signed_imm = if (imm & 0x200) != 0 {
+                            (imm as i32) | !0x3FF
+                        } else {
+                            imm as i32
+                        };
+                        Instruction::CAddi16sp { imm: signed_imm }
+                    } else {
+                        // C.LUI
+                        let imm = ((inst >> 2) & 0x1F) | (((inst >> 12) & 1) << 5);
+                        let signed_imm = if (imm & 0x20) != 0 {
+                            (imm as i32) | !0x3F
+                        } else {
+                            imm as i32
+                        };
+                        Instruction::Lui {
+                            rd,
+                            imm: (signed_imm << 12) as u32,
+                        }
+                    }
+                }
+                5 => {
+                    // C.J
+                    let imm = ((inst >> 2) & 0xE) |     // imm[3:1]
+                              ((inst >> 7) & 0x10) |    // imm[4]
+                              ((inst >> 2) & 0x20) |    // imm[5]
+                              ((inst >> 1) & 0x40) |    // imm[6]
+                              ((inst >> 11) & 0x80) |   // imm[7]
+                              ((inst >> 1) & 0x300) |   // imm[9:8]
+                              ((inst >> 1) & 0x400) |   // imm[10]
+                              ((inst >> 1) & 0x800); // imm[11]
+                    let signed_imm = if (imm & 0x800) != 0 {
+                        (imm as i32) | !0xFFF
+                    } else {
+                        imm as i32
+                    };
+                    Instruction::CJ { imm: signed_imm }
+                }
+                6 => {
+                    // C.BEQZ
+                    let rs1 = (((inst >> 7) & 0x7) + 8) as u8;
+                    let imm = ((inst >> 2) & 0x6) |     // imm[2:1]
+                              ((inst >> 7) & 0x60) |    // imm[6:5]
+                              ((inst >> 1) & 0x18) |    // imm[4:3]
+                              (((inst >> 12) & 1) << 8) | // imm[8]
+                              ((inst >> 2) & 0x80); // imm[7]
+                    let signed_imm = if (imm & 0x100) != 0 {
+                        (imm as i32) | !0x1FF
+                    } else {
+                        imm as i32
+                    };
+                    Instruction::CBeqz {
+                        rs1,
+                        imm: signed_imm,
+                    }
+                }
+                7 => {
+                    // C.BNEZ
+                    let rs1 = (((inst >> 7) & 0x7) + 8) as u8;
+                    let imm = ((inst >> 2) & 0x6) |     // imm[2:1]
+                              ((inst >> 7) & 0x60) |    // imm[6:5]
+                              ((inst >> 1) & 0x18) |    // imm[4:3]
+                              (((inst >> 12) & 1) << 8) | // imm[8]
+                              ((inst >> 2) & 0x80); // imm[7]
+                    let signed_imm = if (imm & 0x100) != 0 {
+                        (imm as i32) | !0x1FF
+                    } else {
+                        imm as i32
+                    };
+                    Instruction::CBnez {
+                        rs1,
+                        imm: signed_imm,
+                    }
+                }
+                _ => Instruction::Unknown(inst as u32),
+            }
+        }
+        2 => {
+            // Quadrant 2
+            match funct3 {
+                0 => {
+                    // C.SLLI
+                    let rd = ((inst >> 7) & 0x1F) as u8;
+                    let shamt = ((inst >> 12) & 0x1) as u8 | ((inst >> 2) & 0x1F) as u8;
+                    Instruction::CSli { rd, shamt }
+                }
+                2 => {
+                    // C.LWSP
+                    let rd = ((inst >> 7) & 0x1F) as u8;
+                    // inst[12] -> imm[5]
+                    // inst[6:4] -> imm[4:2]
+                    // inst[3:2] -> imm[7:6]
+                    let imm = (((inst >> 2) & 0x3) << 6)
+                        | (((inst >> 12) & 0x1) << 5)
+                        | (((inst >> 4) & 0x7) << 2);
+                    Instruction::CLwsp {
+                        rd,
+                        imm: imm as u32,
+                    }
+                }
+                4 => {
+                    let bit12 = (inst >> 12) & 1;
+                    let rs1 = ((inst >> 7) & 0x1F) as u8;
+                    let rs2 = ((inst >> 2) & 0x1F) as u8;
+                    if bit12 == 0 {
+                        if rs2 == 0 {
+                            // C.JR
+                            Instruction::CJr { rs1 }
+                        } else {
+                            // C.MV
+                            Instruction::CMv { rd: rs1, rs2 }
+                        }
+                    } else if rs1 != 0 && rs2 == 0 {
+                        // C.JALR
+                        Instruction::CJalr { rs1 }
+                    } else {
+                        // C.ADD
+                        Instruction::Add { rd: rs1, rs1, rs2 }
+                    }
+                }
+                6 => {
+                    // C.SWSP
+                    let rs2 = ((inst >> 2) & 0x1F) as u8;
+                    // inst[12:9] -> imm[5:2]
+                    // inst[8:7] -> imm[7:6]
+                    let imm = (((inst >> 9) & 0xF) << 2) | (((inst >> 7) & 0x3) << 6);
+                    Instruction::CSwsp {
+                        rs2,
+                        imm: imm as u32,
+                    }
+                }
+                _ => Instruction::Unknown(inst as u32),
+            }
+        }
+        _ => Instruction::Unknown(inst as u32),
     }
 }

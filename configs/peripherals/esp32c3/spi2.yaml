@@ -1,0 +1,1275 @@
+peripheral: SPI2
+version: 0.1.0
+registers:
+- id: CMD
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CONF_BITLEN
+    bit_range:
+    - 17
+    - 0
+    description: Define the APB cycles of  SPI_CONF state. Can be configured in CONF state.
+  - name: UPDATE
+    bit_range:
+    - 23
+    - 23
+    description: Set this bit to synchronize SPI registers from APB clock domain into SPI module clock domain, which is only used in SPI master mode.
+  - name: USR
+    bit_range:
+    - 24
+    - 24
+    description: 'User define command enable.  An operation will be triggered when the bit is set. The bit will be cleared once the operation done.1: enable 0: disable. Can not be changed by CONF_buf.'
+  side_effects: null
+- id: ADDR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USR_ADDR_VALUE
+    bit_range:
+    - 31
+    - 0
+    description: Address to slave. Can be configured in CONF state.
+  side_effects: null
+- id: CTRL
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 3932160
+  fields:
+  - name: DUMMY_OUT
+    bit_range:
+    - 3
+    - 3
+    description: In the dummy phase the signal level of spi is output by the spi controller. Can be configured in CONF state.
+  - name: FADDR_DUAL
+    bit_range:
+    - 5
+    - 5
+    description: 'Apply 2 signals during addr phase 1:enable 0: disable. Can be configured in CONF state.'
+  - name: FADDR_QUAD
+    bit_range:
+    - 6
+    - 6
+    description: 'Apply 4 signals during addr phase 1:enable 0: disable. Can be configured in CONF state.'
+  - name: FCMD_DUAL
+    bit_range:
+    - 8
+    - 8
+    description: 'Apply 2 signals during command phase 1:enable 0: disable. Can be configured in CONF state.'
+  - name: FCMD_QUAD
+    bit_range:
+    - 9
+    - 9
+    description: 'Apply 4 signals during command phase 1:enable 0: disable. Can be configured in CONF state.'
+  - name: FREAD_DUAL
+    bit_range:
+    - 14
+    - 14
+    description: 'In the read operations, read-data phase apply 2 signals. 1: enable 0: disable. Can be configured in CONF state.'
+  - name: FREAD_QUAD
+    bit_range:
+    - 15
+    - 15
+    description: 'In the read operations read-data phase apply 4 signals. 1: enable 0: disable.  Can be configured in CONF state.'
+  - name: Q_POL
+    bit_range:
+    - 18
+    - 18
+    description: 'The bit is used to set MISO line polarity, 1: high 0, low. Can be configured in CONF state.'
+  - name: D_POL
+    bit_range:
+    - 19
+    - 19
+    description: 'The bit is used to set MOSI line polarity, 1: high 0, low. Can be configured in CONF state.'
+  - name: HOLD_POL
+    bit_range:
+    - 20
+    - 20
+    description: 'SPI_HOLD output value when SPI is idle. 1: output high, 0: output low. Can be configured in CONF state.'
+  - name: WP_POL
+    bit_range:
+    - 21
+    - 21
+    description: 'Write protect signal output when SPI is idle.  1: output high, 0: output low.  Can be configured in CONF state.'
+  - name: RD_BIT_ORDER
+    bit_range:
+    - 25
+    - 25
+    description: 'In read-data (MISO) phase 1: LSB first 0: MSB first. Can be configured in CONF state.'
+  - name: WR_BIT_ORDER
+    bit_range:
+    - 26
+    - 26
+    description: 'In command address write-data (MOSI) phases 1: LSB firs 0: MSB first. Can be configured in CONF state.'
+  side_effects: null
+- id: CLOCK
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147496003
+  fields:
+  - name: CLKCNT_L
+    bit_range:
+    - 5
+    - 0
+    description: In the master mode it must be equal to spi_clkcnt_N. In the slave mode it must be 0. Can be configured in CONF state.
+  - name: CLKCNT_H
+    bit_range:
+    - 11
+    - 6
+    description: In the master mode it must be floor((spi_clkcnt_N+1)/2-1). In the slave mode it must be 0. Can be configured in CONF state.
+  - name: CLKCNT_N
+    bit_range:
+    - 17
+    - 12
+    description: In the master mode it is the divider of spi_clk. So spi_clk frequency is system/(spi_clkdiv_pre+1)/(spi_clkcnt_N+1). Can be configured in CONF state.
+  - name: CLKDIV_PRE
+    bit_range:
+    - 21
+    - 18
+    description: In the master mode it is pre-divider of spi_clk.  Can be configured in CONF state.
+  - name: CLK_EQU_SYSCLK
+    bit_range:
+    - 31
+    - 31
+    description: 'In the master mode 1: spi_clk is eqaul to system 0: spi_clk is divided from system clock. Can be configured in CONF state.'
+  side_effects: null
+- id: USER
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147483840
+  fields:
+  - name: DOUTDIN
+    bit_range:
+    - 0
+    - 0
+    description: 'Set the bit to enable full duplex communication. 1: enable 0: disable. Can be configured in CONF state.'
+  - name: QPI_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'Both for master mode and slave mode. 1: spi controller is in QPI mode. 0: others. Can be configured in CONF state.'
+  - name: TSCK_I_EDGE
+    bit_range:
+    - 5
+    - 5
+    description: 'In the slave mode, this bit can be used to change the polarity of tsck. 0: tsck = spi_ck_i. 1:tsck = !spi_ck_i.'
+  - name: CS_HOLD
+    bit_range:
+    - 6
+    - 6
+    description: 'spi cs keep low when spi is in  done  phase. 1: enable 0: disable. Can be configured in CONF state.'
+  - name: CS_SETUP
+    bit_range:
+    - 7
+    - 7
+    description: 'spi cs is enable when spi is in  prepare  phase. 1: enable 0: disable. Can be configured in CONF state.'
+  - name: RSCK_I_EDGE
+    bit_range:
+    - 8
+    - 8
+    description: 'In the slave mode, this bit can be used to change the polarity of rsck. 0: rsck = !spi_ck_i. 1:rsck = spi_ck_i.'
+  - name: CK_OUT_EDGE
+    bit_range:
+    - 9
+    - 9
+    description: the bit combined with spi_mosi_delay_mode bits to set mosi signal delay mode. Can be configured in CONF state.
+  - name: FWRITE_DUAL
+    bit_range:
+    - 12
+    - 12
+    description: In the write operations read-data phase apply 2 signals. Can be configured in CONF state.
+  - name: FWRITE_QUAD
+    bit_range:
+    - 13
+    - 13
+    description: In the write operations read-data phase apply 4 signals. Can be configured in CONF state.
+  - name: USR_CONF_NXT
+    bit_range:
+    - 15
+    - 15
+    description: '1: Enable the DMA CONF phase of next seg-trans operation, which means seg-trans will continue. 0: The seg-trans will end after the current SPI seg-trans or this is not seg-trans mode. Can be configured in CONF state.'
+  - name: SIO
+    bit_range:
+    - 17
+    - 17
+    description: 'Set the bit to enable 3-line half duplex communication mosi and miso signals share the same pin. 1: enable 0: disable. Can be configured in CONF state.'
+  - name: USR_MISO_HIGHPART
+    bit_range:
+    - 24
+    - 24
+    description: 'read-data phase only access to high-part of the buffer spi_w8~spi_w15. 1: enable 0: disable. Can be configured in CONF state.'
+  - name: USR_MOSI_HIGHPART
+    bit_range:
+    - 25
+    - 25
+    description: 'write-data phase only access to high-part of the buffer spi_w8~spi_w15. 1: enable 0: disable.  Can be configured in CONF state.'
+  - name: USR_DUMMY_IDLE
+    bit_range:
+    - 26
+    - 26
+    description: spi clock is disable in dummy phase when the bit is enable. Can be configured in CONF state.
+  - name: USR_MOSI
+    bit_range:
+    - 27
+    - 27
+    description: This bit enable the write-data phase of an operation. Can be configured in CONF state.
+  - name: USR_MISO
+    bit_range:
+    - 28
+    - 28
+    description: This bit enable the read-data phase of an operation. Can be configured in CONF state.
+  - name: USR_DUMMY
+    bit_range:
+    - 29
+    - 29
+    description: This bit enable the dummy phase of an operation. Can be configured in CONF state.
+  - name: USR_ADDR
+    bit_range:
+    - 30
+    - 30
+    description: This bit enable the address phase of an operation. Can be configured in CONF state.
+  - name: USR_COMMAND
+    bit_range:
+    - 31
+    - 31
+    description: This bit enable the command phase of an operation. Can be configured in CONF state.
+  side_effects: null
+- id: USER1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 3091267591
+  fields:
+  - name: USR_DUMMY_CYCLELEN
+    bit_range:
+    - 7
+    - 0
+    description: The length in spi_clk cycles of dummy phase. The register value shall be (cycle_num-1). Can be configured in CONF state.
+  - name: MST_WFULL_ERR_END_EN
+    bit_range:
+    - 16
+    - 16
+    description: '1: SPI transfer is ended when SPI RX AFIFO wfull error is valid in GP-SPI master FD/HD-mode. 0: SPI transfer is not ended when SPI RX AFIFO wfull error is valid in GP-SPI master FD/HD-mode.'
+  - name: CS_SETUP_TIME
+    bit_range:
+    - 21
+    - 17
+    description: (cycles+1) of prepare phase by spi clock this bits are combined with spi_cs_setup bit. Can be configured in CONF state.
+  - name: CS_HOLD_TIME
+    bit_range:
+    - 26
+    - 22
+    description: delay cycles of cs pin by spi clock this bits are combined with spi_cs_hold bit. Can be configured in CONF state.
+  - name: USR_ADDR_BITLEN
+    bit_range:
+    - 31
+    - 27
+    description: The length in bits of address phase. The register value shall be (bit_num-1). Can be configured in CONF state.
+  side_effects: null
+- id: USER2
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 2013265920
+  fields:
+  - name: USR_COMMAND_VALUE
+    bit_range:
+    - 15
+    - 0
+    description: The value of  command. Can be configured in CONF state.
+  - name: MST_REMPTY_ERR_END_EN
+    bit_range:
+    - 27
+    - 27
+    description: '1: SPI transfer is ended when SPI TX AFIFO read empty error is valid in GP-SPI master FD/HD-mode. 0: SPI transfer is not ended when SPI TX AFIFO read empty error is valid in GP-SPI master FD/HD-mode.'
+  - name: USR_COMMAND_BITLEN
+    bit_range:
+    - 31
+    - 28
+    description: The length in bits of command phase. The register value shall be (bit_num-1). Can be configured in CONF state.
+  side_effects: null
+- id: MS_DLEN
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MS_DATA_BITLEN
+    bit_range:
+    - 17
+    - 0
+    description: The value of these bits is the configured SPI transmission data bit length in master mode DMA controlled transfer or CPU controlled transfer. The value is also the configured bit length in slave mode DMA RX controlled transfer. The register value shall be (bit_num-1). Can be configured in CONF state.
+  side_effects: null
+- id: MISC
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 62
+  fields:
+  - name: CS0_DIS
+    bit_range:
+    - 0
+    - 0
+    description: 'SPI CS0 pin enable, 1: disable CS0, 0: spi_cs0 signal is from/to CS0 pin. Can be configured in CONF state.'
+  - name: CS1_DIS
+    bit_range:
+    - 1
+    - 1
+    description: 'SPI CS1 pin enable, 1: disable CS1, 0: spi_cs1 signal is from/to CS1 pin. Can be configured in CONF state.'
+  - name: CS2_DIS
+    bit_range:
+    - 2
+    - 2
+    description: 'SPI CS2 pin enable, 1: disable CS2, 0: spi_cs2 signal is from/to CS2 pin. Can be configured in CONF state.'
+  - name: CS3_DIS
+    bit_range:
+    - 3
+    - 3
+    description: 'SPI CS3 pin enable, 1: disable CS3, 0: spi_cs3 signal is from/to CS3 pin. Can be configured in CONF state.'
+  - name: CS4_DIS
+    bit_range:
+    - 4
+    - 4
+    description: 'SPI CS4 pin enable, 1: disable CS4, 0: spi_cs4 signal is from/to CS4 pin. Can be configured in CONF state.'
+  - name: CS5_DIS
+    bit_range:
+    - 5
+    - 5
+    description: 'SPI CS5 pin enable, 1: disable CS5, 0: spi_cs5 signal is from/to CS5 pin. Can be configured in CONF state.'
+  - name: CK_DIS
+    bit_range:
+    - 6
+    - 6
+    description: '1: spi clk out disable,  0: spi clk out enable. Can be configured in CONF state.'
+  - name: MASTER_CS_POL
+    bit_range:
+    - 12
+    - 7
+    description: In the master mode the bits are the polarity of spi cs line, the value is equivalent to spi_cs ^ spi_master_cs_pol. Can be configured in CONF state.
+  - name: SLAVE_CS_POL
+    bit_range:
+    - 23
+    - 23
+    description: 'spi slave input cs polarity select. 1: inv  0: not change. Can be configured in CONF state.'
+  - name: CK_IDLE_EDGE
+    bit_range:
+    - 29
+    - 29
+    description: '1: spi clk line is high when idle     0: spi clk line is low when idle. Can be configured in CONF state.'
+  - name: CS_KEEP_ACTIVE
+    bit_range:
+    - 30
+    - 30
+    description: spi cs line keep low when the bit is set. Can be configured in CONF state.
+  - name: QUAD_DIN_PIN_SWAP
+    bit_range:
+    - 31
+    - 31
+    description: '1:  spi quad input swap enable  0:  spi quad input swap disable. Can be configured in CONF state.'
+  side_effects: null
+- id: DIN_MODE
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIN0_MODE
+    bit_range:
+    - 1
+    - 0
+    description: 'the input signals are delayed by SPI module clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb, 3: input with the spi_clk. Can be configured in CONF state.'
+  - name: DIN1_MODE
+    bit_range:
+    - 3
+    - 2
+    description: 'the input signals are delayed by SPI module clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb, 3: input with the spi_clk. Can be configured in CONF state.'
+  - name: DIN2_MODE
+    bit_range:
+    - 5
+    - 4
+    description: 'the input signals are delayed by SPI module clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb, 3: input with the spi_clk. Can be configured in CONF state.'
+  - name: DIN3_MODE
+    bit_range:
+    - 7
+    - 6
+    description: 'the input signals are delayed by SPI module clock cycles, 0: input without delayed, 1: input with the posedge of clk_apb,2 input with the negedge of clk_apb, 3: input with the spi_clk. Can be configured in CONF state.'
+  - name: TIMING_HCLK_ACTIVE
+    bit_range:
+    - 16
+    - 16
+    description: '1:enable hclk in SPI input timing module.  0: disable it. Can be configured in CONF state.'
+  side_effects: null
+- id: DIN_NUM
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIN0_NUM
+    bit_range:
+    - 1
+    - 0
+    description: 'the input signals are delayed by SPI module clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...  Can be configured in CONF state.'
+  - name: DIN1_NUM
+    bit_range:
+    - 3
+    - 2
+    description: 'the input signals are delayed by SPI module clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...  Can be configured in CONF state.'
+  - name: DIN2_NUM
+    bit_range:
+    - 5
+    - 4
+    description: 'the input signals are delayed by SPI module clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...  Can be configured in CONF state.'
+  - name: DIN3_NUM
+    bit_range:
+    - 7
+    - 6
+    description: 'the input signals are delayed by SPI module clock cycles, 0: delayed by 1 cycle, 1: delayed by 2 cycles,...  Can be configured in CONF state.'
+  side_effects: null
+- id: DOUT_MODE
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DOUT0_MODE
+    bit_range:
+    - 0
+    - 0
+    description: 'The output signal 0 is delayed by the SPI module clock, 0: output without delayed, 1: output delay for a SPI module clock cycle at its negative edge. Can be configured in CONF state.'
+  - name: DOUT1_MODE
+    bit_range:
+    - 1
+    - 1
+    description: 'The output signal 1 is delayed by the SPI module clock, 0: output without delayed, 1: output delay for a SPI module clock cycle at its negative edge. Can be configured in CONF state.'
+  - name: DOUT2_MODE
+    bit_range:
+    - 2
+    - 2
+    description: 'The output signal 2 is delayed by the SPI module clock, 0: output without delayed, 1: output delay for a SPI module clock cycle at its negative edge. Can be configured in CONF state.'
+  - name: DOUT3_MODE
+    bit_range:
+    - 3
+    - 3
+    description: 'The output signal 3 is delayed by the SPI module clock, 0: output without delayed, 1: output delay for a SPI module clock cycle at its negative edge. Can be configured in CONF state.'
+  side_effects: null
+- id: DMA_CONF
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_SLV_SEG_TRANS_EN
+    bit_range:
+    - 18
+    - 18
+    description: 'Enable dma segment transfer in spi dma half slave mode. 1: enable. 0: disable.'
+  - name: SLV_RX_SEG_TRANS_CLR_EN
+    bit_range:
+    - 19
+    - 19
+    description: '1: spi_dma_infifo_full_vld is cleared by spi slave cmd 5. 0: spi_dma_infifo_full_vld is cleared by spi_trans_done.'
+  - name: SLV_TX_SEG_TRANS_CLR_EN
+    bit_range:
+    - 20
+    - 20
+    description: '1: spi_dma_outfifo_empty_vld is cleared by spi slave cmd 6. 0: spi_dma_outfifo_empty_vld is cleared by spi_trans_done.'
+  - name: RX_EOF_EN
+    bit_range:
+    - 21
+    - 21
+    description: '1: spi_dma_inlink_eof is set when the number of dma pushed data bytes is equal to the value of spi_slv/mst_dma_rd_bytelen[19:0] in spi dma transition.  0: spi_dma_inlink_eof is set by spi_trans_done in non-seg-trans or spi_dma_seg_trans_done in seg-trans.'
+  - name: DMA_RX_ENA
+    bit_range:
+    - 27
+    - 27
+    description: Set this bit to enable SPI DMA controlled receive data mode.
+  - name: DMA_TX_ENA
+    bit_range:
+    - 28
+    - 28
+    description: Set this bit to enable SPI DMA controlled send data mode.
+  - name: RX_AFIFO_RST
+    bit_range:
+    - 29
+    - 29
+    description: Set this bit to reset RX AFIFO, which is used to receive data in SPI master and slave mode transfer.
+  - name: BUF_AFIFO_RST
+    bit_range:
+    - 30
+    - 30
+    description: Set this bit to reset BUF TX AFIFO, which is used send data out in SPI slave CPU controlled mode transfer and master mode transfer.
+  - name: DMA_AFIFO_RST
+    bit_range:
+    - 31
+    - 31
+    description: Set this bit to reset DMA TX AFIFO, which is used to send data out in SPI slave DMA controlled mode transfer.
+  side_effects: null
+- id: DMA_INT_ENA
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_INFIFO_FULL_ERR_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The enable bit for SPI_DMA_INFIFO_FULL_ERR_INT interrupt.
+  - name: DMA_OUTFIFO_EMPTY_ERR_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The enable bit for SPI_DMA_OUTFIFO_EMPTY_ERR_INT interrupt.
+  - name: SLV_EX_QPI_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: The enable bit for SPI slave Ex_QPI interrupt.
+  - name: SLV_EN_QPI_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: The enable bit for SPI slave En_QPI interrupt.
+  - name: SLV_CMD7_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The enable bit for SPI slave CMD7 interrupt.
+  - name: SLV_CMD8_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: The enable bit for SPI slave CMD8 interrupt.
+  - name: SLV_CMD9_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: The enable bit for SPI slave CMD9 interrupt.
+  - name: SLV_CMDA_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: The enable bit for SPI slave CMDA interrupt.
+  - name: SLV_RD_DMA_DONE_INT_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The enable bit for SPI_SLV_RD_DMA_DONE_INT interrupt.
+  - name: SLV_WR_DMA_DONE_INT_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The enable bit for SPI_SLV_WR_DMA_DONE_INT interrupt.
+  - name: SLV_RD_BUF_DONE_INT_ENA
+    bit_range:
+    - 10
+    - 10
+    description: The enable bit for SPI_SLV_RD_BUF_DONE_INT interrupt.
+  - name: SLV_WR_BUF_DONE_INT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: The enable bit for SPI_SLV_WR_BUF_DONE_INT interrupt.
+  - name: TRANS_DONE_INT_ENA
+    bit_range:
+    - 12
+    - 12
+    description: The enable bit for SPI_TRANS_DONE_INT interrupt.
+  - name: DMA_SEG_TRANS_DONE_INT_ENA
+    bit_range:
+    - 13
+    - 13
+    description: The enable bit for SPI_DMA_SEG_TRANS_DONE_INT interrupt.
+  - name: SEG_MAGIC_ERR_INT_ENA
+    bit_range:
+    - 14
+    - 14
+    description: The enable bit for SPI_SEG_MAGIC_ERR_INT interrupt.
+  - name: SLV_BUF_ADDR_ERR_INT_ENA
+    bit_range:
+    - 15
+    - 15
+    description: The enable bit for SPI_SLV_BUF_ADDR_ERR_INT interrupt.
+  - name: SLV_CMD_ERR_INT_ENA
+    bit_range:
+    - 16
+    - 16
+    description: The enable bit for SPI_SLV_CMD_ERR_INT interrupt.
+  - name: MST_RX_AFIFO_WFULL_ERR_INT_ENA
+    bit_range:
+    - 17
+    - 17
+    description: The enable bit for SPI_MST_RX_AFIFO_WFULL_ERR_INT interrupt.
+  - name: MST_TX_AFIFO_REMPTY_ERR_INT_ENA
+    bit_range:
+    - 18
+    - 18
+    description: The enable bit for SPI_MST_TX_AFIFO_REMPTY_ERR_INT interrupt.
+  - name: APP2_INT_ENA
+    bit_range:
+    - 19
+    - 19
+    description: The enable bit for SPI_APP2_INT interrupt.
+  - name: APP1_INT_ENA
+    bit_range:
+    - 20
+    - 20
+    description: The enable bit for SPI_APP1_INT interrupt.
+  side_effects: null
+- id: DMA_INT_CLR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_INFIFO_FULL_ERR_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: The clear bit for SPI_DMA_INFIFO_FULL_ERR_INT interrupt.
+  - name: DMA_OUTFIFO_EMPTY_ERR_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: The clear bit for SPI_DMA_OUTFIFO_EMPTY_ERR_INT interrupt.
+  - name: SLV_EX_QPI_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: The clear bit for SPI slave Ex_QPI interrupt.
+  - name: SLV_EN_QPI_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: The clear bit for SPI slave En_QPI interrupt.
+  - name: SLV_CMD7_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: The clear bit for SPI slave CMD7 interrupt.
+  - name: SLV_CMD8_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: The clear bit for SPI slave CMD8 interrupt.
+  - name: SLV_CMD9_INT_CLR
+    bit_range:
+    - 6
+    - 6
+    description: The clear bit for SPI slave CMD9 interrupt.
+  - name: SLV_CMDA_INT_CLR
+    bit_range:
+    - 7
+    - 7
+    description: The clear bit for SPI slave CMDA interrupt.
+  - name: SLV_RD_DMA_DONE_INT_CLR
+    bit_range:
+    - 8
+    - 8
+    description: The clear bit for SPI_SLV_RD_DMA_DONE_INT interrupt.
+  - name: SLV_WR_DMA_DONE_INT_CLR
+    bit_range:
+    - 9
+    - 9
+    description: The clear bit for SPI_SLV_WR_DMA_DONE_INT interrupt.
+  - name: SLV_RD_BUF_DONE_INT_CLR
+    bit_range:
+    - 10
+    - 10
+    description: The clear bit for SPI_SLV_RD_BUF_DONE_INT interrupt.
+  - name: SLV_WR_BUF_DONE_INT_CLR
+    bit_range:
+    - 11
+    - 11
+    description: The clear bit for SPI_SLV_WR_BUF_DONE_INT interrupt.
+  - name: TRANS_DONE_INT_CLR
+    bit_range:
+    - 12
+    - 12
+    description: The clear bit for SPI_TRANS_DONE_INT interrupt.
+  - name: DMA_SEG_TRANS_DONE_INT_CLR
+    bit_range:
+    - 13
+    - 13
+    description: The clear bit for SPI_DMA_SEG_TRANS_DONE_INT interrupt.
+  - name: SEG_MAGIC_ERR_INT_CLR
+    bit_range:
+    - 14
+    - 14
+    description: The clear bit for SPI_SEG_MAGIC_ERR_INT interrupt.
+  - name: SLV_BUF_ADDR_ERR_INT_CLR
+    bit_range:
+    - 15
+    - 15
+    description: The clear bit for SPI_SLV_BUF_ADDR_ERR_INT interrupt.
+  - name: SLV_CMD_ERR_INT_CLR
+    bit_range:
+    - 16
+    - 16
+    description: The clear bit for SPI_SLV_CMD_ERR_INT interrupt.
+  - name: MST_RX_AFIFO_WFULL_ERR_INT_CLR
+    bit_range:
+    - 17
+    - 17
+    description: The clear bit for SPI_MST_RX_AFIFO_WFULL_ERR_INT interrupt.
+  - name: MST_TX_AFIFO_REMPTY_ERR_INT_CLR
+    bit_range:
+    - 18
+    - 18
+    description: The clear bit for SPI_MST_TX_AFIFO_REMPTY_ERR_INT interrupt.
+  - name: APP2_INT_CLR
+    bit_range:
+    - 19
+    - 19
+    description: The clear bit for SPI_APP2_INT interrupt.
+  - name: APP1_INT_CLR
+    bit_range:
+    - 20
+    - 20
+    description: The clear bit for SPI_APP1_INT interrupt.
+  side_effects: null
+- id: DMA_INT_RAW
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_INFIFO_FULL_ERR_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: '1: The current data rate of DMA Rx is smaller than that of SPI, which will lose the receive data.  0: Others.'
+  - name: DMA_OUTFIFO_EMPTY_ERR_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: '1: The current data rate of DMA TX is smaller than that of SPI. SPI will stop in master mode and send out all 0 in slave mode.  0: Others.'
+  - name: SLV_EX_QPI_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: 'The raw bit for SPI slave Ex_QPI interrupt. 1: SPI slave mode Ex_QPI transmission is ended. 0: Others.'
+  - name: SLV_EN_QPI_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: 'The raw bit for SPI slave En_QPI interrupt. 1: SPI slave mode En_QPI transmission is ended. 0: Others.'
+  - name: SLV_CMD7_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: 'The raw bit for SPI slave CMD7 interrupt. 1: SPI slave mode CMD7 transmission is ended. 0: Others.'
+  - name: SLV_CMD8_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: 'The raw bit for SPI slave CMD8 interrupt. 1: SPI slave mode CMD8 transmission is ended. 0: Others.'
+  - name: SLV_CMD9_INT_RAW
+    bit_range:
+    - 6
+    - 6
+    description: 'The raw bit for SPI slave CMD9 interrupt. 1: SPI slave mode CMD9 transmission is ended. 0: Others.'
+  - name: SLV_CMDA_INT_RAW
+    bit_range:
+    - 7
+    - 7
+    description: 'The raw bit for SPI slave CMDA interrupt. 1: SPI slave mode CMDA transmission is ended. 0: Others.'
+  - name: SLV_RD_DMA_DONE_INT_RAW
+    bit_range:
+    - 8
+    - 8
+    description: 'The raw bit for SPI_SLV_RD_DMA_DONE_INT interrupt. 1: SPI slave mode Rd_DMA transmission is ended. 0: Others.'
+  - name: SLV_WR_DMA_DONE_INT_RAW
+    bit_range:
+    - 9
+    - 9
+    description: 'The raw bit for SPI_SLV_WR_DMA_DONE_INT interrupt. 1: SPI slave mode Wr_DMA transmission is ended. 0: Others.'
+  - name: SLV_RD_BUF_DONE_INT_RAW
+    bit_range:
+    - 10
+    - 10
+    description: 'The raw bit for SPI_SLV_RD_BUF_DONE_INT interrupt. 1: SPI slave mode Rd_BUF transmission is ended. 0: Others.'
+  - name: SLV_WR_BUF_DONE_INT_RAW
+    bit_range:
+    - 11
+    - 11
+    description: 'The raw bit for SPI_SLV_WR_BUF_DONE_INT interrupt. 1: SPI slave mode Wr_BUF transmission is ended. 0: Others.'
+  - name: TRANS_DONE_INT_RAW
+    bit_range:
+    - 12
+    - 12
+    description: 'The raw bit for SPI_TRANS_DONE_INT interrupt. 1: SPI master mode transmission is ended. 0: others.'
+  - name: DMA_SEG_TRANS_DONE_INT_RAW
+    bit_range:
+    - 13
+    - 13
+    description: 'The raw bit for SPI_DMA_SEG_TRANS_DONE_INT interrupt. 1:  spi master DMA full-duplex/half-duplex seg-conf-trans ends or slave half-duplex seg-trans ends. And data has been pushed to corresponding memory.  0:  seg-conf-trans or seg-trans is not ended or not occurred.'
+  - name: SEG_MAGIC_ERR_INT_RAW
+    bit_range:
+    - 14
+    - 14
+    description: 'The raw bit for SPI_SEG_MAGIC_ERR_INT interrupt. 1: The magic value in CONF buffer is error in the DMA seg-conf-trans. 0: others.'
+  - name: SLV_BUF_ADDR_ERR_INT_RAW
+    bit_range:
+    - 15
+    - 15
+    description: 'The raw bit for SPI_SLV_BUF_ADDR_ERR_INT interrupt. 1: The accessing data address of the current SPI slave mode CPU controlled FD, Wr_BUF or Rd_BUF transmission is bigger than 63. 0: Others.'
+  - name: SLV_CMD_ERR_INT_RAW
+    bit_range:
+    - 16
+    - 16
+    description: 'The raw bit for SPI_SLV_CMD_ERR_INT interrupt. 1: The slave command value in the current SPI slave HD mode transmission is not supported. 0: Others.'
+  - name: MST_RX_AFIFO_WFULL_ERR_INT_RAW
+    bit_range:
+    - 17
+    - 17
+    description: 'The raw bit for SPI_MST_RX_AFIFO_WFULL_ERR_INT interrupt. 1: There is a RX AFIFO write-full error when SPI inputs data in master mode. 0: Others.'
+  - name: MST_TX_AFIFO_REMPTY_ERR_INT_RAW
+    bit_range:
+    - 18
+    - 18
+    description: 'The raw bit for SPI_MST_TX_AFIFO_REMPTY_ERR_INT interrupt. 1: There is a TX BUF AFIFO read-empty error when SPI outputs data in master mode. 0: Others.'
+  - name: APP2_INT_RAW
+    bit_range:
+    - 19
+    - 19
+    description: The raw bit for SPI_APP2_INT interrupt. The value is only controlled by application.
+  - name: APP1_INT_RAW
+    bit_range:
+    - 20
+    - 20
+    description: The raw bit for SPI_APP1_INT interrupt. The value is only controlled by application.
+  side_effects: null
+- id: DMA_INT_ST
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_INFIFO_FULL_ERR_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The status bit for SPI_DMA_INFIFO_FULL_ERR_INT interrupt.
+  - name: DMA_OUTFIFO_EMPTY_ERR_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The status bit for SPI_DMA_OUTFIFO_EMPTY_ERR_INT interrupt.
+  - name: SLV_EX_QPI_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: The status bit for SPI slave Ex_QPI interrupt.
+  - name: SLV_EN_QPI_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: The status bit for SPI slave En_QPI interrupt.
+  - name: SLV_CMD7_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: The status bit for SPI slave CMD7 interrupt.
+  - name: SLV_CMD8_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: The status bit for SPI slave CMD8 interrupt.
+  - name: SLV_CMD9_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: The status bit for SPI slave CMD9 interrupt.
+  - name: SLV_CMDA_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: The status bit for SPI slave CMDA interrupt.
+  - name: SLV_RD_DMA_DONE_INT_ST
+    bit_range:
+    - 8
+    - 8
+    description: The status bit for SPI_SLV_RD_DMA_DONE_INT interrupt.
+  - name: SLV_WR_DMA_DONE_INT_ST
+    bit_range:
+    - 9
+    - 9
+    description: The status bit for SPI_SLV_WR_DMA_DONE_INT interrupt.
+  - name: SLV_RD_BUF_DONE_INT_ST
+    bit_range:
+    - 10
+    - 10
+    description: The status bit for SPI_SLV_RD_BUF_DONE_INT interrupt.
+  - name: SLV_WR_BUF_DONE_INT_ST
+    bit_range:
+    - 11
+    - 11
+    description: The status bit for SPI_SLV_WR_BUF_DONE_INT interrupt.
+  - name: TRANS_DONE_INT_ST
+    bit_range:
+    - 12
+    - 12
+    description: The status bit for SPI_TRANS_DONE_INT interrupt.
+  - name: DMA_SEG_TRANS_DONE_INT_ST
+    bit_range:
+    - 13
+    - 13
+    description: The status bit for SPI_DMA_SEG_TRANS_DONE_INT interrupt.
+  - name: SEG_MAGIC_ERR_INT_ST
+    bit_range:
+    - 14
+    - 14
+    description: The status bit for SPI_SEG_MAGIC_ERR_INT interrupt.
+  - name: SLV_BUF_ADDR_ERR_INT_ST
+    bit_range:
+    - 15
+    - 15
+    description: The status bit for SPI_SLV_BUF_ADDR_ERR_INT interrupt.
+  - name: SLV_CMD_ERR_INT_ST
+    bit_range:
+    - 16
+    - 16
+    description: The status bit for SPI_SLV_CMD_ERR_INT interrupt.
+  - name: MST_RX_AFIFO_WFULL_ERR_INT_ST
+    bit_range:
+    - 17
+    - 17
+    description: The status bit for SPI_MST_RX_AFIFO_WFULL_ERR_INT interrupt.
+  - name: MST_TX_AFIFO_REMPTY_ERR_INT_ST
+    bit_range:
+    - 18
+    - 18
+    description: The status bit for SPI_MST_TX_AFIFO_REMPTY_ERR_INT interrupt.
+  - name: APP2_INT_ST
+    bit_range:
+    - 19
+    - 19
+    description: The status bit for SPI_APP2_INT interrupt.
+  - name: APP1_INT_ST
+    bit_range:
+    - 20
+    - 20
+    description: The status bit for SPI_APP1_INT interrupt.
+  side_effects: null
+- id: W0
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF0
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W1
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF1
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W2
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF2
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W3
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF3
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W4
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF4
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W5
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF5
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W6
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF6
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W7
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF7
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W8
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF8
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W9
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF9
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W10
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF10
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W11
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF11
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W12
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF12
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W13
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF13
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W14
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF14
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: W15
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUF15
+    bit_range:
+    - 31
+    - 0
+    description: data buffer
+  side_effects: null
+- id: SLAVE
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 41943040
+  fields:
+  - name: CLK_MODE
+    bit_range:
+    - 1
+    - 0
+    description: 'SPI clock mode bits. 0: SPI clock is off when CS inactive 1: SPI clock is delayed one cycle after CS inactive 2: SPI clock is delayed two cycles after CS inactive 3: SPI clock is alwasy on. Can be configured in CONF state.'
+  - name: CLK_MODE_13
+    bit_range:
+    - 2
+    - 2
+    description: '{CPOL, CPHA},1: support spi clk mode 1 and 3, first edge output data B[0]/B[7].  0: support spi clk mode 0 and 2, first edge output data B[1]/B[6].'
+  - name: RSCK_DATA_OUT
+    bit_range:
+    - 3
+    - 3
+    description: 'It saves half a cycle when tsck is the same as rsck. 1: output data at rsck posedge   0: output data at tsck posedge'
+  - name: SLV_RDDMA_BITLEN_EN
+    bit_range:
+    - 8
+    - 8
+    description: '1: SPI_SLV_DATA_BITLEN stores data bit length of master-read-slave data length in DMA controlled mode(Rd_DMA). 0: others'
+  - name: SLV_WRDMA_BITLEN_EN
+    bit_range:
+    - 9
+    - 9
+    description: '1: SPI_SLV_DATA_BITLEN stores data bit length of master-write-to-slave data length in DMA controlled mode(Wr_DMA). 0: others'
+  - name: SLV_RDBUF_BITLEN_EN
+    bit_range:
+    - 10
+    - 10
+    description: '1: SPI_SLV_DATA_BITLEN stores data bit length of master-read-slave data length in CPU controlled mode(Rd_BUF). 0: others'
+  - name: SLV_WRBUF_BITLEN_EN
+    bit_range:
+    - 11
+    - 11
+    description: '1: SPI_SLV_DATA_BITLEN stores data bit length of master-write-to-slave data length in CPU controlled mode(Wr_BUF). 0: others'
+  - name: DMA_SEG_MAGIC_VALUE
+    bit_range:
+    - 25
+    - 22
+    description: The magic value of BM table in master DMA seg-trans.
+  - name: MODE
+    bit_range:
+    - 26
+    - 26
+    description: 'Set SPI work mode. 1: slave mode 0: master mode.'
+  - name: SOFT_RESET
+    bit_range:
+    - 27
+    - 27
+    description: Software reset enable, reset the spi clock line cs line and data lines. Can be configured in CONF state.
+  - name: USR_CONF
+    bit_range:
+    - 28
+    - 28
+    description: '1: Enable the DMA CONF phase of current seg-trans operation, which means seg-trans will start. 0: This is not seg-trans mode.'
+  side_effects: null
+- id: SLAVE1
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLV_DATA_BITLEN
+    bit_range:
+    - 17
+    - 0
+    description: The transferred data bit length in SPI slave FD and HD mode.
+  - name: SLV_LAST_COMMAND
+    bit_range:
+    - 25
+    - 18
+    description: In the slave mode it is the value of command.
+  - name: SLV_LAST_ADDR
+    bit_range:
+    - 31
+    - 26
+    description: In the slave mode it is the value of address.
+  side_effects: null
+- id: CLK_GATE
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to enable clk gate
+  - name: MST_CLK_ACTIVE
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to power on the SPI module clock.
+  - name: MST_CLK_SEL
+    bit_range:
+    - 2
+    - 2
+    description: 'This bit is used to select SPI module clock source in master mode. 1: PLL_CLK_80M. 0: XTAL CLK.'
+  side_effects: null
+- id: DATE
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583648
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: SPI register version.
+  side_effects: null
+interrupts:
+  SPI2: 19
+timing: null

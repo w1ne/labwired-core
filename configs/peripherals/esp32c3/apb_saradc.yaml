@@ -1,0 +1,648 @@
+peripheral: APB_SARADC
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1073971776
+  fields:
+  - name: SARADC_START_FORCE
+    bit_range:
+    - 0
+    - 0
+    description: select software enable saradc sample
+  - name: SARADC_START
+    bit_range:
+    - 1
+    - 1
+    description: software enable saradc sample
+  - name: SARADC_SAR_CLK_GATED
+    bit_range:
+    - 6
+    - 6
+    description: SAR clock gated
+  - name: SARADC_SAR_CLK_DIV
+    bit_range:
+    - 14
+    - 7
+    description: SAR clock divider
+  - name: SARADC_SAR_PATT_LEN
+    bit_range:
+    - 17
+    - 15
+    description: 0 ~ 15 means length 1 ~ 16
+  - name: SARADC_SAR_PATT_P_CLEAR
+    bit_range:
+    - 23
+    - 23
+    description: clear the pointer of pattern table for DIG ADC1 CTRL
+  - name: SARADC_XPD_SAR_FORCE
+    bit_range:
+    - 28
+    - 27
+    description: force option to xpd sar blocks
+  - name: SARADC_WAIT_ARB_CYCLE
+    bit_range:
+    - 31
+    - 30
+    description: wait arbit signal stable after sar_done
+  side_effects: null
+- id: CTRL2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 41470
+  fields:
+  - name: SARADC_MEAS_NUM_LIMIT
+    bit_range:
+    - 0
+    - 0
+    description: enable max meas num
+  - name: SARADC_MAX_MEAS_NUM
+    bit_range:
+    - 8
+    - 1
+    description: max conversion number
+  - name: SARADC_SAR1_INV
+    bit_range:
+    - 9
+    - 9
+    description: '1: data to DIG ADC1 CTRL is inverted, otherwise not'
+  - name: SARADC_SAR2_INV
+    bit_range:
+    - 10
+    - 10
+    description: '1: data to DIG ADC2 CTRL is inverted, otherwise not'
+  - name: SARADC_TIMER_TARGET
+    bit_range:
+    - 23
+    - 12
+    description: to set saradc timer target
+  - name: SARADC_TIMER_EN
+    bit_range:
+    - 24
+    - 24
+    description: to enable saradc timer trigger
+  side_effects: null
+- id: FILTER_CTRL1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC_FILTER_FACTOR1
+    bit_range:
+    - 28
+    - 26
+    description: Factor of saradc filter1
+  - name: APB_SARADC_FILTER_FACTOR0
+    bit_range:
+    - 31
+    - 29
+    description: Factor of saradc filter0
+  side_effects: null
+- id: FSM_WAIT
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 16713736
+  fields:
+  - name: SARADC_XPD_WAIT
+    bit_range:
+    - 7
+    - 0
+    description: saradc_xpd_wait
+  - name: SARADC_RSTB_WAIT
+    bit_range:
+    - 15
+    - 8
+    description: saradc_rstb_wait
+  - name: SARADC_STANDBY_WAIT
+    bit_range:
+    - 23
+    - 16
+    description: saradc_standby_wait
+  side_effects: null
+- id: SAR1_STATUS
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SARADC_SAR1_STATUS
+    bit_range:
+    - 31
+    - 0
+    description: saradc1 status about data and channel
+  side_effects: null
+- id: SAR2_STATUS
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SARADC_SAR2_STATUS
+    bit_range:
+    - 31
+    - 0
+    description: saradc2 status about data and channel
+  side_effects: null
+- id: SAR_PATT_TAB1
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SARADC_SAR_PATT_TAB1
+    bit_range:
+    - 23
+    - 0
+    description: item 0 ~ 3 for pattern table 1 (each item one byte)
+  side_effects: null
+- id: SAR_PATT_TAB2
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SARADC_SAR_PATT_TAB2
+    bit_range:
+    - 23
+    - 0
+    description: Item 4 ~ 7 for pattern table 1 (each item one byte)
+  side_effects: null
+- id: ONETIME_SAMPLE
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 436207616
+  fields:
+  - name: SARADC_ONETIME_ATTEN
+    bit_range:
+    - 24
+    - 23
+    description: configure onetime atten
+  - name: SARADC_ONETIME_CHANNEL
+    bit_range:
+    - 28
+    - 25
+    description: configure onetime channel
+  - name: SARADC_ONETIME_START
+    bit_range:
+    - 29
+    - 29
+    description: trigger adc onetime sample
+  - name: SARADC2_ONETIME_SAMPLE
+    bit_range:
+    - 30
+    - 30
+    description: enable adc2 onetime sample
+  - name: SARADC1_ONETIME_SAMPLE
+    bit_range:
+    - 31
+    - 31
+    description: enable adc1 onetime sample
+  side_effects: null
+- id: ARB_CTRL
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 2304
+  fields:
+  - name: ADC_ARB_APB_FORCE
+    bit_range:
+    - 2
+    - 2
+    description: adc2 arbiter force to enableapb controller
+  - name: ADC_ARB_RTC_FORCE
+    bit_range:
+    - 3
+    - 3
+    description: adc2 arbiter force to enable rtc controller
+  - name: ADC_ARB_WIFI_FORCE
+    bit_range:
+    - 4
+    - 4
+    description: adc2 arbiter force to enable wifi controller
+  - name: ADC_ARB_GRANT_FORCE
+    bit_range:
+    - 5
+    - 5
+    description: adc2 arbiter force grant
+  - name: ADC_ARB_APB_PRIORITY
+    bit_range:
+    - 7
+    - 6
+    description: Set adc2 arbiterapb priority
+  - name: ADC_ARB_RTC_PRIORITY
+    bit_range:
+    - 9
+    - 8
+    description: Set adc2 arbiter rtc priority
+  - name: ADC_ARB_WIFI_PRIORITY
+    bit_range:
+    - 11
+    - 10
+    description: Set adc2 arbiter wifi priority
+  - name: ADC_ARB_FIX_PRIORITY
+    bit_range:
+    - 12
+    - 12
+    description: adc2 arbiter uses fixed priority
+  side_effects: null
+- id: FILTER_CTRL0
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 57933824
+  fields:
+  - name: APB_SARADC_FILTER_CHANNEL1
+    bit_range:
+    - 21
+    - 18
+    description: configure filter1 to adc channel
+  - name: APB_SARADC_FILTER_CHANNEL0
+    bit_range:
+    - 25
+    - 22
+    description: configure filter0 to adc channel
+  - name: APB_SARADC_FILTER_RESET
+    bit_range:
+    - 31
+    - 31
+    description: enable apb_adc1_filter
+  side_effects: null
+- id: SAR1DATA_STATUS
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC1_DATA
+    bit_range:
+    - 16
+    - 0
+    description: saradc1 data
+  side_effects: null
+- id: SAR2DATA_STATUS
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC2_DATA
+    bit_range:
+    - 16
+    - 0
+    description: saradc2 data
+  side_effects: null
+- id: THRES0_CTRL
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 262125
+  fields:
+  - name: APB_SARADC_THRES0_CHANNEL
+    bit_range:
+    - 3
+    - 0
+    description: configure thres0 to adc channel
+  - name: APB_SARADC_THRES0_HIGH
+    bit_range:
+    - 17
+    - 5
+    description: saradc thres0 monitor thres
+  - name: APB_SARADC_THRES0_LOW
+    bit_range:
+    - 30
+    - 18
+    description: saradc thres0 monitor thres
+  side_effects: null
+- id: THRES1_CTRL
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 262125
+  fields:
+  - name: APB_SARADC_THRES1_CHANNEL
+    bit_range:
+    - 3
+    - 0
+    description: configure thres1 to adc channel
+  - name: APB_SARADC_THRES1_HIGH
+    bit_range:
+    - 17
+    - 5
+    description: saradc thres1 monitor thres
+  - name: APB_SARADC_THRES1_LOW
+    bit_range:
+    - 30
+    - 18
+    description: saradc thres1 monitor thres
+  side_effects: null
+- id: THRES_CTRL
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC_THRES_ALL_EN
+    bit_range:
+    - 27
+    - 27
+    description: enable thres to all channel
+  - name: APB_SARADC_THRES1_EN
+    bit_range:
+    - 30
+    - 30
+    description: enable thres1
+  - name: APB_SARADC_THRES0_EN
+    bit_range:
+    - 31
+    - 31
+    description: enable thres0
+  side_effects: null
+- id: INT_ENA
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC_THRES1_LOW_INT_ENA
+    bit_range:
+    - 26
+    - 26
+    description: saradc thres1 low  interrupt enable
+  - name: APB_SARADC_THRES0_LOW_INT_ENA
+    bit_range:
+    - 27
+    - 27
+    description: saradc thres0 low interrupt enable
+  - name: APB_SARADC_THRES1_HIGH_INT_ENA
+    bit_range:
+    - 28
+    - 28
+    description: saradc thres1 high interrupt enable
+  - name: APB_SARADC_THRES0_HIGH_INT_ENA
+    bit_range:
+    - 29
+    - 29
+    description: saradc thres0 high interrupt enable
+  - name: APB_SARADC2_DONE_INT_ENA
+    bit_range:
+    - 30
+    - 30
+    description: saradc2 done interrupt enable
+  - name: APB_SARADC1_DONE_INT_ENA
+    bit_range:
+    - 31
+    - 31
+    description: saradc1 done interrupt enable
+  side_effects: null
+- id: INT_RAW
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC_THRES1_LOW_INT_RAW
+    bit_range:
+    - 26
+    - 26
+    description: saradc thres1 low  interrupt raw
+  - name: APB_SARADC_THRES0_LOW_INT_RAW
+    bit_range:
+    - 27
+    - 27
+    description: saradc thres0 low interrupt raw
+  - name: APB_SARADC_THRES1_HIGH_INT_RAW
+    bit_range:
+    - 28
+    - 28
+    description: saradc thres1 high interrupt raw
+  - name: APB_SARADC_THRES0_HIGH_INT_RAW
+    bit_range:
+    - 29
+    - 29
+    description: saradc thres0 high interrupt raw
+  - name: APB_SARADC2_DONE_INT_RAW
+    bit_range:
+    - 30
+    - 30
+    description: saradc2 done interrupt raw
+  - name: APB_SARADC1_DONE_INT_RAW
+    bit_range:
+    - 31
+    - 31
+    description: saradc1 done interrupt raw
+  side_effects: null
+- id: INT_ST
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC_THRES1_LOW_INT_ST
+    bit_range:
+    - 26
+    - 26
+    description: saradc thres1 low  interrupt state
+  - name: APB_SARADC_THRES0_LOW_INT_ST
+    bit_range:
+    - 27
+    - 27
+    description: saradc thres0 low interrupt state
+  - name: APB_SARADC_THRES1_HIGH_INT_ST
+    bit_range:
+    - 28
+    - 28
+    description: saradc thres1 high interrupt state
+  - name: APB_SARADC_THRES0_HIGH_INT_ST
+    bit_range:
+    - 29
+    - 29
+    description: saradc thres0 high interrupt state
+  - name: APB_SARADC2_DONE_INT_ST
+    bit_range:
+    - 30
+    - 30
+    description: saradc2 done interrupt state
+  - name: APB_SARADC1_DONE_INT_ST
+    bit_range:
+    - 31
+    - 31
+    description: saradc1 done interrupt state
+  side_effects: null
+- id: INT_CLR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_SARADC_THRES1_LOW_INT_CLR
+    bit_range:
+    - 26
+    - 26
+    description: saradc thres1 low  interrupt clear
+  - name: APB_SARADC_THRES0_LOW_INT_CLR
+    bit_range:
+    - 27
+    - 27
+    description: saradc thres0 low interrupt clear
+  - name: APB_SARADC_THRES1_HIGH_INT_CLR
+    bit_range:
+    - 28
+    - 28
+    description: saradc thres1 high interrupt clear
+  - name: APB_SARADC_THRES0_HIGH_INT_CLR
+    bit_range:
+    - 29
+    - 29
+    description: saradc thres0 high interrupt clear
+  - name: APB_SARADC2_DONE_INT_CLR
+    bit_range:
+    - 30
+    - 30
+    description: saradc2 done interrupt clear
+  - name: APB_SARADC1_DONE_INT_CLR
+    bit_range:
+    - 31
+    - 31
+    description: saradc1 done interrupt clear
+  side_effects: null
+- id: DMA_CONF
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 255
+  fields:
+  - name: APB_ADC_EOF_NUM
+    bit_range:
+    - 15
+    - 0
+    description: the dma_in_suc_eof gen when sample cnt = spi_eof_num
+  - name: APB_ADC_RESET_FSM
+    bit_range:
+    - 30
+    - 30
+    description: reset_apb_adc_state
+  - name: APB_ADC_TRANS
+    bit_range:
+    - 31
+    - 31
+    description: enable apb_adc use spi_dma
+  side_effects: null
+- id: CLKM_CONF
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: CLKM_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Integral I2S clock divider value
+  - name: CLKM_DIV_B
+    bit_range:
+    - 13
+    - 8
+    description: Fractional clock divider numerator value
+  - name: CLKM_DIV_A
+    bit_range:
+    - 19
+    - 14
+    description: Fractional clock divider denominator value
+  - name: CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: reg clk en
+  - name: CLK_SEL
+    bit_range:
+    - 22
+    - 21
+    description: Set this bit to enable clk_apll
+  side_effects: null
+- id: APB_TSENS_CTRL
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 98304
+  fields:
+  - name: TSENS_OUT
+    bit_range:
+    - 7
+    - 0
+    description: temperature sensor data out
+  - name: TSENS_IN_INV
+    bit_range:
+    - 13
+    - 13
+    description: invert temperature sensor data
+  - name: TSENS_CLK_DIV
+    bit_range:
+    - 21
+    - 14
+    description: temperature sensor clock divider
+  - name: TSENS_PU
+    bit_range:
+    - 22
+    - 22
+    description: temperature sensor power up
+  side_effects: null
+- id: TSENS_CTRL2
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 16386
+  fields:
+  - name: TSENS_XPD_WAIT
+    bit_range:
+    - 11
+    - 0
+    description: the time that power up tsens need wait
+  - name: TSENS_XPD_FORCE
+    bit_range:
+    - 13
+    - 12
+    description: force power up tsens
+  - name: TSENS_CLK_INV
+    bit_range:
+    - 14
+    - 14
+    description: inv tsens clk
+  - name: TSENS_CLK_SEL
+    bit_range:
+    - 15
+    - 15
+    description: tsens clk select
+  side_effects: null
+- id: CALI
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 32768
+  fields:
+  - name: APB_SARADC_CALI_CFG
+    bit_range:
+    - 16
+    - 0
+    description: saradc cali factor
+  side_effects: null
+- id: CTRL_DATE
+  address_offset: 1020
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583473
+  fields:
+  - name: DATE
+    bit_range:
+    - 31
+    - 0
+    description: version
+  side_effects: null
+interrupts:
+  APB_ADC: 43
+timing: null

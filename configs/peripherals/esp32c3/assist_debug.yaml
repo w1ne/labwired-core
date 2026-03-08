@@ -1,0 +1,771 @@
+peripheral: ASSIST_DEBUG
+version: 0.1.0
+registers:
+- id: CORE_0_MONTR_ENA
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_DRAM0_0_RD_ENA
+    bit_range:
+    - 0
+    - 0
+    description: reg_core_0_area_dram0_0_rd_ena
+  - name: CORE_0_AREA_DRAM0_0_WR_ENA
+    bit_range:
+    - 1
+    - 1
+    description: reg_core_0_area_dram0_0_wr_ena
+  - name: CORE_0_AREA_DRAM0_1_RD_ENA
+    bit_range:
+    - 2
+    - 2
+    description: reg_core_0_area_dram0_1_rd_ena
+  - name: CORE_0_AREA_DRAM0_1_WR_ENA
+    bit_range:
+    - 3
+    - 3
+    description: reg_core_0_area_dram0_1_wr_ena
+  - name: CORE_0_AREA_PIF_0_RD_ENA
+    bit_range:
+    - 4
+    - 4
+    description: reg_core_0_area_pif_0_rd_ena
+  - name: CORE_0_AREA_PIF_0_WR_ENA
+    bit_range:
+    - 5
+    - 5
+    description: reg_core_0_area_pif_0_wr_ena
+  - name: CORE_0_AREA_PIF_1_RD_ENA
+    bit_range:
+    - 6
+    - 6
+    description: reg_core_0_area_pif_1_rd_ena
+  - name: CORE_0_AREA_PIF_1_WR_ENA
+    bit_range:
+    - 7
+    - 7
+    description: reg_core_0_area_pif_1_wr_ena
+  - name: CORE_0_SP_SPILL_MIN_ENA
+    bit_range:
+    - 8
+    - 8
+    description: reg_core_0_sp_spill_min_ena
+  - name: CORE_0_SP_SPILL_MAX_ENA
+    bit_range:
+    - 9
+    - 9
+    description: reg_core_0_sp_spill_max_ena
+  - name: CORE_0_IRAM0_EXCEPTION_MONITOR_ENA
+    bit_range:
+    - 10
+    - 10
+    description: reg_core_0_iram0_exception_monitor_ena
+  - name: CORE_0_DRAM0_EXCEPTION_MONITOR_ENA
+    bit_range:
+    - 11
+    - 11
+    description: reg_core_0_dram0_exception_monitor_ena
+  side_effects: null
+- id: CORE_0_INTR_RAW
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_DRAM0_0_RD_RAW
+    bit_range:
+    - 0
+    - 0
+    description: reg_core_0_area_dram0_0_rd_raw
+  - name: CORE_0_AREA_DRAM0_0_WR_RAW
+    bit_range:
+    - 1
+    - 1
+    description: reg_core_0_area_dram0_0_wr_raw
+  - name: CORE_0_AREA_DRAM0_1_RD_RAW
+    bit_range:
+    - 2
+    - 2
+    description: reg_core_0_area_dram0_1_rd_raw
+  - name: CORE_0_AREA_DRAM0_1_WR_RAW
+    bit_range:
+    - 3
+    - 3
+    description: reg_core_0_area_dram0_1_wr_raw
+  - name: CORE_0_AREA_PIF_0_RD_RAW
+    bit_range:
+    - 4
+    - 4
+    description: reg_core_0_area_pif_0_rd_raw
+  - name: CORE_0_AREA_PIF_0_WR_RAW
+    bit_range:
+    - 5
+    - 5
+    description: reg_core_0_area_pif_0_wr_raw
+  - name: CORE_0_AREA_PIF_1_RD_RAW
+    bit_range:
+    - 6
+    - 6
+    description: reg_core_0_area_pif_1_rd_raw
+  - name: CORE_0_AREA_PIF_1_WR_RAW
+    bit_range:
+    - 7
+    - 7
+    description: reg_core_0_area_pif_1_wr_raw
+  - name: CORE_0_SP_SPILL_MIN_RAW
+    bit_range:
+    - 8
+    - 8
+    description: reg_core_0_sp_spill_min_raw
+  - name: CORE_0_SP_SPILL_MAX_RAW
+    bit_range:
+    - 9
+    - 9
+    description: reg_core_0_sp_spill_max_raw
+  - name: CORE_0_IRAM0_EXCEPTION_MONITOR_RAW
+    bit_range:
+    - 10
+    - 10
+    description: reg_core_0_iram0_exception_monitor_raw
+  - name: CORE_0_DRAM0_EXCEPTION_MONITOR_RAW
+    bit_range:
+    - 11
+    - 11
+    description: reg_core_0_dram0_exception_monitor_raw
+  side_effects: null
+- id: CORE_0_INTR_ENA
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_DRAM0_0_RD_INTR_ENA
+    bit_range:
+    - 0
+    - 0
+    description: reg_core_0_area_dram0_0_rd_intr_ena
+  - name: CORE_0_AREA_DRAM0_0_WR_INTR_ENA
+    bit_range:
+    - 1
+    - 1
+    description: reg_core_0_area_dram0_0_wr_intr_ena
+  - name: CORE_0_AREA_DRAM0_1_RD_INTR_ENA
+    bit_range:
+    - 2
+    - 2
+    description: reg_core_0_area_dram0_1_rd_intr_ena
+  - name: CORE_0_AREA_DRAM0_1_WR_INTR_ENA
+    bit_range:
+    - 3
+    - 3
+    description: reg_core_0_area_dram0_1_wr_intr_ena
+  - name: CORE_0_AREA_PIF_0_RD_INTR_ENA
+    bit_range:
+    - 4
+    - 4
+    description: reg_core_0_area_pif_0_rd_intr_ena
+  - name: CORE_0_AREA_PIF_0_WR_INTR_ENA
+    bit_range:
+    - 5
+    - 5
+    description: reg_core_0_area_pif_0_wr_intr_ena
+  - name: CORE_0_AREA_PIF_1_RD_INTR_ENA
+    bit_range:
+    - 6
+    - 6
+    description: reg_core_0_area_pif_1_rd_intr_ena
+  - name: CORE_0_AREA_PIF_1_WR_INTR_ENA
+    bit_range:
+    - 7
+    - 7
+    description: reg_core_0_area_pif_1_wr_intr_ena
+  - name: CORE_0_SP_SPILL_MIN_INTR_ENA
+    bit_range:
+    - 8
+    - 8
+    description: reg_core_0_sp_spill_min_intr_ena
+  - name: CORE_0_SP_SPILL_MAX_INTR_ENA
+    bit_range:
+    - 9
+    - 9
+    description: reg_core_0_sp_spill_max_intr_ena
+  - name: CORE_0_IRAM0_EXCEPTION_MONITOR_RLS
+    bit_range:
+    - 10
+    - 10
+    description: reg_core_0_iram0_exception_monitor_ena
+  - name: CORE_0_DRAM0_EXCEPTION_MONITOR_RLS
+    bit_range:
+    - 11
+    - 11
+    description: reg_core_0_dram0_exception_monitor_ena
+  side_effects: null
+- id: CORE_0_INTR_CLR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_DRAM0_0_RD_CLR
+    bit_range:
+    - 0
+    - 0
+    description: reg_core_0_area_dram0_0_rd_clr
+  - name: CORE_0_AREA_DRAM0_0_WR_CLR
+    bit_range:
+    - 1
+    - 1
+    description: reg_core_0_area_dram0_0_wr_clr
+  - name: CORE_0_AREA_DRAM0_1_RD_CLR
+    bit_range:
+    - 2
+    - 2
+    description: reg_core_0_area_dram0_1_rd_clr
+  - name: CORE_0_AREA_DRAM0_1_WR_CLR
+    bit_range:
+    - 3
+    - 3
+    description: reg_core_0_area_dram0_1_wr_clr
+  - name: CORE_0_AREA_PIF_0_RD_CLR
+    bit_range:
+    - 4
+    - 4
+    description: reg_core_0_area_pif_0_rd_clr
+  - name: CORE_0_AREA_PIF_0_WR_CLR
+    bit_range:
+    - 5
+    - 5
+    description: reg_core_0_area_pif_0_wr_clr
+  - name: CORE_0_AREA_PIF_1_RD_CLR
+    bit_range:
+    - 6
+    - 6
+    description: reg_core_0_area_pif_1_rd_clr
+  - name: CORE_0_AREA_PIF_1_WR_CLR
+    bit_range:
+    - 7
+    - 7
+    description: reg_core_0_area_pif_1_wr_clr
+  - name: CORE_0_SP_SPILL_MIN_CLR
+    bit_range:
+    - 8
+    - 8
+    description: reg_core_0_sp_spill_min_clr
+  - name: CORE_0_SP_SPILL_MAX_CLR
+    bit_range:
+    - 9
+    - 9
+    description: reg_core_0_sp_spill_max_clr
+  - name: CORE_0_IRAM0_EXCEPTION_MONITOR_CLR
+    bit_range:
+    - 10
+    - 10
+    description: reg_core_0_iram0_exception_monitor_clr
+  - name: CORE_0_DRAM0_EXCEPTION_MONITOR_CLR
+    bit_range:
+    - 11
+    - 11
+    description: reg_core_0_dram0_exception_monitor_clr
+  side_effects: null
+- id: CORE_0_AREA_DRAM0_0_MIN
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CORE_0_AREA_DRAM0_0_MIN
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_dram0_0_min
+  side_effects: null
+- id: CORE_0_AREA_DRAM0_0_MAX
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_DRAM0_0_MAX
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_dram0_0_max
+  side_effects: null
+- id: CORE_0_AREA_DRAM0_1_MIN
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CORE_0_AREA_DRAM0_1_MIN
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_dram0_1_min
+  side_effects: null
+- id: CORE_0_AREA_DRAM0_1_MAX
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_DRAM0_1_MAX
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_dram0_1_max
+  side_effects: null
+- id: CORE_0_AREA_PIF_0_MIN
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CORE_0_AREA_PIF_0_MIN
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_pif_0_min
+  side_effects: null
+- id: CORE_0_AREA_PIF_0_MAX
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_PIF_0_MAX
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_pif_0_max
+  side_effects: null
+- id: CORE_0_AREA_PIF_1_MIN
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CORE_0_AREA_PIF_1_MIN
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_pif_1_min
+  side_effects: null
+- id: CORE_0_AREA_PIF_1_MAX
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_PIF_1_MAX
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_pif_1_max
+  side_effects: null
+- id: CORE_0_AREA_PC
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_PC
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_pc
+  side_effects: null
+- id: CORE_0_AREA_SP
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_AREA_SP
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_area_sp
+  side_effects: null
+- id: CORE_0_SP_MIN
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_MIN
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_sp_min
+  side_effects: null
+- id: CORE_0_SP_MAX
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CORE_0_SP_MAX
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_sp_max
+  side_effects: null
+- id: CORE_0_SP_PC
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_SP_PC
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_sp_pc
+  side_effects: null
+- id: CORE_0_RCD_EN
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_RCD_RECORDEN
+    bit_range:
+    - 0
+    - 0
+    description: reg_core_0_rcd_recorden
+  - name: CORE_0_RCD_PDEBUGEN
+    bit_range:
+    - 1
+    - 1
+    description: reg_core_0_rcd_pdebugen
+  side_effects: null
+- id: CORE_0_RCD_PDEBUGPC
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_RCD_PDEBUGPC
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_rcd_pdebugpc
+  side_effects: null
+- id: CORE_0_RCD_PDEBUGSP
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_RCD_PDEBUGSP
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_rcd_pdebugsp
+  side_effects: null
+- id: CORE_0_IRAM0_EXCEPTION_MONITOR_0
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_IRAM0_RECORDING_ADDR_0
+    bit_range:
+    - 23
+    - 0
+    description: reg_core_0_iram0_recording_addr_0
+  - name: CORE_0_IRAM0_RECORDING_WR_0
+    bit_range:
+    - 24
+    - 24
+    description: reg_core_0_iram0_recording_wr_0
+  - name: CORE_0_IRAM0_RECORDING_LOADSTORE_0
+    bit_range:
+    - 25
+    - 25
+    description: reg_core_0_iram0_recording_loadstore_0
+  side_effects: null
+- id: CORE_0_IRAM0_EXCEPTION_MONITOR_1
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_IRAM0_RECORDING_ADDR_1
+    bit_range:
+    - 23
+    - 0
+    description: reg_core_0_iram0_recording_addr_1
+  - name: CORE_0_IRAM0_RECORDING_WR_1
+    bit_range:
+    - 24
+    - 24
+    description: reg_core_0_iram0_recording_wr_1
+  - name: CORE_0_IRAM0_RECORDING_LOADSTORE_1
+    bit_range:
+    - 25
+    - 25
+    description: reg_core_0_iram0_recording_loadstore_1
+  side_effects: null
+- id: CORE_0_DRAM0_EXCEPTION_MONITOR_0
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_RECORDING_ADDR_0
+    bit_range:
+    - 23
+    - 0
+    description: reg_core_0_dram0_recording_addr_0
+  - name: CORE_0_DRAM0_RECORDING_WR_0
+    bit_range:
+    - 24
+    - 24
+    description: reg_core_0_dram0_recording_wr_0
+  - name: CORE_0_DRAM0_RECORDING_BYTEEN_0
+    bit_range:
+    - 28
+    - 25
+    description: reg_core_0_dram0_recording_byteen_0
+  side_effects: null
+- id: CORE_0_DRAM0_EXCEPTION_MONITOR_1
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_RECORDING_PC_0
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_dram0_recording_pc_0
+  side_effects: null
+- id: CORE_0_DRAM0_EXCEPTION_MONITOR_2
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_RECORDING_ADDR_1
+    bit_range:
+    - 23
+    - 0
+    description: reg_core_0_dram0_recording_addr_1
+  - name: CORE_0_DRAM0_RECORDING_WR_1
+    bit_range:
+    - 24
+    - 24
+    description: reg_core_0_dram0_recording_wr_1
+  - name: CORE_0_DRAM0_RECORDING_BYTEEN_1
+    bit_range:
+    - 28
+    - 25
+    description: reg_core_0_dram0_recording_byteen_1
+  side_effects: null
+- id: CORE_0_DRAM0_EXCEPTION_MONITOR_3
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_RECORDING_PC_1
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_dram0_recording_pc_1
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_EXCEPTION_MONITOR_0
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_IRAM0_DRAM0_LIMIT_CYCLE_0
+    bit_range:
+    - 19
+    - 0
+    description: reg_core_x_iram0_dram0_limit_cycle_0
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_EXCEPTION_MONITOR_1
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_IRAM0_DRAM0_LIMIT_CYCLE_1
+    bit_range:
+    - 19
+    - 0
+    description: reg_core_x_iram0_dram0_limit_cycle_1
+  side_effects: null
+- id: LOG_SETTING
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: LOG_ENA
+    bit_range:
+    - 2
+    - 0
+    description: reg_log_ena
+  - name: LOG_MODE
+    bit_range:
+    - 6
+    - 3
+    description: reg_log_mode
+  - name: LOG_MEM_LOOP_ENABLE
+    bit_range:
+    - 7
+    - 7
+    description: reg_log_mem_loop_enable
+  side_effects: null
+- id: LOG_DATA_0
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_DATA_0
+    bit_range:
+    - 31
+    - 0
+    description: reg_log_data_0
+  side_effects: null
+- id: LOG_DATA_MASK
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_DATA_SIZE
+    bit_range:
+    - 15
+    - 0
+    description: reg_log_data_size
+  side_effects: null
+- id: LOG_MIN
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_MIN
+    bit_range:
+    - 31
+    - 0
+    description: reg_log_min
+  side_effects: null
+- id: LOG_MAX
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_MAX
+    bit_range:
+    - 31
+    - 0
+    description: reg_log_max
+  side_effects: null
+- id: LOG_MEM_START
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_MEM_START
+    bit_range:
+    - 31
+    - 0
+    description: reg_log_mem_start
+  side_effects: null
+- id: LOG_MEM_END
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_MEM_END
+    bit_range:
+    - 31
+    - 0
+    description: reg_log_mem_end
+  side_effects: null
+- id: LOG_MEM_WRITING_ADDR
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_MEM_WRITING_ADDR
+    bit_range:
+    - 31
+    - 0
+    description: reg_log_mem_writing_addr
+  side_effects: null
+- id: LOG_MEM_FULL_FLAG
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOG_MEM_FULL_FLAG
+    bit_range:
+    - 0
+    - 0
+    description: reg_log_mem_full_flag
+  - name: CLR_LOG_MEM_FULL_FLAG
+    bit_range:
+    - 1
+    - 1
+    description: reg_clr_log_mem_full_flag
+  side_effects: null
+- id: C0RE_0_LASTPC_BEFORE_EXCEPTION
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_LASTPC_BEFORE_EXC
+    bit_range:
+    - 31
+    - 0
+    description: reg_core_0_lastpc_before_exc
+  side_effects: null
+- id: C0RE_0_DEBUG_MODE
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DEBUG_MODE
+    bit_range:
+    - 0
+    - 0
+    description: reg_core_0_debug_mode
+  - name: CORE_0_DEBUG_MODULE_ACTIVE
+    bit_range:
+    - 1
+    - 1
+    description: reg_core_0_debug_module_active
+  side_effects: null
+- id: DATE
+  address_offset: 508
+  size: 32
+  access: READ_WRITE
+  reset_value: 33587216
+  fields:
+  - name: ASSIST_DEBUG_DATE
+    bit_range:
+    - 27
+    - 0
+    description: reg_assist_debug_date
+  side_effects: null
+interrupts:
+  ASSIST_DEBUG: 54
+timing: null

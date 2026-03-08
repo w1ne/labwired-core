@@ -1,0 +1,666 @@
+peripheral: USB_DEVICE
+version: 0.1.0
+registers:
+- id: EP1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RDWR_BYTE
+    bit_range:
+    - 7
+    - 0
+    description: Write and read byte data to/from UART Tx/Rx FIFO through this field. When USB_DEVICE_SERIAL_IN_EMPTY_INT is set, then user can write data (up to 64 bytes) into UART Tx FIFO. When USB_DEVICE_SERIAL_OUT_RECV_PKT_INT is set, user can check USB_DEVICE_OUT_EP1_WR_ADDR USB_DEVICE_OUT_EP0_RD_ADDR to know how many data is received, then read data from UART Rx FIFO.
+  side_effects: null
+- id: EP1_CONF
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: WR_DONE
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to indicate writing byte data to UART Tx FIFO is done.
+  - name: SERIAL_IN_EP_DATA_FREE
+    bit_range:
+    - 1
+    - 1
+    description: '1''b1: Indicate UART Tx FIFO is not full and can write data into in. After writing USB_DEVICE_WR_DONE, this bit would be 0 until data in UART Tx FIFO is read by USB Host.'
+  - name: SERIAL_OUT_EP_DATA_AVAIL
+    bit_range:
+    - 2
+    - 2
+    description: '1''b1: Indicate there is data in UART Rx FIFO.'
+  side_effects: null
+- id: INT_RAW
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: JTAG_IN_FLUSH_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt bit turns to high level when flush cmd is received for IN endpoint 2 of JTAG.
+  - name: SOF_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt bit turns to high level when SOF frame is received.
+  - name: SERIAL_OUT_RECV_PKT_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt bit turns to high level when Serial Port OUT Endpoint received one packet.
+  - name: SERIAL_IN_EMPTY_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt bit turns to high level when Serial Port IN Endpoint is empty.
+  - name: PID_ERR_INT_RAW
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt bit turns to high level when pid error is detected.
+  - name: CRC5_ERR_INT_RAW
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt bit turns to high level when CRC5 error is detected.
+  - name: CRC16_ERR_INT_RAW
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt bit turns to high level when CRC16 error is detected.
+  - name: STUFF_ERR_INT_RAW
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt bit turns to high level when stuff error is detected.
+  - name: IN_TOKEN_REC_IN_EP1_INT_RAW
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt bit turns to high level when IN token for IN endpoint 1 is received.
+  - name: USB_BUS_RESET_INT_RAW
+    bit_range:
+    - 9
+    - 9
+    description: The raw interrupt bit turns to high level when usb bus reset is detected.
+  - name: OUT_EP1_ZERO_PAYLOAD_INT_RAW
+    bit_range:
+    - 10
+    - 10
+    description: The raw interrupt bit turns to high level when OUT endpoint 1 received packet with zero palyload.
+  - name: OUT_EP2_ZERO_PAYLOAD_INT_RAW
+    bit_range:
+    - 11
+    - 11
+    description: The raw interrupt bit turns to high level when OUT endpoint 2 received packet with zero palyload.
+  side_effects: null
+- id: INT_ST
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: JTAG_IN_FLUSH_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt status bit for the USB_DEVICE_JTAG_IN_FLUSH_INT interrupt.
+  - name: SOF_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt status bit for the USB_DEVICE_SOF_INT interrupt.
+  - name: SERIAL_OUT_RECV_PKT_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt status bit for the USB_DEVICE_SERIAL_OUT_RECV_PKT_INT interrupt.
+  - name: SERIAL_IN_EMPTY_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt status bit for the USB_DEVICE_SERIAL_IN_EMPTY_INT interrupt.
+  - name: PID_ERR_INT_ST
+    bit_range:
+    - 4
+    - 4
+    description: The raw interrupt status bit for the USB_DEVICE_PID_ERR_INT interrupt.
+  - name: CRC5_ERR_INT_ST
+    bit_range:
+    - 5
+    - 5
+    description: The raw interrupt status bit for the USB_DEVICE_CRC5_ERR_INT interrupt.
+  - name: CRC16_ERR_INT_ST
+    bit_range:
+    - 6
+    - 6
+    description: The raw interrupt status bit for the USB_DEVICE_CRC16_ERR_INT interrupt.
+  - name: STUFF_ERR_INT_ST
+    bit_range:
+    - 7
+    - 7
+    description: The raw interrupt status bit for the USB_DEVICE_STUFF_ERR_INT interrupt.
+  - name: IN_TOKEN_REC_IN_EP1_INT_ST
+    bit_range:
+    - 8
+    - 8
+    description: The raw interrupt status bit for the USB_DEVICE_IN_TOKEN_REC_IN_EP1_INT interrupt.
+  - name: USB_BUS_RESET_INT_ST
+    bit_range:
+    - 9
+    - 9
+    description: The raw interrupt status bit for the USB_DEVICE_USB_BUS_RESET_INT interrupt.
+  - name: OUT_EP1_ZERO_PAYLOAD_INT_ST
+    bit_range:
+    - 10
+    - 10
+    description: The raw interrupt status bit for the USB_DEVICE_OUT_EP1_ZERO_PAYLOAD_INT interrupt.
+  - name: OUT_EP2_ZERO_PAYLOAD_INT_ST
+    bit_range:
+    - 11
+    - 11
+    description: The raw interrupt status bit for the USB_DEVICE_OUT_EP2_ZERO_PAYLOAD_INT interrupt.
+  side_effects: null
+- id: INT_ENA
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: JTAG_IN_FLUSH_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The interrupt enable bit for the USB_DEVICE_JTAG_IN_FLUSH_INT interrupt.
+  - name: SOF_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The interrupt enable bit for the USB_DEVICE_SOF_INT interrupt.
+  - name: SERIAL_OUT_RECV_PKT_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: The interrupt enable bit for the USB_DEVICE_SERIAL_OUT_RECV_PKT_INT interrupt.
+  - name: SERIAL_IN_EMPTY_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: The interrupt enable bit for the USB_DEVICE_SERIAL_IN_EMPTY_INT interrupt.
+  - name: PID_ERR_INT_ENA
+    bit_range:
+    - 4
+    - 4
+    description: The interrupt enable bit for the USB_DEVICE_PID_ERR_INT interrupt.
+  - name: CRC5_ERR_INT_ENA
+    bit_range:
+    - 5
+    - 5
+    description: The interrupt enable bit for the USB_DEVICE_CRC5_ERR_INT interrupt.
+  - name: CRC16_ERR_INT_ENA
+    bit_range:
+    - 6
+    - 6
+    description: The interrupt enable bit for the USB_DEVICE_CRC16_ERR_INT interrupt.
+  - name: STUFF_ERR_INT_ENA
+    bit_range:
+    - 7
+    - 7
+    description: The interrupt enable bit for the USB_DEVICE_STUFF_ERR_INT interrupt.
+  - name: IN_TOKEN_REC_IN_EP1_INT_ENA
+    bit_range:
+    - 8
+    - 8
+    description: The interrupt enable bit for the USB_DEVICE_IN_TOKEN_REC_IN_EP1_INT interrupt.
+  - name: USB_BUS_RESET_INT_ENA
+    bit_range:
+    - 9
+    - 9
+    description: The interrupt enable bit for the USB_DEVICE_USB_BUS_RESET_INT interrupt.
+  - name: OUT_EP1_ZERO_PAYLOAD_INT_ENA
+    bit_range:
+    - 10
+    - 10
+    description: The interrupt enable bit for the USB_DEVICE_OUT_EP1_ZERO_PAYLOAD_INT interrupt.
+  - name: OUT_EP2_ZERO_PAYLOAD_INT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: The interrupt enable bit for the USB_DEVICE_OUT_EP2_ZERO_PAYLOAD_INT interrupt.
+  side_effects: null
+- id: INT_CLR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: JTAG_IN_FLUSH_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to clear the USB_DEVICE_JTAG_IN_FLUSH_INT interrupt.
+  - name: SOF_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to clear the USB_DEVICE_JTAG_SOF_INT interrupt.
+  - name: SERIAL_OUT_RECV_PKT_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to clear the USB_DEVICE_SERIAL_OUT_RECV_PKT_INT interrupt.
+  - name: SERIAL_IN_EMPTY_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to clear the USB_DEVICE_SERIAL_IN_EMPTY_INT interrupt.
+  - name: PID_ERR_INT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: Set this bit to clear the USB_DEVICE_PID_ERR_INT interrupt.
+  - name: CRC5_ERR_INT_CLR
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to clear the USB_DEVICE_CRC5_ERR_INT interrupt.
+  - name: CRC16_ERR_INT_CLR
+    bit_range:
+    - 6
+    - 6
+    description: Set this bit to clear the USB_DEVICE_CRC16_ERR_INT interrupt.
+  - name: STUFF_ERR_INT_CLR
+    bit_range:
+    - 7
+    - 7
+    description: Set this bit to clear the USB_DEVICE_STUFF_ERR_INT interrupt.
+  - name: IN_TOKEN_REC_IN_EP1_INT_CLR
+    bit_range:
+    - 8
+    - 8
+    description: Set this bit to clear the USB_DEVICE_IN_TOKEN_IN_EP1_INT interrupt.
+  - name: USB_BUS_RESET_INT_CLR
+    bit_range:
+    - 9
+    - 9
+    description: Set this bit to clear the USB_DEVICE_USB_BUS_RESET_INT interrupt.
+  - name: OUT_EP1_ZERO_PAYLOAD_INT_CLR
+    bit_range:
+    - 10
+    - 10
+    description: Set this bit to clear the USB_DEVICE_OUT_EP1_ZERO_PAYLOAD_INT interrupt.
+  - name: OUT_EP2_ZERO_PAYLOAD_INT_CLR
+    bit_range:
+    - 11
+    - 11
+    description: Set this bit to clear the USB_DEVICE_OUT_EP2_ZERO_PAYLOAD_INT interrupt.
+  side_effects: null
+- id: CONF0
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 16896
+  fields:
+  - name: PHY_SEL
+    bit_range:
+    - 0
+    - 0
+    description: Select internal/external PHY
+  - name: EXCHG_PINS_OVERRIDE
+    bit_range:
+    - 1
+    - 1
+    description: Enable software control USB D+ D- exchange
+  - name: EXCHG_PINS
+    bit_range:
+    - 2
+    - 2
+    description: USB D+ D- exchange
+  - name: VREFH
+    bit_range:
+    - 4
+    - 3
+    description: Control single-end input high threshold,1.76V to 2V, step 80mV
+  - name: VREFL
+    bit_range:
+    - 6
+    - 5
+    description: Control single-end input low threshold,0.8V to 1.04V, step 80mV
+  - name: VREF_OVERRIDE
+    bit_range:
+    - 7
+    - 7
+    description: Enable software control input  threshold
+  - name: PAD_PULL_OVERRIDE
+    bit_range:
+    - 8
+    - 8
+    description: Enable software control USB D+ D- pullup pulldown
+  - name: DP_PULLUP
+    bit_range:
+    - 9
+    - 9
+    description: Control USB D+ pull up.
+  - name: DP_PULLDOWN
+    bit_range:
+    - 10
+    - 10
+    description: Control USB D+ pull down.
+  - name: DM_PULLUP
+    bit_range:
+    - 11
+    - 11
+    description: Control USB D- pull up.
+  - name: DM_PULLDOWN
+    bit_range:
+    - 12
+    - 12
+    description: Control USB D- pull down.
+  - name: PULLUP_VALUE
+    bit_range:
+    - 13
+    - 13
+    description: Control pull up value.
+  - name: USB_PAD_ENABLE
+    bit_range:
+    - 14
+    - 14
+    description: Enable USB pad function.
+  side_effects: null
+- id: TEST
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable test of the USB pad
+  - name: USB_OE
+    bit_range:
+    - 1
+    - 1
+    description: USB pad oen in test
+  - name: TX_DP
+    bit_range:
+    - 2
+    - 2
+    description: USB D+ tx value in test
+  - name: TX_DM
+    bit_range:
+    - 3
+    - 3
+    description: USB D- tx value in test
+  side_effects: null
+- id: JFIFO_ST
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 68
+  fields:
+  - name: IN_FIFO_CNT
+    bit_range:
+    - 1
+    - 0
+    description: JTAT in fifo counter.
+  - name: IN_FIFO_EMPTY
+    bit_range:
+    - 2
+    - 2
+    description: '1: JTAG in fifo is empty.'
+  - name: IN_FIFO_FULL
+    bit_range:
+    - 3
+    - 3
+    description: '1: JTAG in fifo is full.'
+  - name: OUT_FIFO_CNT
+    bit_range:
+    - 5
+    - 4
+    description: JTAT out fifo counter.
+  - name: OUT_FIFO_EMPTY
+    bit_range:
+    - 6
+    - 6
+    description: '1: JTAG out fifo is empty.'
+  - name: OUT_FIFO_FULL
+    bit_range:
+    - 7
+    - 7
+    description: '1: JTAG out fifo is full.'
+  - name: IN_FIFO_RESET
+    bit_range:
+    - 8
+    - 8
+    description: Write 1 to reset JTAG in fifo.
+  - name: OUT_FIFO_RESET
+    bit_range:
+    - 9
+    - 9
+    description: Write 1 to reset JTAG out fifo.
+  side_effects: null
+- id: FRAM_NUM
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SOF_FRAME_INDEX
+    bit_range:
+    - 10
+    - 0
+    description: Frame index of received SOF frame.
+  side_effects: null
+- id: IN_EP0_ST
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: IN_EP0_STATE
+    bit_range:
+    - 1
+    - 0
+    description: State of IN Endpoint 0.
+  - name: IN_EP0_WR_ADDR
+    bit_range:
+    - 8
+    - 2
+    description: Write data address of IN endpoint 0.
+  - name: IN_EP0_RD_ADDR
+    bit_range:
+    - 15
+    - 9
+    description: Read data address of IN endpoint 0.
+  side_effects: null
+- id: IN_EP1_ST
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: IN_EP1_STATE
+    bit_range:
+    - 1
+    - 0
+    description: State of IN Endpoint 1.
+  - name: IN_EP1_WR_ADDR
+    bit_range:
+    - 8
+    - 2
+    description: Write data address of IN endpoint 1.
+  - name: IN_EP1_RD_ADDR
+    bit_range:
+    - 15
+    - 9
+    description: Read data address of IN endpoint 1.
+  side_effects: null
+- id: IN_EP2_ST
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: IN_EP2_STATE
+    bit_range:
+    - 1
+    - 0
+    description: State of IN Endpoint 2.
+  - name: IN_EP2_WR_ADDR
+    bit_range:
+    - 8
+    - 2
+    description: Write data address of IN endpoint 2.
+  - name: IN_EP2_RD_ADDR
+    bit_range:
+    - 15
+    - 9
+    description: Read data address of IN endpoint 2.
+  side_effects: null
+- id: IN_EP3_ST
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: IN_EP3_STATE
+    bit_range:
+    - 1
+    - 0
+    description: State of IN Endpoint 3.
+  - name: IN_EP3_WR_ADDR
+    bit_range:
+    - 8
+    - 2
+    description: Write data address of IN endpoint 3.
+  - name: IN_EP3_RD_ADDR
+    bit_range:
+    - 15
+    - 9
+    description: Read data address of IN endpoint 3.
+  side_effects: null
+- id: OUT_EP0_ST
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EP0_STATE
+    bit_range:
+    - 1
+    - 0
+    description: State of OUT Endpoint 0.
+  - name: OUT_EP0_WR_ADDR
+    bit_range:
+    - 8
+    - 2
+    description: Write data address of OUT endpoint 0. When USB_DEVICE_SERIAL_OUT_RECV_PKT_INT is detected, there are USB_DEVICE_OUT_EP0_WR_ADDR-2 bytes data in OUT EP0.
+  - name: OUT_EP0_RD_ADDR
+    bit_range:
+    - 15
+    - 9
+    description: Read data address of OUT endpoint 0.
+  side_effects: null
+- id: OUT_EP1_ST
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EP1_STATE
+    bit_range:
+    - 1
+    - 0
+    description: State of OUT Endpoint 1.
+  - name: OUT_EP1_WR_ADDR
+    bit_range:
+    - 8
+    - 2
+    description: Write data address of OUT endpoint 1. When USB_DEVICE_SERIAL_OUT_RECV_PKT_INT is detected, there are USB_DEVICE_OUT_EP1_WR_ADDR-2 bytes data in OUT EP1.
+  - name: OUT_EP1_RD_ADDR
+    bit_range:
+    - 15
+    - 9
+    description: Read data address of OUT endpoint 1.
+  - name: OUT_EP1_REC_DATA_CNT
+    bit_range:
+    - 22
+    - 16
+    description: Data count in OUT endpoint 1 when one packet is received.
+  side_effects: null
+- id: OUT_EP2_ST
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT_EP2_STATE
+    bit_range:
+    - 1
+    - 0
+    description: State of OUT Endpoint 2.
+  - name: OUT_EP2_WR_ADDR
+    bit_range:
+    - 8
+    - 2
+    description: Write data address of OUT endpoint 2. When USB_DEVICE_SERIAL_OUT_RECV_PKT_INT is detected, there are USB_DEVICE_OUT_EP2_WR_ADDR-2 bytes data in OUT EP2.
+  - name: OUT_EP2_RD_ADDR
+    bit_range:
+    - 15
+    - 9
+    description: Read data address of OUT endpoint 2.
+  side_effects: null
+- id: MISC_CONF
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: '1''h1: Force clock on for register. 1''h0: Support clock only when application writes registers.'
+  side_effects: null
+- id: MEM_CONF
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: USB_MEM_PD
+    bit_range:
+    - 0
+    - 0
+    description: '1: power down usb memory.'
+  - name: USB_MEM_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: '1: Force clock on for usb memory.'
+  side_effects: null
+- id: DATE
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583872
+  fields:
+  - name: DATE
+    bit_range:
+    - 31
+    - 0
+    description: register version.
+  side_effects: null
+interrupts:
+  USB_DEVICE: 26
+timing: null

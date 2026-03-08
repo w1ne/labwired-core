@@ -1,6 +1,7 @@
 use crate::{Bus, Cpu, DebugControl, Machine, SimResult, SimulationObserver, StopReason};
 use std::sync::Arc;
 
+#[allow(dead_code)]
 #[derive(Default)]
 struct MockCpu {
     pc: u32,

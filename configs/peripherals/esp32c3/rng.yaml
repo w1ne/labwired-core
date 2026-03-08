@@ -1,0 +1,12 @@
+peripheral: RNG
+version: 0.1.0
+registers:
+- id: DATA
+  address_offset: 176
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+interrupts: null
+timing: null

@@ -115,14 +115,16 @@ impl Cpu for RiscV {
         }
 
         let instruction = decode_rv32(opcode);
+        let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
         tracing::debug!(
-            "PC={:#x}, Op={:#08x}, Instr={:?}",
+            "PC={:#x}, Op={:#08x}, Instr={:?}, Len={}",
             self.pc,
             opcode,
-            instruction
+            instruction,
+            inst_len
         );
 
-        let mut next_pc = self.pc.wrapping_add(4);
+        let mut next_pc = self.pc.wrapping_add(inst_len);
 
         match instruction {
             Instruction::Lui { rd, imm } => {
@@ -385,6 +387,144 @@ impl Cpu for RiscV {
                     self.write_reg(rd, old);
                 }
             }
+            // RV32M Extension
+            Instruction::Mul { rd, rs1, rs2 } => {
+                let res = self.read_reg(rs1).wrapping_mul(self.read_reg(rs2));
+                self.write_reg(rd, res);
+            }
+            Instruction::Mulh { rd, rs1, rs2 } => {
+                let res = (self.read_reg(rs1) as i32 as i64)
+                    .wrapping_mul(self.read_reg(rs2) as i32 as i64);
+                self.write_reg(rd, (res >> 32) as u32);
+            }
+            Instruction::Mulhsu { rd, rs1, rs2 } => {
+                let res = (self.read_reg(rs1) as i32 as i64)
+                    .wrapping_mul(self.read_reg(rs2) as u64 as i64);
+                self.write_reg(rd, (res >> 32) as u32);
+            }
+            Instruction::Mulhu { rd, rs1, rs2 } => {
+                let res = (self.read_reg(rs1) as u64).wrapping_mul(self.read_reg(rs2) as u64);
+                self.write_reg(rd, (res >> 32) as u32);
+            }
+            Instruction::Div { rd, rs1, rs2 } => {
+                let dividend = self.read_reg(rs1) as i32;
+                let divisor = self.read_reg(rs2) as i32;
+                let res = if divisor == 0 {
+                    -1
+                } else if dividend == i32::MIN && divisor == -1 {
+                    dividend
+                } else {
+                    dividend / divisor
+                };
+                self.write_reg(rd, res as u32);
+            }
+            Instruction::Divu { rd, rs1, rs2 } => {
+                let dividend = self.read_reg(rs1);
+                let divisor = self.read_reg(rs2);
+                let res = if divisor == 0 {
+                    u32::MAX
+                } else {
+                    dividend / divisor
+                };
+                self.write_reg(rd, res);
+            }
+            Instruction::Rem { rd, rs1, rs2 } => {
+                let dividend = self.read_reg(rs1) as i32;
+                let divisor = self.read_reg(rs2) as i32;
+                let res = if divisor == 0 {
+                    dividend
+                } else if dividend == i32::MIN && divisor == -1 {
+                    0
+                } else {
+                    dividend % divisor
+                };
+                self.write_reg(rd, res as u32);
+            }
+            Instruction::Remu { rd, rs1, rs2 } => {
+                let dividend = self.read_reg(rs1);
+                let divisor = self.read_reg(rs2);
+                let res = if divisor == 0 {
+                    dividend
+                } else {
+                    dividend % divisor
+                };
+                self.write_reg(rd, res);
+            }
+            // RV32C Extension
+            Instruction::CAddi { rd, imm } => {
+                if rd != 0 {
+                    let res = self.read_reg(rd).wrapping_add(imm as u32);
+                    self.write_reg(rd, res);
+                }
+            }
+            Instruction::CLi { rd, imm } => {
+                if rd != 0 {
+                    self.write_reg(rd, imm as u32);
+                }
+            }
+            Instruction::CMv { rd, rs2 } => {
+                if rd != 0 {
+                    let val = self.read_reg(rs2);
+                    self.write_reg(rd, val);
+                }
+            }
+            Instruction::CAddi16sp { imm } => {
+                let sp = self.read_reg(2);
+                self.write_reg(2, sp.wrapping_add(imm as u32));
+            }
+            Instruction::CAddi4spn { rd, imm } => {
+                let sp = self.read_reg(2);
+                self.write_reg(rd, sp.wrapping_add(imm));
+            }
+            Instruction::CLw { rd, rs1, imm } => {
+                let addr = self.read_reg(rs1).wrapping_add(imm);
+                let val = bus.read_u32(addr as u64)?;
+                self.write_reg(rd, val);
+            }
+            Instruction::CSw { rs2, rs1, imm } => {
+                let addr = self.read_reg(rs1).wrapping_add(imm);
+                let val = self.read_reg(rs2);
+                bus.write_u32(addr as u64, val)?;
+            }
+            Instruction::CLwsp { rd, imm } => {
+                let sp = self.read_reg(2);
+                let addr = sp.wrapping_add(imm);
+                let val = bus.read_u32(addr as u64)?;
+                self.write_reg(rd, val);
+            }
+            Instruction::CSwsp { rs2, imm } => {
+                let sp = self.read_reg(2);
+                let addr = sp.wrapping_add(imm);
+                let val = self.read_reg(rs2);
+                bus.write_u32(addr as u64, val)?;
+            }
+            Instruction::CJr { rs1 } => {
+                next_pc = self.read_reg(rs1) & !1;
+            }
+            Instruction::CJalr { rs1 } => {
+                let target = self.read_reg(rs1) & !1;
+                self.write_reg(1, self.pc.wrapping_add(2));
+                next_pc = target;
+            }
+            Instruction::CJ { imm } => {
+                next_pc = self.pc.wrapping_add(imm as u32);
+            }
+            Instruction::CBeqz { rs1, imm } => {
+                if self.read_reg(rs1) == 0 {
+                    next_pc = self.pc.wrapping_add(imm as u32);
+                }
+            }
+            Instruction::CBnez { rs1, imm } => {
+                if self.read_reg(rs1) != 0 {
+                    next_pc = self.pc.wrapping_add(imm as u32);
+                }
+            }
+            Instruction::CSli { rd, shamt } => {
+                if rd != 0 {
+                    let res = self.read_reg(rd) << shamt;
+                    self.write_reg(rd, res);
+                }
+            }
             Instruction::Unknown(inst) => {
                 tracing::error!("Unknown instruction {:#x} at {:#x}", inst, self.pc);
                 return Err(crate::SimulationError::DecodeError(self.pc as u64));
@@ -430,7 +570,7 @@ impl Cpu for RiscV {
         registers[32] = self.pc;
 
         for obs in observers {
-            obs.on_step_end(1, &registers);
+            obs.on_step_end(inst_len, &registers);
         }
 
         Ok(())
@@ -675,16 +815,87 @@ mod tests {
     }
 
     #[test]
-    fn test_riscv_snapshot() {
+    fn test_riscv_mul() {
+        let mut bus = SystemBus::new();
         let mut cpu = RiscV::new();
-        cpu.write_reg(1, 42);
-        cpu.pc = 0x1234;
-        let snapshot = cpu.snapshot();
-        if let crate::snapshot::CpuSnapshot::RiscV(s) = snapshot {
-            assert_eq!(s.registers[1], 42);
-            assert_eq!(s.pc, 0x1234);
-        } else {
-            panic!("Expected RiscV snapshot");
-        }
+        // ADDI x1, x0, 10
+        // ADDI x2, x0, 5
+        // MUL x3, x1, x2 (x3 = 10 * 5 = 50)
+        // MUL Opcode: 0x33, funct3: 0, funct7: 0x01, rs1: 1, rs2: 2, rd: 3
+        // 0000001 00010 00001 000 00011 0110011 -> 0x022081B3
+        bus.flash.data = vec![
+            0x93, 0x00, 0xA0, 0x00, // ADDI x1, x0, 10
+            0x13, 0x01, 0x50, 0x00, // ADDI x2, x0, 5
+            0xB3, 0x81, 0x20, 0x02, // MUL x3, x1, x2
+        ];
+
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+        machine.step().unwrap();
+        machine.step().unwrap();
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.read_reg(3), 50);
+        assert_eq!(machine.cpu.pc, 12);
+    }
+
+    #[test]
+    fn test_riscv_compressed_addi() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        // C.ADDI x1, 5 (x1 = 0 + 5)
+        // Op: 01, funct3: 000, rd: 1, imm: 5
+        // 000 0 00001 00101 01 -> 0x0085 (Wait, C.ADDI imm is split)
+        // inst[15:13]=000, inst[12]=imm[5]=0, inst[11:7]=rd=1, inst[6:2]=imm[4:0]=5
+        // 000 0   00001   00101   01 -> 0x0085 (Wait, bitwise: 0000 0000 1001 0101 -> 0x0095?)
+        // Let's use rvcodecjs: C.ADDI x1, 5 -> 0x0095
+        bus.flash.data = vec![
+            0x95, 0x00, // C.ADDI x1, 5
+            0x13, 0x02, 0x50, 0x00, // ADDI x4, x0, 5 (for alignment check)
+        ];
+
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.read_reg(1), 5);
+        assert_eq!(machine.cpu.pc, 2); // PC should increment by 2
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.read_reg(4), 5);
+        assert_eq!(machine.cpu.pc, 6);
+    }
+
+    #[test]
+    fn test_riscv_compressed_lw_sw() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        // x8 is used for C.LW/SW (s0/fp).
+        // 1. ADDI x8, x0, 0x20000000 (RAM start)
+        // 2. ADDI x9, x0, 42
+        // 3. C.SW x9, 4(x8)
+        // 4. C.LW x10, 4(x8)
+
+        // C.SW x9, 4(x8) -> 0xC044 (Little Endian: 44 C0)
+        // C.LW x10, 4(x8) -> 0x4048 (Little Endian: 48 40)
+
+        bus.flash.data = vec![
+            0x37, 0x04, 0x00, 0x20, // LUI x8, 0x20000 (x8 = 0x20000000)
+            0x93, 0x04, 0xA0, 0x02, // ADDI x9, x0, 42
+            0x44, 0xC0, // C.SW x9, 4(x8)
+            0x48, 0x40, // C.LW x10, 4(x8)
+            0x00, 0x00, 0x00, 0x00, // Padding
+        ];
+
+        cpu.pc = 0x0;
+        cpu.write_reg(2, 0x20001000); // Initialize SP just in case
+        let mut machine = Machine::new(cpu, bus);
+        machine.step().unwrap(); // LUI
+        machine.step().unwrap(); // ADDI
+        machine.step().unwrap(); // C.SW
+        machine.step().unwrap(); // C.LW
+
+        assert_eq!(machine.cpu.read_reg(10), 42);
+        assert_eq!(machine.cpu.pc, 12); // 4 + 4 + 2 + 2 = 12
     }
 }

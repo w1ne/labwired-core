@@ -1,0 +1,1267 @@
+peripheral: INTERRUPT_CORE0
+version: 0.1.0
+registers:
+- id: MAC_INTR_MAP
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAC_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: core0_mac_intr_map
+  side_effects: null
+- id: MAC_NMI_MAP
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAC_NMI_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_mac_nmi_map
+  side_effects: null
+- id: PWR_INTR_MAP
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PWR_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_pwr_intr_map
+  side_effects: null
+- id: BB_INT_MAP
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BB_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_bb_int_map
+  side_effects: null
+- id: BT_MAC_INT_MAP
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BT_MAC_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_bt_mac_int_map
+  side_effects: null
+- id: BT_BB_INT_MAP
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BT_BB_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_bt_bb_int_map
+  side_effects: null
+- id: BT_BB_NMI_MAP
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BT_BB_NMI_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_bt_bb_nmi_map
+  side_effects: null
+- id: RWBT_IRQ_MAP
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RWBT_IRQ_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_rwbt_irq_map
+  side_effects: null
+- id: RWBLE_IRQ_MAP
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RWBLE_IRQ_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_rwble_irq_map
+  side_effects: null
+- id: RWBT_NMI_MAP
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RWBT_NMI_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_rwbt_nmi_map
+  side_effects: null
+- id: RWBLE_NMI_MAP
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RWBLE_NMI_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_rwble_nmi_map
+  side_effects: null
+- id: I2C_MST_INT_MAP
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: I2C_MST_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_i2c_mst_int_map
+  side_effects: null
+- id: SLC0_INTR_MAP
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLC0_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_slc0_intr_map
+  side_effects: null
+- id: SLC1_INTR_MAP
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLC1_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_slc1_intr_map
+  side_effects: null
+- id: APB_CTRL_INTR_MAP
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_CTRL_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_apb_ctrl_intr_map
+  side_effects: null
+- id: UHCI0_INTR_MAP
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UHCI0_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_uhci0_intr_map
+  side_effects: null
+- id: GPIO_INTERRUPT_PRO_MAP
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_INTERRUPT_PRO_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_gpio_interrupt_pro_map
+  side_effects: null
+- id: GPIO_INTERRUPT_PRO_NMI_MAP
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_INTERRUPT_PRO_NMI_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_gpio_interrupt_pro_nmi_map
+  side_effects: null
+- id: SPI_INTR_1_MAP
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_INTR_1_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_spi_intr_1_map
+  side_effects: null
+- id: SPI_INTR_2_MAP
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_INTR_2_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_spi_intr_2_map
+  side_effects: null
+- id: I2S1_INT_MAP
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: I2S1_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_i2s1_int_map
+  side_effects: null
+- id: UART_INTR_MAP
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UART_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_uart_intr_map
+  side_effects: null
+- id: UART1_INTR_MAP
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UART1_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_uart1_intr_map
+  side_effects: null
+- id: LEDC_INT_MAP
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LEDC_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_ledc_int_map
+  side_effects: null
+- id: EFUSE_INT_MAP
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EFUSE_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_efuse_int_map
+  side_effects: null
+- id: CAN_INT_MAP
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CAN_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_can_int_map
+  side_effects: null
+- id: USB_INTR_MAP
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USB_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_usb_intr_map
+  side_effects: null
+- id: RTC_CORE_INTR_MAP
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC_CORE_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_rtc_core_intr_map
+  side_effects: null
+- id: RMT_INTR_MAP
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RMT_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_rmt_intr_map
+  side_effects: null
+- id: I2C_EXT0_INTR_MAP
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: I2C_EXT0_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_i2c_ext0_intr_map
+  side_effects: null
+- id: TIMER_INT1_MAP
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_INT1_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_timer_int1_map
+  side_effects: null
+- id: TIMER_INT2_MAP
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMER_INT2_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_timer_int2_map
+  side_effects: null
+- id: TG_T0_INT_MAP
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TG_T0_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_tg_t0_int_map
+  side_effects: null
+- id: TG_WDT_INT_MAP
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TG_WDT_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_tg_wdt_int_map
+  side_effects: null
+- id: TG1_T0_INT_MAP
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TG1_T0_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_tg1_t0_int_map
+  side_effects: null
+- id: TG1_WDT_INT_MAP
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TG1_WDT_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_tg1_wdt_int_map
+  side_effects: null
+- id: CACHE_IA_INT_MAP
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_IA_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_cache_ia_int_map
+  side_effects: null
+- id: SYSTIMER_TARGET0_INT_MAP
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSTIMER_TARGET0_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_systimer_target0_int_map
+  side_effects: null
+- id: SYSTIMER_TARGET1_INT_MAP
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSTIMER_TARGET1_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_systimer_target1_int_map
+  side_effects: null
+- id: SYSTIMER_TARGET2_INT_MAP
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SYSTIMER_TARGET2_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_systimer_target2_int_map
+  side_effects: null
+- id: SPI_MEM_REJECT_INTR_MAP
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_MEM_REJECT_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_spi_mem_reject_intr_map
+  side_effects: null
+- id: ICACHE_PRELOAD_INT_MAP
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ICACHE_PRELOAD_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_icache_preload_int_map
+  side_effects: null
+- id: ICACHE_SYNC_INT_MAP
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ICACHE_SYNC_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_icache_sync_int_map
+  side_effects: null
+- id: APB_ADC_INT_MAP
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_ADC_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_apb_adc_int_map
+  side_effects: null
+- id: DMA_CH0_INT_MAP
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_CH0_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_dma_ch0_int_map
+  side_effects: null
+- id: DMA_CH1_INT_MAP
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_CH1_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_dma_ch1_int_map
+  side_effects: null
+- id: DMA_CH2_INT_MAP
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_CH2_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_dma_ch2_int_map
+  side_effects: null
+- id: RSA_INT_MAP
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RSA_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_rsa_int_map
+  side_effects: null
+- id: AES_INT_MAP
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AES_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_aes_int_map
+  side_effects: null
+- id: SHA_INT_MAP
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SHA_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_sha_int_map
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_0_MAP
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_0_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_cpu_intr_from_cpu_0_map
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_1_MAP
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_1_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_cpu_intr_from_cpu_1_map
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_2_MAP
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_2_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_cpu_intr_from_cpu_2_map
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_3_MAP
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_3_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_cpu_intr_from_cpu_3_map
+  side_effects: null
+- id: ASSIST_DEBUG_INTR_MAP
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ASSIST_DEBUG_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_assist_debug_intr_map
+  side_effects: null
+- id: DMA_APBPERI_PMS_MONITOR_VIOLATE_INTR_MAP
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_dma_apbperi_pms_monitor_violate_intr_map
+  side_effects: null
+- id: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_INTR_MAP
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_core_0_iram0_pms_monitor_violate_intr_map
+  side_effects: null
+- id: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_INTR_MAP
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_core_0_dram0_pms_monitor_violate_intr_map
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_VIOLATE_INTR_MAP
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_core_0_pif_pms_monitor_violate_intr_map
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_VIOLATE_SIZE_INTR_MAP
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_SIZE_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_core_0_pif_pms_monitor_violate_size_intr_map
+  side_effects: null
+- id: BACKUP_PMS_VIOLATE_INTR_MAP
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BACKUP_PMS_VIOLATE_INTR_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_backup_pms_violate_intr_map
+  side_effects: null
+- id: CACHE_CORE0_ACS_INT_MAP
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_CORE0_ACS_INT_MAP
+    bit_range:
+    - 4
+    - 0
+    description: reg_core0_cache_core0_acs_int_map
+  side_effects: null
+- id: INTR_STATUS_REG_0
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTR_STATUS_0
+    bit_range:
+    - 31
+    - 0
+    description: reg_core0_intr_status_0
+  side_effects: null
+- id: INTR_STATUS_REG_1
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTR_STATUS_1
+    bit_range:
+    - 31
+    - 0
+    description: reg_core0_intr_status_1
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: REG_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: reg_core0_reg_clk_en
+  side_effects: null
+- id: CPU_INT_ENABLE
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INT_ENABLE
+    bit_range:
+    - 31
+    - 0
+    description: reg_core0_cpu_int_enable
+  side_effects: null
+- id: CPU_INT_TYPE
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INT_TYPE
+    bit_range:
+    - 31
+    - 0
+    description: reg_core0_cpu_int_type
+  side_effects: null
+- id: CPU_INT_CLEAR
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INT_CLEAR
+    bit_range:
+    - 31
+    - 0
+    description: reg_core0_cpu_int_clear
+  side_effects: null
+- id: CPU_INT_EIP_STATUS
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INT_EIP_STATUS
+    bit_range:
+    - 31
+    - 0
+    description: reg_core0_cpu_int_eip_status
+  side_effects: null
+- id: CPU_INT_PRI_0
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_0_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_0_map
+  side_effects: null
+- id: CPU_INT_PRI_1
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_1_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_1_map
+  side_effects: null
+- id: CPU_INT_PRI_2
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_2_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_2_map
+  side_effects: null
+- id: CPU_INT_PRI_3
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_3_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_3_map
+  side_effects: null
+- id: CPU_INT_PRI_4
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_4_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_4_map
+  side_effects: null
+- id: CPU_INT_PRI_5
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_5_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_5_map
+  side_effects: null
+- id: CPU_INT_PRI_6
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_6_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_6_map
+  side_effects: null
+- id: CPU_INT_PRI_7
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_7_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_7_map
+  side_effects: null
+- id: CPU_INT_PRI_8
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_8_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_8_map
+  side_effects: null
+- id: CPU_INT_PRI_9
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_9_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_9_map
+  side_effects: null
+- id: CPU_INT_PRI_10
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_10_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_10_map
+  side_effects: null
+- id: CPU_INT_PRI_11
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_11_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_11_map
+  side_effects: null
+- id: CPU_INT_PRI_12
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_12_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_12_map
+  side_effects: null
+- id: CPU_INT_PRI_13
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_13_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_13_map
+  side_effects: null
+- id: CPU_INT_PRI_14
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_14_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_14_map
+  side_effects: null
+- id: CPU_INT_PRI_15
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_15_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_15_map
+  side_effects: null
+- id: CPU_INT_PRI_16
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_16_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_16_map
+  side_effects: null
+- id: CPU_INT_PRI_17
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_17_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_17_map
+  side_effects: null
+- id: CPU_INT_PRI_18
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_18_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_18_map
+  side_effects: null
+- id: CPU_INT_PRI_19
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_19_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_19_map
+  side_effects: null
+- id: CPU_INT_PRI_20
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_20_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_20_map
+  side_effects: null
+- id: CPU_INT_PRI_21
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_21_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_21_map
+  side_effects: null
+- id: CPU_INT_PRI_22
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_22_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_22_map
+  side_effects: null
+- id: CPU_INT_PRI_23
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_23_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_23_map
+  side_effects: null
+- id: CPU_INT_PRI_24
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_24_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_24_map
+  side_effects: null
+- id: CPU_INT_PRI_25
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_25_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_25_map
+  side_effects: null
+- id: CPU_INT_PRI_26
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_26_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_26_map
+  side_effects: null
+- id: CPU_INT_PRI_27
+  address_offset: 384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_27_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_27_map
+  side_effects: null
+- id: CPU_INT_PRI_28
+  address_offset: 388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_28_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_28_map
+  side_effects: null
+- id: CPU_INT_PRI_29
+  address_offset: 392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_29_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_29_map
+  side_effects: null
+- id: CPU_INT_PRI_30
+  address_offset: 396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_30_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_30_map
+  side_effects: null
+- id: CPU_INT_PRI_31
+  address_offset: 400
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_PRI_31_MAP
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_pri_31_map
+  side_effects: null
+- id: CPU_INT_THRESH
+  address_offset: 404
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INT_THRESH
+    bit_range:
+    - 3
+    - 0
+    description: reg_core0_cpu_int_thresh
+  side_effects: null
+- id: INTERRUPT_REG_DATE
+  address_offset: 2044
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583632
+  fields:
+  - name: INTERRUPT_REG_DATE
+    bit_range:
+    - 27
+    - 0
+    description: reg_core0_interrupt_reg_date
+  side_effects: null
+interrupts:
+  RWBLE_NMI: 10
+  CACHE_CORE0_ACS: 61
+  SLC0: 12
+  RWBLE: 8
+  FROM_CPU_INTR3: 53
+  CORE0_PIF_PMS: 58
+  WIFI_MAC_NMI: 1
+  FROM_CPU_INTR0: 50
+  FROM_CPU_INTR2: 52
+  WIFI_BB: 3
+  FROM_CPU_INTR1: 51
+  CORE0_PIF_PMS_SIZE: 59
+  BAK_PMS_VIOLATE: 60
+  CORE0_DRAM0_PMS: 57
+  WIFI_PWR: 2
+  SLC1: 13
+  BT_BB_NMI: 6
+  CACHE_IA: 36
+  BT_MAC: 4
+  ICACHE_SYNC0: 42
+  BT_BB: 5
+  RWBT_NMI: 9
+  WIFI_MAC: 0
+  RWBT: 7
+  ICACHE_PRELOAD0: 41
+  CORE0_IRAM0_PMS: 56
+timing: null

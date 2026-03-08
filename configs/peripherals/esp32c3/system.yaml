@@ -1,0 +1,1070 @@
+peripheral: SYSTEM
+version: 0.1.0
+registers:
+- id: CPU_PERI_CLK_EN
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_EN_ASSIST_DEBUG
+    bit_range:
+    - 6
+    - 6
+    description: reg_clk_en_assist_debug
+  - name: CLK_EN_DEDICATED_GPIO
+    bit_range:
+    - 7
+    - 7
+    description: reg_clk_en_dedicated_gpio
+  side_effects: null
+- id: CPU_PERI_RST_EN
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 192
+  fields:
+  - name: RST_EN_ASSIST_DEBUG
+    bit_range:
+    - 6
+    - 6
+    description: reg_rst_en_assist_debug
+  - name: RST_EN_DEDICATED_GPIO
+    bit_range:
+    - 7
+    - 7
+    description: reg_rst_en_dedicated_gpio
+  side_effects: null
+- id: CPU_PER_CONF
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 12
+  fields:
+  - name: CPUPERIOD_SEL
+    bit_range:
+    - 1
+    - 0
+    description: reg_cpuperiod_sel
+  - name: PLL_FREQ_SEL
+    bit_range:
+    - 2
+    - 2
+    description: reg_pll_freq_sel
+  - name: CPU_WAIT_MODE_FORCE_ON
+    bit_range:
+    - 3
+    - 3
+    description: reg_cpu_wait_mode_force_on
+  - name: CPU_WAITI_DELAY_NUM
+    bit_range:
+    - 7
+    - 4
+    description: reg_cpu_waiti_delay_num
+  side_effects: null
+- id: MEM_PD_MASK
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: LSLP_MEM_PD_MASK
+    bit_range:
+    - 0
+    - 0
+    description: reg_lslp_mem_pd_mask
+  side_effects: null
+- id: PERIP_CLK_EN0
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 4190232687
+  fields:
+  - name: TIMERS_CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: reg_timers_clk_en
+  - name: SPI01_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: reg_spi01_clk_en
+  - name: UART_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: reg_uart_clk_en
+  - name: WDG_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: reg_wdg_clk_en
+  - name: I2S0_CLK_EN
+    bit_range:
+    - 4
+    - 4
+    description: reg_i2s0_clk_en
+  - name: UART1_CLK_EN
+    bit_range:
+    - 5
+    - 5
+    description: reg_uart1_clk_en
+  - name: SPI2_CLK_EN
+    bit_range:
+    - 6
+    - 6
+    description: reg_spi2_clk_en
+  - name: I2C_EXT0_CLK_EN
+    bit_range:
+    - 7
+    - 7
+    description: reg_ext0_clk_en
+  - name: UHCI0_CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: reg_uhci0_clk_en
+  - name: RMT_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: reg_rmt_clk_en
+  - name: PCNT_CLK_EN
+    bit_range:
+    - 10
+    - 10
+    description: reg_pcnt_clk_en
+  - name: LEDC_CLK_EN
+    bit_range:
+    - 11
+    - 11
+    description: reg_ledc_clk_en
+  - name: UHCI1_CLK_EN
+    bit_range:
+    - 12
+    - 12
+    description: reg_uhci1_clk_en
+  - name: TIMERGROUP_CLK_EN
+    bit_range:
+    - 13
+    - 13
+    description: reg_timergroup_clk_en
+  - name: EFUSE_CLK_EN
+    bit_range:
+    - 14
+    - 14
+    description: reg_efuse_clk_en
+  - name: TIMERGROUP1_CLK_EN
+    bit_range:
+    - 15
+    - 15
+    description: reg_timergroup1_clk_en
+  - name: SPI3_CLK_EN
+    bit_range:
+    - 16
+    - 16
+    description: reg_spi3_clk_en
+  - name: PWM0_CLK_EN
+    bit_range:
+    - 17
+    - 17
+    description: reg_pwm0_clk_en
+  - name: EXT1_CLK_EN
+    bit_range:
+    - 18
+    - 18
+    description: reg_ext1_clk_en
+  - name: TWAI_CLK_EN
+    bit_range:
+    - 19
+    - 19
+    description: reg_can_clk_en
+  - name: PWM1_CLK_EN
+    bit_range:
+    - 20
+    - 20
+    description: reg_pwm1_clk_en
+  - name: I2S1_CLK_EN
+    bit_range:
+    - 21
+    - 21
+    description: reg_i2s1_clk_en
+  - name: SPI2_DMA_CLK_EN
+    bit_range:
+    - 22
+    - 22
+    description: reg_spi2_dma_clk_en
+  - name: USB_DEVICE_CLK_EN
+    bit_range:
+    - 23
+    - 23
+    description: reg_usb_device_clk_en
+  - name: UART_MEM_CLK_EN
+    bit_range:
+    - 24
+    - 24
+    description: reg_uart_mem_clk_en
+  - name: PWM2_CLK_EN
+    bit_range:
+    - 25
+    - 25
+    description: reg_pwm2_clk_en
+  - name: PWM3_CLK_EN
+    bit_range:
+    - 26
+    - 26
+    description: reg_pwm3_clk_en
+  - name: SPI3_DMA_CLK_EN
+    bit_range:
+    - 27
+    - 27
+    description: reg_spi3_dma_clk_en
+  - name: APB_SARADC_CLK_EN
+    bit_range:
+    - 28
+    - 28
+    description: reg_apb_saradc_clk_en
+  - name: SYSTIMER_CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: reg_systimer_clk_en
+  - name: ADC2_ARB_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: reg_adc2_arb_clk_en
+  - name: SPI4_CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: reg_spi4_clk_en
+  side_effects: null
+- id: PERIP_CLK_EN1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: CRYPTO_AES_CLK_EN
+    bit_range:
+    - 1
+    - 1
+    description: reg_crypto_aes_clk_en
+  - name: CRYPTO_SHA_CLK_EN
+    bit_range:
+    - 2
+    - 2
+    description: reg_crypto_sha_clk_en
+  - name: CRYPTO_RSA_CLK_EN
+    bit_range:
+    - 3
+    - 3
+    description: reg_crypto_rsa_clk_en
+  - name: CRYPTO_DS_CLK_EN
+    bit_range:
+    - 4
+    - 4
+    description: reg_crypto_ds_clk_en
+  - name: CRYPTO_HMAC_CLK_EN
+    bit_range:
+    - 5
+    - 5
+    description: reg_crypto_hmac_clk_en
+  - name: DMA_CLK_EN
+    bit_range:
+    - 6
+    - 6
+    description: reg_dma_clk_en
+  - name: SDIO_HOST_CLK_EN
+    bit_range:
+    - 7
+    - 7
+    description: reg_sdio_host_clk_en
+  - name: LCD_CAM_CLK_EN
+    bit_range:
+    - 8
+    - 8
+    description: reg_lcd_cam_clk_en
+  - name: UART2_CLK_EN
+    bit_range:
+    - 9
+    - 9
+    description: reg_uart2_clk_en
+  - name: TSENS_CLK_EN
+    bit_range:
+    - 10
+    - 10
+    description: reg_tsens_clk_en
+  side_effects: null
+- id: PERIP_RST_EN0
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMERS_RST
+    bit_range:
+    - 0
+    - 0
+    description: reg_timers_rst
+  - name: SPI01_RST
+    bit_range:
+    - 1
+    - 1
+    description: reg_spi01_rst
+  - name: UART_RST
+    bit_range:
+    - 2
+    - 2
+    description: reg_uart_rst
+  - name: WDG_RST
+    bit_range:
+    - 3
+    - 3
+    description: reg_wdg_rst
+  - name: I2S0_RST
+    bit_range:
+    - 4
+    - 4
+    description: reg_i2s0_rst
+  - name: UART1_RST
+    bit_range:
+    - 5
+    - 5
+    description: reg_uart1_rst
+  - name: SPI2_RST
+    bit_range:
+    - 6
+    - 6
+    description: reg_spi2_rst
+  - name: I2C_EXT0_RST
+    bit_range:
+    - 7
+    - 7
+    description: reg_ext0_rst
+  - name: UHCI0_RST
+    bit_range:
+    - 8
+    - 8
+    description: reg_uhci0_rst
+  - name: RMT_RST
+    bit_range:
+    - 9
+    - 9
+    description: reg_rmt_rst
+  - name: PCNT_RST
+    bit_range:
+    - 10
+    - 10
+    description: reg_pcnt_rst
+  - name: LEDC_RST
+    bit_range:
+    - 11
+    - 11
+    description: reg_ledc_rst
+  - name: UHCI1_RST
+    bit_range:
+    - 12
+    - 12
+    description: reg_uhci1_rst
+  - name: TIMERGROUP_RST
+    bit_range:
+    - 13
+    - 13
+    description: reg_timergroup_rst
+  - name: EFUSE_RST
+    bit_range:
+    - 14
+    - 14
+    description: reg_efuse_rst
+  - name: TIMERGROUP1_RST
+    bit_range:
+    - 15
+    - 15
+    description: reg_timergroup1_rst
+  - name: SPI3_RST
+    bit_range:
+    - 16
+    - 16
+    description: reg_spi3_rst
+  - name: PWM0_RST
+    bit_range:
+    - 17
+    - 17
+    description: reg_pwm0_rst
+  - name: EXT1_RST
+    bit_range:
+    - 18
+    - 18
+    description: reg_ext1_rst
+  - name: TWAI_RST
+    bit_range:
+    - 19
+    - 19
+    description: reg_can_rst
+  - name: PWM1_RST
+    bit_range:
+    - 20
+    - 20
+    description: reg_pwm1_rst
+  - name: I2S1_RST
+    bit_range:
+    - 21
+    - 21
+    description: reg_i2s1_rst
+  - name: SPI2_DMA_RST
+    bit_range:
+    - 22
+    - 22
+    description: reg_spi2_dma_rst
+  - name: USB_DEVICE_RST
+    bit_range:
+    - 23
+    - 23
+    description: reg_usb_device_rst
+  - name: UART_MEM_RST
+    bit_range:
+    - 24
+    - 24
+    description: reg_uart_mem_rst
+  - name: PWM2_RST
+    bit_range:
+    - 25
+    - 25
+    description: reg_pwm2_rst
+  - name: PWM3_RST
+    bit_range:
+    - 26
+    - 26
+    description: reg_pwm3_rst
+  - name: SPI3_DMA_RST
+    bit_range:
+    - 27
+    - 27
+    description: reg_spi3_dma_rst
+  - name: APB_SARADC_RST
+    bit_range:
+    - 28
+    - 28
+    description: reg_apb_saradc_rst
+  - name: SYSTIMER_RST
+    bit_range:
+    - 29
+    - 29
+    description: reg_systimer_rst
+  - name: ADC2_ARB_RST
+    bit_range:
+    - 30
+    - 30
+    description: reg_adc2_arb_rst
+  - name: SPI4_RST
+    bit_range:
+    - 31
+    - 31
+    description: reg_spi4_rst
+  side_effects: null
+- id: PERIP_RST_EN1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 510
+  fields:
+  - name: CRYPTO_AES_RST
+    bit_range:
+    - 1
+    - 1
+    description: reg_crypto_aes_rst
+  - name: CRYPTO_SHA_RST
+    bit_range:
+    - 2
+    - 2
+    description: reg_crypto_sha_rst
+  - name: CRYPTO_RSA_RST
+    bit_range:
+    - 3
+    - 3
+    description: reg_crypto_rsa_rst
+  - name: CRYPTO_DS_RST
+    bit_range:
+    - 4
+    - 4
+    description: reg_crypto_ds_rst
+  - name: CRYPTO_HMAC_RST
+    bit_range:
+    - 5
+    - 5
+    description: reg_crypto_hmac_rst
+  - name: DMA_RST
+    bit_range:
+    - 6
+    - 6
+    description: reg_dma_rst
+  - name: SDIO_HOST_RST
+    bit_range:
+    - 7
+    - 7
+    description: reg_sdio_host_rst
+  - name: LCD_CAM_RST
+    bit_range:
+    - 8
+    - 8
+    description: reg_lcd_cam_rst
+  - name: UART2_RST
+    bit_range:
+    - 9
+    - 9
+    description: reg_uart2_rst
+  - name: TSENS_RST
+    bit_range:
+    - 10
+    - 10
+    description: reg_tsens_rst
+  side_effects: null
+- id: BT_LPCK_DIV_INT
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 255
+  fields:
+  - name: BT_LPCK_DIV_NUM
+    bit_range:
+    - 11
+    - 0
+    description: reg_bt_lpck_div_num
+  side_effects: null
+- id: BT_LPCK_DIV_FRAC
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 33558529
+  fields:
+  - name: BT_LPCK_DIV_B
+    bit_range:
+    - 11
+    - 0
+    description: reg_bt_lpck_div_b
+  - name: BT_LPCK_DIV_A
+    bit_range:
+    - 23
+    - 12
+    description: reg_bt_lpck_div_a
+  - name: LPCLK_SEL_RTC_SLOW
+    bit_range:
+    - 24
+    - 24
+    description: reg_lpclk_sel_rtc_slow
+  - name: LPCLK_SEL_8M
+    bit_range:
+    - 25
+    - 25
+    description: reg_lpclk_sel_8m
+  - name: LPCLK_SEL_XTAL
+    bit_range:
+    - 26
+    - 26
+    description: reg_lpclk_sel_xtal
+  - name: LPCLK_SEL_XTAL32K
+    bit_range:
+    - 27
+    - 27
+    description: reg_lpclk_sel_xtal32k
+  - name: LPCLK_RTC_EN
+    bit_range:
+    - 28
+    - 28
+    description: reg_lpclk_rtc_en
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_0
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_0
+    bit_range:
+    - 0
+    - 0
+    description: reg_cpu_intr_from_cpu_0
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_1
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_1
+    bit_range:
+    - 0
+    - 0
+    description: reg_cpu_intr_from_cpu_1
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_2
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_2
+    bit_range:
+    - 0
+    - 0
+    description: reg_cpu_intr_from_cpu_2
+  side_effects: null
+- id: CPU_INTR_FROM_CPU_3
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPU_INTR_FROM_CPU_3
+    bit_range:
+    - 0
+    - 0
+    description: reg_cpu_intr_from_cpu_3
+  side_effects: null
+- id: RSA_PD_CTRL
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: RSA_MEM_PD
+    bit_range:
+    - 0
+    - 0
+    description: reg_rsa_mem_pd
+  - name: RSA_MEM_FORCE_PU
+    bit_range:
+    - 1
+    - 1
+    description: reg_rsa_mem_force_pu
+  - name: RSA_MEM_FORCE_PD
+    bit_range:
+    - 2
+    - 2
+    description: reg_rsa_mem_force_pd
+  side_effects: null
+- id: EDMA_CTRL
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: EDMA_CLK_ON
+    bit_range:
+    - 0
+    - 0
+    description: reg_edma_clk_on
+  - name: EDMA_RESET
+    bit_range:
+    - 1
+    - 1
+    description: reg_edma_reset
+  side_effects: null
+- id: CACHE_CONTROL
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: ICACHE_CLK_ON
+    bit_range:
+    - 0
+    - 0
+    description: reg_icache_clk_on
+  - name: ICACHE_RESET
+    bit_range:
+    - 1
+    - 1
+    description: reg_icache_reset
+  - name: DCACHE_CLK_ON
+    bit_range:
+    - 2
+    - 2
+    description: reg_dcache_clk_on
+  - name: DCACHE_RESET
+    bit_range:
+    - 3
+    - 3
+    description: reg_dcache_reset
+  side_effects: null
+- id: EXTERNAL_DEVICE_ENCRYPT_DECRYPT_CONTROL
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE_SPI_MANUAL_ENCRYPT
+    bit_range:
+    - 0
+    - 0
+    description: reg_enable_spi_manual_encrypt
+  - name: ENABLE_DOWNLOAD_DB_ENCRYPT
+    bit_range:
+    - 1
+    - 1
+    description: reg_enable_download_db_encrypt
+  - name: ENABLE_DOWNLOAD_G0CB_DECRYPT
+    bit_range:
+    - 2
+    - 2
+    description: reg_enable_download_g0cb_decrypt
+  - name: ENABLE_DOWNLOAD_MANUAL_ENCRYPT
+    bit_range:
+    - 3
+    - 3
+    description: reg_enable_download_manual_encrypt
+  side_effects: null
+- id: RTC_FASTMEM_CONFIG
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 2146435072
+  fields:
+  - name: RTC_MEM_CRC_START
+    bit_range:
+    - 8
+    - 8
+    description: reg_rtc_mem_crc_start
+  - name: RTC_MEM_CRC_ADDR
+    bit_range:
+    - 19
+    - 9
+    description: reg_rtc_mem_crc_addr
+  - name: RTC_MEM_CRC_LEN
+    bit_range:
+    - 30
+    - 20
+    description: reg_rtc_mem_crc_len
+  - name: RTC_MEM_CRC_FINISH
+    bit_range:
+    - 31
+    - 31
+    description: reg_rtc_mem_crc_finish
+  side_effects: null
+- id: RTC_FASTMEM_CRC
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTC_MEM_CRC_RES
+    bit_range:
+    - 31
+    - 0
+    description: reg_rtc_mem_crc_res
+  side_effects: null
+- id: REDUNDANT_ECO_CTRL
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REDUNDANT_ECO_DRIVE
+    bit_range:
+    - 0
+    - 0
+    description: reg_redundant_eco_drive
+  - name: REDUNDANT_ECO_RESULT
+    bit_range:
+    - 1
+    - 1
+    description: reg_redundant_eco_result
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: reg_clk_en
+  side_effects: null
+- id: SYSCLK_CONF
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: PRE_DIV_CNT
+    bit_range:
+    - 9
+    - 0
+    description: reg_pre_div_cnt
+  - name: SOC_CLK_SEL
+    bit_range:
+    - 11
+    - 10
+    description: reg_soc_clk_sel
+  - name: CLK_XTAL_FREQ
+    bit_range:
+    - 18
+    - 12
+    description: reg_clk_xtal_freq
+  - name: CLK_DIV_EN
+    bit_range:
+    - 19
+    - 19
+    description: reg_clk_div_en
+  side_effects: null
+- id: MEM_PVT
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: MEM_PATH_LEN
+    bit_range:
+    - 3
+    - 0
+    description: reg_mem_path_len
+  - name: MEM_ERR_CNT_CLR
+    bit_range:
+    - 4
+    - 4
+    description: reg_mem_err_cnt_clr
+  - name: MONITOR_EN
+    bit_range:
+    - 5
+    - 5
+    description: reg_mem_pvt_monitor_en
+  - name: MEM_TIMING_ERR_CNT
+    bit_range:
+    - 21
+    - 6
+    description: reg_mem_timing_err_cnt
+  - name: MEM_VT_SEL
+    bit_range:
+    - 23
+    - 22
+    description: reg_mem_vt_sel
+  side_effects: null
+- id: COMB_PVT_LVT_CONF
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: COMB_PATH_LEN_LVT
+    bit_range:
+    - 4
+    - 0
+    description: reg_comb_path_len_lvt
+  - name: COMB_ERR_CNT_CLR_LVT
+    bit_range:
+    - 5
+    - 5
+    description: reg_comb_err_cnt_clr_lvt
+  - name: COMB_PVT_MONITOR_EN_LVT
+    bit_range:
+    - 6
+    - 6
+    description: reg_comb_pvt_monitor_en_lvt
+  side_effects: null
+- id: COMB_PVT_NVT_CONF
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: COMB_PATH_LEN_NVT
+    bit_range:
+    - 4
+    - 0
+    description: reg_comb_path_len_nvt
+  - name: COMB_ERR_CNT_CLR_NVT
+    bit_range:
+    - 5
+    - 5
+    description: reg_comb_err_cnt_clr_nvt
+  - name: COMB_PVT_MONITOR_EN_NVT
+    bit_range:
+    - 6
+    - 6
+    description: reg_comb_pvt_monitor_en_nvt
+  side_effects: null
+- id: COMB_PVT_HVT_CONF
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: COMB_PATH_LEN_HVT
+    bit_range:
+    - 4
+    - 0
+    description: reg_comb_path_len_hvt
+  - name: COMB_ERR_CNT_CLR_HVT
+    bit_range:
+    - 5
+    - 5
+    description: reg_comb_err_cnt_clr_hvt
+  - name: COMB_PVT_MONITOR_EN_HVT
+    bit_range:
+    - 6
+    - 6
+    description: reg_comb_pvt_monitor_en_hvt
+  side_effects: null
+- id: COMB_PVT_ERR_LVT_SITE0
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_LVT_SITE0
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_lvt_site0
+  side_effects: null
+- id: COMB_PVT_ERR_NVT_SITE0
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_NVT_SITE0
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_nvt_site0
+  side_effects: null
+- id: COMB_PVT_ERR_HVT_SITE0
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_HVT_SITE0
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_hvt_site0
+  side_effects: null
+- id: COMB_PVT_ERR_LVT_SITE1
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_LVT_SITE1
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_lvt_site1
+  side_effects: null
+- id: COMB_PVT_ERR_NVT_SITE1
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_NVT_SITE1
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_nvt_site1
+  side_effects: null
+- id: COMB_PVT_ERR_HVT_SITE1
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_HVT_SITE1
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_hvt_site1
+  side_effects: null
+- id: COMB_PVT_ERR_LVT_SITE2
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_LVT_SITE2
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_lvt_site2
+  side_effects: null
+- id: COMB_PVT_ERR_NVT_SITE2
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_NVT_SITE2
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_nvt_site2
+  side_effects: null
+- id: COMB_PVT_ERR_HVT_SITE2
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_HVT_SITE2
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_hvt_site2
+  side_effects: null
+- id: COMB_PVT_ERR_LVT_SITE3
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_LVT_SITE3
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_lvt_site3
+  side_effects: null
+- id: COMB_PVT_ERR_NVT_SITE3
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_NVT_SITE3
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_nvt_site3
+  side_effects: null
+- id: COMB_PVT_ERR_HVT_SITE3
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMB_TIMING_ERR_CNT_HVT_SITE3
+    bit_range:
+    - 15
+    - 0
+    description: reg_comb_timing_err_cnt_hvt_site3
+  side_effects: null
+- id: SYSTEM_REG_DATE
+  address_offset: 4092
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583440
+  fields:
+  - name: SYSTEM_REG_DATE
+    bit_range:
+    - 27
+    - 0
+    description: reg_system_reg_date
+  side_effects: null
+interrupts: null
+timing: null

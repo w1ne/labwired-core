@@ -1,0 +1,114 @@
+peripheral: GPIO_SD
+version: 0.1.0
+registers:
+- id: SIGMADELTA0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 65280
+  fields:
+  - name: SD0_IN
+    bit_range:
+    - 7
+    - 0
+    description: This field is used to configure the duty cycle of sigma delta modulation output.
+  - name: SD0_PRESCALE
+    bit_range:
+    - 15
+    - 8
+    description: This field is used to set a divider value to divide APB clock.
+  side_effects: null
+- id: SIGMADELTA1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 65280
+  fields:
+  - name: SD0_IN
+    bit_range:
+    - 7
+    - 0
+    description: This field is used to configure the duty cycle of sigma delta modulation output.
+  - name: SD0_PRESCALE
+    bit_range:
+    - 15
+    - 8
+    description: This field is used to set a divider value to divide APB clock.
+  side_effects: null
+- id: SIGMADELTA2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 65280
+  fields:
+  - name: SD0_IN
+    bit_range:
+    - 7
+    - 0
+    description: This field is used to configure the duty cycle of sigma delta modulation output.
+  - name: SD0_PRESCALE
+    bit_range:
+    - 15
+    - 8
+    description: This field is used to set a divider value to divide APB clock.
+  side_effects: null
+- id: SIGMADELTA3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 65280
+  fields:
+  - name: SD0_IN
+    bit_range:
+    - 7
+    - 0
+    description: This field is used to configure the duty cycle of sigma delta modulation output.
+  - name: SD0_PRESCALE
+    bit_range:
+    - 15
+    - 8
+    description: This field is used to set a divider value to divide APB clock.
+  side_effects: null
+- id: SIGMADELTA_CG
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 31
+    - 31
+    description: Clock enable bit of configuration registers for sigma delta modulation.
+  side_effects: null
+- id: SIGMADELTA_MISC
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FUNCTION_CLK_EN
+    bit_range:
+    - 30
+    - 30
+    description: Clock enable bit of sigma delta modulation.
+  - name: SPI_SWAP
+    bit_range:
+    - 31
+    - 31
+    description: Reserved.
+  side_effects: null
+- id: SIGMADELTA_VERSION
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 33579568
+  fields:
+  - name: GPIO_SD_DATE
+    bit_range:
+    - 27
+    - 0
+    description: Version control register.
+  side_effects: null
+interrupts: null
+timing: null

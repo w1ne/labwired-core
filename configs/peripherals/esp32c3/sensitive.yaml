@@ -1,0 +1,2403 @@
+peripheral: SENSITIVE
+version: 0.1.0
+registers:
+- id: ROM_TABLE_LOCK
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROM_TABLE_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: rom_table_lock
+  side_effects: null
+- id: ROM_TABLE
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ROM_TABLE
+    bit_range:
+    - 31
+    - 0
+    description: rom_table
+  side_effects: null
+- id: PRIVILEGE_MODE_SEL_LOCK
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRIVILEGE_MODE_SEL_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: privilege_mode_sel_lock
+  side_effects: null
+- id: PRIVILEGE_MODE_SEL
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRIVILEGE_MODE_SEL
+    bit_range:
+    - 0
+    - 0
+    description: privilege_mode_sel
+  side_effects: null
+- id: APB_PERIPHERAL_ACCESS_0
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APB_PERIPHERAL_ACCESS_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: apb_peripheral_access_lock
+  side_effects: null
+- id: APB_PERIPHERAL_ACCESS_1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: APB_PERIPHERAL_ACCESS_SPLIT_BURST
+    bit_range:
+    - 0
+    - 0
+    description: apb_peripheral_access_split_burst
+  side_effects: null
+- id: INTERNAL_SRAM_USAGE_0
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERNAL_SRAM_USAGE_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: internal_sram_usage_lock
+  side_effects: null
+- id: INTERNAL_SRAM_USAGE_1
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: INTERNAL_SRAM_USAGE_CPU_CACHE
+    bit_range:
+    - 0
+    - 0
+    description: internal_sram_usage_cpu_cache
+  - name: INTERNAL_SRAM_USAGE_CPU_SRAM
+    bit_range:
+    - 3
+    - 1
+    description: internal_sram_usage_cpu_sram
+  side_effects: null
+- id: INTERNAL_SRAM_USAGE_3
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERNAL_SRAM_USAGE_MAC_DUMP_SRAM
+    bit_range:
+    - 2
+    - 0
+    description: internal_sram_usage_mac_dump_sram
+  - name: INTERNAL_SRAM_ALLOC_MAC_DUMP
+    bit_range:
+    - 3
+    - 3
+    description: internal_sram_alloc_mac_dump
+  side_effects: null
+- id: INTERNAL_SRAM_USAGE_4
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERNAL_SRAM_USAGE_LOG_SRAM
+    bit_range:
+    - 0
+    - 0
+    description: internal_sram_usage_log_sram
+  side_effects: null
+- id: CACHE_TAG_ACCESS_0
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_TAG_ACCESS_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: cache_tag_access_lock
+  side_effects: null
+- id: CACHE_TAG_ACCESS_1
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 15
+  fields:
+  - name: PRO_I_TAG_RD_ACS
+    bit_range:
+    - 0
+    - 0
+    description: pro_i_tag_rd_acs
+  - name: PRO_I_TAG_WR_ACS
+    bit_range:
+    - 1
+    - 1
+    description: pro_i_tag_wr_acs
+  - name: PRO_D_TAG_RD_ACS
+    bit_range:
+    - 2
+    - 2
+    description: pro_d_tag_rd_acs
+  - name: PRO_D_TAG_WR_ACS
+    bit_range:
+    - 3
+    - 3
+    description: pro_d_tag_wr_acs
+  side_effects: null
+- id: CACHE_MMU_ACCESS_0
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CACHE_MMU_ACCESS_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: cache_mmu_access_lock
+  side_effects: null
+- id: CACHE_MMU_ACCESS_1
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: PRO_MMU_RD_ACS
+    bit_range:
+    - 0
+    - 0
+    description: pro_mmu_rd_acs
+  - name: PRO_MMU_WR_ACS
+    bit_range:
+    - 1
+    - 1
+    description: pro_mmu_wr_acs
+  side_effects: null
+- id: DMA_APBPERI_SPI2_PMS_CONSTRAIN_0
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_spi2_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_SPI2_PMS_CONSTRAIN_1
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_spi2_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_spi2_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_spi2_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_spi2_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_spi2_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_spi2_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_spi2_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_SPI2_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_spi2_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_0
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_uchi0_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_1
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_UCHI0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_uchi0_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_I2S0_PMS_CONSTRAIN_0
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_i2s0_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_I2S0_PMS_CONSTRAIN_1
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_I2S0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_i2s0_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_MAC_PMS_CONSTRAIN_0
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_mac_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_MAC_PMS_CONSTRAIN_1
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_mac_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_mac_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_mac_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_mac_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_mac_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_mac_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_mac_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_MAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_mac_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_0
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_backup_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_1
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_backup_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_backup_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_backup_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_backup_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_backup_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_backup_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_backup_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_BACKUP_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_backup_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_LC_PMS_CONSTRAIN_0
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_lc_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_LC_PMS_CONSTRAIN_1
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_lc_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_lc_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_lc_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_lc_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_lc_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_lc_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_lc_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_LC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_lc_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_AES_PMS_CONSTRAIN_0
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_aes_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_AES_PMS_CONSTRAIN_1
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_aes_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_aes_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_aes_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_aes_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_aes_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_aes_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_aes_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_AES_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_aes_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_SHA_PMS_CONSTRAIN_0
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_sha_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_SHA_PMS_CONSTRAIN_1
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_sha_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_sha_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_sha_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_sha_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_sha_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_sha_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_sha_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_SHA_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_sha_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_0
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_adc_dac_pms_constrain_lock
+  side_effects: null
+- id: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_1
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 1044735
+  fields:
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_0_pms_0
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_0_pms_1
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_0_pms_2
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_0_pms_3
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_1_pms_0
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_1_pms_1
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_1_pms_2
+  - name: DMA_APBPERI_ADC_DAC_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: dma_apbperi_adc_dac_pms_constrain_sram_world_1_pms_3
+  side_effects: null
+- id: DMA_APBPERI_PMS_MONITOR_0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_PMS_MONITOR_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_pms_monitor_lock
+  side_effects: null
+- id: DMA_APBPERI_PMS_MONITOR_1
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_CLR
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_pms_monitor_violate_clr
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_EN
+    bit_range:
+    - 1
+    - 1
+    description: dma_apbperi_pms_monitor_violate_en
+  side_effects: null
+- id: DMA_APBPERI_PMS_MONITOR_2
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_INTR
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_pms_monitor_violate_intr
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_STATUS_WORLD
+    bit_range:
+    - 2
+    - 1
+    description: dma_apbperi_pms_monitor_violate_status_world
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_STATUS_ADDR
+    bit_range:
+    - 26
+    - 3
+    description: dma_apbperi_pms_monitor_violate_status_addr
+  side_effects: null
+- id: DMA_APBPERI_PMS_MONITOR_3
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_STATUS_WR
+    bit_range:
+    - 0
+    - 0
+    description: dma_apbperi_pms_monitor_violate_status_wr
+  - name: DMA_APBPERI_PMS_MONITOR_VIOLATE_STATUS_BYTEEN
+    bit_range:
+    - 4
+    - 1
+    description: dma_apbperi_pms_monitor_violate_status_byteen
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_DMA_SPLIT_LINE_CONSTRAIN_0
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_IRAM0_DRAM0_DMA_SPLIT_LINE_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: core_x_iram0_dram0_dma_split_line_constrain_lock
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_DMA_SPLIT_LINE_CONSTRAIN_1
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_IRAM0_DRAM0_DMA_SRAM_CATEGORY_0
+    bit_range:
+    - 1
+    - 0
+    description: core_x_iram0_dram0_dma_sram_category_0
+  - name: CORE_X_IRAM0_DRAM0_DMA_SRAM_CATEGORY_1
+    bit_range:
+    - 3
+    - 2
+    description: core_x_iram0_dram0_dma_sram_category_1
+  - name: CORE_X_IRAM0_DRAM0_DMA_SRAM_CATEGORY_2
+    bit_range:
+    - 5
+    - 4
+    description: core_x_iram0_dram0_dma_sram_category_2
+  - name: CORE_X_IRAM0_DRAM0_DMA_SRAM_SPLITADDR
+    bit_range:
+    - 21
+    - 14
+    description: core_x_iram0_dram0_dma_sram_splitaddr
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_DMA_SPLIT_LINE_CONSTRAIN_2
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_IRAM0_SRAM_LINE_0_CATEGORY_0
+    bit_range:
+    - 1
+    - 0
+    description: core_x_iram0_sram_line_0_category_0
+  - name: CORE_X_IRAM0_SRAM_LINE_0_CATEGORY_1
+    bit_range:
+    - 3
+    - 2
+    description: core_x_iram0_sram_line_0_category_1
+  - name: CORE_X_IRAM0_SRAM_LINE_0_CATEGORY_2
+    bit_range:
+    - 5
+    - 4
+    description: core_x_iram0_sram_line_0_category_2
+  - name: CORE_X_IRAM0_SRAM_LINE_0_SPLITADDR
+    bit_range:
+    - 21
+    - 14
+    description: core_x_iram0_sram_line_0_splitaddr
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_DMA_SPLIT_LINE_CONSTRAIN_3
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_IRAM0_SRAM_LINE_1_CATEGORY_0
+    bit_range:
+    - 1
+    - 0
+    description: core_x_iram0_sram_line_1_category_0
+  - name: CORE_X_IRAM0_SRAM_LINE_1_CATEGORY_1
+    bit_range:
+    - 3
+    - 2
+    description: core_x_iram0_sram_line_1_category_1
+  - name: CORE_X_IRAM0_SRAM_LINE_1_CATEGORY_2
+    bit_range:
+    - 5
+    - 4
+    description: core_x_iram0_sram_line_1_category_2
+  - name: CORE_X_IRAM0_SRAM_LINE_1_SPLITADDR
+    bit_range:
+    - 21
+    - 14
+    description: core_x_iram0_sram_line_1_splitaddr
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_DMA_SPLIT_LINE_CONSTRAIN_4
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_0_CATEGORY_0
+    bit_range:
+    - 1
+    - 0
+    description: core_x_dram0_dma_sram_line_0_category_0
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_0_CATEGORY_1
+    bit_range:
+    - 3
+    - 2
+    description: core_x_dram0_dma_sram_line_0_category_1
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_0_CATEGORY_2
+    bit_range:
+    - 5
+    - 4
+    description: core_x_dram0_dma_sram_line_0_category_2
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_0_SPLITADDR
+    bit_range:
+    - 21
+    - 14
+    description: core_x_dram0_dma_sram_line_0_splitaddr
+  side_effects: null
+- id: CORE_X_IRAM0_DRAM0_DMA_SPLIT_LINE_CONSTRAIN_5
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_1_CATEGORY_0
+    bit_range:
+    - 1
+    - 0
+    description: core_x_dram0_dma_sram_line_1_category_0
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_1_CATEGORY_1
+    bit_range:
+    - 3
+    - 2
+    description: core_x_dram0_dma_sram_line_1_category_1
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_1_CATEGORY_2
+    bit_range:
+    - 5
+    - 4
+    description: core_x_dram0_dma_sram_line_1_category_2
+  - name: CORE_X_DRAM0_DMA_SRAM_LINE_1_SPLITADDR
+    bit_range:
+    - 21
+    - 14
+    description: core_x_dram0_dma_sram_line_1_splitaddr
+  side_effects: null
+- id: CORE_X_IRAM0_PMS_CONSTRAIN_0
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: core_x_iram0_pms_constrain_lock
+  side_effects: null
+- id: CORE_X_IRAM0_PMS_CONSTRAIN_1
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 1867775
+  fields:
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 2
+    - 0
+    description: core_x_iram0_pms_constrain_sram_world_1_pms_0
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 5
+    - 3
+    description: core_x_iram0_pms_constrain_sram_world_1_pms_1
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 8
+    - 6
+    description: core_x_iram0_pms_constrain_sram_world_1_pms_2
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 11
+    - 9
+    description: core_x_iram0_pms_constrain_sram_world_1_pms_3
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_CACHEDATAARRAY_PMS_0
+    bit_range:
+    - 14
+    - 12
+    description: core_x_iram0_pms_constrain_sram_world_1_cachedataarray_pms_0
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_ROM_WORLD_1_PMS
+    bit_range:
+    - 20
+    - 18
+    description: core_x_iram0_pms_constrain_rom_world_1_pms
+  side_effects: null
+- id: CORE_X_IRAM0_PMS_CONSTRAIN_2
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 1867775
+  fields:
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 2
+    - 0
+    description: core_x_iram0_pms_constrain_sram_world_0_pms_0
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 5
+    - 3
+    description: core_x_iram0_pms_constrain_sram_world_0_pms_1
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 8
+    - 6
+    description: core_x_iram0_pms_constrain_sram_world_0_pms_2
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 11
+    - 9
+    description: core_x_iram0_pms_constrain_sram_world_0_pms_3
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_CACHEDATAARRAY_PMS_0
+    bit_range:
+    - 14
+    - 12
+    description: core_x_iram0_pms_constrain_sram_world_0_cachedataarray_pms_0
+  - name: CORE_X_IRAM0_PMS_CONSTRAIN_ROM_WORLD_0_PMS
+    bit_range:
+    - 20
+    - 18
+    description: core_x_iram0_pms_constrain_rom_world_0_pms
+  side_effects: null
+- id: CORE_0_IRAM0_PMS_MONITOR_0
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_IRAM0_PMS_MONITOR_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: core_0_iram0_pms_monitor_lock
+  side_effects: null
+- id: CORE_0_IRAM0_PMS_MONITOR_1
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_CLR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_iram0_pms_monitor_violate_clr
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_EN
+    bit_range:
+    - 1
+    - 1
+    description: core_0_iram0_pms_monitor_violate_en
+  side_effects: null
+- id: CORE_0_IRAM0_PMS_MONITOR_2
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_INTR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_iram0_pms_monitor_violate_intr
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_STATUS_WR
+    bit_range:
+    - 1
+    - 1
+    description: core_0_iram0_pms_monitor_violate_status_wr
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_STATUS_LOADSTORE
+    bit_range:
+    - 2
+    - 2
+    description: core_0_iram0_pms_monitor_violate_status_loadstore
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_STATUS_WORLD
+    bit_range:
+    - 4
+    - 3
+    description: core_0_iram0_pms_monitor_violate_status_world
+  - name: CORE_0_IRAM0_PMS_MONITOR_VIOLATE_STATUS_ADDR
+    bit_range:
+    - 28
+    - 5
+    description: core_0_iram0_pms_monitor_violate_status_addr
+  side_effects: null
+- id: CORE_X_DRAM0_PMS_CONSTRAIN_0
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: core_x_dram0_pms_constrain_lock
+  side_effects: null
+- id: CORE_X_DRAM0_PMS_CONSTRAIN_1
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 252702975
+  fields:
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_0
+    bit_range:
+    - 1
+    - 0
+    description: core_x_dram0_pms_constrain_sram_world_0_pms_0
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_1
+    bit_range:
+    - 3
+    - 2
+    description: core_x_dram0_pms_constrain_sram_world_0_pms_1
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_2
+    bit_range:
+    - 5
+    - 4
+    description: core_x_dram0_pms_constrain_sram_world_0_pms_2
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_PMS_3
+    bit_range:
+    - 7
+    - 6
+    description: core_x_dram0_pms_constrain_sram_world_0_pms_3
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_0
+    bit_range:
+    - 13
+    - 12
+    description: core_x_dram0_pms_constrain_sram_world_1_pms_0
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_1
+    bit_range:
+    - 15
+    - 14
+    description: core_x_dram0_pms_constrain_sram_world_1_pms_1
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_2
+    bit_range:
+    - 17
+    - 16
+    description: core_x_dram0_pms_constrain_sram_world_1_pms_2
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_PMS_3
+    bit_range:
+    - 19
+    - 18
+    description: core_x_dram0_pms_constrain_sram_world_1_pms_3
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_ROM_WORLD_0_PMS
+    bit_range:
+    - 25
+    - 24
+    description: core_x_dram0_pms_constrain_rom_world_0_pms
+  - name: CORE_X_DRAM0_PMS_CONSTRAIN_ROM_WORLD_1_PMS
+    bit_range:
+    - 27
+    - 26
+    description: core_x_dram0_pms_constrain_rom_world_1_pms
+  side_effects: null
+- id: CORE_0_DRAM0_PMS_MONITOR_0
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_PMS_MONITOR_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: core_0_dram0_pms_monitor_lock
+  side_effects: null
+- id: CORE_0_DRAM0_PMS_MONITOR_1
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_CLR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_dram0_pms_monitor_violate_clr
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_EN
+    bit_range:
+    - 1
+    - 1
+    description: core_0_dram0_pms_monitor_violate_en
+  side_effects: null
+- id: CORE_0_DRAM0_PMS_MONITOR_2
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_INTR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_dram0_pms_monitor_violate_intr
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_STATUS_LOCK
+    bit_range:
+    - 1
+    - 1
+    description: core_0_dram0_pms_monitor_violate_status_lock
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_STATUS_WORLD
+    bit_range:
+    - 3
+    - 2
+    description: core_0_dram0_pms_monitor_violate_status_world
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_STATUS_ADDR
+    bit_range:
+    - 27
+    - 4
+    description: core_0_dram0_pms_monitor_violate_status_addr
+  side_effects: null
+- id: CORE_0_DRAM0_PMS_MONITOR_3
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_STATUS_WR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_dram0_pms_monitor_violate_status_wr
+  - name: CORE_0_DRAM0_PMS_MONITOR_VIOLATE_STATUS_BYTEEN
+    bit_range:
+    - 4
+    - 1
+    description: core_0_dram0_pms_monitor_violate_status_byteen
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_0
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: core_0_pif_pms_constrain_lock
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_1
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 3473932287
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_UART
+    bit_range:
+    - 1
+    - 0
+    description: core_0_pif_pms_constrain_world_0_uart
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_G0SPI_1
+    bit_range:
+    - 3
+    - 2
+    description: core_0_pif_pms_constrain_world_0_g0spi_1
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_G0SPI_0
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_0_g0spi_0
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_GPIO
+    bit_range:
+    - 7
+    - 6
+    description: core_0_pif_pms_constrain_world_0_gpio
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_FE2
+    bit_range:
+    - 9
+    - 8
+    description: core_0_pif_pms_constrain_world_0_fe2
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_FE
+    bit_range:
+    - 11
+    - 10
+    description: core_0_pif_pms_constrain_world_0_fe
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_TIMER
+    bit_range:
+    - 13
+    - 12
+    description: core_0_pif_pms_constrain_world_0_timer
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_RTC
+    bit_range:
+    - 15
+    - 14
+    description: core_0_pif_pms_constrain_world_0_rtc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_IO_MUX
+    bit_range:
+    - 17
+    - 16
+    description: core_0_pif_pms_constrain_world_0_io_mux
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_WDG
+    bit_range:
+    - 19
+    - 18
+    description: core_0_pif_pms_constrain_world_0_wdg
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_MISC
+    bit_range:
+    - 25
+    - 24
+    description: core_0_pif_pms_constrain_world_0_misc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_I2C
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_0_i2c
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_UART1
+    bit_range:
+    - 31
+    - 30
+    description: core_0_pif_pms_constrain_world_0_uart1
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_2
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 4240641267
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_BT
+    bit_range:
+    - 1
+    - 0
+    description: core_0_pif_pms_constrain_world_0_bt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_I2C_EXT0
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_0_i2c_ext0
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_UHCI0
+    bit_range:
+    - 7
+    - 6
+    description: core_0_pif_pms_constrain_world_0_uhci0
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_RMT
+    bit_range:
+    - 11
+    - 10
+    description: core_0_pif_pms_constrain_world_0_rmt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_LEDC
+    bit_range:
+    - 17
+    - 16
+    description: core_0_pif_pms_constrain_world_0_ledc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_BB
+    bit_range:
+    - 23
+    - 22
+    description: core_0_pif_pms_constrain_world_0_bb
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_TIMERGROUP
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_0_timergroup
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_TIMERGROUP1
+    bit_range:
+    - 29
+    - 28
+    description: core_0_pif_pms_constrain_world_0_timergroup1
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_SYSTIMER
+    bit_range:
+    - 31
+    - 30
+    description: core_0_pif_pms_constrain_world_0_systimer
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_3
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 1019268147
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_SPI_2
+    bit_range:
+    - 1
+    - 0
+    description: core_0_pif_pms_constrain_world_0_spi_2
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_APB_CTRL
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_0_apb_ctrl
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_CAN
+    bit_range:
+    - 11
+    - 10
+    description: core_0_pif_pms_constrain_world_0_can
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_I2S1
+    bit_range:
+    - 15
+    - 14
+    description: core_0_pif_pms_constrain_world_0_i2s1
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_RWBT
+    bit_range:
+    - 23
+    - 22
+    description: core_0_pif_pms_constrain_world_0_rwbt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_WIFIMAC
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_0_wifimac
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_PWR
+    bit_range:
+    - 29
+    - 28
+    description: core_0_pif_pms_constrain_world_0_pwr
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_4
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294964220
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_USB_WRAP
+    bit_range:
+    - 3
+    - 2
+    description: core_0_pif_pms_constrain_world_0_usb_wrap
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_CRYPTO_PERI
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_0_crypto_peri
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_CRYPTO_DMA
+    bit_range:
+    - 7
+    - 6
+    description: core_0_pif_pms_constrain_world_0_crypto_dma
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_APB_ADC
+    bit_range:
+    - 9
+    - 8
+    description: core_0_pif_pms_constrain_world_0_apb_adc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_BT_PWR
+    bit_range:
+    - 13
+    - 12
+    description: core_0_pif_pms_constrain_world_0_bt_pwr
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_USB_DEVICE
+    bit_range:
+    - 15
+    - 14
+    description: core_0_pif_pms_constrain_world_0_usb_device
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_SYSTEM
+    bit_range:
+    - 17
+    - 16
+    description: core_0_pif_pms_constrain_world_0_system
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_SENSITIVE
+    bit_range:
+    - 19
+    - 18
+    description: core_0_pif_pms_constrain_world_0_sensitive
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_INTERRUPT
+    bit_range:
+    - 21
+    - 20
+    description: core_0_pif_pms_constrain_world_0_interrupt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_DMA_COPY
+    bit_range:
+    - 23
+    - 22
+    description: core_0_pif_pms_constrain_world_0_dma_copy
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_CACHE_CONFIG
+    bit_range:
+    - 25
+    - 24
+    description: core_0_pif_pms_constrain_world_0_cache_config
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_AD
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_0_ad
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_DIO
+    bit_range:
+    - 29
+    - 28
+    description: core_0_pif_pms_constrain_world_0_dio
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_0_WORLD_CONTROLLER
+    bit_range:
+    - 31
+    - 30
+    description: core_0_pif_pms_constrain_world_0_world_controller
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_5
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 3473932287
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_UART
+    bit_range:
+    - 1
+    - 0
+    description: core_0_pif_pms_constrain_world_1_uart
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_G0SPI_1
+    bit_range:
+    - 3
+    - 2
+    description: core_0_pif_pms_constrain_world_1_g0spi_1
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_G0SPI_0
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_1_g0spi_0
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_GPIO
+    bit_range:
+    - 7
+    - 6
+    description: core_0_pif_pms_constrain_world_1_gpio
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_FE2
+    bit_range:
+    - 9
+    - 8
+    description: core_0_pif_pms_constrain_world_1_fe2
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_FE
+    bit_range:
+    - 11
+    - 10
+    description: core_0_pif_pms_constrain_world_1_fe
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_TIMER
+    bit_range:
+    - 13
+    - 12
+    description: core_0_pif_pms_constrain_world_1_timer
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_RTC
+    bit_range:
+    - 15
+    - 14
+    description: core_0_pif_pms_constrain_world_1_rtc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_IO_MUX
+    bit_range:
+    - 17
+    - 16
+    description: core_0_pif_pms_constrain_world_1_io_mux
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_WDG
+    bit_range:
+    - 19
+    - 18
+    description: core_0_pif_pms_constrain_world_1_wdg
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_MISC
+    bit_range:
+    - 25
+    - 24
+    description: core_0_pif_pms_constrain_world_1_misc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_I2C
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_1_i2c
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_UART1
+    bit_range:
+    - 31
+    - 30
+    description: core_0_pif_pms_constrain_world_1_uart1
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_6
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 4240641267
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_BT
+    bit_range:
+    - 1
+    - 0
+    description: core_0_pif_pms_constrain_world_1_bt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_I2C_EXT0
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_1_i2c_ext0
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_UHCI0
+    bit_range:
+    - 7
+    - 6
+    description: core_0_pif_pms_constrain_world_1_uhci0
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_RMT
+    bit_range:
+    - 11
+    - 10
+    description: core_0_pif_pms_constrain_world_1_rmt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_LEDC
+    bit_range:
+    - 17
+    - 16
+    description: core_0_pif_pms_constrain_world_1_ledc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_BB
+    bit_range:
+    - 23
+    - 22
+    description: core_0_pif_pms_constrain_world_1_bb
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_TIMERGROUP
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_1_timergroup
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_TIMERGROUP1
+    bit_range:
+    - 29
+    - 28
+    description: core_0_pif_pms_constrain_world_1_timergroup1
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_SYSTIMER
+    bit_range:
+    - 31
+    - 30
+    description: core_0_pif_pms_constrain_world_1_systimer
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_7
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 1019268147
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_SPI_2
+    bit_range:
+    - 1
+    - 0
+    description: core_0_pif_pms_constrain_world_1_spi_2
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_APB_CTRL
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_1_apb_ctrl
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_CAN
+    bit_range:
+    - 11
+    - 10
+    description: core_0_pif_pms_constrain_world_1_can
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_I2S1
+    bit_range:
+    - 15
+    - 14
+    description: core_0_pif_pms_constrain_world_1_i2s1
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_RWBT
+    bit_range:
+    - 23
+    - 22
+    description: core_0_pif_pms_constrain_world_1_rwbt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_WIFIMAC
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_1_wifimac
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_PWR
+    bit_range:
+    - 29
+    - 28
+    description: core_0_pif_pms_constrain_world_1_pwr
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_8
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294964220
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_USB_WRAP
+    bit_range:
+    - 3
+    - 2
+    description: core_0_pif_pms_constrain_world_1_usb_wrap
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_CRYPTO_PERI
+    bit_range:
+    - 5
+    - 4
+    description: core_0_pif_pms_constrain_world_1_crypto_peri
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_CRYPTO_DMA
+    bit_range:
+    - 7
+    - 6
+    description: core_0_pif_pms_constrain_world_1_crypto_dma
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_APB_ADC
+    bit_range:
+    - 9
+    - 8
+    description: core_0_pif_pms_constrain_world_1_apb_adc
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_BT_PWR
+    bit_range:
+    - 13
+    - 12
+    description: core_0_pif_pms_constrain_world_1_bt_pwr
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_USB_DEVICE
+    bit_range:
+    - 15
+    - 14
+    description: core_0_pif_pms_constrain_world_1_usb_device
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_SYSTEM
+    bit_range:
+    - 17
+    - 16
+    description: core_0_pif_pms_constrain_world_1_system
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_SENSITIVE
+    bit_range:
+    - 19
+    - 18
+    description: core_0_pif_pms_constrain_world_1_sensitive
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_INTERRUPT
+    bit_range:
+    - 21
+    - 20
+    description: core_0_pif_pms_constrain_world_1_interrupt
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_DMA_COPY
+    bit_range:
+    - 23
+    - 22
+    description: core_0_pif_pms_constrain_world_1_dma_copy
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_CACHE_CONFIG
+    bit_range:
+    - 25
+    - 24
+    description: core_0_pif_pms_constrain_world_1_cache_config
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_AD
+    bit_range:
+    - 27
+    - 26
+    description: core_0_pif_pms_constrain_world_1_ad
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_DIO
+    bit_range:
+    - 29
+    - 28
+    description: core_0_pif_pms_constrain_world_1_dio
+  - name: CORE_0_PIF_PMS_CONSTRAIN_WORLD_1_WORLD_CONTROLLER
+    bit_range:
+    - 31
+    - 30
+    description: core_0_pif_pms_constrain_world_1_world_controller
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_9
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 4194303
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_SPLTADDR_WORLD_0
+    bit_range:
+    - 10
+    - 0
+    description: core_0_pif_pms_constrain_rtcfast_spltaddr_world_0
+  - name: CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_SPLTADDR_WORLD_1
+    bit_range:
+    - 21
+    - 11
+    description: core_0_pif_pms_constrain_rtcfast_spltaddr_world_1
+  side_effects: null
+- id: CORE_0_PIF_PMS_CONSTRAIN_10
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 4095
+  fields:
+  - name: CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_WORLD_0_L
+    bit_range:
+    - 2
+    - 0
+    description: core_0_pif_pms_constrain_rtcfast_world_0_l
+  - name: CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_WORLD_0_H
+    bit_range:
+    - 5
+    - 3
+    description: core_0_pif_pms_constrain_rtcfast_world_0_h
+  - name: CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_WORLD_1_L
+    bit_range:
+    - 8
+    - 6
+    description: core_0_pif_pms_constrain_rtcfast_world_1_l
+  - name: CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_WORLD_1_H
+    bit_range:
+    - 11
+    - 9
+    description: core_0_pif_pms_constrain_rtcfast_world_1_h
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_0
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: region_pms_constrain_lock
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_1
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 16383
+  fields:
+  - name: REGION_PMS_CONSTRAIN_WORLD_0_AREA_0
+    bit_range:
+    - 1
+    - 0
+    description: region_pms_constrain_world_0_area_0
+  - name: REGION_PMS_CONSTRAIN_WORLD_0_AREA_1
+    bit_range:
+    - 3
+    - 2
+    description: region_pms_constrain_world_0_area_1
+  - name: REGION_PMS_CONSTRAIN_WORLD_0_AREA_2
+    bit_range:
+    - 5
+    - 4
+    description: region_pms_constrain_world_0_area_2
+  - name: REGION_PMS_CONSTRAIN_WORLD_0_AREA_3
+    bit_range:
+    - 7
+    - 6
+    description: region_pms_constrain_world_0_area_3
+  - name: REGION_PMS_CONSTRAIN_WORLD_0_AREA_4
+    bit_range:
+    - 9
+    - 8
+    description: region_pms_constrain_world_0_area_4
+  - name: REGION_PMS_CONSTRAIN_WORLD_0_AREA_5
+    bit_range:
+    - 11
+    - 10
+    description: region_pms_constrain_world_0_area_5
+  - name: REGION_PMS_CONSTRAIN_WORLD_0_AREA_6
+    bit_range:
+    - 13
+    - 12
+    description: region_pms_constrain_world_0_area_6
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_2
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 16383
+  fields:
+  - name: REGION_PMS_CONSTRAIN_WORLD_1_AREA_0
+    bit_range:
+    - 1
+    - 0
+    description: region_pms_constrain_world_1_area_0
+  - name: REGION_PMS_CONSTRAIN_WORLD_1_AREA_1
+    bit_range:
+    - 3
+    - 2
+    description: region_pms_constrain_world_1_area_1
+  - name: REGION_PMS_CONSTRAIN_WORLD_1_AREA_2
+    bit_range:
+    - 5
+    - 4
+    description: region_pms_constrain_world_1_area_2
+  - name: REGION_PMS_CONSTRAIN_WORLD_1_AREA_3
+    bit_range:
+    - 7
+    - 6
+    description: region_pms_constrain_world_1_area_3
+  - name: REGION_PMS_CONSTRAIN_WORLD_1_AREA_4
+    bit_range:
+    - 9
+    - 8
+    description: region_pms_constrain_world_1_area_4
+  - name: REGION_PMS_CONSTRAIN_WORLD_1_AREA_5
+    bit_range:
+    - 11
+    - 10
+    description: region_pms_constrain_world_1_area_5
+  - name: REGION_PMS_CONSTRAIN_WORLD_1_AREA_6
+    bit_range:
+    - 13
+    - 12
+    description: region_pms_constrain_world_1_area_6
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_3
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_0
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_0
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_4
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_1
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_1
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_5
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_2
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_2
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_6
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_3
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_3
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_7
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_4
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_4
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_8
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_5
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_5
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_9
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_6
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_6
+  side_effects: null
+- id: REGION_PMS_CONSTRAIN_10
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION_PMS_CONSTRAIN_ADDR_7
+    bit_range:
+    - 29
+    - 0
+    description: region_pms_constrain_addr_7
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_0
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: core_0_pif_pms_monitor_lock
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_1
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_CLR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_pif_pms_monitor_violate_clr
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_EN
+    bit_range:
+    - 1
+    - 1
+    description: core_0_pif_pms_monitor_violate_en
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_2
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_INTR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_pif_pms_monitor_violate_intr
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HPORT_0
+    bit_range:
+    - 1
+    - 1
+    description: core_0_pif_pms_monitor_violate_status_hport_0
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HSIZE
+    bit_range:
+    - 4
+    - 2
+    description: core_0_pif_pms_monitor_violate_status_hsize
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HWRITE
+    bit_range:
+    - 5
+    - 5
+    description: core_0_pif_pms_monitor_violate_status_hwrite
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HWORLD
+    bit_range:
+    - 7
+    - 6
+    description: core_0_pif_pms_monitor_violate_status_hworld
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_3
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HADDR
+    bit_range:
+    - 31
+    - 0
+    description: core_0_pif_pms_monitor_violate_status_haddr
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_4
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_NONWORD_VIOLATE_CLR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_pif_pms_monitor_nonword_violate_clr
+  - name: CORE_0_PIF_PMS_MONITOR_NONWORD_VIOLATE_EN
+    bit_range:
+    - 1
+    - 1
+    description: core_0_pif_pms_monitor_nonword_violate_en
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_5
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_NONWORD_VIOLATE_INTR
+    bit_range:
+    - 0
+    - 0
+    description: core_0_pif_pms_monitor_nonword_violate_intr
+  - name: CORE_0_PIF_PMS_MONITOR_NONWORD_VIOLATE_STATUS_HSIZE
+    bit_range:
+    - 2
+    - 1
+    description: core_0_pif_pms_monitor_nonword_violate_status_hsize
+  - name: CORE_0_PIF_PMS_MONITOR_NONWORD_VIOLATE_STATUS_HWORLD
+    bit_range:
+    - 4
+    - 3
+    description: core_0_pif_pms_monitor_nonword_violate_status_hworld
+  side_effects: null
+- id: CORE_0_PIF_PMS_MONITOR_6
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CORE_0_PIF_PMS_MONITOR_NONWORD_VIOLATE_STATUS_HADDR
+    bit_range:
+    - 31
+    - 0
+    description: core_0_pif_pms_monitor_nonword_violate_status_haddr
+  side_effects: null
+- id: BACKUP_BUS_PMS_CONSTRAIN_0
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BACKUP_BUS_PMS_CONSTRAIN_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: backup_bus_pms_constrain_lock
+  side_effects: null
+- id: BACKUP_BUS_PMS_CONSTRAIN_1
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 3473932287
+  fields:
+  - name: BACKUP_BUS_PMS_CONSTRAIN_UART
+    bit_range:
+    - 1
+    - 0
+    description: backup_bus_pms_constrain_uart
+  - name: BACKUP_BUS_PMS_CONSTRAIN_G0SPI_1
+    bit_range:
+    - 3
+    - 2
+    description: backup_bus_pms_constrain_g0spi_1
+  - name: BACKUP_BUS_PMS_CONSTRAIN_G0SPI_0
+    bit_range:
+    - 5
+    - 4
+    description: backup_bus_pms_constrain_g0spi_0
+  - name: BACKUP_BUS_PMS_CONSTRAIN_GPIO
+    bit_range:
+    - 7
+    - 6
+    description: backup_bus_pms_constrain_gpio
+  - name: BACKUP_BUS_PMS_CONSTRAIN_FE2
+    bit_range:
+    - 9
+    - 8
+    description: backup_bus_pms_constrain_fe2
+  - name: BACKUP_BUS_PMS_CONSTRAIN_FE
+    bit_range:
+    - 11
+    - 10
+    description: backup_bus_pms_constrain_fe
+  - name: BACKUP_BUS_PMS_CONSTRAIN_TIMER
+    bit_range:
+    - 13
+    - 12
+    description: backup_bus_pms_constrain_timer
+  - name: BACKUP_BUS_PMS_CONSTRAIN_RTC
+    bit_range:
+    - 15
+    - 14
+    description: backup_bus_pms_constrain_rtc
+  - name: BACKUP_BUS_PMS_CONSTRAIN_IO_MUX
+    bit_range:
+    - 17
+    - 16
+    description: backup_bus_pms_constrain_io_mux
+  - name: BACKUP_BUS_PMS_CONSTRAIN_WDG
+    bit_range:
+    - 19
+    - 18
+    description: backup_bus_pms_constrain_wdg
+  - name: BACKUP_BUS_PMS_CONSTRAIN_MISC
+    bit_range:
+    - 25
+    - 24
+    description: backup_bus_pms_constrain_misc
+  - name: BACKUP_BUS_PMS_CONSTRAIN_I2C
+    bit_range:
+    - 27
+    - 26
+    description: backup_bus_pms_constrain_i2c
+  - name: BACKUP_BUS_PMS_CONSTRAIN_UART1
+    bit_range:
+    - 31
+    - 30
+    description: backup_bus_pms_constrain_uart1
+  side_effects: null
+- id: BACKUP_BUS_PMS_CONSTRAIN_2
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 4240641267
+  fields:
+  - name: BACKUP_BUS_PMS_CONSTRAIN_BT
+    bit_range:
+    - 1
+    - 0
+    description: backup_bus_pms_constrain_bt
+  - name: BACKUP_BUS_PMS_CONSTRAIN_I2C_EXT0
+    bit_range:
+    - 5
+    - 4
+    description: backup_bus_pms_constrain_i2c_ext0
+  - name: BACKUP_BUS_PMS_CONSTRAIN_UHCI0
+    bit_range:
+    - 7
+    - 6
+    description: backup_bus_pms_constrain_uhci0
+  - name: BACKUP_BUS_PMS_CONSTRAIN_RMT
+    bit_range:
+    - 11
+    - 10
+    description: backup_bus_pms_constrain_rmt
+  - name: BACKUP_BUS_PMS_CONSTRAIN_LEDC
+    bit_range:
+    - 17
+    - 16
+    description: backup_bus_pms_constrain_ledc
+  - name: BACKUP_BUS_PMS_CONSTRAIN_BB
+    bit_range:
+    - 23
+    - 22
+    description: backup_bus_pms_constrain_bb
+  - name: BACKUP_BUS_PMS_CONSTRAIN_TIMERGROUP
+    bit_range:
+    - 27
+    - 26
+    description: backup_bus_pms_constrain_timergroup
+  - name: BACKUP_BUS_PMS_CONSTRAIN_TIMERGROUP1
+    bit_range:
+    - 29
+    - 28
+    description: backup_bus_pms_constrain_timergroup1
+  - name: BACKUP_BUS_PMS_CONSTRAIN_SYSTIMER
+    bit_range:
+    - 31
+    - 30
+    description: backup_bus_pms_constrain_systimer
+  side_effects: null
+- id: BACKUP_BUS_PMS_CONSTRAIN_3
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 1019268147
+  fields:
+  - name: BACKUP_BUS_PMS_CONSTRAIN_SPI_2
+    bit_range:
+    - 1
+    - 0
+    description: backup_bus_pms_constrain_spi_2
+  - name: BACKUP_BUS_PMS_CONSTRAIN_APB_CTRL
+    bit_range:
+    - 5
+    - 4
+    description: backup_bus_pms_constrain_apb_ctrl
+  - name: BACKUP_BUS_PMS_CONSTRAIN_CAN
+    bit_range:
+    - 11
+    - 10
+    description: backup_bus_pms_constrain_can
+  - name: BACKUP_BUS_PMS_CONSTRAIN_I2S1
+    bit_range:
+    - 15
+    - 14
+    description: backup_bus_pms_constrain_i2s1
+  - name: BACKUP_BUS_PMS_CONSTRAIN_RWBT
+    bit_range:
+    - 23
+    - 22
+    description: backup_bus_pms_constrain_rwbt
+  - name: BACKUP_BUS_PMS_CONSTRAIN_WIFIMAC
+    bit_range:
+    - 27
+    - 26
+    description: backup_bus_pms_constrain_wifimac
+  - name: BACKUP_BUS_PMS_CONSTRAIN_PWR
+    bit_range:
+    - 29
+    - 28
+    description: backup_bus_pms_constrain_pwr
+  side_effects: null
+- id: BACKUP_BUS_PMS_CONSTRAIN_4
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 62460
+  fields:
+  - name: BACKUP_BUS_PMS_CONSTRAIN_USB_WRAP
+    bit_range:
+    - 3
+    - 2
+    description: backup_bus_pms_constrain_usb_wrap
+  - name: BACKUP_BUS_PMS_CONSTRAIN_CRYPTO_PERI
+    bit_range:
+    - 5
+    - 4
+    description: backup_bus_pms_constrain_crypto_peri
+  - name: BACKUP_BUS_PMS_CONSTRAIN_CRYPTO_DMA
+    bit_range:
+    - 7
+    - 6
+    description: backup_bus_pms_constrain_crypto_dma
+  - name: BACKUP_BUS_PMS_CONSTRAIN_APB_ADC
+    bit_range:
+    - 9
+    - 8
+    description: backup_bus_pms_constrain_apb_adc
+  - name: BACKUP_BUS_PMS_CONSTRAIN_BT_PWR
+    bit_range:
+    - 13
+    - 12
+    description: backup_bus_pms_constrain_bt_pwr
+  - name: BACKUP_BUS_PMS_CONSTRAIN_USB_DEVICE
+    bit_range:
+    - 15
+    - 14
+    description: backup_bus_pms_constrain_usb_device
+  side_effects: null
+- id: BACKUP_BUS_PMS_MONITOR_0
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BACKUP_BUS_PMS_MONITOR_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: backup_bus_pms_monitor_lock
+  side_effects: null
+- id: BACKUP_BUS_PMS_MONITOR_1
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: BACKUP_BUS_PMS_MONITOR_VIOLATE_CLR
+    bit_range:
+    - 0
+    - 0
+    description: backup_bus_pms_monitor_violate_clr
+  - name: BACKUP_BUS_PMS_MONITOR_VIOLATE_EN
+    bit_range:
+    - 1
+    - 1
+    description: backup_bus_pms_monitor_violate_en
+  side_effects: null
+- id: BACKUP_BUS_PMS_MONITOR_2
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BACKUP_BUS_PMS_MONITOR_VIOLATE_INTR
+    bit_range:
+    - 0
+    - 0
+    description: backup_bus_pms_monitor_violate_intr
+  - name: BACKUP_BUS_PMS_MONITOR_VIOLATE_STATUS_HTRANS
+    bit_range:
+    - 2
+    - 1
+    description: backup_bus_pms_monitor_violate_status_htrans
+  - name: BACKUP_BUS_PMS_MONITOR_VIOLATE_STATUS_HSIZE
+    bit_range:
+    - 5
+    - 3
+    description: backup_bus_pms_monitor_violate_status_hsize
+  - name: BACKUP_BUS_PMS_MONITOR_VIOLATE_STATUS_HWRITE
+    bit_range:
+    - 6
+    - 6
+    description: backup_bus_pms_monitor_violate_status_hwrite
+  side_effects: null
+- id: BACKUP_BUS_PMS_MONITOR_3
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BACKUP_BUS_PMS_MONITOR_VIOLATE_HADDR
+    bit_range:
+    - 31
+    - 0
+    description: backup_bus_pms_monitor_violate_haddr
+  side_effects: null
+- id: CLOCK_GATE
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: clk_en
+  side_effects: null
+- id: DATE
+  address_offset: 4092
+  size: 32
+  access: READ_WRITE
+  reset_value: 33620480
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: reg_date
+  side_effects: null
+interrupts: null
+timing: null

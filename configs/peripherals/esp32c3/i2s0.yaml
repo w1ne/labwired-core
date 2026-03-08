@@ -1,0 +1,922 @@
+peripheral: I2S0
+version: 0.1.0
+registers:
+- id: INT_RAW
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_DONE_INT_RAW
+    bit_range:
+    - 0
+    - 0
+    description: The raw interrupt status bit  for the i2s_rx_done_int interrupt
+  - name: TX_DONE_INT_RAW
+    bit_range:
+    - 1
+    - 1
+    description: The raw interrupt status bit  for the i2s_tx_done_int interrupt
+  - name: RX_HUNG_INT_RAW
+    bit_range:
+    - 2
+    - 2
+    description: The raw interrupt status bit  for the i2s_rx_hung_int interrupt
+  - name: TX_HUNG_INT_RAW
+    bit_range:
+    - 3
+    - 3
+    description: The raw interrupt status bit  for the i2s_tx_hung_int interrupt
+  side_effects: null
+- id: INT_ST
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_DONE_INT_ST
+    bit_range:
+    - 0
+    - 0
+    description: The masked interrupt status bit  for the i2s_rx_done_int interrupt
+  - name: TX_DONE_INT_ST
+    bit_range:
+    - 1
+    - 1
+    description: The masked interrupt status bit  for the i2s_tx_done_int interrupt
+  - name: RX_HUNG_INT_ST
+    bit_range:
+    - 2
+    - 2
+    description: The masked interrupt status bit  for the i2s_rx_hung_int interrupt
+  - name: TX_HUNG_INT_ST
+    bit_range:
+    - 3
+    - 3
+    description: The masked interrupt status bit  for the i2s_tx_hung_int interrupt
+  side_effects: null
+- id: INT_ENA
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_DONE_INT_ENA
+    bit_range:
+    - 0
+    - 0
+    description: The interrupt enable bit  for the i2s_rx_done_int interrupt
+  - name: TX_DONE_INT_ENA
+    bit_range:
+    - 1
+    - 1
+    description: The interrupt enable bit  for the i2s_tx_done_int interrupt
+  - name: RX_HUNG_INT_ENA
+    bit_range:
+    - 2
+    - 2
+    description: The interrupt enable bit  for the i2s_rx_hung_int interrupt
+  - name: TX_HUNG_INT_ENA
+    bit_range:
+    - 3
+    - 3
+    description: The interrupt enable bit  for the i2s_tx_hung_int interrupt
+  side_effects: null
+- id: INT_CLR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_DONE_INT_CLR
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to clear the i2s_rx_done_int interrupt
+  - name: TX_DONE_INT_CLR
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to clear the i2s_tx_done_int interrupt
+  - name: RX_HUNG_INT_CLR
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to clear the i2s_rx_hung_int interrupt
+  - name: TX_HUNG_INT_CLR
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to clear the i2s_tx_hung_int interrupt
+  side_effects: null
+- id: RX_CONF
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 38400
+  fields:
+  - name: RX_RESET
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to reset receiver
+  - name: RX_FIFO_RESET
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to reset Rx AFIFO
+  - name: RX_START
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to start receiving data
+  - name: RX_SLAVE_MOD
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to enable slave receiver mode
+  - name: RX_MONO
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to enable receiver  in mono mode
+  - name: RX_BIG_ENDIAN
+    bit_range:
+    - 7
+    - 7
+    description: 'I2S Rx byte endian, 1: low addr value to high addr. 0: low addr with low addr value.'
+  - name: RX_UPDATE
+    bit_range:
+    - 8
+    - 8
+    description: Set 1 to update I2S RX registers from APB clock domain to I2S RX clock domain. This bit will be cleared by hardware after update register done.
+  - name: RX_MONO_FST_VLD
+    bit_range:
+    - 9
+    - 9
+    description: '1: The first channel data value is valid in I2S RX mono mode.   0: The second channel data value is valid in I2S RX mono mode.'
+  - name: RX_PCM_CONF
+    bit_range:
+    - 11
+    - 10
+    description: 'I2S RX compress/decompress configuration bit. & 0 (atol): A-Law decompress, 1 (ltoa) : A-Law compress, 2 (utol) : u-Law decompress, 3 (ltou) : u-Law compress. &'
+  - name: RX_PCM_BYPASS
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to bypass Compress/Decompress module for received data.
+  - name: RX_STOP_MODE
+    bit_range:
+    - 14
+    - 13
+    description: '0  : I2S Rx only stop when reg_rx_start is cleared.   1: Stop when reg_rx_start is 0 or in_suc_eof is 1.   2:  Stop I2S RX when reg_rx_start is 0 or RX FIFO is full.'
+  - name: RX_LEFT_ALIGN
+    bit_range:
+    - 15
+    - 15
+    description: '1: I2S RX left alignment mode. 0: I2S RX right alignment mode.'
+  - name: RX_24_FILL_EN
+    bit_range:
+    - 16
+    - 16
+    description: '1: store 24 channel bits to 32 bits. 0:store 24 channel bits to 24 bits.'
+  - name: RX_WS_IDLE_POL
+    bit_range:
+    - 17
+    - 17
+    description: '0: WS should be 0 when receiving left channel data, and WS is 1in right channel.  1: WS should be 1 when receiving left channel data, and WS is 0in right channel.'
+  - name: RX_BIT_ORDER
+    bit_range:
+    - 18
+    - 18
+    description: I2S Rx bit endian. 1:small endian, the LSB is received first. 0:big endian, the MSB is received first.
+  - name: RX_TDM_EN
+    bit_range:
+    - 19
+    - 19
+    description: '1: Enable I2S TDM Rx mode . 0: Disable.'
+  - name: RX_PDM_EN
+    bit_range:
+    - 20
+    - 20
+    description: '1: Enable I2S PDM Rx mode . 0: Disable.'
+  side_effects: null
+- id: TX_CONF
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 45568
+  fields:
+  - name: TX_RESET
+    bit_range:
+    - 0
+    - 0
+    description: Set this bit to reset transmitter
+  - name: TX_FIFO_RESET
+    bit_range:
+    - 1
+    - 1
+    description: Set this bit to reset Tx AFIFO
+  - name: TX_START
+    bit_range:
+    - 2
+    - 2
+    description: Set this bit to start transmitting data
+  - name: TX_SLAVE_MOD
+    bit_range:
+    - 3
+    - 3
+    description: Set this bit to enable slave transmitter mode
+  - name: TX_MONO
+    bit_range:
+    - 5
+    - 5
+    description: Set this bit to enable transmitter in mono mode
+  - name: TX_CHAN_EQUAL
+    bit_range:
+    - 6
+    - 6
+    description: '1: The value of Left channel data is equal to the value of right channel data in I2S TX mono mode or TDM channel select mode. 0: The invalid channel data is reg_i2s_single_data in I2S TX mono mode or TDM channel select mode.'
+  - name: TX_BIG_ENDIAN
+    bit_range:
+    - 7
+    - 7
+    description: 'I2S Tx byte endian, 1: low addr value to high addr.  0: low addr with low addr value.'
+  - name: TX_UPDATE
+    bit_range:
+    - 8
+    - 8
+    description: Set 1 to update I2S TX registers from APB clock domain to I2S TX clock domain. This bit will be cleared by hardware after update register done.
+  - name: TX_MONO_FST_VLD
+    bit_range:
+    - 9
+    - 9
+    description: '1: The first channel data value is valid in I2S TX mono mode.   0: The second channel data value is valid in I2S TX mono mode.'
+  - name: TX_PCM_CONF
+    bit_range:
+    - 11
+    - 10
+    description: 'I2S TX compress/decompress configuration bit. & 0 (atol): A-Law decompress, 1 (ltoa) : A-Law compress, 2 (utol) : u-Law decompress, 3 (ltou) : u-Law compress. &'
+  - name: TX_PCM_BYPASS
+    bit_range:
+    - 12
+    - 12
+    description: Set this bit to bypass  Compress/Decompress module for transmitted data.
+  - name: TX_STOP_EN
+    bit_range:
+    - 13
+    - 13
+    description: Set this bit to stop disable output BCK signal and WS signal when tx FIFO is emtpy
+  - name: TX_LEFT_ALIGN
+    bit_range:
+    - 15
+    - 15
+    description: '1: I2S TX left alignment mode. 0: I2S TX right alignment mode.'
+  - name: TX_24_FILL_EN
+    bit_range:
+    - 16
+    - 16
+    description: '1: Sent 32 bits in 24 channel bits mode. 0: Sent 24 bits in 24 channel bits mode'
+  - name: TX_WS_IDLE_POL
+    bit_range:
+    - 17
+    - 17
+    description: '0: WS should be 0 when sending left channel data, and WS is 1in right channel.  1: WS should be 1 when sending left channel data, and WS is 0in right channel.'
+  - name: TX_BIT_ORDER
+    bit_range:
+    - 18
+    - 18
+    description: I2S Tx bit endian. 1:small endian, the LSB is sent first. 0:big endian, the MSB is sent first.
+  - name: TX_TDM_EN
+    bit_range:
+    - 19
+    - 19
+    description: '1: Enable I2S TDM Tx mode . 0: Disable.'
+  - name: TX_PDM_EN
+    bit_range:
+    - 20
+    - 20
+    description: '1: Enable I2S PDM Tx mode . 0: Disable.'
+  - name: TX_CHAN_MOD
+    bit_range:
+    - 26
+    - 24
+    description: I2S transmitter channel mode configuration bits.
+  - name: SIG_LOOPBACK
+    bit_range:
+    - 27
+    - 27
+    description: Enable signal loop back mode with transmitter module and receiver module sharing the same WS and BCK signals.
+  side_effects: null
+- id: RX_CONF1
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 792584960
+  fields:
+  - name: RX_TDM_WS_WIDTH
+    bit_range:
+    - 6
+    - 0
+    description: The width of rx_ws_out in TDM mode is (I2S_RX_TDM_WS_WIDTH[6:0] +1) * T_bck
+  - name: RX_BCK_DIV_NUM
+    bit_range:
+    - 12
+    - 7
+    description: Bit clock configuration bits in receiver mode.
+  - name: RX_BITS_MOD
+    bit_range:
+    - 17
+    - 13
+    description: 'Set the bits to configure the valid data bit length of I2S receiver channel. 7: all the valid channel data is in 8-bit-mode. 15: all the valid channel data is in 16-bit-mode. 23: all the valid channel data is in 24-bit-mode. 31:all the valid channel data is in 32-bit-mode.'
+  - name: RX_HALF_SAMPLE_BITS
+    bit_range:
+    - 23
+    - 18
+    description: I2S Rx half sample bits -1.
+  - name: RX_TDM_CHAN_BITS
+    bit_range:
+    - 28
+    - 24
+    description: The Rx bit number for each channel minus 1in TDM mode.
+  - name: RX_MSB_SHIFT
+    bit_range:
+    - 29
+    - 29
+    description: Set this bit to enable receiver in Phillips standard mode
+  side_effects: null
+- id: TX_CONF1
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 1866326784
+  fields:
+  - name: TX_TDM_WS_WIDTH
+    bit_range:
+    - 6
+    - 0
+    description: The width of tx_ws_out in TDM mode is (I2S_TX_TDM_WS_WIDTH[6:0] +1) * T_bck
+  - name: TX_BCK_DIV_NUM
+    bit_range:
+    - 12
+    - 7
+    description: Bit clock configuration bits in transmitter mode.
+  - name: TX_BITS_MOD
+    bit_range:
+    - 17
+    - 13
+    description: 'Set the bits to configure the valid data bit length of I2S transmitter channel. 7: all the valid channel data is in 8-bit-mode. 15: all the valid channel data is in 16-bit-mode. 23: all the valid channel data is in 24-bit-mode. 31:all the valid channel data is in 32-bit-mode.'
+  - name: TX_HALF_SAMPLE_BITS
+    bit_range:
+    - 23
+    - 18
+    description: I2S Tx half sample bits -1.
+  - name: TX_TDM_CHAN_BITS
+    bit_range:
+    - 28
+    - 24
+    description: The Tx bit number for each channel minus 1in TDM mode.
+  - name: TX_MSB_SHIFT
+    bit_range:
+    - 29
+    - 29
+    description: Set this bit to enable transmitter in Phillips standard mode
+  - name: TX_BCK_NO_DLY
+    bit_range:
+    - 30
+    - 30
+    description: '1: BCK is not delayed to generate pos/neg edge in master mode. 0: BCK is delayed to generate pos/neg edge in master mode.'
+  side_effects: null
+- id: RX_CLKM_CONF
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: RX_CLKM_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: Integral I2S clock divider value
+  - name: RX_CLK_ACTIVE
+    bit_range:
+    - 26
+    - 26
+    description: I2S Rx module clock enable signal.
+  - name: RX_CLK_SEL
+    bit_range:
+    - 28
+    - 27
+    description: 'Select I2S Rx module source clock. 0: no clock. 1: APLL. 2: CLK160. 3: I2S_MCLK_in.'
+  - name: MCLK_SEL
+    bit_range:
+    - 29
+    - 29
+    description: '0: UseI2S Tx module clock as I2S_MCLK_OUT.  1: UseI2S Rx module clock as I2S_MCLK_OUT.'
+  side_effects: null
+- id: TX_CLKM_CONF
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: TX_CLKM_DIV_NUM
+    bit_range:
+    - 7
+    - 0
+    description: 'Integral I2S TX clock divider value. f_I2S_CLK = f_I2S_CLK_S/(N+b/a). There will be (a-b) * n-div and b * (n+1)-div.  So the average combination will be:  for b <= a/2, z * [x * n-div + (n+1)-div] + y * n-div. For b > a/2, z * [n-div + x * (n+1)-div] + y * (n+1)-div.'
+  - name: TX_CLK_ACTIVE
+    bit_range:
+    - 26
+    - 26
+    description: I2S Tx module clock enable signal.
+  - name: TX_CLK_SEL
+    bit_range:
+    - 28
+    - 27
+    description: 'Select I2S Tx module source clock. 0: XTAL clock. 1: APLL. 2: CLK160. 3: I2S_MCLK_in.'
+  - name: CLK_EN
+    bit_range:
+    - 29
+    - 29
+    description: Set this bit to enable clk gate
+  side_effects: null
+- id: RX_CLKM_DIV_CONF
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: RX_CLKM_DIV_Z
+    bit_range:
+    - 8
+    - 0
+    description: For b <= a/2, the value of I2S_RX_CLKM_DIV_Z is b. For b > a/2, the value of I2S_RX_CLKM_DIV_Z is (a-b).
+  - name: RX_CLKM_DIV_Y
+    bit_range:
+    - 17
+    - 9
+    description: For b <= a/2, the value of I2S_RX_CLKM_DIV_Y is (a%b) . For b > a/2, the value of I2S_RX_CLKM_DIV_Y is (a%(a-b)).
+  - name: RX_CLKM_DIV_X
+    bit_range:
+    - 26
+    - 18
+    description: For b <= a/2, the value of I2S_RX_CLKM_DIV_X is (a/b) - 1. For b > a/2, the value of I2S_RX_CLKM_DIV_X is (a/(a-b)) - 1.
+  - name: RX_CLKM_DIV_YN1
+    bit_range:
+    - 27
+    - 27
+    description: For b <= a/2, the value of I2S_RX_CLKM_DIV_YN1 is 0 . For b > a/2, the value of I2S_RX_CLKM_DIV_YN1 is 1.
+  side_effects: null
+- id: TX_CLKM_DIV_CONF
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: TX_CLKM_DIV_Z
+    bit_range:
+    - 8
+    - 0
+    description: For b <= a/2, the value of I2S_TX_CLKM_DIV_Z is b. For b > a/2, the value of I2S_TX_CLKM_DIV_Z is (a-b).
+  - name: TX_CLKM_DIV_Y
+    bit_range:
+    - 17
+    - 9
+    description: For b <= a/2, the value of I2S_TX_CLKM_DIV_Y is (a%b) . For b > a/2, the value of I2S_TX_CLKM_DIV_Y is (a%(a-b)).
+  - name: TX_CLKM_DIV_X
+    bit_range:
+    - 26
+    - 18
+    description: For b <= a/2, the value of I2S_TX_CLKM_DIV_X is (a/b) - 1. For b > a/2, the value of I2S_TX_CLKM_DIV_X is (a/(a-b)) - 1.
+  - name: TX_CLKM_DIV_YN1
+    bit_range:
+    - 27
+    - 27
+    description: For b <= a/2, the value of I2S_TX_CLKM_DIV_YN1 is 0 . For b > a/2, the value of I2S_TX_CLKM_DIV_YN1 is 1.
+  side_effects: null
+- id: TX_PCM2PDM_CONF
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 4890628
+  fields:
+  - name: TX_PDM_HP_BYPASS
+    bit_range:
+    - 0
+    - 0
+    description: I2S TX PDM bypass hp filter or not. The option has been removed.
+  - name: TX_PDM_SINC_OSR2
+    bit_range:
+    - 4
+    - 1
+    description: I2S TX PDM OSR2 value
+  - name: TX_PDM_PRESCALE
+    bit_range:
+    - 12
+    - 5
+    description: I2S TX PDM prescale for sigmadelta
+  - name: TX_PDM_HP_IN_SHIFT
+    bit_range:
+    - 14
+    - 13
+    description: 'I2S TX PDM sigmadelta scale shift number: 0:/2 , 1:x1 , 2:x2 , 3: x4'
+  - name: TX_PDM_LP_IN_SHIFT
+    bit_range:
+    - 16
+    - 15
+    description: 'I2S TX PDM sigmadelta scale shift number: 0:/2 , 1:x1 , 2:x2 , 3: x4'
+  - name: TX_PDM_SINC_IN_SHIFT
+    bit_range:
+    - 18
+    - 17
+    description: 'I2S TX PDM sigmadelta scale shift number: 0:/2 , 1:x1 , 2:x2 , 3: x4'
+  - name: TX_PDM_SIGMADELTA_IN_SHIFT
+    bit_range:
+    - 20
+    - 19
+    description: 'I2S TX PDM sigmadelta scale shift number: 0:/2 , 1:x1 , 2:x2 , 3: x4'
+  - name: TX_PDM_SIGMADELTA_DITHER2
+    bit_range:
+    - 21
+    - 21
+    description: I2S TX PDM sigmadelta dither2 value
+  - name: TX_PDM_SIGMADELTA_DITHER
+    bit_range:
+    - 22
+    - 22
+    description: I2S TX PDM sigmadelta dither value
+  - name: TX_PDM_DAC_2OUT_EN
+    bit_range:
+    - 23
+    - 23
+    description: I2S TX PDM dac mode enable
+  - name: TX_PDM_DAC_MODE_EN
+    bit_range:
+    - 24
+    - 24
+    description: I2S TX PDM dac 2channel enable
+  - name: PCM2PDM_CONV_EN
+    bit_range:
+    - 25
+    - 25
+    description: I2S TX PDM Converter enable
+  side_effects: null
+- id: TX_PCM2PDM_CONF1
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 66552768
+  fields:
+  - name: TX_PDM_FP
+    bit_range:
+    - 9
+    - 0
+    description: I2S TX PDM Fp
+  - name: TX_PDM_FS
+    bit_range:
+    - 19
+    - 10
+    description: I2S TX PDM Fs
+  - name: TX_IIR_HP_MULT12_5
+    bit_range:
+    - 22
+    - 20
+    description: The fourth parameter of PDM TX IIR_HP filter stage 2 is (504 + I2S_TX_IIR_HP_MULT12_5[2:0])
+  - name: TX_IIR_HP_MULT12_0
+    bit_range:
+    - 25
+    - 23
+    description: The fourth parameter of PDM TX IIR_HP filter stage 1 is (504 + I2S_TX_IIR_HP_MULT12_0[2:0])
+  side_effects: null
+- id: RX_TDM_CTRL
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: RX_TDM_PDM_CHAN0_EN
+    bit_range:
+    - 0
+    - 0
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 0. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_PDM_CHAN1_EN
+    bit_range:
+    - 1
+    - 1
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 1. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_PDM_CHAN2_EN
+    bit_range:
+    - 2
+    - 2
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 2. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_PDM_CHAN3_EN
+    bit_range:
+    - 3
+    - 3
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 3. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_PDM_CHAN4_EN
+    bit_range:
+    - 4
+    - 4
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 4. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_PDM_CHAN5_EN
+    bit_range:
+    - 5
+    - 5
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 5. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_PDM_CHAN6_EN
+    bit_range:
+    - 6
+    - 6
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 6. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_PDM_CHAN7_EN
+    bit_range:
+    - 7
+    - 7
+    description: '1: Enable the valid data input of I2S RX TDM or PDM channel 7. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN8_EN
+    bit_range:
+    - 8
+    - 8
+    description: '1: Enable the valid data input of I2S RX TDM channel 8. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN9_EN
+    bit_range:
+    - 9
+    - 9
+    description: '1: Enable the valid data input of I2S RX TDM channel 9. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN10_EN
+    bit_range:
+    - 10
+    - 10
+    description: '1: Enable the valid data input of I2S RX TDM channel 10. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN11_EN
+    bit_range:
+    - 11
+    - 11
+    description: '1: Enable the valid data input of I2S RX TDM channel 11. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN12_EN
+    bit_range:
+    - 12
+    - 12
+    description: '1: Enable the valid data input of I2S RX TDM channel 12. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN13_EN
+    bit_range:
+    - 13
+    - 13
+    description: '1: Enable the valid data input of I2S RX TDM channel 13. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN14_EN
+    bit_range:
+    - 14
+    - 14
+    description: '1: Enable the valid data input of I2S RX TDM channel 14. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_CHAN15_EN
+    bit_range:
+    - 15
+    - 15
+    description: '1: Enable the valid data input of I2S RX TDM channel 15. 0:  Disable, just input 0 in this channel.'
+  - name: RX_TDM_TOT_CHAN_NUM
+    bit_range:
+    - 19
+    - 16
+    description: The total channel number of I2S TX TDM mode.
+  side_effects: null
+- id: TX_TDM_CTRL
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: TX_TDM_CHAN0_EN
+    bit_range:
+    - 0
+    - 0
+    description: '1: Enable the valid data output of I2S TX TDM channel 0. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN1_EN
+    bit_range:
+    - 1
+    - 1
+    description: '1: Enable the valid data output of I2S TX TDM channel 1. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN2_EN
+    bit_range:
+    - 2
+    - 2
+    description: '1: Enable the valid data output of I2S TX TDM channel 2. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN3_EN
+    bit_range:
+    - 3
+    - 3
+    description: '1: Enable the valid data output of I2S TX TDM channel 3. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN4_EN
+    bit_range:
+    - 4
+    - 4
+    description: '1: Enable the valid data output of I2S TX TDM channel 4. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN5_EN
+    bit_range:
+    - 5
+    - 5
+    description: '1: Enable the valid data output of I2S TX TDM channel 5. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN6_EN
+    bit_range:
+    - 6
+    - 6
+    description: '1: Enable the valid data output of I2S TX TDM channel 6. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN7_EN
+    bit_range:
+    - 7
+    - 7
+    description: '1: Enable the valid data output of I2S TX TDM channel 7. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN8_EN
+    bit_range:
+    - 8
+    - 8
+    description: '1: Enable the valid data output of I2S TX TDM channel 8. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN9_EN
+    bit_range:
+    - 9
+    - 9
+    description: '1: Enable the valid data output of I2S TX TDM channel 9. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN10_EN
+    bit_range:
+    - 10
+    - 10
+    description: '1: Enable the valid data output of I2S TX TDM channel 10. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN11_EN
+    bit_range:
+    - 11
+    - 11
+    description: '1: Enable the valid data output of I2S TX TDM channel 11. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN12_EN
+    bit_range:
+    - 12
+    - 12
+    description: '1: Enable the valid data output of I2S TX TDM channel 12. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN13_EN
+    bit_range:
+    - 13
+    - 13
+    description: '1: Enable the valid data output of I2S TX TDM channel 13. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN14_EN
+    bit_range:
+    - 14
+    - 14
+    description: '1: Enable the valid data output of I2S TX TDM channel 14. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_CHAN15_EN
+    bit_range:
+    - 15
+    - 15
+    description: '1: Enable the valid data output of I2S TX TDM channel 15. 0:  Disable, just output 0 in this channel.'
+  - name: TX_TDM_TOT_CHAN_NUM
+    bit_range:
+    - 19
+    - 16
+    description: The total channel number of I2S TX TDM mode.
+  - name: TX_TDM_SKIP_MSK_EN
+    bit_range:
+    - 20
+    - 20
+    description: When DMA TX buffer stores the data of (REG_TX_TDM_TOT_CHAN_NUM + 1)  channels, and only the data of the enabled channels is sent, then this bit should be set. Clear it when all the data stored in DMA TX buffer is for enabled channels.
+  side_effects: null
+- id: RX_TIMING
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RX_SD_IN_DM
+    bit_range:
+    - 1
+    - 0
+    description: 'The delay mode of I2S Rx SD input signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: RX_WS_OUT_DM
+    bit_range:
+    - 17
+    - 16
+    description: 'The delay mode of I2S Rx WS output signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: RX_BCK_OUT_DM
+    bit_range:
+    - 21
+    - 20
+    description: 'The delay mode of I2S Rx BCK output signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: RX_WS_IN_DM
+    bit_range:
+    - 25
+    - 24
+    description: 'The delay mode of I2S Rx WS input signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: RX_BCK_IN_DM
+    bit_range:
+    - 29
+    - 28
+    description: 'The delay mode of I2S Rx BCK input signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  side_effects: null
+- id: TX_TIMING
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TX_SD_OUT_DM
+    bit_range:
+    - 1
+    - 0
+    description: 'The delay mode of I2S TX SD output signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: TX_SD1_OUT_DM
+    bit_range:
+    - 5
+    - 4
+    description: 'The delay mode of I2S TX SD1 output signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: TX_WS_OUT_DM
+    bit_range:
+    - 17
+    - 16
+    description: 'The delay mode of I2S TX WS output signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: TX_BCK_OUT_DM
+    bit_range:
+    - 21
+    - 20
+    description: 'The delay mode of I2S TX BCK output signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: TX_WS_IN_DM
+    bit_range:
+    - 25
+    - 24
+    description: 'The delay mode of I2S TX WS input signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  - name: TX_BCK_IN_DM
+    bit_range:
+    - 29
+    - 28
+    description: 'The delay mode of I2S TX BCK input signal. 0: bypass. 1: delay by pos edge.  2: delay by neg edge. 3: not used.'
+  side_effects: null
+- id: LC_HUNG_CONF
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 2064
+  fields:
+  - name: LC_FIFO_TIMEOUT
+    bit_range:
+    - 7
+    - 0
+    description: the i2s_tx_hung_int interrupt or the i2s_rx_hung_int interrupt will be triggered when fifo hung counter is equal to this value
+  - name: LC_FIFO_TIMEOUT_SHIFT
+    bit_range:
+    - 10
+    - 8
+    description: The bits are used to scale tick counter threshold. The tick counter is reset when counter value >= 88000/2^i2s_lc_fifo_timeout_shift
+  - name: LC_FIFO_TIMEOUT_ENA
+    bit_range:
+    - 11
+    - 11
+    description: The enable bit for FIFO timeout
+  side_effects: null
+- id: RXEOF_NUM
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 64
+  fields:
+  - name: RX_EOF_NUM
+    bit_range:
+    - 11
+    - 0
+    description: The receive data bit length is (I2S_RX_BITS_MOD[4:0] + 1) * (REG_RX_EOF_NUM[11:0] + 1) . It will trigger in_suc_eof interrupt in the configured DMA RX channel.
+  side_effects: null
+- id: CONF_SIGLE_DATA
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SINGLE_DATA
+    bit_range:
+    - 31
+    - 0
+    description: The configured constant channel data to be sent out.
+  side_effects: null
+- id: STATE
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: TX_IDLE
+    bit_range:
+    - 0
+    - 0
+    description: '1: i2s_tx is idle state. 0: i2s_tx is working.'
+  side_effects: null
+- id: DATE
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 33583648
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: I2S version control register
+  side_effects: null
+interrupts:
+  I2S0: 20
+timing: null
