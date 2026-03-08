@@ -1,0 +1,22 @@
+peripheral: TBMAN
+version: 0.1.0
+registers:
+- id: PLATFORM
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: ASIC
+    bit_range:
+    - 0
+    - 0
+    description: Indicates the platform is an ASIC
+  - name: FPGA
+    bit_range:
+    - 1
+    - 1
+    description: Indicates the platform is an FPGA
+  side_effects: null
+interrupts: null
+timing: null

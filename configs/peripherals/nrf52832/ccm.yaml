@@ -1,0 +1,198 @@
+peripheral: CCM
+version: 0.1.0
+registers:
+- id: TASKS_KSGEN
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CRYPT
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ENDKSGEN
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ENDCRYPT
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ERROR
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDKSGEN_CRYPT
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between ENDKSGEN event and CRYPT task
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDKSGEN
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for ENDKSGEN event
+  - name: ENDCRYPT
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for ENDCRYPT event
+  - name: ERROR
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for ERROR event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDKSGEN
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for ENDKSGEN event
+  - name: ENDCRYPT
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for ENDCRYPT event
+  - name: ERROR
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for ERROR event
+  side_effects: null
+- id: MICSTATUS
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MICSTATUS
+    bit_range:
+    - 0
+    - 0
+    description: The result of the MIC check performed during the previous decryption operation
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 0
+    description: Enable or disable CCM
+  side_effects: null
+- id: MODE
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: MODE
+    bit_range:
+    - 0
+    - 0
+    description: The mode of operation to be used
+  - name: DATARATE
+    bit_range:
+    - 16
+    - 16
+    description: Data rate that the CCM shall run in synch with
+  - name: LENGTH
+    bit_range:
+    - 24
+    - 24
+    description: Packet length configuration
+  side_effects: null
+- id: CNFPTR
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNFPTR
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to the data structure holding the AES key and the CCM NONCE vector (see Table 1 CCM data structure overview)
+  side_effects: null
+- id: INPTR
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INPTR
+    bit_range:
+    - 31
+    - 0
+    description: Input pointer
+  side_effects: null
+- id: OUTPTR
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUTPTR
+    bit_range:
+    - 31
+    - 0
+    description: Output pointer
+  side_effects: null
+- id: SCRATCHPTR
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SCRATCHPTR
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to a scratch data area used for temporary storage during key-stream generation, MIC generation and encryption/decryption.
+  side_effects: null
+interrupts:
+  CCM_AAR: 15
+timing: null

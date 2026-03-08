@@ -1,0 +1,492 @@
+peripheral: EGU3
+version: 0.1.0
+registers:
+- id: TASKS_TRIGGER0
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER1
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER2
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER3
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER4
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER5
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER6
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER7
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER8
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER9
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER10
+  address_offset: 40
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER11
+  address_offset: 44
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER12
+  address_offset: 48
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER13
+  address_offset: 52
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER14
+  address_offset: 56
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_TRIGGER15
+  address_offset: 60
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED0
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED1
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED2
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED3
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED4
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED5
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED6
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED7
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED8
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED9
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED10
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED11
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED12
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED13
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED14
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_TRIGGERED15
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGGERED0
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for TRIGGERED[0] event
+  - name: TRIGGERED1
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for TRIGGERED[1] event
+  - name: TRIGGERED2
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for TRIGGERED[2] event
+  - name: TRIGGERED3
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable interrupt for TRIGGERED[3] event
+  - name: TRIGGERED4
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable interrupt for TRIGGERED[4] event
+  - name: TRIGGERED5
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable interrupt for TRIGGERED[5] event
+  - name: TRIGGERED6
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable interrupt for TRIGGERED[6] event
+  - name: TRIGGERED7
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable interrupt for TRIGGERED[7] event
+  - name: TRIGGERED8
+    bit_range:
+    - 8
+    - 8
+    description: Enable or disable interrupt for TRIGGERED[8] event
+  - name: TRIGGERED9
+    bit_range:
+    - 9
+    - 9
+    description: Enable or disable interrupt for TRIGGERED[9] event
+  - name: TRIGGERED10
+    bit_range:
+    - 10
+    - 10
+    description: Enable or disable interrupt for TRIGGERED[10] event
+  - name: TRIGGERED11
+    bit_range:
+    - 11
+    - 11
+    description: Enable or disable interrupt for TRIGGERED[11] event
+  - name: TRIGGERED12
+    bit_range:
+    - 12
+    - 12
+    description: Enable or disable interrupt for TRIGGERED[12] event
+  - name: TRIGGERED13
+    bit_range:
+    - 13
+    - 13
+    description: Enable or disable interrupt for TRIGGERED[13] event
+  - name: TRIGGERED14
+    bit_range:
+    - 14
+    - 14
+    description: Enable or disable interrupt for TRIGGERED[14] event
+  - name: TRIGGERED15
+    bit_range:
+    - 15
+    - 15
+    description: Enable or disable interrupt for TRIGGERED[15] event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGGERED0
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for TRIGGERED[0] event
+  - name: TRIGGERED1
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for TRIGGERED[1] event
+  - name: TRIGGERED2
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for TRIGGERED[2] event
+  - name: TRIGGERED3
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for TRIGGERED[3] event
+  - name: TRIGGERED4
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for TRIGGERED[4] event
+  - name: TRIGGERED5
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable interrupt for TRIGGERED[5] event
+  - name: TRIGGERED6
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Enable interrupt for TRIGGERED[6] event
+  - name: TRIGGERED7
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable interrupt for TRIGGERED[7] event
+  - name: TRIGGERED8
+    bit_range:
+    - 8
+    - 8
+    description: Write '1' to Enable interrupt for TRIGGERED[8] event
+  - name: TRIGGERED9
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Enable interrupt for TRIGGERED[9] event
+  - name: TRIGGERED10
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Enable interrupt for TRIGGERED[10] event
+  - name: TRIGGERED11
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to Enable interrupt for TRIGGERED[11] event
+  - name: TRIGGERED12
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Enable interrupt for TRIGGERED[12] event
+  - name: TRIGGERED13
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to Enable interrupt for TRIGGERED[13] event
+  - name: TRIGGERED14
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to Enable interrupt for TRIGGERED[14] event
+  - name: TRIGGERED15
+    bit_range:
+    - 15
+    - 15
+    description: Write '1' to Enable interrupt for TRIGGERED[15] event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TRIGGERED0
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for TRIGGERED[0] event
+  - name: TRIGGERED1
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for TRIGGERED[1] event
+  - name: TRIGGERED2
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for TRIGGERED[2] event
+  - name: TRIGGERED3
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for TRIGGERED[3] event
+  - name: TRIGGERED4
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for TRIGGERED[4] event
+  - name: TRIGGERED5
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable interrupt for TRIGGERED[5] event
+  - name: TRIGGERED6
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Disable interrupt for TRIGGERED[6] event
+  - name: TRIGGERED7
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable interrupt for TRIGGERED[7] event
+  - name: TRIGGERED8
+    bit_range:
+    - 8
+    - 8
+    description: Write '1' to Disable interrupt for TRIGGERED[8] event
+  - name: TRIGGERED9
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Disable interrupt for TRIGGERED[9] event
+  - name: TRIGGERED10
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Disable interrupt for TRIGGERED[10] event
+  - name: TRIGGERED11
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to Disable interrupt for TRIGGERED[11] event
+  - name: TRIGGERED12
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Disable interrupt for TRIGGERED[12] event
+  - name: TRIGGERED13
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to Disable interrupt for TRIGGERED[13] event
+  - name: TRIGGERED14
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to Disable interrupt for TRIGGERED[14] event
+  - name: TRIGGERED15
+    bit_range:
+    - 15
+    - 15
+    description: Write '1' to Disable interrupt for TRIGGERED[15] event
+  side_effects: null
+interrupts:
+  SWI0_EGU0: 20
+  SWI3_EGU3: 23
+timing: null

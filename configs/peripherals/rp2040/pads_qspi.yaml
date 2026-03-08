@@ -1,0 +1,269 @@
+peripheral: PADS_QSPI
+version: 0.1.0
+registers:
+- id: VOLTAGE_SELECT
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VOLTAGE_SELECT
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: GPIO_QSPI_SCLK
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 86
+  fields:
+  - name: SLEWFAST
+    bit_range:
+    - 0
+    - 0
+    description: Slew rate control. 1 = Fast, 0 = Slow
+  - name: SCHMITT
+    bit_range:
+    - 1
+    - 1
+    description: Enable schmitt trigger
+  - name: PDE
+    bit_range:
+    - 2
+    - 2
+    description: Pull down enable
+  - name: PUE
+    bit_range:
+    - 3
+    - 3
+    description: Pull up enable
+  - name: DRIVE
+    bit_range:
+    - 5
+    - 4
+    description: Drive strength.
+  - name: IE
+    bit_range:
+    - 6
+    - 6
+    description: Input enable
+  - name: OD
+    bit_range:
+    - 7
+    - 7
+    description: Output disable. Has priority over output enable from peripherals
+  side_effects: null
+- id: GPIO_QSPI_SD0
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 82
+  fields:
+  - name: SLEWFAST
+    bit_range:
+    - 0
+    - 0
+    description: Slew rate control. 1 = Fast, 0 = Slow
+  - name: SCHMITT
+    bit_range:
+    - 1
+    - 1
+    description: Enable schmitt trigger
+  - name: PDE
+    bit_range:
+    - 2
+    - 2
+    description: Pull down enable
+  - name: PUE
+    bit_range:
+    - 3
+    - 3
+    description: Pull up enable
+  - name: DRIVE
+    bit_range:
+    - 5
+    - 4
+    description: Drive strength.
+  - name: IE
+    bit_range:
+    - 6
+    - 6
+    description: Input enable
+  - name: OD
+    bit_range:
+    - 7
+    - 7
+    description: Output disable. Has priority over output enable from peripherals
+  side_effects: null
+- id: GPIO_QSPI_SD1
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 82
+  fields:
+  - name: SLEWFAST
+    bit_range:
+    - 0
+    - 0
+    description: Slew rate control. 1 = Fast, 0 = Slow
+  - name: SCHMITT
+    bit_range:
+    - 1
+    - 1
+    description: Enable schmitt trigger
+  - name: PDE
+    bit_range:
+    - 2
+    - 2
+    description: Pull down enable
+  - name: PUE
+    bit_range:
+    - 3
+    - 3
+    description: Pull up enable
+  - name: DRIVE
+    bit_range:
+    - 5
+    - 4
+    description: Drive strength.
+  - name: IE
+    bit_range:
+    - 6
+    - 6
+    description: Input enable
+  - name: OD
+    bit_range:
+    - 7
+    - 7
+    description: Output disable. Has priority over output enable from peripherals
+  side_effects: null
+- id: GPIO_QSPI_SD2
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 82
+  fields:
+  - name: SLEWFAST
+    bit_range:
+    - 0
+    - 0
+    description: Slew rate control. 1 = Fast, 0 = Slow
+  - name: SCHMITT
+    bit_range:
+    - 1
+    - 1
+    description: Enable schmitt trigger
+  - name: PDE
+    bit_range:
+    - 2
+    - 2
+    description: Pull down enable
+  - name: PUE
+    bit_range:
+    - 3
+    - 3
+    description: Pull up enable
+  - name: DRIVE
+    bit_range:
+    - 5
+    - 4
+    description: Drive strength.
+  - name: IE
+    bit_range:
+    - 6
+    - 6
+    description: Input enable
+  - name: OD
+    bit_range:
+    - 7
+    - 7
+    description: Output disable. Has priority over output enable from peripherals
+  side_effects: null
+- id: GPIO_QSPI_SD3
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 82
+  fields:
+  - name: SLEWFAST
+    bit_range:
+    - 0
+    - 0
+    description: Slew rate control. 1 = Fast, 0 = Slow
+  - name: SCHMITT
+    bit_range:
+    - 1
+    - 1
+    description: Enable schmitt trigger
+  - name: PDE
+    bit_range:
+    - 2
+    - 2
+    description: Pull down enable
+  - name: PUE
+    bit_range:
+    - 3
+    - 3
+    description: Pull up enable
+  - name: DRIVE
+    bit_range:
+    - 5
+    - 4
+    description: Drive strength.
+  - name: IE
+    bit_range:
+    - 6
+    - 6
+    description: Input enable
+  - name: OD
+    bit_range:
+    - 7
+    - 7
+    description: Output disable. Has priority over output enable from peripherals
+  side_effects: null
+- id: GPIO_QSPI_SS
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 90
+  fields:
+  - name: SLEWFAST
+    bit_range:
+    - 0
+    - 0
+    description: Slew rate control. 1 = Fast, 0 = Slow
+  - name: SCHMITT
+    bit_range:
+    - 1
+    - 1
+    description: Enable schmitt trigger
+  - name: PDE
+    bit_range:
+    - 2
+    - 2
+    description: Pull down enable
+  - name: PUE
+    bit_range:
+    - 3
+    - 3
+    description: Pull up enable
+  - name: DRIVE
+    bit_range:
+    - 5
+    - 4
+    description: Drive strength.
+  - name: IE
+    bit_range:
+    - 6
+    - 6
+    description: Input enable
+  - name: OD
+    bit_range:
+    - 7
+    - 7
+    description: Output disable. Has priority over output enable from peripherals
+  side_effects: null
+interrupts: null
+timing: null

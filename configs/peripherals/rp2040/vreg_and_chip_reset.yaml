@@ -1,0 +1,76 @@
+peripheral: VREG_AND_CHIP_RESET
+version: 0.1.0
+registers:
+- id: VREG
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "enable \n                            0=not enabled, 1=enabled"
+  - name: HIZ
+    bit_range:
+    - 1
+    - 1
+    description: "high impedance mode select \n                            0=not in high impedance mode, 1=in high impedance mode"
+  - name: VSEL
+    bit_range:
+    - 7
+    - 4
+    description: "output voltage select \n                            0000 to 0101 - 0.80V \n                            0110         - 0.85V \n                            0111         - 0.90V \n                            1000         - 0.95V \n                            1001         - 1.00V \n                            1010         - 1.05V \n                            1011         - 1.10V (default) \n                            1100         - 1.15V \n                            1101         - 1.20V \n                            1110         - 1.25V \n                            1111         - 1.30V"
+  - name: ROK
+    bit_range:
+    - 12
+    - 12
+    description: "regulation status \n                            0=not in regulation, 1=in regulation"
+  side_effects: null
+- id: BOD
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 145
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: "enable \n                            0=not enabled, 1=enabled"
+  - name: VSEL
+    bit_range:
+    - 7
+    - 4
+    description: "threshold select \n                            0000 - 0.473V \n                            0001 - 0.516V \n                            0010 - 0.559V \n                            0011 - 0.602V \n                            0100 - 0.645V \n                            0101 - 0.688V \n                            0110 - 0.731V \n                            0111 - 0.774V \n                            1000 - 0.817V \n                            1001 - 0.860V (default) \n                            1010 - 0.903V \n                            1011 - 0.946V \n                            1100 - 0.989V \n                            1101 - 1.032V \n                            1110 - 1.075V \n                            1111 - 1.118V"
+  side_effects: null
+- id: CHIP_RESET
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HAD_POR
+    bit_range:
+    - 8
+    - 8
+    description: Last reset was from the power-on reset or brown-out detection blocks
+  - name: HAD_RUN
+    bit_range:
+    - 16
+    - 16
+    description: Last reset was from the RUN pin
+  - name: HAD_PSM_RESTART
+    bit_range:
+    - 20
+    - 20
+    description: Last reset was from the debug port
+  - name: PSM_RESTART_FLAG
+    bit_range:
+    - 24
+    - 24
+    description: "This is set by psm_restart from the debugger. \n                            Its purpose is to branch bootcode to a safe mode when the debugger has issued a psm_restart in order to recover from a boot lock-up. \n                            In the safe mode the debugger can repair the boot code, clear this flag then reboot the processor."
+  side_effects: null
+interrupts: null
+timing: null

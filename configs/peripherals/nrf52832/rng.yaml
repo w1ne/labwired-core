@@ -1,0 +1,87 @@
+peripheral: RNG
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_VALRDY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VALRDY_STOP
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between VALRDY event and STOP task
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VALRDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for VALRDY event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VALRDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for VALRDY event
+  side_effects: null
+- id: CONFIG
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DERCEN
+    bit_range:
+    - 0
+    - 0
+    description: Bias correction
+  side_effects: null
+- id: VALUE
+  address_offset: 1288
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: VALUE
+    bit_range:
+    - 7
+    - 0
+    description: Generated random number
+  side_effects: null
+interrupts:
+  RNG: 13
+timing: null

@@ -1,0 +1,188 @@
+peripheral: ROSC
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 2720
+  fields:
+  - name: FREQ_RANGE
+    bit_range:
+    - 11
+    - 0
+    description: "Controls the number of delay stages in the ROSC ring \n                            LOW uses stages 0 to 7 \n                            MEDIUM uses stages 2 to 7 \n                            HIGH uses stages 4 to 7 \n                            TOOHIGH uses stages 6 to 7 and should not be used because its frequency exceeds design specifications \n                            The clock output will not glitch when changing the range up one step at a time \n                            The clock output will glitch when changing the range down \n                            Note: the values here are gray coded which is why HIGH comes before TOOHIGH"
+  - name: ENABLE
+    bit_range:
+    - 23
+    - 12
+    description: "On power-up this field is initialised to ENABLE \n                            The system clock must be switched to another source before setting this field to DISABLE otherwise the chip will lock up \n                            The 12-bit code is intended to give some protection against accidental writes. An invalid setting will enable the oscillator."
+  side_effects: null
+- id: FREQA
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DS0
+    bit_range:
+    - 2
+    - 0
+    description: Stage 0 drive strength
+  - name: DS1
+    bit_range:
+    - 6
+    - 4
+    description: Stage 1 drive strength
+  - name: DS2
+    bit_range:
+    - 10
+    - 8
+    description: Stage 2 drive strength
+  - name: DS3
+    bit_range:
+    - 14
+    - 12
+    description: Stage 3 drive strength
+  - name: PASSWD
+    bit_range:
+    - 31
+    - 16
+    description: "Set to 0x9696 to apply the settings \n                            Any other value in this field will set all drive strengths to 0"
+  side_effects: null
+- id: FREQB
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DS4
+    bit_range:
+    - 2
+    - 0
+    description: Stage 4 drive strength
+  - name: DS5
+    bit_range:
+    - 6
+    - 4
+    description: Stage 5 drive strength
+  - name: DS6
+    bit_range:
+    - 10
+    - 8
+    description: Stage 6 drive strength
+  - name: DS7
+    bit_range:
+    - 14
+    - 12
+    description: Stage 7 drive strength
+  - name: PASSWD
+    bit_range:
+    - 31
+    - 16
+    description: "Set to 0x9696 to apply the settings \n                            Any other value in this field will set all drive strengths to 0"
+  side_effects: null
+- id: DORMANT
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DORMANT
+    bit_range:
+    - 31
+    - 0
+    description: "This is used to save power by pausing the ROSC \n                            On power-up this field is initialised to WAKE \n                            An invalid write will also select WAKE \n                            Warning: setup the irq before selecting dormant mode"
+  side_effects: null
+- id: DIV
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV
+    bit_range:
+    - 11
+    - 0
+    description: "set to 0xaa0 + div where \n                            div = 0 divides by 32 \n                            div = 1-31 divides by div \n                            any other value sets div=31 \n                            this register resets to div=16"
+  side_effects: null
+- id: PHASE
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: SHIFT
+    bit_range:
+    - 1
+    - 0
+    description: "phase shift the phase-shifted output by SHIFT input clocks \n                            this can be changed on-the-fly \n                            must be set to 0 before setting div=1"
+  - name: FLIP
+    bit_range:
+    - 2
+    - 2
+    description: "invert the phase-shifted output \n                            this is ignored when div=1"
+  - name: ENABLE
+    bit_range:
+    - 3
+    - 3
+    description: "enable the phase-shifted output \n                            this can be changed on-the-fly"
+  - name: PASSWD
+    bit_range:
+    - 11
+    - 4
+    description: "set to 0xaa \n                            any other value enables the output with shift=0"
+  side_effects: null
+- id: STATUS
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLED
+    bit_range:
+    - 12
+    - 12
+    description: "Oscillator is enabled but not necessarily running and stable \n                            this resets to 0 but transitions to 1 during chip startup"
+  - name: DIV_RUNNING
+    bit_range:
+    - 16
+    - 16
+    description: "post-divider is running \n                            this resets to 0 but transitions to 1 during chip startup"
+  - name: BADWRITE
+    bit_range:
+    - 24
+    - 24
+    description: An invalid value has been written to CTRL_ENABLE or CTRL_FREQ_RANGE or FREQA or FREQB or DIV or PHASE or DORMANT
+  - name: STABLE
+    bit_range:
+    - 31
+    - 31
+    description: Oscillator is running and stable
+  side_effects: null
+- id: RANDOMBIT
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: RANDOMBIT
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: COUNT
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COUNT
+    bit_range:
+    - 7
+    - 0
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

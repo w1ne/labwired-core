@@ -1,0 +1,325 @@
+peripheral: SPIS2
+version: 0.1.0
+registers:
+- id: TASKS_ACQUIRE
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_RELEASE
+  address_offset: 40
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_END
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ENDRX
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_ACQUIRED
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END_ACQUIRE
+    bit_range:
+    - 2
+    - 2
+    description: Shortcut between END event and ACQUIRE task
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for END event
+  - name: ENDRX
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for ENDRX event
+  - name: ACQUIRED
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Enable interrupt for ACQUIRED event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: END
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for END event
+  - name: ENDRX
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for ENDRX event
+  - name: ACQUIRED
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Disable interrupt for ACQUIRED event
+  side_effects: null
+- id: SEMSTAT
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: SEMSTAT
+    bit_range:
+    - 1
+    - 0
+    description: Semaphore status
+  side_effects: null
+- id: STATUS
+  address_offset: 1088
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OVERREAD
+    bit_range:
+    - 0
+    - 0
+    description: TX buffer over-read detected, and prevented
+  - name: OVERFLOW
+    bit_range:
+    - 1
+    - 1
+    description: RX buffer overflow detected, and prevented
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 3
+    - 0
+    description: Enable or disable SPI slave
+  side_effects: null
+- id: PSEL_SCK
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_MISO
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_MOSI
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_CSN
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: RXD_PTR
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: RXD data pointer
+  side_effects: null
+- id: RXD_MAXCNT
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 7
+    - 0
+    description: Maximum number of bytes in receive buffer
+  side_effects: null
+- id: RXD_AMOUNT
+  address_offset: 1340
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 7
+    - 0
+    description: Number of bytes received in the last granted transaction
+  side_effects: null
+- id: TXD_PTR
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: TXD data pointer
+  side_effects: null
+- id: TXD_MAXCNT
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 7
+    - 0
+    description: Maximum number of bytes in transmit buffer
+  side_effects: null
+- id: TXD_AMOUNT
+  address_offset: 1356
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 7
+    - 0
+    description: Number of bytes transmitted in last granted transaction
+  side_effects: null
+- id: CONFIG
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ORDER
+    bit_range:
+    - 0
+    - 0
+    description: Bit order
+  - name: CPHA
+    bit_range:
+    - 1
+    - 1
+    description: Serial clock (SCK) phase
+  - name: CPOL
+    bit_range:
+    - 2
+    - 2
+    description: Serial clock (SCK) polarity
+  side_effects: null
+- id: DEF
+  address_offset: 1372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DEF
+    bit_range:
+    - 7
+    - 0
+    description: Default character. Character clocked out in case of an ignored transaction.
+  side_effects: null
+- id: ORC
+  address_offset: 1472
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ORC
+    bit_range:
+    - 7
+    - 0
+    description: Over-read character. Character clocked out after an over-read of the transmit buffer.
+  side_effects: null
+interrupts:
+  SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0: 3
+  SPIM2_SPIS2_SPI2: 35
+timing: null

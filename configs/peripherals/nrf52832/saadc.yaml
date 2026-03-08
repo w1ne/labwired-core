@@ -1,0 +1,1304 @@
+peripheral: SAADC
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_SAMPLE
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: TASKS_CALIBRATEOFFSET
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STARTED
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_END
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_DONE
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_RESULTDONE
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CALIBRATEDONE
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_STOPPED
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH0_LIMITH
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH0_LIMITL
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH1_LIMITH
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH1_LIMITL
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH2_LIMITH
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH2_LIMITL
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH3_LIMITH
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH3_LIMITL
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH4_LIMITH
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH4_LIMITL
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH5_LIMITH
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH5_LIMITL
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH6_LIMITH
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH6_LIMITL
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH7_LIMITH
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: EVENTS_CH7_LIMITL
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STARTED
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for STARTED event
+  - name: END
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for END event
+  - name: DONE
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for DONE event
+  - name: RESULTDONE
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable interrupt for RESULTDONE event
+  - name: CALIBRATEDONE
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable interrupt for CALIBRATEDONE event
+  - name: STOPPED
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable interrupt for STOPPED event
+  - name: CH0LIMITH
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable interrupt for CH[0].LIMITH event
+  - name: CH0LIMITL
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable interrupt for CH[0].LIMITL event
+  - name: CH1LIMITH
+    bit_range:
+    - 8
+    - 8
+    description: Enable or disable interrupt for CH[1].LIMITH event
+  - name: CH1LIMITL
+    bit_range:
+    - 9
+    - 9
+    description: Enable or disable interrupt for CH[1].LIMITL event
+  - name: CH2LIMITH
+    bit_range:
+    - 10
+    - 10
+    description: Enable or disable interrupt for CH[2].LIMITH event
+  - name: CH2LIMITL
+    bit_range:
+    - 11
+    - 11
+    description: Enable or disable interrupt for CH[2].LIMITL event
+  - name: CH3LIMITH
+    bit_range:
+    - 12
+    - 12
+    description: Enable or disable interrupt for CH[3].LIMITH event
+  - name: CH3LIMITL
+    bit_range:
+    - 13
+    - 13
+    description: Enable or disable interrupt for CH[3].LIMITL event
+  - name: CH4LIMITH
+    bit_range:
+    - 14
+    - 14
+    description: Enable or disable interrupt for CH[4].LIMITH event
+  - name: CH4LIMITL
+    bit_range:
+    - 15
+    - 15
+    description: Enable or disable interrupt for CH[4].LIMITL event
+  - name: CH5LIMITH
+    bit_range:
+    - 16
+    - 16
+    description: Enable or disable interrupt for CH[5].LIMITH event
+  - name: CH5LIMITL
+    bit_range:
+    - 17
+    - 17
+    description: Enable or disable interrupt for CH[5].LIMITL event
+  - name: CH6LIMITH
+    bit_range:
+    - 18
+    - 18
+    description: Enable or disable interrupt for CH[6].LIMITH event
+  - name: CH6LIMITL
+    bit_range:
+    - 19
+    - 19
+    description: Enable or disable interrupt for CH[6].LIMITL event
+  - name: CH7LIMITH
+    bit_range:
+    - 20
+    - 20
+    description: Enable or disable interrupt for CH[7].LIMITH event
+  - name: CH7LIMITL
+    bit_range:
+    - 21
+    - 21
+    description: Enable or disable interrupt for CH[7].LIMITL event
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STARTED
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Enable interrupt for STARTED event
+  - name: END
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Enable interrupt for END event
+  - name: DONE
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Enable interrupt for DONE event
+  - name: RESULTDONE
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Enable interrupt for RESULTDONE event
+  - name: CALIBRATEDONE
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Enable interrupt for CALIBRATEDONE event
+  - name: STOPPED
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Enable interrupt for STOPPED event
+  - name: CH0LIMITH
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Enable interrupt for CH[0].LIMITH event
+  - name: CH0LIMITL
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Enable interrupt for CH[0].LIMITL event
+  - name: CH1LIMITH
+    bit_range:
+    - 8
+    - 8
+    description: Write '1' to Enable interrupt for CH[1].LIMITH event
+  - name: CH1LIMITL
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Enable interrupt for CH[1].LIMITL event
+  - name: CH2LIMITH
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Enable interrupt for CH[2].LIMITH event
+  - name: CH2LIMITL
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to Enable interrupt for CH[2].LIMITL event
+  - name: CH3LIMITH
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Enable interrupt for CH[3].LIMITH event
+  - name: CH3LIMITL
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to Enable interrupt for CH[3].LIMITL event
+  - name: CH4LIMITH
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to Enable interrupt for CH[4].LIMITH event
+  - name: CH4LIMITL
+    bit_range:
+    - 15
+    - 15
+    description: Write '1' to Enable interrupt for CH[4].LIMITL event
+  - name: CH5LIMITH
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to Enable interrupt for CH[5].LIMITH event
+  - name: CH5LIMITL
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to Enable interrupt for CH[5].LIMITL event
+  - name: CH6LIMITH
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to Enable interrupt for CH[6].LIMITH event
+  - name: CH6LIMITL
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Enable interrupt for CH[6].LIMITL event
+  - name: CH7LIMITH
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Enable interrupt for CH[7].LIMITH event
+  - name: CH7LIMITL
+    bit_range:
+    - 21
+    - 21
+    description: Write '1' to Enable interrupt for CH[7].LIMITL event
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STARTED
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to Disable interrupt for STARTED event
+  - name: END
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to Disable interrupt for END event
+  - name: DONE
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to Disable interrupt for DONE event
+  - name: RESULTDONE
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to Disable interrupt for RESULTDONE event
+  - name: CALIBRATEDONE
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to Disable interrupt for CALIBRATEDONE event
+  - name: STOPPED
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to Disable interrupt for STOPPED event
+  - name: CH0LIMITH
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to Disable interrupt for CH[0].LIMITH event
+  - name: CH0LIMITL
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to Disable interrupt for CH[0].LIMITL event
+  - name: CH1LIMITH
+    bit_range:
+    - 8
+    - 8
+    description: Write '1' to Disable interrupt for CH[1].LIMITH event
+  - name: CH1LIMITL
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to Disable interrupt for CH[1].LIMITL event
+  - name: CH2LIMITH
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to Disable interrupt for CH[2].LIMITH event
+  - name: CH2LIMITL
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to Disable interrupt for CH[2].LIMITL event
+  - name: CH3LIMITH
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to Disable interrupt for CH[3].LIMITH event
+  - name: CH3LIMITL
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to Disable interrupt for CH[3].LIMITL event
+  - name: CH4LIMITH
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to Disable interrupt for CH[4].LIMITH event
+  - name: CH4LIMITL
+    bit_range:
+    - 15
+    - 15
+    description: Write '1' to Disable interrupt for CH[4].LIMITL event
+  - name: CH5LIMITH
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to Disable interrupt for CH[5].LIMITH event
+  - name: CH5LIMITL
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to Disable interrupt for CH[5].LIMITL event
+  - name: CH6LIMITH
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to Disable interrupt for CH[6].LIMITH event
+  - name: CH6LIMITL
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to Disable interrupt for CH[6].LIMITL event
+  - name: CH7LIMITH
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to Disable interrupt for CH[7].LIMITH event
+  - name: CH7LIMITL
+    bit_range:
+    - 21
+    - 21
+    description: Write '1' to Disable interrupt for CH[7].LIMITL event
+  side_effects: null
+- id: STATUS
+  address_offset: 1024
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: STATUS
+    bit_range:
+    - 0
+    - 0
+    description: Status
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable ADC
+  side_effects: null
+- id: CH0_PSELP
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH0_PSELN
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH0_CONFIG
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH0_LIMIT
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: CH1_PSELP
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH1_PSELN
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH1_CONFIG
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH1_LIMIT
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: CH2_PSELP
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH2_PSELN
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH2_CONFIG
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH2_LIMIT
+  address_offset: 1340
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: CH3_PSELP
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH3_PSELN
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH3_CONFIG
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH3_LIMIT
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: CH4_PSELP
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH4_PSELN
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH4_CONFIG
+  address_offset: 1368
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH4_LIMIT
+  address_offset: 1372
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: CH5_PSELP
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH5_PSELN
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH5_CONFIG
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH5_LIMIT
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: CH6_PSELP
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH6_PSELN
+  address_offset: 1396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH6_CONFIG
+  address_offset: 1400
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH6_LIMIT
+  address_offset: 1404
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: CH7_PSELP
+  address_offset: 1408
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELP
+    bit_range:
+    - 4
+    - 0
+    description: Analog positive input channel
+  side_effects: null
+- id: CH7_PSELN
+  address_offset: 1412
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSELN
+    bit_range:
+    - 4
+    - 0
+    description: Analog negative input, enables differential channel
+  side_effects: null
+- id: CH7_CONFIG
+  address_offset: 1416
+  size: 32
+  access: READ_WRITE
+  reset_value: 131072
+  fields:
+  - name: RESP
+    bit_range:
+    - 1
+    - 0
+    description: Positive channel resistor control
+  - name: RESN
+    bit_range:
+    - 5
+    - 4
+    description: Negative channel resistor control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Gain control
+  - name: REFSEL
+    bit_range:
+    - 12
+    - 12
+    description: Reference control
+  - name: TACQ
+    bit_range:
+    - 18
+    - 16
+    description: Acquisition time, the time the ADC uses to sample the input voltage
+  - name: MODE
+    bit_range:
+    - 20
+    - 20
+    description: Enable differential mode
+  - name: BURST
+    bit_range:
+    - 24
+    - 24
+    description: Enable burst mode
+  side_effects: null
+- id: CH7_LIMIT
+  address_offset: 1420
+  size: 32
+  access: READ_WRITE
+  reset_value: 2147450880
+  fields:
+  - name: LOW
+    bit_range:
+    - 15
+    - 0
+    description: Low level limit
+  - name: HIGH
+    bit_range:
+    - 31
+    - 16
+    description: High level limit
+  side_effects: null
+- id: RESOLUTION
+  address_offset: 1520
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: VAL
+    bit_range:
+    - 2
+    - 0
+    description: Set the resolution
+  side_effects: null
+- id: OVERSAMPLE
+  address_offset: 1524
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OVERSAMPLE
+    bit_range:
+    - 3
+    - 0
+    description: Oversample control
+  side_effects: null
+- id: SAMPLERATE
+  address_offset: 1528
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CC
+    bit_range:
+    - 10
+    - 0
+    description: Capture and compare value. Sample rate is 16 MHz/CC
+  - name: MODE
+    bit_range:
+    - 12
+    - 12
+    description: Select mode for sample rate control
+  side_effects: null
+- id: RESULT_PTR
+  address_offset: 1580
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: RESULT_MAXCNT
+  address_offset: 1584
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 14
+    - 0
+    description: Maximum number of buffer words to transfer
+  side_effects: null
+- id: RESULT_AMOUNT
+  address_offset: 1588
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 14
+    - 0
+    description: Number of buffer words transferred since last START. This register can be read after an END or STOPPED event.
+  side_effects: null
+interrupts:
+  SAADC: 7
+timing: null
