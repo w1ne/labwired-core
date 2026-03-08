@@ -1,6 +1,7 @@
 # LabWired - RP2040 Chip Descriptor
 name: "rp2040"
 arch: "arm"
+registers_count: 240
 flash:
   base: 0x10000000
   size: "2MB"

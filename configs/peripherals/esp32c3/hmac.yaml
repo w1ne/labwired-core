@@ -1,0 +1,365 @@
+peripheral: HMAC
+version: 0.1.0
+registers:
+- id: SET_START
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_START
+    bit_range:
+    - 0
+    - 0
+    description: Start hmac operation.
+  side_effects: null
+- id: SET_PARA_PURPOSE
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PURPOSE_SET
+    bit_range:
+    - 3
+    - 0
+    description: Set hmac parameter purpose.
+  side_effects: null
+- id: SET_PARA_KEY
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: KEY_SET
+    bit_range:
+    - 2
+    - 0
+    description: Set hmac parameter key.
+  side_effects: null
+- id: SET_PARA_FINISH
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_PARA_END
+    bit_range:
+    - 0
+    - 0
+    description: Finish hmac configuration.
+  side_effects: null
+- id: SET_MESSAGE_ONE
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_TEXT_ONE
+    bit_range:
+    - 0
+    - 0
+    description: Call SHA to calculate one message block.
+  side_effects: null
+- id: SET_MESSAGE_ING
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_TEXT_ING
+    bit_range:
+    - 0
+    - 0
+    description: Continue typical hmac.
+  side_effects: null
+- id: SET_MESSAGE_END
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_TEXT_END
+    bit_range:
+    - 0
+    - 0
+    description: Start hardware padding.
+  side_effects: null
+- id: SET_RESULT_FINISH
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_RESULT_END
+    bit_range:
+    - 0
+    - 0
+    description: After read result from upstream, then let hmac back to idle.
+  side_effects: null
+- id: SET_INVALIDATE_JTAG
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_INVALIDATE_JTAG
+    bit_range:
+    - 0
+    - 0
+    description: Clear result from hmac downstream JTAG.
+  side_effects: null
+- id: SET_INVALIDATE_DS
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_INVALIDATE_DS
+    bit_range:
+    - 0
+    - 0
+    description: Clear result from hmac downstream DS.
+  side_effects: null
+- id: QUERY_ERROR
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: QUERY_CHECK
+    bit_range:
+    - 0
+    - 0
+    description: 'Hmac configuration state. 0: key are agree with purpose. 1: error'
+  side_effects: null
+- id: QUERY_BUSY
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUSY_STATE
+    bit_range:
+    - 0
+    - 0
+    description: 'Hmac state. 1''b0: idle. 1''b1: busy'
+  side_effects: null
+- id: WR_MESSAGE_MEM0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM1
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM2
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM3
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM4
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM5
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM6
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM7
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM8
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM9
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM10
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM11
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM12
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM13
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM14
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: WR_MESSAGE_MEM15
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM0
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM1
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM2
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM3
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM4
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM5
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM6
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: RD_RESULT_MEM7
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SET_MESSAGE_PAD
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_TEXT_PAD
+    bit_range:
+    - 0
+    - 0
+    description: Start software padding.
+  side_effects: null
+- id: ONE_BLOCK
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET_ONE_BLOCK
+    bit_range:
+    - 0
+    - 0
+    description: Don't have to do padding.
+  side_effects: null
+- id: SOFT_JTAG_CTRL
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SOFT_JTAG_CTRL
+    bit_range:
+    - 0
+    - 0
+    description: Turn on JTAG verification.
+  side_effects: null
+- id: WR_JTAG
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WR_JTAG
+    bit_range:
+    - 31
+    - 0
+    description: 32-bit of key to be compared.
+  side_effects: null
+interrupts: null
+timing: null
