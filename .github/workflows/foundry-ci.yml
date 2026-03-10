@@ -21,15 +21,13 @@ jobs:
   backend:
     name: foundry-backend-ci
     runs-on: self-hosted
+    container: w1ne/labwired-dev:latest
     defaults:
       run:
         working-directory: foundry/backend
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -68,15 +66,13 @@ jobs:
   frontend:
     name: foundry-frontend-ci
     runs-on: self-hosted
+    container: w1ne/labwired-dev:latest
     defaults:
       run:
         working-directory: foundry/frontend
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential
 
       - name: Set up Node
         uses: actions/setup-node@v4

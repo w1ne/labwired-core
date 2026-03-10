@@ -11,14 +11,12 @@ jobs:
       run:
         working-directory: ./vscode
     runs-on: self-hosted
+    container: w1ne/labwired-dev:latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential
 
       - name: Install Node.js
         uses: actions/setup-node@v4
