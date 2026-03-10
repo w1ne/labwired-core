@@ -22,18 +22,11 @@ on:
 jobs:
   integration-smoke:
     name: vscode-integration-smoke
-    runs-on: self-hosted
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./vscode
     steps:
-      - name: Install baseline tools
-        run: |
-          apt-get update
-          apt-get install -y git sudo curl build-essential
-          git config --global --add safe.directory /__w/labwired/labwired
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -58,11 +51,6 @@ jobs:
 
       - name: Compile
         run: npm run compile
-
-      - name: Install system dependencies for VS Code tests
-        run: |
-          apt-get update
-          apt-get install -y xvfb libglib2.0-0 libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
 
       - name: Run Unit Tests (Docker Logic)
         run: xvfb-run --auto-servernum ./node_modules/.bin/mocha out/test/unit/docker.test.js
