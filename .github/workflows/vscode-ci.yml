@@ -23,26 +23,46 @@ jobs:
   integration-smoke:
     name: vscode-integration-smoke
     runs-on: self-hosted
+    container: ubuntu:22.04
     defaults:
       run:
         working-directory: ./vscode
     steps:
+      - name: Install baseline tools
+        run: |
+          apt-get update
+          apt-get install -y git sudo curl build-essential
+          git config --global --add safe.directory /__w/labwired/labwired
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
       - name: Install Dependencies
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app/vscode w1ne/labwired-dev:latest npm ci
+        run: npm ci
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build LabWired (DAP)
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app/core w1ne/labwired-dev:latest cargo build -p labwired-dap --release
+        run: cargo build -p labwired-dap --release
+        working-directory: ../core
 
       - name: Compile
+        run: npm run compile
+
+      - name: Install system dependencies for VS Code tests
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app/vscode w1ne/labwired-dev:latest npm run compile
+          apt-get update
+          apt-get install -y xvfb libglib2.0-0 libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 libgbm1 libasound2
 
       - name: Run Unit Tests (Docker Logic)
-        run: ./node_modules/.bin/mocha out/test/unit/docker.test.js
+        run: xvfb-run --auto-servernum ./node_modules/.bin/mocha out/test/unit/docker.test.js

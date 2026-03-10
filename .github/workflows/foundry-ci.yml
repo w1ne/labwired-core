@@ -21,20 +21,30 @@ jobs:
   backend:
     name: foundry-backend-ci
     runs-on: self-hosted
+    container: ubuntu:22.04
     defaults:
       run:
         working-directory: foundry/backend
 
     steps:
+      - name: Install baseline tools
+        run: |
+          apt-get update
+          apt-get install -y git sudo curl build-essential
+          git config --global --add safe.directory /__w/labwired/labwired
+
       - uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: foundry/backend/go.mod
+
       - name: Go test
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app/foundry/backend w1ne/labwired-dev:latest go test ./cmd/... ./internal/...
+        run: go test ./cmd/... ./internal/...
 
       - name: Build server
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app/foundry/backend w1ne/labwired-dev:latest go build -o foundry-server ./cmd/server
+        run: go build -o foundry-server ./cmd/server
 
       - name: Backend smoke (health endpoint)
         env:
@@ -62,20 +72,32 @@ jobs:
   frontend:
     name: foundry-frontend-ci
     runs-on: self-hosted
+    container: ubuntu:22.04
     defaults:
       run:
         working-directory: foundry/frontend
 
     steps:
+      - name: Install baseline tools
+        run: |
+          apt-get update
+          apt-get install -y git sudo curl build-essential
+          git config --global --add safe.directory /__w/labwired/labwired
+
       - uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+          cache-dependency-path: foundry/frontend/package-lock.json
+
       - name: Install dependencies
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app/foundry/frontend w1ne/labwired-dev:latest npm ci
+        run: npm ci
 
       - name: Test
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app/foundry/frontend w1ne/labwired-dev:latest npm test -- --run
+        run: npm test -- --run
 
       - name: Build
         run: npm run build
