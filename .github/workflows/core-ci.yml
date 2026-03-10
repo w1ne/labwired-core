@@ -18,15 +18,8 @@ defaults:
 jobs:
   integration-smoke:
     name: core-integration-smoke
-    runs-on: self-hosted
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Install baseline tools
-        run: |
-          apt-get update
-          apt-get install -y git sudo curl build-essential
-          git config --global --add safe.directory /__w/labwired/labwired
-
       - uses: actions/checkout@v4
         with:
           submodules: recursive
