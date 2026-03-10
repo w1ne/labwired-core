@@ -138,7 +138,7 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
     let mut args = vec![
         "build".to_string(),
         "-p".to_string(),
-        package,
+        package.clone(),
         "--target".to_string(),
         target,
     ];
@@ -146,8 +146,19 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
         args.push("--release".to_string());
     }
 
+    let package_dir_crates = project_root.join("crates").join(&package);
+    let package_dir_examples = project_root.join("examples").join(&package);
+
+    let build_dir = if package_dir_crates.exists() {
+        package_dir_crates.clone()
+    } else if package_dir_examples.exists() {
+        package_dir_examples.clone()
+    } else {
+        project_root.to_path_buf()
+    };
+
     let status = Command::new("cargo")
-        .current_dir(project_root)
+        .current_dir(&build_dir)
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTFLAGS")
         .args(args)
