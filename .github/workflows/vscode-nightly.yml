@@ -11,48 +11,32 @@ jobs:
       run:
         working-directory: ./vscode
     runs-on: self-hosted
-    container: w1ne/labwired-dev:latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: npm
-          cache-dependency-path: vscode/package-lock.json
-
       - name: Install Dependencies
-        run: npm ci
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/vscode w1ne/labwired-dev:latest npm ci
 
       - name: Build LabWired (DAP)
-        run: cargo build -p labwired-dap --release
-        working-directory: ./core
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/core w1ne/labwired-dev:latest cargo build -p labwired-dap --release
 
       - name: Compile
-        run: npm run compile
-
-      - name: Install ARM target
-        run: rustup target add thumbv7m-none-eabi
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/vscode w1ne/labwired-dev:latest npm run compile
 
       - name: Build Demo Firmware Fixture
-        run: cargo build -p demo-blinky --release --target thumbv7m-none-eabi
-        working-directory: ./core
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/core w1ne/labwired-dev:latest cargo build -p demo-blinky --release --target thumbv7m-none-eabi
 
       - name: Run Tests (Linux)
-        if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum bash -lc 'ELECTRON_RUN_AS_NODE= npm test'
-
-      - name: Run Tests (Non-Linux)
-        if: runner.os != 'Linux'
-        run: npm test
-        working-directory: ./vscode
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/vscode w1ne/labwired-dev:latest xvfb-run --auto-servernum bash -lc 'ELECTRON_RUN_AS_NODE= npm test'
 
       - name: Run Unit Tests (Docker Logic)
-        run: ./node_modules/.bin/mocha out/test/unit/docker.test.js
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/vscode w1ne/labwired-dev:latest ./node_modules/.bin/mocha out/test/unit/docker.test.js

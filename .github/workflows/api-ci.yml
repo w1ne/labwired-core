@@ -21,15 +21,9 @@ jobs:
   test:
     name: go-test-api
     runs-on: self-hosted
-    container: w1ne/labwired-dev:latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.0'
-          cache-dependency-path: foundry/backend/go.sum
-
       - name: Run Tests
-        run: go test -v -short ./...
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/foundry/backend w1ne/labwired-dev:latest go test -v -short ./...
