@@ -19,22 +19,15 @@ jobs:
   integration-smoke:
     name: core-integration-smoke
     runs-on: self-hosted
-    container: w1ne/labwired-dev:latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: core
-
       - name: Build CLI
-        run: cargo build -p labwired-cli
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/core w1ne/labwired-dev:latest cargo build -p labwired-cli
 
       - name: Run integration smoke
-        run: cargo run -q -p labwired-cli -- test --script examples/ci/dummy-max-uart-bytes.yaml --output-dir out/integration-smoke --no-uart-stdout
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/core w1ne/labwired-dev:latest cargo run -q -p labwired-cli -- test --script examples/ci/dummy-max-uart-bytes.yaml --output-dir out/integration-smoke --no-uart-stdout
