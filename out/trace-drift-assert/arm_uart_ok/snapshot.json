@@ -20,6 +20,7 @@
       0,
       26
     ],
+    "pc": 26,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,

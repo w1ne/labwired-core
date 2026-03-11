@@ -20,6 +20,7 @@
       1063,
       1108
     ],
+    "pc": 1108,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,

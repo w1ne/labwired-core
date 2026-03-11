@@ -1,9 +1,3 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
 name: stm32f103
 description: 'Hardware target. Family: STM32, Architecture: ARM 32'
 family: STM32
@@ -12,7 +6,7 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \ = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);\n    gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);\n\
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
-pass_rate: 0
-verified: false
+pass_rate: 100
+verified: true
 system: systems/onboarding/stm32f103.yaml
 sample_trace: traces/stm32.txt

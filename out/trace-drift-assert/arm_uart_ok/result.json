@@ -32,6 +32,32 @@
       "passed": true
     }
   ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073790976,
+      10,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536887296,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536887296,
+      0,
+      26
+    ],
+    "pc": 26,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "vtor": 0
+  },
   "firmware_hash": "a8c8679672afc67e5e18491cd88c769b46d60752d30a014ac71a4079b03dd344",
   "config": {
     "firmware": "examples/ci/../../target/thumbv6m-none-eabi/release/firmware-ci-fixture",

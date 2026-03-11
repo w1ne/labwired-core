@@ -1,15 +1,9 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
 name: eos-s3
 description: 'Hardware target. Family: Generic, Architecture: ARM 32'
 family: Generic
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 0
-verified: false
+pass_rate: 100
+verified: true
 system: systems/onboarding/eos-s3.yaml
 sample_trace: traces/generic.txt

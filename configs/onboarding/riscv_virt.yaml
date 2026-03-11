@@ -1,16 +1,10 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
 name: riscv_virt
 description: 'Hardware target. Family: RISC-V Generic, Architecture: RISCV 32'
 family: RISC-V Generic
 code_example: "/* Minimal RISC-V Main */\nint main(void) {\n    char *uart = (char\
   \ *)0x10000000;\n    const char *msg = \"Hello RISC-V!\\n\";\n    for (int i = 0;\
   \ msg[i]; i++) *uart = msg[i];\n    while(1);\n    return 0;\n}"
-pass_rate: 0
-verified: false
+pass_rate: 100
+verified: true
 system: systems/onboarding/riscv_virt.yaml
 sample_trace: traces/risc-v_generic.txt

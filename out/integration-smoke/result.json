@@ -32,6 +32,32 @@
       "passed": true
     }
   ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      1073790976,
+      10,
+      1128,
+      0,
+      0,
+      0,
+      0,
+      537001976,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537001976,
+      1063,
+      1108
+    ],
+    "pc": 1108,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "vtor": 0
+  },
   "firmware_hash": "2d87f4fa3133207904ac1d353113d7af4adf7d325ab9bef6a058333389fac499",
   "config": {
     "firmware": "examples/ci/../../tests/fixtures/uart-ok-thumbv7m.elf",
