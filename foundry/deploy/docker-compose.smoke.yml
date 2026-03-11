@@ -10,7 +10,7 @@ services:
       DB_PATH: "/data/foundry.db"
       ARTIFACTS_DIR: "/data/artifacts"
       DATA_DIR: "/data"
-      HARDWARE_JSON_PATH: "/app/configs/renode_hardware.json"
+      HARDWARE_JSON_PATH: "/app/configs/hardware.json"
       CORE_CONFIGS_DIR: "/app/core-configs"
       ALLOW_INSECURE_STRIPE_WEBHOOKS: "true"
     volumes:

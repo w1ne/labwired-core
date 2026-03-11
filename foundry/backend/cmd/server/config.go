@@ -35,7 +35,7 @@ func loadConfigFromEnv() (config, error) {
 		ArtifactsDir:          envOrDefault("ARTIFACTS_DIR", "/tmp/foundry/artifacts"),
 		DataDir:               envOrDefault("DATA_DIR", "data"),
 		DBPath:                envOrDefault("DB_PATH", "foundry.db"),
-		HardwareJSONPath:      envOrDefault("HARDWARE_JSON_PATH", "configs/renode_hardware.json"),
+		HardwareJSONPath:      envOrDefault("HARDWARE_JSON_PATH", "configs/hardware.json"),
 		CoreConfigsDir:        envOrDefault("CORE_CONFIGS_DIR", "../../core/configs"),
 		KeyPrefixBackfillPath: strings.TrimSpace(os.Getenv("KEY_PREFIX_BACKFILL_PATH")),
 		StripeWebhookSecret:   strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),

@@ -132,7 +132,7 @@ func TestValidateRuntimeDependencies(t *testing.T) {
 		AppEnv:           "development",
 		LabWiredPath:     "sh",
 		ArtifactsDir:     t.TempDir(),
-		HardwareJSONPath: "configs/renode_hardware.json",
+		HardwareJSONPath: "configs/hardware.json",
 	}
 	if err := validateRuntimeDependencies(cfg); err != nil {
 		t.Fatalf("expected runtime dependency validation to pass, got %v", err)

@@ -30,7 +30,14 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || (!strings.HasSuffix(path, ".yaml") && !strings.HasSuffix(path, ".yml")) {
+		if d.IsDir() {
+			// Skip internal chip and system definition directories
+			if d.Name() == "chips" || d.Name() == "systems" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".yaml") && !strings.HasSuffix(path, ".yml") {
 			return nil
 		}
 
@@ -43,12 +50,23 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 		var model struct {
 			Name           string `yaml:"name"`
 			Description    string `yaml:"description"`
+			Family         string `yaml:"family"`
+			CodeExample    string `yaml:"code_example"`
 			RegistersCount *int   `yaml:"registers_count"`
 			PassRate       *int   `yaml:"pass_rate"`
+			Verified       *bool  `yaml:"verified"`
 		}
 		if err := yaml.Unmarshal(data, &model); err != nil {
 			log.Printf("[catalog] failed to parse model %s: %v", path, err)
 			return nil
+		}
+
+		arch := ""
+		if strings.Contains(model.Description, "Architecture: ") {
+			parts := strings.Split(model.Description, "Architecture: ")
+			if len(parts) > 1 {
+				arch = strings.TrimSpace(parts[1])
+			}
 		}
 
 		relPath, relErr := filepath.Rel(configsDir, path)
@@ -62,9 +80,14 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			name = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
 		}
 
-		passRate := 100
+		passRate := 0
 		if model.PassRate != nil {
 			passRate = *model.PassRate
+		}
+
+		verified := false
+		if model.Verified != nil {
+			verified = *model.Verified
 		}
 
 		registers := countRegistersInYAMLModel(data)
@@ -73,15 +96,18 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 		}
 
 		asset := db.CatalogAsset{
-			ID:          id,
-			Name:        name,
-			Description: model.Description,
-			PassRate:    passRate,
-			Registers:   registers,
-			IrURL:       "",
-			Verified:    true,
-			SourceType:  "core-config",
-			SourceRef:   relPath,
+			ID:           id,
+			Name:         name,
+			Description:  model.Description,
+			Family:       model.Family,
+			Architecture: arch,
+			CodeExample:  model.CodeExample,
+			PassRate:     passRate,
+			Registers:    registers,
+			IrURL:        "",
+			Verified:     verified,
+			SourceType:   "core-config",
+			SourceRef:    relPath,
 		}
 
 		if model.Description == "" {

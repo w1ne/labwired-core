@@ -1,0 +1,51 @@
+name: Validate HW Targets
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Run weekly 
+  workflow_dispatch: # Allow manual triggers
+  push:
+    paths:
+      - 'scripts/validate_hw_targets.py'
+
+jobs:
+  validate-targets:
+    runs-on: ubuntu-latest
+    container: zephyrprojectrtos/ci:v0.26.8 # Official Zephyr CI container
+
+    steps:
+      - name: Checkout Labwired
+        uses: actions/checkout@v4
+
+      - name: Initialize Zephyr Workspace
+        run: |
+          west init /opt/zephyrproject
+          cd /opt/zephyrproject
+          west update
+          west zephyr-export
+          pip3 install -r zephyr/scripts/requirements.txt
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi, thumbv7m-none-eabi, riscv32i-unknown-none-elf
+
+      - name: Build Labwired Core
+        run: |
+          cd core
+          cargo build --release -p labwired-cli
+
+      - name: Run Validation Script
+        env:
+          ZEPHYR_BASE: /opt/zephyrproject/zephyr
+        run: |
+          pip3 install pyyaml
+          python3 scripts/validate_hw_targets.py
+
+      - name: Commit and Push Updated Catalog
+        run: |
+          git config --global user.name "LabWired CI"
+          git config --global user.email "ci@labwired.com"
+          git add core/configs/onboarding/
+          git commit -m "chore(catalog): autoupdate onboarding targets pass rates" || echo "No changes to commit"
+          git push

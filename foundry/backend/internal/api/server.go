@@ -493,7 +493,7 @@ func (s *Server) removeWorkspaceAtLocked(idx int) {
 func (s *Server) routes() {
 	// Public endpoints
 	s.router.HandleFunc("/v1/catalog", s.handleListCatalog).Methods("GET")
-	s.router.HandleFunc("/v1/catalog/{id}", s.handleGetCatalogAsset).Methods("GET")
+	s.router.HandleFunc("/v1/catalog/{id:.*}", s.handleGetCatalogAsset).Methods("GET")
 	s.router.HandleFunc("/v1/info", s.handleInfo).Methods("GET")
 	s.router.HandleFunc("/v1/hardware", s.handleListHardware).Methods("GET")
 	s.router.HandleFunc("/v1/health", s.handleHealth).Methods("GET")
@@ -503,6 +503,7 @@ func (s *Server) routes() {
 	}).Methods("GET")
 	s.router.PathPrefix("/v1/docs").Handler(http.StripPrefix("/v1/docs", http.FileServer(http.Dir("static"))))
 	s.router.PathPrefix("/data/").Handler(http.StripPrefix("/data/", http.FileServer(http.Dir(s.dataDir))))
+	s.router.PathPrefix("/v1/catalog/traces/").Handler(http.StripPrefix("/v1/catalog/traces/", http.FileServer(http.Dir("core/configs/onboarding/traces"))))
 
 	// Stripe webhook (no API key auth — verified by signature)
 	s.router.HandleFunc("/v1/webhooks/stripe", s.handleStripeWebhook).Methods("POST")

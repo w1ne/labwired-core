@@ -1,9 +1,9 @@
 import os
 import json
 
-renode_path = "/opt/renode/platforms"
-boards_path = os.path.join(renode_path, "boards")
-cpus_path = os.path.join(renode_path, "cpus")
+hw_path = "/tmp/hw-platforms/platforms"
+boards_path = os.path.join(hw_path, "boards")
+cpus_path = os.path.join(hw_path, "cpus")
 
 tier1_boards = {
     "stm32f4_discovery.repl", "stm32f7_discovery-bb.repl", "stm32f072b_discovery.repl",
@@ -57,7 +57,7 @@ for root, dirs, files in os.walk(cpus_path):
 
 hardware.sort(key=lambda x: (x["tier"], x["type"], x["name"]))
 
-output_file = "/home/andrii/Projects/labwired/foundry/backend/configs/renode_hardware.json"
+output_file = "/home/andrii/Projects/labwired/foundry/backend/configs/hardware.json"
 with open(output_file, 'w') as f:
     json.dump(hardware, f, indent=2)
 

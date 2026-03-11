@@ -24,7 +24,7 @@ ENV PORT=8080 \
     APP_ENV=production \
     DB_PATH=/data/foundry.db \
     ARTIFACTS_DIR=/data/artifacts \
-    HARDWARE_JSON_PATH=/app/configs/renode_hardware.json
+    HARDWARE_JSON_PATH=/app/configs/hardware.json
 
 RUN mkdir -p /data/artifacts && chown -R appuser:appuser /app /data
 USER appuser
