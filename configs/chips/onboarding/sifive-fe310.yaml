@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: sifive-fe310
+arch: arm
+flash:
+  base: 4096
+  size: 4096B
+ram:
+  base: 131072
+  size: 8192B
+peripherals:
+- id: uart0
+  type: sifive_uart
+  bus: sysbus
+  base_address: 268513280
+- id: uart1
+  type: sifive_uart
+  bus: sysbus
+  base_address: 268578816
+- id: gpioInputs
+  type: sifive_gpio
+  bus: sysbus
+  base_address: 268509184

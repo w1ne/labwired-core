@@ -1,0 +1,15 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: fomu
+arch: arm
+flash:
+  base: 0
+  size: 8192B
+ram:
+  base: 268435456
+  size: 131072B
+peripherals: []

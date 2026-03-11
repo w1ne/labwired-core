@@ -1,0 +1,51 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: leon3
+arch: arm
+flash:
+  base: 134217728
+  size: 1073741824B
+ram:
+  base: 1073741824
+  size: 536870912B
+peripherals:
+- id: ahbInfo
+  type: gaislerahbplugandplayinfo
+  bus: sysbus
+  base_address: 4294963200
+- id: apbController
+  type: gaislerapbcontroller
+  bus: sysbus
+  base_address: 2148528128
+- id: esaMemController
+  type: esamemorycontroller
+  bus: sysbus
+  base_address: 2147483648
+- id: uart
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2147483904
+- id: timer
+  type: gaisler_gptimer
+  bus: sysbus
+  base_address: 2147484416
+- id: eth
+  type: gaislereth
+  bus: sysbus
+  base_address: 2147486464
+- id: gpio
+  type: gaisler_gpio
+  bus: sysbus
+  base_address: 2147485696
+- id: phy
+  type: ethernetphysicallayer
+  bus: eth
+  base_address: 0
+- id: led
+  type: led
+  bus: gpio
+  base_address: 0

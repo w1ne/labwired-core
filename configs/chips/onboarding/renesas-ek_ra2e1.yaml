@@ -1,0 +1,75 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: renesas-ek_ra2e1
+arch: arm
+flash:
+  base: 134217728
+  size: 131072B
+ram:
+  base: 536887296
+  size: 16384B
+peripherals:
+- id: led_blue
+  type: led
+  bus: port9
+  base_address: 15
+- id: led_green
+  type: led
+  bus: port9
+  base_address: 14
+- id: led_red
+  type: led
+  bus: port9
+  base_address: 13
+- id: button_s2
+  type: button
+  bus: port0
+  base_address: 15
+- id: button_s1
+  type: button
+  bus: port0
+  base_address: 4
+- id: portMisc
+  type: renesasra_gpiomisc
+  bus: sysbus
+  base_address: 1074007296
+- id: gpt
+  type: renesasra_gpt
+  bus: sysbus
+  base_address: 1074233344
+- id: agt0
+  type: renesasra_agt
+  bus: sysbus
+  base_address: 1074282496
+- id: agt1
+  type: renesasra_agt
+  bus: sysbus
+  base_address: 1074282752
+- id: sci0
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200576
+- id: sci1
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200608
+- id: sci2
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200640
+- id: sci9
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200864
+- id: sysc_oscsf
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073864764
+- id: iic0
+  type: renesasra_iic
+  bus: sysbus
+  base_address: 1074081792

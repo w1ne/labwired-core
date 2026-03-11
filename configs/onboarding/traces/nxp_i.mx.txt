@@ -1,0 +1,5 @@
+U-Boot 2026.03 (Mar 11 2026)
+CPU: i.MX RT1064
+Board: MIMXRT1064-EVK
+[OK] DRAM: 32MB
+Hello NXP i.MX!

@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: miv
+arch: arm
+flash:
+  base: 4096
+  size: 61440B
+ram:
+  base: 2147483648
+  size: 67108864B
+peripherals:
+- id: uart
+  type: miv_coreuart
+  bus: sysbus
+  base_address: 1879052288
+- id: gpioInputs
+  type: miv_coregpio
+  bus: sysbus
+  base_address: 1879056384
+- id: gpioOutputs
+  type: miv_coregpio
+  bus: sysbus
+  base_address: 1879068672
+- id: timer0
+  type: miv_coretimer
+  bus: sysbus
+  base_address: 1879060480
+- id: timer1
+  type: miv_coretimer
+  bus: sysbus
+  base_address: 1879064576

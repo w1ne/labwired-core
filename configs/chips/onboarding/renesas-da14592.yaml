@@ -1,0 +1,71 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: renesas-da14592
+arch: arm
+flash:
+  base: 134217728
+  size: 294912B
+ram:
+  base: 8388608
+  size: 98304B
+peripherals:
+- id: timer1
+  type: renesasda14_gpt
+  bus: sysbus
+  base_address: 1342243584
+- id: timer2
+  type: renesasda14_gpt
+  bus: sysbus
+  base_address: 1342243840
+- id: timer3
+  type: renesasda14_gpt
+  bus: sysbus
+  base_address: 1342244096
+- id: timer4
+  type: renesasda14_gpt
+  bus: sysbus
+  base_address: 1342310912
+- id: uart0
+  type: renesasda14_uart
+  bus: sysbus
+  base_address: 1342308352
+- id: uart1
+  type: renesasda14_uart
+  bus: sysbus
+  base_address: 1342308608
+- id: gpadc
+  type: renesasda14_gpadc
+  bus: sysbus
+  base_address: 1342441728
+- id: gpio
+  type: renesasda14_gpio
+  bus: sysbus
+  base_address: 1342309888
+- id: dma
+  type: renesasda14_dma
+  bus: sysbus
+  base_address: 1342571008
+- id: i2c
+  type: renesasda_i2c
+  bus: sysbus
+  base_address: 1342309120
+- id: clock_gen
+  type: renesasda14_clockgenerationcontroller
+  bus: sysbus
+  base_address: 1342177280
+- id: xtal32m_regs
+  type: renesasda14_xtal32mregisters
+  bus: sysbus
+  base_address: 1342242816
+- id: spi
+  type: renesasda_spi
+  bus: sysbus
+  base_address: 1342308864
+- id: gp_regs
+  type: renesasda14_generalpurposeregisters
+  bus: sysbus
+  base_address: 1342505728

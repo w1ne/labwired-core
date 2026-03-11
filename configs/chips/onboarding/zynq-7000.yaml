@@ -1,0 +1,111 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: zynq-7000
+arch: arm
+flash:
+  base: 134217728
+  size: 1073741824B
+ram:
+  base: 536870912
+  size: 1073741824B
+peripherals:
+- id: usbEhci2
+  type: ehcihostcontroller
+  bus: sysbus
+  base_address: 3758108672
+- id: usbEhci
+  type: ehcihostcontroller
+  bus: sysbus
+  base_address: 3758104576
+- id: pl310
+  type: pl310
+  bus: sysbus
+  base_address: 4176486400
+- id: gem0
+  type: cadencegem
+  bus: sysbus
+  base_address: 3758141440
+- id: gem1
+  type: cadencegem
+  bus: sysbus
+  base_address: 3758145536
+- id: uart0
+  type: cadence_uart
+  bus: sysbus
+  base_address: 3758096384
+- id: uart1
+  type: cadence_uart
+  bus: sysbus
+  base_address: 3758100480
+- id: i2c1
+  type: cadence_i2c
+  bus: sysbus
+  base_address: 3758116864
+- id: i2c0
+  type: cadence_i2c
+  bus: sysbus
+  base_address: 3758112768
+- id: spi0
+  type: cadence_spi
+  bus: sysbus
+  base_address: 3758120960
+- id: spi1
+  type: cadence_spi
+  bus: sysbus
+  base_address: 3758125056
+- id: sdhci0
+  type: sdhci
+  bus: sysbus
+  base_address: 3759144960
+- id: sdhci1
+  type: sdhci
+  bus: sysbus
+  base_address: 3759149056
+- id: ttc0
+  type: cadence_ttc
+  bus: sysbus
+  base_address: 4160753664
+- id: ttc1
+  type: cadence_ttc
+  bus: sysbus
+  base_address: 4160757760
+- id: watchdog0
+  type: cadence_wdt
+  bus: sysbus
+  base_address: 4160770048
+- id: globalTimer
+  type: arm_globaltimer
+  bus: sysbus
+  base_address: 4176478720
+- id: scu
+  type: armsnoopcontrolunit
+  bus: sysbus
+  base_address: 4176478208
+- id: qspi
+  type: xilinxqspi
+  bus: sysbus
+  base_address: 3758149632
+- id: gpio
+  type: xilinxgpiops
+  bus: sysbus
+  base_address: 3758137344
+- id: xadc
+  type: xilinx_xadc
+  bus: sysbus
+  base_address: 4160778496
+- id: slcr
+  type: zynq7000_systemlevelcontrolregisters
+  bus: sysbus
+  base_address: 4160749568
+- id: nand
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 3758153728
+- id: dma_pl330
+  type: pl330_dma
+  bus: sysbus
+  base_address: 4160761856

@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: mpc5567
+arch: arm
+flash:
+  base: 0
+  size: 2097152B
+ram:
+  base: 536870912
+  size: 536870912B
+peripherals:
+- id: uart
+  type: mpc5567_uart
+  bus: sysbus
+  base_address: 4294639616
+- id: uart2
+  type: mpc5567_uart
+  bus: sysbus
+  base_address: 4294656000
+- id: fec
+  type: fastethernetcontroller
+  bus: sysbus
+  base_address: 4294230016
+- id: emios
+  type: emios
+  bus: sysbus
+  base_address: 3287941120
+- id: fmpllSynsr
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 3287810052

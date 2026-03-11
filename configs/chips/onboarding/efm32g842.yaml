@@ -1,0 +1,67 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: efm32g842
+arch: arm
+flash:
+  base: 134217728
+  size: 131072B
+ram:
+  base: 536870912
+  size: 16384B
+peripherals:
+- id: usart2
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073793024
+- id: leUart1
+  type: leuart
+  bus: sysbus
+  base_address: 1074283520
+- id: timer2
+  type: efm32timer
+  bus: sysbus
+  base_address: 1073809408
+- id: i2c0
+  type: efm32ggi2ccontroller
+  bus: sysbus
+  base_address: 1073782784
+- id: timer0
+  type: efm32timer
+  bus: sysbus
+  base_address: 1073807360
+- id: timer1
+  type: efm32timer
+  bus: sysbus
+  base_address: 1073808384
+- id: usart0
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073790976
+- id: usart1
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073792000
+- id: leUart0
+  type: leuart
+  bus: sysbus
+  base_address: 1074282496
+- id: gpioPort
+  type: efmgpioport
+  bus: sysbus
+  base_address: 1073766400
+- id: bitband
+  type: bitbanding
+  bus: sysbus
+  base_address: 1107296256
+- id: cmuStatusOscillator
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074561068
+- id: vcmpStatus
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073741832

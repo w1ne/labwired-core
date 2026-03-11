@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: cortex-r8_smp
+arch: arm
+flash:
+  base: 134217728
+  size: 134217728B
+ram:
+  base: 536870912
+  size: 64KB
+peripherals:
+- id: scu
+  type: armsnoopcontrolunit
+  bus: sysbus
+  base_address: 2919235584
+- id: uart1
+  type: cadence_uart
+  bus: sysbus
+  base_address: 4278255616
+- id: ttc0
+  type: cadence_ttc
+  bus: sysbus
+  base_address: 4279304192

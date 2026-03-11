@@ -1,0 +1,43 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: renesas_rz_t2m
+arch: arm
+flash:
+  base: 2281701376
+  size: 67108864B
+ram:
+  base: 268435456
+  size: 1572864B
+peripherals:
+- id: timer
+  type: arm_generictimer
+  bus: cpu
+  base_address: 15
+- id: sci0
+  type: renesas_sci
+  bus: sysbus
+  base_address: 2147487744
+- id: sci1
+  type: renesas_sci
+  bus: sysbus
+  base_address: 2147488768
+- id: sci2
+  type: renesas_sci
+  bus: sysbus
+  base_address: 2147489792
+- id: sci3
+  type: renesas_sci
+  bus: sysbus
+  base_address: 2147490816
+- id: sci4
+  type: renesas_sci
+  bus: sysbus
+  base_address: 2147491840
+- id: sci5
+  type: renesas_sci
+  bus: sysbus
+  base_address: 2164264960

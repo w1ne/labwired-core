@@ -1,0 +1,39 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: nxp-k6xf
+arch: arm
+flash:
+  base: 134217728
+  size: 1048576B
+ram:
+  base: 536805376
+  size: 65536B
+peripherals:
+- id: uart0
+  type: k6xf_uart
+  bus: sysbus
+  base_address: 1074176000
+- id: mcg
+  type: k6xf_mcg
+  bus: sysbus
+  base_address: 1074151424
+- id: sim
+  type: k6xf_sim
+  bus: sysbus
+  base_address: 1074032640
+- id: eth
+  type: k6xf_ethernet
+  bus: sysbus
+  base_address: 1074528256
+- id: phy
+  type: ethernetphysicallayer
+  bus: eth
+  base_address: 0
+- id: rng
+  type: k6xf_rng
+  bus: sysbus
+  base_address: 1073909760

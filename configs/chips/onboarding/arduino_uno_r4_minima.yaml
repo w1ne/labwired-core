@@ -1,0 +1,63 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: arduino_uno_r4_minima
+arch: arm
+flash:
+  base: 134217728
+  size: 262144B
+ram:
+  base: 536870912
+  size: 32768B
+peripherals:
+- id: gpt
+  type: renesasra_gpt
+  bus: sysbus
+  base_address: 1074233344
+- id: agt0
+  type: renesasra_agt
+  bus: sysbus
+  base_address: 1074282496
+- id: agt1
+  type: renesasra_agt
+  bus: sysbus
+  base_address: 1074282752
+- id: sci0
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200576
+- id: sci1
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200608
+- id: sci2
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200640
+- id: sci9
+  type: renesasra6m5_sci
+  bus: sysbus
+  base_address: 1074200864
+- id: portMisc
+  type: renesasra_gpiomisc
+  bus: sysbus
+  base_address: 1074007296
+- id: sysc_oscsf
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073864764
+- id: sysc_vbtsr
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073865905
+- id: iic0
+  type: renesasra_iic
+  bus: sysbus
+  base_address: 1074081792
+- id: iic1
+  type: renesasra_iic
+  bus: sysbus
+  base_address: 1074082048

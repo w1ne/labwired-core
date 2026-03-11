@@ -1,0 +1,103 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: sam4s
+arch: arm
+flash:
+  base: 134217728
+  size: 4194304B
+ram:
+  base: 536870912
+  size: 4194304B
+peripherals:
+- id: dwt
+  type: dwt
+  bus: sysbus
+  base_address: 3758100480
+- id: sram_bb
+  type: bitbanding
+  bus: sysbus
+  base_address: 570425344
+- id: tc0_1_2
+  type: sam_tc
+  bus: sysbus
+  base_address: 1073807360
+- id: tc3_4_5
+  type: sam_tc
+  bus: sysbus
+  base_address: 1073823744
+- id: usart0
+  type: sam_usart
+  bus: sysbus
+  base_address: 1073889280
+- id: usart1
+  type: sam_usart
+  bus: sysbus
+  base_address: 1073905664
+- id: adc
+  type: sam4s_adc
+  bus: sysbus
+  base_address: 1073971200
+- id: dacc
+  type: sam4s_dacc
+  bus: sysbus
+  base_address: 1073987584
+- id: PMC_SR
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074660456
+- id: uart0
+  type: sam_usart
+  bus: sysbus
+  base_address: 1074660864
+- id: uart1
+  type: sam_usart
+  bus: sysbus
+  base_address: 1074661376
+- id: eefc
+  type: sam4s_eefc
+  bus: sysbus
+  base_address: 1074661888
+- id: rstc
+  type: sam4s_rstc
+  bus: sysbus
+  base_address: 1074664448
+- id: wdt
+  type: sam4s_wdt
+  bus: sysbus
+  base_address: 1074664528
+- id: peripheral_bb
+  type: bitbanding
+  bus: sysbus
+  base_address: 1107296256
+- id: crc
+  type: sam4s_crccu
+  bus: sysbus
+  base_address: 1074020352
+- id: pioA
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 1074662912
+- id: pioB
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 1074663424
+- id: pioC
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 1074663936
+- id: spi
+  type: sam_spi
+  bus: sysbus
+  base_address: 1073774592
+- id: twi1
+  type: sam4s_twi
+  bus: sysbus
+  base_address: 1073856512
+- id: twi0
+  type: sam4s_twi
+  bus: sysbus
+  base_address: 1073840128

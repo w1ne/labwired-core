@@ -1,0 +1,18 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: stm32f4_discovery-bb
+description: 'Hardware target. Family: STM32, Architecture: Other'
+family: STM32
+code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
+  \ <zephyr/drivers/gpio.h>\n\nvoid main(void) {\n    const struct gpio_dt_spec led\
+  \ = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);\n    gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);\n\
+  \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
+  \  }\n}"
+pass_rate: 0
+verified: false
+system: systems/onboarding/stm32f4_discovery-bb.yaml
+sample_trace: traces/stm32.txt

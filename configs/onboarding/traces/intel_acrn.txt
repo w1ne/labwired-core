@@ -1,0 +1,5 @@
+ACRN Hypervisor Starting
+Version: 3.0-rel
+[OK] CPU 0 Online
+[OK] VM 0 Started
+Hello Intel ACRN!

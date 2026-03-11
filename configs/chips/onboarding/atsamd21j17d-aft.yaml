@@ -1,0 +1,55 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: atsamd21j17d-aft
+arch: arm
+flash:
+  base: 134217728
+  size: 262144B
+ram:
+  base: 8192
+  size: 32768B
+peripherals:
+- id: dwt
+  type: dwt
+  bus: sysbus
+  base_address: 57344
+- id: rtc
+  type: samd21_rtc
+  bus: sysbus
+  base_address: 16384
+- id: gpio_a
+  type: samd21_gpio
+  bus: sysbus
+  base_address: 16640
+- id: gpio_b
+  type: samd21_gpio
+  bus: sysbus
+  base_address: 16640
+- id: usart0
+  type: samd5_uart
+  bus: sysbus
+  base_address: 16896
+- id: tc4
+  type: samd21_timer
+  bus: sysbus
+  base_address: 16896
+- id: tc6
+  type: samd21_timer
+  bus: sysbus
+  base_address: 16896
+- id: gclk
+  type: arraymemory
+  bus: sysbus
+  base_address: 1073744896
+- id: usart1
+  type: samd5_uart
+  bus: sysbus
+  base_address: 16896
+- id: usart2
+  type: samd5_uart
+  bus: sysbus
+  base_address: 16896

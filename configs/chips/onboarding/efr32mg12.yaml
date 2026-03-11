@@ -1,0 +1,103 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: efr32mg12
+arch: arm
+flash:
+  base: 134217728
+  size: 262144B
+ram:
+  base: 553648128
+  size: 8192B
+peripherals:
+- id: rtcc
+  type: efr32_rtcc
+  bus: sysbus
+  base_address: 1074012160
+- id: i2c1
+  type: efr32_i2ccontroller
+  bus: sysbus
+  base_address: 1073792000
+- id: usart2
+  type: efr32_usart
+  bus: sysbus
+  base_address: 1073809408
+- id: usart3
+  type: efr32_usart
+  bus: sysbus
+  base_address: 1073810432
+- id: flashCtrl
+  type: efr32xg13flashcontroller
+  bus: sysbus
+  base_address: 1074659328
+- id: wtimer0
+  type: efr32_timer
+  bus: sysbus
+  base_address: 1073848320
+- id: wtimer1
+  type: efr32_timer
+  bus: sysbus
+  base_address: 1073849344
+- id: emu_pwrcfg
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074671672
+- id: emu_if
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074671652
+- id: i2c0
+  type: efr32_i2ccontroller
+  bus: sysbus
+  base_address: 1073790976
+- id: usart0
+  type: efr32_usart
+  bus: sysbus
+  base_address: 1073807360
+- id: usart1
+  type: efr32_usart
+  bus: sysbus
+  base_address: 1073808384
+- id: leUart0
+  type: leuart
+  bus: sysbus
+  base_address: 1074044928
+- id: gpioPort
+  type: efr32_gpioport
+  bus: sysbus
+  base_address: 1073782784
+- id: bitband_peripherals
+  type: bitbanding
+  bus: sysbus
+  base_address: 1107296256
+- id: bitclear
+  type: bitaccess
+  bus: sysbus
+  base_address: 1140850688
+- id: bitset
+  type: bitaccess
+  bus: sysbus
+  base_address: 1174405120
+- id: bitband_sram
+  type: bitbanding
+  bus: sysbus
+  base_address: 570425344
+- id: timer0
+  type: efr32_timer
+  bus: sysbus
+  base_address: 1073840128
+- id: timer1
+  type: efr32_timer
+  bus: sysbus
+  base_address: 1073841152
+- id: cmu
+  type: efr32_cmu
+  bus: sysbus
+  base_address: 1074675712
+- id: ldma
+  type: efr32mg12_ldma
+  bus: sysbus
+  base_address: 1074667520

@@ -1,0 +1,71 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: renesas-r7fa8m1a
+arch: arm
+flash:
+  base: 134217728
+  size: 65536B
+ram:
+  base: 805306368
+  size: 65536B
+peripherals:
+- id: gpt
+  type: renesasra_gpt
+  bus: sysbus
+  base_address: 1077026816
+- id: gpt_ns
+  type: renesasra_gpt
+  bus: sysbus
+  base_address: 1345462272
+- id: agt0
+  type: renesasra_agt
+  bus: sysbus
+  base_address: 1075974144
+- id: agt1
+  type: renesasra_agt
+  bus: sysbus
+  base_address: 1075974400
+- id: sci0
+  type: renesasra8m1_sci
+  bus: sysbus
+  base_address: 1077248000
+- id: sci1
+  type: renesasra8m1_sci
+  bus: sysbus
+  base_address: 1077248256
+- id: sci2
+  type: renesasra8m1_sci
+  bus: sysbus
+  base_address: 1077248512
+- id: sci3
+  type: renesasra8m1_sci
+  bus: sysbus
+  base_address: 1077248768
+- id: sci4
+  type: renesasra8m1_sci
+  bus: sysbus
+  base_address: 1077249024
+- id: sci9
+  type: renesasra8m1_sci
+  bus: sysbus
+  base_address: 1077250304
+- id: portMisc
+  type: renesasra_gpiomisc
+  bus: sysbus
+  base_address: 1077939456
+- id: SYSC_SCICKCR
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073864789
+- id: iic0
+  type: renesasra_iic
+  bus: sysbus
+  base_address: 1076224000
+- id: iic1
+  type: renesasra_iic
+  bus: sysbus
+  base_address: 1076224256

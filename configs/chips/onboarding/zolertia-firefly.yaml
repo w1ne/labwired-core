@@ -1,0 +1,79 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: zolertia-firefly
+arch: arm
+flash:
+  base: 134217728
+  size: 131072B
+ram:
+  base: 536870912
+  size: 262144B
+peripherals:
+- id: cc1200
+  type: cc1200
+  bus: ssi0
+  base_address: 0
+- id: uDma
+  type: udma
+  bus: sysbus
+  base_address: 1074786304
+- id: uart0
+  type: pl011
+  bus: sysbus
+  base_address: 1073790976
+- id: watchdog
+  type: cc2538watchdog
+  bus: sysbus
+  base_address: 1074614272
+- id: sleepTimer
+  type: cc2538sleeptimer
+  bus: sysbus
+  base_address: 1074614336
+- id: uart1
+  type: pl011
+  bus: sysbus
+  base_address: 1073795072
+- id: gpioA
+  type: cc2538_gpio
+  bus: sysbus
+  base_address: 1074630656
+- id: gpioB
+  type: cc2538_gpio
+  bus: sysbus
+  base_address: 1074634752
+- id: gpioC
+  type: cc2538_gpio
+  bus: sysbus
+  base_address: 1074638848
+- id: gpioD
+  type: cc2538_gpio
+  bus: sysbus
+  base_address: 1074642944
+- id: radio
+  type: cc2538rf
+  bus: sysbus
+  base_address: 1074298880
+- id: bitband
+  type: bitbanding
+  bus: sysbus
+  base_address: 570425344
+- id: crypto
+  type: cc2538_cryptoprocessor
+  bus: sysbus
+  base_address: 1074311168
+- id: flashCtrl
+  type: cc2538flashcontroller
+  bus: sysbus
+  base_address: 1074606080
+- id: ssi0
+  type: cc2538_ssi
+  bus: sysbus
+  base_address: 1073774592
+- id: ssi1
+  type: cc2538_ssi
+  bus: sysbus
+  base_address: 1073778688

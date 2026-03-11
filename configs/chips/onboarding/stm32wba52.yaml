@@ -1,0 +1,111 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: stm32wba52
+arch: arm
+flash:
+  base: 134217728
+  size: 1048576B
+ram:
+  base: 536870912
+  size: 131072B
+peripherals:
+- id: pwr
+  type: stm32wba_pwr
+  bus: sysbus
+  base_address: 1174538240
+- id: usart1
+  type: stm32f7_usart
+  bus: sysbus
+  base_address: 1073821696
+- id: usart2
+  type: stm32f7_usart
+  bus: sysbus
+  base_address: 1073759232
+- id: lpuart1
+  type: stm32f7_usart
+  bus: sysbus
+  base_address: 1174414336
+- id: spi1
+  type: stm32wba_spi
+  bus: sysbus
+  base_address: 1073819648
+- id: spi3
+  type: stm32wba_spi
+  bus: sysbus
+  base_address: 1174413312
+- id: adc4
+  type: stm32wba_adc
+  bus: sysbus
+  base_address: 1174540288
+- id: gpioPortA
+  type: stm32_gpioport
+  bus: sysbus
+  base_address: 1107427328
+- id: gpioPortB
+  type: stm32_gpioport
+  bus: sysbus
+  base_address: 1107428352
+- id: gpioPortC
+  type: stm32_gpioport
+  bus: sysbus
+  base_address: 1107429376
+- id: gpioPortH
+  type: stm32_gpioport
+  bus: sysbus
+  base_address: 1107434496
+- id: i2c1
+  type: stm32f7_i2c
+  bus: sysbus
+  base_address: 1073763328
+- id: i2c3
+  type: stm32f7_i2c
+  bus: sysbus
+  base_address: 1174415360
+- id: timer1
+  type: stm32_timer
+  bus: sysbus
+  base_address: 1073818624
+- id: timer2
+  type: stm32_timer
+  bus: sysbus
+  base_address: 1073741824
+- id: timer3
+  type: stm32_timer
+  bus: sysbus
+  base_address: 1073742848
+- id: timer16
+  type: stm32_timer
+  bus: sysbus
+  base_address: 1073824768
+- id: timer17
+  type: stm32_timer
+  bus: sysbus
+  base_address: 1073825792
+- id: iwdg
+  type: stm32_independentwatchdog
+  bus: sysbus
+  base_address: 1073754112
+- id: lptim1
+  type: stm32l0_lptimer
+  bus: sysbus
+  base_address: 1174422528
+- id: lptim2
+  type: stm32l0_lptimer
+  bus: sysbus
+  base_address: 1073779712
+- id: rtc
+  type: stm32f4_rtc
+  bus: sysbus
+  base_address: 1174435840
+- id: flash_ctrl
+  type: stm32wba_flashcontroller
+  bus: sysbus
+  base_address: 1073881088
+- id: rcc
+  type: stm32wba_rcc
+  bus: sysbus
+  base_address: 1174539264

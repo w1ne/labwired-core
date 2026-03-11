@@ -1,0 +1,75 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: litex_tock
+arch: arm
+flash:
+  base: 0
+  size: 45056B
+ram:
+  base: 16777216
+  size: 8192B
+peripherals:
+- id: uart
+  type: litex_uart
+  bus: sysbus
+  base_address: 2181046272
+- id: phy
+  type: ethernetphysicallayer
+  bus: eth
+  base_address: 0
+- id: timer0
+  type: litex_timer_csr32
+  bus: sysbus
+  base_address: 2181048320
+- id: led0
+  type: led
+  bus: cas
+  base_address: 0
+- id: led1
+  type: led
+  bus: cas
+  base_address: 1
+- id: led2
+  type: led
+  bus: cas
+  base_address: 2
+- id: led3
+  type: led
+  bus: cas
+  base_address: 3
+- id: switch0
+  type: button
+  bus: cas
+  base_address: 32
+- id: switch1
+  type: button
+  bus: cas
+  base_address: 33
+- id: switch2
+  type: button
+  bus: cas
+  base_address: 34
+- id: switch3
+  type: button
+  bus: cas
+  base_address: 35
+- id: button0
+  type: button
+  bus: cas
+  base_address: 64
+- id: button1
+  type: button
+  bus: cas
+  base_address: 65
+- id: button2
+  type: button
+  bus: cas
+  base_address: 66
+- id: button3
+  type: button
+  bus: cas
+  base_address: 67

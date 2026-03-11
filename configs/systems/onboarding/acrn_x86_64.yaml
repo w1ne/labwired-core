@@ -1,0 +1,8 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: acrn_x86_64
+chip: ../../chips/onboarding/acrn_x86_64.yaml

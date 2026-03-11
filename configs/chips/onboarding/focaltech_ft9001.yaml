@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: focaltech_ft9001
+arch: arm
+flash:
+  base: 524288
+  size: 4096B
+ram:
+  base: 536838144
+  size: 32768B
+peripherals:
+- id: cpm
+  type: focaltechft9001_cpm
+  bus: sysbus
+  base_address: 1073758208
+- id: rst
+  type: focaltechft9001_reset
+  bus: sysbus
+  base_address: 1073750016
+- id: trng
+  type: focaltechft9001_trng
+  bus: sysbus
+  base_address: 1073983488
+- id: usart2
+  type: ft9001_usart
+  bus: sysbus
+  base_address: 1073823744
+- id: dwt
+  type: dwt
+  bus: sysbus
+  base_address: 3758100480

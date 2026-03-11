@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: x86_64-kvm-virtio
+arch: arm
+flash:
+  base: 0
+  size: 536870912B
+ram:
+  base: 0
+  size: 64KB
+peripherals:
+- id: virtio_disk
+  type: virtioblockdevice
+  bus: sysbus
+  base_address: 1073745920
+- id: cmos
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 3758096496
+- id: uart
+  type: ns16550
+  bus: sysbus
+  base_address: 3758097400

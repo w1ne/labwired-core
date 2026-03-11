@@ -1,0 +1,111 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: nrf52840
+arch: arm
+flash:
+  base: 134217728
+  size: 1048576B
+ram:
+  base: 8388608
+  size: 262144B
+peripherals:
+- id: uart0
+  type: nrf52840_uart
+  bus: sysbus
+  base_address: 1073750016
+- id: uart1
+  type: nrf52840_uart
+  bus: sysbus
+  base_address: 1073905664
+- id: rtc0
+  type: nrf52840_rtc
+  bus: sysbus
+  base_address: 1073786880
+- id: rtc1
+  type: nrf52840_rtc
+  bus: sysbus
+  base_address: 1073811456
+- id: rtc2
+  type: nrf52840_rtc
+  bus: sysbus
+  base_address: 1073889280
+- id: wdt
+  type: nrf52840_watchdog
+  bus: sysbus
+  base_address: 1073807360
+- id: ppi
+  type: nrf52840_ppi
+  bus: sysbus
+  base_address: 1073868800
+- id: clock
+  type: nrf_clock
+  bus: sysbus
+  base_address: 1073741824
+- id: twi0
+  type: nrf52840_i2c
+  bus: sysbus
+  base_address: 1073754112
+- id: spi2
+  type: nrf52840_spi
+  bus: sysbus
+  base_address: 1073885184
+- id: gpio0
+  type: nrf52840_gpio
+  bus: sysbus
+  base_address: 1342178560
+- id: gpio1
+  type: nrf52840_gpio
+  bus: sysbus
+  base_address: 1342179328
+- id: gpiote
+  type: nrf52840_gpiotasksevents
+  bus: sysbus
+  base_address: 1073766400
+- id: twi1
+  type: nrf52840_i2c
+  bus: sysbus
+  base_address: 1073758208
+- id: timer0
+  type: nrf52840_timer
+  bus: sysbus
+  base_address: 1073774592
+- id: timer1
+  type: nrf52840_timer
+  bus: sysbus
+  base_address: 1073778688
+- id: timer2
+  type: nrf52840_timer
+  bus: sysbus
+  base_address: 1073782784
+- id: timer3
+  type: nrf52840_timer
+  bus: sysbus
+  base_address: 1073848320
+- id: timer4
+  type: nrf52840_timer
+  bus: sysbus
+  base_address: 1073852416
+- id: i2s
+  type: nrf52840_i2s
+  bus: sysbus
+  base_address: 1073893376
+- id: pdm
+  type: nrf52840_pdm
+  bus: sysbus
+  base_address: 1073860608
+- id: radio
+  type: nrf52840_radio
+  bus: sysbus
+  base_address: 1073745920
+- id: rng
+  type: nrf52840_rng
+  bus: sysbus
+  base_address: 1073795072
+- id: ecb
+  type: nrf52840_ecb
+  bus: sysbus
+  base_address: 1073799168

@@ -1,0 +1,43 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: sam_e70
+arch: arm
+flash:
+  base: 134217728
+  size: 268435456B
+ram:
+  base: 536870912
+  size: 268435456B
+peripherals:
+- id: usart0
+  type: sam_usart
+  bus: sysbus
+  base_address: 1073889280
+- id: usart1
+  type: sam_usart
+  bus: sysbus
+  base_address: 1073905664
+- id: usart2
+  type: sam_usart
+  bus: sysbus
+  base_address: 1073922048
+- id: gem
+  type: cadencegem
+  bus: sysbus
+  base_address: 1074069504
+- id: phy
+  type: ethernetphysicallayer
+  bus: gem
+  base_address: 0
+- id: trng
+  type: sam_trng
+  bus: sysbus
+  base_address: 1074200576
+- id: PMC_SR
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074660968

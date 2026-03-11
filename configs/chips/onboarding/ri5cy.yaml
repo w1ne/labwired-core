@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: ri5cy
+arch: arm
+flash:
+  base: 134217728
+  size: 1048576B
+ram:
+  base: 536870912
+  size: 196608B
+peripherals:
+- id: lpuart0
+  type: nxp_lpuart
+  bus: sysbus
+  base_address: 1074012160
+- id: lpuart1
+  type: nxp_lpuart
+  bus: sysbus
+  base_address: 1074016256
+- id: lptmr0
+  type: lowpower_timer
+  bus: sysbus
+  base_address: 1073946624
+- id: lptmr1
+  type: lowpower_timer
+  bus: sysbus
+  base_address: 1073950720
+- id: lptmr2
+  type: lowpower_timer
+  bus: sysbus
+  base_address: 1090695168

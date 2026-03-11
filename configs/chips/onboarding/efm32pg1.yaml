@@ -1,0 +1,39 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: efm32pg1
+arch: arm
+flash:
+  base: 134217728
+  size: 262144B
+ram:
+  base: 536870912
+  size: 32768B
+peripherals:
+- id: usart0
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073807360
+- id: usart1
+  type: efm32_uart
+  bus: sysbus
+  base_address: 1073808384
+- id: leUart0
+  type: leuart
+  bus: sysbus
+  base_address: 1074044928
+- id: bitband
+  type: bitbanding
+  bus: sysbus
+  base_address: 1107296256
+- id: cmuStatusOscillator
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074561068
+- id: vcmpStatus
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073741832

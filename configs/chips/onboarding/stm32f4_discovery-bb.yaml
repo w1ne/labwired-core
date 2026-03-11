@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: stm32f4_discovery-bb
+arch: arm
+flash:
+  base: 0
+  size: 256KB
+ram:
+  base: 0
+  size: 64KB
+peripherals:
+- id: phy
+  type: ethernetphysicallayer
+  bus: ethernet
+  base_address: 0
+- id: phy1
+  type: ethernetphysicallayer
+  bus: ethernet
+  base_address: 1

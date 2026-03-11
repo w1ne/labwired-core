@@ -1,0 +1,55 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: arduino_101-shield
+arch: arm
+flash:
+  base: 4294959104
+  size: 8192B
+ram:
+  base: 2818572288
+  size: 81920B
+peripherals:
+- id: led
+  type: led
+  bus: pwm
+  base_address: 0
+- id: button
+  type: button
+  bus: gpio
+  base_address: 0
+- id: lm74
+  type: ti_lm74
+  bus: spi0
+  base_address: 11
+- id: spi0
+  type: quark_spi
+  bus: sysbus
+  base_address: 2952794112
+- id: spi1
+  type: quark_spi
+  bus: sysbus
+  base_address: 2952795136
+- id: uartA
+  type: ns16550
+  bus: sysbus
+  base_address: 2952798208
+- id: uartB
+  type: ns16550
+  bus: sysbus
+  base_address: 2952799232
+- id: gpio
+  type: quark_gpiocontroller
+  bus: sysbus
+  base_address: 2952793088
+- id: pwm
+  type: quark_pwm
+  bus: sysbus
+  base_address: 2952792064
+- id: scss
+  type: quark_systemcontrolsubsystem
+  bus: sysbus
+  base_address: 2961178624

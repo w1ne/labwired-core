@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: tegra_externals
+arch: arm
+flash:
+  base: 0
+  size: 256KB
+ram:
+  base: 0
+  size: 64KB
+peripherals:
+- id: usbHub
+  type: usbhub
+  bus: usbEhci2
+  base_address: 1
+- id: usbMouse
+  type: usbmouse
+  bus: usbHub
+  base_address: 2
+- id: usbKeyboard
+  type: usbkeyboard
+  bus: usbHub
+  base_address: 1

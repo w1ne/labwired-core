@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: mimxrt798s
+arch: arm
+flash:
+  base: 134217728
+  size: 134217728B
+ram:
+  base: 1610612736
+  size: 16777216B
+peripherals:
+- id: micfil
+  type: imxrt700_micfil
+  bus: sysbus
+  base_address: 1075896320
+- id: rstctl1_i3c0
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074003984
+- id: i3c0_rst_cpu1
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073741852
+- id: rstctl1_i3c3
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074098176
+- id: syscon3_nsvtor
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1074143388

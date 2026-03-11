@@ -1,0 +1,47 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: verilated_ibex
+arch: arm
+flash:
+  base: 0
+  size: 32768B
+ram:
+  base: 16777216
+  size: 8192B
+peripherals:
+- id: rom
+  type: arraymemory
+  bus: sysbus
+  base_address: 0
+- id: sram
+  type: arraymemory
+  bus: sysbus
+  base_address: 16777216
+- id: main_ram
+  type: arraymemory
+  bus: sysbus
+  base_address: 1073741824
+- id: stack
+  type: arraymemory
+  bus: sysbus
+  base_address: 4026531840
+- id: cpu
+  type: cosimulatedriscv32
+  bus: sysbus
+  base_address: 12
+- id: ctrl
+  type: litex_soc_controller
+  bus: sysbus
+  base_address: 2181038080
+- id: uart
+  type: litex_uart
+  bus: sysbus
+  base_address: 2181046272
+- id: timer0
+  type: litex_timer_csr32
+  bus: sysbus
+  base_address: 2181048320

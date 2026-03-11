@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: cortex_a53_console
+arch: arm
+flash:
+  base: 134217728
+  size: 67108864B
+ram:
+  base: 1073741824
+  size: 134217728B
+peripherals:
+- id: timer
+  type: arm_generictimer
+  bus: cpu0
+  base_address: 15
+- id: uart0
+  type: pl011
+  bus: sysbus
+  base_address: 150994944
+- id: virtio_console
+  type: virtiommioconsole
+  bus: sysbus
+  base_address: 167772160

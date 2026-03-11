@@ -1,0 +1,59 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: egis_et171
+arch: arm
+flash:
+  base: 1879048192
+  size: 65536B
+ram:
+  base: 0
+  size: 393216B
+peripherals:
+- id: mtimer
+  type: riscvmachinetimer
+  bus: sysbus
+  base_address: 3858759680
+- id: uart0
+  type: ns16550
+  bus: sysbus
+  base_address: 4028629024
+- id: pit0
+  type: andesatcpit100
+  bus: sysbus
+  base_address: 4030726144
+- id: gpio0
+  type: andesatcgpio100
+  bus: sysbus
+  base_address: 4033871872
+- id: watchdog
+  type: andesatcwdt200_watchdog
+  bus: sysbus
+  base_address: 4031774720
+- id: spi0
+  type: andesatcspi200
+  bus: sysbus
+  base_address: 4038066176
+- id: spi1
+  type: andesatcspi200
+  bus: sysbus
+  base_address: 4042260480
+- id: rtc0
+  type: andesatcrtc100
+  bus: sysbus
+  base_address: 4032823296
+- id: syscon
+  type: egiset171_aosmu
+  bus: sysbus
+  base_address: 4027580416
+- id: smu2
+  type: egiset171_smu2
+  bus: sysbus
+  base_address: 4041211904
+- id: crypto
+  type: egiset171_crypto
+  bus: sysbus
+  base_address: 3892314112

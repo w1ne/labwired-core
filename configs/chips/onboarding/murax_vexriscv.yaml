@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: murax_vexriscv
+arch: arm
+flash:
+  base: 2147483648
+  size: 262144B
+ram:
+  base: 4096
+  size: 262144B
+peripherals:
+- id: uart
+  type: murax_uart
+  bus: sysbus
+  base_address: 4026597376
+- id: gpioA
+  type: murax_gpio
+  bus: sysbus
+  base_address: 4026531840
+- id: timer
+  type: murax_timer
+  bus: sysbus
+  base_address: 4026662912

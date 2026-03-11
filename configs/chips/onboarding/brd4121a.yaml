@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: brd4121a
+arch: arm
+flash:
+  base: 134217728
+  size: 3268608B
+ram:
+  base: 536870912
+  size: 524288B
+peripherals:
+- id: led0
+  type: led
+  bus: gpioPort
+  base_address: 66
+- id: led1
+  type: led
+  bus: gpioPort
+  base_address: 67
+- id: button0
+  type: button
+  bus: gpioPort
+  base_address: 64
+- id: button1
+  type: button
+  bus: gpioPort
+  base_address: 65
+- id: DCDC_IF
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1342799912

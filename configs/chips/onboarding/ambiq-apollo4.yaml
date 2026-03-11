@@ -1,0 +1,103 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: ambiq-apollo4
+arch: arm
+flash:
+  base: 134217728
+  size: 4096B
+ram:
+  base: 536870912
+  size: 2097152B
+peripherals:
+- id: bootrom_logger
+  type: ambiqapollo4_bootromlogger
+  bus: sysbus
+  base_address: 134217724
+- id: adc
+  type: ambiqapollo4_adc
+  bus: sysbus
+  base_address: 1073971200
+- id: gpio
+  type: ambiqapollo4_gpio
+  bus: sysbus
+  base_address: 1073807360
+- id: iom0
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074069504
+- id: iom1
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074073600
+- id: iom2
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074077696
+- id: iom3
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074081792
+- id: iom4
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074085888
+- id: iom5
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074089984
+- id: iom6
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074094080
+- id: iom7
+  type: ambiqapollo4_iomaster
+  bus: sysbus
+  base_address: 1074098176
+- id: rtc
+  type: ambiqapollo4_rtc
+  bus: sysbus
+  base_address: 1073760256
+- id: timer
+  type: ambiqapollo4_timer
+  bus: sysbus
+  base_address: 1073774592
+- id: stimer
+  type: ambiqapollo4_systemtimer
+  bus: sysbus
+  base_address: 1073776640
+- id: uart0
+  type: pl011
+  bus: sysbus
+  base_address: 1073856512
+- id: uart1
+  type: pl011
+  bus: sysbus
+  base_address: 1073860608
+- id: uart2
+  type: pl011
+  bus: sysbus
+  base_address: 1073864704
+- id: uart3
+  type: pl011
+  bus: sysbus
+  base_address: 1073868800
+- id: pwrctrl
+  type: ambiqapollo4_powercontroller
+  bus: sysbus
+  base_address: 1073876992
+- id: security
+  type: ambiqapollo4_security
+  bus: sysbus
+  base_address: 1073938432
+- id: wdt
+  type: ambiqapollo4_watchdog
+  bus: sysbus
+  base_address: 1073889280
+- id: cpu_complex
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1207959552

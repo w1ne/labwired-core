@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: renesas_rz_g2l
+arch: arm
+flash:
+  base: 134217728
+  size: 256KB
+ram:
+  base: 536870912
+  size: 64KB
+peripherals:
+- id: timer0
+  type: arm_generictimer
+  bus: cpu0
+  base_address: 15
+- id: timer1
+  type: arm_generictimer
+  bus: cpu1
+  base_address: 15

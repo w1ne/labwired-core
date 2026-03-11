@@ -1,0 +1,51 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: sifive-fu540
+arch: arm
+flash:
+  base: 16777216
+  size: 8192B
+ram:
+  base: 2147483648
+  size: 8589934592B
+peripherals:
+- id: uart0
+  type: sifive_uart
+  bus: sysbus
+  base_address: 268500992
+- id: uart1
+  type: sifive_uart
+  bus: sysbus
+  base_address: 268505088
+- id: gpio
+  type: sifive_gpio
+  bus: sysbus
+  base_address: 268828672
+- id: ethernet
+  type: cadencegem
+  bus: sysbus
+  base_address: 269025280
+- id: phy
+  type: ethernetphysicallayer
+  bus: ethernet
+  base_address: 0
+- id: qspi0
+  type: hifive_spi
+  bus: sysbus
+  base_address: 268697600
+- id: qspi1
+  type: hifive_spi
+  bus: sysbus
+  base_address: 268701696
+- id: qspi2
+  type: hifive_spi
+  bus: sysbus
+  base_address: 268763136
+- id: i2c
+  type: opencoresi2c
+  bus: sysbus
+  base_address: 268632064

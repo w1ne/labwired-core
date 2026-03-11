@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: up_squared_x86_64
+arch: arm
+flash:
+  base: 134217728
+  size: 2147483648B
+ram:
+  base: 536870912
+  size: 2147483648B
+peripherals:
+- id: uart
+  type: ns16550
+  bus: sysbus
+  base_address: 2684354560
+- id: hpet
+  type: hpet
+  bus: sysbus
+  base_address: 4275044352
+- id: pci
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 3758099704

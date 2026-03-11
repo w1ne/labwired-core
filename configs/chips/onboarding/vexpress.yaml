@@ -1,0 +1,83 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: vexpress
+arch: arm
+flash:
+  base: 2147483648
+  size: 536870912B
+ram:
+  base: 2147483648
+  size: 536870912B
+peripherals:
+- id: uart0
+  type: pl011
+  bus: sysbus
+  base_address: 268472320
+- id: uart1
+  type: pl011
+  bus: sysbus
+  base_address: 268476416
+- id: uart2
+  type: pl011
+  bus: sysbus
+  base_address: 268480512
+- id: uart3
+  type: pl011
+  bus: sysbus
+  base_address: 268484608
+- id: timer1
+  type: arm_sp804_timer
+  bus: sysbus
+  base_address: 268505088
+- id: timer2
+  type: arm_sp804_timer
+  bus: sysbus
+  base_address: 268509184
+- id: sysCtl
+  type: armsysctl
+  bus: sysbus
+  base_address: 268435456
+- id: pl310
+  type: pl310
+  bus: sysbus
+  base_address: 503357440
+- id: pl031
+  type: pl031
+  bus: sysbus
+  base_address: 268529664
+- id: usbEhci
+  type: isp1761
+  bus: sysbus
+  base_address: 1325400064
+- id: kmi0
+  type: pl050
+  bus: sysbus
+  base_address: 268460032
+- id: kmi1
+  type: pl050
+  bus: sysbus
+  base_address: 268464128
+- id: usbHub
+  type: usbhub
+  bus: usbEhci
+  base_address: 1
+- id: usbMouse
+  type: usbmouse
+  bus: usbHub
+  base_address: 2
+- id: usbKeyboard
+  type: usbkeyboard
+  bus: usbHub
+  base_address: 1
+- id: controller
+  type: emulatorcontroller
+  bus: sysbus
+  base_address: 536870912
+- id: lcd
+  type: pl110
+  bus: sysbus
+  base_address: 268566528

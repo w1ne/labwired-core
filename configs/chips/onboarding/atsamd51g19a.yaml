@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: atsamd51g19a
+arch: arm
+flash:
+  base: 134217728
+  size: 524288B
+ram:
+  base: 536870912
+  size: 196608B
+peripherals:
+- id: sercom3
+  type: samd5_uart
+  bus: sysbus
+  base_address: 1090600960
+- id: dwt
+  type: dwt
+  bus: sysbus
+  base_address: 3758100480
+- id: gclk_phctrl1
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073749124
+- id: pac_intflag
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073745936
+- id: pac_status
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073745984

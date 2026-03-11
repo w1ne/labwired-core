@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: at91rm9200
+arch: arm
+flash:
+  base: 134217728
+  size: 196608B
+ram:
+  base: 536870912
+  size: 196608B
+peripherals:
+- id: uart0
+  type: atmel91debugunit
+  bus: sysbus
+  base_address: 4294963712
+- id: systemTimer
+  type: atmel91systemtimer
+  bus: sysbus
+  base_address: 4294966528
+- id: ckgrPllar
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 4294966312
+- id: ckgrPllbr
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 4294966316
+- id: pmcMkcr
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 4294966320

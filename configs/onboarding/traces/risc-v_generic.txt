@@ -1,0 +1,5 @@
+RISC-V Bootloader
+CPU: rv32imac
+RAM: 128MB
+[OK] UART initialized at 0x10000000
+Hello RISC-V!

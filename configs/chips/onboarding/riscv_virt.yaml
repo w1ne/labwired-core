@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: riscv_virt
+arch: arm
+flash:
+  base: 2147483648
+  size: 2147483648B
+ram:
+  base: 2147483648
+  size: 2147483648B
+peripherals:
+- id: uart0
+  type: ns16550
+  bus: sysbus
+  base_address: 268435456

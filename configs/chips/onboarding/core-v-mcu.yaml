@@ -1,0 +1,43 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: core-v-mcu
+arch: arm
+flash:
+  base: 436207616
+  size: 8192B
+ram:
+  base: 469762048
+  size: 524288B
+peripherals:
+- id: uart
+  type: pulp_udma_uart
+  bus: sysbus
+  base_address: 437264640
+- id: timer
+  type: pulp_timer
+  bus: sysbus
+  base_address: 437301248
+- id: gpio
+  type: pulp_apb_gpio
+  bus: sysbus
+  base_address: 437260288
+- id: i2s
+  type: pulp_i2s
+  bus: sysbus
+  base_address: 437264896
+- id: i2c0
+  type: pulp_udma_i2c
+  bus: sysbus
+  base_address: 437264768
+- id: spi
+  type: pulp_udma_spi
+  bus: sysbus
+  base_address: 437264512
+- id: camera_controller
+  type: pulp_udma_camera
+  bus: sysbus
+  base_address: 437265024

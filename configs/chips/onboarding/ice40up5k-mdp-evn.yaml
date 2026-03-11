@@ -1,0 +1,39 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: ice40up5k-mdp-evn
+arch: arm
+flash:
+  base: 0
+  size: 8192B
+ram:
+  base: 268435456
+  size: 131072B
+peripherals:
+- id: bmp180
+  type: bmp180
+  bus: i2c
+  base_address: 119
+- id: lsm330_a
+  type: lsm330_accelerometer
+  bus: i2c
+  base_address: 24
+- id: lsm330_g
+  type: lsm330_gyroscope
+  bus: i2c
+  base_address: 107
+- id: lis2ds12
+  type: lis2ds12
+  bus: i2c
+  base_address: 29
+- id: lsm303dlhc_a
+  type: lsm303dlhc_accelerometer
+  bus: i2c
+  base_address: 25
+- id: lsm303dlhc_g
+  type: lsm303dlhc_gyroscope
+  bus: i2c
+  base_address: 30

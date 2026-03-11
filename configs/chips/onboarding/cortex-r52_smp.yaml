@@ -1,0 +1,31 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: cortex-r52_smp
+arch: arm
+flash:
+  base: 2281701376
+  size: 67108864B
+ram:
+  base: 536870912
+  size: 2147483648B
+peripherals:
+- id: timer1
+  type: arm_generictimer
+  bus: cpu1
+  base_address: 15
+- id: uart1
+  type: pl011
+  bus: sysbus
+  base_address: 2617901056
+- id: timer
+  type: arm_generictimer
+  bus: cpu
+  base_address: 15
+- id: uart0
+  type: pl011
+  bus: sysbus
+  base_address: 2617835520

@@ -1,0 +1,43 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: lpc2294
+arch: arm
+flash:
+  base: 134217728
+  size: 65536B
+ram:
+  base: 536870912
+  size: 65536B
+peripherals:
+- id: can1
+  type: lpc_can
+  bus: sysbus
+  base_address: 3758374912
+- id: can2
+  type: lpc_can
+  bus: sysbus
+  base_address: 3758391296
+- id: can3
+  type: lpc_can
+  bus: sysbus
+  base_address: 3758407680
+- id: can4
+  type: lpc_can
+  bus: sysbus
+  base_address: 3758424064
+- id: uart0
+  type: ns16550
+  bus: sysbus
+  base_address: 3758145536
+- id: uart1
+  type: ns16550
+  bus: sysbus
+  base_address: 3758161920
+- id: timer0
+  type: lpc_ctimer
+  bus: sysbus
+  base_address: 3758112768

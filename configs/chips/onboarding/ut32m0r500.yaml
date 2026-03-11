@@ -1,0 +1,55 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: ut32m0r500
+arch: arm
+flash:
+  base: 134217728
+  size: 32768B
+ram:
+  base: 536870912
+  size: 98304B
+peripherals:
+- id: uart0
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 1073758208
+- id: uart1
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 1073762304
+- id: timer0
+  type: arm_sp804_timer
+  bus: sysbus
+  base_address: 1073745920
+- id: timer1
+  type: arm_sp804_timer
+  bus: sysbus
+  base_address: 1073750016
+- id: adc
+  type: caes_adc
+  bus: sysbus
+  base_address: 1073803264
+- id: gpio0
+  type: arm_ahb_gpio
+  bus: sysbus
+  base_address: 1073872896
+- id: gpio1
+  type: arm_ahb_gpio
+  bus: sysbus
+  base_address: 1073876992
+- id: gpio2
+  type: arm_ahb_gpio
+  bus: sysbus
+  base_address: 1073881088
+- id: can0
+  type: ut32_can
+  bus: sysbus
+  base_address: 1073885184
+- id: can1
+  type: ut32_can
+  bus: sysbus
+  base_address: 1073889280

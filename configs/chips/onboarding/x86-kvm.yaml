@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: x86-kvm
+arch: arm
+flash:
+  base: 0
+  size: 536870912B
+ram:
+  base: 0
+  size: 64KB
+peripherals:
+- id: uart
+  type: ns16550
+  bus: sysbus
+  base_address: 3758097400

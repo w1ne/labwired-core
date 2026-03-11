@@ -1,0 +1,35 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: msp430f2619
+arch: arm
+flash:
+  base: 3072
+  size: 1024B
+ram:
+  base: 512
+  size: 2048B
+peripherals:
+- id: mpy
+  type: msp430f2xxx_mpy
+  bus: sysbus
+  base_address: 304
+- id: boot
+  type: arraymemory
+  bus: sysbus
+  base_address: 3072
+- id: ram_extended
+  type: arraymemory
+  bus: sysbus
+  base_address: 6400
+- id: code
+  type: arraymemory
+  bus: sysbus
+  base_address: 8448
+- id: info_mem
+  type: arraymemory
+  bus: sysbus
+  base_address: 4096

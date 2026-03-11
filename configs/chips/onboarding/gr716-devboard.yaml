@@ -1,0 +1,67 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: gr716-devboard
+arch: arm
+flash:
+  base: 0
+  size: 4096B
+ram:
+  base: 805306368
+  size: 65536B
+peripherals:
+- id: switch0
+  type: button
+  bus: gpio0
+  base_address: 0
+- id: switch1
+  type: button
+  bus: gpio0
+  base_address: 17
+- id: switch2
+  type: button
+  bus: gpio1
+  base_address: 30
+- id: switch3
+  type: button
+  bus: gpio1
+  base_address: 31
+- id: uart
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2150629376
+- id: uart1
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2150633472
+- id: uart2
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2150637568
+- id: uart3
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2150641664
+- id: uart4
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2150645760
+- id: uart5
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2150649856
+- id: timer0
+  type: gaisler_gptimer
+  bus: sysbus
+  base_address: 2147495936
+- id: gpio0
+  type: gaisler_gpio
+  bus: sysbus
+  base_address: 2150678528
+- id: gpio1
+  type: gaisler_gpio
+  bus: sysbus
+  base_address: 2150682624

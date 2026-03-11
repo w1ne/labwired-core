@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: litex_common
+arch: arm
+flash:
+  base: 536870912
+  size: 33554432B
+ram:
+  base: 268435456
+  size: 262144B
+peripherals:
+- id: phy
+  type: ethernetphysicallayer
+  bus: eth
+  base_address: 0

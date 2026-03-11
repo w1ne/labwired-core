@@ -1,0 +1,83 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: colibri-vf61
+arch: arm
+flash:
+  base: 134217728
+  size: 524288B
+ram:
+  base: 1056964608
+  size: 524288B
+peripherals:
+- id: usbHub
+  type: usbhub
+  bus: usbEhci1
+  base_address: 1
+- id: mouse
+  type: usbmouse
+  bus: usbHub
+  base_address: 5
+- id: fusion
+  type: fusionf0710a
+  bus: i2c0
+  base_address: 16
+- id: uart0
+  type: imxuart
+  bus: sysbus
+  base_address: 1073901568
+- id: uart1
+  type: imxuart
+  bus: sysbus
+  base_address: 1073905664
+- id: uart2
+  type: imxuart
+  bus: sysbus
+  base_address: 1073909760
+- id: eDma0
+  type: vybriddma
+  bus: sysbus
+  base_address: 1073840128
+- id: eDma1
+  type: vybriddma
+  bus: sysbus
+  base_address: 1074364416
+- id: fb
+  type: vybriddcu
+  bus: sysbus
+  base_address: 1074102272
+- id: usbEhci0
+  type: ehcihostcontroller
+  bus: sysbus
+  base_address: 1073954816
+- id: usbEhci1
+  type: ehcihostcontroller
+  bus: sysbus
+  base_address: 1074479104
+- id: i2c0
+  type: vybridi2c
+  bus: sysbus
+  base_address: 1074159616
+- id: i2c1
+  type: vybridi2c
+  bus: sysbus
+  base_address: 1074163712
+- id: timers
+  type: periodicinterrupttimer
+  bus: sysbus
+  base_address: 1073967104
+- id: globalTimer
+  type: arm_globaltimer
+  bus: sysbus
+  base_address: 1073750528
+- id: sema4
+  type: sema4
+  bus: sysbus
+  base_address: 1073860608
+- id: nand
+  type: fslnand
+  bus: sysbus
+  base_address: 1074659328

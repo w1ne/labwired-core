@@ -1,0 +1,51 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: s32k118
+arch: arm
+flash:
+  base: 134217728
+  size: 262144B
+ram:
+  base: 536870912
+  size: 262144B
+peripherals:
+- id: dwt
+  type: dwt
+  bus: sysbus
+  base_address: 3758100480
+- id: lpspi0
+  type: imxrt_lpspi
+  bus: sysbus
+  base_address: 1073922048
+- id: lpspi1
+  type: imxrt_lpspi
+  bus: sysbus
+  base_address: 1073926144
+- id: lpuart0
+  type: nxp_lpuart
+  bus: sysbus
+  base_address: 1074176000
+- id: lpuart1
+  type: nxp_lpuart
+  bus: sysbus
+  base_address: 1074180096
+- id: can0_mcr
+  type: pythonperipheral
+  bus: sysbus
+  base_address: 1073889280
+- id: lpit
+  type: s32k_lpit
+  bus: sysbus
+  base_address: 1073967104
+- id: lptmr
+  type: s32k_lptmr
+  bus: sysbus
+  base_address: 1074003968
+- id: scg
+  type: s32k_scg
+  bus: sysbus
+  base_address: 1074151424

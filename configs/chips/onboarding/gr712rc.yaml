@@ -1,0 +1,79 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: gr712rc
+arch: arm
+flash:
+  base: 0
+  size: 8388608B
+ram:
+  base: 1073741824
+  size: 134217728B
+peripherals:
+- id: ftmctrl
+  type: gaisler_faulttolerantmemorycontroller
+  bus: sysbus
+  base_address: 2147483648
+- id: uart0
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2147483904
+- id: uart1
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2148532480
+- id: uart2
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2148532736
+- id: uart3
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2148532992
+- id: uart4
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2148533248
+- id: uart5
+  type: gaislerapbuart
+  bus: sysbus
+  base_address: 2148533504
+- id: gptimer
+  type: gaisler_gptimer
+  bus: sysbus
+  base_address: 2147484416
+- id: grtimer
+  type: gaisler_gptimer
+  bus: sysbus
+  base_address: 2148533760
+- id: gpio1
+  type: gaisler_gpio
+  bus: sysbus
+  base_address: 2147485952
+- id: gpio2
+  type: gaisler_gpio
+  bus: sysbus
+  base_address: 2147486208
+- id: greth
+  type: gaislereth
+  bus: sysbus
+  base_address: 2147487232
+- id: phy
+  type: ethernetphysicallayer
+  bus: greth
+  base_address: 0
+- id: ahbInfo
+  type: gaislerahbplugandplayinfo
+  bus: sysbus
+  base_address: 4294963200
+- id: apb1Controller
+  type: gaislerapbcontroller
+  bus: sysbus
+  base_address: 2148528128
+- id: apb2Controller
+  type: gaislerapbcontroller
+  bus: sysbus
+  base_address: 2149576704

@@ -1,0 +1,27 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: litex_minerva
+arch: arm
+flash:
+  base: 537001984
+  size: 32768B
+ram:
+  base: 268435456
+  size: 262144B
+peripherals:
+- id: boot_flash
+  type: arraymemory
+  bus: sysbus
+  base_address: 539131904
+- id: uart
+  type: litex_uart
+  bus: sysbus
+  base_address: 3758102528
+- id: timer0
+  type: litex_timer
+  bus: sysbus
+  base_address: 3758106624

@@ -1,0 +1,87 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: crosslink-nx-evn
+arch: arm
+flash:
+  base: 0
+  size: 32768B
+ram:
+  base: 1073741824
+  size: 8388608B
+peripherals:
+- id: ctrl
+  type: litex_soc_controller
+  bus: sysbus
+  base_address: 4026531840
+- id: uart
+  type: litex_uart
+  bus: sysbus
+  base_address: 4026540032
+- id: timer0
+  type: litex_timer
+  bus: sysbus
+  base_address: 4026542080
+- id: leds
+  type: litex_controlandstatus
+  bus: sysbus
+  base_address: 4026544128
+- id: led0
+  type: led
+  bus: leds
+  base_address: 0
+- id: led1
+  type: led
+  bus: leds
+  base_address: 1
+- id: led2
+  type: led
+  bus: leds
+  base_address: 2
+- id: led3
+  type: led
+  bus: leds
+  base_address: 3
+- id: led4
+  type: led
+  bus: leds
+  base_address: 4
+- id: led5
+  type: led
+  bus: leds
+  base_address: 5
+- id: led6
+  type: led
+  bus: leds
+  base_address: 6
+- id: led7
+  type: led
+  bus: leds
+  base_address: 7
+- id: led8
+  type: led
+  bus: leds
+  base_address: 8
+- id: led9
+  type: led
+  bus: leds
+  base_address: 9
+- id: led10
+  type: led
+  bus: leds
+  base_address: 10
+- id: led11
+  type: led
+  bus: leds
+  base_address: 11
+- id: led12
+  type: led
+  bus: leds
+  base_address: 12
+- id: led13
+  type: led
+  bus: leds
+  base_address: 13

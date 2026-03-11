@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: riscv_verilated_uartlite
+arch: arm
+flash:
+  base: 1610612736
+  size: 104857600B
+ram:
+  base: 1610612736
+  size: 104857600B
+peripherals:
+- id: uart
+  type: cosimulateduart
+  bus: sysbus
+  base_address: 1879048192

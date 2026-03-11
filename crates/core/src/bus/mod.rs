@@ -282,25 +282,49 @@ impl SystemBus {
 
         for p_cfg in &merged_peripherals {
             let dev: Box<dyn Peripheral> = match p_cfg.r#type.as_str() {
-                "uart" => {
-                    let layout: UartRegisterLayout = Self::parse_profile_or_default(p_cfg, "UART")?;
+                "uart" | "stm32_uart" | "stm32f1_uart" | "stm32f2_uart" | "stm32f4_uart"
+                | "stm32f7_usart" | "stm32h5_usart" | "efm32_uart" | "nxp_lpuart" | "ns16550"
+                | "pl011" | "gaislerapbuart" => {
+                    let layout: UartRegisterLayout =
+                        if p_cfg.r#type.contains("stm32h5") || p_cfg.r#type.contains("stm32f7") {
+                            UartRegisterLayout::Stm32V2
+                        } else if p_cfg.r#type.contains("nrf") {
+                            UartRegisterLayout::Nrf52
+                        } else {
+                            Self::parse_profile_or_default(p_cfg, "UART")?
+                        };
                     Box::new(crate::peripherals::uart::Uart::new_with_layout(layout))
                 }
-                "systick" => Box::new(crate::peripherals::systick::Systick::new()),
-                "gpio" => {
-                    let layout: GpioRegisterLayout = Self::parse_profile_or_default(p_cfg, "GPIO")?;
+                "systick" | "arm_generictimer" => {
+                    Box::new(crate::peripherals::systick::Systick::new())
+                }
+                "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
+                | "imxrt_gpio" => {
+                    let layout: GpioRegisterLayout =
+                        if p_cfg.r#type.contains("stm32f4") || p_cfg.r#type.contains("h5") {
+                            GpioRegisterLayout::Stm32V2
+                        } else {
+                            Self::parse_profile_or_default(p_cfg, "GPIO")?
+                        };
                     Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
                 }
                 "rcc" => {
                     let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;
                     Box::new(crate::peripherals::rcc::Rcc::new_with_layout(layout))
                 }
-                "timer" => Box::new(crate::peripherals::timer::Timer::new()),
-                "i2c" => Box::new(crate::peripherals::i2c::I2c::new()),
-                "spi" => Box::new(crate::peripherals::spi::Spi::new()),
+                "timer" | "stm32_timer" | "efm32timer" | "renesasra_agt" | "stm32l0_lptimer" => {
+                    Box::new(crate::peripherals::timer::Timer::new())
+                }
+                "i2c"
+                | "stm32f1_i2c"
+                | "stm32f2_i2c"
+                | "stm32f4_i2c"
+                | "stm32f7_i2c"
+                | "efm32ggi2ccontroller" => Box::new(crate::peripherals::i2c::I2c::new()),
+                "spi" | "stm32spi" => Box::new(crate::peripherals::spi::Spi::new()),
                 "exti" => Box::new(crate::peripherals::exti::Exti::new()),
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
-                "dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+                "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
                 "adc" => Box::new(crate::peripherals::adc::Adc::new()),
                 "pio" => {
                     let mut pio = crate::peripherals::pio::Pio::new();
@@ -415,12 +439,12 @@ impl SystemBus {
                     ))
                 }
                 other => {
-                    tracing::warn!(
-                        "Unsupported peripheral type '{}' for id '{}'; skipping",
+                    tracing::debug!(
+                        "Mapping unknown peripheral type '{}' to Stub for id '{}'",
                         other,
                         p_cfg.id
                     );
-                    continue;
+                    Box::new(crate::peripherals::stub::StubPeripheral::new(0x00))
                 }
             };
 
