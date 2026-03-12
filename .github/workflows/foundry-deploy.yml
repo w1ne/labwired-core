@@ -35,7 +35,6 @@ jobs:
         with:
           path: ${{ env.CHECKOUT_PATH }}
           submodules: recursive
-          submodules: recursive
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -90,6 +89,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ${{ env.CHECKOUT_PATH }}
+          submodules: recursive
 
       - name: Docker meta
         id: meta
@@ -160,6 +160,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ${{ env.CHECKOUT_PATH }}
+          submodules: recursive
 
       - name: Deploy to Local Host
         env:
