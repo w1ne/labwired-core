@@ -36,8 +36,12 @@ func slugifyCatalogPart(v string) string {
 func catalogIDFromCorePath(relPath string, fallbackName string) string {
 	relPath = filepath.ToSlash(strings.TrimSpace(relPath))
 	stem := strings.TrimSuffix(filepath.Base(relPath), filepath.Ext(relPath))
-	if stem == "" {
-		stem = fallbackName
+	label := stem
+	if strings.TrimSpace(fallbackName) != "" {
+		label = fallbackName
+	}
+	if label == "" {
+		label = "unknown"
 	}
 	parts := strings.Split(relPath, "/")
 	root := ""
@@ -46,13 +50,13 @@ func catalogIDFromCorePath(relPath string, fallbackName string) string {
 	}
 	switch root {
 	case "onboarding", "boards", "systems":
-		return "board/" + slugifyCatalogPart(stem)
+		return "board/" + slugifyCatalogPart(label)
 	case "chips":
-		return "chip/" + slugifyCatalogPart(stem)
+		return "chip/" + slugifyCatalogPart(label)
 	case "peripherals":
-		return "peripheral/" + slugifyCatalogPart(stem)
+		return "peripheral/" + slugifyCatalogPart(label)
 	default:
-		return "catalog/" + slugifyCatalogPart(stem)
+		return "catalog/" + slugifyCatalogPart(label)
 	}
 }
 
