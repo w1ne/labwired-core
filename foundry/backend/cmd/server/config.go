@@ -14,6 +14,7 @@ import (
 // config is the validated runtime configuration for the Foundry backend server.
 type config struct {
 	Port                    string
+	BuildCommit             string
 	LabWiredPath            string
 	ArtifactsDir            string
 	DataDir                 string
@@ -31,6 +32,7 @@ type config struct {
 func loadConfigFromEnv() (config, error) {
 	cfg := config{
 		Port:                  envOrDefault("PORT", "8080"),
+		BuildCommit:           envOrDefault("BUILD_COMMIT", envOrDefault("GITHUB_SHA", "unknown")),
 		LabWiredPath:          envOrDefault("LABWIRED_PATH", "labwired"),
 		ArtifactsDir:          envOrDefault("ARTIFACTS_DIR", "/tmp/foundry/artifacts"),
 		DataDir:               envOrDefault("DATA_DIR", "data"),

@@ -73,6 +73,12 @@ func main() {
 	if err := cat.SyncFromDisk(cfg.CoreConfigsDir); err != nil {
 		log.Printf("Warning: failed to sync catalog from disk: %v", err)
 	}
+	log.Printf(
+		"Foundry startup: build_commit=%s app_env=%s hardware_endpoint_source=catalog core_configs_dir=%s",
+		cfg.BuildCommit,
+		cfg.AppEnv,
+		cfg.CoreConfigsDir,
+	)
 
 	orch := verification.NewOrchestrator(cfg.LabWiredPath)
 	srv := api.NewServer(orch, store, cat, cfg.ArtifactsDir, cfg.DataDir, cfg.ServerOptions)
