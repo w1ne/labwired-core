@@ -1,64 +1,47 @@
-import os
+#!/usr/bin/env python3
 import json
+import os
+from pathlib import Path
 
-hw_path = "/tmp/hw-platforms/platforms"
-boards_path = os.path.join(hw_path, "boards")
-cpus_path = os.path.join(hw_path, "cpus")
+import yaml
 
-tier1_boards = {
-    "stm32f4_discovery.repl", "stm32f7_discovery-bb.repl", "stm32f072b_discovery.repl",
-    "arduino_nano_33_ble.repl", "arty_litex_vexriscv.repl", "beaglev_starlight.repl",
-    "silabs/brd4162a.repl", "silabs/slwstk6220a.repl"
-}
-tier1_cpus = {
-    "stm32f103.repl", "stm32f4.repl", "stm32g0.repl", "stm32h743.repl", "stm32l071.repl",
-    "nrf52840.repl", "atsamd51g19a.repl", "sam_e70.repl", "sifive-fe310.repl",
-    "nxp-k6xf.repl", "imxrt1064.repl", "riscv_virt.repl", "litex_vexriscv.repl"
-}
 
-def get_name(rel_path):
-    base = os.path.basename(rel_path)
-    return os.path.splitext(base)[0]
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ONBOARDING_DIR = REPO_ROOT / "core" / "configs" / "onboarding"
+OUTPUT_FILE = REPO_ROOT / "foundry" / "backend" / "configs" / "hardware.json"
 
-hardware = []
 
-for root, dirs, files in os.walk(boards_path):
-    for file in files:
-        if file.endswith(".repl"):
-            full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(full_path, boards_path)
-            # normalize for exact matching
-            rel_path_norm = rel_path.replace("\\", "/")
+def load_board_entry(path: Path):
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    name = data.get("name") or path.stem
+    pass_rate = int(data.get("pass_rate", 0) or 0)
+    verified = bool(data.get("verified", False))
+    # Tier-1 means fully validated and verified in the unified catalog source.
+    tier = 1 if (verified and pass_rate >= 100) else 2
 
-            tier = 1 if rel_path_norm in tier1_boards else 2
-            hardware.append({
-                "id": f"board-{get_name(rel_path)}",
-                "name": get_name(rel_path),
-                "type": "board",
-                "repl_path": f"platforms/boards/{rel_path_norm}",
-                "tier": tier
-            })
+    return {
+        "id": f"board-{name}",
+        "name": name,
+        "type": "board",
+        # Keep contract shape; onboarding manifests are now the SoT.
+        "repl_path": f"core/configs/onboarding/{path.name}",
+        "tier": tier,
+    }
 
-for root, dirs, files in os.walk(cpus_path):
-    for file in files:
-        if file.endswith(".repl"):
-            full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(full_path, cpus_path)
-            rel_path_norm = rel_path.replace("\\", "/")
 
-            tier = 1 if rel_path_norm in tier1_cpus else 2
-            hardware.append({
-                "id": f"cpu-{get_name(rel_path)}",
-                "name": get_name(rel_path),
-                "type": "cpu",
-                "repl_path": f"platforms/cpus/{rel_path_norm}",
-                "tier": tier
-            })
+def main():
+    if not ONBOARDING_DIR.exists():
+        raise SystemExit(f"onboarding directory not found: {ONBOARDING_DIR}")
 
-hardware.sort(key=lambda x: (x["tier"], x["type"], x["name"]))
+    hardware = []
+    for path in sorted(ONBOARDING_DIR.glob("*.yaml")):
+        hardware.append(load_board_entry(path))
 
-output_file = "/home/andrii/Projects/labwired/foundry/backend/configs/hardware.json"
-with open(output_file, 'w') as f:
-    json.dump(hardware, f, indent=2)
+    hardware.sort(key=lambda x: (x["tier"], x["type"], x["name"]))
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT_FILE.write_text(json.dumps(hardware, indent=2) + "\n", encoding="utf-8")
+    print(f"Generated {len(hardware)} entries in {OUTPUT_FILE}")
 
-print(f"Generated {len(hardware)} entries in {output_file}")
+
+if __name__ == "__main__":
+    main()

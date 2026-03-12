@@ -787,12 +787,25 @@ func TestCleanupExpiredArtifacts_PrunesOldIdempotencyRows(t *testing.T) {
 
 func TestListHardware_ReturnsJSON(t *testing.T) {
 	srv, store, _ := newTestServer(t)
-	seed := []db.HardwareItem{
-		{ID: "h1", Name: "h1", Type: "board", ReplPath: "test1", Tier: 1},
-		{ID: "h2", Name: "h2", Type: "cpu", ReplPath: "test2", Tier: 2},
+	if err := store.UpsertCatalogAsset(db.CatalogAsset{
+		ID:         "h1",
+		Name:       "h1",
+		PassRate:   100,
+		Verified:   true,
+		SourceRef:  "core/configs/onboarding/h1.yaml",
+		SourceType: "core-config",
+	}); err != nil {
+		t.Fatalf("UpsertCatalogAsset(h1) failed: %v", err)
 	}
-	if err := store.SeedHardware(seed); err != nil {
-		t.Fatalf("SeedHardware failed: %v", err)
+	if err := store.UpsertCatalogAsset(db.CatalogAsset{
+		ID:         "h2",
+		Name:       "h2",
+		PassRate:   75,
+		Verified:   false,
+		SourceRef:  "core/configs/onboarding/h2.yaml",
+		SourceType: "core-config",
+	}); err != nil {
+		t.Fatalf("UpsertCatalogAsset(h2) failed: %v", err)
 	}
 
 	rr := doAuthRequest(t, srv, http.MethodGet, "/v1/hardware", "", nil)
@@ -808,7 +821,13 @@ func TestListHardware_ReturnsJSON(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
-	if items[0].ID != "h1" || items[1].ID != "h2" {
+	if items[0].ID != "h1" || items[0].Tier != 1 || items[0].Type != "board" {
+		t.Errorf("unexpected first item: %+v", items[0])
+	}
+	if items[1].ID != "h2" || items[1].Tier != 2 || items[1].Type != "board" {
+		t.Errorf("unexpected second item: %+v", items[1])
+	}
+	if items[0].ReplPath == "" || items[1].ReplPath == "" {
 		t.Errorf("unexpected ordering or content: %+v", items)
 	}
 }

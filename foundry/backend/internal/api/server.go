@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -708,14 +709,35 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListHardware(w http.ResponseWriter, r *http.Request) {
-	items, err := s.store.ListHardware()
-	if err != nil {
-		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve hardware list.", "")
-		return
+	assets := s.catalog.List()
+	items := make([]db.HardwareItem, 0, len(assets))
+	for _, a := range assets {
+		tier := 2
+		if a.Verified && a.PassRate >= 100 {
+			tier = 1
+		}
+		replPath := a.SourceRef
+		if replPath == "" {
+			replPath = a.ID
+		}
+		items = append(items, db.HardwareItem{
+			ID:       a.ID,
+			Name:     a.Name,
+			Type:     "board",
+			ReplPath: replPath,
+			Tier:     tier,
+		})
 	}
-	if items == nil {
-		items = []db.HardwareItem{}
-	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Tier != items[j].Tier {
+			return items[i].Tier < items[j].Tier
+		}
+		if items[i].Type != items[j].Type {
+			return items[i].Type < items[j].Type
+		}
+		return items[i].Name < items[j].Name
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 }
