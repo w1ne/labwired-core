@@ -38,6 +38,7 @@ func main() {
 		}
 	}()
 
+	var hwItems []db.HardwareItem
 	hwData, err := os.ReadFile(cfg.HardwareJSONPath)
 	if err != nil {
 		if cfg.AppEnv == "production" {
@@ -45,7 +46,6 @@ func main() {
 		}
 		log.Printf("Warning: failed to read hardware config from %s: %v", cfg.HardwareJSONPath, err)
 	} else {
-		var hwItems []db.HardwareItem
 		if err := json.Unmarshal(hwData, &hwItems); err != nil {
 			log.Printf("Warning: failed to parse hardware config: %v", err)
 		} else {
@@ -72,6 +72,13 @@ func main() {
 	cat := catalog.NewManager(store)
 	if err := cat.SyncFromDisk(cfg.CoreConfigsDir); err != nil {
 		log.Printf("Warning: failed to sync catalog from disk: %v", err)
+	}
+	if len(hwItems) > 0 {
+		if err := cat.SyncFromHardwareIndex(hwItems); err != nil {
+			log.Printf("Warning: failed to sync catalog from hardware index: %v", err)
+		} else {
+			log.Printf("Catalog sync imported %d hardware index entries", len(hwItems))
+		}
 	}
 	log.Printf(
 		"Foundry startup: build_commit=%s app_env=%s hardware_endpoint_source=catalog core_configs_dir=%s",

@@ -118,3 +118,51 @@ func TestPromoteToCatalog_MarksVerifiedAndSetsSource(t *testing.T) {
 		t.Fatalf("expected ir_url to be set")
 	}
 }
+
+func TestSyncFromHardwareIndex_ImportsExternalBoardsIntoCatalog(t *testing.T) {
+	store := newTestStore(t)
+	mgr := NewManager(store)
+
+	items := []db.HardwareItem{
+		{
+			ID:       "board-ext-a",
+			Name:     "ext-a",
+			Type:     "board",
+			ReplPath: "platforms/boards/ext-a.repl",
+			Tier:     1,
+		},
+		{
+			ID:       "board-ext-b",
+			Name:     "ext-b",
+			Type:     "board",
+			ReplPath: "platforms/boards/ext-b.repl",
+			Tier:     2,
+		},
+	}
+
+	if err := mgr.SyncFromHardwareIndex(items); err != nil {
+		t.Fatalf("SyncFromHardwareIndex failed: %v", err)
+	}
+
+	a, ok := mgr.Get("board-ext-a")
+	if !ok {
+		t.Fatalf("expected board-ext-a to exist")
+	}
+	if a.SourceType != "platform-catalog" {
+		t.Fatalf("expected source_type platform-catalog, got %q", a.SourceType)
+	}
+	if !a.Verified || a.PassRate != 100 {
+		t.Fatalf("expected tier-1 board to map to verified=true pass_rate=100, got verified=%v pass_rate=%d", a.Verified, a.PassRate)
+	}
+
+	b, ok := mgr.Get("board-ext-b")
+	if !ok {
+		t.Fatalf("expected board-ext-b to exist")
+	}
+	if b.Verified || b.PassRate != 0 {
+		t.Fatalf("expected tier-2 board to map to verified=false pass_rate=0, got verified=%v pass_rate=%d", b.Verified, b.PassRate)
+	}
+	if b.SourceRef != "platforms/boards/ext-b.repl" {
+		t.Fatalf("unexpected source_ref: %q", b.SourceRef)
+	}
+}

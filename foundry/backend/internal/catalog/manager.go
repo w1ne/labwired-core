@@ -177,6 +177,52 @@ func (m *Manager) Get(id string) (db.CatalogAsset, bool) {
 	return asset, ok
 }
 
+// SyncFromHardwareIndex upserts external hardware index rows into the unified catalog.
+// This keeps /v1/catalog and /v1/hardware aligned even for non-core board entries.
+func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
+	for _, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			name = strings.TrimSpace(item.ID)
+		}
+		if name == "" {
+			continue
+		}
+
+		verified := item.Tier <= 1
+		passRate := 0
+		if verified {
+			passRate = 100
+		}
+
+		asset := db.CatalogAsset{
+			ID:           strings.TrimSpace(item.ID),
+			Name:         name,
+			Description:  fmt.Sprintf("Catalog board profile: %s", name),
+			Family:       "",
+			Architecture: "",
+			CodeExample:  "",
+			PassRate:     passRate,
+			Registers:    0,
+			IrURL:        "",
+			Verified:     verified,
+			SourceType:   "platform-catalog",
+			SourceRef:    strings.TrimSpace(item.ReplPath),
+		}
+		if asset.ID == "" {
+			continue
+		}
+		if asset.SourceRef == "" {
+			asset.SourceRef = asset.ID
+		}
+
+		if err := m.store.UpsertCatalogAsset(asset); err != nil {
+			log.Printf("[catalog] failed to upsert indexed asset %s: %v", asset.ID, err)
+		}
+	}
+	return nil
+}
+
 func countRegistersInYAMLModel(data []byte) int {
 	var parsed any
 	if err := yaml.Unmarshal(data, &parsed); err != nil {
