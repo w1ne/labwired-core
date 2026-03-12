@@ -1,120 +1,83 @@
-# LabWired Core - Firmware Simulation Engine
+# LabWired Core
 
-
-> High-performance, declarative firmware simulator for ARM Cortex-M and RISC-V microcontrollers.
+Deterministic firmware simulation engine for ARM Cortex-M and RISC-V targets.
 
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://labwired.com/docs/)
 
-## CI Dashboard
+## What This Repo Owns
 
-### Merge Gate
-
-- `core-integrity` (required on PRs to `main`): ![Core Integrity](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml/badge.svg?branch=main)  
-[Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml)
-
-### Quality Signals
-
-- `coverage` (PR + push + scheduled/manual): ![Coverage](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml/badge.svg?branch=main)  
-[Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-coverage.yml)
-- `unsupported-audit` (scheduled/manual): ![Unsupported Audit](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml/badge.svg?branch=main)  
-[Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml)
-- `nightly-validation` (scheduled/manual): ![Nightly](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml/badge.svg?branch=main)  
-[Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml)
-- `validate-hw-targets` (scheduled/manual + selected main pushes): ![Validate HW Targets](https://github.com/w1ne/labwired-core/actions/workflows/core-validate-hw-targets.yml/badge.svg?branch=main)  
-[Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-validate-hw-targets.yml)
-Publishes `out/hw-target-validation/summary.{json,md}` and refreshes onboarding validation metadata.
-
-### Board Model Signals
-
-- `ci-fixture-uart1` (ARM Cortex-M): ![ARM Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml/badge.svg?branch=main)  
-Coverage: smoke + max UART + no-progress  
-[ARM Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-arm.yml)
-- `ci-fixture-riscv-uart1` (RISC-V): ![RISC-V Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml/badge.svg?branch=main)  
-Coverage: smoke  
-[RISC-V Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci-fixture-riscv.yml)
-- `nucleo-h563zi`: ![H563 Board](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml/badge.svg?branch=main)  
-Coverage: io-smoke + fullchip-smoke  
-[NUCLEO-H563ZI CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-nucleo-h563zi.yml)
-
-## Highlights
-
-- **🚀 [Demos & Examples](../DEMOS.md)** - Central portal for all LabWired demos.
-- **v0.1.0 Demo**: [Blinky + I2C Sensor](examples/demo-blinky/README.md)
-- **NUCLEO-H563ZI Showcase**: [Human Demo Example](examples/nucleo-h563zi/README.md)
-- **Case Study**: [Debugging STM32 Without Hardware](docs/case_study_stm32.md)
-
-## Features
-
-- **Multi-Architecture**: ARM Cortex-M (M0, M3, M4) and RISC-V (RV32I) support
-- **Declarative Configuration**: YAML-based chip and peripheral definitions
-- **CI Test Runner**: Deterministic `labwired test` with JSON/JUnit outputs
-- **Debug Protocols**: GDB Remote Serial Protocol and Debug Adapter Protocol (DAP)
-- **High Performance**: Native Rust implementation with cycle-accurate simulation
-- **HAL Compatible**: Run binaries built with standard HALs (stm32f1xx-hal, etc.)
+- Simulation engine correctness and determinism.
+- Chip/system model execution (`configs/chips`, `configs/systems`).
+- Hardware-target validation metadata for catalog consumers.
 
 ## Quick Start
 
-### Install (one-liner)
+### Install
 
 ```sh
 curl -fsSL https://labwired.com/install.sh | sh
-```
-
-This detects your platform (Linux / macOS, x86_64 / ARM64), downloads a prebuilt binary from the
-latest [GitHub Release](https://github.com/w1ne/labwired-core/releases), and adds `labwired` to
-your `$PATH`. If no prebuilt is available for your platform it falls back to compiling from source
-via `cargo install`.
-
-```sh
 labwired --version
 ```
 
-> **Options** (env vars):
-> - `LABWIRED_VERSION=v0.12.0` — pin a specific release
-> - `LABWIRED_FROM_SOURCE=1` — always build from source
-> - `LABWIRED_INSTALL_DIR=~/.local/bin` — override install directory
+Install options:
+- `LABWIRED_VERSION=v0.12.0` pins a release.
+- `LABWIRED_FROM_SOURCE=1` forces source build.
+- `LABWIRED_INSTALL_DIR=~/.local/bin` overrides install dir.
 
-### Running a Simulation
+### Run a deterministic test script
 
-```bash
+```sh
 labwired test --script tests/uart-ok.yaml --output-dir results
 ```
 
-### From Source
+### Build from source
 
-If you prefer to build manually:
-
-```bash
-# Prerequisites: Rust 1.75+ and target toolchains
+```sh
 rustup target add thumbv6m-none-eabi thumbv7m-none-eabi riscv32i-unknown-none-elf
-
-git clone https://github.com/w1ne/labwired-core.git
-cd labwired-core
 cargo build --release -p labwired-cli
 ./target/release/labwired --version
 ```
 
-## CI Integration
+## CI At A Glance
 
-Use `labwired test` for deterministic CI testing:
+### Required merge gate
 
-```bash
-labwired test --script tests/uart-ok.yaml --output-dir results
-```
+- `core-ci.yml`: required checks for PRs to `main`.
 
-See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
+### Quality signals
 
-## Documentation
+- `core-coverage.yml`: coverage verification.
+- `core-unsupported-audit.yml`: unsupported instruction audits.
+- `core-nightly.yml`: broader nightly validation.
+- `core-validate-hw-targets.yml`: full onboarding target sweep, emits `out/hw-target-validation/summary.{json,md}`, and refreshes onboarding validation metadata.
 
-- [Agents Manual](./docs/agents.md) 🤖
-- [Architecture Overview](./docs/architecture.md)
-- [Architecture Guide](./docs/architecture_guide.md)
-- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md) (config-first)
-- [Catalog Validation Structure](./docs/catalog_validation.md) (PR smoke vs full target sweep ownership)
+### Board model signals
+
+- `core-board-ci-fixture-arm.yml`: ARM fixture smoke coverage.
+- `core-board-ci-fixture-riscv.yml`: RISC-V fixture smoke coverage.
+- `core-board-nucleo-h563zi.yml`: H563 io-smoke and fullchip-smoke.
+
+## Validation Structure
+
+- PR smoke and scoreboard: `core-onboarding-smoke.yml`.
+- Full target sweep for catalog metadata: `core-validate-hw-targets.yml`.
+- Policy and downstream contract: [docs/catalog_validation.md](./docs/catalog_validation.md).
+
+## Key Docs
+
+- [Docs Index](./docs/index.md)
+- [Architecture](./docs/architecture.md)
+- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md)
 - [CI Integration Guide](./docs/ci_integration.md)
-- [GDB Integration](./docs/gdb_integration.md)
 - [Release Strategy](./docs/release_strategy.md)
-- [VS Code Debugging](./docs/vscode_debugging.md)
+- [Agents Manual](./docs/agents.md)
+
+## Highlights
+
+- [Demos & Examples](../DEMOS.md)
+- [Blinky + I2C Sensor Demo](examples/demo-blinky/README.md)
+- [NUCLEO-H563ZI Showcase](examples/nucleo-h563zi/README.md)
+- [STM32 Case Study](docs/case_study_stm32.md)
 
 ## License
 
