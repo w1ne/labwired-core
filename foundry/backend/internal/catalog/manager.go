@@ -155,6 +155,45 @@ func validationURLFromModel(runURL, artifactsURL string) string {
 	return runURL
 }
 
+func splitCatalogID(id string) (string, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(id), "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	kind := strings.TrimSpace(parts[0])
+	slug := strings.TrimSpace(parts[1])
+	if kind == "" || slug == "" {
+		return "", "", false
+	}
+	return kind, slug, true
+}
+
+// dedupeBoardChipAliases keeps board rows as canonical and hides chip rows with the same slug.
+func dedupeBoardChipAliases(assets []db.CatalogAsset) []db.CatalogAsset {
+	boardSlugs := make(map[string]struct{}, len(assets))
+	for _, a := range assets {
+		kind, slug, ok := splitCatalogID(a.ID)
+		if !ok {
+			continue
+		}
+		if kind == "board" {
+			boardSlugs[slug] = struct{}{}
+		}
+	}
+
+	out := make([]db.CatalogAsset, 0, len(assets))
+	for _, a := range assets {
+		kind, slug, ok := splitCatalogID(a.ID)
+		if ok && kind == "chip" {
+			if _, hasBoard := boardSlugs[slug]; hasBoard {
+				continue
+			}
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 // SyncFromDisk scans the provided directory for YAML models and upserts them to the DB.
 func (m *Manager) SyncFromDisk(configsDir string) error {
 	log.Printf("[catalog] syncing models from disk: %s", configsDir)
@@ -317,7 +356,7 @@ func (m *Manager) List() []db.CatalogAsset {
 		log.Printf("[catalog] failed to list assets: %v", err)
 		return []db.CatalogAsset{}
 	}
-	return assets
+	return dedupeBoardChipAliases(assets)
 }
 
 func (m *Manager) Get(id string) (db.CatalogAsset, bool) {

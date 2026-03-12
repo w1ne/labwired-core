@@ -178,3 +178,49 @@ func TestSyncFromHardwareIndex_ImportsExternalBoardsIntoCatalog(t *testing.T) {
 		t.Fatalf("expected no validation_url for external index import, got %q", b.ValidationURL)
 	}
 }
+
+func TestList_DedupesChipWhenSameBoardSlugExists(t *testing.T) {
+	store := newTestStore(t)
+	mgr := NewManager(store)
+
+	if err := store.UpsertCatalogAsset(db.CatalogAsset{
+		ID:          "board/a20",
+		Name:        "A20",
+		Description: "Board row",
+		SourceType:  "platform-catalog",
+	}); err != nil {
+		t.Fatalf("upsert board failed: %v", err)
+	}
+	if err := store.UpsertCatalogAsset(db.CatalogAsset{
+		ID:          "chip/a20",
+		Name:        "A20",
+		Description: "Chip row",
+		SourceType:  "core-config",
+	}); err != nil {
+		t.Fatalf("upsert chip failed: %v", err)
+	}
+	if err := store.UpsertCatalogAsset(db.CatalogAsset{
+		ID:          "chip/rp2040",
+		Name:        "RP2040",
+		Description: "Unique chip row",
+		SourceType:  "core-config",
+	}); err != nil {
+		t.Fatalf("upsert unique chip failed: %v", err)
+	}
+
+	assets := mgr.List()
+	seen := map[string]bool{}
+	for _, a := range assets {
+		seen[a.ID] = true
+	}
+
+	if !seen["board/a20"] {
+		t.Fatalf("expected board/a20 to remain")
+	}
+	if seen["chip/a20"] {
+		t.Fatalf("expected chip/a20 to be hidden when board/a20 exists")
+	}
+	if !seen["chip/rp2040"] {
+		t.Fatalf("expected unique chip/rp2040 to remain")
+	}
+}
