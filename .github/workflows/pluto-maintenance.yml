@@ -1,0 +1,50 @@
+name: Pluto Maintenance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * *"
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    concurrency:
+      group: pluto-maintenance
+      cancel-in-progress: false
+    steps:
+      - name: Environment snapshot
+        run: |
+          set -euo pipefail
+          echo "host=$(hostname)"
+          date -u
+          df -h
+          docker system df || true
+
+      - name: Cleanup runner workspaces and logs
+        run: |
+          set -euo pipefail
+          # Keep only fresh run folders and recent diagnostics.
+          for base in /home/w1ne/actions-runner*; do
+            [ -d "$base" ] || continue
+            find "$base/_work" -mindepth 1 -maxdepth 1 -type d -name 'run-*' -mtime +1 -exec rm -rf {} + || true
+            find "$base/_work/_temp" -mindepth 1 -maxdepth 1 -type d -mtime +1 -exec rm -rf {} + || true
+            find "$base/_diag" -type f -mtime +7 -delete || true
+          done
+
+          # Legacy github-pages temp dirs can accumulate quickly.
+          find /home/w1ne -maxdepth 1 -type d -name 'actions_github_pages_*' -mtime +2 -exec rm -rf {} + || true
+
+      - name: Cleanup Docker caches
+        run: |
+          set -euo pipefail
+          # Safe pruning: no volume prune to avoid deleting active data.
+          docker container prune -f --filter "until=240h" || true
+          docker image prune -af --filter "until=240h" || true
+          docker builder prune -af --filter "until=240h" || true
+
+      - name: Post-clean snapshot
+        run: |
+          set -euo pipefail
+          df -h
+          docker system df || true
