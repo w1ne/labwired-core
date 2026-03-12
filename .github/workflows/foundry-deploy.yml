@@ -179,6 +179,11 @@ jobs:
           echo "Updating host binaries and configs..."
 
           # 1. Build and install latest labwired binary
+          export PATH="$HOME/.cargo/bin:$PATH"
+          if ! command -v cargo >/dev/null 2>&1; then
+            echo "cargo not found in PATH"
+            exit 1
+          fi
           cd core
           cargo build --release -p labwired-cli
           mkdir -p "$LABWIRED_ROOT/bin"
