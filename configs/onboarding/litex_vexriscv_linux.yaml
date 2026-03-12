@@ -1,6 +1,7 @@
 name: litex_vexriscv_linux
-description: 'Hardware target. Family: Generic, Architecture: RISCV 32'
-family: Generic
+description: 'LiteX SoC running standard VexRiscv core capable of booting Linux. Architecture: RISC-V RV32IMA.'
+family: LiteX
+url: https://github.com/enjoy-digital/linux-on-litex-vexriscv
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 75

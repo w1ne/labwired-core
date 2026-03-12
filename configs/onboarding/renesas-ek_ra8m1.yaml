@@ -1,6 +1,7 @@
 name: renesas-ek_ra8m1
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'Renesas EK-RA8M1 Evaluation Kit featuring high performance Cortex-M85 with Helium. Architecture: ARM Cortex-M85.'
+family: Renesas RA8
+url: https://www.renesas.com/products/microcontrollers-microprocessors/ra-cortex-m-mcus/ek-ra8m1-evaluation-kit-ra8m1-mcu-group
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

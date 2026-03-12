@@ -1,6 +1,7 @@
 name: atsamd21j17d-aft
-description: 'Hardware target. Family: Atmel SAM, Architecture: ARM 32'
-family: Atmel SAM
+description: 'Microchip SAMD21 Series MCU. Architecture: ARM Cortex-M0+. General purpose low power microcontroller.'
+family: Microchip SAM D
+url: https://www.microchip.com/en-us/product/ATSAMD21J17D
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

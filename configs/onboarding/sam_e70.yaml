@@ -1,6 +1,7 @@
 name: sam_e70
-description: 'Hardware target. Family: Atmel SAM, Architecture: ARM 32'
-family: Atmel SAM
+description: 'Microchip SAM E70 high-performance ARM Cortex-M7 microcontroller for industrial networking. Architecture: ARMv7E-M.'
+family: Microchip SAM E70
+url: https://www.microchip.com/en-us/product/ATSAME70Q21
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

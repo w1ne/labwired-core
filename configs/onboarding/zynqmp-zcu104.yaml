@@ -1,6 +1,7 @@
 name: zynqmp-zcu104
-description: 'Hardware target. Family: Generic, Architecture: ARM 64'
-family: Generic
+description: 'AMD Xilinx ZCU104 Evaluation Board emphasizing Video/Vision features on Zynq UltraScale+ MPSoC. Architecture: Quad ARM Cortex-A53.'
+family: AMD Xilinx Zynq UltraScale+
+url: https://www.xilinx.com/products/boards-and-kits/zcu104.html
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

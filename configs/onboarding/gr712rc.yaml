@@ -1,6 +1,7 @@
 name: gr712rc
-description: 'Hardware target. Family: Generic, Architecture: Other'
-family: Generic
+description: 'Cobham Gaisler GR712RC Dual-Core LEON3 Fault-Tolerant Processor. Architecture: SPARC V8.'
+family: Gaisler LEON3
+url: https://www.gaisler.com/index.php/products/components/gr712rc
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 75

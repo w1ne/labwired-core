@@ -1,6 +1,7 @@
 name: stm32f4_discovery
-description: 'Hardware target. Family: STM32, Architecture: ARM 32'
-family: STM32
+description: 'STMicroelectronics STM32F407G-DISC1 reference evaluation board. Architecture: ARMv7E-M.'
+family: STM32F4
+url: https://www.st.com/en/evaluation-tools/stm32f407g-disc1.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
   \ <zephyr/drivers/gpio.h>\n\nvoid main(void) {\n    const struct gpio_dt_spec led\
   \ = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);\n    gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);\n\

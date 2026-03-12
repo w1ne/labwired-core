@@ -1,6 +1,7 @@
 name: mimxrt798s
-description: 'Hardware target. Family: NXP i.MX, Architecture: ARM 32'
-family: NXP i.MX
+description: 'NXP i.MX RT798S high-end secure crossover MCU with intelligent edge computing capabilities. Architecture: ARMv8-M.'
+family: NXP i.MX RT
+url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/i-mx-rt-crossover-mcus/i-mx-rt700-crossover-mcu-family:i.MX-RT700
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

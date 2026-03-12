@@ -1,6 +1,7 @@
 name: renesas_rz_t2m
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'Renesas RZ/T2M High-performance multi-function MPU for AC servo drives. Architecture: Dual ARM Cortex-R52.'
+family: Renesas RZ/T2M
+url: https://www.renesas.com/products/microcontrollers-microprocessors/rz-mpus/rzt2m-high-performance-multi-function-mpu-ac-servo-drives-and-industrial-networks
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

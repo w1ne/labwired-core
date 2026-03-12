@@ -1,6 +1,7 @@
 name: xtensa-sample-controller
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'Cadence Tensilica Xtensa sample DSP/Controller reference design. Architecture: Xtensa.'
+url: https://www.cadence.com/en_US/home/tools/ip/tensilica-ip/xtensa-customizable-processors.html
+family: Tensilica Xtensa
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

@@ -1,6 +1,7 @@
 name: imxrt1064
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'NXP i.MX RT1064 high-performance crossover processor with ARM Cortex-M7 and 4MB on-chip flash. Architecture: ARMv7E-M.'
+family: NXP i.MX RT
+url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/i-mx-rt-crossover-mcus/i-mx-rt1064-crossover-mcu-with-arm-cortex-m7-core:i.MX-RT1064
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

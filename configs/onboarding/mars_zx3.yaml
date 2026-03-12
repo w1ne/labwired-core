@@ -1,6 +1,7 @@
 name: mars_zx3
-description: 'Hardware target. Family: Generic, Architecture: ARM 64'
-family: Generic
+description: 'Enclustra Mars ZX3 System-on-Module based on Xilinx Zynq-7020. Architecture: Dual ARM Cortex-A9.'
+url: https://www.enclustra.com/en/products/system-on-modules/mars-zx3/
+family: Enclustra
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

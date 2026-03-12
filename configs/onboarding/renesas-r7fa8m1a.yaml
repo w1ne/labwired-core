@@ -1,6 +1,7 @@
 name: renesas-r7fa8m1a
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'Renesas RA8M1 Group 480MHz ultra-high performance MCU. Architecture: ARM Cortex-M85.'
+family: Renesas RA8
+url: https://www.renesas.com/products/microcontrollers-microprocessors/ra-cortex-m-mcus/ra8m1-480-mhz-arm-cortex-m85-based-microcontroller-helium-and-trustzone
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

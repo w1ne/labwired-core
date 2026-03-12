@@ -1,6 +1,7 @@
 name: fomu
-description: 'Hardware target. Family: Generic, Architecture: RISCV 32'
-family: Generic
+description: 'Fomu tiny USB form factor FPGA board running RISC-V softcore. Architecture: RISC-V RV32I.'
+url: https://tomu.im/fomu.html
+family: Lattice iCE40
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 75

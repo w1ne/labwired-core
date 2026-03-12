@@ -1,6 +1,7 @@
 name: fsl_lx2160ardb
-description: 'Hardware target. Family: Generic, Architecture: ARM 64'
-family: Generic
+description: 'NXP Layerscape LX2160A Reference Design Board (RDB) for the 16-core Cortex-A72 SoC. Architecture: ARMv8-A.'
+url: https://www.nxp.com/design/development-boards/qoriq-developer-resources/lx2160a-reference-design-board:LX2160A-RDB
+family: NXP Layerscape
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

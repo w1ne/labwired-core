@@ -1,6 +1,7 @@
 name: zynqmp-zcu102-revB
-description: 'Hardware target. Family: Generic, Architecture: ARM 64'
-family: Generic
+description: 'AMD Xilinx ZCU102 Evaluation Board (Rev B) featuring Zynq UltraScale+ MPSoC. Architecture: Quad ARM Cortex-A53 / Dual Cortex-R5F.'
+family: AMD Xilinx Zynq UltraScale+
+url: https://www.xilinx.com/products/boards-and-kits/ek-u1-zcu102-g.html
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

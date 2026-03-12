@@ -1,6 +1,7 @@
 name: nrf52840
-description: 'Hardware target. Family: nRF5, Architecture: ARM 32'
-family: nRF5
+description: 'Nordic Semiconductor nRF52840 multiprotocol Bluetooth 5 / 802.15.4 / Thread / Zigbee SoC. Architecture: ARM Cortex-M4F.'
+family: Nordic nRF52
+url: https://www.nordicsemi.com/Products/nRF52840
 code_example: "/* Zephyr Blinky for nRF52 */\n#include <zephyr/kernel.h>\n#include\
   \ <zephyr/drivers/gpio.h>\n\nvoid main(void) {\n    const struct gpio_dt_spec led\
   \ = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);\n    gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);\n\

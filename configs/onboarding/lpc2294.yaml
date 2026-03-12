@@ -1,6 +1,7 @@
 name: lpc2294
-description: 'Hardware target. Family: NXP LPC, Architecture: ARM 32'
-family: NXP LPC
+description: 'NXP (Philips) LPC2294 16/32-bit ARM7TDMI-S microcontroller with CAN and ADC. Architecture: ARMv4T.'
+url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/lpc2000-arm7-mcus/lpc2294-16-32-bit-arm7-microcontroller-with-can-and-adc:LPC2294
+family: NXP LPC2000
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

@@ -1,6 +1,7 @@
 name: ri5cy
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'PULP platform RI5CY 4-stage processing core (now CV32E40P). Architecture: RISC-V RV32IMFC.'
+family: PULP / CORE-V
+url: https://github.com/pulp-platform/riscv
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

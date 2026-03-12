@@ -1,6 +1,7 @@
 name: egis_et171
-description: 'Hardware target. Family: Generic, Architecture: RISCV 32'
-family: Generic
+description: 'Egistec ET171 Fingerprint Sensor Evaluation Target. Architecture: ARM Cortex-M.'
+url: https://www.egistec.com/
+family: Egistec
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 75

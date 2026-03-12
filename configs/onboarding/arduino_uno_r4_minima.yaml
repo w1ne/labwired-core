@@ -1,6 +1,7 @@
 name: arduino_uno_r4_minima
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'Arduino Uno R4 Minima based on Renesas RA4M1. Architecture: ARM Cortex-M4F. Classic Uno hardware with Cortex-M.'
+family: Arduino
+url: https://store.arduino.cc/products/uno-r4-minima
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

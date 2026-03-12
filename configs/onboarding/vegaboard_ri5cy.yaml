@@ -1,6 +1,7 @@
 name: vegaboard_ri5cy
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'NXP VEGA board implementing the RI5CY RISC-V core on an RV32M1 MCU. Architecture: RISC-V RV32IMFC.'
+url: https://www.nxp.com/design/development-boards/automotive-development-platforms/rv32m1-vega-development-board:RV32M1-VEGA
+family: NXP RV32M1
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

@@ -1,6 +1,7 @@
 name: renesas-r7fa2l1a
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'Renesas RA2L1 Group ultra-low power 48MHz microcontroller. Architecture: ARM Cortex-M23.'
+family: Renesas RA2
+url: https://www.renesas.com/products/microcontrollers-microprocessors/ra-cortex-m-mcus/ra2l1-48mhz-arm-cortex-m23-ultra-low-power-general-purpose-microcontroller
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

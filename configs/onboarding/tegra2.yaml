@@ -1,6 +1,7 @@
 name: tegra2
-description: 'Hardware target. Family: Generic, Architecture: ARM 64'
-family: Generic
+description: 'NVIDIA Tegra 2 (T20) dual-core mobile processor. Architecture: ARMv7-A (Cortex-A9).'
+family: NVIDIA Tegra
+url: https://developer.nvidia.com/tegra-2-mobile-processor
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

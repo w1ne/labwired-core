@@ -1,6 +1,7 @@
 name: arduino_101-shield
-description: 'Hardware target. Family: Generic, Architecture: Other'
-family: Generic
+description: 'Arduino 101 Base Board / Shield with Intel Curie. Architecture: x86/ARC. Real-world Arduino target retired by Intel.'
+family: Intel Curie
+url: https://docs.arduino.cc/retired/boards/arduino-101
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

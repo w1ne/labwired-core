@@ -1,6 +1,7 @@
 name: opentitan-earlgrey-cw310
-description: 'Hardware target. Family: Generic, Architecture: RISCV 32'
-family: Generic
+description: 'OpenTitan target configured for the NewAE Technology CW310 FPGA board. Architecture: RISC-V RV32IMC.'
+family: OpenTitan
+url: https://opentitan.org/book/doc/getting_started/setup_fpga/cw310.html
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

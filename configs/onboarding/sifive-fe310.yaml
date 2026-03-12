@@ -1,6 +1,7 @@
 name: sifive-fe310
-description: 'Hardware target. Family: SiFive, Architecture: RISCV 32'
+description: 'SiFive Freedom E310 open-source RISC-V SoC. Architecture: RISC-V RV32IMAC.'
 family: SiFive
+url: https://www.sifive.com/boards/hifive1-rev-b
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

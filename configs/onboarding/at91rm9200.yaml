@@ -1,6 +1,7 @@
 name: at91rm9200
-description: 'Hardware target. Family: Generic, Architecture: ARM 32'
-family: Generic
+description: 'Microchip (Atmel) AT91RM9200 ARM920T based microprocessor. Architecture: ARM9 (ARMv4T). Vintage industrial processor.'
+url: https://www.microchip.com/en-us/product/AT91RM9200
+family: Microchip AT91
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

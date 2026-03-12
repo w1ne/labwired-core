@@ -1,6 +1,7 @@
 name: stm32f103
-description: 'Hardware target. Family: STM32, Architecture: ARM 32'
-family: STM32
+description: 'STMicroelectronics STM32F103 performance line ARM Cortex-M3 (famous ''Blue Pill'' target chip). Architecture: ARMv7-M.'
+family: STM32F1
+url: https://www.st.com/en/microcontrollers-microprocessors/stm32f103.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
   \ <zephyr/drivers/gpio.h>\n\nvoid main(void) {\n    const struct gpio_dt_spec led\
   \ = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);\n    gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);\n\

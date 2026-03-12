@@ -1,6 +1,7 @@
 name: picosoc
-description: 'Hardware target. Family: Generic, Architecture: RISCV 32'
-family: Generic
+description: 'PicoSoC tiny RISC-V based System on Chip. Architecture: RISC-V RV32IMC.'
+family: PicoRV
+url: https://github.com/YosysHQ/picorv32
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 75

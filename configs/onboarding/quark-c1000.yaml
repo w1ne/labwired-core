@@ -1,6 +1,7 @@
 name: quark-c1000
-description: 'Hardware target. Family: Generic, Architecture: Other'
-family: Generic
+description: 'Intel Quark SE C1000 ultra-low power x86 microcontroller. Architecture: x86/ARC.'
+family: Intel Quark
+url: https://www.intel.com/content/www/us/en/products/details/processors/quark.html
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100

@@ -1,6 +1,7 @@
 name: nucleo_wba52cg
-description: 'Hardware target. Family: STM32, Architecture: ARM 32'
-family: STM32
+description: 'STMicroelectronics NUCLEO-WBA52CG development board for Bluetooth 5.3 applications. Architecture: ARMv8-M.'
+family: STM32 Nucleo-64
+url: https://www.st.com/en/evaluation-tools/nucleo-wba52cg.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
   \ <zephyr/drivers/gpio.h>\n\nvoid main(void) {\n    const struct gpio_dt_spec led\
   \ = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);\n    gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);\n\
