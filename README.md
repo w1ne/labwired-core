@@ -21,6 +21,8 @@ Explore the [Documentation Hub](./docs/README.md) for strategy and platform-leve
 - Root `labwired` repo owns model delivery and integration packaging for `labwired-core` consumption.
 - `labwired-core` repo owns simulator engine correctness and heavy verification workflows.
 - Root CI stays lean for fast merge feedback; heavy validation runs in `labwired-core`.
+- Hardware target validation and catalog pass-rate refresh are owned by `labwired-core` (`core-validate-hw-targets.yml`).
+- Foundry catalog consumes validation metadata from `core/configs/onboarding/*.yaml` (`validation.run_url` + `validation.artifacts_url`).
 
 ## 🤖 Agent-First Architecture
 LabWired is built primarily as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its core mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
