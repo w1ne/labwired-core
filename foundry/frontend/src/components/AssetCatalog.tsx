@@ -21,22 +21,54 @@ interface Props {
     onSelectAsset?: (id: string) => void;
 }
 
-type SortKey = 'name' | 'pass_rate' | 'registers' | 'source_type';
+type SortKey = 'name' | 'pass_rate' | 'registers' | 'architecture' | 'source_type';
+type StatusFilter = 'all' | 'verified' | 'modeled';
+
+type CatalogRow = Asset & {
+    category: string;
+    arch: string;
+};
+
+const categoryFromID = (id: string): string => {
+    const part = (id || '').split('/')[0] || 'unknown';
+    if (!part) return 'unknown';
+    return part;
+};
+
+const normalizedArchitecture = (arch: string): string => {
+    const trimmed = (arch || '').trim();
+    return trimmed === '' ? 'unknown' : trimmed;
+};
+
+const scoreLabel = (asset: Asset): string => {
+    if (!asset.verified) return 'MODELED';
+    if (asset.pass_rate >= 100) return 'VERIFIED';
+    if (asset.pass_rate >= 70) return 'PARTIAL';
+    return 'LOW';
+};
+
+const compareText = (a: string, b: string): number => a.localeCompare(b, undefined, { sensitivity: 'base' });
 
 const AssetCatalog = ({ onSelectAsset }: Props) => {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
+
     const [query, setQuery] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('all');
     const [sourceFilter, setSourceFilter] = useState('all');
-    const [verifiedOnly, setVerifiedOnly] = useState(false);
+    const [archFilter, setArchFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
     const [sortKey, setSortKey] = useState<SortKey>('name');
     const [sortAsc, setSortAsc] = useState(true);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(30);
 
     useEffect(() => {
         fetch(apiUrl('/v1/catalog'), { headers: authHeaders() })
             .then(res => res.json())
             .then(data => {
-                setAssets(data);
+                setAssets(Array.isArray(data) ? data : []);
                 setLoading(false);
             })
             .catch(err => {
@@ -45,26 +77,38 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
             });
     }, []);
 
-    const sourceTypes = useMemo(() => {
-        const unique = new Set(assets.map(a => a.source_type || 'unknown'));
-        return ['all', ...Array.from(unique).sort()];
+    const rows: CatalogRow[] = useMemo(() => {
+        return assets.map(a => ({
+            ...a,
+            category: categoryFromID(a.id),
+            arch: normalizedArchitecture(a.architecture),
+        }));
     }, [assets]);
 
-    const filteredAssets = useMemo(() => {
+    const categories = useMemo(() => ['all', ...Array.from(new Set(rows.map(r => r.category))).sort(compareText)], [rows]);
+    const sourceTypes = useMemo(() => ['all', ...Array.from(new Set(rows.map(r => r.source_type || 'unknown'))).sort(compareText)], [rows]);
+    const archValues = useMemo(() => ['all', ...Array.from(new Set(rows.map(r => r.arch))).sort(compareText)], [rows]);
+
+    const filteredRows = useMemo(() => {
         const q = query.trim().toLowerCase();
-        const rows = assets.filter(asset => {
-            if (verifiedOnly && !asset.verified) return false;
-            if (sourceFilter !== 'all' && (asset.source_type || 'unknown') !== sourceFilter) return false;
+        const filtered = rows.filter(row => {
+            if (categoryFilter !== 'all' && row.category !== categoryFilter) return false;
+            if (sourceFilter !== 'all' && (row.source_type || 'unknown') !== sourceFilter) return false;
+            if (archFilter !== 'all' && row.arch !== archFilter) return false;
+            if (statusFilter === 'verified' && !row.verified) return false;
+            if (statusFilter === 'modeled' && row.verified) return false;
+
             if (!q) return true;
             return (
-                asset.id.toLowerCase().includes(q) ||
-                asset.name.toLowerCase().includes(q) ||
-                asset.description.toLowerCase().includes(q) ||
-                (asset.architecture || '').toLowerCase().includes(q)
+                row.id.toLowerCase().includes(q) ||
+                row.name.toLowerCase().includes(q) ||
+                row.description.toLowerCase().includes(q) ||
+                row.arch.toLowerCase().includes(q) ||
+                row.category.toLowerCase().includes(q)
             );
         });
 
-        rows.sort((a, b) => {
+        filtered.sort((a, b) => {
             let cmp = 0;
             switch (sortKey) {
                 case 'pass_rate':
@@ -73,19 +117,33 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
                 case 'registers':
                     cmp = (a.registers || 0) - (b.registers || 0);
                     break;
+                case 'architecture':
+                    cmp = compareText(a.arch, b.arch);
+                    break;
                 case 'source_type':
-                    cmp = (a.source_type || '').localeCompare(b.source_type || '');
+                    cmp = compareText(a.source_type || '', b.source_type || '');
                     break;
                 case 'name':
                 default:
-                    cmp = (a.name || '').localeCompare(b.name || '');
+                    cmp = compareText(a.name || '', b.name || '');
                     break;
             }
             return sortAsc ? cmp : -cmp;
         });
 
-        return rows;
-    }, [assets, query, sourceFilter, verifiedOnly, sortKey, sortAsc]);
+        return filtered;
+    }, [rows, query, categoryFilter, sourceFilter, archFilter, statusFilter, sortKey, sortAsc]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const pagedRows = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filteredRows.slice(start, start + pageSize);
+    }, [filteredRows, currentPage, pageSize]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [query, categoryFilter, sourceFilter, archFilter, statusFilter, sortKey, sortAsc, pageSize]);
 
     const setSort = (key: SortKey) => {
         if (sortKey === key) {
@@ -96,86 +154,108 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
         }
     };
 
+    const verifiedCount = rows.filter(r => r.verified).length;
+
     if (loading) {
         return <div style={{ padding: '2rem', color: 'var(--lw-pink)', fontWeight: 800, fontFamily: 'Outfit' }}>SCANNING LABWIRED CATALOG...</div>;
     }
 
     return (
-        <div style={{ padding: '2rem', flex: 1, backgroundColor: '#f9f9f9' }}>
-            <header style={{ marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '2.5rem', color: 'var(--lw-black)', marginBottom: '0.5rem' }}>VERIFIED ASSETS</h1>
-                <p style={{ color: 'var(--lw-gray)', marginTop: 0, maxWidth: '780px', fontSize: '1rem' }}>
-                    Unified board catalog with searchable metadata and direct links to source, vendor pages, and latest validation evidence.
-                </p>
+        <div className="catalog-page">
+            <header className="catalog-header">
+                <h1>ASSET CATALOG</h1>
+                <p>Search, filter, and sort across boards/chips/peripherals with source, official docs, and validation evidence links.</p>
             </header>
 
-            <div className="bento-card" style={{ marginBottom: '1.5rem', display: 'grid', gap: '0.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+            <section className="catalog-metrics">
+                <div className="catalog-metric"><span>Total</span><strong>{rows.length}</strong></div>
+                <div className="catalog-metric"><span>Verified</span><strong>{verifiedCount}</strong></div>
+                <div className="catalog-metric"><span>Sources</span><strong>{sourceTypes.length - 1}</strong></div>
+                <div className="catalog-metric"><span>Architectures</span><strong>{archValues.length - 1}</strong></div>
+            </section>
+
+            <section className="catalog-controls bento-card">
                 <input
                     type="text"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    placeholder="Search by id, name, architecture..."
-                    style={{ padding: '0.7rem 0.8rem', borderRadius: '8px', border: '1px solid #ddd' }}
+                    placeholder="Search id, name, category, architecture..."
                 />
-                <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} style={{ padding: '0.7rem 0.8rem', borderRadius: '8px', border: '1px solid #ddd' }}>
-                    {sourceTypes.map(source => (
-                        <option key={source} value={source}>{source === 'all' ? 'All sources' : source}</option>
-                    ))}
+                <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+                    {categories.map(value => <option key={value} value={value}>{value === 'all' ? 'All categories' : value}</option>)}
                 </select>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--lw-gray)', fontWeight: 600 }}>
-                    <input type="checkbox" checked={verifiedOnly} onChange={e => setVerifiedOnly(e.target.checked)} />
-                    Verified only
-                </label>
-                <div style={{ color: 'var(--lw-gray)', fontWeight: 600, alignSelf: 'center' }}>
-                    Showing {filteredAssets.length} of {assets.length}
-                </div>
-            </div>
+                <select value={archFilter} onChange={e => setArchFilter(e.target.value)}>
+                    {archValues.map(value => <option key={value} value={value}>{value === 'all' ? 'All architectures' : value}</option>)}
+                </select>
+                <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+                    {sourceTypes.map(value => <option key={value} value={value}>{value === 'all' ? 'All sources' : value}</option>)}
+                </select>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}>
+                    <option value="all">All quality states</option>
+                    <option value="verified">Verified only</option>
+                    <option value="modeled">Modeled only</option>
+                </select>
+                <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
+                    <option value={20}>20 rows/page</option>
+                    <option value={30}>30 rows/page</option>
+                    <option value={50}>50 rows/page</option>
+                    <option value={100}>100 rows/page</option>
+                </select>
+            </section>
 
-            {assets.length === 0 && <p style={{ color: 'var(--lw-gray)', fontStyle: 'italic' }}>No assets found. The backend may not be running.</p>}
-
-            <div className="bento-card" style={{ padding: 0, overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '980px' }}>
-                    <thead>
-                        <tr style={{ backgroundColor: '#f3f4fb', borderBottom: '1px solid #ddd' }}>
-                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>ID</th>
-                            <th style={{ textAlign: 'left', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('name')}>Name</th>
-                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>Arch</th>
-                            <th style={{ textAlign: 'right', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('pass_rate')}>Pass %</th>
-                            <th style={{ textAlign: 'right', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('registers')}>Registers</th>
-                            <th style={{ textAlign: 'left', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('source_type')}>Source</th>
-                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>Links</th>
-                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredAssets.map(asset => (
-                            <tr key={asset.id} style={{ borderBottom: '1px solid #eee' }}>
-                                <td style={{ padding: '0.75rem', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{asset.id}</td>
-                                <td style={{ padding: '0.75rem' }}>
-                                    <div style={{ fontWeight: 700 }}>{asset.name}</div>
-                                    <div style={{ color: 'var(--lw-gray)', fontSize: '0.82rem' }}>{asset.description}</div>
-                                </td>
-                                <td style={{ padding: '0.75rem', color: 'var(--lw-gray)' }}>{asset.architecture || '—'}</td>
-                                <td style={{ padding: '0.75rem', textAlign: 'right', color: asset.verified ? 'var(--lw-pink)' : 'var(--lw-gray)', fontWeight: 700 }}>
-                                    {asset.verified ? `${asset.pass_rate}%` : 'N/A'}
-                                </td>
-                                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700 }}>{asset.registers || 0}</td>
-                                <td style={{ padding: '0.75rem', color: 'var(--lw-gray)' }}>{asset.source_type || 'unknown'}</td>
-                                <td style={{ padding: '0.75rem' }}>
-                                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.82rem' }}>
-                                        {asset.source_url && <a href={asset.source_url} target="_blank" rel="noreferrer">Source</a>}
-                                        {asset.official_url && <a href={asset.official_url} target="_blank" rel="noreferrer">Official</a>}
-                                        {asset.validation_url && <a href={asset.validation_url} target="_blank" rel="noreferrer">Validation</a>}
-                                    </div>
-                                </td>
-                                <td style={{ padding: '0.75rem' }}>
-                                    <button className="secondary" onClick={() => onSelectAsset?.(asset.id)}>Details</button>
-                                </td>
+            <section className="catalog-table-wrap bento-card">
+                {rows.length === 0 ? (
+                    <p style={{ color: 'var(--lw-gray)', fontStyle: 'italic' }}>No assets found. The backend may not be running.</p>
+                ) : (
+                    <table className="catalog-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th onClick={() => setSort('name')}>Name</th>
+                                <th>Category</th>
+                                <th onClick={() => setSort('architecture')}>Architecture</th>
+                                <th onClick={() => setSort('pass_rate')}>Quality</th>
+                                <th onClick={() => setSort('registers')}>Registers</th>
+                                <th onClick={() => setSort('source_type')}>Source</th>
+                                <th>Links</th>
+                                <th>Action</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            {pagedRows.map(asset => (
+                                <tr key={asset.id}>
+                                    <td className="mono">{asset.id}</td>
+                                    <td>
+                                        <div className="catalog-name">{asset.name}</div>
+                                        <div className="catalog-desc">{asset.description}</div>
+                                    </td>
+                                    <td>{asset.category}</td>
+                                    <td>{asset.arch}</td>
+                                    <td>
+                                        <span className={`catalog-score ${asset.verified ? 'ok' : 'warn'}`}>{scoreLabel(asset)} {asset.verified ? `${asset.pass_rate}%` : ''}</span>
+                                    </td>
+                                    <td>{asset.registers || 0}</td>
+                                    <td>{asset.source_type || 'unknown'}</td>
+                                    <td>
+                                        <div className="catalog-links">
+                                            {asset.source_url && <a href={asset.source_url} target="_blank" rel="noreferrer">Source</a>}
+                                            {asset.official_url && <a href={asset.official_url} target="_blank" rel="noreferrer">Official</a>}
+                                            {asset.validation_url && <a href={asset.validation_url} target="_blank" rel="noreferrer">Validation</a>}
+                                        </div>
+                                    </td>
+                                    <td><button className="secondary" onClick={() => onSelectAsset?.(asset.id)}>Details</button></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </section>
+
+            <section className="catalog-pagination">
+                <button className="secondary" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Prev</button>
+                <span>Page {currentPage} / {totalPages} • Showing {pagedRows.length} of {filteredRows.length}</span>
+                <button className="secondary" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>Next</button>
+            </section>
         </div>
     );
 };

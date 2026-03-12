@@ -76,7 +76,7 @@ function App() {
             <button onClick={() => navigate('/dashboard')} className="secondary" style={{ padding: '0.5rem 1rem' }}>Dashboard →</button>
           </div>
         </nav>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+        <div style={{ width: '100%' }}>
           <AssetCatalog onSelectAsset={(id) => navigate(`/assets/${id}`)} />
         </div>
       </div>
