@@ -1,0 +1,4 @@
+# LabWired - nRF52832 Example System Configuration
+name: "nrf52832-example"
+chip: "../../configs/chips/nrf52832.yaml"
+external_devices: []
