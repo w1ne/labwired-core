@@ -19,6 +19,15 @@ jobs:
     env:
       CHECKOUT_PATH: run-${{ github.run_id }}-test
     steps:
+      - name: Preflight cleanup
+        run: |
+          set -euo pipefail
+          df -h
+          find "$(dirname "$GITHUB_WORKSPACE")" -maxdepth 1 -type d -name 'run-*' -exec rm -rf {} + || true
+          find /home/w1ne/actions-runner-labwired/_diag -type f -mtime +2 -delete || true
+          docker system prune -af --volumes || true
+          df -h
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -62,6 +71,15 @@ jobs:
       owner_lower: ${{ steps.meta.outputs.owner_lower }}
       image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
+      - name: Preflight cleanup
+        run: |
+          set -euo pipefail
+          df -h
+          find "$(dirname "$GITHUB_WORKSPACE")" -maxdepth 1 -type d -name 'run-*' -exec rm -rf {} + || true
+          find /home/w1ne/actions-runner-labwired/_diag -type f -mtime +2 -delete || true
+          docker system prune -af --volumes || true
+          df -h
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
