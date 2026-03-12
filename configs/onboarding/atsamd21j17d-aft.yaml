@@ -7,3 +7,13 @@ pass_rate: 100
 verified: true
 system: systems/onboarding/atsamd21j17d-aft.yaml
 sample_trace: traces/atmel_sam.txt
+validation:
+  method: ci-arm-fixture-simulation
+  reason: simulation-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    simulation: true
+  timestamp_utc: '2026-03-12T19:37:30.203603+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
+  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
