@@ -115,13 +115,28 @@ jobs:
 
       - name: Deploy to Local Host
         env:
+          LABWIRED_ROOT: /home/w1ne/labwired
           DEPLOY_PATH: /home/w1ne/labwired/foundry/deploy
           OWNER_LOWER: ${{ needs.build-and-push.outputs.owner_lower }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
           set -euo pipefail
           
-          # Sync deployment files from repository to deploy path
+          echo "Updating host binaries and configs..."
+          
+          # 1. Build and install latest labwired binary
+          cd core
+          cargo build --release -p labwired-cli
+          mkdir -p "$LABWIRED_ROOT/bin"
+          cp target/release/labwired-cli "$LABWIRED_ROOT/bin/labwired"
+          chmod +x "$LABWIRED_ROOT/bin/labwired"
+          cd ..
+          
+          # 2. Sync latest hardware configurations
+          mkdir -p "$LABWIRED_ROOT/core"
+          cp -r core/configs "$LABWIRED_ROOT/core/"
+          
+          # 3. Sync deployment files
           cp foundry/deploy/docker-compose.prod.yml "$DEPLOY_PATH/"
           cp foundry/deploy/Caddyfile "$DEPLOY_PATH/"
           
@@ -133,10 +148,6 @@ jobs:
           fi
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-          # Since it's a self-hosted runner on the same host, we assume docker access.
-          # We don't need to login if the images are public or already accessible, 
-          # but we keep the logic for image tagging.
 
           grep -q '^BACKEND_IMAGE=' .env || echo "BACKEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-backend" >> .env
           grep -q '^FRONTEND_IMAGE=' .env || echo "FRONTEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-frontend" >> .env
