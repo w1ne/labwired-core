@@ -74,6 +74,9 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 	if boardAsset.SourceRef != "boards/dup.yaml" {
 		t.Fatalf("unexpected source_ref: %q", boardAsset.SourceRef)
 	}
+	if boardAsset.SourceURL == "" {
+		t.Fatalf("expected source_url to be populated")
+	}
 
 	periphAsset, ok := seen["peripheral/demoperiph"]
 	if !ok {
@@ -164,5 +167,8 @@ func TestSyncFromHardwareIndex_ImportsExternalBoardsIntoCatalog(t *testing.T) {
 	}
 	if b.SourceRef != "platforms/boards/ext-b.repl" {
 		t.Fatalf("unexpected source_ref: %q", b.SourceRef)
+	}
+	if b.SourceURL != "https://github.com/renode/renode/blob/master/platforms/boards/ext-b.repl" {
+		t.Fatalf("unexpected source_url: %q", b.SourceURL)
 	}
 }

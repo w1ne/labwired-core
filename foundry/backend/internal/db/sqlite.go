@@ -63,6 +63,8 @@ type CatalogAsset struct {
 	Verified     bool   `json:"verified"`
 	SourceType   string `json:"source_type"`
 	SourceRef    string `json:"source_ref"`
+	SourceURL    string `json:"source_url"`
+	OfficialURL  string `json:"official_url"`
 }
 
 type Store struct {
@@ -163,11 +165,15 @@ func (s *Store) migrate() error {
 			ir_url TEXT DEFAULT '',
 			verified INTEGER NOT NULL DEFAULT 0,
 			source_type TEXT NOT NULL DEFAULT 'unknown',
-			source_ref TEXT NOT NULL DEFAULT ''
+			source_ref TEXT NOT NULL DEFAULT '',
+			source_url TEXT NOT NULL DEFAULT '',
+			official_url TEXT NOT NULL DEFAULT ''
 		);`,
 		`ALTER TABLE catalog_assets ADD COLUMN verified INTEGER NOT NULL DEFAULT 0;`,
 		`ALTER TABLE catalog_assets ADD COLUMN source_type TEXT NOT NULL DEFAULT 'unknown';`,
 		`ALTER TABLE catalog_assets ADD COLUMN source_ref TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE catalog_assets ADD COLUMN source_url TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE catalog_assets ADD COLUMN official_url TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE catalog_assets ADD COLUMN architecture TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE catalog_assets ADD COLUMN family TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE catalog_assets ADD COLUMN code_example TEXT NOT NULL DEFAULT '';`,
@@ -960,8 +966,8 @@ func (s *Store) UpsertCatalogAsset(asset CatalogAsset) error {
 		verified = 1
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO catalog_assets (id, name, description, family, architecture, code_example, pass_rate, registers, ir_url, verified, source_type, source_ref)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO catalog_assets (id, name, description, family, architecture, code_example, pass_rate, registers, ir_url, verified, source_type, source_ref, source_url, official_url)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   name = excluded.name,
 		   description = excluded.description,
@@ -973,15 +979,17 @@ func (s *Store) UpsertCatalogAsset(asset CatalogAsset) error {
 		   ir_url = excluded.ir_url,
 		   verified = excluded.verified,
 		   source_type = excluded.source_type,
-		   source_ref = excluded.source_ref`,
-		asset.ID, asset.Name, asset.Description, asset.Family, asset.Architecture, asset.CodeExample, asset.PassRate, asset.Registers, asset.IrURL, verified, asset.SourceType, asset.SourceRef,
+		   source_ref = excluded.source_ref,
+		   source_url = excluded.source_url,
+		   official_url = excluded.official_url`,
+		asset.ID, asset.Name, asset.Description, asset.Family, asset.Architecture, asset.CodeExample, asset.PassRate, asset.Registers, asset.IrURL, verified, asset.SourceType, asset.SourceRef, asset.SourceURL, asset.OfficialURL,
 	)
 	return err
 }
 
 // ListCatalogAssets returns all assets in the catalog.
 func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
-	rows, err := s.db.Query(`SELECT id, name, description, family, architecture, code_example, pass_rate, registers, ir_url, verified, source_type, source_ref FROM catalog_assets ORDER BY id ASC`)
+	rows, err := s.db.Query(`SELECT id, name, description, family, architecture, code_example, pass_rate, registers, ir_url, verified, source_type, source_ref, source_url, official_url FROM catalog_assets ORDER BY id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -990,7 +998,7 @@ func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
 	for rows.Next() {
 		var a CatalogAsset
 		var verified int
-		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.Family, &a.Architecture, &a.CodeExample, &a.PassRate, &a.Registers, &a.IrURL, &verified, &a.SourceType, &a.SourceRef); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.Family, &a.Architecture, &a.CodeExample, &a.PassRate, &a.Registers, &a.IrURL, &verified, &a.SourceType, &a.SourceRef, &a.SourceURL, &a.OfficialURL); err != nil {
 			return nil, err
 		}
 		a.Verified = verified == 1
@@ -1072,9 +1080,9 @@ func (s *Store) GetCatalogAsset(id string) (CatalogAsset, bool, error) {
 	var a CatalogAsset
 	var verified int
 	err := s.db.QueryRow(
-		`SELECT id, name, description, family, architecture, code_example, pass_rate, registers, ir_url, verified, source_type, source_ref FROM catalog_assets WHERE id = ?`,
+		`SELECT id, name, description, family, architecture, code_example, pass_rate, registers, ir_url, verified, source_type, source_ref, source_url, official_url FROM catalog_assets WHERE id = ?`,
 		id,
-	).Scan(&a.ID, &a.Name, &a.Description, &a.Family, &a.Architecture, &a.CodeExample, &a.PassRate, &a.Registers, &a.IrURL, &verified, &a.SourceType, &a.SourceRef)
+	).Scan(&a.ID, &a.Name, &a.Description, &a.Family, &a.Architecture, &a.CodeExample, &a.PassRate, &a.Registers, &a.IrURL, &verified, &a.SourceType, &a.SourceRef, &a.SourceURL, &a.OfficialURL)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return a, false, nil

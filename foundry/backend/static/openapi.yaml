@@ -50,6 +50,10 @@ components:
           type: string
         source_ref:
           type: string
+        source_url:
+          type: string
+        official_url:
+          type: string
 
     VerificationRequest:
       type: object

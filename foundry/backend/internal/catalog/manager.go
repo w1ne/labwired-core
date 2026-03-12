@@ -16,6 +16,14 @@ type Manager struct {
 	store *db.Store
 }
 
+var knownOfficialBoardURLs = map[string]string{
+	"board/arduino-nano-33-ble": "https://docs.arduino.cc/hardware/nano-33-ble/",
+	"board/arduino-uno-r4-minima": "https://docs.arduino.cc/hardware/uno-r4-minima/",
+	"board/nucleo-f401re":       "https://www.st.com/en/evaluation-tools/nucleo-f401re.html",
+	"board/nucleo-h563zi-demo":  "https://www.st.com/en/evaluation-tools/nucleo-h563zi.html",
+	"chip/rp2040":               "https://www.raspberrypi.com/documentation/microcontrollers/rp2040.html",
+}
+
 func NewManager(store *db.Store) *Manager {
 	return &Manager{
 		store: store,
@@ -106,6 +114,38 @@ func catalogIDFromHardwareItem(item db.HardwareItem) string {
 	return prefix + "/" + slugifyCatalogPart(name)
 }
 
+func sourceURLForCoreConfig(relPath string) string {
+	relPath = filepath.ToSlash(strings.TrimSpace(relPath))
+	if relPath == "" {
+		return ""
+	}
+	return "https://github.com/w1ne/labwired-core/blob/main/configs/" + relPath
+}
+
+func sourceURLForHardwareItem(item db.HardwareItem) string {
+	ref := filepath.ToSlash(strings.TrimSpace(item.ReplPath))
+	if ref == "" {
+		return ""
+	}
+	if strings.HasPrefix(ref, "platforms/") {
+		return "https://github.com/renode/renode/blob/master/" + ref
+	}
+	if strings.HasPrefix(ref, "core/configs/") {
+		return "https://github.com/w1ne/labwired-core/blob/main/configs/" + strings.TrimPrefix(ref, "core/configs/")
+	}
+	if strings.HasPrefix(ref, "onboarding/") || strings.HasPrefix(ref, "chips/") || strings.HasPrefix(ref, "systems/") || strings.HasPrefix(ref, "peripherals/") {
+		return "https://github.com/w1ne/labwired-core/blob/main/configs/" + ref
+	}
+	return ""
+}
+
+func officialURLForAssetID(assetID string) string {
+	if v, ok := knownOfficialBoardURLs[assetID]; ok {
+		return v
+	}
+	return ""
+}
+
 // SyncFromDisk scans the provided directory for YAML models and upserts them to the DB.
 func (m *Manager) SyncFromDisk(configsDir string) error {
 	log.Printf("[catalog] syncing models from disk: %s", configsDir)
@@ -188,15 +228,17 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			Verified:     verified,
 			SourceType:   "core-config",
 			SourceRef:    relPath,
+			SourceURL:    sourceURLForCoreConfig(relPath),
+			OfficialURL:  officialURLForAssetID(id),
 		}
 
 		if model.Description == "" {
 			if strings.Contains(path, "/chips/") {
-				asset.Description = fmt.Sprintf("Hardware model for %s chip.", name)
+			asset.Description = fmt.Sprintf("Hardware model for %s chip.", name)
 			} else if strings.Contains(path, "/peripherals/") {
 				asset.Description = fmt.Sprintf("Peripheral model for %s.", name)
 			} else {
-				asset.Description = fmt.Sprintf("LabWired hardware model: %s", name)
+				asset.Description = fmt.Sprintf("Simulation profile for %s.", name)
 			}
 		}
 
@@ -294,7 +336,7 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 		asset := db.CatalogAsset{
 			ID:           catalogIDFromHardwareItem(item),
 			Name:         name,
-			Description:  fmt.Sprintf("Catalog board profile: %s", name),
+			Description:  fmt.Sprintf("Simulation profile for %s.", name),
 			Family:       "",
 			Architecture: "",
 			CodeExample:  "",
@@ -304,6 +346,7 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 			Verified:     verified,
 			SourceType:   "platform-catalog",
 			SourceRef:    strings.TrimSpace(item.ReplPath),
+			SourceURL:    sourceURLForHardwareItem(item),
 		}
 		if asset.ID == "" {
 			continue
@@ -311,6 +354,7 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 		if asset.SourceRef == "" {
 			asset.SourceRef = asset.ID
 		}
+		asset.OfficialURL = officialURLForAssetID(asset.ID)
 
 		if err := m.store.UpsertCatalogAsset(asset); err != nil {
 			log.Printf("[catalog] failed to upsert indexed asset %s: %v", asset.ID, err)
