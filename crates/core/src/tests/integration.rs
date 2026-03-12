@@ -380,7 +380,7 @@ pub mod integration_tests {
     }
 
     #[test]
-    fn test_from_config_skips_unsupported_peripherals() {
+    fn test_from_config_maps_unknown_peripherals_to_stub() {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip".to_string(),
@@ -424,9 +424,11 @@ pub mod integration_tests {
         };
 
         let bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
-        assert_eq!(bus.peripherals.len(), 1);
+        assert_eq!(bus.peripherals.len(), 2);
         assert_eq!(bus.peripherals[0].name, "uart1");
         assert_eq!(bus.peripherals[0].base, 0x4000_C000);
+        assert_eq!(bus.peripherals[1].name, "mystery");
+        assert_eq!(bus.peripherals[1].base, 0x5000_0000);
     }
 
     #[test]
