@@ -1,0 +1,4 @@
+# LabWired - nRF52840 Example System Configuration
+name: "nrf52840-example"
+chip: "../../configs/chips/nrf52840.yaml"
+external_devices: []

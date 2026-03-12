@@ -19,6 +19,7 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
     println!("Scanning for chips in: {:?}", chips_dir);
 
     let mut failed_boards = Vec::new();
+    let mut unexpected_skips = Vec::new();
 
     for entry in fs::read_dir(&chips_dir)? {
         let entry = entry?;
@@ -91,9 +92,20 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                     println!("  [PASS] {} is strictly onboarded.", file_stem);
                 }
             } else {
-                println!("  [WARN] No example directory found matching chip '{}'. Skipping strict check.", file_stem);
+                println!(
+                    "  [FAIL] No example directory found matching chip '{}'.",
+                    file_stem
+                );
+                unexpected_skips.push(file_stem.to_string());
             }
         }
+    }
+
+    if !unexpected_skips.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Strict Board Onboarding has unexpected example gaps: {:?}",
+            unexpected_skips
+        ));
     }
 
     if !failed_boards.is_empty() {
