@@ -36,8 +36,9 @@ def validate_model(config_path):
     with open(config_path, 'r') as f:
         model = yaml.safe_load(f)
 
-    arch = model.get("description", "")
-    is_arm32 = "ARM 32" in arch
+    arch = model.get("description", "").upper()
+    is_arm = "ARM" in arch
+    is_arm32 = is_arm and not ("64" in arch or "AARCH64" in arch)
 
     # New onboarding structure:
     # Catalog: core/configs/onboarding/<board>.yaml
@@ -68,11 +69,11 @@ def validate_model(config_path):
         # For non-ARM32, do structural validation: check chip has a memory map
         flash = chip.get("flash", {})
         ram = chip.get("ram", {})
-        has_flash = (flash.get("base", 0) or 0) > 0
-        has_ram = (ram.get("base", 0) or 0) > 0
-        checks = [system_exists, chip_exists, has_flash, has_ram]
-        passed = sum(1 for c in checks if c)
-        score = int(round(100 * passed / len(checks)))
+        has_flash = "base" in flash and flash["base"] is not None
+        has_ram = "base" in ram and ram["base"] is not None
+        checks_list = [system_exists, chip_exists, has_flash, has_ram]
+        passed = sum(1 for c in checks_list if c)
+        score = int(round(100 * passed / len(checks_list)))
         check_map = {
             "system_manifest": system_exists,
             "chip_descriptor": chip_exists,
