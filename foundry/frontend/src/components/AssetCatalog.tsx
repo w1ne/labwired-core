@@ -12,6 +12,8 @@ interface Asset {
     verified: boolean;
     source_type: string;
     source_ref: string;
+    source_url?: string;
+    official_url?: string;
 }
 
 interface Props {
@@ -74,8 +76,16 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.7rem', color: 'var(--lw-blue)', opacity: 0.8, fontSize: '1.1rem' }}>
                                     <i className="fa-solid fa-play" style={{ cursor: 'pointer' }} title="Run in Sandbox" onClick={() => onSelectAsset?.(asset.id)}></i>
-                                    <i className="fa-solid fa-file-lines" style={{ cursor: 'pointer' }} title="View Logs"></i>
-                                    <i className="fa-brands fa-github" style={{ cursor: 'pointer' }} title="View Source"></i>
+                                    {asset.source_url && (
+                                        <a href={asset.source_url} target="_blank" rel="noreferrer" title="View source">
+                                            <i className="fa-brands fa-github" style={{ cursor: 'pointer', color: 'var(--lw-blue)' }}></i>
+                                        </a>
+                                    )}
+                                    {asset.official_url && (
+                                        <a href={asset.official_url} target="_blank" rel="noreferrer" title="Official board page">
+                                            <i className="fa-solid fa-up-right-from-square" style={{ cursor: 'pointer', color: 'var(--lw-blue)' }}></i>
+                                        </a>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -97,9 +107,19 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
                             </div>
                         </div>
 
-                        <p style={{ margin: '0 0 1rem', color: 'var(--lw-gray)', fontSize: '0.75rem' }}>
-                            Source: {asset.source_type || 'unknown'} {asset.source_ref ? `(${asset.source_ref})` : ''}
-                        </p>
+                        <div style={{ margin: '0 0 1rem', color: 'var(--lw-gray)', fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <span>Source: {asset.source_type || 'unknown'} {asset.source_ref ? `(${asset.source_ref})` : ''}</span>
+                            {asset.source_url && (
+                                <a href={asset.source_url} target="_blank" rel="noreferrer" style={{ color: 'var(--lw-blue)' }}>
+                                    Source link
+                                </a>
+                            )}
+                            {asset.official_url && (
+                                <a href={asset.official_url} target="_blank" rel="noreferrer" style={{ color: 'var(--lw-blue)' }}>
+                                    Official board page
+                                </a>
+                            )}
+                        </div>
 
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <button style={{ flex: 1 }} onClick={() => onSelectAsset?.(asset.id)}>DETAILS</button>

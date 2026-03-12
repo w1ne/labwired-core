@@ -103,9 +103,21 @@ const AssetDetail = ({ id, onBack }: Props) => {
 
             {/* Downloads */}
             <h2 style={{ fontFamily: 'Outfit', fontSize: '1.5rem', marginBottom: '1rem' }}>Artifacts</h2>
-            <p style={{ color: 'var(--lw-gray)', marginTop: '-0.25rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                Source: {asset.source_type || 'unknown'} {asset.source_ref ? `(${asset.source_ref})` : ''}
-            </p>
+            <div style={{ color: 'var(--lw-gray)', marginTop: '-0.25rem', marginBottom: '1rem', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <span>Source: {asset.source_type || 'unknown'} {asset.source_ref ? `(${asset.source_ref})` : ''}</span>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    {asset.source_url && (
+                        <a href={asset.source_url} target="_blank" rel="noreferrer" style={{ color: 'var(--lw-blue)' }}>
+                            Source link
+                        </a>
+                    )}
+                    {asset.official_url && (
+                        <a href={asset.official_url} target="_blank" rel="noreferrer" style={{ color: 'var(--lw-blue)' }}>
+                            Official board page
+                        </a>
+                    )}
+                </div>
+            </div>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                 {asset.ir_url && (
                     <a href={asset.ir_url} download>
