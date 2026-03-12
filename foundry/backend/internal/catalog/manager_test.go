@@ -23,19 +23,19 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 	mgr := NewManager(store)
 	root := t.TempDir()
 
-	chipDir := filepath.Join(root, "chips")
+	boardDir := filepath.Join(root, "boards")
 	periphDir := filepath.Join(root, "peripherals")
-	if err := os.MkdirAll(chipDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll chip dir failed: %v", err)
+	if err := os.MkdirAll(boardDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll board dir failed: %v", err)
 	}
 	if err := os.MkdirAll(periphDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll periph dir failed: %v", err)
 	}
 
-	chipYAML := []byte("name: DemoChip\nregisters_count: 42\nregisters:\n  - { name: A }\n  - { name: B }\n")
+	boardYAML := []byte("name: DemoBoard\nregisters_count: 42\npass_rate: 100\nverified: true\nregisters:\n  - { name: A }\n  - { name: B }\n")
 	periphYAML := []byte("name: DemoPeriph\nregisters:\n  - { name: C }\n")
-	if err := os.WriteFile(filepath.Join(chipDir, "dup.yaml"), chipYAML, 0o644); err != nil {
-		t.Fatalf("write chip yaml failed: %v", err)
+	if err := os.WriteFile(filepath.Join(boardDir, "dup.yaml"), boardYAML, 0o644); err != nil {
+		t.Fatalf("write board yaml failed: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(periphDir, "dup.yaml"), periphYAML, 0o644); err != nil {
 		t.Fatalf("write periph yaml failed: %v", err)
@@ -55,24 +55,24 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 		seen[a.ID] = a
 	}
 
-	chipAsset, ok := seen["chips/dup"]
+	boardAsset, ok := seen["boards/dup"]
 	if !ok {
-		t.Fatalf("expected chips/dup asset")
+		t.Fatalf("expected boards/dup asset")
 	}
-	if chipAsset.Registers != 42 {
-		t.Fatalf("expected chip registers=42 (override), got %d", chipAsset.Registers)
+	if boardAsset.Registers != 42 {
+		t.Fatalf("expected board registers=42 (override), got %d", boardAsset.Registers)
 	}
-	if !chipAsset.Verified {
+	if !boardAsset.Verified {
 		t.Fatalf("expected disk-synced asset to be verified")
 	}
-	if chipAsset.PassRate != 100 {
-		t.Fatalf("expected pass rate 100, got %d", chipAsset.PassRate)
+	if boardAsset.PassRate != 100 {
+		t.Fatalf("expected pass rate 100, got %d", boardAsset.PassRate)
 	}
-	if chipAsset.SourceType != "core-config" {
-		t.Fatalf("expected source_type core-config, got %q", chipAsset.SourceType)
+	if boardAsset.SourceType != "core-config" {
+		t.Fatalf("expected source_type core-config, got %q", boardAsset.SourceType)
 	}
-	if chipAsset.SourceRef != "chips/dup.yaml" {
-		t.Fatalf("unexpected source_ref: %q", chipAsset.SourceRef)
+	if boardAsset.SourceRef != "boards/dup.yaml" {
+		t.Fatalf("unexpected source_ref: %q", boardAsset.SourceRef)
 	}
 
 	periphAsset, ok := seen["peripherals/dup"]
