@@ -1,5 +1,12 @@
 [
   {
+    "id": "board-a20",
+    "name": "a20",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/a20.yaml",
+    "tier": 1
+  },
+  {
     "id": "board-ambiq-apollo4",
     "name": "ambiq-apollo4",
     "type": "board",
@@ -102,6 +109,13 @@
     "name": "cc2538",
     "type": "board",
     "repl_path": "core/configs/onboarding/cc2538.yaml",
+    "tier": 1
+  },
+  {
+    "id": "board-colibri-vf61",
+    "name": "colibri-vf61",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/colibri-vf61.yaml",
     "tier": 1
   },
   {
@@ -266,6 +280,13 @@
     "tier": 1
   },
   {
+    "id": "board-egis_et171",
+    "name": "egis_et171",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/egis_et171.yaml",
+    "tier": 1
+  },
+  {
     "id": "board-eos-s3",
     "name": "eos-s3",
     "type": "board",
@@ -308,17 +329,10 @@
     "tier": 1
   },
   {
-    "id": "board-focaltech_ft9001",
-    "name": "focaltech_ft9001",
+    "id": "board-fsl_lx2160ardb",
+    "name": "fsl_lx2160ardb",
     "type": "board",
-    "repl_path": "core/configs/onboarding/focaltech_ft9001.yaml",
-    "tier": 1
-  },
-  {
-    "id": "board-imxrt1064",
-    "name": "imxrt1064",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/imxrt1064.yaml",
+    "repl_path": "core/configs/onboarding/fsl_lx2160ardb.yaml",
     "tier": 1
   },
   {
@@ -336,6 +350,13 @@
     "tier": 1
   },
   {
+    "id": "board-mars_zx3",
+    "name": "mars_zx3",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/mars_zx3.yaml",
+    "tier": 1
+  },
+  {
     "id": "board-max32652",
     "name": "max32652",
     "type": "board",
@@ -347,13 +368,6 @@
     "name": "max32652-evkit",
     "type": "board",
     "repl_path": "core/configs/onboarding/max32652-evkit.yaml",
-    "tier": 1
-  },
-  {
-    "id": "board-mimxrt1064_evk",
-    "name": "mimxrt1064_evk",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/mimxrt1064_evk.yaml",
     "tier": 1
   },
   {
@@ -501,6 +515,13 @@
     "name": "renesas-rz_t2m_rsk",
     "type": "board",
     "repl_path": "core/configs/onboarding/renesas-rz_t2m_rsk.yaml",
+    "tier": 1
+  },
+  {
+    "id": "board-renesas_rz_g2l",
+    "name": "renesas_rz_g2l",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/renesas_rz_g2l.yaml",
     "tier": 1
   },
   {
@@ -721,10 +742,17 @@
     "tier": 1
   },
   {
-    "id": "board-up_squared_x86_64",
-    "name": "up_squared_x86_64",
+    "id": "board-tegra2",
+    "name": "tegra2",
     "type": "board",
-    "repl_path": "core/configs/onboarding/up_squared_x86_64.yaml",
+    "repl_path": "core/configs/onboarding/tegra2.yaml",
+    "tier": 1
+  },
+  {
+    "id": "board-tegra3",
+    "name": "tegra3",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/tegra3.yaml",
     "tier": 1
   },
   {
@@ -735,17 +763,17 @@
     "tier": 1
   },
   {
-    "id": "board-vegaboard_ri5cy",
-    "name": "vegaboard_ri5cy",
+    "id": "board-vybrid",
+    "name": "vybrid",
     "type": "board",
-    "repl_path": "core/configs/onboarding/vegaboard_ri5cy.yaml",
+    "repl_path": "core/configs/onboarding/vybrid.yaml",
     "tier": 1
   },
   {
-    "id": "board-xtensa-sample-controller",
-    "name": "xtensa-sample-controller",
+    "id": "board-zedboard",
+    "name": "zedboard",
     "type": "board",
-    "repl_path": "core/configs/onboarding/xtensa-sample-controller.yaml",
+    "repl_path": "core/configs/onboarding/zedboard.yaml",
     "tier": 1
   },
   {
@@ -756,17 +784,38 @@
     "tier": 1
   },
   {
+    "id": "board-zynq-7000",
+    "name": "zynq-7000",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/zynq-7000.yaml",
+    "tier": 1
+  },
+  {
+    "id": "board-zynqmp",
+    "name": "zynqmp",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/zynqmp.yaml",
+    "tier": 1
+  },
+  {
+    "id": "board-zynqmp-zcu102-revA",
+    "name": "zynqmp-zcu102-revA",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/zynqmp-zcu102-revA.yaml",
+    "tier": 1
+  },
+  {
+    "id": "board-zynqmp-zcu104",
+    "name": "zynqmp-zcu104",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/zynqmp-zcu104.yaml",
+    "tier": 1
+  },
+  {
     "id": "board-A2_CV32E40P",
     "name": "A2_CV32E40P",
     "type": "board",
     "repl_path": "core/configs/onboarding/A2_CV32E40P.yaml",
-    "tier": 2
-  },
-  {
-    "id": "board-a20",
-    "name": "a20",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/a20.yaml",
     "tier": 2
   },
   {
@@ -805,13 +854,6 @@
     "tier": 2
   },
   {
-    "id": "board-colibri-vf61",
-    "name": "colibri-vf61",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/colibri-vf61.yaml",
-    "tier": 2
-  },
-  {
     "id": "board-core-v-mcu",
     "name": "core-v-mcu",
     "type": "board",
@@ -826,10 +868,10 @@
     "tier": 2
   },
   {
-    "id": "board-egis_et171",
-    "name": "egis_et171",
+    "id": "board-focaltech_ft9001",
+    "name": "focaltech_ft9001",
     "type": "board",
-    "repl_path": "core/configs/onboarding/egis_et171.yaml",
+    "repl_path": "core/configs/onboarding/focaltech_ft9001.yaml",
     "tier": 2
   },
   {
@@ -837,13 +879,6 @@
     "name": "fomu",
     "type": "board",
     "repl_path": "core/configs/onboarding/fomu.yaml",
-    "tier": 2
-  },
-  {
-    "id": "board-fsl_lx2160ardb",
-    "name": "fsl_lx2160ardb",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/fsl_lx2160ardb.yaml",
     "tier": 2
   },
   {
@@ -872,6 +907,13 @@
     "name": "ice40up5k-mdp-evn",
     "type": "board",
     "repl_path": "core/configs/onboarding/ice40up5k-mdp-evn.yaml",
+    "tier": 2
+  },
+  {
+    "id": "board-imxrt1064",
+    "name": "imxrt1064",
+    "type": "board",
+    "repl_path": "core/configs/onboarding/imxrt1064.yaml",
     "tier": 2
   },
   {
@@ -952,10 +994,10 @@
     "tier": 2
   },
   {
-    "id": "board-mars_zx3",
-    "name": "mars_zx3",
+    "id": "board-mimxrt1064_evk",
+    "name": "mimxrt1064_evk",
     "type": "board",
-    "repl_path": "core/configs/onboarding/mars_zx3.yaml",
+    "repl_path": "core/configs/onboarding/mimxrt1064_evk.yaml",
     "tier": 2
   },
   {
@@ -1036,13 +1078,6 @@
     "tier": 2
   },
   {
-    "id": "board-renesas_rz_g2l",
-    "name": "renesas_rz_g2l",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/renesas_rz_g2l.yaml",
-    "tier": 2
-  },
-  {
     "id": "board-sifive-fe310",
     "name": "sifive-fe310",
     "type": "board",
@@ -1071,20 +1106,6 @@
     "tier": 2
   },
   {
-    "id": "board-tegra2",
-    "name": "tegra2",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/tegra2.yaml",
-    "tier": 2
-  },
-  {
-    "id": "board-tegra3",
-    "name": "tegra3",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/tegra3.yaml",
-    "tier": 2
-  },
-  {
     "id": "board-tock_veer_el2_sim",
     "name": "tock_veer_el2_sim",
     "type": "board",
@@ -1092,45 +1113,24 @@
     "tier": 2
   },
   {
-    "id": "board-vybrid",
-    "name": "vybrid",
+    "id": "board-up_squared_x86_64",
+    "name": "up_squared_x86_64",
     "type": "board",
-    "repl_path": "core/configs/onboarding/vybrid.yaml",
+    "repl_path": "core/configs/onboarding/up_squared_x86_64.yaml",
     "tier": 2
   },
   {
-    "id": "board-zedboard",
-    "name": "zedboard",
+    "id": "board-vegaboard_ri5cy",
+    "name": "vegaboard_ri5cy",
     "type": "board",
-    "repl_path": "core/configs/onboarding/zedboard.yaml",
+    "repl_path": "core/configs/onboarding/vegaboard_ri5cy.yaml",
     "tier": 2
   },
   {
-    "id": "board-zynq-7000",
-    "name": "zynq-7000",
+    "id": "board-xtensa-sample-controller",
+    "name": "xtensa-sample-controller",
     "type": "board",
-    "repl_path": "core/configs/onboarding/zynq-7000.yaml",
-    "tier": 2
-  },
-  {
-    "id": "board-zynqmp",
-    "name": "zynqmp",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/zynqmp.yaml",
-    "tier": 2
-  },
-  {
-    "id": "board-zynqmp-zcu102-revA",
-    "name": "zynqmp-zcu102-revA",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/zynqmp-zcu102-revA.yaml",
-    "tier": 2
-  },
-  {
-    "id": "board-zynqmp-zcu104",
-    "name": "zynqmp-zcu104",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/zynqmp-zcu104.yaml",
+    "repl_path": "core/configs/onboarding/xtensa-sample-controller.yaml",
     "tier": 2
   }
 ]
