@@ -31,25 +31,36 @@ jobs:
             exit 0
           fi
 
-          if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y build-essential pkg-config
+          if command -v clang >/dev/null 2>&1; then
+            mkdir -p "$HOME/.local/bin"
+            printf '#!/usr/bin/env bash\nexec clang "$@"\n' > "$HOME/.local/bin/cc"
+            chmod +x "$HOME/.local/bin/cc"
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            echo "Created cc shim to clang"
             exit 0
           fi
 
-          if command -v dnf >/dev/null 2>&1; then
-            sudo dnf groupinstall -y "Development Tools"
-            sudo dnf install -y pkgconf-pkg-config
-            exit 0
+          if sudo -n true >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y build-essential pkg-config
+              exit 0
+            fi
+
+            if command -v dnf >/dev/null 2>&1; then
+              sudo dnf groupinstall -y "Development Tools"
+              sudo dnf install -y pkgconf-pkg-config
+              exit 0
+            fi
+
+            if command -v yum >/dev/null 2>&1; then
+              sudo yum groupinstall -y "Development Tools"
+              sudo yum install -y pkgconfig
+              exit 0
+            fi
           fi
 
-          if command -v yum >/dev/null 2>&1; then
-            sudo yum groupinstall -y "Development Tools"
-            sudo yum install -y pkgconfig
-            exit 0
-          fi
-
-          echo "No supported package manager found to install a C toolchain."
+          echo "No usable C toolchain found (no cc, no clang, and no passwordless sudo for package install)."
           exit 1
 
       - name: Install Rust
