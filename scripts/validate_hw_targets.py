@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,7 @@ CONFIGS_DIR = REPO_ROOT / "configs" / "onboarding"
 SYSTEMS_DIR = REPO_ROOT / "configs" / "systems" / "onboarding"
 LABWIRED_BIN = REPO_ROOT / "target" / "release" / "labwired"
 ZEPHYR_DIR = Path(os.environ.get("ZEPHYR_BASE", "/opt/zephyrproject/zephyr"))
+OUT_DIR = REPO_ROOT / "out" / "hw-target-validation"
 
 GITHUB_SERVER_URL = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
 GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
@@ -95,6 +97,7 @@ def main() -> int:
     total = len(configs)
     passed = 0
     failed: list[tuple[str, str]] = []
+    records: list[dict[str, object]] = []
 
     print(f"Found {total} onboarding targets")
 
@@ -147,8 +150,51 @@ def main() -> int:
             else:
                 failed.append((target_name, reason))
                 print(f"[{target_name}] fail ({reason})")
+            records.append(
+                {
+                    "target": target_name,
+                    "pass_rate": pass_rate,
+                    "verified": verified,
+                    "reason": reason,
+                    "checks": checks,
+                    "run_url": run_url,
+                    "artifacts_url": artifacts_url,
+                }
+            )
 
     print(f"Validation complete: {passed}/{total} passed")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "total": total,
+        "passed": passed,
+        "failed": len(failed),
+        "pass_percentage": int(round((passed / total) * 100)) if total else 0,
+        "run_url": run_url,
+        "artifacts_url": artifacts_url,
+        "results": records,
+    }
+    (OUT_DIR / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        "# Hardware Target Validation Summary",
+        "",
+        f"- Total targets: **{total}**",
+        f"- Passed: **{passed}**",
+        f"- Failed: **{len(failed)}**",
+        f"- Pass %: **{summary['pass_percentage']}%**",
+    ]
+    if run_url:
+        lines.append(f"- Run URL: {run_url}")
+    if artifacts_url:
+        lines.append(f"- Artifacts URL: {artifacts_url}")
+    lines.extend(["", "## Failed Targets", ""])
+    if failed:
+        for name, reason in failed:
+            lines.append(f"- `{name}`: {reason}")
+    else:
+        lines.append("- none")
+    (OUT_DIR / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
     if failed:
         print(f"Failed: {len(failed)}")
         for name, reason in failed[:50]:

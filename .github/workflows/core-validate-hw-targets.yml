@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: core-validate-hw-targets-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate-targets:
     runs-on: ubuntu-latest
@@ -62,6 +66,23 @@ jobs:
           name: validated-onboarding-manifests
           path: configs/onboarding/*.yaml
           retention-days: 14
+
+      - name: Upload validation summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hw-target-validation-summary
+          path: |
+            out/hw-target-validation/summary.json
+            out/hw-target-validation/summary.md
+          retention-days: 14
+
+      - name: Publish validation summary
+        if: always()
+        run: |
+          if [ -f out/hw-target-validation/summary.md ]; then
+            cat out/hw-target-validation/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Commit and push onboarding updates
         if: github.ref == 'refs/heads/main'
