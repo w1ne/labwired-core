@@ -154,7 +154,14 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
         }
     };
 
-    const verifiedCount = rows.filter(r => r.verified).length;
+    const boardRows = rows.filter(r => r.category === 'board');
+    const verifiedBoardCount = boardRows.filter(r => r.verified).length;
+    const validationLinkedCount = rows.filter(r => (r.validation_url || '').trim() !== '').length;
+    const knownArchitectureRows = rows.filter(r => r.arch !== 'unknown');
+    const knownArchitectureCount = new Set(knownArchitectureRows.map(r => r.arch)).size;
+    const verifiedBoardRate = boardRows.length === 0 ? 0 : Math.round((verifiedBoardCount / boardRows.length) * 100);
+    const validationCoverage = rows.length === 0 ? 0 : Math.round((validationLinkedCount / rows.length) * 100);
+    const knownArchCoverage = rows.length === 0 ? 0 : Math.round((knownArchitectureRows.length / rows.length) * 100);
 
     if (loading) {
         return <div style={{ padding: '2rem', color: 'var(--lw-pink)', fontWeight: 800, fontFamily: 'Outfit' }}>SCANNING LABWIRED CATALOG...</div>;
@@ -168,10 +175,10 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
             </header>
 
             <section className="catalog-metrics">
-                <div className="catalog-metric"><span>Total</span><strong>{rows.length}</strong></div>
-                <div className="catalog-metric"><span>Verified</span><strong>{verifiedCount}</strong></div>
-                <div className="catalog-metric"><span>Sources</span><strong>{sourceTypes.length - 1}</strong></div>
-                <div className="catalog-metric"><span>Architectures</span><strong>{archValues.length - 1}</strong></div>
+                <div className="catalog-metric"><span>Catalog Items</span><strong>{rows.length}</strong></div>
+                <div className="catalog-metric"><span>Verified Boards</span><strong>{verifiedBoardCount}/{boardRows.length} ({verifiedBoardRate}%)</strong></div>
+                <div className="catalog-metric"><span>Known Architectures</span><strong>{knownArchitectureCount} ({knownArchCoverage}% rows)</strong></div>
+                <div className="catalog-metric"><span>Validation Linked</span><strong>{validationLinkedCount}/{rows.length} ({validationCoverage}%)</strong></div>
             </section>
 
             <section className="catalog-controls bento-card">
