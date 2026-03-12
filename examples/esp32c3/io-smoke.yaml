@@ -1,0 +1,9 @@
+# LabWired - ESP32-C3 IO smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/uart-ok-thumbv7m.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000
+assertions:
+  - expected_stop_reason: max_steps
