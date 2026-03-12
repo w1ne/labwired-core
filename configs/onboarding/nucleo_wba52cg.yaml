@@ -1,5 +1,6 @@
 name: nucleo_wba52cg
-description: 'STMicroelectronics NUCLEO-WBA52CG development board for Bluetooth 5.3 applications. Architecture: ARMv8-M.'
+description: 'STMicroelectronics NUCLEO-WBA52CG development board for Bluetooth 5.3
+  applications. Architecture: ARMv8-M.'
 family: STM32 Nucleo-64
 url: https://www.st.com/en/evaluation-tools/nucleo-wba52cg.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -12,12 +13,12 @@ verified: true
 system: systems/onboarding/nucleo_wba52cg.yaml
 sample_trace: traces/stm32.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.738753+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:29.839974+00:00'
+  run_url: ''
+  artifacts_url: ''

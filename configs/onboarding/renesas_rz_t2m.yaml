@@ -1,5 +1,6 @@
 name: renesas_rz_t2m
-description: 'Renesas RZ/T2M High-performance multi-function MPU for AC servo drives. Architecture: Dual ARM Cortex-R52.'
+description: 'Renesas RZ/T2M High-performance multi-function MPU for AC servo drives.
+  Architecture: Dual ARM Cortex-R52.'
 family: Renesas RZ/T2M
 url: https://www.renesas.com/products/microcontrollers-microprocessors/rz-mpus/rzt2m-high-performance-multi-function-mpu-ac-servo-drives-and-industrial-networks
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/renesas_rz_t2m.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.918617+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:30.968220+00:00'
+  run_url: ''
+  artifacts_url: ''

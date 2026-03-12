@@ -1,21 +1,21 @@
 name: a20
-description: 'Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture: ARMv7-A. Used in Cubieboard2 and Olinuxino.'
+description: 'Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture:
+  ARMv7-A. Used in Cubieboard2 and Olinuxino.'
 url: https://linux-sunxi.org/A20
 family: Allwinner
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: false
+verified: true
 system: systems/onboarding/a20.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: local-simulation
+  reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: true
-    ram_base_present: true
-  timestamp_utc: '2026-03-12T19:37:30.157934+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+    simulation: true
+  timestamp_utc: '2026-03-12T23:52:25.122401+00:00'
+  run_url: ''
+  artifacts_url: ''

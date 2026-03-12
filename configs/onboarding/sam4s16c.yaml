@@ -1,5 +1,6 @@
 name: sam4s16c
-description: 'Microchip (Atmel) SAM4S16C ARM Cortex-M4 microcontroller with 1MB Flash. Architecture: ARMv7E-M.'
+description: 'Microchip (Atmel) SAM4S16C ARM Cortex-M4 microcontroller with 1MB Flash.
+  Architecture: ARMv7E-M.'
 family: Microchip SAM4S
 url: https://www.microchip.com/en-us/product/ATSAM4S16C
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/sam4s16c.yaml
 sample_trace: traces/atmel_sam.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.949815+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:31.138343+00:00'
+  run_url: ''
+  artifacts_url: ''

@@ -1,5 +1,6 @@
 name: msp430f2619
-description: 'Texas Instruments MSP430F2619 Ultra-Low-Power 16-bit Microcontroller. Architecture: MSP430 (16-bit).'
+description: 'Texas Instruments MSP430F2619 Ultra-Low-Power 16-bit Microcontroller.
+  Architecture: MSP430 (16-bit).'
 family: MSP430
 url: https://www.ti.com/product/MSP430F2619
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,13 +10,13 @@ verified: false
 system: systems/onboarding/msp430f2619.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: local-structural
+  reason: structural-ok (non-ARM32)
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T19:37:30.695909+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:29.493456+00:00'
+  run_url: ''
+  artifacts_url: ''

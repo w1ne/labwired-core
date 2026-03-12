@@ -1,5 +1,6 @@
 name: max32652
-description: 'Analog Devices (Maxim) MAX32652 ultra-low-power ARM Cortex-M4 MCU with scalable memory architecture. Architecture: ARM Cortex-M4F.'
+description: 'Analog Devices (Maxim) MAX32652 ultra-low-power ARM Cortex-M4 MCU with
+  scalable memory architecture. Architecture: ARM Cortex-M4F.'
 url: https://www.analog.com/en/products/max32652.html
 family: Analog Devices MAX32
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/max32652.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.641504+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:29.236150+00:00'
+  run_url: ''
+  artifacts_url: ''

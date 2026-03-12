@@ -1,20 +1,22 @@
 name: xtensa-sample-controller
-description: 'Cadence Tensilica Xtensa sample DSP/Controller reference design. Architecture: Xtensa.'
+description: 'Cadence Tensilica Xtensa sample DSP/Controller reference design. Architecture:
+  Xtensa.'
 url: https://www.cadence.com/en_US/home/tools/ip/tensilica-ip/xtensa-customizable-processors.html
 family: Tensilica Xtensa
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/xtensa-sample-controller.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: local-structural
+  reason: structural-ok (non-ARM32)
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-03-12T19:37:31.322782+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-03-12T23:52:33.450825+00:00'
+  run_url: ''
+  artifacts_url: ''

@@ -1,5 +1,6 @@
 name: renesas-r7fa2l1a
-description: 'Renesas RA2L1 Group ultra-low power 48MHz microcontroller. Architecture: ARM Cortex-M23.'
+description: 'Renesas RA2L1 Group ultra-low power 48MHz microcontroller. Architecture:
+  ARM Cortex-M23.'
 family: Renesas RA2
 url: https://www.renesas.com/products/microcontrollers-microprocessors/ra-cortex-m-mcus/ra2l1-48mhz-arm-cortex-m23-ultra-low-power-general-purpose-microcontroller
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/renesas-r7fa2l1a.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.884348+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:30.706589+00:00'
+  run_url: ''
+  artifacts_url: ''

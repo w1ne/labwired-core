@@ -1,5 +1,6 @@
 name: arduino_nano_33_ble
-description: 'Arduino Nano 33 BLE Sense board based on nRF52840. Architecture: ARM Cortex-M4F. Features Bluetooth Low Energy.'
+description: 'Arduino Nano 33 BLE Sense board based on nRF52840. Architecture: ARM
+  Cortex-M4F. Features Bluetooth Low Energy.'
 family: Arduino
 url: https://store.arduino.cc/products/arduino-nano-33-ble
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/arduino_nano_33_ble.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.176322+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:25.259578+00:00'
+  run_url: ''
+  artifacts_url: ''

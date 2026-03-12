@@ -1,5 +1,6 @@
 name: atsamd21j17d-aft
-description: 'Microchip SAMD21 Series MCU. Architecture: ARM Cortex-M0+. General purpose low power microcontroller.'
+description: 'Microchip SAMD21 Series MCU. Architecture: ARM Cortex-M0+. General purpose
+  low power microcontroller.'
 family: Microchip SAM D
 url: https://www.microchip.com/en-us/product/ATSAMD21J17D
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/atsamd21j17d-aft.yaml
 sample_trace: traces/atmel_sam.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.203603+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:25.452436+00:00'
+  run_url: ''
+  artifacts_url: ''

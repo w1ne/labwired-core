@@ -1,5 +1,6 @@
 name: stm32l072
-description: 'STMicroelectronics STM32L072 ultra-low-power MCU featuring crystal-less USB 2.0 functionality. Architecture: ARMv6-M.'
+description: 'STMicroelectronics STM32L072 ultra-low-power MCU featuring crystal-less
+  USB 2.0 functionality. Architecture: ARMv6-M.'
 family: STM32L0
 url: https://www.st.com/en/microcontrollers-microprocessors/stm32l072.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -12,12 +13,12 @@ verified: true
 system: systems/onboarding/stm32l072.yaml
 sample_trace: traces/stm32.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:31.217496+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:32.873303+00:00'
+  run_url: ''
+  artifacts_url: ''
