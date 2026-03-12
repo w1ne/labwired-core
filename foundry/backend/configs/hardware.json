@@ -511,13 +511,6 @@
     "tier": 1
   },
   {
-    "id": "board-ri5cy",
-    "name": "ri5cy",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/ri5cy.yaml",
-    "tier": 1
-  },
-  {
     "id": "board-s32k118",
     "name": "s32k118",
     "type": "board",
@@ -655,13 +648,6 @@
     "name": "stm32f4_discovery",
     "type": "board",
     "repl_path": "core/configs/onboarding/stm32f4_discovery.yaml",
-    "tier": 1
-  },
-  {
-    "id": "board-stm32f4_discovery-kit",
-    "name": "stm32f4_discovery-kit",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/stm32f4_discovery-kit.yaml",
     "tier": 1
   },
   {
@@ -1138,13 +1124,6 @@
     "name": "zynqmp-zcu102-revA",
     "type": "board",
     "repl_path": "core/configs/onboarding/zynqmp-zcu102-revA.yaml",
-    "tier": 2
-  },
-  {
-    "id": "board-zynqmp-zcu102-revB",
-    "name": "zynqmp-zcu102-revB",
-    "type": "board",
-    "repl_path": "core/configs/onboarding/zynqmp-zcu102-revB.yaml",
     "tier": 2
   },
   {
