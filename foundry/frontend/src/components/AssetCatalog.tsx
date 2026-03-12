@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiUrl, authHeaders } from '../api';
 
 interface Asset {
@@ -14,15 +14,23 @@ interface Asset {
     source_ref: string;
     source_url?: string;
     official_url?: string;
+    validation_url?: string;
 }
 
 interface Props {
     onSelectAsset?: (id: string) => void;
 }
 
+type SortKey = 'name' | 'pass_rate' | 'registers' | 'source_type';
+
 const AssetCatalog = ({ onSelectAsset }: Props) => {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
+    const [query, setQuery] = useState('');
+    const [sourceFilter, setSourceFilter] = useState('all');
+    const [verifiedOnly, setVerifiedOnly] = useState(false);
+    const [sortKey, setSortKey] = useState<SortKey>('name');
+    const [sortAsc, setSortAsc] = useState(true);
 
     useEffect(() => {
         fetch(apiUrl('/v1/catalog'), { headers: authHeaders() })
@@ -37,100 +45,136 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
             });
     }, []);
 
+    const sourceTypes = useMemo(() => {
+        const unique = new Set(assets.map(a => a.source_type || 'unknown'));
+        return ['all', ...Array.from(unique).sort()];
+    }, [assets]);
+
+    const filteredAssets = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        const rows = assets.filter(asset => {
+            if (verifiedOnly && !asset.verified) return false;
+            if (sourceFilter !== 'all' && (asset.source_type || 'unknown') !== sourceFilter) return false;
+            if (!q) return true;
+            return (
+                asset.id.toLowerCase().includes(q) ||
+                asset.name.toLowerCase().includes(q) ||
+                asset.description.toLowerCase().includes(q) ||
+                (asset.architecture || '').toLowerCase().includes(q)
+            );
+        });
+
+        rows.sort((a, b) => {
+            let cmp = 0;
+            switch (sortKey) {
+                case 'pass_rate':
+                    cmp = (a.pass_rate || 0) - (b.pass_rate || 0);
+                    break;
+                case 'registers':
+                    cmp = (a.registers || 0) - (b.registers || 0);
+                    break;
+                case 'source_type':
+                    cmp = (a.source_type || '').localeCompare(b.source_type || '');
+                    break;
+                case 'name':
+                default:
+                    cmp = (a.name || '').localeCompare(b.name || '');
+                    break;
+            }
+            return sortAsc ? cmp : -cmp;
+        });
+
+        return rows;
+    }, [assets, query, sourceFilter, verifiedOnly, sortKey, sortAsc]);
+
+    const setSort = (key: SortKey) => {
+        if (sortKey === key) {
+            setSortAsc(prev => !prev);
+        } else {
+            setSortKey(key);
+            setSortAsc(true);
+        }
+    };
+
     if (loading) {
         return <div style={{ padding: '2rem', color: 'var(--lw-pink)', fontWeight: 800, fontFamily: 'Outfit' }}>SCANNING LABWIRED CATALOG...</div>;
     }
 
     return (
         <div style={{ padding: '2rem', flex: 1, backgroundColor: '#f9f9f9' }}>
-            <header style={{ marginBottom: '3rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <h1 style={{ fontSize: '3rem', color: 'var(--lw-black)' }}>VERIFIED ASSETS</h1>
-                </div>
-                <p style={{ color: 'var(--lw-gray)', marginTop: '0.5rem', maxWidth: '600px', fontSize: '1.1rem' }}>
-                    Pre-verified <strong>Strict IR</strong> models for bit-accurate MCU simulation, automatically synced with upstream CI dashboards.
+            <header style={{ marginBottom: '1.5rem' }}>
+                <h1 style={{ fontSize: '2.5rem', color: 'var(--lw-black)', marginBottom: '0.5rem' }}>VERIFIED ASSETS</h1>
+                <p style={{ color: 'var(--lw-gray)', marginTop: 0, maxWidth: '780px', fontSize: '1rem' }}>
+                    Unified board catalog with searchable metadata and direct links to source, vendor pages, and latest validation evidence.
                 </p>
             </header>
 
-            {assets.length === 0 && (
-                <p style={{ color: 'var(--lw-gray)', fontStyle: 'italic' }}>No assets found. The backend may not be running.</p>
-            )}
+            <div className="bento-card" style={{ marginBottom: '1.5rem', display: 'grid', gap: '0.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+                <input
+                    type="text"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search by id, name, architecture..."
+                    style={{ padding: '0.7rem 0.8rem', borderRadius: '8px', border: '1px solid #ddd' }}
+                />
+                <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} style={{ padding: '0.7rem 0.8rem', borderRadius: '8px', border: '1px solid #ddd' }}>
+                    {sourceTypes.map(source => (
+                        <option key={source} value={source}>{source === 'all' ? 'All sources' : source}</option>
+                    ))}
+                </select>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--lw-gray)', fontWeight: 600 }}>
+                    <input type="checkbox" checked={verifiedOnly} onChange={e => setVerifiedOnly(e.target.checked)} />
+                    Verified only
+                </label>
+                <div style={{ color: 'var(--lw-gray)', fontWeight: 600, alignSelf: 'center' }}>
+                    Showing {filteredAssets.length} of {assets.length}
+                </div>
+            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '2rem' }}>
-                {assets.map(asset => (
-                    <div key={asset.id} className="bento-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <h3 style={{ fontSize: '1.5rem', color: 'var(--lw-black)', margin: 0 }}>{asset.name}</h3>
-                                {asset.architecture && (
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--lw-blue)', fontWeight: 600 }}>{asset.architecture}</div>
-                                )}
-                            </div>
+            {assets.length === 0 && <p style={{ color: 'var(--lw-gray)', fontStyle: 'italic' }}>No assets found. The backend may not be running.</p>}
 
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.8rem' }}>
-                                <div style={{
-                                    backgroundColor: '#E6E9FC', color: 'var(--lw-blue)', padding: '0.2rem 1rem',
-                                    borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.5px'
-                                }}>
-                                    PASSED
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.7rem', color: 'var(--lw-blue)', opacity: 0.8, fontSize: '1.1rem' }}>
-                                    <i className="fa-solid fa-play" style={{ cursor: 'pointer' }} title="Run in Sandbox" onClick={() => onSelectAsset?.(asset.id)}></i>
-                                    {asset.source_url && (
-                                        <a href={asset.source_url} target="_blank" rel="noreferrer" title="View source">
-                                            <i className="fa-brands fa-github" style={{ cursor: 'pointer', color: 'var(--lw-blue)' }}></i>
-                                        </a>
-                                    )}
-                                    {asset.official_url && (
-                                        <a href={asset.official_url} target="_blank" rel="noreferrer" title="Official board page">
-                                            <i className="fa-solid fa-up-right-from-square" style={{ cursor: 'pointer', color: 'var(--lw-blue)' }}></i>
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        <p style={{ fontSize: '0.95rem', color: 'var(--lw-gray)', marginBottom: '2rem', minHeight: '3.5rem', lineHeight: '1.6' }}>
-                            {asset.description.length > 120 ? asset.description.substring(0, 120) + '...' : asset.description}
-                        </p>
-
-                        <div style={{ display: 'flex', gap: '2.5rem', marginBottom: '2rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
-                            <div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--lw-gray)', textTransform: 'uppercase', fontWeight: 800 }}>Registers</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'Outfit' }}>{asset.registers}</div>
-                            </div>
-                            <div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--lw-gray)', textTransform: 'uppercase', fontWeight: 800 }}>Pass Rate</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'Outfit', color: asset.verified ? 'var(--lw-pink)' : 'var(--lw-gray)' }}>
+            <div className="bento-card" style={{ padding: 0, overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '980px' }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#f3f4fb', borderBottom: '1px solid #ddd' }}>
+                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>ID</th>
+                            <th style={{ textAlign: 'left', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('name')}>Name</th>
+                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>Arch</th>
+                            <th style={{ textAlign: 'right', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('pass_rate')}>Pass %</th>
+                            <th style={{ textAlign: 'right', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('registers')}>Registers</th>
+                            <th style={{ textAlign: 'left', padding: '0.8rem', cursor: 'pointer' }} onClick={() => setSort('source_type')}>Source</th>
+                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>Links</th>
+                            <th style={{ textAlign: 'left', padding: '0.8rem' }}>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredAssets.map(asset => (
+                            <tr key={asset.id} style={{ borderBottom: '1px solid #eee' }}>
+                                <td style={{ padding: '0.75rem', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem' }}>{asset.id}</td>
+                                <td style={{ padding: '0.75rem' }}>
+                                    <div style={{ fontWeight: 700 }}>{asset.name}</div>
+                                    <div style={{ color: 'var(--lw-gray)', fontSize: '0.82rem' }}>{asset.description}</div>
+                                </td>
+                                <td style={{ padding: '0.75rem', color: 'var(--lw-gray)' }}>{asset.architecture || '—'}</td>
+                                <td style={{ padding: '0.75rem', textAlign: 'right', color: asset.verified ? 'var(--lw-pink)' : 'var(--lw-gray)', fontWeight: 700 }}>
                                     {asset.verified ? `${asset.pass_rate}%` : 'N/A'}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{ margin: '0 0 1rem', color: 'var(--lw-gray)', fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            <span>Source: {asset.source_type || 'unknown'} {asset.source_ref ? `(${asset.source_ref})` : ''}</span>
-                            {asset.source_url && (
-                                <a href={asset.source_url} target="_blank" rel="noreferrer" style={{ color: 'var(--lw-blue)' }}>
-                                    Source link
-                                </a>
-                            )}
-                            {asset.official_url && (
-                                <a href={asset.official_url} target="_blank" rel="noreferrer" style={{ color: 'var(--lw-blue)' }}>
-                                    Official board page
-                                </a>
-                            )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                            <button style={{ flex: 1 }} onClick={() => onSelectAsset?.(asset.id)}>DETAILS</button>
-                            {asset.ir_url && (
-                                <a href={asset.ir_url} download style={{ flex: 1 }}>
-                                    <button className="secondary" style={{ width: '100%' }}>DOWNLOAD IR</button>
-                                </a>
-                            )}
-                        </div>
-                    </div>
-                ))}
+                                </td>
+                                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700 }}>{asset.registers || 0}</td>
+                                <td style={{ padding: '0.75rem', color: 'var(--lw-gray)' }}>{asset.source_type || 'unknown'}</td>
+                                <td style={{ padding: '0.75rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.82rem' }}>
+                                        {asset.source_url && <a href={asset.source_url} target="_blank" rel="noreferrer">Source</a>}
+                                        {asset.official_url && <a href={asset.official_url} target="_blank" rel="noreferrer">Official</a>}
+                                        {asset.validation_url && <a href={asset.validation_url} target="_blank" rel="noreferrer">Validation</a>}
+                                    </div>
+                                </td>
+                                <td style={{ padding: '0.75rem' }}>
+                                    <button className="secondary" onClick={() => onSelectAsset?.(asset.id)}>Details</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );

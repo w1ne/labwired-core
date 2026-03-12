@@ -146,6 +146,15 @@ func officialURLForAssetID(assetID string) string {
 	return ""
 }
 
+func validationURLFromModel(runURL, artifactsURL string) string {
+	runURL = strings.TrimSpace(runURL)
+	artifactsURL = strings.TrimSpace(artifactsURL)
+	if artifactsURL != "" {
+		return artifactsURL
+	}
+	return runURL
+}
+
 // SyncFromDisk scans the provided directory for YAML models and upserts them to the DB.
 func (m *Manager) SyncFromDisk(configsDir string) error {
 	log.Printf("[catalog] syncing models from disk: %s", configsDir)
@@ -175,6 +184,10 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			RegistersCount *int   `yaml:"registers_count"`
 			PassRate       *int   `yaml:"pass_rate"`
 			Verified       *bool  `yaml:"verified"`
+			Validation     struct {
+				RunURL       string `yaml:"run_url"`
+				ArtifactsURL string `yaml:"artifacts_url"`
+			} `yaml:"validation"`
 		}
 		if err := yaml.Unmarshal(data, &model); err != nil {
 			log.Printf("[catalog] failed to parse model %s: %v", path, err)
@@ -230,6 +243,7 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			SourceRef:    relPath,
 			SourceURL:    sourceURLForCoreConfig(relPath),
 			OfficialURL:  officialURLForAssetID(id),
+			ValidationURL: validationURLFromModel(model.Validation.RunURL, model.Validation.ArtifactsURL),
 		}
 
 		if model.Description == "" {
@@ -347,6 +361,7 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 			SourceType:   "platform-catalog",
 			SourceRef:    strings.TrimSpace(item.ReplPath),
 			SourceURL:    sourceURLForHardwareItem(item),
+			ValidationURL: "",
 		}
 		if asset.ID == "" {
 			continue

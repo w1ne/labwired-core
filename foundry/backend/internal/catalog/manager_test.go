@@ -32,7 +32,7 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 		t.Fatalf("MkdirAll periph dir failed: %v", err)
 	}
 
-	boardYAML := []byte("name: DemoBoard\nregisters_count: 42\npass_rate: 100\nverified: true\nregisters:\n  - { name: A }\n  - { name: B }\n")
+	boardYAML := []byte("name: DemoBoard\nregisters_count: 42\npass_rate: 100\nverified: true\nvalidation:\n  run_url: https://github.com/example/repo/actions/runs/123\n  artifacts_url: https://github.com/example/repo/actions/runs/123#artifacts\nregisters:\n  - { name: A }\n  - { name: B }\n")
 	periphYAML := []byte("name: DemoPeriph\nregisters:\n  - { name: C }\n")
 	if err := os.WriteFile(filepath.Join(boardDir, "dup.yaml"), boardYAML, 0o644); err != nil {
 		t.Fatalf("write board yaml failed: %v", err)
@@ -76,6 +76,9 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 	}
 	if boardAsset.SourceURL == "" {
 		t.Fatalf("expected source_url to be populated")
+	}
+	if boardAsset.ValidationURL != "https://github.com/example/repo/actions/runs/123#artifacts" {
+		t.Fatalf("unexpected validation_url: %q", boardAsset.ValidationURL)
 	}
 
 	periphAsset, ok := seen["peripheral/demoperiph"]
@@ -170,5 +173,8 @@ func TestSyncFromHardwareIndex_ImportsExternalBoardsIntoCatalog(t *testing.T) {
 	}
 	if b.SourceURL != "https://github.com/renode/renode/blob/master/platforms/boards/ext-b.repl" {
 		t.Fatalf("unexpected source_url: %q", b.SourceURL)
+	}
+	if b.ValidationURL != "" {
+		t.Fatalf("expected no validation_url for external index import, got %q", b.ValidationURL)
 	}
 }

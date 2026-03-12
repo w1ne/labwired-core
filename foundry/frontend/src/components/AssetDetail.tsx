@@ -116,6 +116,11 @@ const AssetDetail = ({ id, onBack }: Props) => {
                             Official board page
                         </a>
                     )}
+                    {asset.validation_url && (
+                        <a href={asset.validation_url} target="_blank" rel="noreferrer" style={{ color: 'var(--lw-blue)' }}>
+                            Latest validation artifacts
+                        </a>
+                    )}
                 </div>
             </div>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>

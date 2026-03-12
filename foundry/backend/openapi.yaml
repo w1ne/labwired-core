@@ -54,6 +54,8 @@ components:
           type: string
         official_url:
           type: string
+        validation_url:
+          type: string
 
     VerificationRequest:
       type: object

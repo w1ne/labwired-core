@@ -11,6 +11,19 @@ CONFIGS_DIR = os.path.join(LABWIRED_DIR, "core", "configs", "onboarding")
 SYSTEMS_DIR = os.path.join(LABWIRED_DIR, "core", "configs", "systems", "onboarding")
 ZEPHYR_DIR = os.environ.get("ZEPHYR_BASE", "/opt/zephyrproject/zephyr")
 LABWIRED_BIN = os.path.join(LABWIRED_DIR, "core", "target", "release", "labwired")
+GITHUB_SERVER_URL = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
+GITHUB_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+GITHUB_RUN_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+
+
+def github_validation_links():
+    if not GITHUB_REPOSITORY or not GITHUB_RUN_ID:
+        return "", ""
+    run_url = f"{GITHUB_SERVER_URL}/{GITHUB_REPOSITORY}/actions/runs/{GITHUB_RUN_ID}"
+    if GITHUB_RUN_ATTEMPT:
+        run_url = f"{run_url}/attempts/{GITHUB_RUN_ATTEMPT}"
+    return run_url, f"{run_url}#artifacts"
 
 def run_zephyr_build(board_name, output_dir):
     print(f"[{board_name}] Building zephyr hello_world...")
@@ -51,6 +64,7 @@ def run_labwired_sim(elf_path, system_path):
         return False, str(e)
 
 def main():
+    run_url, artifacts_url = github_validation_links()
     if not os.path.exists(LABWIRED_BIN):
         print(f"ERROR: labwired binary not found at {LABWIRED_BIN}")
         print("Please compile Labwired core using `cargo build --release` first.")
@@ -125,6 +139,8 @@ def main():
                 "reason": reason,
                 "checks": check_map,
                 "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "run_url": run_url,
+                "artifacts_url": artifacts_url,
             }
 
         with open(path, 'w') as f:

@@ -14,6 +14,18 @@ LABWIRED_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIGS_DIR = os.path.join(LABWIRED_DIR, "core", "configs", "onboarding")
 LABWIRED_BIN = os.path.join(LABWIRED_DIR, "core", "target", "release", "labwired")
 ARM_FIXTURE = os.path.join(LABWIRED_DIR, "core", "tests", "fixtures", "uart-ok-thumbv7m.elf")
+GITHUB_SERVER_URL = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
+GITHUB_RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+GITHUB_RUN_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+
+def github_validation_links():
+    if not GITHUB_REPOSITORY or not GITHUB_RUN_ID:
+        return "", ""
+    run_url = f"{GITHUB_SERVER_URL}/{GITHUB_REPOSITORY}/actions/runs/{GITHUB_RUN_ID}"
+    if GITHUB_RUN_ATTEMPT:
+        run_url = f"{run_url}/attempts/{GITHUB_RUN_ATTEMPT}"
+    return run_url, f"{run_url}#artifacts"
 
 def validate_model(config_path):
     """Try to load/run a model in labwired.
@@ -116,6 +128,7 @@ def validate_model(config_path):
         return False, str(e)[:80], score, False, check_map, "local-simulation"
 
 def main():
+    run_url, artifacts_url = github_validation_links()
     if not os.path.exists(LABWIRED_BIN):
         print(f"ERROR: labwired binary not found at {LABWIRED_BIN}")
         return 2
@@ -152,6 +165,8 @@ def main():
             "reason": reason,
             "checks": checks,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "run_url": run_url,
+            "artifacts_url": artifacts_url,
         }
         with open(path, 'w') as f:
             yaml.dump(model, f, default_flow_style=False, sort_keys=False)
