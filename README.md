@@ -20,6 +20,9 @@
 [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml)
 - `nightly-validation` (scheduled/manual): ![Nightly](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml/badge.svg?branch=main)  
 [Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-nightly.yml)
+- `validate-hw-targets` (scheduled/manual + selected main pushes): ![Validate HW Targets](https://github.com/w1ne/labwired-core/actions/workflows/core-validate-hw-targets.yml/badge.svg?branch=main)  
+[Workflow](https://github.com/w1ne/labwired-core/actions/workflows/core-validate-hw-targets.yml)
+Publishes `out/hw-target-validation/summary.{json,md}` and refreshes onboarding validation metadata.
 
 ### Board Model Signals
 
@@ -107,6 +110,7 @@ See [`docs/ci_integration.md`](./docs/ci_integration.md) for details.
 - [Architecture Overview](./docs/architecture.md)
 - [Architecture Guide](./docs/architecture_guide.md)
 - [Board Onboarding Playbook](./docs/board_onboarding_playbook.md) (config-first)
+- [Catalog Validation Structure](./docs/catalog_validation.md) (PR smoke vs full target sweep ownership)
 - [CI Integration Guide](./docs/ci_integration.md)
 - [GDB Integration](./docs/gdb_integration.md)
 - [Release Strategy](./docs/release_strategy.md)
