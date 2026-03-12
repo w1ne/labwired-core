@@ -55,9 +55,9 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 		seen[a.ID] = a
 	}
 
-	boardAsset, ok := seen["boards/dup"]
+	boardAsset, ok := seen["board/demoboard"]
 	if !ok {
-		t.Fatalf("expected boards/dup asset")
+		t.Fatalf("expected board/demoboard asset")
 	}
 	if boardAsset.Registers != 42 {
 		t.Fatalf("expected board registers=42 (override), got %d", boardAsset.Registers)
@@ -75,9 +75,9 @@ func TestSyncFromDisk_UsesUniquePathIDsAndProvenance(t *testing.T) {
 		t.Fatalf("unexpected source_ref: %q", boardAsset.SourceRef)
 	}
 
-	periphAsset, ok := seen["peripherals/dup"]
+	periphAsset, ok := seen["peripheral/demoperiph"]
 	if !ok {
-		t.Fatalf("expected peripherals/dup asset")
+		t.Fatalf("expected peripheral/demoperiph asset")
 	}
 	if periphAsset.Registers != 1 {
 		t.Fatalf("expected peripheral registers=1, got %d", periphAsset.Registers)
@@ -144,9 +144,9 @@ func TestSyncFromHardwareIndex_ImportsExternalBoardsIntoCatalog(t *testing.T) {
 		t.Fatalf("SyncFromHardwareIndex failed: %v", err)
 	}
 
-	a, ok := mgr.Get("board-ext-a")
+	a, ok := mgr.Get("board/ext-a")
 	if !ok {
-		t.Fatalf("expected board-ext-a to exist")
+		t.Fatalf("expected board/ext-a to exist")
 	}
 	if a.SourceType != "platform-catalog" {
 		t.Fatalf("expected source_type platform-catalog, got %q", a.SourceType)
@@ -155,9 +155,9 @@ func TestSyncFromHardwareIndex_ImportsExternalBoardsIntoCatalog(t *testing.T) {
 		t.Fatalf("expected tier-1 board to map to verified=true pass_rate=100, got verified=%v pass_rate=%d", a.Verified, a.PassRate)
 	}
 
-	b, ok := mgr.Get("board-ext-b")
+	b, ok := mgr.Get("board/ext-b")
 	if !ok {
-		t.Fatalf("expected board-ext-b to exist")
+		t.Fatalf("expected board/ext-b to exist")
 	}
 	if b.Verified || b.PassRate != 0 {
 		t.Fatalf("expected tier-2 board to map to verified=false pass_rate=0, got verified=%v pass_rate=%d", b.Verified, b.PassRate)

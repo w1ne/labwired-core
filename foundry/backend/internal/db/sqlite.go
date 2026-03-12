@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -1082,4 +1083,23 @@ func (s *Store) GetCatalogAsset(id string) (CatalogAsset, bool, error) {
 	}
 	a.Verified = verified == 1
 	return a, true, nil
+}
+
+// DeleteCatalogAssetsBySourceTypes removes catalog assets for the given source types.
+func (s *Store) DeleteCatalogAssetsBySourceTypes(sourceTypes []string) error {
+	if len(sourceTypes) == 0 {
+		return nil
+	}
+	placeholders := make([]string, 0, len(sourceTypes))
+	args := make([]any, 0, len(sourceTypes))
+	for _, st := range sourceTypes {
+		placeholders = append(placeholders, "?")
+		args = append(args, st)
+	}
+	q := fmt.Sprintf(
+		`DELETE FROM catalog_assets WHERE source_type IN (%s)`,
+		strings.Join(placeholders, ","),
+	)
+	_, err := s.db.Exec(q, args...)
+	return err
 }

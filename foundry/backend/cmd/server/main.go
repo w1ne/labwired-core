@@ -70,15 +70,10 @@ func main() {
 	}
 
 	cat := catalog.NewManager(store)
-	if err := cat.SyncFromDisk(cfg.CoreConfigsDir); err != nil {
-		log.Printf("Warning: failed to sync catalog from disk: %v", err)
-	}
-	if len(hwItems) > 0 {
-		if err := cat.SyncFromHardwareIndex(hwItems); err != nil {
-			log.Printf("Warning: failed to sync catalog from hardware index: %v", err)
-		} else {
-			log.Printf("Catalog sync imported %d hardware index entries", len(hwItems))
-		}
+	if err := cat.RebuildGitBackedCatalog(cfg.CoreConfigsDir, hwItems); err != nil {
+		log.Printf("Warning: failed to rebuild git-backed catalog: %v", err)
+	} else {
+		log.Printf("Catalog rebuild imported %d hardware index entries", len(hwItems))
 	}
 	log.Printf(
 		"Foundry startup: build_commit=%s app_env=%s hardware_endpoint_source=catalog core_configs_dir=%s",

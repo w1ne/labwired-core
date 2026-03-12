@@ -22,6 +22,55 @@ func NewManager(store *db.Store) *Manager {
 	}
 }
 
+func slugifyCatalogPart(v string) string {
+	s := strings.ToLower(strings.TrimSpace(v))
+	s = strings.ReplaceAll(s, "_", "-")
+	s = strings.ReplaceAll(s, " ", "-")
+	s = strings.Trim(s, "-")
+	if s == "" {
+		return "unknown"
+	}
+	return s
+}
+
+func catalogIDFromCorePath(relPath string, fallbackName string) string {
+	relPath = filepath.ToSlash(strings.TrimSpace(relPath))
+	stem := strings.TrimSuffix(filepath.Base(relPath), filepath.Ext(relPath))
+	if stem == "" {
+		stem = fallbackName
+	}
+	parts := strings.Split(relPath, "/")
+	root := ""
+	if len(parts) > 0 {
+		root = parts[0]
+	}
+	switch root {
+	case "onboarding", "boards", "systems":
+		return "board/" + slugifyCatalogPart(stem)
+	case "chips":
+		return "chip/" + slugifyCatalogPart(stem)
+	case "peripherals":
+		return "peripheral/" + slugifyCatalogPart(stem)
+	default:
+		return "catalog/" + slugifyCatalogPart(stem)
+	}
+}
+
+func catalogIDFromHardwareItem(item db.HardwareItem) string {
+	name := strings.TrimSpace(item.Name)
+	if name == "" {
+		name = strings.TrimSpace(item.ID)
+	}
+	if name == "" {
+		name = strings.TrimSuffix(filepath.Base(strings.TrimSpace(item.ReplPath)), filepath.Ext(strings.TrimSpace(item.ReplPath)))
+	}
+	prefix := "board"
+	if strings.EqualFold(strings.TrimSpace(item.Type), "cpu") {
+		prefix = "cpu"
+	}
+	return prefix + "/" + slugifyCatalogPart(name)
+}
+
 // SyncFromDisk scans the provided directory for YAML models and upserts them to the DB.
 func (m *Manager) SyncFromDisk(configsDir string) error {
 	log.Printf("[catalog] syncing models from disk: %s", configsDir)
@@ -31,10 +80,6 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			return err
 		}
 		if d.IsDir() {
-			// Skip internal chip and system definition directories
-			if d.Name() == "chips" || d.Name() == "systems" {
-				return fs.SkipDir
-			}
 			return nil
 		}
 		if !strings.HasSuffix(path, ".yaml") && !strings.HasSuffix(path, ".yml") {
@@ -74,11 +119,11 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			relPath = d.Name()
 		}
 		relPath = filepath.ToSlash(relPath)
-		id := strings.TrimSuffix(relPath, filepath.Ext(relPath))
 		name := model.Name
 		if name == "" {
 			name = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
 		}
+		id := catalogIDFromCorePath(relPath, name)
 
 		passRate := 0
 		if model.PassRate != nil {
@@ -128,6 +173,22 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 	})
 
 	return err
+}
+
+// RebuildGitBackedCatalog replaces git-derived catalog rows with a fresh import.
+func (m *Manager) RebuildGitBackedCatalog(configsDir string, indexItems []db.HardwareItem) error {
+	if err := m.store.DeleteCatalogAssetsBySourceTypes([]string{"core-config", "platform-catalog"}); err != nil {
+		return err
+	}
+	if err := m.SyncFromDisk(configsDir); err != nil {
+		return err
+	}
+	if len(indexItems) > 0 {
+		if err := m.SyncFromHardwareIndex(indexItems); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PromoteToCatalog saves a synthesized model to persistent storage and adds it to the catalog.
@@ -196,7 +257,7 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 		}
 
 		asset := db.CatalogAsset{
-			ID:           strings.TrimSpace(item.ID),
+			ID:           catalogIDFromHardwareItem(item),
 			Name:         name,
 			Description:  fmt.Sprintf("Catalog board profile: %s", name),
 			Family:       "",
