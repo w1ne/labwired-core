@@ -1,5 +1,6 @@
 name: sifive-fu540
-description: 'SiFive Freedom U540 multicore RISC-V Linux processor (HiFive Unleashed). Architecture: RISC-V RV64GC.'
+description: 'SiFive Freedom U540 multicore RISC-V Linux processor (HiFive Unleashed).
+  Architecture: RISC-V RV64GC.'
 family: SiFive
 url: https://www.sifive.com/boards/hifive-unleashed
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,13 +10,13 @@ verified: false
 system: systems/onboarding/sifive-fu540.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: local-structural
+  reason: structural-ok (non-ARM32)
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T19:37:30.976912+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:31.357243+00:00'
+  run_url: ''
+  artifacts_url: ''

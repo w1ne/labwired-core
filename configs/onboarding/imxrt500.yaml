@@ -1,5 +1,6 @@
 name: imxrt500
-description: 'NXP i.MX RT500 multi-core crossover processor with ARM Cortex-M33, DSP, and GPU. Architecture: ARMv8-M.'
+description: 'NXP i.MX RT500 multi-core crossover processor with ARM Cortex-M33, DSP,
+  and GPU. Architecture: ARMv8-M.'
 family: NXP i.MX RT
 url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/i-mx-rt-crossover-mcus/i-mx-rt500-microcontrollers-mcu-with-arm-cortex-m33-dsp-and-gpu:i.MX-RT500
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/imxrt500.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.553820+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:28.325747+00:00'
+  run_url: ''
+  artifacts_url: ''

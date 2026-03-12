@@ -1,5 +1,6 @@
 name: eos-s3-quickfeather
-description: 'QuickLogic QuickFeather development board for EOS S3 multi-core MCU + eFPGA. Architecture: ARM Cortex-M4F.'
+description: 'QuickLogic QuickFeather development board for EOS S3 multi-core MCU
+  + eFPGA. Architecture: ARM Cortex-M4F.'
 url: https://www.quicklogic.com/products/eos-s3/quickfeather/
 family: QuickLogic EOS
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/eos-s3-quickfeather.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.487913+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:27.712969+00:00'
+  run_url: ''
+  artifacts_url: ''

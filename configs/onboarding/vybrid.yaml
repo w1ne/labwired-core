@@ -1,21 +1,21 @@
 name: vybrid
-description: 'NXP (Freescale) Vybrid highly integrated mixed-signal asymmetric multi-core SoC (ARM Cortex-A5 / Cortex-M4). Architecture: ARMv7-A / ARMv7-M.'
+description: 'NXP (Freescale) Vybrid highly integrated mixed-signal asymmetric multi-core
+  SoC (ARM Cortex-A5 / Cortex-M4). Architecture: ARMv7-A / ARMv7-M.'
 family: NXP Vybrid
 url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/vybrid-controller-solutions:VYBRID
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: false
+verified: true
 system: systems/onboarding/vybrid.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: local-simulation
+  reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: true
-    ram_base_present: true
-  timestamp_utc: '2026-03-12T19:37:31.314924+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+    simulation: true
+  timestamp_utc: '2026-03-12T23:52:33.431642+00:00'
+  run_url: ''
+  artifacts_url: ''

@@ -1,5 +1,6 @@
 name: quark_c1000-cc2520
-description: 'Intel Quark SE C1000 integrated with Texas Instruments CC2520 802.15.4 radio. Architecture: x86/ARC.'
+description: 'Intel Quark SE C1000 integrated with Texas Instruments CC2520 802.15.4
+  radio. Architecture: x86/ARC.'
 family: Intel Quark
 url: https://www.intel.com/content/www/us/en/products/details/processors/quark.html
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,13 +10,13 @@ verified: false
 system: systems/onboarding/quark_c1000-cc2520.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: local-structural
+  reason: structural-ok (non-ARM32)
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T19:37:30.837290+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:30.428144+00:00'
+  run_url: ''
+  artifacts_url: ''

@@ -1,5 +1,6 @@
 name: A2_CV32E40P
-description: 'OpenHW Group CORE-V CV32E40P RISC-V Core. Architecture: RISC-V RV32IMFC. Official evaluation target.'
+description: 'OpenHW Group CORE-V CV32E40P RISC-V Core. Architecture: RISC-V RV32IMFC.
+  Official evaluation target.'
 family: CORE-V
 url: https://github.com/openhwgroup/cv32e40p
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,13 +10,13 @@ verified: false
 system: systems/onboarding/A2_CV32E40P.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: local-structural
+  reason: structural-ok (non-ARM32)
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T19:37:30.151797+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:25.063041+00:00'
+  run_url: ''
+  artifacts_url: ''

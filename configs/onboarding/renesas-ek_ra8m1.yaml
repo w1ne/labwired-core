@@ -1,5 +1,6 @@
 name: renesas-ek_ra8m1
-description: 'Renesas EK-RA8M1 Evaluation Kit featuring high performance Cortex-M85 with Helium. Architecture: ARM Cortex-M85.'
+description: 'Renesas EK-RA8M1 Evaluation Kit featuring high performance Cortex-M85
+  with Helium. Architecture: ARM Cortex-M85.'
 family: Renesas RA8
 url: https://www.renesas.com/products/microcontrollers-microprocessors/ra-cortex-m-mcus/ek-ra8m1-evaluation-kit-ra8m1-mcu-group
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/renesas-ek_ra8m1.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.872137+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:30.621559+00:00'
+  run_url: ''
+  artifacts_url: ''

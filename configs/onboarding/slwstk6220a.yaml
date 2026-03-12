@@ -1,5 +1,6 @@
 name: slwstk6220a
-description: 'Silicon Labs SLWSTK6220A EZR32 Wonder Gecko 868 MHz Wireless Starter Kit. Architecture: ARM Cortex-M4F.'
+description: 'Silicon Labs SLWSTK6220A EZR32 Wonder Gecko 868 MHz Wireless Starter
+  Kit. Architecture: ARM Cortex-M4F.'
 family: Silicon Labs Development Board
 url: https://www.silabs.com/development-tools/wireless/proprietary/ezr32wg-868-mhz-wireless-starter-kit
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/slwstk6220a.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:31.001451+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:31.698131+00:00'
+  run_url: ''
+  artifacts_url: ''

@@ -1,5 +1,6 @@
 name: nrf52840
-description: 'Nordic Semiconductor nRF52840 multiprotocol Bluetooth 5 / 802.15.4 / Thread / Zigbee SoC. Architecture: ARM Cortex-M4F.'
+description: 'Nordic Semiconductor nRF52840 multiprotocol Bluetooth 5 / 802.15.4 /
+  Thread / Zigbee SoC. Architecture: ARM Cortex-M4F.'
 family: Nordic nRF52
 url: https://www.nordicsemi.com/Products/nRF52840
 code_example: "/* Zephyr Blinky for nRF52 */\n#include <zephyr/kernel.h>\n#include\
@@ -12,12 +13,12 @@ verified: true
 system: systems/onboarding/nrf52840.yaml
 sample_trace: traces/nrf5.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.709363+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:29.622529+00:00'
+  run_url: ''
+  artifacts_url: ''

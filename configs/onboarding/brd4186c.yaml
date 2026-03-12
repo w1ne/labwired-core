@@ -1,5 +1,6 @@
 name: brd4186c
-description: 'Silicon Labs xG24 Development Kit with AI/ML accelerator. Architecture: ARM Cortex-M33.'
+description: 'Silicon Labs xG24 Development Kit with AI/ML accelerator. Architecture:
+  ARM Cortex-M33.'
 family: Silicon Labs
 url: https://www.silabs.com/
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/brd4186c.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.260167+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:25.955791+00:00'
+  run_url: ''
+  artifacts_url: ''

@@ -1,5 +1,6 @@
 name: nucleo_h753zi
-description: 'STMicroelectronics NUCLEO-H753ZI development board with STM32H753ZI high-performance MCU. Architecture: ARMv7E-M.'
+description: 'STMicroelectronics NUCLEO-H753ZI development board with STM32H753ZI
+  high-performance MCU. Architecture: ARMv7E-M.'
 family: STM32 Nucleo-144
 url: https://www.st.com/en/evaluation-tools/nucleo-h753zi.html
 code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#include\
@@ -12,12 +13,12 @@ verified: true
 system: systems/onboarding/nucleo_h753zi.yaml
 sample_trace: traces/stm32.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.731384+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:29.794578+00:00'
+  run_url: ''
+  artifacts_url: ''

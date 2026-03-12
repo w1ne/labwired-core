@@ -1,5 +1,6 @@
 name: litex_vexriscv_smp
-description: 'Symmetric Multiprocessing (SMP) capable LiteX SoC with multiple VexRiscv cores. Architecture: RISC-V RV32IMA.'
+description: 'Symmetric Multiprocessing (SMP) capable LiteX SoC with multiple VexRiscv
+  cores. Architecture: RISC-V RV32IMA.'
 family: LiteX
 url: https://github.com/enjoy-digital/litex
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,13 +10,13 @@ verified: false
 system: systems/onboarding/litex_vexriscv_smp.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: local-structural
+  reason: structural-ok (non-ARM32)
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T19:37:30.600331+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:28.521821+00:00'
+  run_url: ''
+  artifacts_url: ''

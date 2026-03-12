@@ -1,5 +1,6 @@
 name: renesas-rz_t2m_rsk
-description: 'Renesas Starter Kit+ for RZ/T2M Industrial Microprocessor. Architecture: Dual ARM Cortex-R52.'
+description: 'Renesas Starter Kit+ for RZ/T2M Industrial Microprocessor. Architecture:
+  Dual ARM Cortex-R52.'
 family: Renesas RZ/T2M
 url: https://www.renesas.com/products/microcontrollers-microprocessors/rz-mpus/renesas-starter-kit-rzt2m
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/renesas-rz_t2m_rsk.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.910373+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:30.883344+00:00'
+  run_url: ''
+  artifacts_url: ''

@@ -1,5 +1,6 @@
 name: nxp-k6xf
-description: 'NXP (formerly Freescale) Kinetis K6x ARM Cortex-M4 MCU series with Ethernet and USB. Architecture: ARMv7-M.'
+description: 'NXP (formerly Freescale) Kinetis K6x ARM Cortex-M4 MCU series with Ethernet
+  and USB. Architecture: ARMv7-M.'
 family: NXP Kinetis
 url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/k-series-cortex-m4:KINETIS_K_SERIES
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/nxp-k6xf.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.770103+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:30.048957+00:00'
+  run_url: ''
+  artifacts_url: ''

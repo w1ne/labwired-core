@@ -1,5 +1,6 @@
 name: efm32pg1
-description: 'Silicon Labs EFM32PG1 Pearl Gecko Series 1 performance microcontroller. Architecture: ARM Cortex-M4F.'
+description: 'Silicon Labs EFM32PG1 Pearl Gecko Series 1 performance microcontroller.
+  Architecture: ARM Cortex-M4F.'
 family: Silicon Labs EFM32 Pearl Gecko
 url: https://www.silabs.com/mcu/32-bit/efm32-pearl-gecko
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -9,12 +10,12 @@ verified: true
 system: systems/onboarding/efm32pg1.yaml
 sample_trace: traces/silicon_labs_efm32.txt
 validation:
-  method: ci-arm-fixture-simulation
+  method: local-simulation
   reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-12T19:37:30.409674+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1
-  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23020303708/attempts/1#artifacts
+  timestamp_utc: '2026-03-12T23:52:27.043188+00:00'
+  run_url: ''
+  artifacts_url: ''
