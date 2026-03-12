@@ -33,6 +33,37 @@ func slugifyCatalogPart(v string) string {
 	return s
 }
 
+func standardizeCatalogName(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	replaced := strings.NewReplacer("_", " ", "-", " ").Replace(raw)
+	parts := strings.Fields(replaced)
+	if len(parts) == 0 {
+		return ""
+	}
+	acronyms := map[string]struct{}{
+		"acrn": {}, "adc": {}, "arm": {}, "ble": {}, "can": {}, "cpu": {}, "dma": {}, "eth": {},
+		"fpga": {}, "gpio": {}, "i2c": {}, "i2s": {}, "irq": {}, "lte": {}, "mcu": {}, "nvic": {},
+		"pwm": {}, "qspi": {}, "rcc": {}, "riscv": {}, "sdio": {}, "soc": {}, "spi": {}, "uart": {},
+		"usb": {}, "wifi": {},
+	}
+	for i, p := range parts {
+		lower := strings.ToLower(p)
+		if _, ok := acronyms[lower]; ok || strings.IndexFunc(p, func(r rune) bool { return r >= '0' && r <= '9' }) >= 0 {
+			parts[i] = strings.ToUpper(p)
+			continue
+		}
+		if len(p) <= 3 {
+			parts[i] = strings.ToUpper(p)
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + strings.ToLower(p[1:])
+	}
+	return strings.Join(parts, " ")
+}
+
 func catalogIDFromCorePath(relPath string, fallbackName string) string {
 	relPath = filepath.ToSlash(strings.TrimSpace(relPath))
 	stem := strings.TrimSuffix(filepath.Base(relPath), filepath.Ext(relPath))
@@ -123,9 +154,9 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			relPath = d.Name()
 		}
 		relPath = filepath.ToSlash(relPath)
-		name := model.Name
+		name := standardizeCatalogName(model.Name)
 		if name == "" {
-			name = strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+			name = standardizeCatalogName(strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())))
 		}
 		id := catalogIDFromCorePath(relPath, name)
 
@@ -246,9 +277,9 @@ func (m *Manager) Get(id string) (db.CatalogAsset, bool) {
 // This keeps /v1/catalog and /v1/hardware aligned even for non-core board entries.
 func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 	for _, item := range items {
-		name := strings.TrimSpace(item.Name)
+		name := standardizeCatalogName(item.Name)
 		if name == "" {
-			name = strings.TrimSpace(item.ID)
+			name = standardizeCatalogName(item.ID)
 		}
 		if name == "" {
 			continue
