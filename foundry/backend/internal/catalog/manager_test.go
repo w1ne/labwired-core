@@ -188,6 +188,7 @@ func TestList_DedupesChipWhenSameBoardSlugExists(t *testing.T) {
 		Name:        "A20",
 		Description: "Board row",
 		SourceType:  "platform-catalog",
+		Architecture: "",
 	}); err != nil {
 		t.Fatalf("upsert board failed: %v", err)
 	}
@@ -196,6 +197,7 @@ func TestList_DedupesChipWhenSameBoardSlugExists(t *testing.T) {
 		Name:        "A20",
 		Description: "Chip row",
 		SourceType:  "core-config",
+		Architecture: "ARM 64",
 	}); err != nil {
 		t.Fatalf("upsert chip failed: %v", err)
 	}
@@ -222,5 +224,16 @@ func TestList_DedupesChipWhenSameBoardSlugExists(t *testing.T) {
 	}
 	if !seen["chip/rp2040"] {
 		t.Fatalf("expected unique chip/rp2040 to remain")
+	}
+
+	var board db.CatalogAsset
+	for _, a := range assets {
+		if a.ID == "board/a20" {
+			board = a
+			break
+		}
+	}
+	if board.Architecture != "ARM 64" {
+		t.Fatalf("expected board/a20 architecture to be inherited from chip alias, got %q", board.Architecture)
 	}
 }

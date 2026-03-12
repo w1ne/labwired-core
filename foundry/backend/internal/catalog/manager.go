@@ -171,6 +171,7 @@ func splitCatalogID(id string) (string, string, bool) {
 // dedupeBoardChipAliases keeps board rows as canonical and hides chip rows with the same slug.
 func dedupeBoardChipAliases(assets []db.CatalogAsset) []db.CatalogAsset {
 	boardSlugs := make(map[string]struct{}, len(assets))
+	chipBySlug := make(map[string]db.CatalogAsset, len(assets))
 	for _, a := range assets {
 		kind, slug, ok := splitCatalogID(a.ID)
 		if !ok {
@@ -178,12 +179,27 @@ func dedupeBoardChipAliases(assets []db.CatalogAsset) []db.CatalogAsset {
 		}
 		if kind == "board" {
 			boardSlugs[slug] = struct{}{}
+			continue
+		}
+		if kind == "chip" {
+			chipBySlug[slug] = a
 		}
 	}
 
 	out := make([]db.CatalogAsset, 0, len(assets))
 	for _, a := range assets {
 		kind, slug, ok := splitCatalogID(a.ID)
+		if ok && kind == "board" {
+			if chip, hasChip := chipBySlug[slug]; hasChip {
+				// Keep board as canonical row but backfill missing metadata from chip alias.
+				if strings.TrimSpace(a.Architecture) == "" && strings.TrimSpace(chip.Architecture) != "" {
+					a.Architecture = chip.Architecture
+				}
+				if strings.TrimSpace(a.Family) == "" && strings.TrimSpace(chip.Family) != "" {
+					a.Family = chip.Family
+				}
+			}
+		}
 		if ok && kind == "chip" {
 			if _, hasBoard := boardSlugs[slug]; hasBoard {
 				continue
