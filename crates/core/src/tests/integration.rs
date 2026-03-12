@@ -432,6 +432,34 @@ pub mod integration_tests {
     }
 
     #[test]
+    fn test_from_config_maps_common_alias_types_to_real_peripherals() {
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("litex_uart"),
+            "uart"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("stm32f1gpioport"),
+            "gpio"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("renesasra_iic"),
+            "i2c"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("s32k3xx_dmamux"),
+            "dma"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("efr32_cmu"),
+            "rcc"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("arm_sp804_timer"),
+            "systick"
+        );
+    }
+
+    #[test]
     fn test_gpio_bsrr_brr_buffered_writes() {
         let mut bus = crate::bus::SystemBus::new();
         let gpioa_base = 0x4001_0800;

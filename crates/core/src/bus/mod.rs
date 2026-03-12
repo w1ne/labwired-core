@@ -60,6 +60,49 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
+    pub(crate) fn canonical_peripheral_type(raw_type: &str) -> String {
+        let t = raw_type.to_ascii_lowercase();
+
+        // Keep explicit core types as-is.
+        match t.as_str() {
+            "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
+            | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal" => {
+                return t;
+            }
+            _ => {}
+        }
+
+        if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
+            return "uart".to_string();
+        }
+        if t == "sam4s_pio" || (t.contains("gpio") && t != "pio") {
+            return "gpio".to_string();
+        }
+        if t.contains("i2c") || t.contains("iic") || t.contains("smbus") || t.ends_with("_twi") {
+            return "i2c".to_string();
+        }
+        if t.contains("spi") {
+            return "spi".to_string();
+        }
+        if t == "udma" || t.contains("dma") {
+            return "dma".to_string();
+        }
+        if t.contains("rcc") || t.contains("cmu") || t == "nrf_clock" {
+            return "rcc".to_string();
+        }
+        if t == "arm_generictimer" || t == "arm_globaltimer" || t == "arm_sp804_timer" {
+            return "systick".to_string();
+        }
+        if t.contains("timer") || t.ends_with("_gpt") || t.ends_with("_agt") {
+            return "timer".to_string();
+        }
+        if t.contains("adc") {
+            return "adc".to_string();
+        }
+
+        t
+    }
+
     fn profile_name(p_cfg: &PeripheralConfig) -> anyhow::Result<Option<&str>> {
         if let Some(value) = p_cfg.config.get("profile") {
             return value.as_str().map(Some).ok_or_else(|| {
@@ -281,7 +324,17 @@ impl SystemBus {
         }
 
         for p_cfg in &merged_peripherals {
-            let dev: Box<dyn Peripheral> = match p_cfg.r#type.as_str() {
+            let canonical_type = Self::canonical_peripheral_type(&p_cfg.r#type);
+            if canonical_type != p_cfg.r#type.to_ascii_lowercase() {
+                tracing::debug!(
+                    "Canonicalized peripheral type '{}' -> '{}' for id '{}'",
+                    p_cfg.r#type,
+                    canonical_type,
+                    p_cfg.id
+                );
+            }
+
+            let dev: Box<dyn Peripheral> = match canonical_type.as_str() {
                 "uart" | "stm32_uart" | "stm32f1_uart" | "stm32f2_uart" | "stm32f4_uart"
                 | "stm32f7_usart" | "stm32h5_usart" | "efm32_uart" | "nxp_lpuart" | "ns16550"
                 | "pl011" | "gaislerapbuart" => {
@@ -438,10 +491,10 @@ impl SystemBus {
                         desc,
                     ))
                 }
-                other => {
+                _other => {
                     tracing::debug!(
                         "Mapping unknown peripheral type '{}' to Stub for id '{}'",
-                        other,
+                        p_cfg.r#type,
                         p_cfg.id
                     );
                     Box::new(crate::peripherals::stub::StubPeripheral::new(0x00))
