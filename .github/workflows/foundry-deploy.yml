@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ${{ env.CHECKOUT_PATH }}
+          submodules: recursive
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -178,24 +179,11 @@ jobs:
 
           echo "Updating host binaries and configs..."
 
-          # 1. Build and install latest labwired binary
-          export PATH="$HOME/.cargo/bin:$PATH"
-          if ! command -v cargo >/dev/null 2>&1; then
-            echo "cargo not found in PATH"
-            exit 1
-          fi
-          cd core
-          cargo build --release -p labwired-cli
-          mkdir -p "$LABWIRED_ROOT/bin"
-          cp target/release/labwired-cli "$LABWIRED_ROOT/bin/labwired"
-          chmod +x "$LABWIRED_ROOT/bin/labwired"
-          cd ..
-
-          # 2. Sync latest hardware configurations
+          # 1. Sync latest hardware configurations
           mkdir -p "$LABWIRED_ROOT/core"
           cp -r core/configs "$LABWIRED_ROOT/core/"
-
-          # 3. Sync deployment files
+          
+          # 2. Sync deployment files
           cp "$WORK_ROOT/foundry/deploy/docker-compose.prod.yml" "$DEPLOY_PATH/"
           cp "$WORK_ROOT/foundry/deploy/Caddyfile" "$DEPLOY_PATH/"
 
