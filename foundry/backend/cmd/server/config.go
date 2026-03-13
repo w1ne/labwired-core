@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -156,7 +157,10 @@ func validateStripeConfig(appEnv, webhookSecret string, allowInsecure bool) erro
 
 func validateRuntimeDependencies(cfg config) error {
 	if _, err := exec.LookPath(cfg.LabWiredPath); err != nil {
-		return fmt.Errorf("LABWIRED_PATH command not found: %w", err)
+		if cfg.AppEnv == "production" {
+			return fmt.Errorf("LABWIRED_PATH command not found: %w", err)
+		}
+		log.Printf("Warning: LABWIRED_PATH command '%s' not found. Runs will fail.", cfg.LabWiredPath)
 	}
 	if err := os.MkdirAll(cfg.ArtifactsDir, 0o755); err != nil {
 		return fmt.Errorf("ARTIFACTS_DIR is not writable: %w", err)

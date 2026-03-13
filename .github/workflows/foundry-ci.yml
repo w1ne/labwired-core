@@ -66,6 +66,12 @@ jobs:
             sleep 1
           done
 
+          if [ ! -f /tmp/foundry-health.json ]; then
+            echo "--- Server Logs ---"
+            cat /tmp/foundry-server.log
+            exit 1
+          fi
+
           cat /tmp/foundry-health.json
           grep -q '"status"' /tmp/foundry-health.json
 
