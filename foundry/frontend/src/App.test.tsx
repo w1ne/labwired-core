@@ -5,7 +5,7 @@ import App from './App';
 let signedIn = true;
 
 vi.mock('@clerk/react', () => ({
-    useAuth: () => ({ isSignedIn: signedIn }),
+    useAuth: () => ({ isSignedIn: signedIn, isLoaded: true }),
 }));
 
 vi.mock('./components/Sidebar', () => ({
