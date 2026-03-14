@@ -1,6 +1,6 @@
 [package]
 name = "firmware-hil-showcase"
-version = "0.11.0"
+version.workspace = true
 edition = "2021"
 
 [dependencies]

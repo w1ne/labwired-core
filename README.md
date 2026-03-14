@@ -20,14 +20,14 @@ labwired --version
 ```
 
 Install options:
-- `LABWIRED_VERSION=v0.12.0` pins a release.
+ - `LABWIRED_VERSION=v0.12.1` pins a release.
 - `LABWIRED_FROM_SOURCE=1` forces source build.
 - `LABWIRED_INSTALL_DIR=~/.local/bin` overrides install dir.
 
 ### Run a deterministic test script
 
 ```sh
-labwired test --script tests/uart-ok.yaml --output-dir results
+labwired test --script examples/ci/uart-ok.yaml --output-dir results
 ```
 
 ### Build from source
@@ -42,7 +42,8 @@ cargo build --release -p labwired-cli
 
 ### Required merge gate
 
-- `core-ci.yml`: required checks for PRs to `main`.
+- Root `.github/workflows/core-ci.yml`: fast integration smoke for this monorepo.
+- `core/.github/workflows/core-ci.yml`: full core validation gate.
 
 ### Quality signals
 

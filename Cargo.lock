@@ -509,7 +509,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "firmware"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "firmware-ci-fixture"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "cortex-m",
  "panic-halt",
@@ -535,35 +535,35 @@ dependencies = [
 
 [[package]]
 name = "firmware-f401-demo"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-h563-demo"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-h563-fullchip-demo"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-h563-io-demo"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-hil-showcase"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "panic-halt",
 ]
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-cli"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-codegen"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "labwired-ir",
@@ -868,7 +868,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-config"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "human-size",
@@ -882,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-core"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -900,7 +900,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-dap"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -918,7 +918,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-gdbstub"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "gdbstub",
@@ -932,7 +932,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-ir"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-loader"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-wasm"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "cortex-m",
  "gdbstub",
@@ -1578,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "riscv-ci-fixture"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "panic-halt",
  "riscv 0.10.1",
