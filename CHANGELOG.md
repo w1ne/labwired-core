@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-02-16
+
+### Fixed
+- **Workspace Validation**: Closed version drift between the workspace release and component manifests so release artifacts resolve to one patch line.
+- **DAP Synchronization**: Aligned `labwired-dap` with the current core release and its release documentation.
+- **Release Docs**: Corrected CI/test script references so release commands point at files that exist in this checkout.
+
 ## [0.12.0] - 2026-02-16
 
 ### Fixed

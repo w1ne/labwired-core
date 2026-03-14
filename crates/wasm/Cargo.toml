@@ -1,6 +1,6 @@
 [package]
 name = "labwired-wasm"
-version = "0.12.0"
+version.workspace = true
 edition = "2021"
 publish = false
 
