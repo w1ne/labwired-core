@@ -749,3 +749,46 @@ func TestFailExhaustedQueuedRuns_MarksQueuedAsError(t *testing.T) {
 		t.Fatalf("expected status error, got %s", record.Status)
 	}
 }
+
+func TestGetAccountUsageAndRuns_DeduplicateSharedWorkspaceKeys(t *testing.T) {
+	store := newTestStore(t)
+	clerkUserID := "clerk-shared-workspace"
+
+	key1, err := store.CreateKeyForClerkUser(clerkUserID, "lw_sk_live_shared_workspace_key_1", "ws-shared")
+	if err != nil {
+		t.Fatalf("CreateKeyForClerkUser first failed: %v", err)
+	}
+	key2, err := store.CreateKeyForClerkUser(clerkUserID, "lw_sk_live_shared_workspace_key_2", "ws-ignored")
+	if err != nil {
+		t.Fatalf("CreateKeyForClerkUser second failed: %v", err)
+	}
+	if key2.WorkspaceID != key1.WorkspaceID {
+		t.Fatalf("expected reused workspace, got=%s want=%s", key2.WorkspaceID, key1.WorkspaceID)
+	}
+
+	if err := store.SaveRun("run-shared-1", key1.WorkspaceID, "pass"); err != nil {
+		t.Fatalf("SaveRun failed: %v", err)
+	}
+
+	usage, err := store.GetAccountUsage(clerkUserID)
+	if err != nil {
+		t.Fatalf("GetAccountUsage failed: %v", err)
+	}
+	if usage.Quota != 1000 {
+		t.Fatalf("expected quota 1000 once per workspace, got %d", usage.Quota)
+	}
+	if usage.RunsUsedThisMonth != 1 {
+		t.Fatalf("expected one used run, got %d", usage.RunsUsedThisMonth)
+	}
+
+	runs, err := store.ListRunsForClerkUser(clerkUserID)
+	if err != nil {
+		t.Fatalf("ListRunsForClerkUser failed: %v", err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("expected one deduplicated run, got %d", len(runs))
+	}
+	if runs[0].RunID != "run-shared-1" {
+		t.Fatalf("unexpected run id: got=%s want=run-shared-1", runs[0].RunID)
+	}
+}

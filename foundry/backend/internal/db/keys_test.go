@@ -62,3 +62,35 @@ func TestBackfillKeyPrefixForPlaintext_EnablesLegacyKeyValidation(t *testing.T) 
 		t.Fatalf("unexpected workspace id after backfill: got=%s want=%s", k.WorkspaceID, workspaceID)
 	}
 }
+
+func TestCreateKeyForClerkUser_ReusesWorkspaceAndQuota(t *testing.T) {
+	store := newTestStore(t)
+
+	firstKey, err := store.CreateKeyForClerkUser("clerk-user-1", "lw_sk_live_first_key_123456", "ws-clerk-1")
+	if err != nil {
+		t.Fatalf("CreateKeyForClerkUser first failed: %v", err)
+	}
+	if firstKey.WorkspaceID != "ws-clerk-1" {
+		t.Fatalf("unexpected first workspace: got=%s want=ws-clerk-1", firstKey.WorkspaceID)
+	}
+
+	if err := store.AddQuotaRuns("ws-clerk-1", 250); err != nil {
+		t.Fatalf("AddQuotaRuns failed: %v", err)
+	}
+
+	secondKey, err := store.CreateKeyForClerkUser("clerk-user-1", "lw_sk_live_second_key_654321", "ws-ignored")
+	if err != nil {
+		t.Fatalf("CreateKeyForClerkUser second failed: %v", err)
+	}
+	if secondKey.WorkspaceID != firstKey.WorkspaceID {
+		t.Fatalf("expected reused workspace: got=%s want=%s", secondKey.WorkspaceID, firstKey.WorkspaceID)
+	}
+
+	quota, err := store.GetMonthlyQuota(firstKey.WorkspaceID)
+	if err != nil {
+		t.Fatalf("GetMonthlyQuota failed: %v", err)
+	}
+	if quota != 1250 {
+		t.Fatalf("unexpected reused workspace quota: got=%d want=1250", quota)
+	}
+}

@@ -51,20 +51,20 @@ type HardwareItem struct {
 
 // CatalogAsset represents a verified hardware model in the catalog.
 type CatalogAsset struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	Family       string `json:"family"`
-	Architecture string `json:"architecture"`
-	CodeExample  string `json:"code_example"`
-	PassRate     int    `json:"pass_rate"`
-	Registers    int    `json:"registers"`
-	IrURL        string `json:"ir_url"`
-	Verified     bool   `json:"verified"`
-	SourceType   string `json:"source_type"`
-	SourceRef    string `json:"source_ref"`
-	SourceURL    string `json:"source_url"`
-	OfficialURL  string `json:"official_url"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Family        string `json:"family"`
+	Architecture  string `json:"architecture"`
+	CodeExample   string `json:"code_example"`
+	PassRate      int    `json:"pass_rate"`
+	Registers     int    `json:"registers"`
+	IrURL         string `json:"ir_url"`
+	Verified      bool   `json:"verified"`
+	SourceType    string `json:"source_type"`
+	SourceRef     string `json:"source_ref"`
+	SourceURL     string `json:"source_url"`
+	OfficialURL   string `json:"official_url"`
 	ValidationURL string `json:"validation_url"`
 }
 
@@ -314,7 +314,7 @@ func (s *Store) ReserveRunForWorkspace(runID, workspaceID, status string) error 
 		   SELECT COALESCE(SUM(billable), 0) FROM simulation_runs
 		   WHERE workspace_id = ? AND datetime(created_at) >= datetime('now', '-30 days')
 		 ) < COALESCE(
-		   (SELECT monthly_quota FROM api_keys WHERE workspace_id = ? AND revoked = FALSE LIMIT 1),
+		   (SELECT MAX(monthly_quota) FROM api_keys WHERE workspace_id = ? AND revoked = FALSE),
 		   1000
 		 )`,
 		runID, workspaceID, status, workspaceID, workspaceID,
@@ -349,7 +349,7 @@ func (s *Store) ReserveRunForWorkspaceWithInflight(runID, workspaceID, status st
 		   SELECT COALESCE(SUM(billable), 0) FROM simulation_runs
 		   WHERE workspace_id = ? AND datetime(created_at) >= datetime('now', '-30 days')
 		 ) < COALESCE(
-		   (SELECT monthly_quota FROM api_keys WHERE workspace_id = ? AND revoked = FALSE LIMIT 1),
+		   (SELECT MAX(monthly_quota) FROM api_keys WHERE workspace_id = ? AND revoked = FALSE),
 		   1000
 		 )`,
 		runID, workspaceID, status,
@@ -404,7 +404,7 @@ func (s *Store) ReserveRunsForWorkspace(runIDs []string, workspaceID, status str
 	var limit int
 	if err := tx.QueryRow(
 		`SELECT COALESCE(
-		   (SELECT monthly_quota FROM api_keys WHERE workspace_id = ? AND revoked = FALSE LIMIT 1),
+		   (SELECT MAX(monthly_quota) FROM api_keys WHERE workspace_id = ? AND revoked = FALSE),
 		   1000
 		 )`,
 		workspaceID,
@@ -837,7 +837,7 @@ func (s *Store) SetRunBillable(runID string, billable bool) error {
 func (s *Store) GetMonthlyQuota(workspaceID string) (int, error) {
 	var quota int
 	err := s.db.QueryRow(
-		`SELECT monthly_quota FROM api_keys WHERE workspace_id = ? AND revoked = FALSE LIMIT 1`,
+		`SELECT COALESCE(MAX(monthly_quota), 1000) FROM api_keys WHERE workspace_id = ? AND revoked = FALSE`,
 		workspaceID,
 	).Scan(&quota)
 	if err != nil {
@@ -1013,11 +1013,11 @@ func (s *Store) ListCatalogAssets() ([]CatalogAsset, error) {
 
 // AccountUsage holds aggregated quota/usage for a Clerk account.
 type AccountUsage struct {
-	ClerkUserID        string `json:"clerk_user_id"`
-	Tier               string `json:"tier"`
-	RunsUsedThisMonth  int    `json:"runs_used_this_month"`
-	Quota              int    `json:"quota"`
-	RunsRemaining      int    `json:"runs_remaining"`
+	ClerkUserID       string `json:"clerk_user_id"`
+	Tier              string `json:"tier"`
+	RunsUsedThisMonth int    `json:"runs_used_this_month"`
+	Quota             int    `json:"quota"`
+	RunsRemaining     int    `json:"runs_remaining"`
 }
 
 // GetAccountUsage returns aggregated usage across all non-revoked API keys for a Clerk user.
@@ -1025,15 +1025,27 @@ func (s *Store) GetAccountUsage(clerkUserID string) (AccountUsage, error) {
 	var used, quota int
 	var tier string
 	err := s.db.QueryRow(`
+		WITH user_workspaces AS (
+			SELECT
+				workspace_id,
+				MAX(monthly_quota) AS monthly_quota,
+				MAX(tier) AS tier
+			FROM api_keys
+			WHERE clerk_user_id = ? AND revoked = FALSE
+			GROUP BY workspace_id
+		),
+		recent_usage AS (
+			SELECT workspace_id, COALESCE(SUM(billable), 0) AS used
+			FROM simulation_runs
+			WHERE datetime(created_at) >= datetime('now', '-30 days')
+			GROUP BY workspace_id
+		)
 		SELECT
-			COALESCE(SUM(r.billable), 0),
-			COALESCE(SUM(k.monthly_quota), 0),
-			COALESCE(MAX(k.tier), 'builder')
-		FROM api_keys k
-		LEFT JOIN simulation_runs r
-			ON r.workspace_id = k.workspace_id
-			AND datetime(r.created_at) >= datetime('now', '-30 days')
-		WHERE k.clerk_user_id = ? AND k.revoked = FALSE
+			COALESCE(SUM(COALESCE(u.used, 0)), 0),
+			COALESCE(SUM(w.monthly_quota), 0),
+			COALESCE(MAX(w.tier), 'builder')
+		FROM user_workspaces w
+		LEFT JOIN recent_usage u ON u.workspace_id = w.workspace_id
 	`, clerkUserID).Scan(&used, &quota, &tier)
 	if err != nil {
 		return AccountUsage{}, err
@@ -1059,8 +1071,13 @@ func (s *Store) ListRunsForClerkUser(clerkUserID string) ([]RunRecord, error) {
 	rows, err := s.db.Query(`
 		SELECT r.run_id, r.workspace_id, r.status, r.assertions_passed, r.assertions_total, r.artifacts_path, r.created_at
 		FROM simulation_runs r
-		JOIN api_keys k ON k.workspace_id = r.workspace_id
-		WHERE k.clerk_user_id = ? AND k.revoked = FALSE
+		WHERE EXISTS (
+			SELECT 1
+			FROM api_keys k
+			WHERE k.workspace_id = r.workspace_id
+			  AND k.clerk_user_id = ?
+			  AND k.revoked = FALSE
+		)
 		ORDER BY r.created_at DESC LIMIT 50
 	`, clerkUserID)
 	if err != nil {

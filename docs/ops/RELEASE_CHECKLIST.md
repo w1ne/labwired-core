@@ -28,9 +28,9 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo build --workspace
-cargo build -p firmware-stm32f103-blinky --release --target thumbv7m-none-eabi
+cargo build -p demo-blinky --release --target thumbv7m-none-eabi
 ./scripts/unsupported_instruction_audit.sh \
-  --firmware target/thumbv7m-none-eabi/release/firmware-stm32f103-blinky \
+  --firmware target/thumbv7m-none-eabi/release/demo-blinky \
   --system configs/systems/ci-fixture-uart1.yaml \
   --max-steps 20000 \
   --out-dir out/unsupported-audit/ci-fixture \
@@ -65,7 +65,11 @@ These checks are mandatory due to incidents on 2026-02-14, 2026-02-15, and 2026-
 
 ## 4. CI Gate Verification
 
-- [ ] `Rust Core CI` is green: `.github/workflows/core-ci.yml`.
+- [ ] Root integration smoke is green: `.github/workflows/core-ci.yml`.
+- [ ] Core release-grade workflows are green for the target scope:
+  - `core/.github/workflows/core-ci.yml`
+  - `core/.github/workflows/core-unsupported-audit.yml`
+  - `core/.github/workflows/core-validate-hw-targets.yml` when board/catalog metadata changed
 - [ ] `VS Code Extension CI` is green: `.github/workflows/vscode-ci.yml` (required for platform releases and `vscode` scope).
 - [ ] No required check is bypassed; no release is cut on pending checks.
 

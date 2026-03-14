@@ -39,8 +39,8 @@ labwired/
 ```bash
 cd core
 
-# Exclude all embedded firmware crates that require cross-compilation targets
-EXCLUDES="--exclude firmware-armv6m-hello --exclude firmware-stm32f103-blinky --exclude firmware-stm32f103-uart --exclude firmware-armv6m-ci-fixture --exclude firmware-armv7m-benchmark --exclude firmware-f401-demo --exclude firmware-h563-demo --exclude firmware-h563-fullchip-demo --exclude firmware-h563-io-demo --exclude firmware-hil-showcase --exclude firmware-nrf52832-demo --exclude firmware-rp2040-pio-onboarding --exclude firmware-rv32i-ci-fixture --exclude firmware-rv32i-hello"
+# Exclude cross-target firmware/examples for a fast host-only loop
+EXCLUDES="--exclude firmware --exclude firmware-ci-fixture --exclude firmware-f401-demo --exclude firmware-h563-demo --exclude firmware-h563-fullchip-demo --exclude firmware-h563-io-demo --exclude firmware-hil-showcase --exclude firmware-comparative-benchmark --exclude firmware-rp2040-pio-onboarding --exclude firmware-rp2040-demo --exclude firmware-nrf52840-demo --exclude riscv-ci-fixture --exclude arm-hello --exclude riscv-hello --exclude demo-blinky"
 
 # Build all host crates
 cargo build --workspace $EXCLUDES
@@ -48,8 +48,8 @@ cargo build --workspace $EXCLUDES
 # Run tests
 cargo test --workspace $EXCLUDES
 
-# Build firmware examples (requires embedded targets)
-cargo build -p firmware-stm32f103-uart --target thumbv7m-none-eabi --release
+# Build a firmware example (requires embedded targets)
+cargo build -p demo-blinky --target thumbv7m-none-eabi --release
 ```
 
 ### VS Code Extension
@@ -82,7 +82,7 @@ python scripts/extract_datasheet.py
 ### Core
 ```bash
 cd core
-EXCLUDES="--exclude firmware-armv6m-hello --exclude firmware-stm32f103-blinky --exclude firmware-stm32f103-uart --exclude firmware-armv6m-ci-fixture --exclude firmware-armv7m-benchmark --exclude firmware-f401-demo --exclude firmware-h563-demo --exclude firmware-h563-fullchip-demo --exclude firmware-h563-io-demo --exclude firmware-hil-showcase --exclude firmware-nrf52832-demo --exclude firmware-rp2040-pio-onboarding --exclude firmware-rv32i-ci-fixture --exclude firmware-rv32i-hello"
+EXCLUDES="--exclude firmware --exclude firmware-ci-fixture --exclude firmware-f401-demo --exclude firmware-h563-demo --exclude firmware-h563-fullchip-demo --exclude firmware-h563-io-demo --exclude firmware-hil-showcase --exclude firmware-comparative-benchmark --exclude firmware-rp2040-pio-onboarding --exclude firmware-rp2040-demo --exclude firmware-nrf52840-demo --exclude riscv-ci-fixture --exclude arm-hello --exclude riscv-hello --exclude demo-blinky"
 cargo test --workspace $EXCLUDES
 cargo clippy --workspace $EXCLUDES -- -D warnings
 cargo fmt --all -- --check

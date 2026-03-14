@@ -136,11 +136,11 @@ docker run --rm -v $PWD:/workspace ghcr.io/w1ne/labwired:latest \
 
 
 ## 🤝 Development Workflow
-We follow **Gitflow** and enforce strict quality gates.
+We follow **trunk-based development** on `main` and enforce strict quality gates.
 
-- **Main Branch**: `main` (Production tags only).
-- **Development**: `develop` (Feature integration).
-- **Feature Branches**: `feature/xyz`.
+- **Main Branch**: `main`.
+- **Feature Branches**: `feature/xyz` or `feature/issue-id-description`.
+- **Hotfix Branches**: `hotfix/xyz`.
 
 **Quality Gates:**
 - Root PRs must pass lean integration gates.

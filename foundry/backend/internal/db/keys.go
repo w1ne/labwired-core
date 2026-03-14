@@ -1,20 +1,22 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type APIKey struct {
-	ID           string `json:"id"`
-	KeyHash      string `json:"-"`
-	KeyPrefix    string `json:"-"`
-	WorkspaceID  string `json:"workspace_id"`
-	Tier         string `json:"tier"`
-	ClerkUserID  string `json:"clerk_user_id,omitempty"`
+	ID          string `json:"id"`
+	KeyHash     string `json:"-"`
+	KeyPrefix   string `json:"-"`
+	WorkspaceID string `json:"workspace_id"`
+	Tier        string `json:"tier"`
+	ClerkUserID string `json:"clerk_user_id,omitempty"`
 }
 
 // APIKeyPublic is the safe subset returned to the cabinet (no hash, masked prefix only).
@@ -79,20 +81,54 @@ func (s *Store) ListKeysForClerkUser(clerkUserID string) ([]APIKeyPublic, error)
 	return keys, nil
 }
 
-// CreateKeyForClerkUser generates a new workspace + API key for a Clerk account.
-// Returns the APIKey with the plaintext key embedded in KeyPrefix for one-time display.
+// CreateKeyForClerkUser creates an API key for a Clerk account.
+// Existing accounts reuse their first active workspace so account-level usage/quota
+// stays stable across multiple keys.
 func (s *Store) CreateKeyForClerkUser(clerkUserID, plaintextKey, workspaceID string) (*APIKey, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextKey), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	var quota int
+	err = tx.QueryRow(
+		`SELECT workspace_id, monthly_quota
+		 FROM api_keys
+		 WHERE clerk_user_id = ? AND revoked = FALSE
+		 ORDER BY rowid ASC
+		 LIMIT 1`,
+		clerkUserID,
+	).Scan(&workspaceID, &quota)
+	switch {
+	case err == nil:
+	case err == sql.ErrNoRows:
+		if strings.TrimSpace(workspaceID) == "" {
+			workspaceID = uuid.New().String()
+		}
+		quota = 1000
+	default:
+		return nil, err
+	}
+
 	id := uuid.New().String()
 	prefix := keyPrefix(plaintextKey)
-	_, err = s.db.Exec(
-		"INSERT INTO api_keys (id, key_hash, key_prefix, workspace_id, tier, clerk_user_id) VALUES (?, ?, ?, ?, ?, ?)",
-		id, string(hash), prefix, workspaceID, "builder", clerkUserID,
+	_, err = tx.Exec(
+		`INSERT INTO api_keys (id, key_hash, key_prefix, workspace_id, tier, monthly_quota, clerk_user_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, string(hash), prefix, workspaceID, "builder", quota, clerkUserID,
 	)
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &APIKey{

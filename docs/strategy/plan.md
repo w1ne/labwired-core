@@ -127,7 +127,7 @@ _Validated gaps logged on February 12, 2026._
 - [x] Project Structure (Workspace)
     - **Verified**: `Cargo.toml` workspace defines `core`, `loader`, `cli`.
 - [x] Release & Merging Strategy Defined (`core/docs/release_strategy.md`)
-    - **Verified**: Document exists and team follows Gitflow.
+    - **Verified**: Document exists and team follows trunk-based development on `main`.
 - [x] Core Traits (CPU, MemoryBus, Peripheral)
     - **Verified**: `crates/core/src/lib.rs` defines `Cpu` and `Bus` traits.
 - [x] Error Handling Strategy (`thiserror`)

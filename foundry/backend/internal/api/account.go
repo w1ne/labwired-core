@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/labwired/foundry-backend/internal/db"
 )
@@ -81,9 +80,8 @@ func (s *Server) handleCreateAccountKey(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	plaintextKey := fmt.Sprintf("lw_sk_live_%s", hex.EncodeToString(raw))
-	workspaceID := uuid.New().String()
 
-	apiKey, err := s.store.CreateKeyForClerkUser(clerkUserID, plaintextKey, workspaceID)
+	apiKey, err := s.store.CreateKeyForClerkUser(clerkUserID, plaintextKey, "")
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to store API key.", "")
 		return
