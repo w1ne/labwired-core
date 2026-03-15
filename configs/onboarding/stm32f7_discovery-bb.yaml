@@ -9,16 +9,17 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/stm32f7_discovery-bb.yaml
 sample_trace: traces/stm32.txt
 validation:
-  method: local-simulation
-  reason: simulation-ok
+  method: ci-structural
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-03-12T23:52:32.565546+00:00'
-  run_url: ''
-  artifacts_url: ''
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-03-15T00:05:00.153981+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/23099265713/attempts/1
+  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23099265713/attempts/1#artifacts

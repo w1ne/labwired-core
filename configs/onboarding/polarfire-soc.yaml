@@ -10,13 +10,13 @@ verified: false
 system: systems/onboarding/polarfire-soc.yaml
 sample_trace: traces/generic.txt
 validation:
-  method: local-structural
-  reason: structural-ok (non-ARM32)
+  method: ci-structural
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T23:52:30.369306+00:00'
-  run_url: ''
-  artifacts_url: ''
+  timestamp_utc: '2026-03-15T00:04:59.809840+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/23099265713/attempts/1
+  artifacts_url: https://github.com/w1ne/labwired-core/actions/runs/23099265713/attempts/1#artifacts
