@@ -8,5 +8,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.ts',
+    pool: 'threads',
+    server: {
+      deps: {
+        inline: ['jsdom', 'html-encoding-sniffer', '@exodus/bytes'],
+      },
+    },
   },
 });

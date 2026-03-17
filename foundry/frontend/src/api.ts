@@ -20,3 +20,7 @@ export function authHeaders(): Record<string, string> {
 
 // Stripe payment link — replace with your real link before going live.
 export const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_placeholder';
+
+export function hasLiveStripePaymentLink(): boolean {
+    return !STRIPE_PAYMENT_LINK.includes('test_placeholder');
+}

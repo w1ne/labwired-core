@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@clerk/react';
-import { apiUrl, STRIPE_PAYMENT_LINK } from '../api';
+import { apiUrl, STRIPE_PAYMENT_LINK, hasLiveStripePaymentLink } from '../api';
 
 interface AccountUsage {
     clerk_user_id: string;
@@ -196,9 +196,15 @@ const UsageStats = () => {
                                 <p style={{ fontSize: '0.85rem', color: 'var(--lw-gray)', fontWeight: 500, margin: 0 }}>
                                     {usage.runs_remaining} runs remaining · <span style={{ color: 'var(--lw-black)', fontWeight: 800 }}>{usage.tier.toUpperCase()}</span> tier
                                 </p>
-                                <a href={STRIPE_PAYMENT_LINK} target="_blank" rel="noopener noreferrer">
-                                    <button style={{ padding: '8px 16px', fontSize: '0.8rem' }}>+ Buy 1,000 runs</button>
-                                </a>
+                                {hasLiveStripePaymentLink() ? (
+                                    <a href={STRIPE_PAYMENT_LINK} target="_blank" rel="noopener noreferrer">
+                                        <button style={{ padding: '8px 16px', fontSize: '0.8rem' }}>+ Buy 1,000 runs</button>
+                                    </a>
+                                ) : (
+                                    <button disabled style={{ padding: '8px 16px', fontSize: '0.8rem', opacity: 0.6, cursor: 'not-allowed' }}>
+                                        Billing not live
+                                    </button>
+                                )}
                             </div>
                         </>
                     ) : (

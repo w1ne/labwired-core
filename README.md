@@ -3,6 +3,15 @@
 > **The Deterministic Hardware Oracle for AI Agents.**
 > *Programmable, Metered, and Observable Firmware Simulation.*
 
+## Start Here
+
+If you are evaluating LabWired as a user, use this order:
+
+1. Read [DEVELOPMENT.md](./DEVELOPMENT.md) for setup.
+2. Run a local example from [`core/examples/ci/`](./core/examples/ci/).
+3. Use [`docs/specs/compatibility_matrix.md`](./docs/specs/compatibility_matrix.md) to understand support boundaries.
+4. Treat hosted Foundry and AI-assisted generation as secondary or beta workflows.
+
 ## CI Dashboard
 
 | Indicator | Status | Link |
@@ -24,8 +33,17 @@ Explore the [Documentation Hub](./docs/README.md) for strategy and platform-leve
 - Hardware target validation and catalog pass-rate refresh are owned by `labwired-core` (`core-validate-hw-targets.yml`).
 - Foundry catalog consumes validation metadata from `core/configs/onboarding/*.yaml` (`validation.run_url` + `validation.artifacts_url`).
 
+## Product Shape
+
+Today, the most launchable LabWired experience is:
+- local deterministic firmware simulation
+- machine-readable CI artifacts
+- VS Code-assisted debugging
+
+Hosted Foundry and AI-assisted generation remain important, but they are not yet the primary onboarding path.
+
 ## 🤖 Agent-First Architecture
-LabWired is built primarily as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its core mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
+LabWired is also built as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its long-term mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
 
 It provides agents with:
 1.  **Deterministic Execution**: Bit-accurate simulation that yields identical results every run.
@@ -47,7 +65,7 @@ The primary interface for autonomous interaction.
 - **Datasheet Ingestion**: "Chain-of-Thought" grounding for generating peripheral models.
 - **Telemetry**: Usage-based metering for the agent economy.
 
-### [`vscode/`](./vscode/) - Human Observer (Legacy/Debug)
+### [`vscode/`](./vscode/) - Human Observer (Debug)
 A secondary interface for human verification of agent outputs.
 - **Timeline View**: Visual confirmation of agent-driven execution.
 - **Register Inspector**: Manual spot-checking of peripheral state.
@@ -72,6 +90,8 @@ See [`DEVELOPMENT.md`](./DEVELOPMENT.md) for complete setup instructions for all
 ## 📚 Documentation & Demos
 - **🚀 [Demos & Examples](./DEMOS.md)** - Start here to see LabWired in action.
 - **📖 [Documentation Hub](./docs/README.md)** - Central index for all platform documentation.
+  - [User Launch Worklist](./docs/launch/USER_LAUNCH_WORKLIST.md)
+  - [Compatibility Matrix](./docs/specs/compatibility_matrix.md)
   - [Strategy & Planning](./docs/strategy/plan.md)
   - [Technical Specs](./docs/specs/DIGITAL_TWIN_SPEC.md)
   - [Development Guide](./DEVELOPMENT.md)

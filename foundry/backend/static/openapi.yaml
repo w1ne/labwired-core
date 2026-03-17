@@ -14,6 +14,9 @@ components:
     BearerAuth:
       type: http
       scheme: bearer
+    ClerkBearerAuth:
+      type: http
+      scheme: bearer
 
   schemas:
     Error:
@@ -141,6 +144,40 @@ components:
           type: string
         artifacts:
           $ref: '#/components/schemas/RunArtifacts'
+
+    APIKeyPublic:
+      type: object
+      properties:
+        id:
+          type: string
+        key_prefix:
+          type: string
+        workspace_id:
+          type: string
+        tier:
+          type: string
+
+    AccountUsage:
+      type: object
+      properties:
+        clerk_user_id:
+          type: string
+        tier:
+          type: string
+        runs_used_this_month:
+          type: integer
+        quota:
+          type: integer
+        runs_remaining:
+          type: integer
+
+    QuickstartResponse:
+      type: object
+      properties:
+        key_prefix:
+          type: string
+        curl:
+          type: string
 
 paths:
   /info:
@@ -322,6 +359,190 @@ paths:
       responses:
         '200':
           description: Usage payload.
+
+  /account/usage:
+    get:
+      summary: Get dashboard usage/quota
+      security:
+        - ClerkBearerAuth: []
+      responses:
+        '200':
+          description: Account usage across Clerk-owned workspaces.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountUsage'
+
+  /account/runs:
+    get:
+      summary: List dashboard runs
+      security:
+        - ClerkBearerAuth: []
+      responses:
+        '200':
+          description: Recent runs across Clerk-owned workspaces.
+
+  /account/runs/{run_id}:
+    get:
+      summary: Get dashboard run status
+      security:
+        - ClerkBearerAuth: []
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current dashboard run status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunStatus'
+
+  /account/runs/{run_id}/artifacts/{file}:
+    get:
+      summary: Download dashboard run artifact
+      security:
+        - ClerkBearerAuth: []
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [output.json, proof.vcd, result.json, error.log]
+      responses:
+        '200':
+          description: Artifact file stream.
+
+  /account/keys:
+    get:
+      summary: List dashboard API keys
+      security:
+        - ClerkBearerAuth: []
+      responses:
+        '200':
+          description: Active API keys for the Clerk account.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/APIKeyPublic'
+    post:
+      summary: Create dashboard API key
+      security:
+        - ClerkBearerAuth: []
+      responses:
+        '201':
+          description: API key created.
+
+  /account/keys/{key_id}:
+    delete:
+      summary: Revoke dashboard API key
+      security:
+        - ClerkBearerAuth: []
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: API key revoked.
+
+  /account/quickstart:
+    get:
+      summary: Get personalized dashboard quickstart snippet
+      security:
+        - ClerkBearerAuth: []
+      responses:
+        '200':
+          description: Curl snippet for human operators.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickstartResponse'
+
+  /account/estimate:
+    post:
+      summary: Estimate synthesis cost from dashboard
+      security:
+        - ClerkBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SynthesisRequest'
+      responses:
+        '200':
+          description: Cost estimate.
+
+  /account/synthesize:
+    post:
+      summary: Submit synthesis job from dashboard
+      security:
+        - ClerkBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SynthesisRequest'
+      responses:
+        '202':
+          description: Synthesis queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SynthesisQueuedResponse'
+
+  /account/models/verify:
+    post:
+      summary: Enqueue model verification from dashboard
+      security:
+        - ClerkBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerificationRequest'
+      responses:
+        '202':
+          description: Verification queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueuedRunResponse'
+
+  /account/systems/verify:
+    post:
+      summary: Enqueue system verification from dashboard
+      security:
+        - ClerkBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemVerificationRequest'
+      responses:
+        '202':
+          description: Verification queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueuedRunResponse'
 
   /hardware:
     get:

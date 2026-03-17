@@ -27,6 +27,11 @@ type APIKeyPublic struct {
 	Tier        string `json:"tier"`
 }
 
+type AccountWorkspace struct {
+	WorkspaceID string `json:"workspace_id"`
+	Tier        string `json:"tier"`
+}
+
 func keyPrefix(plaintextKey string) string {
 	const prefixLen = 16
 	if len(plaintextKey) <= prefixLen {
@@ -79,6 +84,26 @@ func (s *Store) ListKeysForClerkUser(clerkUserID string) ([]APIKeyPublic, error)
 		keys = append(keys, k)
 	}
 	return keys, nil
+}
+
+// GetPrimaryWorkspaceForClerkUser returns the first active workspace for a Clerk account.
+func (s *Store) GetPrimaryWorkspaceForClerkUser(clerkUserID string) (*AccountWorkspace, error) {
+	row := s.db.QueryRow(
+		`SELECT workspace_id, tier
+		 FROM api_keys
+		 WHERE clerk_user_id = ? AND revoked = FALSE
+		 ORDER BY rowid ASC
+		 LIMIT 1`,
+		clerkUserID,
+	)
+	var binding AccountWorkspace
+	if err := row.Scan(&binding.WorkspaceID, &binding.Tier); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &binding, nil
 }
 
 // CreateKeyForClerkUser creates an API key for a Clerk account.

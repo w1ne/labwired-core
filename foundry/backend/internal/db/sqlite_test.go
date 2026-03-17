@@ -792,3 +792,35 @@ func TestGetAccountUsageAndRuns_DeduplicateSharedWorkspaceKeys(t *testing.T) {
 		t.Fatalf("unexpected run id: got=%s want=run-shared-1", runs[0].RunID)
 	}
 }
+
+func TestGetRunForClerkUser_RestrictsWorkspaceOwnership(t *testing.T) {
+	store := newTestStore(t)
+
+	ownerKey, err := store.CreateKeyForClerkUser("clerk-owner", "lw_sk_live_owner_run_key_123456", "ws-owner")
+	if err != nil {
+		t.Fatalf("CreateKeyForClerkUser owner failed: %v", err)
+	}
+	if _, err := store.CreateKeyForClerkUser("clerk-other", "lw_sk_live_other_run_key_654321", "ws-other"); err != nil {
+		t.Fatalf("CreateKeyForClerkUser other failed: %v", err)
+	}
+
+	if err := store.SaveRun("run-owner-1", ownerKey.WorkspaceID, "pass"); err != nil {
+		t.Fatalf("SaveRun failed: %v", err)
+	}
+
+	record, err := store.GetRunForClerkUser("run-owner-1", "clerk-owner")
+	if err != nil {
+		t.Fatalf("GetRunForClerkUser owner failed: %v", err)
+	}
+	if record == nil || record.RunID != "run-owner-1" {
+		t.Fatalf("expected owner to see run-owner-1, got %#v", record)
+	}
+
+	record, err = store.GetRunForClerkUser("run-owner-1", "clerk-other")
+	if err != nil {
+		t.Fatalf("GetRunForClerkUser other failed: %v", err)
+	}
+	if record != nil {
+		t.Fatalf("expected non-owner to be denied, got %#v", record)
+	}
+}

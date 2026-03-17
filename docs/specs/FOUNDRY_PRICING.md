@@ -151,8 +151,11 @@ result = response.json()
 
 ## Purchasing Credits
 
-Users can instantly top up their account using our Stripe checkout link:
-**[Buy 1,000 Simulation Runs (€49)](https://buy.stripe.com/test_placeholder)**
+Users will be able to top up their account through a Stripe checkout link once billing is productionized.
+
+Current state:
+- the production checkout URL is not finalized in this repo snapshot
+- billing should be treated as beta or manual until the live payment path is verified
 
 Upon successful payment, the Stripe webhook automatically credits the workspace associated with the provided email address.
 

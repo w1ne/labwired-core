@@ -94,3 +94,37 @@ func TestCreateKeyForClerkUser_ReusesWorkspaceAndQuota(t *testing.T) {
 		t.Fatalf("unexpected reused workspace quota: got=%d want=1250", quota)
 	}
 }
+
+func TestGetPrimaryWorkspaceForClerkUser_ReturnsFirstActiveWorkspace(t *testing.T) {
+	store := newTestStore(t)
+
+	binding, err := store.GetPrimaryWorkspaceForClerkUser("missing-user")
+	if err != nil {
+		t.Fatalf("GetPrimaryWorkspaceForClerkUser missing failed: %v", err)
+	}
+	if binding != nil {
+		t.Fatalf("expected nil binding for missing user, got %#v", binding)
+	}
+
+	first, err := store.CreateKeyForClerkUser("clerk-user-primary", "lw_sk_live_primary_workspace_key_123", "ws-primary")
+	if err != nil {
+		t.Fatalf("CreateKeyForClerkUser first failed: %v", err)
+	}
+	if _, err := store.CreateKeyForClerkUser("clerk-user-primary", "lw_sk_live_primary_workspace_key_456", "ws-ignored"); err != nil {
+		t.Fatalf("CreateKeyForClerkUser second failed: %v", err)
+	}
+
+	binding, err = store.GetPrimaryWorkspaceForClerkUser("clerk-user-primary")
+	if err != nil {
+		t.Fatalf("GetPrimaryWorkspaceForClerkUser failed: %v", err)
+	}
+	if binding == nil {
+		t.Fatalf("expected workspace binding")
+	}
+	if binding.WorkspaceID != first.WorkspaceID {
+		t.Fatalf("unexpected workspace id: got=%s want=%s", binding.WorkspaceID, first.WorkspaceID)
+	}
+	if binding.Tier != "builder" {
+		t.Fatalf("unexpected tier: got=%s want=builder", binding.Tier)
+	}
+}

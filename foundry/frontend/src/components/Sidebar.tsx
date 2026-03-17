@@ -2,7 +2,7 @@
 
 const Sidebar = ({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) => {
     const tabs = [
-        { id: 'private-models', label: 'Private Models', icon: '🔒' },
+        { id: 'private-models', label: 'Run Console', icon: '🧪' },
         { id: 'usage', label: 'Usage & Quota', icon: '📊' },
         { id: 'health', label: 'Platform Health', icon: '🩺' },
         { id: 'docs', label: 'API Reference', icon: '📕' },

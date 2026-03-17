@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@clerk/react';
 import { apiUrl, authHeaders } from '../api';
 
 interface RunResponse {
@@ -20,29 +21,37 @@ interface Props {
 }
 
 const RunDetail = ({ runId, onBack }: Props) => {
+    const { getToken, isSignedIn } = useAuth();
     const [run, setRun] = useState<RunResponse | null>(null);
     const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState(true);
 
-    const loadRun = () => {
+    const loadRun = useCallback(async () => {
         setLoading(true);
         setError('');
-        fetch(apiUrl(`/v1/runs/${runId}`), { headers: authHeaders() })
-            .then(async (r) => {
-                if (!r.ok) {
-                    const body = await r.text();
-                    throw new Error(body || `Run endpoint returned ${r.status}`);
-                }
-                return r.json();
-            })
-            .then((data: RunResponse) => setRun(data))
-            .catch((err) => setError(err instanceof Error ? err.message : 'Failed to fetch run'))
-            .finally(() => setLoading(false));
-    };
+        try {
+            const clerkToken = isSignedIn ? await getToken() : null;
+            const dashboardHeaders: Record<string, string> = {};
+            if (clerkToken) dashboardHeaders['Authorization'] = `Bearer ${clerkToken}`;
+            const endpoint = clerkToken ? `/v1/account/runs/${runId}` : `/v1/runs/${runId}`;
+            const headers = clerkToken ? dashboardHeaders : authHeaders();
+            const response = await fetch(apiUrl(endpoint), { headers });
+            if (!response.ok) {
+                const body = await response.text();
+                throw new Error(body || `Run endpoint returned ${response.status}`);
+            }
+            const data: RunResponse = await response.json();
+            setRun(data);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to fetch run');
+        } finally {
+            setLoading(false);
+        }
+    }, [getToken, isSignedIn, runId]);
 
     useEffect(() => {
         loadRun();
-    }, [runId]);
+    }, [loadRun]);
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--lw-bg)', padding: '2rem 2.5rem', maxWidth: '960px', margin: '0 auto' }}>
@@ -60,7 +69,9 @@ const RunDetail = ({ runId, onBack }: Props) => {
             {error && !loading && (
                 <div className="bento-card">
                     <p style={{ color: '#b42318', fontWeight: 700, marginBottom: '0.5rem' }}>{error}</p>
-                    <p style={{ color: 'var(--lw-gray)', margin: 0 }}>Check API key/workspace access, then retry.</p>
+                    <p style={{ color: 'var(--lw-gray)', margin: 0 }}>
+                        {isSignedIn ? 'Check dashboard access, then retry.' : 'Check API key/workspace access, then retry.'}
+                    </p>
                 </div>
             )}
 

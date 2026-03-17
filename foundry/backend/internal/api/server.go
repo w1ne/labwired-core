@@ -88,13 +88,13 @@ type Job struct {
 }
 
 type Server struct {
-	router       *mux.Router
-	jobs         sync.Map // run_id -> *Job (in-memory while queued/running)
-	workerCount  int
-	workersWG    sync.WaitGroup
-	orchestrator *verification.Orchestrator
-	store        *db.Store
-	catalog      *catalog.Manager
+	router         *mux.Router
+	jobs           sync.Map // run_id -> *Job (in-memory while queued/running)
+	workerCount    int
+	workersWG      sync.WaitGroup
+	orchestrator   *verification.Orchestrator
+	store          *db.Store
+	catalog        *catalog.Manager
 	artifactsDir   string
 	dataDir        string
 	clerkSecretKey string
@@ -535,9 +535,16 @@ func (s *Server) routes() {
 		account.Use(s.clerkAuthMiddleware)
 		account.HandleFunc("/usage", s.handleAccountUsage).Methods("GET")
 		account.HandleFunc("/runs", s.handleAccountRuns).Methods("GET")
+		account.HandleFunc("/runs/{run_id}", s.handleAccountRun).Methods("GET")
+		account.HandleFunc("/runs/{run_id}/artifacts/{file}", s.handleAccountRunArtifact).Methods("GET")
+		account.HandleFunc("/estimate", s.handleAccountEstimate).Methods("POST")
+		account.HandleFunc("/synthesize", s.handleAccountSynthesize).Methods("POST")
+		account.HandleFunc("/models/verify", s.handleAccountVerifyModel).Methods("POST")
+		account.HandleFunc("/systems/verify", s.handleAccountVerifySystem).Methods("POST")
 		account.HandleFunc("/keys", s.handleListAccountKeys).Methods("GET")
 		account.HandleFunc("/keys", s.handleCreateAccountKey).Methods("POST")
 		account.HandleFunc("/keys/{key_id}", s.handleRevokeAccountKey).Methods("DELETE")
+		account.HandleFunc("/quickstart", s.handleAccountQuickstart).Methods("GET")
 	}
 }
 
@@ -1276,24 +1283,8 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string]interface{}{
-		"run_id":            record.RunID,
-		"status":            record.Status,
-		"assertions_passed": record.AssertionsPassed,
-		"assertions_total":  record.AssertionsTotal,
-		"created_at":        record.CreatedAt,
-	}
-	if record.ArtifactsPath != "" {
-		baseURL := "/v1/runs/" + record.RunID + "/artifacts"
-		resp["artifacts"] = map[string]string{
-			"ir_url":     baseURL + "/output.json",
-			"vcd_url":    baseURL + "/proof.vcd",
-			"result_url": baseURL + "/result.json",
-		}
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(s.runResponse(record, "/v1/runs/"+record.RunID+"/artifacts"))
 }
 
 func (s *Server) handleGetRunArtifact(w http.ResponseWriter, r *http.Request) {
@@ -1313,30 +1304,25 @@ func (s *Server) handleGetRunArtifact(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusNotFound, "RUN_NOT_FOUND", "No run found with that ID.", "")
 		return
 	}
-	if record.ArtifactsPath == "" {
-		sendError(w, http.StatusNotFound, "ARTIFACT_NOT_FOUND", "No artifacts available for this run.", "")
-		return
-	}
+	s.serveRunArtifact(w, r, record)
+}
 
-	name := mux.Vars(r)["file"]
-	allowed := map[string]struct{}{
-		"output.json": {},
-		"proof.vcd":   {},
-		"result.json": {},
-		"error.log":   {},
+func (s *Server) runResponse(record *db.RunRecord, artifactsBaseURL string) map[string]interface{} {
+	resp := map[string]interface{}{
+		"run_id":            record.RunID,
+		"status":            record.Status,
+		"assertions_passed": record.AssertionsPassed,
+		"assertions_total":  record.AssertionsTotal,
+		"created_at":        record.CreatedAt,
 	}
-	if _, ok := allowed[name]; !ok {
-		sendError(w, http.StatusNotFound, "ARTIFACT_NOT_FOUND", "Requested artifact is not available.", "")
-		return
+	if record.ArtifactsPath != "" {
+		resp["artifacts"] = map[string]string{
+			"ir_url":     artifactsBaseURL + "/output.json",
+			"vcd_url":    artifactsBaseURL + "/proof.vcd",
+			"result_url": artifactsBaseURL + "/result.json",
+		}
 	}
-
-	artifactPath := filepath.Join(record.ArtifactsPath, name)
-	if _, err := os.Stat(artifactPath); err != nil {
-		sendError(w, http.StatusNotFound, "ARTIFACT_NOT_FOUND", "Requested artifact was not found.", "")
-		return
-	}
-
-	http.ServeFile(w, r, artifactPath)
+	return resp
 }
 
 func (s *Server) handleListRuns(w http.ResponseWriter, r *http.Request) {

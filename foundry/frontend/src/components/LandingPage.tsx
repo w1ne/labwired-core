@@ -1,4 +1,4 @@
-import { apiUrl, STRIPE_PAYMENT_LINK } from '../api';
+import { apiUrl, STRIPE_PAYMENT_LINK, hasLiveStripePaymentLink } from '../api';
 import { UserButton, useAuth, useClerk } from '@clerk/react';
 
 const CURL_SNIPPET = `curl -X POST https://foundry.labwired.com/v1/models/verify \\
@@ -191,11 +191,17 @@ const LandingPage = ({ onEnterDashboard }: Props) => {
                     <button onClick={openDashboard} style={{ background: 'var(--lw-pink)', border: 'none', color: '#fff', padding: '1rem 2.5rem', fontSize: '1rem' }}>
                         Start free
                     </button>
-                    <a href={STRIPE_PAYMENT_LINK} target="_blank" rel="noopener noreferrer">
-                        <button className="secondary" style={{ background: 'transparent', color: 'var(--lw-bg)', border: '2px solid var(--lw-bg)', padding: '1rem 2.5rem', fontSize: '1rem' }}>
-                            Buy 1,000 runs →
+                    {hasLiveStripePaymentLink() ? (
+                        <a href={STRIPE_PAYMENT_LINK} target="_blank" rel="noopener noreferrer">
+                            <button className="secondary" style={{ background: 'transparent', color: 'var(--lw-bg)', border: '2px solid var(--lw-bg)', padding: '1rem 2.5rem', fontSize: '1rem' }}>
+                                Buy 1,000 runs →
+                            </button>
+                        </a>
+                    ) : (
+                        <button className="secondary" disabled style={{ background: 'transparent', color: 'var(--lw-bg)', border: '2px solid var(--lw-bg)', padding: '1rem 2.5rem', fontSize: '1rem', opacity: 0.6, cursor: 'not-allowed' }}>
+                            Billing not live
                         </button>
-                    </a>
+                    )}
                 </div>
             </section>
 

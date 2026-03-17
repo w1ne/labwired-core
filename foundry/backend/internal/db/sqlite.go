@@ -611,6 +611,32 @@ func (s *Store) GetRunForWorkspace(runID, workspaceID string) (*RunRecord, error
 	return &r, nil
 }
 
+// GetRunForClerkUser returns a run only if it belongs to a workspace owned by the given Clerk user.
+func (s *Store) GetRunForClerkUser(runID, clerkUserID string) (*RunRecord, error) {
+	row := s.db.QueryRow(
+		`SELECT r.run_id, r.workspace_id, r.status, r.assertions_passed, r.assertions_total, r.artifacts_path, r.created_at
+		 FROM simulation_runs r
+		 WHERE r.run_id = ?
+		   AND EXISTS (
+		     SELECT 1
+		     FROM api_keys k
+		     WHERE k.workspace_id = r.workspace_id
+		       AND k.clerk_user_id = ?
+		       AND k.revoked = FALSE
+		   )`,
+		runID,
+		clerkUserID,
+	)
+	var r RunRecord
+	if err := row.Scan(&r.RunID, &r.WorkspaceID, &r.Status, &r.AssertionsPassed, &r.AssertionsTotal, &r.ArtifactsPath, &r.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &r, nil
+}
+
 // ListRunsWithArtifactsBefore returns runs with artifacts older than the cutoff.
 func (s *Store) ListRunsWithArtifactsBefore(cutoff time.Time) ([]RunArtifactRecord, error) {
 	rows, err := s.db.Query(
