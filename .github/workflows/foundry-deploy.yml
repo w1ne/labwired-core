@@ -168,6 +168,9 @@ jobs:
           DEPLOY_PATH: /home/w1ne/labwired/foundry/deploy
           OWNER_LOWER: ${{ needs.build-and-push.outputs.owner_lower }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           WORK_ROOT="${GITHUB_WORKSPACE}/${CHECKOUT_PATH}"
@@ -184,7 +187,7 @@ jobs:
           # 1. Sync latest hardware configurations
           mkdir -p "$LABWIRED_ROOT/core"
           cp -r core/configs "$LABWIRED_ROOT/core/"
-          
+
           # 2. Sync deployment files
           cp "$WORK_ROOT/foundry/deploy/docker-compose.prod.yml" "$DEPLOY_PATH/"
           cp "$WORK_ROOT/foundry/deploy/Caddyfile" "$DEPLOY_PATH/"
@@ -200,6 +203,34 @@ jobs:
 
           grep -q '^BACKEND_IMAGE=' .env || echo "BACKEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-backend" >> .env
           grep -q '^FRONTEND_IMAGE=' .env || echo "FRONTEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-frontend" >> .env
+
+          if [ -z "${CLERK_SECRET_KEY}" ]; then
+            echo "Missing required secret: CLERK_SECRET_KEY"
+            exit 1
+          fi
+
+          # Keep runtime secrets in the host .env consumed by docker compose.
+          if grep -q '^CLERK_SECRET_KEY=' .env; then
+            sed -i "s|^CLERK_SECRET_KEY=.*|CLERK_SECRET_KEY=${CLERK_SECRET_KEY}|" .env
+          else
+            echo "CLERK_SECRET_KEY=${CLERK_SECRET_KEY}" >> .env
+          fi
+
+          if [ -n "${OPENAI_API_KEY}" ]; then
+            if grep -q '^OPENAI_API_KEY=' .env; then
+              sed -i "s|^OPENAI_API_KEY=.*|OPENAI_API_KEY=${OPENAI_API_KEY}|" .env
+            else
+              echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env
+            fi
+          fi
+
+          if [ -n "${STRIPE_WEBHOOK_SECRET}" ]; then
+            if grep -q '^STRIPE_WEBHOOK_SECRET=' .env; then
+              sed -i "s|^STRIPE_WEBHOOK_SECRET=.*|STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}|" .env
+            else
+              echo "STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}" >> .env
+            fi
+          fi
 
           if grep -q '^BACKEND_IMAGE_TAG=' .env; then
             sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=$IMAGE_TAG/" .env
