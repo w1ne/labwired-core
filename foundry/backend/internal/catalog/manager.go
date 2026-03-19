@@ -17,11 +17,11 @@ type Manager struct {
 }
 
 var knownOfficialBoardURLs = map[string]string{
-	"board/arduino-nano-33-ble": "https://docs.arduino.cc/hardware/nano-33-ble/",
+	"board/arduino-nano-33-ble":   "https://docs.arduino.cc/hardware/nano-33-ble/",
 	"board/arduino-uno-r4-minima": "https://docs.arduino.cc/hardware/uno-r4-minima/",
-	"board/nucleo-f401re":       "https://www.st.com/en/evaluation-tools/nucleo-f401re.html",
-	"board/nucleo-h563zi-demo":  "https://www.st.com/en/evaluation-tools/nucleo-h563zi.html",
-	"chip/rp2040":               "https://www.raspberrypi.com/documentation/microcontrollers/rp2040.html",
+	"board/nucleo-f401re":         "https://www.st.com/en/evaluation-tools/nucleo-f401re.html",
+	"board/nucleo-h563zi-demo":    "https://www.st.com/en/evaluation-tools/nucleo-h563zi.html",
+	"chip/rp2040":                 "https://www.raspberrypi.com/documentation/microcontrollers/rp2040.html",
 }
 
 func NewManager(store *db.Store) *Manager {
@@ -284,26 +284,26 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 		}
 
 		asset := db.CatalogAsset{
-			ID:           id,
-			Name:         name,
-			Description:  model.Description,
-			Family:       model.Family,
-			Architecture: arch,
-			CodeExample:  model.CodeExample,
-			PassRate:     passRate,
-			Registers:    registers,
-			IrURL:        "",
-			Verified:     verified,
-			SourceType:   "core-config",
-			SourceRef:    relPath,
-			SourceURL:    sourceURLForCoreConfig(relPath),
-			OfficialURL:  officialURLForAssetID(id),
+			ID:            id,
+			Name:          name,
+			Description:   model.Description,
+			Family:        model.Family,
+			Architecture:  arch,
+			CodeExample:   model.CodeExample,
+			PassRate:      passRate,
+			Registers:     registers,
+			IrURL:         "",
+			Verified:      verified,
+			SourceType:    "core-config",
+			SourceRef:     relPath,
+			SourceURL:     sourceURLForCoreConfig(relPath),
+			OfficialURL:   officialURLForAssetID(id),
 			ValidationURL: validationURLFromModel(model.Validation.RunURL, model.Validation.ArtifactsURL),
 		}
 
 		if model.Description == "" {
 			if strings.Contains(path, "/chips/") {
-			asset.Description = fmt.Sprintf("Hardware model for %s chip.", name)
+				asset.Description = fmt.Sprintf("Hardware model for %s chip.", name)
 			} else if strings.Contains(path, "/peripherals/") {
 				asset.Description = fmt.Sprintf("Peripheral model for %s.", name)
 			} else {
@@ -403,19 +403,19 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 		}
 
 		asset := db.CatalogAsset{
-			ID:           catalogIDFromHardwareItem(item),
-			Name:         name,
-			Description:  fmt.Sprintf("Simulation profile for %s.", name),
-			Family:       "",
-			Architecture: "",
-			CodeExample:  "",
-			PassRate:     passRate,
-			Registers:    0,
-			IrURL:        "",
-			Verified:     verified,
-			SourceType:   "platform-catalog",
-			SourceRef:    strings.TrimSpace(item.ReplPath),
-			SourceURL:    sourceURLForHardwareItem(item),
+			ID:            catalogIDFromHardwareItem(item),
+			Name:          name,
+			Description:   fmt.Sprintf("Simulation profile for %s.", name),
+			Family:        "",
+			Architecture:  "",
+			CodeExample:   "",
+			PassRate:      passRate,
+			Registers:     0,
+			IrURL:         "",
+			Verified:      verified,
+			SourceType:    "platform-catalog",
+			SourceRef:     strings.TrimSpace(item.ReplPath),
+			SourceURL:     sourceURLForHardwareItem(item),
 			ValidationURL: "",
 		}
 		if asset.ID == "" {
@@ -425,6 +425,40 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 			asset.SourceRef = asset.ID
 		}
 		asset.OfficialURL = officialURLForAssetID(asset.ID)
+
+		// Preserve richer metadata imported from core configs when the hardware index
+		// references the same logical board/chip ID.
+		if existing, ok, err := m.store.GetCatalogAsset(asset.ID); err != nil {
+			log.Printf("[catalog] failed to inspect existing asset %s: %v", asset.ID, err)
+		} else if ok {
+			if strings.TrimSpace(existing.Description) != "" {
+				asset.Description = existing.Description
+			}
+			if strings.TrimSpace(existing.Family) != "" {
+				asset.Family = existing.Family
+			}
+			if strings.TrimSpace(existing.Architecture) != "" {
+				asset.Architecture = existing.Architecture
+			}
+			if strings.TrimSpace(existing.CodeExample) != "" {
+				asset.CodeExample = existing.CodeExample
+			}
+			if existing.Registers > 0 {
+				asset.Registers = existing.Registers
+			}
+			if strings.TrimSpace(existing.IrURL) != "" {
+				asset.IrURL = existing.IrURL
+			}
+			if strings.TrimSpace(existing.SourceURL) != "" && asset.SourceURL == "" {
+				asset.SourceURL = existing.SourceURL
+			}
+			if strings.TrimSpace(existing.ValidationURL) != "" {
+				asset.ValidationURL = existing.ValidationURL
+			}
+			if strings.TrimSpace(existing.OfficialURL) != "" {
+				asset.OfficialURL = existing.OfficialURL
+			}
+		}
 
 		if err := m.store.UpsertCatalogAsset(asset); err != nil {
 			log.Printf("[catalog] failed to upsert indexed asset %s: %v", asset.ID, err)

@@ -179,24 +179,85 @@ func TestSyncFromHardwareIndex_ImportsExternalBoardsIntoCatalog(t *testing.T) {
 	}
 }
 
+func TestSyncFromHardwareIndex_PreservesExistingCoreMetadata(t *testing.T) {
+	store := newTestStore(t)
+	mgr := NewManager(store)
+
+	if err := store.UpsertCatalogAsset(db.CatalogAsset{
+		ID:            "board/ext-a",
+		Name:          "Ext A",
+		Description:   "Imported from core configs. Architecture: ARM Cortex-M4F.",
+		Family:        "ExtFamily",
+		Architecture:  "ARM Cortex-M4F",
+		CodeExample:   "int main(void) {}",
+		Registers:     77,
+		PassRate:      65,
+		Verified:      false,
+		SourceType:    "core-config",
+		SourceRef:     "onboarding/ext-a.yaml",
+		SourceURL:     "https://example.com/source",
+		OfficialURL:   "https://example.com/official",
+		ValidationURL: "https://example.com/validation",
+	}); err != nil {
+		t.Fatalf("seed core-config asset failed: %v", err)
+	}
+
+	items := []db.HardwareItem{
+		{
+			ID:       "board-ext-a",
+			Name:     "ext-a",
+			Type:     "board",
+			ReplPath: "platforms/boards/ext-a.repl",
+			Tier:     1,
+		},
+	}
+
+	if err := mgr.SyncFromHardwareIndex(items); err != nil {
+		t.Fatalf("SyncFromHardwareIndex failed: %v", err)
+	}
+
+	a, ok := mgr.Get("board/ext-a")
+	if !ok {
+		t.Fatalf("expected board/ext-a to exist")
+	}
+	if a.Architecture != "ARM Cortex-M4F" {
+		t.Fatalf("expected architecture to be preserved, got %q", a.Architecture)
+	}
+	if a.ValidationURL != "https://example.com/validation" {
+		t.Fatalf("expected validation url to be preserved, got %q", a.ValidationURL)
+	}
+	if a.Description != "Imported from core configs. Architecture: ARM Cortex-M4F." {
+		t.Fatalf("expected description to be preserved, got %q", a.Description)
+	}
+	if a.Registers != 77 {
+		t.Fatalf("expected registers to be preserved, got %d", a.Registers)
+	}
+	if !a.Verified || a.PassRate != 100 {
+		t.Fatalf("expected tier-1 hardware index to upgrade verification, got verified=%v pass_rate=%d", a.Verified, a.PassRate)
+	}
+	if a.SourceType != "platform-catalog" {
+		t.Fatalf("expected source_type platform-catalog after merge, got %q", a.SourceType)
+	}
+}
+
 func TestList_DedupesChipWhenSameBoardSlugExists(t *testing.T) {
 	store := newTestStore(t)
 	mgr := NewManager(store)
 
 	if err := store.UpsertCatalogAsset(db.CatalogAsset{
-		ID:          "board/a20",
-		Name:        "A20",
-		Description: "Board row",
-		SourceType:  "platform-catalog",
+		ID:           "board/a20",
+		Name:         "A20",
+		Description:  "Board row",
+		SourceType:   "platform-catalog",
 		Architecture: "",
 	}); err != nil {
 		t.Fatalf("upsert board failed: %v", err)
 	}
 	if err := store.UpsertCatalogAsset(db.CatalogAsset{
-		ID:          "chip/a20",
-		Name:        "A20",
-		Description: "Chip row",
-		SourceType:  "core-config",
+		ID:           "chip/a20",
+		Name:         "A20",
+		Description:  "Chip row",
+		SourceType:   "core-config",
 		Architecture: "ARM 64",
 	}); err != nil {
 		t.Fatalf("upsert chip failed: %v", err)
