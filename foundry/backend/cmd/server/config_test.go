@@ -117,8 +117,8 @@ func TestLoadConfigFromEnv_ProductionStripeGuardrails(t *testing.T) {
 	}
 
 	t.Setenv("ALLOW_INSECURE_STRIPE_WEBHOOKS", "false")
-	if _, err := loadConfigFromEnv(); err == nil {
-		t.Fatalf("expected production guardrail error when webhook secret is missing")
+	if _, err := loadConfigFromEnv(); err != nil {
+		t.Fatalf("expected production config without webhook secret to stay bootable, got error: %v", err)
 	}
 
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")

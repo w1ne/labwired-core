@@ -150,7 +150,7 @@ func validateStripeConfig(appEnv, webhookSecret string, allowInsecure bool) erro
 		return fmt.Errorf("ALLOW_INSECURE_STRIPE_WEBHOOKS must be false in production")
 	}
 	if webhookSecret == "" {
-		return fmt.Errorf("STRIPE_WEBHOOK_SECRET is required in production")
+		log.Printf("Warning: STRIPE_WEBHOOK_SECRET is not set in production. Stripe webhook handling will remain disabled until the secret is configured.")
 	}
 	return nil
 }
