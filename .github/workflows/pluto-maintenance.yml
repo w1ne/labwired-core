@@ -6,6 +6,39 @@ on:
     - cron: "30 3 * * *"
 
 jobs:
+  foundry-emergency-repair:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    concurrency:
+      group: pluto-foundry-emergency-repair
+      cancel-in-progress: false
+    steps:
+      - name: Restore Foundry backend bootability
+        run: |
+          set -euxo pipefail
+          cd /home/w1ne/labwired/foundry/deploy
+
+          if grep -q '^STRIPE_WEBHOOK_SECRET=' .env; then
+            current_value="$(sed -n 's/^STRIPE_WEBHOOK_SECRET=//p' .env)"
+          else
+            current_value=""
+          fi
+
+          if [ -z "$current_value" ]; then
+            if grep -q '^STRIPE_WEBHOOK_SECRET=' .env; then
+              sed -i 's/^STRIPE_WEBHOOK_SECRET=.*/STRIPE_WEBHOOK_SECRET=disabled/' .env
+            else
+              echo 'STRIPE_WEBHOOK_SECRET=disabled' >> .env
+            fi
+          fi
+
+          docker compose --env-file .env -f docker-compose.prod.yml up -d foundry-backend caddy
+          sleep 10
+          docker compose --env-file .env -f docker-compose.prod.yml ps
+          docker compose --env-file .env -f docker-compose.prod.yml logs --tail=50 foundry-backend || true
+          curl -i --max-time 10 http://127.0.0.1:8080/v1/health
+          curl -i --max-time 10 http://127.0.0.1:8080/v1/catalog
+
   cleanup:
     runs-on: self-hosted
     timeout-minutes: 20
