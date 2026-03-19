@@ -173,6 +173,40 @@ jobs:
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
+
+          verify_foundry() {
+            local backend_health proxy_health catalog_json
+            local total architectures validations
+
+            backend_health="$(curl -fsS --retry 10 --retry-delay 3 http://127.0.0.1:8080/v1/health)"
+            proxy_health="$(curl -fsS --retry 10 --retry-delay 3 -H 'Host: foundry.labwired.com' http://127.0.0.1/v1/health)"
+            catalog_json="$(curl -fsS --retry 10 --retry-delay 3 -H 'Host: foundry.labwired.com' http://127.0.0.1/v1/catalog)"
+
+            BACKEND_HEALTH_JSON="$backend_health" PROXY_HEALTH_JSON="$proxy_health" CATALOG_JSON="$catalog_json" python3 -c 'import json, os, sys; backend=json.loads(os.environ["BACKEND_HEALTH_JSON"]); proxy=json.loads(os.environ["PROXY_HEALTH_JSON"]); catalog=json.loads(os.environ["CATALOG_JSON"]); total=len(catalog); architectures=sum(1 for row in catalog if (row.get("architecture") or "").strip()); validations=sum(1 for row in catalog if (row.get("validation_url") or "").strip()); print(json.dumps({"backend_status": backend.get("status"), "proxy_status": proxy.get("status"), "catalog_total": total, "catalog_architectures": architectures, "catalog_validations": validations}, indent=2)); backend.get("status") == "healthy" or sys.exit("backend health endpoint is not healthy"); proxy.get("status") == "healthy" or sys.exit("proxy health endpoint is not healthy"); total > 0 or sys.exit("catalog is empty after deploy"); architectures > 0 or sys.exit("catalog has zero architecture metadata after deploy"); validations > 0 or sys.exit("catalog has zero validation links after deploy")'
+          }
+
+          rollback_foundry() {
+            echo "Rolling back Foundry to previous image tags..."
+            if [ -n "${PREV_BACKEND_IMAGE_TAG:-}" ]; then
+              if grep -q '^BACKEND_IMAGE_TAG=' .env; then
+                sed -i "s/^BACKEND_IMAGE_TAG=.*/BACKEND_IMAGE_TAG=$PREV_BACKEND_IMAGE_TAG/" .env
+              else
+                echo "BACKEND_IMAGE_TAG=$PREV_BACKEND_IMAGE_TAG" >> .env
+              fi
+            fi
+            if [ -n "${PREV_FRONTEND_IMAGE_TAG:-}" ]; then
+              if grep -q '^FRONTEND_IMAGE_TAG=' .env; then
+                sed -i "s/^FRONTEND_IMAGE_TAG=.*/FRONTEND_IMAGE_TAG=$PREV_FRONTEND_IMAGE_TAG/" .env
+              else
+                echo "FRONTEND_IMAGE_TAG=$PREV_FRONTEND_IMAGE_TAG" >> .env
+              fi
+            fi
+
+            docker compose --env-file .env -f docker-compose.prod.yml pull
+            docker compose --env-file .env -f docker-compose.prod.yml up -d
+            docker compose --env-file .env -f docker-compose.prod.yml ps
+          }
+
           WORK_ROOT="${GITHUB_WORKSPACE}/${CHECKOUT_PATH}"
 
           if [ ! -d "$WORK_ROOT/.git" ]; then
@@ -198,6 +232,9 @@ jobs:
             echo "Missing .env in $DEPLOY_PATH"
             exit 1
           fi
+
+          PREV_BACKEND_IMAGE_TAG="$(awk -F= '/^BACKEND_IMAGE_TAG=/{print $2}' .env | tail -n1)"
+          PREV_FRONTEND_IMAGE_TAG="$(awk -F= '/^FRONTEND_IMAGE_TAG=/{print $2}' .env | tail -n1)"
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
@@ -243,6 +280,18 @@ jobs:
             echo "FRONTEND_IMAGE_TAG=$IMAGE_TAG" >> .env
           fi
 
-          docker compose --env-file .env -f docker-compose.prod.yml pull
-          docker compose --env-file .env -f docker-compose.prod.yml up -d
+          if ! docker compose --env-file .env -f docker-compose.prod.yml pull; then
+            rollback_foundry
+            exit 1
+          fi
+          if ! docker compose --env-file .env -f docker-compose.prod.yml up -d; then
+            rollback_foundry
+            exit 1
+          fi
           docker compose --env-file .env -f docker-compose.prod.yml ps
+
+          if ! verify_foundry; then
+            rollback_foundry
+            verify_foundry
+            exit 1
+          fi

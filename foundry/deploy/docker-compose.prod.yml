@@ -29,6 +29,12 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/v1/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -72,8 +78,10 @@ services:
       - NET_BIND_SERVICE
     pids_limit: 128
     depends_on:
-      - foundry-backend
-      - foundry-frontend
+      foundry-backend:
+        condition: service_healthy
+      foundry-frontend:
+        condition: service_started
     networks:
       - foundry_net
 

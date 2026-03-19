@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"log"
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestLoadConfigFromEnv_Defaults(t *testing.T) {
 	t.Setenv("PORT", "")
@@ -128,6 +134,7 @@ func TestLoadConfigFromEnv_ProductionStripeGuardrails(t *testing.T) {
 }
 
 func TestValidateRuntimeDependencies(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
 	cfg := config{
 		AppEnv:           "development",
 		LabWiredPath:     "sh",
@@ -136,5 +143,47 @@ func TestValidateRuntimeDependencies(t *testing.T) {
 	}
 	if err := validateRuntimeDependencies(cfg); err != nil {
 		t.Fatalf("expected runtime dependency validation to pass, got %v", err)
+	}
+}
+
+func TestValidateRuntimeDependencies_ProductionRequiresCoreConfigsDir(t *testing.T) {
+	hardwareJSON := t.TempDir() + "/hardware.json"
+	if err := os.WriteFile(hardwareJSON, []byte("[]"), 0o644); err != nil {
+		t.Fatalf("failed to write hardware json fixture: %v", err)
+	}
+	cfg := config{
+		AppEnv:           "production",
+		LabWiredPath:     "sh",
+		ArtifactsDir:     t.TempDir(),
+		HardwareJSONPath: hardwareJSON,
+		CoreConfigsDir:   "testdata/missing-core-configs",
+	}
+	if err := validateRuntimeDependencies(cfg); err == nil {
+		t.Fatalf("expected missing CORE_CONFIGS_DIR to fail validation")
+	}
+}
+
+func TestLogOptionalDependencyState_WarnsForDisabledIntegrations(t *testing.T) {
+	var buf bytes.Buffer
+	prevWriter := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prevWriter)
+		log.SetFlags(prevFlags)
+	})
+
+	logOptionalDependencyState(config{})
+
+	out := buf.String()
+	for _, expected := range []string{
+		"optional integration disabled: stripe_webhooks",
+		"optional integration disabled: clerk_account_api",
+		"optional integration disabled: openai_synthesis",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected log output to contain %q, got %q", expected, out)
+		}
 	}
 }

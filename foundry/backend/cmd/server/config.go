@@ -28,6 +28,7 @@ type config struct {
 	AppEnv                  string
 	ServerOptions           api.ServerOptions
 	ClerkSecretKey          string
+	OpenAIAPIKey            string
 }
 
 func loadConfigFromEnv() (config, error) {
@@ -44,6 +45,7 @@ func loadConfigFromEnv() (config, error) {
 		StripeWebhookSecret:   strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		AppEnv:                strings.ToLower(strings.TrimSpace(envOrDefault("APP_ENV", "development"))),
 		ClerkSecretKey:        strings.TrimSpace(os.Getenv("CLERK_SECRET_KEY")),
+		OpenAIAPIKey:          strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
 		ServerOptions:         api.DefaultServerOptions(),
 	}
 
@@ -169,6 +171,44 @@ func validateRuntimeDependencies(cfg config) error {
 		if _, err := os.Stat(cfg.HardwareJSONPath); err != nil {
 			return fmt.Errorf("HARDWARE_JSON_PATH must exist in production: %w", err)
 		}
+		if info, err := os.Stat(cfg.CoreConfigsDir); err != nil {
+			return fmt.Errorf("CORE_CONFIGS_DIR must exist in production: %w", err)
+		} else if !info.IsDir() {
+			return fmt.Errorf("CORE_CONFIGS_DIR must be a directory in production: %s", cfg.CoreConfigsDir)
+		}
 	}
+	logOptionalDependencyState(cfg)
 	return nil
+}
+
+func logOptionalDependencyState(cfg config) {
+	integrations := []struct {
+		name    string
+		enabled bool
+		reason  string
+	}{
+		{
+			name:    "stripe_webhooks",
+			enabled: cfg.StripeWebhookSecret != "",
+			reason:  "STRIPE_WEBHOOK_SECRET is unset; /v1/webhooks/stripe will reject requests until configured.",
+		},
+		{
+			name:    "clerk_account_api",
+			enabled: cfg.ClerkSecretKey != "",
+			reason:  "CLERK_SECRET_KEY is unset; account-scoped routes will remain unavailable.",
+		},
+		{
+			name:    "openai_synthesis",
+			enabled: cfg.OpenAIAPIKey != "",
+			reason:  "OPENAI_API_KEY is unset; AI synthesis features will remain unavailable.",
+		},
+	}
+
+	for _, integration := range integrations {
+		if integration.enabled {
+			log.Printf("Optional integration enabled: %s", integration.name)
+			continue
+		}
+		log.Printf("Warning: optional integration disabled: %s. %s", integration.name, integration.reason)
+	}
 }
