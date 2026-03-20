@@ -1,0 +1,30 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": false,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `ftmctrl` | `0x80000000` | 0 | `` |
+| `uart0` | `0x80000100` | 0 | `` |
+| `uart1` | `0x80100100` | 0 | `` |
+| `uart2` | `0x80100200` | 0 | `` |
+| `uart3` | `0x80100300` | 0 | `` |
+| `uart4` | `0x80100400` | 0 | `` |
+| `uart5` | `0x80100500` | 0 | `` |
+| `gptimer` | `0x80000300` | 0 | `` |
+| `grtimer` | `0x80100600` | 0 | `` |
+| `gpio1` | `0x80000900` | 0 | `` |
+| `gpio2` | `0x80000a00` | 0 | `` |
+| `greth` | `0x80000e00` | 0 | `` |
+| `phy` | `0x00000000` | 0 | `` |
+| `ahbInfo` | `0xfffff000` | 0 | `` |
+| `apb1Controller` | `0x800ff000` | 0 | `` |
+| `apb2Controller` | `0x801ff000` | 0 | `` |
+
+**Total Peripherals:** 16
+**Total Registers Covered:** 0

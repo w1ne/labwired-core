@@ -1,0 +1,18 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": false,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `timer0` | `0xf0001800` | 0 | `` |
+| `uart` | `0xf0001000` | 0 | `` |
+| `cpu_timer` | `0xf0000800` | 0 | `` |
+| `spi` | `0xf0008000` | 0 | `` |
+
+**Total Peripherals:** 4
+**Total Registers Covered:** 0

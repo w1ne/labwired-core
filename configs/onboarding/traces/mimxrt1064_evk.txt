@@ -1,0 +1,51 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `green_led` | `0x00000009` | 0 | `` |
+| `wdog1` | `0x400b8000` | 0 | `` |
+| `trng` | `0x400cc000` | 0 | `` |
+| `wdog2` | `0x400d0000` | 0 | `` |
+| `wdog3` | `0x400bc000` | 0 | `` |
+| `iomuxc` | `0x401f8000` | 0 | `` |
+| `analog01` | `0x400d8000` | 0 | `` |
+| `analog03` | `0x400d8034` | 0 | `` |
+| `dcdc` | `0x40080000` | 0 | `` |
+| `gpTimer1` | `0x401ec000` | 0 | `` |
+| `lpuart1` | `0x40184000` | 0 | `` |
+| `lpuart2` | `0x40188000` | 0 | `` |
+| `lpuart3` | `0x4018c000` | 0 | `` |
+| `lpuart4` | `0x40190000` | 0 | `` |
+| `lpuart5` | `0x40194000` | 0 | `` |
+| `lpuart6` | `0x40198000` | 0 | `` |
+| `lpuart7` | `0x4019c000` | 0 | `` |
+| `lpuart8` | `0x401a0000` | 0 | `` |
+| `gpio1` | `0x401b8000` | 0 | `` |
+| `gpio2` | `0x401bc000` | 0 | `` |
+| `gpio3` | `0x401c0000` | 0 | `` |
+| `gpio4` | `0x401c4000` | 0 | `` |
+| `gpio5` | `0x400c0000` | 0 | `` |
+| `gpio6` | `0x42000000` | 0 | `` |
+| `gpio7` | `0x42004000` | 0 | `` |
+| `gpio8` | `0x42008000` | 0 | `` |
+| `gpio9` | `0x4200c000` | 0 | `` |
+| `gpio10` | `0x401c8000` | 0 | `` |
+| `enet` | `0x402d8000` | 0 | `` |
+| `enet2` | `0x402d4000` | 0 | `` |
+| `flex_spi2` | `0x402a4000` | 0 | `` |
+| `adc1` | `0x400c4000` | 0 | `` |
+| `adc2` | `0x400c8000` | 0 | `` |
+| `pwm1` | `0x403dc000` | 0 | `` |
+| `pwm2` | `0x403e0000` | 0 | `` |
+| `pwm3` | `0x403e4000` | 0 | `` |
+| `pwm4` | `0x403e8000` | 0 | `` |
+
+**Total Peripherals:** 37
+**Total Registers Covered:** 0

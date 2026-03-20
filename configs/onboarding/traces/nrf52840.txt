@@ -1,0 +1,38 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `uart0` | `0x40002000` | 0 | `` |
+| `uart1` | `0x40028000` | 0 | `` |
+| `rtc0` | `0x4000b000` | 0 | `` |
+| `rtc1` | `0x40011000` | 0 | `` |
+| `rtc2` | `0x40024000` | 0 | `` |
+| `wdt` | `0x40010000` | 0 | `` |
+| `ppi` | `0x4001f000` | 0 | `` |
+| `clock` | `0x40000000` | 0 | `` |
+| `twi0` | `0x40003000` | 0 | `` |
+| `spi2` | `0x40023000` | 0 | `` |
+| `gpio0` | `0x50000500` | 0 | `` |
+| `gpio1` | `0x50000800` | 0 | `` |
+| `gpiote` | `0x40006000` | 0 | `` |
+| `twi1` | `0x40004000` | 0 | `` |
+| `timer0` | `0x40008000` | 0 | `` |
+| `timer1` | `0x40009000` | 0 | `` |
+| `timer2` | `0x4000a000` | 0 | `` |
+| `timer3` | `0x4001a000` | 0 | `` |
+| `timer4` | `0x4001b000` | 0 | `` |
+| `i2s` | `0x40025000` | 0 | `` |
+| `pdm` | `0x4001d000` | 0 | `` |
+| `radio` | `0x40001000` | 0 | `` |
+| `rng` | `0x4000d000` | 0 | `` |
+| `ecb` | `0x4000e000` | 0 | `` |
+
+**Total Peripherals:** 24
+**Total Registers Covered:** 0

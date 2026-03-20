@@ -1,0 +1,6 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}

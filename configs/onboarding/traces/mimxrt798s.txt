@@ -1,0 +1,19 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `micfil` | `0x4020e000` | 0 | `` |
+| `rstctl1_i3c0` | `0x40040010` | 0 | `` |
+| `i3c0_rst_cpu1` | `0x4000001c` | 0 | `` |
+| `rstctl1_i3c3` | `0x40057000` | 0 | `` |
+| `syscon3_nsvtor` | `0x4006209c` | 0 | `` |
+
+**Total Peripherals:** 5
+**Total Registers Covered:** 0

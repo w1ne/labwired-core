@@ -1,0 +1,23 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `uart` | `0xf0001000` | 0 | `` |
+| `spi` | `0xf0007800` | 0 | `` |
+| `i2c` | `0xf0008000` | 0 | `` |
+| `si7021` | `0x00000005` | 0 | `` |
+| `gpio_out` | `0xf0004800` | 0 | `` |
+| `gpio_in` | `0xf0007000` | 0 | `` |
+| `button` | `0x00000000` | 0 | `` |
+| `soc_controller` | `0xf0000000` | 0 | `` |
+| `mmcm` | `0xf0009800` | 0 | `` |
+
+**Total Peripherals:** 9
+**Total Registers Covered:** 0

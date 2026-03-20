@@ -1,0 +1,38 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `pwr` | `0x46020800` | 0 | `` |
+| `usart1` | `0x40013800` | 0 | `` |
+| `usart2` | `0x40004400` | 0 | `` |
+| `lpuart1` | `0x46002400` | 0 | `` |
+| `spi1` | `0x40013000` | 0 | `` |
+| `spi3` | `0x46002000` | 0 | `` |
+| `adc4` | `0x46021000` | 0 | `` |
+| `gpioPortA` | `0x42020000` | 0 | `` |
+| `gpioPortB` | `0x42020400` | 0 | `` |
+| `gpioPortC` | `0x42020800` | 0 | `` |
+| `gpioPortH` | `0x42021c00` | 0 | `` |
+| `i2c1` | `0x40005400` | 0 | `` |
+| `i2c3` | `0x46002800` | 0 | `` |
+| `timer1` | `0x40012c00` | 0 | `` |
+| `timer2` | `0x40000000` | 0 | `` |
+| `timer3` | `0x40000400` | 0 | `` |
+| `timer16` | `0x40014400` | 0 | `` |
+| `timer17` | `0x40014800` | 0 | `` |
+| `iwdg` | `0x40003000` | 0 | `` |
+| `lptim1` | `0x46004400` | 0 | `` |
+| `lptim2` | `0x40009400` | 0 | `` |
+| `rtc` | `0x46007800` | 0 | `` |
+| `flash_ctrl` | `0x40022000` | 0 | `` |
+| `rcc` | `0x46020c00` | 0 | `` |
+
+**Total Peripherals:** 24
+**Total Registers Covered:** 0

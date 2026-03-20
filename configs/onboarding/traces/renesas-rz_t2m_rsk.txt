@@ -1,0 +1,21 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `timer` | `0x0000000f` | 0 | `` |
+| `sci0` | `0x80001000` | 0 | `` |
+| `sci1` | `0x80001400` | 0 | `` |
+| `sci2` | `0x80001800` | 0 | `` |
+| `sci3` | `0x80001c00` | 0 | `` |
+| `sci4` | `0x80002000` | 0 | `` |
+| `sci5` | `0x81001000` | 0 | `` |
+
+**Total Peripherals:** 7
+**Total Registers Covered:** 0

@@ -1,0 +1,31 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `uart0` | `0x01c28000` | 0 | `` |
+| `uart1` | `0x01c28400` | 0 | `` |
+| `uart2` | `0x01c28800` | 0 | `` |
+| `uart3` | `0x01c28c00` | 0 | `` |
+| `uart4` | `0x01c29000` | 0 | `` |
+| `uart5` | `0x01c29400` | 0 | `` |
+| `uart6` | `0x01c29800` | 0 | `` |
+| `uart7` | `0x01c29c00` | 0 | `` |
+| `usbEhci1` | `0x01c14000` | 0 | `` |
+| `usbHub` | `0x00000001` | 0 | `` |
+| `usbEhci2` | `0x01c1c000` | 0 | `` |
+| `timer` | `0x0000000f` | 0 | `` |
+| `sunxiMmc0` | `0x01c0f000` | 0 | `` |
+| `sunxiMmc1` | `0x01c10000` | 0 | `` |
+| `sunxiMmc3` | `0x01c12000` | 0 | `` |
+| `sunxiHstimer` | `0x01c60000` | 0 | `` |
+| `sunxiTimer` | `0x01c20c00` | 0 | `` |
+
+**Total Peripherals:** 17
+**Total Registers Covered:** 0

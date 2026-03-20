@@ -1,0 +1,19 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `cpm` | `0x40004000` | 0 | `` |
+| `rst` | `0x40002000` | 0 | `` |
+| `trng` | `0x4003b000` | 0 | `` |
+| `usart2` | `0x40014000` | 0 | `` |
+| `dwt` | `0xe0001000` | 0 | `` |
+
+**Total Peripherals:** 5
+**Total Registers Covered:** 0

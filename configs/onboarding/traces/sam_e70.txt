@@ -1,0 +1,21 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `usart0` | `0x40024000` | 0 | `` |
+| `usart1` | `0x40028000` | 0 | `` |
+| `usart2` | `0x4002c000` | 0 | `` |
+| `gem` | `0x40050000` | 0 | `` |
+| `phy` | `0x00000000` | 0 | `` |
+| `trng` | `0x40070000` | 0 | `` |
+| `PMC_SR` | `0x400e0668` | 0 | `` |
+
+**Total Peripherals:** 7
+**Total Registers Covered:** 0

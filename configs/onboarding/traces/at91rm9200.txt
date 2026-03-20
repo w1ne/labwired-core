@@ -1,0 +1,19 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `uart0` | `0xfffff200` | 0 | `` |
+| `systemTimer` | `0xfffffd00` | 0 | `` |
+| `ckgrPllar` | `0xfffffc28` | 0 | `` |
+| `ckgrPllbr` | `0xfffffc2c` | 0 | `` |
+| `pmcMkcr` | `0xfffffc30` | 0 | `` |
+
+**Total Peripherals:** 5
+**Total Registers Covered:** 0

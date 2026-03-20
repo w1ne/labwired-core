@@ -1,0 +1,17 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `uart` | `0xf0010000` | 0 | `` |
+| `gpioA` | `0xf0000000` | 0 | `` |
+| `timer` | `0xf0020000` | 0 | `` |
+
+**Total Peripherals:** 3
+**Total Registers Covered:** 0

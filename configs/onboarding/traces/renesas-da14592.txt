@@ -1,0 +1,28 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `timer1` | `0x50010300` | 0 | `` |
+| `timer2` | `0x50010400` | 0 | `` |
+| `timer3` | `0x50010500` | 0 | `` |
+| `timer4` | `0x50020a00` | 0 | `` |
+| `uart0` | `0x50020000` | 0 | `` |
+| `uart1` | `0x50020100` | 0 | `` |
+| `gpadc` | `0x50040900` | 0 | `` |
+| `gpio` | `0x50020600` | 0 | `` |
+| `dma` | `0x50060200` | 0 | `` |
+| `i2c` | `0x50020300` | 0 | `` |
+| `clock_gen` | `0x50000000` | 0 | `` |
+| `xtal32m_regs` | `0x50010000` | 0 | `` |
+| `spi` | `0x50020200` | 0 | `` |
+| `gp_regs` | `0x50050300` | 0 | `` |
+
+**Total Peripherals:** 14
+**Total Registers Covered:** 0

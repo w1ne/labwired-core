@@ -1,0 +1,31 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `usbHub` | `0x00000001` | 0 | `` |
+| `mouse` | `0x00000005` | 0 | `` |
+| `fusion` | `0x00000010` | 0 | `` |
+| `uart0` | `0x40027000` | 0 | `` |
+| `uart1` | `0x40028000` | 0 | `` |
+| `uart2` | `0x40029000` | 0 | `` |
+| `eDma0` | `0x40018000` | 0 | `` |
+| `eDma1` | `0x40098000` | 0 | `` |
+| `fb` | `0x40058000` | 0 | `` |
+| `usbEhci0` | `0x40034000` | 0 | `` |
+| `usbEhci1` | `0x400b4000` | 0 | `` |
+| `i2c0` | `0x40066000` | 0 | `` |
+| `i2c1` | `0x40067000` | 0 | `` |
+| `timers` | `0x40037000` | 0 | `` |
+| `globalTimer` | `0x40002200` | 0 | `` |
+| `sema4` | `0x4001d000` | 0 | `` |
+| `nand` | `0x400e0000` | 0 | `` |
+
+**Total Peripherals:** 17
+**Total Registers Covered:** 0

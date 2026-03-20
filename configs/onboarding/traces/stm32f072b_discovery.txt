@@ -1,0 +1,47 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `led` | `0x00000006` | 0 | `` |
+| `usart1` | `0x40013800` | 0 | `` |
+| `usart2` | `0x40004400` | 0 | `` |
+| `usart3` | `0x40004800` | 0 | `` |
+| `usart4` | `0x40004c00` | 0 | `` |
+| `usart5` | `0x40005000` | 0 | `` |
+| `usart6` | `0x40011400` | 0 | `` |
+| `usart7` | `0x40011800` | 0 | `` |
+| `gpioPortA` | `0x48000000` | 0 | `` |
+| `gpioPortB` | `0x48000400` | 0 | `` |
+| `gpioPortC` | `0x48000800` | 0 | `` |
+| `gpioPortD` | `0x48000c00` | 0 | `` |
+| `gpioPortE` | `0x48001000` | 0 | `` |
+| `gpioPortF` | `0x48001400` | 0 | `` |
+| `i2c1` | `0x40005400` | 0 | `` |
+| `i2c2` | `0x40005800` | 0 | `` |
+| `spi1` | `0x40013000` | 0 | `` |
+| `spi2` | `0x40003800` | 0 | `` |
+| `timer1` | `0x40012c00` | 0 | `` |
+| `timer2` | `0x40000000` | 0 | `` |
+| `timer3` | `0x40000400` | 0 | `` |
+| `timer6` | `0x40001000` | 0 | `` |
+| `timer7` | `0x40001400` | 0 | `` |
+| `timer14` | `0x40002000` | 0 | `` |
+| `timer15` | `0x40014000` | 0 | `` |
+| `timer16` | `0x40014400` | 0 | `` |
+| `timer17` | `0x40014800` | 0 | `` |
+| `can` | `0x40006400` | 0 | `` |
+| `rtc` | `0x40002800` | 0 | `` |
+| `rcc` | `0x40021000` | 0 | `` |
+| `DMA` | `0x40020000` | 0 | `` |
+| `adc` | `0x40012400` | 0 | `` |
+| `crc` | `0x40023000` | 0 | `` |
+
+**Total Peripherals:** 33
+**Total Registers Covered:** 0

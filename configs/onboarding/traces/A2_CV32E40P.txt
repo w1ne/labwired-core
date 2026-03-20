@@ -1,0 +1,21 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `uart` | `0x1a102100` | 0 | `` |
+| `timer` | `0x1a10b000` | 0 | `` |
+| `gpio` | `0x1a101000` | 0 | `` |
+| `i2s` | `0x1a102200` | 0 | `` |
+| `i2c0` | `0x1a102180` | 0 | `` |
+| `spi` | `0x1a102080` | 0 | `` |
+| `camera_controller` | `0x1a102280` | 0 | `` |
+
+**Total Peripherals:** 7
+**Total Registers Covered:** 0

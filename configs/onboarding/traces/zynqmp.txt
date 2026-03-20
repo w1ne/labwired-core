@@ -1,0 +1,40 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `apu0Timer` | `0x0000000f` | 0 | `` |
+| `apu1Timer` | `0x0000000f` | 0 | `` |
+| `apu2Timer` | `0x0000000f` | 0 | `` |
+| `apu3Timer` | `0x0000000f` | 0 | `` |
+| `uart0` | `0xff000000` | 0 | `` |
+| `uart1` | `0xff010000` | 0 | `` |
+| `i2c0` | `0xff020000` | 0 | `` |
+| `i2c1` | `0xff030000` | 0 | `` |
+| `ttc0` | `0xff110000` | 0 | `` |
+| `ttc1` | `0xff120000` | 0 | `` |
+| `ttc2` | `0xff130000` | 0 | `` |
+| `ttc3` | `0xff140000` | 0 | `` |
+| `gem0` | `0xff0b0000` | 0 | `` |
+| `gem1` | `0xff0c0000` | 0 | `` |
+| `gem2` | `0xff0d0000` | 0 | `` |
+| `gem3` | `0xff0e0000` | 0 | `` |
+| `phy` | `0x00000000` | 0 | `` |
+| `gpio` | `0xff0a0000` | 0 | `` |
+| `ipi` | `0xff300000` | 0 | `` |
+| `rtc` | `0xffa60000` | 0 | `` |
+| `platformManagementUnit` | `0x0000000a` | 0 | `` |
+| `L1_PLL_STATUS_READ_1_SERDES_REGISTER` | `0xfd4063e4` | 0 | `` |
+| `L2_PLL_STATUS_READ_1_SERDES_REGISTER` | `0xfd40a3e4` | 0 | `` |
+| `L3_PLL_STATUS_READ_1_SERDES_REGISTER` | `0xfd40e3e4` | 0 | `` |
+| `PS_CTRL_STATUS_AMS_REGISTER` | `0xffa50040` | 0 | `` |
+| `qspi` | `0xff0f0000` | 0 | `` |
+
+**Total Peripherals:** 26
+**Total Registers Covered:** 0

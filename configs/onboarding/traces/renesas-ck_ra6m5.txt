@@ -1,0 +1,46 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `led_red` | `0x0000000a` | 0 | `` |
+| `led_green` | `0x00000009` | 0 | `` |
+| `led_blue` | `0x00000001` | 0 | `` |
+| `button` | `0x00000004` | 0 | `` |
+| `hs3001` | `0x00000044` | 0 | `` |
+| `iaq` | `0x00000032` | 0 | `` |
+| `oaq` | `0x00000033` | 0 | `` |
+| `barometer` | `0x00000063` | 0 | `` |
+| `icm` | `0x00000068` | 0 | `` |
+| `magnetometer` | `0x0000000c` | 0 | `` |
+| `sysc_oscsf` | `0x4001e03c` | 0 | `` |
+| `gpt` | `0x40169000` | 0 | `` |
+| `agt0` | `0x400e8000` | 0 | `` |
+| `agt1` | `0x400e8100` | 0 | `` |
+| `agt2` | `0x400e8200` | 0 | `` |
+| `agt3` | `0x400e8300` | 0 | `` |
+| `agt4` | `0x400e8400` | 0 | `` |
+| `agt5` | `0x400e8500` | 0 | `` |
+| `sci0` | `0x40118000` | 0 | `` |
+| `sci1` | `0x40118100` | 0 | `` |
+| `sci2` | `0x40118200` | 0 | `` |
+| `sci3` | `0x40118300` | 0 | `` |
+| `sci4` | `0x40118400` | 0 | `` |
+| `sci5` | `0x40118500` | 0 | `` |
+| `sci6` | `0x40118600` | 0 | `` |
+| `sci7` | `0x40118700` | 0 | `` |
+| `sci8` | `0x40118800` | 0 | `` |
+| `sci9` | `0x40118900` | 0 | `` |
+| `portMisc` | `0x40080d00` | 0 | `` |
+| `iic0` | `0x4009f000` | 0 | `` |
+| `iic1` | `0x4009f100` | 0 | `` |
+| `iic2` | `0x4009f200` | 0 | `` |
+
+**Total Peripherals:** 32
+**Total Registers Covered:** 0

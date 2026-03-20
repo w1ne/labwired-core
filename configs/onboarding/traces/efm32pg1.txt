@@ -1,0 +1,20 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `usart0` | `0x40010000` | 0 | `` |
+| `usart1` | `0x40010400` | 0 | `` |
+| `leUart0` | `0x4004a000` | 0 | `` |
+| `bitband` | `0x42000000` | 0 | `` |
+| `cmuStatusOscillator` | `0x400c802c` | 0 | `` |
+| `vcmpStatus` | `0x40000008` | 0 | `` |
+
+**Total Peripherals:** 6
+**Total Registers Covered:** 0

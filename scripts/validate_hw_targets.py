@@ -35,7 +35,7 @@ def github_validation_links() -> tuple[str, str]:
     return run_url, f"{run_url}#artifacts"
 
 
-def run_labwired_sim(system_path: str) -> tuple[bool, str]:
+def run_labwired_sim(system_path: str) -> tuple[bool, str, str]:
     print(f"[{Path(system_path).name}] running labwired simulation")
     try:
         result = subprocess.run(
@@ -54,15 +54,62 @@ def run_labwired_sim(system_path: str) -> tuple[bool, str]:
             timeout=10,
             check=False,
         )
+        full_trace = result.stderr or ""
         if result.returncode == 0:
-            return True, "simulation-ok"
-        lines = (result.stderr or "").strip().splitlines()
-        return False, (lines[-1] if lines else f"exit-{result.returncode}")[:120]
-    except subprocess.TimeoutExpired:
-        return True, "simulation-ok (timeout)"
+            return True, "simulation-ok", full_trace
+        lines = full_trace.strip().splitlines()
+        return False, (lines[-1] if lines else f"exit-{result.returncode}")[:120], full_trace
+    except subprocess.TimeoutExpired as exc:
+        full_trace = (exc.stderr or b"").decode(errors="replace") if hasattr(exc, "stderr") else "timeout"
+        return True, "simulation-ok (timeout)", full_trace
     except Exception as exc:  # pragma: no cover - operational failures
-        return False, str(exc)[:120]
+        return False, str(exc)[:120], str(exc)
 
+
+def generate_coverage_report(chip_path: Path) -> str:
+    if not chip_path.exists():
+        return ""
+    try:
+        chip = yaml.safe_load(chip_path.read_text(encoding="utf-8")) or {}
+        peripherals = chip.get("peripherals", [])
+        if not peripherals:
+            return ""
+        
+        lines = [
+            "",
+            "## Hardware Coverage Report",
+            "",
+            "| Peripheral ID | Base Address | Registers Covered | Model Path |",
+            "|---|---|---|---|",
+        ]
+        
+        total_regs = 0
+        for p in peripherals:
+            pid = p.get("id", "unknown")
+            base = p.get("base_address", 0)
+            config = p.get("config", {})
+            ir_path_str = config.get("path", "")
+            
+            regs_count = 0
+            if ir_path_str:
+                ir_path = REPO_ROOT / ir_path_str
+                if ir_path.exists() and ir_path.suffix == ".json":
+                    try:
+                        ir_data = json.loads(ir_path.read_text(encoding="utf-8"))
+                        for pers in ir_data.get("peripherals", {}).values():
+                            regs_count += len(pers.get("registers", []))
+                    except Exception:
+                        pass
+            
+            total_regs += regs_count
+            lines.append(f"| `{pid}` | `0x{base:08x}` | {regs_count} | `{ir_path_str}` |")
+            
+        lines.append("")
+        lines.append(f"**Total Peripherals:** {len(peripherals)}")
+        lines.append(f"**Total Registers Covered:** {total_regs}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"\nError generating coverage report: {e}"
 
 def architecture_from_description(desc: str) -> str:
     marker = "Architecture:"
@@ -126,6 +173,7 @@ def main() -> int:
         reason = "structural-ok"
 
         is_arm32 = "ARM 32" in architecture
+        trace_output = ""
         if is_arm32:
             method = "ci-arm-fixture-simulation"
             if not system_exists:
@@ -136,8 +184,9 @@ def main() -> int:
                 }
                 reason = "missing-system-manifest"
                 ok = False
+                trace_output = "ERROR: Missing system manifest"
             else:
-                sim_ok, sim_reason = run_labwired_sim(str(system_path))
+                sim_ok, sim_reason, sim_trace = run_labwired_sim(str(system_path))
                 checks = {
                     "system_manifest": True,
                     "chip_descriptor": chip_path.exists(),
@@ -146,13 +195,27 @@ def main() -> int:
                 reason = sim_reason
                 ok = sim_ok and checks["chip_descriptor"]
                 verified = ok
+                trace_output = sim_trace
         else:
             checks, ok = structural_checks(chip_path, system_exists)
             reason = "structural-ok" if ok else "missing-memory-map-or-manifest"
+            trace_output = json.dumps(checks, indent=2)
 
         passed_checks = sum(1 for check_ok in checks.values() if check_ok)
         pass_rate = int(round(100 * passed_checks / len(checks))) if checks else 0
-
+        
+        # Append detailed hardware coverage report
+        coverage = generate_coverage_report(chip_path)
+        if coverage:
+            trace_output += "\n" + coverage
+        
+        # Write actual trace to file
+        traces_dir = CONFIGS_DIR / "traces"
+        traces_dir.mkdir(parents=True, exist_ok=True)
+        trace_file = traces_dir / f"{target_name}.txt"
+        trace_file.write_text(trace_output, encoding="utf-8")
+        
+        model["sample_trace"] = f"traces/{target_name}.txt"
         model["pass_rate"] = pass_rate
         model["verified"] = verified
         model["validation"] = {

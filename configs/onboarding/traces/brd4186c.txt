@@ -1,0 +1,19 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `led0` | `0x00000042` | 0 | `` |
+| `led1` | `0x00000043` | 0 | `` |
+| `button0` | `0x00000040` | 0 | `` |
+| `button1` | `0x00000041` | 0 | `` |
+| `DCDC_IF` | `0x50094028` | 0 | `` |
+
+**Total Peripherals:** 5
+**Total Registers Covered:** 0

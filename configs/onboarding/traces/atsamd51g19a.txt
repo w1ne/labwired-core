@@ -1,0 +1,19 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `sercom3` | `0x41014000` | 0 | `` |
+| `dwt` | `0xe0001000` | 0 | `` |
+| `gclk_phctrl1` | `0x40001c84` | 0 | `` |
+| `pac_intflag` | `0x40001010` | 0 | `` |
+| `pac_status` | `0x40001040` | 0 | `` |
+
+**Total Peripherals:** 5
+**Total Registers Covered:** 0

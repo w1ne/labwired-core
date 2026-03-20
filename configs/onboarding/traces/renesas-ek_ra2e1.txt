@@ -1,0 +1,29 @@
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
+
+## Hardware Coverage Report
+
+| Peripheral ID | Base Address | Registers Covered | Model Path |
+|---|---|---|---|
+| `led_blue` | `0x0000000f` | 0 | `` |
+| `led_green` | `0x0000000e` | 0 | `` |
+| `led_red` | `0x0000000d` | 0 | `` |
+| `button_s2` | `0x0000000f` | 0 | `` |
+| `button_s1` | `0x00000004` | 0 | `` |
+| `portMisc` | `0x40040d00` | 0 | `` |
+| `gpt` | `0x40078000` | 0 | `` |
+| `agt0` | `0x40084000` | 0 | `` |
+| `agt1` | `0x40084100` | 0 | `` |
+| `sci0` | `0x40070000` | 0 | `` |
+| `sci1` | `0x40070020` | 0 | `` |
+| `sci2` | `0x40070040` | 0 | `` |
+| `sci9` | `0x40070120` | 0 | `` |
+| `sysc_oscsf` | `0x4001e03c` | 0 | `` |
+| `iic0` | `0x40053000` | 0 | `` |
+
+**Total Peripherals:** 15
+**Total Registers Covered:** 0
