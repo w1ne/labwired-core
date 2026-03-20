@@ -38,23 +38,34 @@ const AssetDetail = ({ id, onBack }: Props) => {
         <div style={{ minHeight: '100vh', background: 'var(--lw-bg)', padding: '2rem 2.5rem', maxWidth: '960px', margin: '0 auto' }}>
             <button className="secondary" onClick={onBack} style={{ marginBottom: '2rem' }}>← Back to catalog</button>
 
-            {/* Proof badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-                <h1 style={{ fontFamily: 'Outfit', fontSize: '2.5rem', fontWeight: 900 }}>{asset.id || asset.name}</h1>
-                <div style={{
-                    background: isVerified ? 'var(--lw-green)' : 'var(--lw-gray)', color: '#000', padding: '6px 16px',
-                    borderRadius: '6px', fontWeight: 900, fontSize: '0.85rem',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    boxShadow: isVerified ? '0 0 12px rgba(39, 201, 63, 0.4)' : 'none',
-                    animation: isVerified ? 'pulse 2s infinite' : 'none',
-                }}>
-                    {isVerified ? '✓ VERIFIED' : 'MODELED'}
+            {/* Header: image + title + badge */}
+            <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap' }}>
+                {asset.image_url && (
+                    <img
+                        src={asset.image_url}
+                        alt={asset.name || asset.id}
+                        style={{ width: 160, height: 160, objectFit: 'contain', borderRadius: 12, background: '#f8f8f8', padding: 12, flexShrink: 0 }}
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                )}
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                        <h1 style={{ fontFamily: 'Outfit', fontSize: '2.5rem', fontWeight: 900 }}>{asset.id || asset.name}</h1>
+                        <div style={{
+                            background: isVerified ? 'var(--lw-green)' : 'var(--lw-gray)', color: '#000', padding: '6px 16px',
+                            borderRadius: '6px', fontWeight: 900, fontSize: '0.85rem',
+                            fontFamily: 'JetBrains Mono, monospace',
+                            boxShadow: isVerified ? '0 0 12px rgba(39, 201, 63, 0.4)' : 'none',
+                            animation: isVerified ? 'pulse 2s infinite' : 'none',
+                        }}>
+                            {isVerified ? '✓ VERIFIED' : 'MODELED'}
+                        </div>
+                    </div>
+                    <p style={{ color: 'var(--lw-gray)', fontSize: '1.1rem', maxWidth: '600px', lineHeight: 1.7 }}>
+                        {asset.description || 'Pre-verified peripheral model.'}
+                    </p>
                 </div>
             </div>
-
-            <p style={{ color: 'var(--lw-gray)', fontSize: '1.1rem', marginBottom: '3rem', maxWidth: '600px', lineHeight: 1.7 }}>
-                {asset.description || 'Pre-verified peripheral model.'}
-            </p>
 
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '3rem', maxWidth: '600px' }}>

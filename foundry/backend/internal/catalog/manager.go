@@ -24,6 +24,36 @@ var knownOfficialBoardURLs = map[string]string{
 	"chip/rp2040":                 "https://www.raspberrypi.com/documentation/microcontrollers/rp2040.html",
 }
 
+// knownBoardImageURLs maps catalog asset IDs to stable manufacturer product images.
+// Only includes images from official manufacturer CDNs or documentation sites.
+var knownBoardImageURLs = map[string]string{
+	// ST Nucleo boards
+	"board/nucleo-f401re":      "https://www.st.com/bin/ecommerce/api/image.PF260320.en.feature-description-include-personalized-no-cpn-large.jpg",
+	"board/nucleo-h563zi":      "https://www.st.com/bin/ecommerce/api/image.PF272352.en.feature-description-include-personalized-no-cpn-large.jpg",
+	"board/nucleo-h563zi-demo": "https://www.st.com/bin/ecommerce/api/image.PF272352.en.feature-description-include-personalized-no-cpn-large.jpg",
+	// Raspberry Pi
+	"chip/rp2040":    "https://www.raspberrypi.com/app/uploads/2020/12/rp2040-top-1-300x300.png",
+	"board/rpi-pico": "https://www.raspberrypi.com/app/uploads/2020/12/pico-board-top-315x237.png",
+	// Arduino
+	"board/arduino-nano-33-ble":     "https://docs.arduino.cc/static/media/arduino-nano-33-ble.svg",
+	"board/arduino-uno-r4-minima":   "https://docs.arduino.cc/static/media/arduino-uno-r4-minima.svg",
+	"board/arduino-uno-r4-wifi":     "https://docs.arduino.cc/static/media/arduino-uno-r4-wifi.svg",
+	"board/arduino-nano-33-ble-rev2": "https://docs.arduino.cc/static/media/arduino-nano-33-ble.svg",
+	// Nordic nRF52
+	"chip/nrf52840": "https://docs.nordicsemi.com/bundle/ncs-latest/page/nrf/images/nrf52840.png",
+	"chip/nrf52832": "https://docs.nordicsemi.com/bundle/ncs-latest/page/nrf/images/nrf52832.png",
+	// Espressif
+	"chip/esp32c3": "https://www.espressif.com/sites/default/files/modules/ESP32-C3-MINI-1_v1.0.png",
+	"chip/esp32":   "https://www.espressif.com/sites/default/files/modules/ESP32_v3.2.png",
+}
+
+func imageURLForAssetID(assetID string) string {
+	if v, ok := knownBoardImageURLs[assetID]; ok {
+		return v
+	}
+	return ""
+}
+
 func NewManager(store *db.Store) *Manager {
 	return &Manager{
 		store: store,
@@ -242,6 +272,7 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			Name           string `yaml:"name"`
 			Description    string `yaml:"description"`
 			URL            string `yaml:"url"`
+			Image          string `yaml:"image"`
 			Family         string `yaml:"family"`
 			CodeExample    string `yaml:"code_example"`
 			SampleTrace    string `yaml:"sample_trace"`
@@ -309,9 +340,13 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			SourceURL:     sourceURLForCoreConfig(relPath),
 			OfficialURL:   strings.TrimSpace(model.URL),
 			ValidationURL: validationURLFromModel(model.Validation.RunURL, model.Validation.ArtifactsURL),
+			ImageURL:      strings.TrimSpace(model.Image),
 		}
 		if asset.OfficialURL == "" {
 			asset.OfficialURL = officialURLForAssetID(id)
+		}
+		if asset.ImageURL == "" {
+			asset.ImageURL = imageURLForAssetID(id)
 		}
 
 		if model.Description == "" {
@@ -366,6 +401,9 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			}
 			if strings.TrimSpace(asset.SourceRef) == "" || preferExisting {
 				asset.SourceRef = existing.SourceRef
+			}
+			if strings.TrimSpace(asset.ImageURL) == "" {
+				asset.ImageURL = existing.ImageURL
 			}
 		}
 
@@ -483,6 +521,7 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 			asset.SourceRef = asset.ID
 		}
 		asset.OfficialURL = officialURLForAssetID(asset.ID)
+		asset.ImageURL = imageURLForAssetID(asset.ID)
 
 		// Preserve richer metadata imported from core configs when the hardware index
 		// references the same logical board/chip ID.
@@ -515,6 +554,9 @@ func (m *Manager) SyncFromHardwareIndex(items []db.HardwareItem) error {
 			}
 			if strings.TrimSpace(existing.OfficialURL) != "" {
 				asset.OfficialURL = existing.OfficialURL
+			}
+			if strings.TrimSpace(existing.ImageURL) != "" {
+				asset.ImageURL = existing.ImageURL
 			}
 		}
 

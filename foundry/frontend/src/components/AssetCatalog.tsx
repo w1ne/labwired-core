@@ -15,6 +15,7 @@ interface Asset {
     source_url?: string;
     official_url?: string;
     validation_url?: string;
+    image_url?: string;
 }
 
 interface Props {
@@ -233,8 +234,20 @@ const AssetCatalog = ({ onSelectAsset }: Props) => {
                                 <tr key={asset.id}>
                                     <td className="mono">{asset.id}</td>
                                     <td>
-                                        <div className="catalog-name">{asset.name}</div>
-                                        <div className="catalog-desc">{asset.description}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            {asset.image_url && (
+                                                <img
+                                                    src={asset.image_url}
+                                                    alt={asset.name}
+                                                    style={{ width: 40, height: 40, objectFit: 'contain', flexShrink: 0, borderRadius: 4, background: '#f8f8f8' }}
+                                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                />
+                                            )}
+                                            <div>
+                                                <div className="catalog-name">{asset.name}</div>
+                                                <div className="catalog-desc">{asset.description}</div>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>{asset.category}</td>
                                     <td>{asset.arch}</td>
