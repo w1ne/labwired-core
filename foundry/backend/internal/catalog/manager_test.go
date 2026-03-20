@@ -240,6 +240,96 @@ func TestSyncFromHardwareIndex_PreservesExistingCoreMetadata(t *testing.T) {
 	}
 }
 
+func TestSyncFromDiskThenHardwareIndex_PreservesActualCoreMetadata(t *testing.T) {
+	store := newTestStore(t)
+	mgr := NewManager(store)
+
+	root := t.TempDir()
+	onboardingDir := filepath.Join(root, "onboarding")
+	if err := os.MkdirAll(onboardingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll onboarding dir failed: %v", err)
+	}
+
+	yamlData := []byte("name: a20\ndescription: 'Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture: ARMv7-A. Used in Cubieboard2 and Olinuxino.'\nfamily: Allwinner\nverified: true\npass_rate: 100\nvalidation:\n  method: local-simulation\n  reason: simulation-ok\n")
+	if err := os.WriteFile(filepath.Join(onboardingDir, "a20.yaml"), yamlData, 0o644); err != nil {
+		t.Fatalf("write onboarding yaml failed: %v", err)
+	}
+
+	if err := mgr.SyncFromDisk(root); err != nil {
+		t.Fatalf("SyncFromDisk failed: %v", err)
+	}
+
+	if err := mgr.SyncFromHardwareIndex([]db.HardwareItem{
+		{
+			ID:       "board-a20",
+			Name:     "a20",
+			Type:     "board",
+			ReplPath: "core/configs/onboarding/a20.yaml",
+			Tier:     1,
+		},
+	}); err != nil {
+		t.Fatalf("SyncFromHardwareIndex failed: %v", err)
+	}
+
+	a, ok := mgr.Get("board/a20")
+	if !ok {
+		t.Fatalf("expected board/a20 to exist")
+	}
+	if a.Description != "Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture: ARMv7-A. Used in Cubieboard2 and Olinuxino." {
+		t.Fatalf("expected description to be preserved, got %q", a.Description)
+	}
+	if a.Architecture != "ARMv7-A. Used in Cubieboard2 and Olinuxino." {
+		t.Fatalf("expected architecture to be preserved, got %q", a.Architecture)
+	}
+}
+
+func TestSyncFromDisk_PrefersCanonicalOnboardingManifestForDuplicateBoardIDs(t *testing.T) {
+	store := newTestStore(t)
+	mgr := NewManager(store)
+
+	root := t.TempDir()
+	onboardingDir := filepath.Join(root, "onboarding")
+	systemsDir := filepath.Join(root, "systems", "onboarding")
+	if err := os.MkdirAll(onboardingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll onboarding dir failed: %v", err)
+	}
+	if err := os.MkdirAll(systemsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll systems dir failed: %v", err)
+	}
+
+	onboardingYAML := []byte("name: a20\ndescription: 'Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture: ARMv7-A.'\nurl: https://linux-sunxi.org/A20\nfamily: Allwinner\npass_rate: 100\nverified: true\nsample_trace: traces/a20.txt\nvalidation:\n  method: local-simulation\n")
+	systemYAML := []byte("name: a20\ncpu: cortex-a7\n")
+	if err := os.WriteFile(filepath.Join(onboardingDir, "a20.yaml"), onboardingYAML, 0o644); err != nil {
+		t.Fatalf("write onboarding yaml failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(systemsDir, "a20.yaml"), systemYAML, 0o644); err != nil {
+		t.Fatalf("write system yaml failed: %v", err)
+	}
+
+	if err := mgr.SyncFromDisk(root); err != nil {
+		t.Fatalf("SyncFromDisk failed: %v", err)
+	}
+
+	a, ok := mgr.Get("board/a20")
+	if !ok {
+		t.Fatalf("expected board/a20 to exist")
+	}
+	if a.Description != "Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture: ARMv7-A." {
+		t.Fatalf("expected onboarding description to win, got %q", a.Description)
+	}
+	if a.Architecture != "ARMv7-A." {
+		t.Fatalf("expected onboarding architecture to win, got %q", a.Architecture)
+	}
+	if a.SourceRef != "onboarding/a20.yaml" {
+		t.Fatalf("expected onboarding source_ref to win, got %q", a.SourceRef)
+	}
+	if a.OfficialURL != "https://linux-sunxi.org/A20" {
+		t.Fatalf("expected onboarding url to populate official_url, got %q", a.OfficialURL)
+	}
+	if a.ValidationURL != "" {
+		t.Fatalf("expected empty validation url, got %q", a.ValidationURL)
+	}
+}
 func TestList_DedupesChipWhenSameBoardSlugExists(t *testing.T) {
 	store := newTestStore(t)
 	mgr := NewManager(store)

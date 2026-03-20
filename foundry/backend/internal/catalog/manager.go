@@ -121,7 +121,6 @@ func sourceURLForCoreConfig(relPath string) string {
 	}
 	return "https://github.com/w1ne/labwired-core/blob/main/configs/" + relPath
 }
-
 func sourceURLForHardwareItem(item db.HardwareItem) string {
 	ref := filepath.ToSlash(strings.TrimSpace(item.ReplPath))
 	if ref == "" {
@@ -152,7 +151,10 @@ func validationURLFromModel(runURL, artifactsURL string) string {
 	if artifactsURL != "" {
 		return artifactsURL
 	}
-	return runURL
+	if runURL != "" {
+		return runURL
+	}
+	return ""
 }
 
 func splitCatalogID(id string) (string, string, bool) {
@@ -166,6 +168,11 @@ func splitCatalogID(id string) (string, string, bool) {
 		return "", "", false
 	}
 	return kind, slug, true
+}
+
+func isCanonicalCoreConfigRef(ref string) bool {
+	ref = filepath.ToSlash(strings.TrimSpace(ref))
+	return strings.HasPrefix(ref, "onboarding/")
 }
 
 // dedupeBoardChipAliases keeps board rows as canonical and hides chip rows with the same slug.
@@ -234,12 +241,15 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 		var model struct {
 			Name           string `yaml:"name"`
 			Description    string `yaml:"description"`
+			URL            string `yaml:"url"`
 			Family         string `yaml:"family"`
 			CodeExample    string `yaml:"code_example"`
+			SampleTrace    string `yaml:"sample_trace"`
 			RegistersCount *int   `yaml:"registers_count"`
 			PassRate       *int   `yaml:"pass_rate"`
 			Verified       *bool  `yaml:"verified"`
 			Validation     struct {
+				Method       string `yaml:"method"`
 				RunURL       string `yaml:"run_url"`
 				ArtifactsURL string `yaml:"artifacts_url"`
 			} `yaml:"validation"`
@@ -297,8 +307,11 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 			SourceType:    "core-config",
 			SourceRef:     relPath,
 			SourceURL:     sourceURLForCoreConfig(relPath),
-			OfficialURL:   officialURLForAssetID(id),
+			OfficialURL:   strings.TrimSpace(model.URL),
 			ValidationURL: validationURLFromModel(model.Validation.RunURL, model.Validation.ArtifactsURL),
+		}
+		if asset.OfficialURL == "" {
+			asset.OfficialURL = officialURLForAssetID(id)
 		}
 
 		if model.Description == "" {
@@ -308,6 +321,51 @@ func (m *Manager) SyncFromDisk(configsDir string) error {
 				asset.Description = fmt.Sprintf("Peripheral model for %s.", name)
 			} else {
 				asset.Description = fmt.Sprintf("Simulation profile for %s.", name)
+			}
+		}
+
+		if existing, ok, err := m.store.GetCatalogAsset(asset.ID); err != nil {
+			log.Printf("[catalog] failed to inspect existing asset %s: %v", asset.ID, err)
+		} else if ok {
+			existingIsCanonical := isCanonicalCoreConfigRef(existing.SourceRef)
+			assetIsCanonical := isCanonicalCoreConfigRef(asset.SourceRef)
+			preferExisting := existingIsCanonical && !assetIsCanonical
+
+			if strings.TrimSpace(asset.Description) == "" || preferExisting {
+				asset.Description = existing.Description
+			}
+			if strings.TrimSpace(asset.Family) == "" || preferExisting {
+				asset.Family = existing.Family
+			}
+			if strings.TrimSpace(asset.Architecture) == "" || preferExisting {
+				asset.Architecture = existing.Architecture
+			}
+			if strings.TrimSpace(asset.CodeExample) == "" || preferExisting {
+				asset.CodeExample = existing.CodeExample
+			}
+			if asset.Registers == 0 || preferExisting {
+				asset.Registers = existing.Registers
+			}
+			if asset.PassRate == 0 || preferExisting {
+				asset.PassRate = existing.PassRate
+			}
+			if !asset.Verified || preferExisting {
+				asset.Verified = asset.Verified || existing.Verified
+			}
+			if strings.TrimSpace(asset.IrURL) == "" {
+				asset.IrURL = existing.IrURL
+			}
+			if strings.TrimSpace(asset.ValidationURL) == "" || preferExisting {
+				asset.ValidationURL = existing.ValidationURL
+			}
+			if strings.TrimSpace(asset.OfficialURL) == "" || preferExisting {
+				asset.OfficialURL = existing.OfficialURL
+			}
+			if strings.TrimSpace(asset.SourceURL) == "" || preferExisting {
+				asset.SourceURL = existing.SourceURL
+			}
+			if strings.TrimSpace(asset.SourceRef) == "" || preferExisting {
+				asset.SourceRef = existing.SourceRef
 			}
 		}
 
