@@ -6,16 +6,16 @@ url: https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontr
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/nxp-k6xf.yaml
-sample_trace: traces/generic.txt
 validation:
-  method: local-simulation
-  reason: simulation-ok
+  method: ci-structural
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-03-12T23:52:30.048957+00:00'
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-03-20T00:47:14.487720+00:00'
   run_url: ''
-  artifacts_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nxp-k6xf.md

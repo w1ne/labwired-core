@@ -8,15 +8,14 @@ code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // 
 pass_rate: 100
 verified: false
 system: systems/onboarding/opentitan-earlgrey-cw310.yaml
-sample_trace: traces/generic.txt
 validation:
-  method: local-structural
-  reason: structural-ok (non-ARM32)
+  method: ci-structural
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T23:52:30.258480+00:00'
+  timestamp_utc: '2026-03-20T00:47:14.823687+00:00'
   run_url: ''
-  artifacts_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/opentitan-earlgrey-cw310.md

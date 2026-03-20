@@ -9,16 +9,16 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/nucleo_h753zi.yaml
-sample_trace: traces/stm32.txt
 validation:
-  method: local-simulation
-  reason: simulation-ok
+  method: ci-structural
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-03-12T23:52:29.794578+00:00'
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-03-20T00:47:14.262487+00:00'
   run_url: ''
-  artifacts_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nucleo_h753zi.md

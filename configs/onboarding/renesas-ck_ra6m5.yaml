@@ -6,16 +6,16 @@ url: https://www.renesas.com/products/microcontrollers-microprocessors/ra-cortex
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/renesas-ck_ra6m5.yaml
-sample_trace: traces/generic.txt
 validation:
-  method: local-simulation
-  reason: simulation-ok
+  method: ci-structural
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-03-12T23:52:30.495542+00:00'
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-03-20T00:47:15.140544+00:00'
   run_url: ''
-  artifacts_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/renesas-ck_ra6m5.md
