@@ -297,7 +297,7 @@ func TestSyncFromDisk_PrefersCanonicalOnboardingManifestForDuplicateBoardIDs(t *
 		t.Fatalf("MkdirAll systems dir failed: %v", err)
 	}
 
-	onboardingYAML := []byte("name: a20\ndescription: 'Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture: ARMv7-A.'\nurl: https://linux-sunxi.org/A20\nfamily: Allwinner\npass_rate: 100\nverified: true\nsample_trace: traces/generic.txt\nvalidation:\n  method: local-simulation\n")
+	onboardingYAML := []byte("name: a20\ndescription: 'Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture: ARMv7-A.'\nurl: https://linux-sunxi.org/A20\nfamily: Allwinner\npass_rate: 100\nverified: true\nsample_trace: traces/a20.txt\nvalidation:\n  method: local-simulation\n")
 	systemYAML := []byte("name: a20\ncpu: cortex-a7\n")
 	if err := os.WriteFile(filepath.Join(onboardingDir, "a20.yaml"), onboardingYAML, 0o644); err != nil {
 		t.Fatalf("write onboarding yaml failed: %v", err)
@@ -326,8 +326,8 @@ func TestSyncFromDisk_PrefersCanonicalOnboardingManifestForDuplicateBoardIDs(t *
 	if a.OfficialURL != "https://linux-sunxi.org/A20" {
 		t.Fatalf("expected onboarding url to populate official_url, got %q", a.OfficialURL)
 	}
-	if a.ValidationURL != "https://github.com/w1ne/labwired-core/blob/main/configs/onboarding/traces/generic.txt" {
-		t.Fatalf("expected sample trace fallback validation url, got %q", a.ValidationURL)
+	if a.ValidationURL != "https://github.com/w1ne/labwired-core/blob/main/configs/onboarding/traces/a20.txt" {
+		t.Fatalf("expected real trace fallback validation url, got %q", a.ValidationURL)
 	}
 }
 

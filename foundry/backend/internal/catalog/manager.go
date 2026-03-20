@@ -121,7 +121,6 @@ func sourceURLForCoreConfig(relPath string) string {
 	}
 	return "https://github.com/w1ne/labwired-core/blob/main/configs/" + relPath
 }
-
 func traceURLForCoreConfig(relPath, sampleTrace string) string {
 	relPath = filepath.ToSlash(strings.TrimSpace(relPath))
 	sampleTrace = filepath.ToSlash(strings.TrimSpace(sampleTrace))
@@ -165,7 +164,7 @@ func validationURLFromModel(runURL, artifactsURL, sampleTrace, relPath string, h
 	if runURL != "" {
 		return runURL
 	}
-	if hasValidation {
+	if hasValidation && !strings.Contains(sampleTrace, "generic.txt") && !strings.Contains(sampleTrace, "stm32.txt") && !strings.Contains(sampleTrace, "silicon_labs_efm32.txt") && !strings.Contains(sampleTrace, "atmel_sam.txt") && !strings.Contains(sampleTrace, "intel_acrn.txt") && !strings.Contains(sampleTrace, "litex_vexriscv.txt") && !strings.Contains(sampleTrace, "nrf5.txt") && !strings.Contains(sampleTrace, "nxp_i.mx.txt") {
 		return traceURLForCoreConfig(relPath, sampleTrace)
 	}
 	return ""
