@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-03-20
+
+### Added
+- **Foundry Integration**: Core configs (`core/configs/`) now mounted into Foundry backend for dynamic catalog sync.
+- **Catalog Support**: Board and peripheral YAML descriptors ingested into unified hardware catalog; validation URLs and onboarding manifests surfaced via API.
+
+### Changed
+- **Version Bump**: Workspace version updated to `0.13.0` across all crates.
+
 ## [0.12.1] - 2026-02-16
 
 ### Fixed
