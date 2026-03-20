@@ -9,7 +9,7 @@ code_example: "/* Zephyr Blinky for nRF52 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(1000);\n \
   \   }\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/nrf52840.yaml
 validation:
   method: ci-arm-fixture-simulation
