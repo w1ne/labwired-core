@@ -8,15 +8,14 @@ code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // 
 pass_rate: 100
 verified: false
 system: systems/onboarding/sifive-fu540.yaml
-sample_trace: traces/generic.txt
 validation:
-  method: local-structural
-  reason: structural-ok (non-ARM32)
+  method: ci-structural
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-12T23:52:31.357243+00:00'
+  timestamp_utc: '2026-03-20T00:47:15.947060+00:00'
   run_url: ''
-  artifacts_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/sifive-fu540.md

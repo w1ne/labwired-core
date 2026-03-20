@@ -79,34 +79,18 @@ def generate_coverage_report(chip_path: Path) -> str:
             "",
             "## Hardware Coverage Report",
             "",
-            "| Peripheral ID | Base Address | Registers Covered | Model Path |",
-            "|---|---|---|---|",
+            "| Peripheral ID | Base Address | Type |",
+            "|---|---|---|",
         ]
         
-        total_regs = 0
         for p in peripherals:
             pid = p.get("id", "unknown")
             base = p.get("base_address", 0)
-            config = p.get("config", {})
-            ir_path_str = config.get("path", "")
-            
-            regs_count = 0
-            if ir_path_str:
-                ir_path = REPO_ROOT / ir_path_str
-                if ir_path.exists() and ir_path.suffix == ".json":
-                    try:
-                        ir_data = json.loads(ir_path.read_text(encoding="utf-8"))
-                        for pers in ir_data.get("peripherals", {}).values():
-                            regs_count += len(pers.get("registers", []))
-                    except Exception:
-                        pass
-            
-            total_regs += regs_count
-            lines.append(f"| `{pid}` | `0x{base:08x}` | {regs_count} | `{ir_path_str}` |")
+            ptype = p.get("type", "unknown")
+            lines.append(f"| `{pid}` | `0x{base:08x}` | `{ptype}` |")
             
         lines.append("")
         lines.append(f"**Total Peripherals:** {len(peripherals)}")
-        lines.append(f"**Total Registers Covered:** {total_regs}")
         return "\n".join(lines)
     except Exception as e:
         return f"\nError generating coverage report: {e}"
@@ -172,7 +156,7 @@ def main() -> int:
         method = "ci-structural"
         reason = "structural-ok"
 
-        is_arm32 = "ARM 32" in architecture
+        is_arm32 = "arm" in architecture.lower()
         trace_output = ""
         if is_arm32:
             method = "ci-arm-fixture-simulation"
@@ -205,17 +189,45 @@ def main() -> int:
         pass_rate = int(round(100 * passed_checks / len(checks))) if checks else 0
         
         # Append detailed hardware coverage report
+        docs_dir = REPO_ROOT / "docs" / "boards"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        report_file = docs_dir / f"{target_name}.md"
+        
+        report_lines = [
+            f"# Validation Report: {target_name}",
+            "",
+            f"**Architecture:** {architecture if architecture else 'Unknown'}",
+            "",
+            "## 1. Dynamic Simulation Validation",
+        ]
+        
+        if is_arm32:
+            report_lines.append(f"**Status:** {'✅ Passed' if ok else '❌ Failed'} ({reason})")
+            report_lines.append("")
+            report_lines.append("```text")
+            if sim_trace.strip():
+                report_lines.append(sim_trace.strip())
+            else:
+                report_lines.append("Simulation completed successfully with no warnings.")
+            report_lines.append("```")
+        else:
+            report_lines.append(f"**Status:** {'✅ Structural Check Passed' if ok else '❌ Failed'} ({reason})")
+            report_lines.append("")
+            report_lines.append("```json")
+            report_lines.append(json.dumps(checks, indent=2))
+            report_lines.append("```")
+            
+        report_lines.append("")
         coverage = generate_coverage_report(chip_path)
         if coverage:
-            trace_output += "\n" + coverage
+            report_lines.append(coverage)
+            
+        report_file.write_text("\n".join(report_lines), encoding="utf-8")
         
-        # Write actual trace to file
-        traces_dir = CONFIGS_DIR / "traces"
-        traces_dir.mkdir(parents=True, exist_ok=True)
-        trace_file = traces_dir / f"{target_name}.txt"
-        trace_file.write_text(trace_output, encoding="utf-8")
+        board_artifacts_url = f"https://github.com/w1ne/labwired-core/blob/main/docs/boards/{target_name}.md"
         
-        model["sample_trace"] = f"traces/{target_name}.txt"
+        if "sample_trace" in model and model["sample_trace"].startswith("traces/"):
+            del model["sample_trace"]
         model["pass_rate"] = pass_rate
         model["verified"] = verified
         model["validation"] = {
@@ -224,7 +236,7 @@ def main() -> int:
             "checks": checks,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "run_url": run_url,
-            "artifacts_url": artifacts_url,
+            "artifacts_url": board_artifacts_url,
         }
         path.write_text(yaml.dump(model, default_flow_style=False, sort_keys=False), encoding="utf-8")
 
