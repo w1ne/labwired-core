@@ -5,7 +5,7 @@ url: https://www.latticesemi.com/products/developmentboardsandkits/ice40ultraplu
 family: Lattice iCE40
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
+pass_rate: 75
 verified: false
 system: systems/onboarding/ice40up5k-mdp-evn.yaml
 validation:
@@ -14,7 +14,7 @@ validation:
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: true
+    flash_base_present: false
     ram_base_present: true
   timestamp_utc: '2026-03-20T01:17:12.376607+00:00'
   run_url: ''

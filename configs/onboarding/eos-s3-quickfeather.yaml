@@ -6,7 +6,7 @@ family: QuickLogic EOS
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/eos-s3-quickfeather.yaml
 validation:
   method: ci-arm-fixture-simulation
