@@ -1,0 +1,16 @@
+name: litex_ibex
+description: Auto-generated draft for litex_ibex
+pass_rate: 100
+verified: false
+system: systems/onboarding/litex_ibex.yaml
+validation:
+  method: ci-structural
+  reason: structural-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-03-20T01:17:12.475472+00:00'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/litex_ibex.md

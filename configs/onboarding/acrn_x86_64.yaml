@@ -1,0 +1,16 @@
+name: acrn_x86_64
+description: Auto-generated draft for acrn_x86_64
+pass_rate: 100
+verified: false
+system: systems/onboarding/acrn_x86_64.yaml
+validation:
+  method: ci-structural
+  reason: structural-ok
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    flash_base_present: true
+    ram_base_present: true
+  timestamp_utc: '2026-03-20T01:17:10.655770+00:00'
+  run_url: ''
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/acrn_x86_64.md

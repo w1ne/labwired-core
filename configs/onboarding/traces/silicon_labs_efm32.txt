@@ -1,4 +1,0 @@
-[BOOT] EFM32GG Starting...
-[MEM] 1024KB Flash enabled
-[IO] USART1 Configured
-Hello Silicon Labs!

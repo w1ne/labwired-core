@@ -16,6 +16,6 @@ validation:
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-20T00:47:12.116951+00:00'
+  timestamp_utc: '2026-03-20T01:17:11.253046+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/core-v-mcu.md

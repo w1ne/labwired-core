@@ -5,17 +5,17 @@ family: LiteX
 url: https://digilent.com/shop/nexys-video-artix-7-fpga-trainer-board-for-multimedia-applications/
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 75
+pass_rate: 100
 verified: false
 system: systems/onboarding/litex_nexys_video_vexriscv_linux.yaml
 validation:
   method: ci-structural
-  reason: missing-memory-map-or-manifest
+  reason: structural-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: false
+    flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-20T00:47:13.341976+00:00'
+  timestamp_utc: '2026-03-20T01:17:12.517352+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/litex_nexys_video_vexriscv_linux.md

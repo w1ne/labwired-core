@@ -1,12 +1,17 @@
 # Validation Report: egis_et171
 
-**Architecture:** ARM Cortex-M.
+**Architecture:** RISC-V.
 
 ## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+**Status:** ✅ Structural Check Passed (structural-ok)
 
-```text
-Simulation completed successfully with no warnings.
+```json
+{
+  "system_manifest": true,
+  "chip_descriptor": true,
+  "flash_base_present": true,
+  "ram_base_present": true
+}
 ```
 
 

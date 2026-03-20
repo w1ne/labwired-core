@@ -1,17 +1,11 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
 name: picosoc
 arch: arm
 flash:
   base: 16777216
   size: 16777216B
 ram:
-  base: 0
-  size: 16777216B
+  base: 1073741824
+  size: 262144
 peripherals:
 - id: uart
   type: picosoc_simpleuart

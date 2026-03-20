@@ -9,16 +9,15 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: false
+verified: true
 system: systems/onboarding/stm32wba52.yaml
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: ci-arm-fixture-simulation
+  reason: simulation-ok
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: true
-    ram_base_present: true
-  timestamp_utc: '2026-03-20T00:47:17.716806+00:00'
+    simulation: true
+  timestamp_utc: '2026-03-20T01:17:15.921999+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/stm32wba52.md

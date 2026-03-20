@@ -16,6 +16,6 @@ validation:
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-20T00:47:14.888801+00:00'
+  timestamp_utc: '2026-03-20T01:17:13.924820+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/opentitan-earlgrey.md

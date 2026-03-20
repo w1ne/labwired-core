@@ -1,7 +1,0 @@
--- LiteX BIOS --
-(c) Copyright 2012-2026 Enjoy-Digital
-(c) Copyright 2007-2026 M-Labs
-
-CPU: VexRiscv @ 100MHz
-RAM: 64MB (32-bit)
-Hello LiteX!

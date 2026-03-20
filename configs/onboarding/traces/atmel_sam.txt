@@ -1,4 +1,0 @@
-[BOARD] SAM-E70 Starting
-[CHIP] Flash 2MB / RAM 384KB OK
-[INIT] UART0 Initialized
-Hello Atmel SAM!
