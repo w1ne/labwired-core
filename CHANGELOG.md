@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-03-20
+
+### Added
+- **AI Synthesis Pipeline**: `POST /v1/synthesize` endpoint for hardware model synthesis-as-a-service; `POST /v1/estimate` for free cost estimation before consuming quota.
+- **API Key Authentication**: Bearer token auth with per-key billing quotas, `/v1/usage` reporting, and `GET/POST/DELETE /v1/account/keys` management endpoints.
+- **Clerk Authentication**: Dashboard and account routes gated via Clerk OIDC; frontend `auth.tsx` module for session handling.
+- **Dynamic Catalog Sync**: Backend syncs hardware models from `core/configs` YAML on startup and after deploys; synthesis output promoted into catalog via `PromoteToCatalog`.
+- **External Hardware Index**: 200+ functional targets imported from Renode board catalog; tier-1 boards marked verified with 100% pass rate.
+- **Catalog Table UX**: Scalable filter, sort, and pagination UI for the hardware catalog; validation links, source URLs, and official board links exposed in API and frontend.
+- **Private Models UI**: Placeholder component for user-owned synthesized model management.
+- **Health Monitoring**: `HealthMonitoring` dashboard component with real-time backend status.
+- **Deploy Health Gates**: `foundry-deploy.yml` validates `/v1/health` and `/v1/catalog` (architecture + validation_url metadata) after every deploy; automatic rollback to previous image tags on failure.
+- **Pluto Maintenance Workflow**: Scheduled daily cleanup and emergency `foundry-repair` dispatch job; fallback Stripe secret handling keeps backend bootable.
+- **Release Smoke Script**: `foundry/backend/release_smoke.sh` for pre-release API validation (health, auth boundary, quota lifecycle).
+
+### Fixed
+- **Catalog Metadata Preservation**: Board metadata (architecture, validation URL) no longer overwritten during external index sync.
+- **Chip Alias Deduplication**: Chip-only rows hidden when a canonical board row with the same slug exists; board metadata backfilled from chip aliases.
+- **Catalog ID Standardization**: IDs derived from model names for consistency across git-backed and synthesized entries.
+- **Stripe Boot Resilience**: Foundry API remains bootable when `STRIPE_WEBHOOK_SECRET` is unset; pluto emergency repair falls back to `"disabled"` sentinel.
+- **App Routing Tests**: Clerk `useAuth` mock now supplies `isLoaded: true` to prevent routing test hangs.
+- **Hardware Validation Script**: Supports new hardware description format and allows base address `0`.
+
+### Changed
+- **CI Runners**: All main-repo workflows migrated to self-hosted `ubuntu:22.04` container runners; portable Zig fallback for C compiler on locked-down hosts.
+- **Deploy Pipeline**: Isolated checkout paths (`run-${{ github.run_id }}-*`) and preflight disk reclaim on self-hosted runner before each stage.
+- **Catalog Quality Metrics**: Coverage counters replaced with quality-focused metrics (verified status, pass rate, validation URL presence).
+- **Hardware Listing**: `/v1/hardware` unified with catalog source; hardware JSON and core configs dir configurable via env.
+
 ## [0.12.1] - 2026-02-16
 
 ### Fixed

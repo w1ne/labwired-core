@@ -5,6 +5,12 @@
 
 set -e
 
+if [[ -x "${HOME}/opt/go1.24.0-bin/bin/go" ]]; then
+  GO_BIN="${HOME}/opt/go1.24.0-bin/bin/go"
+else
+  GO_BIN="$(command -v go)" || { echo "go not found in PATH"; exit 1; }
+fi
+
 echo "🚀 [E2E] Starting Full API Validation Suite..."
 
 # 1. SETUP
@@ -15,7 +21,7 @@ rm -rf /tmp/foundry/artifacts_e2e
 mkdir -p /tmp/foundry/artifacts_e2e
 
 # Start Server
-PORT=8080 DB_PATH=foundry_e2e.db ARTIFACTS_DIR=/tmp/foundry/artifacts_e2e ~/opt/go1.24.0-bin/bin/go run cmd/server/main.go > /tmp/server_e2e.log 2>&1 &
+PORT=8080 DB_PATH=foundry_e2e.db ARTIFACTS_DIR=/tmp/foundry/artifacts_e2e "$GO_BIN" run cmd/server/main.go > /tmp/server_e2e.log 2>&1 &
 SERVER_PID=$!
 
 # Cleanup on exit
@@ -25,7 +31,7 @@ sleep 3 # Wait for server and DB migrations
 
 # 2. GENERATE KEY
 echo "🔑 [E2E] Generating first-party Builder Key..."
-KEY_OUTPUT=$(~/opt/go1.24.0-bin/bin/go run cmd/addkey/main.go -workspace labwired-team -db foundry_e2e.db)
+KEY_OUTPUT=$("$GO_BIN" run cmd/addkey/main.go -workspace labwired-team -db foundry_e2e.db)
 API_KEY=$(echo "$KEY_OUTPUT" | grep 'Your API Key' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 echo "🔑 [E2E] Key generated: $API_KEY"
 

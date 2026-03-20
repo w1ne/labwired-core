@@ -2,18 +2,24 @@
 # LabWired Foundry API - Security & Quota Regression Test
 # Runs an end-to-end check of Auth Middlewares and Quota Exhaustion
 
+if [[ -x "${HOME}/opt/go1.24.0-bin/bin/go" ]]; then
+  GO_BIN="${HOME}/opt/go1.24.0-bin/bin/go"
+else
+  GO_BIN="$(command -v go)" || { echo "go not found in PATH"; exit 1; }
+fi
+
 echo "🚀 [TEST] Starting API Regression Suite..."
 
 # 1. Setup DB and Server
 cd $(dirname $0)
 rm -f foundry_test.db
-PORT=8081 DB_PATH=foundry_test.db ~/opt/go1.24.0-bin/bin/go run cmd/server/main.go > /tmp/server_test.log 2>&1 &
+PORT=8081 DB_PATH=foundry_test.db "$GO_BIN" run cmd/server/main.go > /tmp/server_test.log 2>&1 &
 SERVER_PID=$!
 sleep 2 # wait for server
 
 # 2. Generate a fresh key
 echo "🔑 [TEST] Generating fresh Builder Tier API Key..."
-KEY_OUTPUT=$(~/opt/go1.24.0-bin/bin/go run ./cmd/addkey -workspace test-workspace -db foundry_test.db)
+KEY_OUTPUT=$("$GO_BIN" run ./cmd/addkey -workspace test-workspace -db foundry_test.db)
 API_KEY=$(echo "$KEY_OUTPUT" | grep 'Your API Key' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 echo "🔑 [TEST] Key: $API_KEY"
 

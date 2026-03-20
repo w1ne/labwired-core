@@ -2,18 +2,24 @@
 # LabWired Foundry API - Stateless "Compiler" Verification Demo
 # Showcases an external agent verifying custom YAML directly against the cloud orchestrator.
 
+if [[ -x "${HOME}/opt/go1.24.0-bin/bin/go" ]]; then
+  GO_BIN="${HOME}/opt/go1.24.0-bin/bin/go"
+else
+  GO_BIN="$(command -v go)" || { echo "go not found in PATH"; exit 1; }
+fi
+
 echo "🚀 [DEMO] Starting Foundry Verification-as-a-Service Loop..."
 
 # 1. Setup DB and Server
 cd $(dirname $0)
 rm -f foundry_demo_verify.db
-PORT=8083 DB_PATH=foundry_demo_verify.db ~/opt/go1.24.0-bin/bin/go run cmd/server/main.go > /tmp/server_demo_verify.log 2>&1 &
+PORT=8083 DB_PATH=foundry_demo_verify.db "$GO_BIN" run cmd/server/main.go > /tmp/server_demo_verify.log 2>&1 &
 SERVER_PID=$!
 sleep 2 # wait for server
 
 # 2. Generate a fresh key
 echo "🔑 [DEMO] Generating a fresh Developer API Key..."
-KEY_OUTPUT=$(~/opt/go1.24.0-bin/bin/go run ./cmd/addkey -workspace demo-workspace-3 -db foundry_demo_verify.db)
+KEY_OUTPUT=$("$GO_BIN" run ./cmd/addkey -workspace demo-workspace-3 -db foundry_demo_verify.db)
 API_KEY=$(echo "$KEY_OUTPUT" | grep 'Your API Key' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 echo "🔑 [DEMO] Setup Complete. Key: $API_KEY"
 echo "------------------------------------------------------"
