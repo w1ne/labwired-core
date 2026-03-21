@@ -238,6 +238,148 @@ func (s *Server) serveRunArtifact(w http.ResponseWriter, r *http.Request, record
 	http.ServeFile(w, r, artifactPath)
 }
 
+// handleAccountUsageBreakdown returns usage grouped by operation type.
+func (s *Server) handleAccountUsageBreakdown(w http.ResponseWriter, r *http.Request) {
+	clerkUserID, ok := clerkUserIDFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Clerk user ID not found in context.", "")
+		return
+	}
+	breakdown, err := s.store.GetUsageBreakdownForClerkUser(clerkUserID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch usage breakdown.", "")
+		return
+	}
+	if breakdown == nil {
+		breakdown = []db.UsageBreakdown{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(breakdown)
+}
+
+// handleCreateOrg creates a new organization with the caller as admin.
+func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request) {
+	clerkUserID, ok := clerkUserIDFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Clerk user ID not found in context.", "")
+		return
+	}
+
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+		sendError(w, http.StatusBadRequest, "BAD_REQUEST", "Request body must contain 'name'.", "")
+		return
+	}
+
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate org ID.", "")
+		return
+	}
+	orgID := hex.EncodeToString(raw)
+
+	if err := s.store.CreateOrg(orgID, body.Name, clerkUserID); err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create organization.", "")
+		return
+	}
+
+	_ = s.store.RecordAuditEvent(orgID, clerkUserID, "create_org", "organization", orgID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"id":   orgID,
+		"name": body.Name,
+	})
+}
+
+// handleListOrgs returns all organizations the caller belongs to.
+func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request) {
+	clerkUserID, ok := clerkUserIDFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Clerk user ID not found in context.", "")
+		return
+	}
+	orgs, err := s.store.ListOrgsForUser(clerkUserID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list organizations.", "")
+		return
+	}
+	if orgs == nil {
+		orgs = []db.OrgRecord{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(orgs)
+}
+
+// handleAddOrgMember adds a member to an organization (admin only, enforced by RBAC middleware).
+func (s *Server) handleAddOrgMember(w http.ResponseWriter, r *http.Request) {
+	clerkUserID, ok := clerkUserIDFromContext(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Clerk user ID not found in context.", "")
+		return
+	}
+	orgID := mux.Vars(r)["org_id"]
+
+	var body struct {
+		ClerkUserID string `json:"clerk_user_id"`
+		Role        string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ClerkUserID == "" {
+		sendError(w, http.StatusBadRequest, "BAD_REQUEST", "Request body must contain 'clerk_user_id'.", "")
+		return
+	}
+	if body.Role == "" {
+		body.Role = "developer"
+	}
+	if _, valid := roleLevel[body.Role]; !valid {
+		sendError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid role. Must be: admin, developer, or viewer.", "")
+		return
+	}
+
+	if err := s.store.AddOrgMember(orgID, body.ClerkUserID, body.Role); err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to add member.", "")
+		return
+	}
+
+	_ = s.store.RecordAuditEvent(orgID, clerkUserID, "add_member", "org_member", body.ClerkUserID)
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"status": "added"})
+}
+
+// handleListOrgMembers returns all members of an organization (viewer+ access via RBAC).
+func (s *Server) handleListOrgMembers(w http.ResponseWriter, r *http.Request) {
+	orgID := mux.Vars(r)["org_id"]
+	members, err := s.store.ListOrgMembers(orgID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list members.", "")
+		return
+	}
+	if members == nil {
+		members = []db.OrgMember{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(members)
+}
+
+// handleOrgAuditLog returns audit log entries for an organization (admin only via RBAC).
+func (s *Server) handleOrgAuditLog(w http.ResponseWriter, r *http.Request) {
+	orgID := mux.Vars(r)["org_id"]
+	entries, err := s.store.ListAuditLog(orgID, 200)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch audit log.", "")
+		return
+	}
+	if entries == nil {
+		entries = []db.AuditEntry{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entries)
+}
+
 func (s *Server) handleAccountQuickstart(w http.ResponseWriter, r *http.Request) {
 	clerkUserID, ok := clerkUserIDFromContext(r.Context())
 	if !ok {

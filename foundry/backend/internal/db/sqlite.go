@@ -12,13 +12,48 @@ import (
 
 // RunRecord is the full simulation_runs row returned for polling.
 type RunRecord struct {
-	RunID            string `json:"run_id"`
-	WorkspaceID      string `json:"workspace_id"`
-	Status           string `json:"status"`
-	AssertionsPassed int    `json:"assertions_passed"`
-	AssertionsTotal  int    `json:"assertions_total"`
-	ArtifactsPath    string `json:"artifacts_path,omitempty"`
-	CreatedAt        string `json:"created_at"`
+	RunID            string  `json:"run_id"`
+	WorkspaceID      string  `json:"workspace_id"`
+	Status           string  `json:"status"`
+	AssertionsPassed int     `json:"assertions_passed"`
+	AssertionsTotal  int     `json:"assertions_total"`
+	ArtifactsPath    string  `json:"artifacts_path,omitempty"`
+	CreatedAt        string  `json:"created_at"`
+	OpType           string  `json:"op_type"`
+	SimMinutes       float64 `json:"sim_minutes"`
+}
+
+// OrgRecord represents an organization.
+type OrgRecord struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
+
+// OrgMember represents an organization membership.
+type OrgMember struct {
+	OrgID       string `json:"org_id"`
+	ClerkUserID string `json:"clerk_user_id"`
+	Role        string `json:"role"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// AuditEntry represents a single audit log entry.
+type AuditEntry struct {
+	ID           int64  `json:"id"`
+	OrgID        string `json:"org_id"`
+	ActorID      string `json:"actor_id"`
+	Action       string `json:"action"`
+	ResourceType string `json:"resource_type"`
+	ResourceID   string `json:"resource_id"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// UsageBreakdown represents aggregated usage by operation type.
+type UsageBreakdown struct {
+	OpType     string  `json:"op_type"`
+	RunCount   int     `json:"run_count"`
+	SimMinutes float64 `json:"sim_minutes"`
 }
 
 // RunArtifactRecord represents a run with persisted artifacts and timestamp.
@@ -203,6 +238,35 @@ func (s *Store) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_simulation_runs_workspace_created ON simulation_runs(workspace_id, created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_requests(created_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_request_rate_windows_window_start ON request_rate_windows(window_start);`,
+		// Metering: per-operation type and simulation minutes tracking.
+		`ALTER TABLE simulation_runs ADD COLUMN op_type TEXT NOT NULL DEFAULT 'verify';`,
+		`ALTER TABLE simulation_runs ADD COLUMN sim_minutes REAL NOT NULL DEFAULT 0.0;`,
+		// Organization model for multi-tenancy.
+		`CREATE TABLE IF NOT EXISTS organizations (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE TABLE IF NOT EXISTS org_members (
+			org_id TEXT NOT NULL,
+			clerk_user_id TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT 'developer',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (org_id, clerk_user_id)
+		);`,
+		`ALTER TABLE api_keys ADD COLUMN org_id TEXT NOT NULL DEFAULT '';`,
+		`CREATE INDEX IF NOT EXISTS idx_org_members_user ON org_members(clerk_user_id);`,
+		// Audit logging.
+		`CREATE TABLE IF NOT EXISTS audit_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			org_id TEXT NOT NULL DEFAULT '',
+			actor_id TEXT NOT NULL,
+			action TEXT NOT NULL,
+			resource_type TEXT NOT NULL,
+			resource_id TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_org ON audit_log(org_id, created_at);`,
 	}
 
 	for _, q := range queries {
@@ -1161,4 +1225,159 @@ func (s *Store) DeleteCatalogAssetsBySourceTypes(sourceTypes []string) error {
 	)
 	_, err := s.db.Exec(q, args...)
 	return err
+}
+
+// --- Metering ---
+
+// GetUsageBreakdownForClerkUser returns usage grouped by op_type for the last 30 days.
+func (s *Store) GetUsageBreakdownForClerkUser(clerkUserID string) ([]UsageBreakdown, error) {
+	rows, err := s.db.Query(`
+		SELECT COALESCE(r.op_type, 'verify') AS op_type,
+		       COUNT(*) AS run_count,
+		       COALESCE(SUM(r.sim_minutes), 0) AS sim_minutes
+		FROM simulation_runs r
+		JOIN api_keys k ON r.workspace_id = k.workspace_id
+		WHERE k.clerk_user_id = ?
+		  AND r.billable = 1
+		  AND r.created_at >= datetime('now', '-30 days')
+		GROUP BY COALESCE(r.op_type, 'verify')
+		ORDER BY run_count DESC
+	`, clerkUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []UsageBreakdown
+	for rows.Next() {
+		var b UsageBreakdown
+		if err := rows.Scan(&b.OpType, &b.RunCount, &b.SimMinutes); err != nil {
+			return nil, err
+		}
+		result = append(result, b)
+	}
+	return result, rows.Err()
+}
+
+// --- Organization Model ---
+
+// CreateOrg creates a new organization and adds the creator as admin.
+func (s *Store) CreateOrg(orgID, name, creatorClerkUserID string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`INSERT INTO organizations (id, name) VALUES (?, ?)`, orgID, name)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`INSERT INTO org_members (org_id, clerk_user_id, role) VALUES (?, ?, 'admin')`,
+		orgID, creatorClerkUserID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// ListOrgsForUser returns all organizations a user belongs to.
+func (s *Store) ListOrgsForUser(clerkUserID string) ([]OrgRecord, error) {
+	rows, err := s.db.Query(`
+		SELECT o.id, o.name, o.created_at
+		FROM organizations o
+		JOIN org_members m ON o.id = m.org_id
+		WHERE m.clerk_user_id = ?
+		ORDER BY o.created_at DESC
+	`, clerkUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []OrgRecord
+	for rows.Next() {
+		var o OrgRecord
+		if err := rows.Scan(&o.ID, &o.Name, &o.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, o)
+	}
+	return result, rows.Err()
+}
+
+// AddOrgMember adds a member to an organization with the given role.
+func (s *Store) AddOrgMember(orgID, clerkUserID, role string) error {
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO org_members (org_id, clerk_user_id, role) VALUES (?, ?, ?)`,
+		orgID, clerkUserID, role)
+	return err
+}
+
+// GetOrgMemberRole returns the role of a user in an organization, or "" if not a member.
+func (s *Store) GetOrgMemberRole(orgID, clerkUserID string) (string, error) {
+	var role string
+	err := s.db.QueryRow(`SELECT role FROM org_members WHERE org_id = ? AND clerk_user_id = ?`,
+		orgID, clerkUserID).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return role, err
+}
+
+// ListOrgMembers returns all members of an organization.
+func (s *Store) ListOrgMembers(orgID string) ([]OrgMember, error) {
+	rows, err := s.db.Query(`SELECT org_id, clerk_user_id, role, created_at FROM org_members WHERE org_id = ? ORDER BY created_at`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []OrgMember
+	for rows.Next() {
+		var m OrgMember
+		if err := rows.Scan(&m.OrgID, &m.ClerkUserID, &m.Role, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, m)
+	}
+	return result, rows.Err()
+}
+
+// --- Audit Logging ---
+
+// RecordAuditEvent inserts an audit log entry.
+func (s *Store) RecordAuditEvent(orgID, actorID, action, resourceType, resourceID string) error {
+	_, err := s.db.Exec(`INSERT INTO audit_log (org_id, actor_id, action, resource_type, resource_id) VALUES (?, ?, ?, ?, ?)`,
+		orgID, actorID, action, resourceType, resourceID)
+	return err
+}
+
+// ListAuditLog returns audit entries for an organization, newest first.
+func (s *Store) ListAuditLog(orgID string, limit int) ([]AuditEntry, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.Query(`
+		SELECT id, org_id, actor_id, action, resource_type, resource_id, created_at
+		FROM audit_log
+		WHERE org_id = ?
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, orgID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(&e.ID, &e.OrgID, &e.ActorID, &e.Action, &e.ResourceType, &e.ResourceID, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, e)
+	}
+	return result, rows.Err()
 }

@@ -7,8 +7,9 @@ which form the basis of the LabWired usage-based monetization model for agents.
 """
 
 import logging
+import os
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class UsageTracker:
         self.start_time = time.time()
         self.ai_ops = 0
         self.sim_min = 0.0
+        self.op_type = "ai_ingest"
 
     def record_ai_op(self, count: int = 1):
         """
@@ -49,6 +51,7 @@ class UsageTracker:
         return {
             "ai_operations": self.ai_ops,
             "simulation_minutes": round(self.sim_min, 2),
+            "op_type": self.op_type,
             "status": "LabWired AIPi: Usage Recorded"
         }
 
@@ -60,3 +63,53 @@ class UsageTracker:
         print(f"\n[TELEMETRY] {stats['status']}")
         print(f"  AI Operations: {stats['ai_operations']}")
         print(f"  Simulation Minutes Utilized: {stats['simulation_minutes']}")
+
+        # Export to Foundry if configured
+        self.export_to_foundry()
+
+    def export_to_foundry(
+        self,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
+        """
+        Export usage telemetry to the Foundry backend.
+
+        Sends a POST request with operation type and simulation minutes.
+        Only active when LABWIRED_FOUNDRY_URL and LABWIRED_API_KEY env vars are set,
+        or when explicit parameters are provided.
+        """
+        url = api_url or os.environ.get("LABWIRED_FOUNDRY_URL")
+        key = api_key or os.environ.get("LABWIRED_API_KEY")
+
+        if not url or not key:
+            return  # Silent no-op when not configured
+
+        stats = self.calculate_usage()
+        payload = {
+            "op_type": stats["op_type"],
+            "ai_operations": stats["ai_operations"],
+            "sim_minutes": stats["simulation_minutes"],
+        }
+
+        try:
+            import urllib.request
+            import json
+
+            req = urllib.request.Request(
+                f"{url.rstrip('/')}/v1/telemetry/ingest",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-API-Key": key,
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200 or resp.status == 201:
+                    logger.debug("Telemetry exported to Foundry")
+                else:
+                    logger.debug(f"Telemetry export returned status {resp.status}")
+        except Exception as e:
+            # Never fail the pipeline due to telemetry export issues
+            logger.debug(f"Telemetry export failed (non-fatal): {e}")

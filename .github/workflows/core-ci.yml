@@ -99,3 +99,43 @@ jobs:
 
       - name: Run integration smoke
         run: cargo run -q -p labwired-cli -- test --script examples/ci/dummy-max-uart-bytes.yaml --output-dir out/integration-smoke --no-uart-stdout
+
+  determinism-gate:
+    name: determinism-proof
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: checkout-main
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Run determinism proof (5 runs, result + trace comparison)
+        run: cargo test -p labwired-cli --test determinism -- --nocapture
+
+  compatibility-matrix:
+    name: generate-compat-matrix
+    runs-on: self-hosted
+    needs: integration-smoke
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: checkout-main
+          submodules: recursive
+
+      - name: Generate compatibility matrix
+        run: python3 scripts/generate_compat_matrix.py > compatibility_matrix.json
+        working-directory: ./checkout-main/core
+
+      - name: Upload compatibility matrix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-matrix
+          path: ./checkout-main/core/compatibility_matrix.json
