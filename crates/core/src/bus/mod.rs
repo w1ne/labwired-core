@@ -14,6 +14,7 @@ use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
 use std::cell::Cell;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
@@ -284,6 +285,22 @@ impl SystemBus {
             };
             uart.set_sink(Some(sink.clone()), echo_stdout);
         }
+    }
+
+    /// Collect shared RX buffer handles from all UART peripherals on this bus.
+    /// The caller can push bytes into these buffers to inject serial input.
+    pub fn attach_uart_rx_source(&self) -> Vec<Arc<Mutex<VecDeque<u8>>>> {
+        let mut sources = Vec::new();
+        for p in &self.peripherals {
+            let Some(any) = p.dev.as_any() else {
+                continue;
+            };
+            let Some(uart) = any.downcast_ref::<Uart>() else {
+                continue;
+            };
+            sources.push(uart.rx_buffer());
+        }
+        sources
     }
 
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
