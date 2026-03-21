@@ -8,4 +8,5 @@ pub mod arm;
 pub mod riscv;
 
 pub use arm::decode_thumb_16;
+pub use arm::decode_thumb_32;
 pub use arm::Instruction as ArmInstruction;
