@@ -126,6 +126,36 @@ jobs:
             exit 0
           fi
 
+          if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
+            arch="$(uname -m)"
+            case "$arch" in
+              x86_64) zig_pkg="zig-linux-x86_64-0.13.0" ;;
+              aarch64) zig_pkg="zig-linux-aarch64-0.13.0" ;;
+              *)
+                zig_pkg=""
+                ;;
+            esac
+
+            if [ -n "$zig_pkg" ]; then
+              mkdir -p "$HOME/.local/zig" "$HOME/.local/bin"
+              curl -fsSL "https://ziglang.org/download/0.13.0/${zig_pkg}.tar.xz" -o /tmp/zig.tar.xz
+              tar -xf /tmp/zig.tar.xz -C "$HOME/.local/zig" --strip-components=1
+              printf '#!/usr/bin/env bash\nexec "$HOME/.local/zig/zig" cc "$@"\n' > "$HOME/.local/bin/cc"
+              chmod +x "$HOME/.local/bin/cc"
+              echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+              echo "Created cc shim to zig cc"
+              exit 0
+            fi
+          fi
+
+          if sudo -n true >/dev/null 2>&1; then
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y build-essential pkg-config
+              exit 0
+            fi
+          fi
+
           echo "No usable C toolchain found"
           exit 1
 
