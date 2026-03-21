@@ -272,6 +272,10 @@ func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "BAD_REQUEST", "Request body must contain 'name'.", "")
 		return
 	}
+	if len(body.Name) > 128 {
+		sendError(w, http.StatusBadRequest, "BAD_REQUEST", "Organization name must be 128 characters or fewer.", "")
+		return
+	}
 
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {

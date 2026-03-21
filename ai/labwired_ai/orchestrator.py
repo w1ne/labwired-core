@@ -222,48 +222,16 @@ class PipelineOrchestrator:
         return result
 
     def _run_verification(self, ir_path: Path) -> dict:
-        """Run the verify harness and collect results."""
+        """Run the verify harness and collect structured results."""
         try:
-            from .verify_harness import verify
+            from .verify_harness import verify_structured
 
-            # Capture verification by temporarily redirecting
-            # The verify function returns 0 (pass) or 1 (fail) and logs counts
-            # We need to parse the results more carefully
-            import io
-            import contextlib
-
-            log_capture = io.StringIO()
-            handler = logging.StreamHandler(log_capture)
-            handler.setLevel(logging.INFO)
-            verify_logger = logging.getLogger("labwired_ai.verify_harness")
-            verify_logger.addHandler(handler)
-
-            exit_code = verify(str(ir_path))
-
-            verify_logger.removeHandler(handler)
-            log_output = log_capture.getvalue()
-
-            # Parse passed/failed from log output
-            passed = 0
-            failed = 0
-            for line in log_output.splitlines():
-                if "Passed:" in line:
-                    try:
-                        passed = int(line.split("Passed:")[1].strip())
-                    except (ValueError, IndexError):
-                        pass
-                elif "Failed:" in line:
-                    try:
-                        failed = int(line.split("Failed:")[1].strip())
-                    except (ValueError, IndexError):
-                        pass
-
+            result = verify_structured(str(ir_path))
             return {
-                "exit_code": exit_code,
-                "passed": passed,
-                "failed": failed,
-                "total": passed + failed,
-                "log": log_output,
+                "exit_code": result.get("exit_code", 1),
+                "passed": result.get("passed", 0),
+                "failed": result.get("failed", 0),
+                "total": result.get("total", 0),
             }
 
         except ImportError:

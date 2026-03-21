@@ -880,10 +880,11 @@ func TestDataCatalogArtifact_IsServedFromDataDir(t *testing.T) {
 }
 
 func TestHealth_ExposesRuntimeMetrics(t *testing.T) {
-	srv, _, artifactsDir := newTestServer(t)
+	srv, store, artifactsDir := newTestServer(t)
 	if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll artifacts dir failed: %v", err)
 	}
+	key := createKey(t, store, "ws-health-metrics")
 
 	srv.metrics.InflightLimitRejected.Add(2)
 	srv.metrics.QueueFullRejected.Add(3)
@@ -896,7 +897,7 @@ func TestHealth_ExposesRuntimeMetrics(t *testing.T) {
 	srv.metrics.StripeDuplicateEvents.Add(10)
 	srv.metrics.IdempotencyRowsPruned.Add(11)
 
-	rr := doAuthRequest(t, srv, http.MethodGet, "/v1/health", "", nil)
+	rr := doAuthRequest(t, srv, http.MethodGet, "/v1/health", key, nil)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
 	}

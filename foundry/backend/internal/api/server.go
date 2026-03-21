@@ -123,7 +123,8 @@ type Server struct {
 	rateLimitWindow          time.Duration
 	cleanupStopCh            chan struct{}
 
-	metrics serverMetrics
+	metrics        serverMetrics
+	allowedOrigins []string
 }
 
 type ServerOptions struct {
@@ -247,6 +248,7 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 		rateLimitWindow:          opts.RateLimitWindow,
 		cleanupStopCh:            make(chan struct{}),
 		clerkSecretKey:           opts.ClerkSecretKey,
+		allowedOrigins:           parseAllowedOrigins(),
 	}
 	s.scheduleCond = sync.NewCond(&s.scheduleMu)
 	s.routes()
@@ -260,6 +262,26 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 	s.workersWG.Add(1)
 	go s.leaseRecoveryLoop()
 	return s
+}
+
+// parseAllowedOrigins reads CORS_ALLOWED_ORIGINS env var (comma-separated).
+// Falls back to ["*"] if unset (dev mode). Set to your frontend domain in production.
+func parseAllowedOrigins() []string {
+	raw := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if raw == "" {
+		return []string{"*"}
+	}
+	var origins []string
+	for _, o := range strings.Split(raw, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			origins = append(origins, o)
+		}
+	}
+	if len(origins) == 0 {
+		return []string{"*"}
+	}
+	return origins
 }
 
 func (s *Server) recoverPendingRuns() {
@@ -533,6 +555,7 @@ func (s *Server) routes() {
 	if s.clerkSecretKey != "" {
 		account := s.router.PathPrefix("/v1/account").Subrouter()
 		account.Use(s.clerkAuthMiddleware)
+		account.Use(s.accountRateLimitMiddleware)
 		account.HandleFunc("/usage", s.handleAccountUsage).Methods("GET")
 		account.HandleFunc("/runs", s.handleAccountRuns).Methods("GET")
 		account.HandleFunc("/runs/{run_id}", s.handleAccountRun).Methods("GET")
@@ -808,20 +831,30 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"shutting_down":              scheduleShuttingDown,
 		"max_inflight_per_workspace": s.maxInflightPerWorkspace,
 	}
-	components["metrics"] = map[string]int64{
-		"inflight_limit_rejected":       s.metrics.InflightLimitRejected.Load(),
-		"queue_full_rejected":           s.metrics.QueueFullRejected.Load(),
-		"shutting_down_rejected":        s.metrics.ShuttingDownRejected.Load(),
-		"cleanup_artifact_deleted":      s.metrics.CleanupArtifactDeleted.Load(),
-		"cleanup_artifact_skipped":      s.metrics.CleanupArtifactSkippedUnsafe.Load(),
-		"cleanup_artifact_failures":     s.metrics.CleanupArtifactDeleteFailed.Load(),
-		"cleanup_db_path_clear_failed":  s.metrics.CleanupDBPathClearFailed.Load(),
-		"cleanup_metadata_rows_deleted": s.metrics.CleanupMetadataRowsDeleted.Load(),
-		"stripe_duplicate_events":       s.metrics.StripeDuplicateEvents.Load(),
-		"lease_requeues":                s.metrics.LeaseRequeues.Load(),
-		"attempts_exhausted":            s.metrics.AttemptsExhausted.Load(),
-		"idempotency_rows_pruned":       s.metrics.IdempotencyRowsPruned.Load(),
-		"rate_limit_rejected":           s.metrics.RateLimitRejected.Load(),
+	// Internal metrics only exposed to authenticated callers
+	showMetrics := false
+	if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		key := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		if _, err := s.store.ValidateKey(key); err == nil {
+			showMetrics = true
+		}
+	}
+	if showMetrics {
+		components["metrics"] = map[string]int64{
+			"inflight_limit_rejected":       s.metrics.InflightLimitRejected.Load(),
+			"queue_full_rejected":           s.metrics.QueueFullRejected.Load(),
+			"shutting_down_rejected":        s.metrics.ShuttingDownRejected.Load(),
+			"cleanup_artifact_deleted":      s.metrics.CleanupArtifactDeleted.Load(),
+			"cleanup_artifact_skipped":      s.metrics.CleanupArtifactSkippedUnsafe.Load(),
+			"cleanup_artifact_failures":     s.metrics.CleanupArtifactDeleteFailed.Load(),
+			"cleanup_db_path_clear_failed":  s.metrics.CleanupDBPathClearFailed.Load(),
+			"cleanup_metadata_rows_deleted": s.metrics.CleanupMetadataRowsDeleted.Load(),
+			"stripe_duplicate_events":       s.metrics.StripeDuplicateEvents.Load(),
+			"lease_requeues":                s.metrics.LeaseRequeues.Load(),
+			"attempts_exhausted":            s.metrics.AttemptsExhausted.Load(),
+			"idempotency_rows_pruned":       s.metrics.IdempotencyRowsPruned.Load(),
+			"rate_limit_rejected":           s.metrics.RateLimitRejected.Load(),
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

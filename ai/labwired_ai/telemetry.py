@@ -101,7 +101,7 @@ class UsageTracker:
                 data=json.dumps(payload).encode("utf-8"),
                 headers={
                     "Content-Type": "application/json",
-                    "X-API-Key": key,
+                    "Authorization": f"Bearer {key}",
                 },
                 method="POST",
             )
@@ -112,4 +112,4 @@ class UsageTracker:
                     logger.debug(f"Telemetry export returned status {resp.status}")
         except Exception as e:
             # Never fail the pipeline due to telemetry export issues
-            logger.debug(f"Telemetry export failed (non-fatal): {e}")
+            logger.warning(f"Telemetry export failed (non-fatal): {e}")

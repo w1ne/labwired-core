@@ -44,16 +44,24 @@ jobs:
           if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
             arch="$(uname -m)"
             case "$arch" in
-              x86_64) zig_pkg="zig-linux-x86_64-0.13.0" ;;
-              aarch64) zig_pkg="zig-linux-aarch64-0.13.0" ;;
+              x86_64)
+                zig_pkg="zig-linux-x86_64-0.13.0"
+                zig_sha="d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea"
+                ;;
+              aarch64)
+                zig_pkg="zig-linux-aarch64-0.13.0"
+                zig_sha="041ac42323837eb5624068acd8b00cd5777dac4cf91179e8dad7a7e90dd0c556"
+                ;;
               *)
                 zig_pkg=""
+                zig_sha=""
                 ;;
             esac
 
             if [ -n "$zig_pkg" ]; then
               mkdir -p "$HOME/.local/zig" "$HOME/.local/bin"
               curl -fsSL "https://ziglang.org/download/0.13.0/${zig_pkg}.tar.xz" -o /tmp/zig.tar.xz
+              echo "${zig_sha}  /tmp/zig.tar.xz" | sha256sum --check --strict || { echo "Zig checksum mismatch!"; exit 1; }
               tar -xf /tmp/zig.tar.xz -C "$HOME/.local/zig" --strip-components=1
               printf '#!/usr/bin/env bash\nexec "$HOME/.local/zig/zig" cc "$@"\n' > "$HOME/.local/bin/cc"
               chmod +x "$HOME/.local/bin/cc"
@@ -129,16 +137,24 @@ jobs:
           if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
             arch="$(uname -m)"
             case "$arch" in
-              x86_64) zig_pkg="zig-linux-x86_64-0.13.0" ;;
-              aarch64) zig_pkg="zig-linux-aarch64-0.13.0" ;;
+              x86_64)
+                zig_pkg="zig-linux-x86_64-0.13.0"
+                zig_sha="d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea"
+                ;;
+              aarch64)
+                zig_pkg="zig-linux-aarch64-0.13.0"
+                zig_sha="041ac42323837eb5624068acd8b00cd5777dac4cf91179e8dad7a7e90dd0c556"
+                ;;
               *)
                 zig_pkg=""
+                zig_sha=""
                 ;;
             esac
 
             if [ -n "$zig_pkg" ]; then
               mkdir -p "$HOME/.local/zig" "$HOME/.local/bin"
               curl -fsSL "https://ziglang.org/download/0.13.0/${zig_pkg}.tar.xz" -o /tmp/zig.tar.xz
+              echo "${zig_sha}  /tmp/zig.tar.xz" | sha256sum --check --strict || { echo "Zig checksum mismatch!"; exit 1; }
               tar -xf /tmp/zig.tar.xz -C "$HOME/.local/zig" --strip-components=1
               printf '#!/usr/bin/env bash\nexec "$HOME/.local/zig/zig" cc "$@"\n' > "$HOME/.local/bin/cc"
               chmod +x "$HOME/.local/bin/cc"

@@ -80,7 +80,8 @@ func (s *Server) clerkAuthMiddleware(next http.Handler) http.Handler {
 			JWKSClient: jwksClient,
 		})
 		if err != nil {
-			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or expired session token.", err.Error())
+			log.Printf("[clerk-auth] JWT verification failed: %v", err)
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or expired session token.", "Check your Clerk session and retry.")
 			return
 		}
 		ctx := context.WithValue(r.Context(), clerkUserIDKey, claims.Subject)
@@ -97,7 +98,25 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		// Restrict CORS to configured allowed origins; fall back to same-origin only
+		allowed := false
+		for _, ao := range s.allowedOrigins {
+			if ao == "*" || ao == origin {
+				allowed = true
+				break
+			}
+		}
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		} else if len(s.allowedOrigins) > 0 {
+			w.Header().Set("Access-Control-Allow-Origin", s.allowedOrigins[0])
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key")
 		w.Header().Set("Access-Control-Expose-Headers", "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset")
@@ -190,6 +209,33 @@ func (s *Server) rateLimitMiddleware(next http.Handler) http.Handler {
 		}
 		writeRateLimitHeaders(w, limit, remaining, wsReset)
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) accountRateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clerkUserID, ok := clerkUserIDFromContext(r.Context())
+		if !ok {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Clerk user ID not found.", "")
+			return
+		}
+
+		now := time.Now().UTC()
+		count, resetAt, err := s.store.IncrementRateWindow("clerk_user", clerkUserID, now, s.rateLimitWindow)
+		if err != nil {
+			sendError(w, http.StatusInternalServerError, "RATE_LIMIT_CHECK_FAILED", "Failed to enforce request rate limit.", "Retry later.")
+			return
+		}
+		limit := s.rateLimitPerWorkspace
+		if count > limit {
+			s.metrics.RateLimitRejected.Add(1)
+			writeRateLimitHeaders(w, limit, 0, resetAt)
+			sendError(w, http.StatusTooManyRequests, "RATE_LIMITED", "Account request rate exceeded.", "Retry after the rate-limit window resets.")
+			return
+		}
+		remaining := limit - count
+		writeRateLimitHeaders(w, limit, remaining, resetAt)
 		next.ServeHTTP(w, r)
 	})
 }
