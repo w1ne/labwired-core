@@ -103,11 +103,31 @@ jobs:
   determinism-gate:
     name: determinism-proof
     runs-on: self-hosted
+    needs: integration-smoke
     steps:
       - uses: actions/checkout@v4
         with:
           path: checkout-main
           submodules: recursive
+
+      - name: Ensure build toolchain
+        run: |
+          if command -v cc >/dev/null 2>&1; then
+            echo "C compiler already available"
+            exit 0
+          fi
+
+          if command -v clang >/dev/null 2>&1; then
+            mkdir -p "$HOME/.local/bin"
+            printf '#!/usr/bin/env bash\nexec clang "$@"\n' > "$HOME/.local/bin/cc"
+            chmod +x "$HOME/.local/bin/cc"
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            echo "Created cc shim to clang"
+            exit 0
+          fi
+
+          echo "No usable C toolchain found"
+          exit 1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
