@@ -94,10 +94,14 @@ pub struct ExternalDevice {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum BoardIoKind {
     Led,
     Button,
+    AdcInput,
+    PwmOutput,
+    I2cDevice,
+    SpiDevice,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
@@ -122,6 +126,10 @@ pub struct BoardIoBinding {
     pub signal: BoardIoSignal,
     #[serde(default = "default_true")]
     pub active_high: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub i2c_address: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_type: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

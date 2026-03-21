@@ -5,6 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::SimResult;
+use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -36,14 +37,22 @@ impl FromStr for UartRegisterLayout {
 }
 
 /// Minimal UART mock with selectable register layout.
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 pub struct Uart {
     layout: UartRegisterLayout,
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
+    #[serde(skip)]
+    rx_buf: Arc<Mutex<VecDeque<u8>>>,
     echo_stdout: bool,
     cr3: u32,
     dma_tx_pending: bool,
+}
+
+impl Default for Uart {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Uart {
@@ -55,10 +64,16 @@ impl Uart {
         Self {
             layout,
             sink: None,
+            rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: true,
             cr3: 0,
             dma_tx_pending: false,
         }
+    }
+
+    /// Get a shared handle to the RX buffer for external data injection.
+    pub fn rx_buffer(&self) -> Arc<Mutex<VecDeque<u8>>> {
+        self.rx_buf.clone()
     }
 
     fn status_offset(&self) -> u64 {
@@ -122,9 +137,20 @@ impl Uart {
 impl crate::Peripheral for Uart {
     fn read(&self, offset: u64) -> SimResult<u8> {
         if offset == self.status_offset() {
-            return Ok(self.status_ready_value());
+            let mut val = self.status_ready_value();
+            // Set RXNE bit (bit 5) when RX buffer has data
+            if let Ok(guard) = self.rx_buf.lock() {
+                if !guard.is_empty() {
+                    val |= 1 << 5; // RXNE
+                }
+            }
+            return Ok(val);
         }
         if offset == self.rx_offset() {
+            // Pop one byte from RX buffer
+            if let Ok(mut guard) = self.rx_buf.lock() {
+                return Ok(guard.pop_front().unwrap_or(0x00));
+            }
             return Ok(0x00);
         }
         if offset == self.cr3_offset() {
@@ -169,9 +195,19 @@ impl crate::Peripheral for Uart {
 
     fn peek(&self, offset: u64) -> Option<u8> {
         if offset == self.status_offset() {
-            return Some(self.status_ready_value());
+            let mut val = self.status_ready_value();
+            if let Ok(guard) = self.rx_buf.lock() {
+                if !guard.is_empty() {
+                    val |= 1 << 5; // RXNE
+                }
+            }
+            return Some(val);
         }
         if offset == self.rx_offset() {
+            // Peek without consuming
+            if let Ok(guard) = self.rx_buf.lock() {
+                return Some(*guard.front().unwrap_or(&0x00));
+            }
             return Some(0x00);
         }
         if offset == self.cr3_offset() {
