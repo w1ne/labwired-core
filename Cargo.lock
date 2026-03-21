@@ -980,6 +980,8 @@ dependencies = [
  "labwired-loader",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
+ "serde_yaml",
  "wasm-bindgen",
 ]
 

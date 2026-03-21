@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 /// A single instruction execution trace point
@@ -8,7 +8,7 @@ pub struct InstructionTrace {
     pub pc: u32,
     pub instruction: u32,
     pub cycle: u64,
-    pub register_delta: HashMap<u8, (u32, u32)>,
+    pub register_delta: BTreeMap<u8, (u32, u32)>,
     pub memory_writes: Vec<MemoryWrite>,
     pub mnemonic: Option<String>,
     pub stack_depth: u32,
@@ -87,7 +87,7 @@ impl crate::SimulationObserver for TraceObserver {
             return;
         }
 
-        let mut register_delta = HashMap::new();
+        let mut register_delta = BTreeMap::new();
         for (i, &current_val) in registers.iter().enumerate() {
             let prev_val = state.registers_before.get(i).copied().unwrap_or(0);
             if prev_val != current_val {

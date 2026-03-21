@@ -4,11 +4,18 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::process::Command;
 
 fn get_labwired_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_labwired"))
+}
+
+fn sha256_file(path: &std::path::Path) -> String {
+    let data = std::fs::read(path).unwrap_or_else(|e| panic!("Failed to read {:?}: {}", path, e));
+    let hash = Sha256::digest(&data);
+    format!("{:x}", hash)
 }
 
 #[test]
@@ -50,6 +57,7 @@ assertions: []
     std::fs::write(&script_path, script_content).unwrap();
 
     let mut results: Vec<serde_json::Value> = Vec::new();
+    let mut trace_hashes: Vec<String> = Vec::new();
 
     for i in 0..runs {
         let output_dir = temp_dir.join(format!("run_{}", i));
@@ -59,6 +67,7 @@ assertions: []
             .arg(&script_path)
             .arg("--output-dir")
             .arg(&output_dir)
+            .arg("--trace")
             .arg("--no-uart-stdout")
             .output()
             .expect("Failed to run labwired");
@@ -83,10 +92,32 @@ assertions: []
         let json: serde_json::Value =
             serde_json::from_str(&result_content).expect("Failed to parse result.json");
         results.push(json);
+
+        // Collect trace.json hash for determinism comparison
+        let trace_json_path = output_dir.join("trace.json");
+        if trace_json_path.exists() {
+            trace_hashes.push(sha256_file(&trace_json_path));
+        } else {
+            panic!(
+                "Run {} failed to produce trace.json (--trace was set)",
+                i
+            );
+        }
     }
 
+    // Compare result.json across all runs
     let first = &results[0];
     for (i, current) in results.iter().enumerate().skip(1) {
-        assert_eq!(first, current, "Run {} result differs from Run 0", i);
+        assert_eq!(first, current, "Run {} result.json differs from Run 0", i);
+    }
+
+    // Compare trace.json hashes across all runs (SHA-256 for efficiency)
+    let first_hash = &trace_hashes[0];
+    for (i, hash) in trace_hashes.iter().enumerate().skip(1) {
+        assert_eq!(
+            first_hash, hash,
+            "Run {} trace.json hash differs from Run 0 (non-deterministic instruction trace)",
+            i
+        );
     }
 }

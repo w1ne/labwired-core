@@ -114,6 +114,9 @@ struct SourceArg {
 #[derive(Debug, Deserialize)]
 struct BreakpointArg {
     line: Option<i64>,
+    condition: Option<String>,
+    #[serde(rename = "hitCondition")]
+    hit_condition: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,6 +125,30 @@ struct SetBreakpointsArgs {
     source: SourceArg,
     #[serde(default)]
     breakpoints: Vec<BreakpointArg>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DataBreakpointInfoArgs {
+    name: String,
+    #[serde(rename = "variablesReference")]
+    #[serde(default)]
+    variables_reference: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetDataBreakpointsArgs {
+    #[serde(default)]
+    breakpoints: Vec<DataBreakpointEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DataBreakpointEntry {
+    data_id: String,
+    #[serde(default)]
+    access_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -391,23 +418,49 @@ impl DapServer {
                     // Run a chunk
                     match adapter_clone.continue_execution_chunk(10_000) {
                         Ok(reason) => {
+                            // Check data breakpoints (watchpoints) after each chunk
+                            if let Some(watched_addr) = adapter_clone.check_data_breakpoints() {
+                                {
+                                    let mut r = running_clone.lock().unwrap();
+                                    *r = false;
+                                }
+                                let _ = sender_clone.send_event("stopped", Some(json!({
+                                    "reason": "data breakpoint",
+                                    "description": format!("Data breakpoint hit at {:#x}", watched_addr),
+                                    "threadId": 1,
+                                    "allThreadsStopped": true
+                                })));
+                            } else {
                             match reason {
-                                labwired_core::StopReason::Breakpoint(_)
-                                | labwired_core::StopReason::ManualStop => {
+                                labwired_core::StopReason::Breakpoint(addr) => {
+                                    // Evaluate conditional breakpoint
+                                    let should_stop = adapter_clone.evaluate_breakpoint_condition(addr);
+                                    if should_stop {
+                                        {
+                                            let mut r = running_clone.lock().unwrap();
+                                            *r = false;
+                                        }
+                                        let _ = sender_clone.send_event("stopped", Some(json!({
+                                            "reason": "breakpoint",
+                                            "threadId": 1,
+                                            "allThreadsStopped": true
+                                        })));
+                                    }
+                                    // If condition is false, continue running (don't stop)
+                                }
+                                labwired_core::StopReason::ManualStop => {
                                     {
                                         let mut r = running_clone.lock().unwrap();
                                         *r = false;
                                     }
                                     let _ = sender_clone.send_event("stopped", Some(json!({
-                                    "reason": match reason {
-                                        labwired_core::StopReason::Breakpoint(_) => "breakpoint",
-                                        _ => "pause",
-                                    },
-                                    "threadId": 1,
-                                    "allThreadsStopped": true
-                                })));
+                                        "reason": "pause",
+                                        "threadId": 1,
+                                        "allThreadsStopped": true
+                                    })));
                                 }
                                 _ => {} // Continue running
+                            }
                             }
                         }
                         Err(e) => {
@@ -549,6 +602,7 @@ impl DapServer {
                         "supportsConfigurationDoneRequest": true,
                         "supportsFunctionBreakpoints": true,
                         "supportsConditionalBreakpoints": true,
+                        "supportsDataBreakpoints": true,
                         "supportsDisassembleRequest": true,
                         "supportsReadMemoryRequest": true,
                         "supportsSteppingGranularity": true,
@@ -627,10 +681,14 @@ impl DapServer {
                     return Ok(HandleResult::Continue);
                 };
                 let mapped_path = self.apply_source_map_incoming(&path);
+                let mut conditions: Vec<Option<String>> = Vec::new();
                 let lines = args
                     .breakpoints
                     .into_iter()
-                    .map(|b| b.line.unwrap_or(0))
+                    .map(|b| {
+                        conditions.push(b.condition);
+                        b.line.unwrap_or(0)
+                    })
                     .collect::<Vec<i64>>();
 
                 let resolutions = match self.adapter.set_breakpoints(mapped_path, lines.clone()) {
@@ -649,6 +707,15 @@ impl DapServer {
                             .collect()
                     }
                 };
+
+                // Store conditional breakpoint expressions on the adapter
+                for (i, res) in resolutions.iter().enumerate() {
+                    if let Some(addr) = res.address {
+                        if let Some(cond) = conditions.get(i).and_then(|c| c.as_ref()) {
+                            self.adapter.set_breakpoint_condition(addr, cond.clone());
+                        }
+                    }
+                }
 
                 let breakpoints: Vec<Value> = resolutions
                     .into_iter()
@@ -671,6 +738,80 @@ impl DapServer {
                 sender.send_response(
                     req_seq,
                     "setBreakpoints",
+                    Some(json!({ "breakpoints": breakpoints })),
+                )?;
+            }
+            "dataBreakpointInfo" => {
+                let Some(args) = Self::parse_args::<DataBreakpointInfoArgs, _>(
+                    req_seq,
+                    "dataBreakpointInfo",
+                    arguments,
+                    sender,
+                )?
+                else {
+                    return Ok(HandleResult::Continue);
+                };
+
+                // Parse address from the name (e.g., "0x20000000" or a symbol name)
+                let addr = parse_address(&args.name)
+                    .or_else(|| self.adapter.resolve_symbol(&args.name).map(|a| a as u64));
+
+                if let Some(addr) = addr {
+                    sender.send_response(
+                        req_seq,
+                        "dataBreakpointInfo",
+                        Some(json!({
+                            "dataId": format!("{:#x}", addr),
+                            "description": format!("Watch {:#x}", addr),
+                            "accessTypes": ["write", "readWrite"],
+                            "canPersist": false,
+                        })),
+                    )?;
+                } else {
+                    sender.send_response(
+                        req_seq,
+                        "dataBreakpointInfo",
+                        Some(json!({
+                            "dataId": null,
+                            "description": "Cannot watch this expression",
+                        })),
+                    )?;
+                }
+            }
+            "setDataBreakpoints" => {
+                let Some(args) = Self::parse_args::<SetDataBreakpointsArgs, _>(
+                    req_seq,
+                    "setDataBreakpoints",
+                    arguments,
+                    sender,
+                )?
+                else {
+                    return Ok(HandleResult::Continue);
+                };
+
+                let mut breakpoints = Vec::new();
+                let mut addrs = Vec::new();
+
+                for bp in &args.breakpoints {
+                    if let Some(addr) = parse_address(&bp.data_id) {
+                        addrs.push(addr);
+                        breakpoints.push(json!({
+                            "verified": true,
+                            "id": format!("{:#x}", addr),
+                        }));
+                    } else {
+                        breakpoints.push(json!({
+                            "verified": false,
+                            "message": "Invalid address",
+                        }));
+                    }
+                }
+
+                self.adapter.set_data_breakpoints(addrs);
+
+                sender.send_response(
+                    req_seq,
+                    "setDataBreakpoints",
                     Some(json!({ "breakpoints": breakpoints })),
                 )?;
             }
@@ -859,6 +1000,57 @@ impl DapServer {
                     }
                 }
 
+                // Try memory dereference: *(0xADDR) or *(addr)
+                if result_val.is_none() {
+                    let trimmed = expression.trim();
+                    if trimmed.starts_with("*(") && trimmed.ends_with(')') {
+                        let inner = &trimmed[2..trimmed.len() - 1].trim();
+                        if let Some(addr) = parse_address(inner) {
+                            if let Ok(data) = self.adapter.read_memory(addr, 4) {
+                                let val = (data[0] as u32)
+                                    | ((data[1] as u32) << 8)
+                                    | ((data[2] as u32) << 16)
+                                    | ((data[3] as u32) << 24);
+                                result_val = Some(format!("{:#x}", val));
+                            }
+                        }
+                    }
+                }
+
+                // Try register arithmetic: Rn + offset or Rn - offset
+                if result_val.is_none() {
+                    let trimmed = expression.trim();
+                    let (reg_part, op, offset) = if let Some(pos) = trimmed.find('+') {
+                        (&trimmed[..pos].trim(), '+', &trimmed[pos + 1..].trim())
+                    } else if let Some(pos) = trimmed.rfind('-') {
+                        if pos > 0 {
+                            (&trimmed[..pos].trim(), '-', &trimmed[pos + 1..].trim())
+                        } else {
+                            (&"", ' ', &"")
+                        }
+                    } else {
+                        (&"", ' ', &"")
+                    };
+                    if !reg_part.is_empty() {
+                        if let Ok(names) = self.adapter.get_register_names() {
+                            for (i, name) in names.iter().enumerate() {
+                                if name.eq_ignore_ascii_case(reg_part) {
+                                    let reg_val = self.adapter.get_register(i as u8).unwrap_or(0);
+                                    if let Some(off) = parse_address(offset).map(|v| v as u32).or_else(|| offset.parse::<u32>().ok()) {
+                                        let val = match op {
+                                            '+' => reg_val.wrapping_add(off),
+                                            '-' => reg_val.wrapping_sub(off),
+                                            _ => reg_val,
+                                        };
+                                        result_val = Some(format!("{:#x}", val));
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // If not a register, try as a symbol
                 if result_val.is_none() {
                     if let Some(addr) = self.adapter.resolve_symbol(&expression) {
@@ -937,22 +1129,32 @@ impl DapServer {
                 let instruction_count = args.instruction_count.unwrap_or(10).max(0) as usize;
                 let instruction_offset = args.instruction_offset.unwrap_or(0);
 
-                let start_addr = (addr as i64 + instruction_offset * 2) as u64; // Assuming 2-byte thumb instructions for simple offset
+                let start_addr = (addr as i64 + instruction_offset * 2) as u64;
 
                 let mut instructions = Vec::new();
-                // Read data in chunks to disassemble
+                // Read enough data for worst-case (all 32-bit instructions)
                 if let Ok(data) = self.adapter.read_memory(start_addr, instruction_count * 4) {
-                    for i in 0..instruction_count {
-                        let curr_addr = start_addr + (i * 2) as u64;
-                        let idx = i * 2;
-                        if idx + 2 > data.len() {
-                            break;
-                        }
+                    let mut offset = 0usize;
+                    while instructions.len() < instruction_count && offset + 2 <= data.len() {
+                        let curr_addr = start_addr + offset as u64;
+                        let h1 = (data[offset] as u16) | ((data[offset + 1] as u16) << 8);
 
-                        let opcode = (data[idx] as u16) | ((data[idx + 1] as u16) << 8);
-                        let instr = labwired_core::decoder::decode_thumb_16(opcode);
+                        // Detect 32-bit Thumb-2: first halfword starts with 0b11101/0b11110/0b11111
+                        let is_32bit = (h1 >> 11) >= 0b11101;
 
-                        // Better formatting for "Ozone-like" feel
+                        let (instr, instr_bytes, byte_len) = if is_32bit && offset + 4 <= data.len() {
+                            let h2 = (data[offset + 2] as u16) | ((data[offset + 3] as u16) << 8);
+                            let decoded = labwired_core::decoder::decode_thumb_32(h1, h2);
+                            let bytes = format!("{:02x}{:02x}{:02x}{:02x}",
+                                data[offset + 1], data[offset], data[offset + 3], data[offset + 2]);
+                            (decoded, bytes, 4usize)
+                        } else {
+                            let decoded = labwired_core::decoder::decode_thumb_16(h1);
+                            let bytes = format!("{:02x}{:02x}", data[offset + 1], data[offset]);
+                            (decoded, bytes, 2usize)
+                        };
+
+                        // Format instruction with Ozone-like mnemonic style
                         let instr_str = format!("{:?}", instr);
                         let display_instr = instr_str
                             .split_whitespace()
@@ -964,11 +1166,23 @@ impl DapServer {
                             .map(|(_, rest)| rest)
                             .unwrap_or("");
 
-                        instructions.push(json!({
+                        // Add source line info if available from symbols
+                        let mut entry = json!({
                             "address": format!("{:#x}", curr_addr),
                             "instruction": format!("{} {}", display_instr, operands),
-                            "instructionBytes": format!("{:02x}{:02x}", data[idx+1], data[idx]),
-                        }));
+                            "instructionBytes": instr_bytes,
+                        });
+
+                        if let Some(loc) = self.adapter.get_source_location(curr_addr as u32) {
+                            entry["location"] = json!({
+                                "name": loc.file,
+                                "path": loc.file,
+                            });
+                            entry["line"] = json!(loc.line);
+                        }
+
+                        instructions.push(entry);
+                        offset += byte_len;
                     }
                 }
 
@@ -1302,7 +1516,7 @@ mod tests {
     use anyhow::Result;
     use labwired_core::DebugControl;
     use serde_json::json;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
 
     #[test]
     fn test_handle_initialize() -> Result<()> {
@@ -1514,7 +1728,7 @@ mod tests {
                 instruction: 0,
                 cycle: 0,
                 function: Some("entry".to_string()),
-                register_delta: HashMap::new(),
+                register_delta: BTreeMap::new(),
                 memory_writes: Vec::new(),
                 stack_depth: 0x2000_1000,
                 mnemonic: None,
@@ -1524,7 +1738,7 @@ mod tests {
                 instruction: 0,
                 cycle: 1,
                 function: Some("deep".to_string()),
-                register_delta: HashMap::new(),
+                register_delta: BTreeMap::new(),
                 memory_writes: Vec::new(),
                 stack_depth: 0x2000_1000u32.saturating_sub(((MAX_PROFILE_DEPTH + 500) as u32) * 4),
                 mnemonic: None,

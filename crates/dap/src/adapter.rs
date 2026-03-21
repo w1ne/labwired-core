@@ -65,6 +65,12 @@ struct GpioOffsets {
     odr_offset: u64,
 }
 
+/// Source location resolved from DWARF debug info.
+pub struct SourceLocation {
+    pub file: String,
+    pub line: u32,
+}
+
 #[derive(Clone)]
 pub struct LabwiredAdapter {
     pub machine: Arc<Mutex<Option<Box<dyn DebugControl + Send>>>>,
@@ -75,6 +81,10 @@ pub struct LabwiredAdapter {
     pub cycle_count: Arc<AtomicU64>,
     board_io_bindings: Arc<Mutex<Vec<ResolvedBoardIoBinding>>>,
     mem_tracker: Arc<MemoryTracker>,
+    /// Conditional breakpoint expressions keyed by address.
+    conditional_breakpoints: Arc<Mutex<std::collections::HashMap<u32, String>>>,
+    /// Data breakpoint (watchpoint) addresses.
+    data_breakpoints: Arc<Mutex<std::collections::HashSet<u64>>>,
 }
 
 #[derive(Debug, Default)]
@@ -130,6 +140,8 @@ impl LabwiredAdapter {
             cycle_count: Arc::new(AtomicU64::new(0)),
             board_io_bindings: Arc::new(Mutex::new(Vec::new())),
             mem_tracker: Arc::new(MemoryTracker::default()),
+            conditional_breakpoints: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            data_breakpoints: Arc::new(Mutex::new(std::collections::HashSet::new())),
         }
     }
 
@@ -372,7 +384,7 @@ impl LabwiredAdapter {
             let registers_after: Vec<u32> = (0..16).map(|i| machine.read_core_reg(i)).collect();
 
             // Calculate register delta (only changed registers: ID -> (old, new))
-            let mut register_delta = std::collections::HashMap::new();
+            let mut register_delta = std::collections::BTreeMap::new();
             for i in 0..16 {
                 if registers_before[i] != registers_after[i] {
                     register_delta.insert(i as u8, (registers_before[i], registers_after[i]));
@@ -768,6 +780,109 @@ impl LabwiredAdapter {
         } else {
             Err(anyhow!("Machine not initialized"))
         }
+    }
+
+    /// Store a condition expression for a breakpoint at the given address.
+    pub fn set_breakpoint_condition(&self, addr: u32, condition: String) {
+        self.conditional_breakpoints.lock().unwrap().insert(addr, condition);
+    }
+
+    /// Check if a breakpoint at the given address has a condition, and evaluate it.
+    /// Returns true if the breakpoint should stop (condition met or no condition).
+    pub fn evaluate_breakpoint_condition(&self, addr: u32) -> bool {
+        let conditions = self.conditional_breakpoints.lock().unwrap();
+        let Some(condition) = conditions.get(&addr) else {
+            return true; // No condition = always stop
+        };
+
+        // Minimal expression evaluator: "Rn == value", "Rn != value", "Rn > value", "Rn < value"
+        let condition = condition.trim();
+
+        // Parse "LHS op RHS" pattern
+        let ops = ["==", "!=", ">=", "<=", ">", "<"];
+        for op in ops {
+            if let Some(pos) = condition.find(op) {
+                let lhs_str = condition[..pos].trim();
+                let rhs_str = condition[pos + op.len()..].trim();
+
+                let lhs_val = self.eval_simple_expr(lhs_str);
+                let rhs_val = self.eval_simple_expr(rhs_str);
+
+                if let (Some(lhs), Some(rhs)) = (lhs_val, rhs_val) {
+                    return match op {
+                        "==" => lhs == rhs,
+                        "!=" => lhs != rhs,
+                        ">=" => lhs >= rhs,
+                        "<=" => lhs <= rhs,
+                        ">" => lhs > rhs,
+                        "<" => lhs < rhs,
+                        _ => true,
+                    };
+                }
+
+                // If we can't evaluate, stop anyway (safer)
+                return true;
+            }
+        }
+
+        true // Unparseable condition = always stop
+    }
+
+    /// Evaluate a simple expression: register name, hex literal, or decimal literal.
+    fn eval_simple_expr(&self, expr: &str) -> Option<u32> {
+        let expr = expr.trim();
+
+        // Try as register name
+        if let Ok(names) = self.get_register_names() {
+            for (i, name) in names.iter().enumerate() {
+                if name.eq_ignore_ascii_case(expr) {
+                    return self.get_register(i as u8).ok();
+                }
+            }
+        }
+
+        // Try as hex literal
+        if let Some(hex_str) = expr.strip_prefix("0x").or_else(|| expr.strip_prefix("0X")) {
+            return u32::from_str_radix(hex_str, 16).ok();
+        }
+
+        // Try as decimal literal
+        expr.parse::<u32>().ok()
+    }
+
+    /// Set data breakpoint (watchpoint) addresses.
+    pub fn set_data_breakpoints(&self, addrs: Vec<u64>) {
+        let mut db = self.data_breakpoints.lock().unwrap();
+        db.clear();
+        for addr in addrs {
+            db.insert(addr);
+        }
+    }
+
+    /// Check if any memory writes in the last step hit a data breakpoint.
+    pub fn check_data_breakpoints(&self) -> Option<u64> {
+        let db = self.data_breakpoints.lock().unwrap();
+        if db.is_empty() {
+            return None;
+        }
+        let writes = self.mem_tracker.writes.lock().unwrap();
+        for w in writes.iter() {
+            if db.contains(&w.address) {
+                return Some(w.address);
+            }
+        }
+        None
+    }
+
+    /// Get source file and line for a given address from DWARF info.
+    pub fn get_source_location(&self, addr: u32) -> Option<SourceLocation> {
+        let symbols = self.symbols.lock().unwrap();
+        let provider = symbols.as_ref()?;
+        let loc = provider.lookup(addr as u64)?;
+        Some(SourceLocation {
+            file: loc.file,
+            line: loc.line.unwrap_or(0),
+        })
     }
 
     pub fn read_memory(&self, addr: u64, len: usize) -> Result<Vec<u8>> {
@@ -1174,7 +1289,7 @@ mod tests {
             cycle: 0,
             function: None,
             register_delta: {
-                let mut map = std::collections::HashMap::new();
+                let mut map = std::collections::BTreeMap::new();
                 map.insert(0, (42, 100)); // R0 changed from 42 to 100
                 map
             },
@@ -1271,7 +1386,7 @@ mod tests {
                 cycle: i as u64,
                 function: None,
                 register_delta: {
-                    let mut map = std::collections::HashMap::new();
+                    let mut map = std::collections::BTreeMap::new();
                     map.insert(0, (i, i + 1));
                     map
                 },
