@@ -175,12 +175,14 @@ jobs:
           set -euo pipefail
 
           verify_foundry() {
-            local proxy_health catalog_json
+            local tmp_dir
+            tmp_dir="$(mktemp -d)"
+            trap 'rm -rf "$tmp_dir"' RETURN
 
-            proxy_health="$(curl -fsS --retry 10 --retry-all-errors --retry-delay 3 https://foundry.labwired.com/v1/health)"
-            catalog_json="$(curl -fsS --retry 10 --retry-all-errors --retry-delay 3 https://foundry.labwired.com/v1/catalog)"
+            curl -fsS --retry 10 --retry-all-errors --retry-delay 3 https://foundry.labwired.com/v1/health  > "$tmp_dir/health.json"
+            curl -fsS --retry 10 --retry-all-errors --retry-delay 3 https://foundry.labwired.com/v1/catalog > "$tmp_dir/catalog.json"
 
-            PROXY_HEALTH_JSON="$proxy_health" CATALOG_JSON="$catalog_json" python3 -c 'import json, os, sys; proxy=json.loads(os.environ["PROXY_HEALTH_JSON"]); catalog=json.loads(os.environ["CATALOG_JSON"]); total=len(catalog); architectures=sum(1 for row in catalog if (row.get("architecture") or "").strip()); validations=sum(1 for row in catalog if (row.get("validation_url") or "").strip()); print(json.dumps({"proxy_status": proxy.get("status"), "catalog_total": total, "catalog_architectures": architectures, "catalog_validations": validations}, indent=2)); proxy.get("status") == "healthy" or sys.exit("proxy health endpoint is not healthy"); total > 0 or sys.exit("catalog is empty after deploy"); architectures > 0 or sys.exit("catalog has zero architecture metadata after deploy"); validations > 0 or sys.exit("catalog has zero validation links after deploy")'
+            python3 -c 'import json,sys; proxy=json.load(open(sys.argv[1])); catalog=json.load(open(sys.argv[2])); total=len(catalog); arch=sum(1 for r in catalog if (r.get("architecture") or "").strip()); val=sum(1 for r in catalog if (r.get("validation_url") or "").strip()); print(json.dumps({"proxy_status":proxy.get("status"),"catalog_total":total,"catalog_architectures":arch,"catalog_validations":val},indent=2)); proxy.get("status")=="healthy" or sys.exit("proxy health endpoint is not healthy"); total>0 or sys.exit("catalog is empty after deploy"); arch>0 or sys.exit("catalog has zero architecture metadata after deploy"); val>0 or sys.exit("catalog has zero validation links after deploy")' "$tmp_dir/health.json" "$tmp_dir/catalog.json"
           }
 
           rollback_foundry() {
