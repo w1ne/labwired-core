@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Trace-Level Determinism Proof**: Extended `determinism.rs` to compare `trace.json` SHA-256 hashes across 5 runs; added as `determinism-proof` CI gate.
+- **Deterministic Trace Serialization**: Switched `InstructionTrace.register_delta` from `HashMap` to `BTreeMap` for stable JSON key ordering.
+- **Auto-Generated Compatibility Matrix**: `scripts/generate_compat_matrix.py` enumerates chip configs and smoke test coverage; output uploaded as CI artifact.
+- **Conditional Breakpoints**: DAP breakpoints with `condition` and `hitCondition` expression evaluation (register comparisons, hex/decimal literals).
+- **Data Breakpoints**: `supportsDataBreakpoints` DAP capability; triggers on memory writes to watched addresses via `MemoryTracker`.
+- **Enhanced Evaluate Handler**: DAP `evaluate` supports `*(0xADDR)` memory dereference and `Rn +/- offset` register arithmetic.
+- **Improved Disassembly**: Thumb-2 32-bit instruction decoding in DAP disassemble handler; `decode_thumb_32` re-exported from decoder module; source line correlation via DWARF symbols.
+
 ## [0.13.0] - 2026-03-20
 
 ### Added
