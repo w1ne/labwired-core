@@ -21,67 +21,75 @@ Completion standard:
 - Unsupported-instruction audit workflow exists (`core/scripts/unsupported_instruction_audit.sh`).
 - Human observer path exists via VS Code extension (timeline/register/memory features are present at basic level).
 
-## Missing to Finish the Vision
+## Gap Status (Updated 2026-03-21)
 
-## 1) Foundation Is Implemented but Not Fully Hardened
+For a detailed item-by-item tracker, see [SCOREBOARD.md](./SCOREBOARD.md).
 
-Missing:
-- Determinism proof suite against real hardware baselines ("golden reference" periodic board validation) is still open in planning.
-- Compatibility matrix and explicit "known gaps by MCU/peripheral" is not maintained as a release artifact.
+## 1) Foundation Hardening — LARGELY CLOSED
+
+**Closed:**
+- Trace-level determinism proof (SHA-256 hash comparison across 5 runs) runs as `determinism-proof` CI gate.
+- Auto-generated compatibility matrix (`core/scripts/generate_compat_matrix.py`) uploaded as CI artifact per build.
+- BTreeMap-based trace serialization eliminates non-deterministic JSON output.
+
+**Remaining:**
+- Golden-reference board validation (periodic real hardware baseline) is still open in planning.
 - Run artifact standardization is not fully unified across all modes (interactive CLI vs test mode vs AI workflows).
 
-Impact:
-- The "Hardware Oracle" claim is weaker without continuous determinism proof and a stable build baseline.
+## 2) Agentic Loop — LARGELY CLOSED
 
-## 2) Agentic Loop Is In Progress, Not Zero-Touch
+**Closed:**
+- End-to-end `auto-ingest` orchestrator with ingest → IR convert → verify → LLM-assisted retry loop (max 3x).
+- Confidence scoring with auto-approve threshold (>= 0.9 pass rate).
 
-Missing:
-- True zero-touch datasheet-to-functional-simulation path remains unmet (still requires manual corrections in practical flows).
-- Advanced ingestion + behavior extraction pipeline (timing semantics, cross-peripheral side effects) is not complete.
-- Model compatibility policy ("required behavior" vs "best effort") is not finalized.
-- Stable external AIPi contract/package story is incomplete (docs exist, but lifecycle guarantees and versioning are not fully productized).
+**Remaining:**
+- Tier-1 target zero-touch validation coverage not yet confirmed end-to-end.
+- AIPi contract versioning and backward-compatibility policy not formalized.
+- Advanced timing semantics and cross-peripheral side effects not yet in synthesis pipeline.
 
-Impact:
-- Agents can assist and accelerate, but cannot yet be trusted as fully autonomous model authors for broad device coverage.
+## 3) Metering Economy — LARGELY CLOSED
 
-## 3) Metering Exists as Telemetry, Not as an Economy
+**Closed:**
+- Per-operation type tracking (`op_type` column) and simulation minutes (`sim_minutes` column) in Foundry DB.
+- Usage breakdown endpoint (`GET /v1/account/usage/breakdown`) for per-operation reporting.
+- Python SDK telemetry auto-exports to Foundry when `LABWIRED_FOUNDRY_URL` is set.
 
-Missing:
-- Runtime telemetry fields exist (`instructions`, `cycles`), but production metering backend is not implemented.
-- No tenancy-aware quota enforcement and billing-grade accounting pipeline.
-- No COGS tracking per run or pricing instrumentation needed for "Simulation Minutes" monetization.
+**Remaining:**
+- COGS tracking per run and pricing instrumentation for billing-grade monetization.
 
-Impact:
-- The "Agent Economy" pillar is currently conceptual + local telemetry, not a deployable business system.
+## 4) Foundry Multi-Tenancy — LARGELY CLOSED
 
-## 4) Foundry (Hosted Twin Service) Is Still Future-State
+**Closed:**
+- Organization model with `organizations` and `org_members` tables.
+- RBAC middleware (admin > developer > viewer) on org-scoped endpoints.
+- Audit logging with `audit_log` table and `GET /v1/account/org/{id}/audit` endpoint.
+- Org management API (`POST/GET /v1/account/org`, member management).
 
-Missing:
-- Multi-tenant control plane (Org/Project/Run hierarchy, RBAC, authn/authz).
+**Remaining:**
 - Secure cloud execution fabric (scheduler, isolation boundary, fleet management).
-- Hosted API for on-demand twin spin-up with lifecycle management.
-- Enterprise controls (audit logs, retention policy, SSO, compliance evidence pipeline/TQK workflow).
+- SSO integration beyond Clerk.
+- Compliance evidence pipeline / retention policy.
 
-Impact:
-- Phase 3 is not started as a production service. Vision remains local-tooling-centric today.
+## 5) Human Observer (VS Code) — LARGELY CLOSED
 
-## 5) Human Observer Is Useful but Not Yet "Final Mile" Grade
+**Closed:**
+- Conditional breakpoints with expression evaluation (register comparisons, hex/decimal).
+- Data breakpoints (watchpoints) triggering on memory writes.
+- Watch expressions with memory dereference (`*(0xADDR)`) and register arithmetic.
+- Live hover provider for register names and hex addresses.
+- Improved Thumb-2 32-bit disassembly view with source line correlation.
 
-Missing:
-- Advanced debugger parity items still open (enhanced register semantics, reverse debugging, disassembly/profiling, RTOS-awareness).
-- End-to-end "open project -> one-click run matched simulator" workflow is not complete.
+**Remaining:**
+- Reverse debugging and RTOS-awareness.
+- One-click "open project → matched simulator" flow not fully automated.
 
-Impact:
-- Human verification works for demos and development, but not yet at full professional "default debugger" quality target.
+## 6) Documentation & Delivery — CLOSED
 
-## 6) Documentation and Delivery Gaps
-
-Missing:
-- A single release-grade "vision completion scoreboard" in docs has been missing (this file fills that gap).
-- This blocks clean public communication of status.
-
-Impact:
-- External users see mixed signals between strategy claims and operational readiness.
+**Closed:**
+- Vision Completion Scoreboard (`docs/strategy/vision/SCOREBOARD.md`).
+- Getting Started tutorial (`docs/tutorials/getting-started.md`).
+- CI Integration tutorial (`docs/tutorials/ci-integration.md`).
+- Documentation hub links updated.
 
 ## Definition of Done for Vision Completion
 

@@ -63,12 +63,14 @@ The immutable source of truth for hardware behavior.
 The primary interface for autonomous interaction.
 - **Schematic Intelligence**: VLM-based perception of hardware topology.
 - **Datasheet Ingestion**: "Chain-of-Thought" grounding for generating peripheral models.
-- **Telemetry**: Usage-based metering for the agent economy.
+- **Zero-Touch Pipeline**: `auto-ingest` orchestrator with LLM-assisted retries and confidence scoring.
+- **Telemetry**: Usage-based metering with automatic Foundry export.
 
 ### [`vscode/`](./vscode/) - Human Observer (Debug)
 A secondary interface for human verification of agent outputs.
 - **Timeline View**: Visual confirmation of agent-driven execution.
 - **Register Inspector**: Manual spot-checking of peripheral state.
+- **Advanced Debugging**: Conditional breakpoints, data breakpoints, watch expressions, live hovers, and Thumb-2 disassembly.
 
 ## 🚀 Quick Start
 
@@ -90,10 +92,11 @@ See [`DEVELOPMENT.md`](./DEVELOPMENT.md) for complete setup instructions for all
 ## 📚 Documentation & Demos
 - **🚀 [Demos & Examples](./DEMOS.md)** - Start here to see LabWired in action.
 - **📖 [Documentation Hub](./docs/README.md)** - Central index for all platform documentation.
-  - [User Launch Worklist](./docs/launch/USER_LAUNCH_WORKLIST.md)
+  - [Getting Started Tutorial](./docs/tutorials/getting-started.md)
+  - [CI Integration Guide](./docs/tutorials/ci-integration.md)
   - [Compatibility Matrix](./docs/specs/compatibility_matrix.md)
+  - [Vision Scoreboard](./docs/strategy/vision/SCOREBOARD.md)
   - [Strategy & Planning](./docs/strategy/plan.md)
-  - [Technical Specs](./docs/specs/DIGITAL_TWIN_SPEC.md)
   - [Development Guide](./DEVELOPMENT.md)
 - **🤖 [Agent Instructions](./AGENTS.md)** - Repository-level instructions for coding agents.
 - **⚙️ [Core Emulator](./core/README.md)** - Detailed emulator engine documentation.

@@ -5,8 +5,27 @@ This directory provides the **Programmable Toolset** used by agents to generate,
 ## Structure
 
 *   `docs/` - Algorithm specifications and [Agent Interface Guide](file:///home/andrii/Projects/labwired/docs/AGENT_INTERFACE.md).
-*   `labwired_ai/` - Core Python modules (LLM, Schematic Parsing, IR Conversion).
+*   `labwired_ai/` - Core Python modules (LLM, Schematic Parsing, IR Conversion, Orchestration).
 *   `tests/` - E2E verification pipelines for agent-driven workflows.
+
+## Key Commands
+
+### `auto-ingest` — Zero-Touch Pipeline
+
+End-to-end datasheet-to-simulation orchestrator with automatic retries:
+
+```bash
+python -m labwired_ai auto-ingest \
+  --pdf datasheet.pdf --pages 6-12 \
+  --name MY_CHIP --output-dir out/my-chip \
+  --max-retries 3 --auto-approve-threshold 0.9
+```
+
+Chains: PDF ingestion → register extraction → behavioral synthesis → IR conversion → verification. On failure, collects errors, re-prompts the LLM, and retries (up to 3x). Confidence scoring auto-approves when pass rate >= threshold.
+
+### Telemetry Export
+
+When `LABWIRED_FOUNDRY_URL` and `LABWIRED_API_KEY` environment variables are set, usage telemetry (simulation minutes, operation types) is automatically exported to the Foundry backend.
 
 ## Strategic Goal: The Agentic Moat
 

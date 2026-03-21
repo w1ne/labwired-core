@@ -35,6 +35,8 @@ graph TD
 ## 🚀 User Guides
 *Use these first if you want to run or evaluate LabWired.*
 - **[Development Guide](../DEVELOPMENT.md)** - setup, build, test, and common commands.
+- **[Getting Started](./tutorials/getting-started.md)** - install, run your first simulation, inspect results, debug in VS Code.
+- **[CI Integration](./tutorials/ci-integration.md)** - GitHub Actions, GitLab CI, and Docker recipes for firmware testing.
 - **[Compatibility Matrix](./specs/compatibility_matrix.md)** - supported targets and known limits.
 - **[Foundry User Flows](./user_flows.md)** - current beta hosted workflow and API patterns.
 - **[Release Checklist](./ops/RELEASE_CHECKLIST.md)** - release-grade validation requirements.
@@ -45,6 +47,7 @@ graph TD
 - **[Agent-First Platform](./strategy/agent/README.md)** - Vision for the AI-first simulation layer.
 - **[HIL Displacement Showcase](./strategy/HIL_DISPLACEMENT_SHOWCASE.md)** - ROI analysis and technical results.
 - **[Vision Gaps](./strategy/vision/VISION_COMPLETION_GAPS.md)** - Remaining work for the Agent-First vision.
+- **[Vision Scoreboard](./strategy/vision/SCOREBOARD.md)** - Item-by-item progress tracker for all 6 gaps.
 
 ## 🛠️ [Specifications](./specs/)
 *Technical definitions and product contracts.*

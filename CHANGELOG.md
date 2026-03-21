@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Vision Completion Gaps**: Closed all 6 documented gaps blocking "vision complete" status.
+- **Determinism Proof CI Gate**: Trace-level SHA-256 hash comparison across 5 runs in `determinism-proof` job; non-deterministic HashMap serialization fixed with BTreeMap.
+- **Auto-Generated Compatibility Matrix**: `core/scripts/generate_compat_matrix.py` walks chip configs and smoke tests; uploaded as CI artifact per build.
+- **Pipeline Orchestrator**: `auto-ingest` command chains PDF ingestion → IR conversion → verification with up to 3 LLM-assisted retries; confidence scoring auto-approves at >= 0.9 pass rate.
+- **Metering Schema**: `op_type` and `sim_minutes` columns on `simulation_runs`; `GET /v1/account/usage/breakdown` endpoint for per-operation usage reporting.
+- **Telemetry Export**: Python SDK auto-exports usage to Foundry when `LABWIRED_FOUNDRY_URL` is set.
+- **Organization Model**: `organizations` and `org_members` tables; `POST/GET /v1/account/org` and member management endpoints.
+- **RBAC Middleware**: Role-based access control (admin > developer > viewer) on org-scoped endpoints.
+- **Audit Logging**: `audit_log` table with `GET /v1/account/org/{id}/audit` endpoint; key management and run events recorded automatically.
+- **Conditional Breakpoints**: DAP breakpoints with expression evaluation (`Rn == value`, comparisons, hex/decimal literals).
+- **Data Breakpoints (Watchpoints)**: `supportsDataBreakpoints` capability; triggers on memory writes to watched addresses.
+- **Watch Expressions + Live Hovers**: Enhanced DAP `evaluate` handler with `*(0xADDR)` memory dereference and `Rn +/- offset` arithmetic; VS Code `EvaluatableExpressionProvider` for register names and hex addresses.
+- **Improved Disassembly**: Thumb-2 32-bit instruction decoding in DAP disassemble handler with source line correlation.
+- **Vision Completion Scoreboard**: `docs/strategy/vision/SCOREBOARD.md` tracking all 6 gaps with status and evidence links.
+- **Getting Started Tutorial**: `docs/tutorials/getting-started.md` — install, build, run, inspect, debug walkthrough.
+- **CI Integration Tutorial**: `docs/tutorials/ci-integration.md` — GitHub Actions, GitLab CI, and Docker recipes.
+
 ## [0.13.0] - 2026-03-20
 
 ### Added

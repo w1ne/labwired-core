@@ -52,6 +52,10 @@ Recommended starting point:
 | **LM75B (I2C Sensor)** | Tier 1 | Reliable fallback for demo dry runs. |
 | **Generic LED / Button** | Tier 1 | Integrated with VS Code Command Center. |
 
+## Auto-Generated Matrix
+
+A machine-readable compatibility matrix is auto-generated on every CI build by `core/scripts/generate_compat_matrix.py`. It enumerates chip configs, peripheral types, and smoke test coverage, and is uploaded as a CI artifact (`compatibility-matrix`). Use it for programmatic queries; this document provides the human-readable interpretation.
+
 ## User Guidance
 
 - If you are evaluating LabWired for the first time, do not start with experimental targets.
