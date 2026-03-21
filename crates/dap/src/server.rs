@@ -1204,7 +1204,7 @@ impl DapServer {
                 };
                 let addr = parse_address(&args.memory_reference).unwrap_or(0);
                 let offset = args.offset.unwrap_or(0);
-                let count = args.count.unwrap_or(64).max(0) as usize;
+                let count = (args.count.unwrap_or(64).max(0) as usize).min(1024 * 1024);
 
                 let final_addr = (addr as i64 + offset) as u64;
 
