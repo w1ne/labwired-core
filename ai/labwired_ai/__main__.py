@@ -13,6 +13,7 @@ from .llm import (
     generate_peripheral_yaml
 )
 from .convert_to_ir import convert as convert_to_ir
+from .orchestrator import PipelineOrchestrator
 
 # Configure logging
 logging.basicConfig(
@@ -47,6 +48,15 @@ def main(args_list=None):
     ingest_parser.add_argument("--name", required=True, help="Peripheral name")
     ingest_parser.add_argument("--output", help="Output YAML file")
     ingest_parser.add_argument("--strict-ir", help="Output Strict IR JSON file")
+
+    # Command: auto-ingest (Zero-Touch Pipeline)
+    auto_parser = subparsers.add_parser("auto-ingest", help="Zero-touch pipeline: PDF → verified model with retry loop")
+    auto_parser.add_argument("--pdf", required=True, help="Path to PDF file")
+    auto_parser.add_argument("--pages", required=True, help="Page ranges for registers & behavior (e.g., '6-12')")
+    auto_parser.add_argument("--name", required=True, help="Peripheral name")
+    auto_parser.add_argument("--output-dir", required=True, help="Output directory for all artifacts")
+    auto_parser.add_argument("--max-retries", type=int, default=3, help="Max retry attempts on verification failure")
+    auto_parser.add_argument("--auto-approve-threshold", type=float, default=0.9, help="Confidence threshold for auto-approval (0.0-1.0)")
 
     args = parser.parse_args(args_list)
 
@@ -119,6 +129,30 @@ def main(args_list=None):
 
                 convert_to_ir(yaml_path, args.strict_ir)
                 logger.info(f"Strict IR generated at {args.strict_ir}")
+
+        elif args.command == "auto-ingest":
+            logger.info(f"Starting zero-touch pipeline for {args.name}...")
+            orchestrator = PipelineOrchestrator(
+                pdf_path=args.pdf,
+                pages=args.pages,
+                name=args.name,
+                output_dir=args.output_dir,
+                max_retries=args.max_retries,
+                auto_approve_threshold=args.auto_approve_threshold,
+                tracker=tracker,
+            )
+            result = orchestrator.run()
+
+            if result.success:
+                logger.info(f"Pipeline succeeded: {result.confidence_label} "
+                           f"({result.passed}/{result.total}, {result.confidence:.1%})")
+                logger.info(f"  YAML: {result.yaml_path}")
+                logger.info(f"  IR:   {result.ir_path}")
+            else:
+                logger.error(f"Pipeline failed after {result.attempts} attempts")
+                for err in result.errors:
+                    logger.error(f"  - {err}")
+                sys.exit(1)
 
         else:
             parser.print_help()

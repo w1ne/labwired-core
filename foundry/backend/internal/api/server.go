@@ -545,6 +545,17 @@ func (s *Server) routes() {
 		account.HandleFunc("/keys", s.handleCreateAccountKey).Methods("POST")
 		account.HandleFunc("/keys/{key_id}", s.handleRevokeAccountKey).Methods("DELETE")
 		account.HandleFunc("/quickstart", s.handleAccountQuickstart).Methods("GET")
+		account.HandleFunc("/usage/breakdown", s.handleAccountUsageBreakdown).Methods("GET")
+
+		// Organization management
+		account.HandleFunc("/org", s.handleCreateOrg).Methods("POST")
+		account.HandleFunc("/org", s.handleListOrgs).Methods("GET")
+
+		// Per-org routes with RBAC
+		orgRouter := account.PathPrefix("/org/{org_id}").Subrouter()
+		orgRouter.Handle("/members", s.requireRole("viewer")(http.HandlerFunc(s.handleListOrgMembers))).Methods("GET")
+		orgRouter.Handle("/members", s.requireRole("admin")(http.HandlerFunc(s.handleAddOrgMember))).Methods("POST")
+		orgRouter.Handle("/audit", s.requireRole("admin")(http.HandlerFunc(s.handleOrgAuditLog))).Methods("GET")
 	}
 }
 
