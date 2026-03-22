@@ -115,18 +115,25 @@ export function App() {
 
       // Use compiled ELF if available, otherwise fall back to demo firmware
       let firmware: Uint8Array;
+      let systemYaml: string;
+      let chipYaml: string;
+
       if (result?.success && result.elf) {
         firmware = result.elf;
+        // Use diagram-derived config for user-compiled firmware
+        const config = diagramToConfig(editor.state.diagram);
+        systemYaml = config.systemYaml;
+        chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUpload successful. Starting simulation...');
       } else {
-        // Fall back to pre-built demo firmware
+        // Fall back to pre-built demo firmware with its matching YAML configs
         const project = await ensureFirmwareLoaded(selectedProject);
         setSelectedProject(project);
         firmware = project.firmware;
+        systemYaml = project.systemYaml;
+        chipYaml = project.chipYaml;
         setCompileOutput((prev) => prev + '\nUsing pre-built demo firmware.');
       }
-
-      const { systemYaml, chipYaml } = diagramToConfig(editor.state.diagram);
 
       const b = await SimulatorBridge.fromConfig(mod, {
         systemYaml,
