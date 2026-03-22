@@ -20,7 +20,7 @@ labwired --version
 ```
 
 Install options:
- - `LABWIRED_VERSION=v0.12.1` pins a release.
+ - `LABWIRED_VERSION=v0.13.0` pins a release.
 - `LABWIRED_FROM_SOURCE=1` forces source build.
 - `LABWIRED_INSTALL_DIR=~/.local/bin` overrides install dir.
 
