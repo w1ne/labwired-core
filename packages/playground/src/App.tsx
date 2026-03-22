@@ -26,7 +26,9 @@ import {
   type Part,
   type Diagram,
 } from '@labwired/ui';
-import { DEMO_PROJECTS, ensureFirmwareLoaded, type DemoProject } from './demos';
+import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
+import { fetchCatalog, type CatalogEntry } from './catalog-client';
+import { BoardPicker } from './BoardPicker';
 
 type BottomTab = 'output' | 'serial' | 'registers' | 'trace' | 'memory';
 
@@ -35,22 +37,34 @@ function nextPartId(type: string): string {
   return `${type}${++partCounter}`;
 }
 
-function makeInitialDiagram(board: string): Diagram {
+function makeInitialDiagram(board: string, mcuType: string): Diagram {
   return {
     ...createEmptyDiagram(board),
-    parts: [{ id: 'mcu', type: 'mcu', x: 100, y: 100, rotate: 0, attrs: {} }],
+    parts: [{ id: 'mcu', type: mcuType, x: 100, y: 100, rotate: 0, attrs: {} }],
   };
 }
+
+const DEFAULT_BOARD = BOARD_CONFIGS[0]; // stm32f103-blinky
 
 export function App() {
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
   const [bridge, setBridge] = useState<SimulatorBridge | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProject, setSelectedProject] = useState<DemoProject>(DEMO_PROJECTS[0]);
   const [running, setRunning] = useState(false);
   const traceRef = useRef<TraceEntry[]>([]);
   const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
+
+  // Board selection (from catalog + bundled configs)
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [selectedBoard, setSelectedBoard] = useState<BoardConfig>(() => {
+    const savedId = localStorage.getItem('labwired-board');
+    if (savedId) {
+      const found = BOARD_CONFIGS.find((c) => c.boardId === savedId);
+      if (found) return found;
+    }
+    return DEFAULT_BOARD;
+  });
 
   // Code editor state
   const [source, setSource] = useState(EXAMPLE_SKETCHES[0].source);
@@ -63,10 +77,36 @@ export function App() {
   const embed = isEmbedMode();
 
   // Editor state
-  const editor = useEditorState(makeInitialDiagram('stm32f103'));
+  const editor = useEditorState(
+    makeInitialDiagram(selectedBoard.chipId, selectedBoard.mcuComponentType),
+  );
 
   // Whether simulation has been loaded (bridge exists)
   const simActive = !!bridge;
+
+  // Fetch catalog on mount
+  useEffect(() => {
+    fetchCatalog().then(setCatalog);
+  }, []);
+
+  // Persist selected board
+  useEffect(() => {
+    localStorage.setItem('labwired-board', selectedBoard.boardId);
+  }, [selectedBoard]);
+
+  // Handle board selection
+  const handleBoardSelect = useCallback(
+    (config: BoardConfig) => {
+      setSelectedBoard(config);
+      editor.loadDiagram(
+        makeInitialDiagram(config.chipId, config.mcuComponentType),
+      );
+      // Stop any running simulation
+      setRunning(false);
+      setBridge(null);
+    },
+    [editor],
+  );
 
   // Load WASM module lazily
   const loadWasm = useCallback(async () => {
@@ -89,7 +129,7 @@ export function App() {
       const result = await compileCode({
         source,
         language: 'arduino',
-        target: editor.state.diagram.board,
+        target: selectedBoard.chipId,
       });
       setCompileErrors(result.errors);
       setCompileOutput(result.output);
@@ -101,7 +141,7 @@ export function App() {
     } finally {
       setCompiling(false);
     }
-  }, [source, editor.state.diagram.board]);
+  }, [source, selectedBoard.chipId]);
 
   // "Upload" (compile + run): convert diagram → config, init simulator
   const handleRun = useCallback(async () => {
@@ -120,19 +160,26 @@ export function App() {
 
       if (result?.success && result.elf) {
         firmware = result.elf;
-        // Use diagram-derived config for user-compiled firmware
-        const config = diagramToConfig(editor.state.diagram);
+        // Use diagram-derived config with the selected board's chip YAML
+        const config = diagramToConfig(editor.state.diagram, selectedBoard.chipYaml);
         systemYaml = config.systemYaml;
         chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUpload successful. Starting simulation...');
-      } else {
+      } else if (selectedBoard.demoFirmwarePath) {
         // Fall back to pre-built demo firmware with its matching YAML configs
-        const project = await ensureFirmwareLoaded(selectedProject);
-        setSelectedProject(project);
-        firmware = project.firmware;
-        systemYaml = project.systemYaml;
-        chipYaml = project.chipYaml;
+        const resp = await fetch(selectedBoard.demoFirmwarePath);
+        if (!resp.ok) throw new Error(`Failed to load firmware: ${selectedBoard.demoFirmwarePath}`);
+        firmware = new Uint8Array(await resp.arrayBuffer());
+        systemYaml = selectedBoard.systemYaml;
+        chipYaml = selectedBoard.chipYaml;
         setCompileOutput((prev) => prev + '\nUsing pre-built demo firmware.');
+      } else {
+        // No demo firmware and compile failed
+        setCompileOutput(
+          (prev) => prev + `\nNo pre-built firmware for ${selectedBoard.name}. Write code and compile it first.`,
+        );
+        setLoading(false);
+        return;
       }
 
       const b = await SimulatorBridge.fromConfig(mod, {
@@ -151,7 +198,7 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, [handleCompile, loadWasm, selectedProject, editor.state.diagram]);
+  }, [handleCompile, loadWasm, selectedBoard, editor.state.diagram]);
 
   // Stop simulation
   const handleStop = useCallback(() => {
@@ -221,7 +268,6 @@ export function App() {
       }
     }
 
-    // Enrich PWM outputs with frequency/angle from peripheral snapshots
     if (bridge) {
       const ioConfig = bridge.getBoardIoConfig();
       for (const binding of ioConfig) {
@@ -430,6 +476,13 @@ export function App() {
         <div className="playground-header">
           <span className="logo">LabWired</span>
 
+          {/* Board picker (from catalog) */}
+          <BoardPicker
+            catalog={catalog}
+            selectedBoardId={selectedBoard.boardId}
+            onSelect={handleBoardSelect}
+          />
+
           {/* Example sketches */}
           <select
             className="project-selector"
@@ -442,20 +495,6 @@ export function App() {
             <option value="" disabled>Examples...</option>
             {EXAMPLE_SKETCHES.map((s) => (
               <option key={s.name} value={s.name}>{s.name}</option>
-            ))}
-          </select>
-
-          {/* Demo project selector */}
-          <select
-            className="project-selector"
-            value={selectedProject.id}
-            onChange={(e) => {
-              const proj = DEMO_PROJECTS.find((p) => p.id === e.target.value);
-              if (proj) setSelectedProject(proj);
-            }}
-          >
-            {DEMO_PROJECTS.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
 

@@ -154,9 +154,65 @@ const STM32F103_PINS: Record<string, PinMapping> = {
   PC15: { gpio: { peripheral: 'gpioc', pin: 15 }, functions: [] },
 };
 
+/** STM32H563 pin mappings (extends F103 with additional GPIO ports D-G). */
+const STM32H563_PINS: Record<string, PinMapping> = {
+  ...STM32F103_PINS,
+  PD0: { gpio: { peripheral: 'gpiod', pin: 0 }, functions: [] },
+  PD1: { gpio: { peripheral: 'gpiod', pin: 1 }, functions: [] },
+  PE0: { gpio: { peripheral: 'gpioe', pin: 0 }, functions: [] },
+  PF4: { gpio: { peripheral: 'gpiof', pin: 4 }, functions: [] },
+  PG4: { gpio: { peripheral: 'gpiog', pin: 4 }, functions: [] },
+};
+
+/** RP2040 pin mappings (GP0-GP28). */
+const RP2040_PINS: Record<string, PinMapping> = Object.fromEntries(
+  Array.from({ length: 29 }, (_, i) => [
+    `GP${i}`,
+    {
+      gpio: { peripheral: 'gpio', pin: i },
+      functions: i <= 3
+        ? [{ type: 'uart' as const, peripheral: 'uart0', role: i % 2 === 0 ? 'tx' : 'rx' }]
+        : [],
+    },
+  ]),
+);
+
+/** nRF52840 pin mappings (P0.00-P0.31, P1.00-P1.15). */
+const NRF52840_PINS: Record<string, PinMapping> = {
+  ...Object.fromEntries(
+    Array.from({ length: 32 }, (_, i) => [
+      `P0.${String(i).padStart(2, '0')}`,
+      { gpio: { peripheral: 'gpio0', pin: i }, functions: [] as PinFunction[] },
+    ]),
+  ),
+  ...Object.fromEntries(
+    Array.from({ length: 16 }, (_, i) => [
+      `P1.${String(i).padStart(2, '0')}`,
+      { gpio: { peripheral: 'gpio1', pin: i }, functions: [] as PinFunction[] },
+    ]),
+  ),
+};
+
+/** ESP32-C3 pin mappings (GPIO0-GPIO21). */
+const ESP32C3_PINS: Record<string, PinMapping> = Object.fromEntries(
+  Array.from({ length: 22 }, (_, i) => [
+    `GPIO${i}`,
+    {
+      gpio: { peripheral: 'gpio', pin: i },
+      functions: i <= 1
+        ? [{ type: 'uart' as const, peripheral: 'uart0', role: i === 0 ? 'tx' : 'rx' }]
+        : [],
+    },
+  ]),
+);
+
 const PIN_MAPS: Record<string, Record<string, PinMapping>> = {
   stm32f103: STM32F103_PINS,
   stm32f401: STM32F103_PINS, // Similar enough for now
+  stm32h563: STM32H563_PINS,
+  rp2040: RP2040_PINS,
+  nrf52840: NRF52840_PINS,
+  esp32c3: ESP32C3_PINS,
 };
 
 /**

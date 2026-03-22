@@ -131,11 +131,15 @@ function parseMcuPin(pinLabel: string): { peripheral: string; pin: number } | nu
 
 /**
  * Convert a visual diagram into system YAML + chip YAML for the WASM simulator.
+ * If chipYamlOverride is provided, it is used instead of the built-in CHIP_YAMLS lookup.
  */
-export function diagramToConfig(diagram: Diagram): { systemYaml: string; chipYaml: string } {
-  const chipYaml = CHIP_YAMLS[diagram.board];
+export function diagramToConfig(
+  diagram: Diagram,
+  chipYamlOverride?: string,
+): { systemYaml: string; chipYaml: string } {
+  const chipYaml = chipYamlOverride ?? CHIP_YAMLS[diagram.board];
   if (!chipYaml) {
-    throw new Error(`Unknown board: ${diagram.board}`);
+    throw new Error(`Unknown board: ${diagram.board}. Provide a chipYamlOverride or add it to CHIP_YAMLS.`);
   }
 
   // Build board_io entries from wires that connect components to MCU pins
