@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { BOARD_CONFIGS, BOARD_CONFIG_MAP, type BoardConfig } from './bundled-configs';
 import { type CatalogEntry, catalogSlug } from './catalog-client';
+// Catalog entries are used only to enrich bundled boards with images/metadata
 
 interface BoardPickerProps {
   catalog: CatalogEntry[];
@@ -25,34 +26,10 @@ function buildBoardList(catalog: CatalogEntry[]) {
       registers: catalogEntry?.registers ?? 0,
       verified: catalogEntry?.verified ?? false,
       passRate: catalogEntry?.pass_rate ?? 0,
-      simulatable: true,
       hasDemoFw: !!config.demoFirmwarePath,
       config,
     };
   });
-
-  // Add catalog-only entries (not simulatable)
-  const bundledSlugs = new Set(BOARD_CONFIGS.flatMap((c) => [c.boardId, c.chipId]));
-  for (const entry of catalog) {
-    const slug = catalogSlug(entry.id);
-    if (bundledSlugs.has(slug)) continue;
-    // Only show boards and chips with register models
-    if (!entry.id.startsWith('board/') && !entry.id.startsWith('chip/')) continue;
-    if (entry.registers === 0 && !entry.image_url) continue; // skip low-quality entries
-    items.push({
-      id: slug,
-      name: entry.name,
-      description: entry.description,
-      arch: entry.architecture || entry.family,
-      imageUrl: entry.image_url,
-      registers: entry.registers,
-      verified: entry.verified,
-      passRate: entry.pass_rate,
-      simulatable: false,
-      hasDemoFw: false,
-      config: null,
-    });
-  }
 
   return items;
 }
@@ -66,9 +43,8 @@ interface BoardListItem {
   registers: number;
   verified: boolean;
   passRate: number;
-  simulatable: boolean;
   hasDemoFw: boolean;
-  config: BoardConfig | null;
+  config: BoardConfig;
 }
 
 export function BoardPicker({ catalog, selectedBoardId, onSelect }: BoardPickerProps) {
@@ -93,11 +69,7 @@ export function BoardPicker({ catalog, selectedBoardId, onSelect }: BoardPickerP
     ? items.filter((b) => b.name.toLowerCase().includes(filter.toLowerCase()))
     : items;
 
-  // Sort: simulatable first, then by name
-  filtered.sort((a, b) => {
-    if (a.simulatable !== b.simulatable) return a.simulatable ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  filtered.sort((a, b) => a.name.localeCompare(b.name));
 
   const selected = BOARD_CONFIG_MAP.get(selectedBoardId);
 
@@ -122,17 +94,12 @@ export function BoardPicker({ catalog, selectedBoardId, onSelect }: BoardPickerP
             {filtered.map((item) => (
               <button
                 key={item.id}
-                className={`board-picker-item ${item.id === selectedBoardId ? 'selected' : ''} ${
-                  !item.simulatable ? 'catalog-only' : ''
-                }`}
+                className={`board-picker-item ${item.id === selectedBoardId ? 'selected' : ''}`}
                 onClick={() => {
-                  if (item.config) {
-                    onSelect(item.config);
-                    setOpen(false);
-                    setFilter('');
-                  }
+                  onSelect(item.config);
+                  setOpen(false);
+                  setFilter('');
                 }}
-                disabled={!item.simulatable}
               >
                 <div className="board-picker-img">
                   {item.imageUrl ? (
@@ -148,14 +115,8 @@ export function BoardPicker({ catalog, selectedBoardId, onSelect }: BoardPickerP
                 <div className="board-picker-info">
                   <div className="board-picker-item-name">
                     {item.name}
-                    {item.simulatable && (
-                      <span className="badge badge-ready">Ready</span>
-                    )}
                     {item.hasDemoFw && (
                       <span className="badge badge-demo">Demo</span>
-                    )}
-                    {!item.simulatable && (
-                      <span className="badge badge-catalog">Catalog</span>
                     )}
                   </div>
                   <div className="board-picker-item-meta">

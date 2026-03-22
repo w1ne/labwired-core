@@ -525,11 +525,6 @@ html, body, #root {
   border-left: 2px solid var(--lw-pink, #e83e8c);
 }
 
-.board-picker-item.catalog-only {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .board-picker-img {
   width: 36px;
   height: 36px;
@@ -590,19 +585,9 @@ html, body, #root {
   letter-spacing: 0.03em;
 }
 
-.badge-ready {
-  background: rgba(39,201,63,0.2);
-  color: #27c93f;
-}
-
 .badge-demo {
   background: rgba(86,156,214,0.2);
   color: #569cd6;
-}
-
-.badge-catalog {
-  background: rgba(255,255,255,0.08);
-  color: var(--lw-gray, #888);
 }
 
 .verified-badge {
