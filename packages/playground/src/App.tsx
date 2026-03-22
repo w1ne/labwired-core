@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
-  BoardCanvas,
   SimControls,
   RegisterGrid,
   MemoryInspector,
@@ -29,8 +28,7 @@ import {
 } from '@labwired/ui';
 import { DEMO_PROJECTS, ensureFirmwareLoaded, type DemoProject } from './demos';
 
-type Mode = 'editor' | 'debug';
-type BottomTab = 'output' | 'serial';
+type BottomTab = 'output' | 'serial' | 'registers' | 'trace' | 'memory';
 
 let partCounter = 0;
 function nextPartId(type: string): string {
@@ -45,7 +43,6 @@ function makeInitialDiagram(board: string): Diagram {
 }
 
 export function App() {
-  const [mode, setMode] = useState<Mode>('editor');
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
   const [bridge, setBridge] = useState<SimulatorBridge | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,10 +59,14 @@ export function App() {
   const [compiling, setCompiling] = useState(false);
   const [bottomTab, setBottomTab] = useState<BottomTab>('output');
   const [showCode, setShowCode] = useState(true);
+  const [showBottomPanel, setShowBottomPanel] = useState(true);
   const embed = isEmbedMode();
 
   // Editor state
   const editor = useEditorState(makeInitialDiagram('stm32f103'));
+
+  // Whether simulation has been loaded (bridge exists)
+  const simActive = !!bridge;
 
   // Load WASM module lazily
   const loadWasm = useCallback(async () => {
@@ -83,6 +84,7 @@ export function App() {
     setCompileOutput('Compiling...\n');
     setCompileErrors([]);
     setBottomTab('output');
+    setShowBottomPanel(true);
     try {
       const result = await compileCode({
         source,
@@ -101,7 +103,7 @@ export function App() {
     }
   }, [source, editor.state.diagram.board]);
 
-  // "Upload" (compile + run): convert diagram → config, init simulator, switch to debug mode
+  // "Upload" (compile + run): convert diagram → config, init simulator
   const handleRun = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -135,13 +137,20 @@ export function App() {
       setRunning(true);
       traceRef.current = [];
       setTraceEntries([]);
-      setMode('debug');
+      setBottomTab('serial');
+      setShowBottomPanel(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   }, [handleCompile, loadWasm, selectedProject, editor.state.diagram]);
+
+  // Stop simulation
+  const handleStop = useCallback(() => {
+    setRunning(false);
+    setBridge(null);
+  }, []);
 
   // Drive the simulation loop
   const { state: simState, stepOnce, clearUart } = useSimulationLoop({
@@ -177,8 +186,6 @@ export function App() {
     return bridge.readMemory(stackBase, 64);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge, stackBase]);
-
-  const boardIoConfig = useMemo(() => bridge?.getBoardIoConfig() ?? [], [bridge]);
 
   const handleButtonToggle = useCallback(
     (id: string, pressed: boolean) => { bridge?.setBoardIoInput(id, pressed); },
@@ -216,12 +223,10 @@ export function App() {
           const snap = bridge.getPeripheralSnapshot(binding.peripheral) as
             { psc?: number; arr?: number; cnt?: number } | null;
           if (snap && typeof snap.arr === 'number' && snap.arr > 0) {
-            const clockHz = 8_000_000; // Assume 8MHz system clock
+            const clockHz = 8_000_000;
             const freq = Math.round(clockHz / ((snap.psc ?? 0) + 1) / (snap.arr + 1));
             map[binding.id].frequency = freq;
-            // Derive servo angle: assume 50Hz servo frequency, duty maps to angle
             if (freq >= 40 && freq <= 60) {
-              // Standard servo: ARR+1 is full period, active portion maps 0-180°
               map[binding.id].angle = map[binding.id].active ? 90 : 0;
             }
           }
@@ -238,7 +243,6 @@ export function App() {
   const handleAnalogChange = useCallback(
     (partId: string, value: number) => {
       if (!bridge) return;
-      // Find the part's IO config to get the peripheral name
       const config = bridge.getBoardIoConfig();
       const binding = config.find((b) => b.id === partId);
       if (binding) {
@@ -289,12 +293,11 @@ export function App() {
             const num = parseInt(p.id.replace(/\D/g, ''), 10);
             if (!isNaN(num) && num > partCounter) partCounter = num;
           }
-          // Clear hash after loading
           history.replaceState(null, '', window.location.pathname + window.location.search);
           return;
         }
       });
-      return; // Don't load from localStorage if we have a hash
+      return;
     }
 
     const saved = localStorage.getItem('labwired-diagram');
@@ -345,7 +348,6 @@ export function App() {
           editor.loadDiagram(data.diagram as Diagram);
           if (data.source) setSource(data.source);
         } else {
-          // Legacy: diagram-only file
           editor.loadDiagram(data as Diagram);
         }
       } catch { alert('Invalid project file'); }
@@ -359,6 +361,7 @@ export function App() {
     await navigator.clipboard.writeText(url);
     setCompileOutput('Share URL copied to clipboard!');
     setBottomTab('output');
+    setShowBottomPanel(true);
   }, [editor.state.diagram, source]);
 
   // Keyboard shortcuts
@@ -366,28 +369,27 @@ export function App() {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      // Skip if Monaco editor is focused
       if ((e.target as HTMLElement).closest('.monaco-editor')) return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (mode === 'editor' && editor.state.selectedIds.size > 0) {
+        if (editor.state.selectedIds.size > 0) {
           editor.deleteSelected();
         }
       }
       if (e.key === 'r' || e.key === 'R') {
-        if (mode === 'editor' && editor.state.selectedIds.size === 1) {
+        if (editor.state.selectedIds.size === 1) {
           editor.rotatePart([...editor.state.selectedIds][0]);
         }
       }
       if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
-        if (mode === 'editor') { e.preventDefault(); editor.redo(); }
+        e.preventDefault(); editor.redo();
       } else if (e.ctrlKey && e.key === 'z') {
-        if (mode === 'editor') { e.preventDefault(); editor.undo(); }
+        e.preventDefault(); editor.undo();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [mode, editor]);
+  }, [editor]);
 
   if (loading) {
     return (
@@ -398,226 +400,212 @@ export function App() {
     );
   }
 
-  return (
-    <div className={mode === 'editor' ? 'playground playground-editor' : 'playground playground-debug'}>
-      {/* Toolbar */}
-      {!embed && <div className="playground-header">
-        <span className="logo">LabWired</span>
+  // Bottom tab content
+  const bottomContent = () => {
+    switch (bottomTab) {
+      case 'output':
+        return <pre className="compile-output">{compileOutput || 'Ready to compile.'}</pre>;
+      case 'serial':
+        return <SerialMonitor output={simState.uartOutput} onClear={clearUart} style={{ height: '100%' }} />;
+      case 'registers':
+        return <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />;
+      case 'trace':
+        return <InstructionTrace entries={traceEntries} style={{ maxHeight: '100%', overflow: 'auto' }} />;
+      case 'memory':
+        return <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />;
+    }
+  };
 
-        {/* Mode tabs */}
-        <div className="mode-tabs">
-          <button
-            className={`mode-tab ${mode === 'editor' ? 'active' : ''}`}
-            onClick={() => { setMode('editor'); setRunning(false); }}
+  return (
+    <div className="playground">
+      {/* ===== Header ===== */}
+      {!embed && (
+        <div className="playground-header">
+          <span className="logo">LabWired</span>
+
+          {/* Example sketches */}
+          <select
+            className="project-selector"
+            value=""
+            onChange={(e) => {
+              const sketch = EXAMPLE_SKETCHES.find((s) => s.name === e.target.value);
+              if (sketch) setSource(sketch.source);
+            }}
           >
-            Editor
+            <option value="" disabled>Examples...</option>
+            {EXAMPLE_SKETCHES.map((s) => (
+              <option key={s.name} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+
+          {/* Demo project selector */}
+          <select
+            className="project-selector"
+            value={selectedProject.id}
+            onChange={(e) => {
+              const proj = DEMO_PROJECTS.find((p) => p.id === e.target.value);
+              if (proj) setSelectedProject(proj);
+            }}
+          >
+            {DEMO_PROJECTS.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          <div className="header-separator" />
+
+          <button className="toolbar-btn toolbar-btn-verify" onClick={handleCompile} disabled={compiling}>
+            {compiling ? 'Compiling...' : 'Verify'}
+          </button>
+          <button className="toolbar-btn" onClick={handleRun} disabled={compiling || loading}>
+            Upload
+          </button>
+
+          {/* Sim controls inline when simulation is active */}
+          {simActive && (
+            <>
+              <div className="header-separator" />
+              <SimControls
+                running={running}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onStep={handleStep}
+                onReset={handleReset}
+                pc={simState.pc}
+                cycles={simState.cycles}
+              />
+              <button className="toolbar-btn toolbar-btn-ghost toolbar-btn-stop" onClick={handleStop}>
+                Stop
+              </button>
+            </>
+          )}
+
+          <div className="header-spacer" />
+
+          <button
+            className={`toolbar-btn toolbar-btn-ghost ${showCode ? 'active' : ''}`}
+            onClick={() => setShowCode(!showCode)}
+            title="Toggle code editor"
+          >
+            Code
+          </button>
+          <button className="toolbar-btn toolbar-btn-ghost" onClick={handleShare}>Share</button>
+          <button className="toolbar-btn toolbar-btn-ghost" onClick={handleExport}>Export</button>
+          <button className="toolbar-btn toolbar-btn-ghost" onClick={handleImport}>Import</button>
+          <button
+            className="toolbar-btn toolbar-btn-ghost"
+            onClick={editor.undo}
+            disabled={editor.state.undoStack.length === 0}
+          >
+            Undo
           </button>
           <button
-            className={`mode-tab ${mode === 'debug' ? 'active' : ''}`}
-            onClick={() => setMode('debug')}
-            disabled={!bridge}
+            className="toolbar-btn toolbar-btn-ghost"
+            onClick={editor.redo}
+            disabled={editor.state.redoStack.length === 0}
           >
-            Debug
+            Redo
           </button>
+
+          {error && <span className="header-error">{error}</span>}
+        </div>
+      )}
+
+      {/* ===== Unified Layout ===== */}
+      <div className="editor-layout">
+        {/* Component palette (left sidebar) */}
+        <div className="editor-sidebar-left">
+          <ComponentPalette onAddPart={handleAddPartFromPalette} />
         </div>
 
-        {mode === 'editor' && (
-          <>
-            {/* Board selector */}
-            <select
-              className="project-selector"
-              value={selectedProject.id}
-              onChange={(e) => {
-                const proj = DEMO_PROJECTS.find((p) => p.id === e.target.value);
-                if (proj) setSelectedProject(proj);
-              }}
-            >
-              {DEMO_PROJECTS.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-
-            {/* Example sketches */}
-            <select
-              className="project-selector"
-              value=""
-              onChange={(e) => {
-                const sketch = EXAMPLE_SKETCHES.find((s) => s.name === e.target.value);
-                if (sketch) setSource(sketch.source);
-              }}
-            >
-              <option value="" disabled>Examples...</option>
-              {EXAMPLE_SKETCHES.map((s) => (
-                <option key={s.name} value={s.name}>{s.name}</option>
-              ))}
-            </select>
-
-            <button className="toolbar-btn toolbar-btn-verify" onClick={handleCompile} disabled={compiling}>
-              {compiling ? 'Compiling...' : 'Verify'}
-            </button>
-            <button className="toolbar-btn" onClick={handleRun} disabled={compiling}>
-              Upload
-            </button>
-            <button
-              className={`toolbar-btn toolbar-btn-ghost ${showCode ? 'active' : ''}`}
-              onClick={() => setShowCode(!showCode)}
-              title="Toggle code editor"
-            >
-              Code
-            </button>
-            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleShare}>Share</button>
-            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleExport}>Export</button>
-            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleImport}>Import</button>
-            <button
-              className="toolbar-btn toolbar-btn-ghost"
-              onClick={editor.undo}
-              disabled={editor.state.undoStack.length === 0}
-            >
-              Undo
-            </button>
-            <button
-              className="toolbar-btn toolbar-btn-ghost"
-              onClick={editor.redo}
-              disabled={editor.state.redoStack.length === 0}
-            >
-              Redo
-            </button>
-          </>
-        )}
-
-        {mode === 'debug' && (
-          <SimControls
-            running={running}
-            onPlay={handlePlay}
-            onPause={handlePause}
-            onStep={handleStep}
-            onReset={handleReset}
-            pc={simState.pc}
-            cycles={simState.cycles}
-            style={{ flex: 1 }}
-          />
-        )}
-
-        {error && <span className="header-error">{error}</span>}
-      </div>}
-
-      {/* EDITOR MODE — Arduino IDE layout */}
-      {mode === 'editor' && (
-        <div className="editor-layout">
-          {/* Component palette (far left) */}
-          <div className="editor-sidebar-left">
-            <ComponentPalette onAddPart={handleAddPartFromPalette} />
-          </div>
-
-          {/* Main content area */}
-          <div className="editor-center">
-            <div className="editor-top-split">
-              {/* Code editor (left pane) */}
-              {showCode && (
-                <div className="editor-code-pane">
-                  <CodeEditor
-                    source={source}
-                    onChange={setSource}
-                    errors={compileErrors}
-                  />
-                </div>
-              )}
-              {/* Circuit canvas (right pane) */}
-              <div className="editor-canvas-pane">
-                <EditorCanvas
-                  state={editor.state}
-                  boardIoStates={boardIoStateMap}
-                  onMovePart={editor.movePart}
-                  onResizePart={editor.resizePart}
-                  onSelect={editor.select}
-                  onSelectRect={editor.selectRect}
-                  onStartWire={editor.startWire}
-                  onCompleteWire={editor.completeWire}
-                  onCancelWire={editor.cancelWire}
-                  onDeleteWire={editor.deleteWire}
-                  onDropPart={handleDropPart}
-                  onButtonToggle={handleButtonToggle}
-                  onAnalogChange={handleAnalogChange}
+        {/* Main content area */}
+        <div className="editor-center">
+          <div className="editor-top-split">
+            {/* Code editor (left pane) */}
+            {showCode && (
+              <div className="editor-code-pane">
+                <CodeEditor
+                  source={source}
+                  onChange={setSource}
+                  errors={compileErrors}
                 />
               </div>
+            )}
+            {/* Circuit canvas (always visible — shows live state during sim) */}
+            <div className="editor-canvas-pane">
+              <EditorCanvas
+                state={editor.state}
+                boardIoStates={boardIoStateMap}
+                onMovePart={editor.movePart}
+                onResizePart={editor.resizePart}
+                onSelect={editor.select}
+                onSelectRect={editor.selectRect}
+                onStartWire={editor.startWire}
+                onCompleteWire={editor.completeWire}
+                onCancelWire={editor.cancelWire}
+                onDeleteWire={editor.deleteWire}
+                onDropPart={handleDropPart}
+                onButtonToggle={handleButtonToggle}
+                onAnalogChange={handleAnalogChange}
+              />
             </div>
+          </div>
 
-            {/* Bottom pane — compiler output / serial monitor */}
+          {/* Bottom panel — tabbed: output / serial / registers / trace / memory */}
+          {showBottomPanel && (
             <div className="editor-bottom-pane">
               <div className="bottom-tabs">
+                {(['output', 'serial', 'registers', 'trace', 'memory'] as BottomTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    className={`bottom-tab ${bottomTab === tab ? 'active' : ''} ${
+                      !simActive && tab !== 'output' && tab !== 'serial' ? 'disabled' : ''
+                    }`}
+                    onClick={() => setBottomTab(tab)}
+                    disabled={!simActive && tab !== 'output' && tab !== 'serial'}
+                  >
+                    {tab === 'output' ? 'Output' :
+                     tab === 'serial' ? 'Serial' :
+                     tab === 'registers' ? 'Registers' :
+                     tab === 'trace' ? 'Trace' : 'Memory'}
+                  </button>
+                ))}
                 <button
-                  className={`bottom-tab ${bottomTab === 'output' ? 'active' : ''}`}
-                  onClick={() => setBottomTab('output')}
+                  className="bottom-tab bottom-tab-close"
+                  onClick={() => setShowBottomPanel(false)}
+                  title="Hide panel"
                 >
-                  Output
-                </button>
-                <button
-                  className={`bottom-tab ${bottomTab === 'serial' ? 'active' : ''}`}
-                  onClick={() => setBottomTab('serial')}
-                >
-                  Serial Monitor
+                  ×
                 </button>
               </div>
               <div className="bottom-content">
-                {bottomTab === 'output' && (
-                  <pre className="compile-output">{compileOutput || 'Ready to compile.'}</pre>
-                )}
-                {bottomTab === 'serial' && (
-                  <SerialMonitor
-                    output={simState.uartOutput}
-                    onClear={clearUart}
-                    style={{ height: '100%' }}
-                  />
-                )}
+                {bottomContent()}
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Property panel (far right) */}
-          <div className="editor-sidebar-right">
-            <PropertyPanel
-              parts={selectedParts}
-              onUpdateAttrs={editor.updateAttrs}
-              onDelete={editor.deleteSelected}
-              onRotate={editor.rotatePart}
-              onResize={editor.resizePart}
-            />
-          </div>
+          {/* Collapsed bottom panel toggle */}
+          {!showBottomPanel && (
+            <button
+              className="bottom-panel-toggle"
+              onClick={() => setShowBottomPanel(true)}
+            >
+              Output / Serial / Debug
+            </button>
+          )}
         </div>
-      )}
 
-      {/* DEBUG MODE */}
-      {mode === 'debug' && (
-        <>
-          <div className="playground-board">
-            <BoardCanvas
-              boardName={selectedProject.name}
-              chipId={selectedProject.chip}
-              boardIo={boardIoConfig}
-              boardIoStates={simState.boardIoStates}
-              onButtonToggle={handleButtonToggle}
-              width={560}
-              height={380}
-            />
-          </div>
-          <div className="playground-panels">
-            <RegisterGrid registers={registers} style={{ flex: '0 0 auto' }} />
-            <InstructionTrace entries={traceEntries} style={{ flex: 1 }} />
-            <MemoryInspector
-              data={stackMemory}
-              baseAddress={stackBase}
-              style={{ flex: '0 0 auto' }}
-            />
-          </div>
-          <div className="playground-serial">
-            <SerialMonitor
-              output={simState.uartOutput}
-              onClear={clearUart}
-              style={{ height: '100%' }}
-            />
-          </div>
-        </>
-      )}
+        {/* Property panel (right sidebar) */}
+        <div className="editor-sidebar-right">
+          <PropertyPanel
+            parts={selectedParts}
+            onUpdateAttrs={editor.updateAttrs}
+            onDelete={editor.deleteSelected}
+            onRotate={editor.rotatePart}
+            onResize={editor.resizePart}
+          />
+        </div>
+      </div>
     </div>
   );
 }

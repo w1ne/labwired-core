@@ -11,74 +11,60 @@ html, body, #root {
   color: var(--lw-dark-text, #d4d4d4);
 }
 
-/* ===== Shared playground layout ===== */
+/* ===== Unified playground layout ===== */
 .playground {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
+/* ===== Header / Toolbar ===== */
 .playground-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 6px 12px;
-  background: #12121a;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #16161e;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   z-index: 10;
   flex-shrink: 0;
   flex-wrap: wrap;
+  min-height: 36px;
 }
 
 .playground-header .logo {
   font-family: var(--lw-font-mono);
-  font-size: 0.8rem;
-  letter-spacing: 0.1em;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--lw-gray);
+  color: var(--lw-pink, #e83e8c);
+  font-weight: 700;
+  margin-right: 4px;
 }
 
-/* ===== Mode tabs ===== */
-.mode-tabs {
-  display: flex;
-  gap: 0;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 6px;
-  overflow: hidden;
+.header-separator {
+  width: 1px;
+  height: 20px;
+  background: rgba(255,255,255,0.12);
+  margin: 0 2px;
 }
 
-.mode-tab {
-  font-family: var(--lw-font-mono);
-  font-size: 0.7rem;
-  padding: 3px 12px;
-  border: none;
-  background: transparent;
-  color: var(--lw-gray);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.mode-tab.active {
-  background: var(--lw-pink, #e83e8c);
-  color: #fff;
-}
-
-.mode-tab:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.header-spacer {
+  flex: 1;
 }
 
 /* ===== Toolbar buttons ===== */
 .toolbar-btn {
   font-family: var(--lw-font-mono);
-  font-size: 0.7rem;
-  padding: 3px 12px;
+  font-size: 0.65rem;
+  padding: 3px 10px;
   border: 1px solid var(--lw-pink, #e83e8c);
   border-radius: 4px;
   background: var(--lw-pink, #e83e8c);
   color: #fff;
   cursor: pointer;
   transition: opacity 0.15s;
+  white-space: nowrap;
 }
 
 .toolbar-btn:hover { opacity: 0.85; }
@@ -92,7 +78,7 @@ html, body, #root {
 .toolbar-btn-ghost {
   background: transparent;
   color: var(--lw-gray, #888);
-  border-color: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.12);
 }
 
 .toolbar-btn-ghost:hover {
@@ -106,14 +92,36 @@ html, body, #root {
   border-color: #569cd6;
 }
 
-.header-error {
-  font-family: var(--lw-font-mono);
-  font-size: 0.7rem;
-  color: var(--lw-pink, #e83e8c);
-  margin-left: auto;
+.toolbar-btn-stop {
+  border-color: #ff4444;
+  color: #ff4444;
 }
 
-/* ===== Editor mode — Arduino IDE layout ===== */
+.toolbar-btn-stop:hover {
+  background: rgba(255,68,68,0.15);
+  color: #ff6666;
+}
+
+.header-error {
+  font-family: var(--lw-font-mono);
+  font-size: 0.65rem;
+  color: var(--lw-pink, #e83e8c);
+  margin-left: 8px;
+}
+
+/* ===== Project selector ===== */
+.project-selector {
+  font-family: var(--lw-font-mono);
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: var(--lw-gray, #ccc);
+  cursor: pointer;
+}
+
+/* ===== Main editor layout ===== */
 .editor-layout {
   display: flex;
   flex: 1;
@@ -121,10 +129,10 @@ html, body, #root {
 }
 
 .editor-sidebar-left {
-  width: 180px;
+  width: 160px;
   overflow-y: auto;
   border-right: 1px solid rgba(255,255,255,0.08);
-  background: #12121a;
+  background: #13131b;
   flex-shrink: 0;
 }
 
@@ -133,6 +141,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 .editor-top-split {
@@ -142,9 +151,10 @@ html, body, #root {
 }
 
 .editor-code-pane {
-  width: 45%;
-  min-width: 280px;
-  border-right: 2px solid rgba(255,255,255,0.1);
+  width: 38%;
+  min-width: 260px;
+  max-width: 50%;
+  border-right: 2px solid rgba(255,255,255,0.08);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -154,33 +164,38 @@ html, body, #root {
   flex: 1;
   overflow: hidden;
   position: relative;
+  min-width: 200px;
 }
 
+/* ===== Bottom panel ===== */
 .editor-bottom-pane {
-  height: 150px;
+  height: 180px;
   flex-shrink: 0;
-  border-top: 2px solid rgba(255,255,255,0.1);
+  border-top: 2px solid rgba(255,255,255,0.08);
   display: flex;
   flex-direction: column;
-  background: #12121a;
+  background: #13131b;
 }
 
 .bottom-tabs {
   display: flex;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
+  background: #16161e;
 }
 
 .bottom-tab {
   font-family: var(--lw-font-mono);
-  font-size: 0.65rem;
-  padding: 4px 14px;
+  font-size: 0.6rem;
+  padding: 4px 12px;
   border: none;
   background: transparent;
-  color: var(--lw-gray);
+  color: var(--lw-gray, #888);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .bottom-tab.active {
@@ -188,8 +203,25 @@ html, body, #root {
   border-bottom-color: var(--lw-pink, #e83e8c);
 }
 
-.bottom-tab:hover {
+.bottom-tab:hover:not(.disabled):not(.bottom-tab-close) {
   background: rgba(255,255,255,0.03);
+  color: #ccc;
+}
+
+.bottom-tab.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.bottom-tab-close {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--lw-gray, #666);
+  padding: 4px 10px;
+}
+
+.bottom-tab-close:hover {
+  color: #fff;
 }
 
 .bottom-content {
@@ -199,86 +231,75 @@ html, body, #root {
 
 .compile-output {
   font-family: var(--lw-font-mono);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   padding: 8px 12px;
   color: var(--lw-gray, #aaa);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
+/* Collapsed bottom panel toggle */
+.bottom-panel-toggle {
+  font-family: var(--lw-font-mono);
+  font-size: 0.6rem;
+  padding: 3px 12px;
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: #16161e;
+  color: var(--lw-gray, #666);
+  cursor: pointer;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.bottom-panel-toggle:hover {
+  background: rgba(255,255,255,0.03);
+  color: #ccc;
+}
+
+/* ===== Right sidebar ===== */
 .editor-sidebar-right {
-  width: 220px;
+  width: 200px;
   overflow-y: auto;
   border-left: 1px solid rgba(255,255,255,0.08);
-  background: #12121a;
+  background: #13131b;
   flex-shrink: 0;
-}
-
-/* ===== Debug mode layout ===== */
-.playground-debug {
-  display: grid;
-  grid-template-rows: 1fr auto;
-  grid-template-columns: 1fr 380px;
-  grid-template-areas:
-    "board    panels"
-    "serial   serial";
-  flex: 1;
-}
-
-.playground-board {
-  grid-area: board;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.playground-panels {
-  grid-area: panels;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow: auto;
-  padding: 8px;
-}
-
-.playground-serial {
-  grid-area: serial;
-  min-height: 120px;
-  max-height: 200px;
 }
 
 /* ===== Component Palette ===== */
 .editor-palette {
-  padding: 10px;
+  padding: 8px;
 }
 
 .palette-title {
   font-family: var(--lw-font-heading);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: #fff;
 }
 
 .palette-group {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .palette-category {
   font-family: var(--lw-font-mono);
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--lw-gray, #888);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .palette-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px;
+  padding: 3px 5px;
   border-radius: 4px;
   cursor: grab;
   transition: background 0.15s;
@@ -295,18 +316,18 @@ html, body, #root {
 
 .palette-label {
   font-family: var(--lw-font-mono);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--lw-gray, #ccc);
 }
 
 /* ===== Property Panel ===== */
 .editor-property-panel {
-  padding: 10px;
+  padding: 8px;
 }
 
 .panel-title {
   font-family: var(--lw-font-heading);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   margin-bottom: 4px;
   color: #fff;
@@ -314,26 +335,26 @@ html, body, #root {
 
 .panel-id {
   font-family: var(--lw-font-mono);
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   color: var(--lw-gray, #888);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .panel-empty {
   font-family: var(--lw-font-mono);
-  font-size: 0.7rem;
-  color: var(--lw-gray, #666);
-  padding: 20px 0;
+  font-size: 0.65rem;
+  color: var(--lw-gray, #555);
+  padding: 16px 0;
   text-align: center;
 }
 
 .panel-section {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .panel-section-title {
   font-family: var(--lw-font-mono);
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--lw-gray, #888);
@@ -350,44 +371,44 @@ html, body, #root {
 
 .panel-row label {
   font-family: var(--lw-font-mono);
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: var(--lw-gray, #aaa);
   flex-shrink: 0;
 }
 
 .panel-input {
   font-family: var(--lw-font-mono);
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   padding: 2px 5px;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 3px;
   background: rgba(255,255,255,0.05);
   color: #fff;
   width: 100%;
-  max-width: 110px;
+  max-width: 100px;
 }
 
 .panel-input-sm {
-  max-width: 60px;
+  max-width: 55px;
 }
 
 .panel-value {
   font-family: var(--lw-font-mono);
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: #fff;
 }
 
 .panel-actions {
   display: flex;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .panel-btn {
   font-family: var(--lw-font-mono);
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   padding: 3px 8px;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 3px;
   background: transparent;
   color: var(--lw-gray, #ccc);
@@ -407,18 +428,6 @@ html, body, #root {
 
 .panel-btn-danger:hover {
   background: rgba(255,68,68,0.15);
-}
-
-/* ===== Project selector ===== */
-.project-selector {
-  font-family: var(--lw-font-mono);
-  font-size: 0.7rem;
-  padding: 3px 6px;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--lw-gray, #ccc);
-  cursor: pointer;
 }
 
 /* ===== Loading state ===== */
@@ -455,7 +464,7 @@ html, body, #root {
   .editor-sidebar-left,
   .editor-sidebar-right {
     width: 100%;
-    max-height: 150px;
+    max-height: 120px;
     border: none;
     border-bottom: 1px solid rgba(255,255,255,0.08);
   }
@@ -467,16 +476,9 @@ html, body, #root {
   .editor-code-pane {
     width: 100%;
     min-width: 0;
-    max-height: 40vh;
+    max-width: 100%;
+    max-height: 35vh;
     border-right: none;
-    border-bottom: 2px solid rgba(255,255,255,0.1);
-  }
-
-  .playground-debug {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "board"
-      "panels"
-      "serial";
+    border-bottom: 2px solid rgba(255,255,255,0.08);
   }
 }
