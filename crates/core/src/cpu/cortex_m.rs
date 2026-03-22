@@ -879,6 +879,7 @@ impl CortexM {
                                     wb_val = base.wrapping_add(offset as u32);
                                 }
                             }
+                            let mut branch_taken = false;
                             match op1 & 0x7 {
                                 0 => {
                                     let val = (self.read_reg(rt) & 0xFF) as u8;
@@ -903,7 +904,12 @@ impl CortexM {
                                 }
                                 5 => {
                                     if let Ok(v) = bus.read_u32(addr as u64) {
-                                        self.write_reg(rt, v);
+                                        if rt == 15 {
+                                            self.branch_to(v, bus)?;
+                                            branch_taken = true;
+                                        } else {
+                                            self.write_reg(rt, v);
+                                        }
                                     }
                                 }
                                 _ => {
@@ -914,7 +920,9 @@ impl CortexM {
                                 if wb {
                                     self.write_reg(rn, wb_val);
                                 }
-                                pc_increment = 4;
+                                if !branch_taken {
+                                    pc_increment = 4;
+                                }
                             }
                         } else {
                             // Register offset (T2)
@@ -925,6 +933,7 @@ impl CortexM {
                             let base = self.read_reg(rn);
                             let offset = self.read_reg(rm).wrapping_shl(imm2 as u32);
                             let addr = base.wrapping_add(offset);
+                            let mut branch_taken = false;
                             match op1 & 0x7 {
                                 1 => {
                                     if let Ok(v) = bus.read_u8(addr as u64) {
@@ -938,12 +947,19 @@ impl CortexM {
                                 }
                                 5 => {
                                     if let Ok(v) = bus.read_u32(addr as u64) {
-                                        self.write_reg(rt, v);
+                                        if rt == 15 {
+                                            self.branch_to(v, bus)?;
+                                            branch_taken = true;
+                                        } else {
+                                            self.write_reg(rt, v);
+                                        }
                                     }
                                 }
                                 _ => {}
                             }
-                            pc_increment = 4;
+                            if !branch_taken {
+                                pc_increment = 4;
+                            }
                         }
                     } else if (h1 & 0xFB00) == 0xF000 && (h2 & 0x8000) == 0 {
                         // Data-processing (modified immediate) - repeated here for safety but usually handled by DataProcImm32
