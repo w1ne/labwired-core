@@ -312,6 +312,13 @@ jobs:
             rollback_foundry
             exit 1
           fi
+
+          # Reload Caddy config in-place (bind-mounted Caddyfile updated on disk;
+          # docker compose up -d does not restart caddy if only the file contents changed)
+          docker compose --env-file .env -f docker-compose.prod.yml exec -T caddy \
+            caddy reload --config /etc/caddy/Caddyfile --force || \
+            docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+
           docker compose --env-file .env -f docker-compose.prod.yml ps
 
           if ! verify_foundry; then

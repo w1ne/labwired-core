@@ -127,4 +127,9 @@ jobs:
           docker compose --env-file .env -f docker-compose.prod.yml ps
           docker compose --env-file .env -f docker-compose.prod.yml logs --tail=120 foundry-backend
 
+          # Reload Caddy so any updated Caddyfile takes effect without full restart
+          docker compose --env-file .env -f docker-compose.prod.yml exec -T caddy \
+            caddy reload --config /etc/caddy/Caddyfile --force || \
+            docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+
           verify_foundry
