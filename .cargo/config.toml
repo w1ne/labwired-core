@@ -1,5 +1,6 @@
-# Linker configuration for ARM targets is handled in build.rs
-# of respective crates to avoid global interference.
+# Linker configuration for ARM targets.
+# cortex-m-rt 0.7.x does not emit rustc-link-arg=-Tlink.x automatically;
+# this config.toml provides it globally for all thumbv6m targets.
 
 [target.thumbv6m-none-eabi]
 rustflags = ["-C", "link-arg=-Tlink.x"]
