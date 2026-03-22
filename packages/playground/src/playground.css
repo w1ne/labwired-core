@@ -167,7 +167,13 @@ html, body, #root {
   border-right: 1px solid rgba(255,255,255,0.08);
   background: #181825;
   flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
 }
+.editor-sidebar-left::-webkit-scrollbar { width: 4px; }
+.editor-sidebar-left::-webkit-scrollbar-track { background: transparent; }
+.editor-sidebar-left::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+.editor-sidebar-left::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
 .editor-center {
   flex: 1;
@@ -313,7 +319,13 @@ html, body, #root {
   border-left: 1px solid rgba(255,255,255,0.08);
   background: #181825;
   flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
 }
+.editor-sidebar-right::-webkit-scrollbar { width: 4px; }
+.editor-sidebar-right::-webkit-scrollbar-track { background: transparent; }
+.editor-sidebar-right::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+.editor-sidebar-right::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
 /* ===== Component Palette ===== */
 .editor-palette {
