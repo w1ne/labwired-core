@@ -191,8 +191,8 @@ impl CortexM {
     }
 
     fn branch_to<B: Bus + ?Sized>(&mut self, addr: u32, bus: &mut B) -> SimResult<()> {
-        if (addr & 0xF000_0000) == 0xF000_0000 {
-            // EXC_RETURN logic
+        if (addr & 0xFFFFFFF0) == 0xFFFFFFF0 {
+            // EXC_RETURN: valid values are 0xFFFFFFF1/F9/FD (and FPU variants E1/E9/ED)
             self.exception_return(bus)?;
         } else {
             self.pc = addr & !1;
@@ -210,7 +210,7 @@ impl CortexM {
         self.r3 = bus.read_u32((frame_ptr + 12) as u64)?;
         self.r12 = bus.read_u32((frame_ptr + 16) as u64)?;
         self.lr = bus.read_u32((frame_ptr + 20) as u64)?;
-        self.pc = bus.read_u32((frame_ptr + 24) as u64)?;
+        self.pc = bus.read_u32((frame_ptr + 24) as u64)? & !1;
         self.xpsr = bus.read_u32((frame_ptr + 28) as u64)?;
 
         self.sp = frame_ptr + 32;
@@ -769,12 +769,23 @@ impl CortexM {
                     pc_increment = 4;
                 }
                 Instruction::LdrImm32 { rt, rn, imm12 } => {
-                    let base = self.read_reg(rn);
+                    // When rn==PC, ARM spec requires Align(PC+4, 4) as base (literal load)
+                    let base = if rn == 15 {
+                        (self.pc.wrapping_add(4)) & !3
+                    } else {
+                        self.read_reg(rn)
+                    };
                     let addr = base.wrapping_add(imm12 as u32);
                     if let Ok(val) = bus.read_u32(addr as u64) {
-                        self.write_reg(rt, val);
+                        if rt == 15 {
+                            // LDR PC, [...] is an interworking branch — must go through branch_to
+                            self.branch_to(val, bus)?;
+                            pc_increment = 0;
+                        } else {
+                            self.write_reg(rt, val);
+                        }
                     }
-                    pc_increment = 4;
+                    // pc_increment stays at 4 (set by decode) unless we took a branch above
                 }
                 Instruction::StrImm32 { rt, rn, imm12 } => {
                     let base = self.read_reg(rn);
