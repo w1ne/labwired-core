@@ -41,12 +41,13 @@ jobs:
             fi
           fi
 
-          docker compose --env-file .env -f docker-compose.prod.yml up -d foundry-backend caddy
-          sleep 10
+          docker compose --env-file .env -f docker-compose.prod.yml up -d
+          docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+          sleep 5
           docker compose --env-file .env -f docker-compose.prod.yml ps
           docker compose --env-file .env -f docker-compose.prod.yml logs --tail=50 foundry-backend || true
-          curl -i --max-time 10 http://127.0.0.1:8080/v1/health
-          curl -i --max-time 10 http://127.0.0.1:8080/v1/catalog
+          curl -fsS --retry 10 --retry-all-errors --retry-delay 3 https://foundry.labwired.com/v1/health
+          curl -fsS --retry 10 --retry-all-errors --retry-delay 3 https://foundry.labwired.com/v1/catalog
 
   cleanup:
     if: github.event_name == 'schedule' || github.event.inputs.task == 'cleanup' || github.event.inputs.task == ''

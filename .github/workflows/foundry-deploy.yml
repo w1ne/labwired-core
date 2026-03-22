@@ -222,6 +222,8 @@ jobs:
 
             docker compose --env-file .env -f docker-compose.prod.yml pull
             docker compose --env-file .env -f docker-compose.prod.yml up -d
+            docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+            sleep 5
             docker compose --env-file .env -f docker-compose.prod.yml ps
           }
 
