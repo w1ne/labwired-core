@@ -1,14 +1,13 @@
 {
   "name": "@labwired/playground",
-  "version": "0.1.0",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "lint": "eslint ."
+    "test": "vitest run"
   },
   "dependencies": {
     "@labwired/ui": "file:../ui",

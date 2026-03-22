@@ -10,7 +10,7 @@ node_modules
 *.disasm
 *.bin
 tests/scripts/uart_check.yaml
-editors/vscode/out
+vscode/out
 /out/
 
 # AI Secrets
