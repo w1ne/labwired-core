@@ -120,6 +120,7 @@ export function App() {
   const loadWasm = useCallback(async () => {
     if (wasmModule) return wasmModule;
     const wasmUrl = new URL(`${import.meta.env.BASE_URL}wasm/labwired_wasm.js`, window.location.origin);
+    wasmUrl.searchParams.set('v', String(__BUILD_TIME__));
     const mod = await import(/* @vite-ignore */ wasmUrl.href);
     await mod.default();
     setWasmModule(mod as WasmModule);
