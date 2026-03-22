@@ -1,0 +1,4 @@
+name: "stm32f103-bare"
+chip: "../chips/stm32f103.yaml"
+external_devices: []
+board_io: []

@@ -24,3 +24,6 @@ serde_yaml.workspace = true
 memmap2.workspace = true
 pio.workspace = true
 pio-parser.workspace = true
+
+[dev-dependencies]
+labwired-loader = { path = "../loader" }

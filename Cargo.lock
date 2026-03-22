@@ -534,6 +534,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-esp32c3-demo"
+version = "0.1.0"
+dependencies = [
+ "panic-halt",
+ "riscv 0.10.1",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-f401-demo"
 version = "0.13.0"
 dependencies = [
@@ -888,6 +897,7 @@ dependencies = [
  "bitflags",
  "labwired-config",
  "labwired-ir",
+ "labwired-loader",
  "memmap2 0.9.10",
  "pio",
  "pio-parser",

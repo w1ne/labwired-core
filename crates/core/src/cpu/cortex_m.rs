@@ -215,7 +215,10 @@ impl CortexM {
 
         self.sp = frame_ptr + 32;
 
-        tracing::info!("Exception return to {:#x}", self.pc);
+        tracing::debug!(
+            "EXC_RETURN: frame={:#010x} restored LR={:#010x} PC={:#010x}",
+            frame_ptr, self.lr, self.pc
+        );
         Ok(())
     }
 }
@@ -412,6 +415,8 @@ impl CortexM {
             let frame_ptr = sp.wrapping_sub(32);
 
             // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR
+            let stacked_lr = self.lr;
+            let stacked_pc = self.pc;
             let _ = bus.write_u32(frame_ptr as u64, self.r0);
             let _ = bus.write_u32((frame_ptr + 4) as u64, self.r1);
             let _ = bus.write_u32((frame_ptr + 8) as u64, self.r2);
@@ -431,11 +436,9 @@ impl CortexM {
             let vector_addr = vtor + (exception_num * 4);
             if let Ok(handler) = bus.read_u32(vector_addr as u64) {
                 self.pc = handler & !1;
-                tracing::info!(
-                    "Exception {} trigger, jump to {:#x} (VTOR={:#x})",
-                    exception_num,
-                    self.pc,
-                    vtor
+                tracing::debug!(
+                    "EXC_ENTRY: exc={} handler={:#010x} frame={:#010x} stacked_lr={:#010x} stacked_pc={:#010x}",
+                    exception_num, self.pc, frame_ptr, stacked_lr, stacked_pc
                 );
             }
 
@@ -851,15 +854,31 @@ impl CortexM {
                         let rn = (h1 & 0xF) as u8;
                         let rt = ((h2 >> 12) & 0xF) as u8;
                         let is_t4 = (op1 & 0x8) == 0;
-                        let is_reg_offset = is_t4 && (h2 & 0x0800) == 0;
+                        // When Rn=PC (rn==15), T4 form is always the PC-literal encoding
+                        // (LDR.W Rt, [PC, ±imm12]), never register-offset.
+                        let is_reg_offset = is_t4 && rn != 15 && (h2 & 0x0800) == 0;
                         if !is_reg_offset {
                             let mut supported = true;
                             let addr: u32;
                             let mut wb = false;
                             let mut wb_val = 0u32;
                             if !is_t4 {
-                                let offset = (h2 & 0xFFF) as i32;
-                                addr = self.read_reg(rn).wrapping_add(offset as u32);
+                                // T3: Rn-relative with unsigned imm12
+                                let base = if rn == 15 {
+                                    // PC-literal T3: Align(PC+4, 4) + imm12
+                                    (self.pc.wrapping_add(4)) & !3
+                                } else {
+                                    self.read_reg(rn)
+                                };
+                                let offset = (h2 & 0xFFF) as u32;
+                                addr = base.wrapping_add(offset);
+                            } else if rn == 15 {
+                                // PC-literal T2: LDR.W Rt, [PC, ±imm12]
+                                // U bit is bit 7 of h1; imm12 is h2[11:0]
+                                let imm12 = (h2 & 0xFFF) as u32;
+                                let u = (h1 >> 7) & 1;
+                                let base = (self.pc.wrapping_add(4)) & !3;
+                                addr = if u != 0 { base.wrapping_add(imm12) } else { base.wrapping_sub(imm12) };
                             } else {
                                 let p = (h2 >> 10) & 1;
                                 let u = (h2 >> 9) & 1;
@@ -905,6 +924,10 @@ impl CortexM {
                                 5 => {
                                     if let Ok(v) = bus.read_u32(addr as u64) {
                                         if rt == 15 {
+                                            if wb {
+                                                self.write_reg(rn, wb_val);
+                                                wb = false;
+                                            }
                                             self.branch_to(v, bus)?;
                                             branch_taken = true;
                                         } else {
@@ -1524,13 +1547,19 @@ impl CortexM {
 
                     if p {
                         if let Ok(val) = bus.read_u32(sp as u64) {
+                            // Commit SP before branching so EXC_RETURN unstacking reads the
+                            // hardware exception frame, not this function's software save area.
+                            sp = sp.wrapping_add(4);
+                            self.write_reg(13, sp);
                             self.branch_to(val, bus)?;
                             pc_increment = 0; // Branch taken
+                        } else {
+                            sp = sp.wrapping_add(4);
+                            self.write_reg(13, sp);
                         }
-                        sp = sp.wrapping_add(4);
+                    } else {
+                        self.write_reg(13, sp);
                     }
-
-                    self.write_reg(13, sp);
                 }
                 Instruction::Ldm { rn, registers } => {
                     let mut base = self.read_reg(rn);
