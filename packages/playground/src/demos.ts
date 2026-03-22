@@ -176,7 +176,7 @@ export const DEMO_PROJECTS: DemoProject[] = [
     description: 'LED and user button on Nucleo board. Press the button to interact!',
     systemYaml: F401_SYSTEM_YAML,
     chipYaml: STM32F401_CHIP_YAML,
-    firmwarePath: `${import.meta.env.BASE_URL}wasm/demo-blinky.bin`, // Reuse blinky firmware for now
+    firmwarePath: `${import.meta.env.BASE_URL}wasm/demo-nucleo-f401.elf`,
     firmware: new Uint8Array(0),
   },
 ];

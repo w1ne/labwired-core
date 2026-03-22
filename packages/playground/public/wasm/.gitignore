@@ -1,0 +1,9 @@
+# Ignore wasm-pack generated package metadata (not needed in git)
+package.json
+*.d.ts
+
+# Keep firmware ELFs and the WASM module in git for reproducible deploys
+\!*.bin
+\!*.elf
+\!*.wasm
+\!*.js

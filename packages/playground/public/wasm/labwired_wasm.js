@@ -1,6 +1,13 @@
 /* @ts-self-types="./labwired_wasm.d.ts" */
 
 export class WasmSimulator {
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WasmSimulator.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmSimulatorFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -10,6 +17,64 @@ export class WasmSimulator {
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmsimulator_free(ptr, 0);
+    }
+    /**
+     * Drain UART TX output bytes accumulated since the last call.
+     * @returns {Uint8Array}
+     */
+    drain_uart_output() {
+        const ret = wasm.wasmsimulator_drain_uart_output(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * Push bytes into all UART RX buffers (bidirectional serial input).
+     * @param {Uint8Array} data
+     */
+    feed_uart_input(data) {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.wasmsimulator_feed_uart_input(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * @param {Uint8Array} packet
+     * @returns {Uint8Array}
+     */
+    gdb_process_packet(packet) {
+        const ptr0 = passArray8ToWasm0(packet, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_gdb_process_packet(this.__wbg_ptr, ptr0, len0);
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
+     * Returns analog state for ADC and PWM board_io bindings.
+     * @returns {any}
+     */
+    get_board_io_analog_states() {
+        const ret = wasm.wasmsimulator_get_board_io_analog_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Returns the board_io configuration as a JSON array.
+     * Each entry: { id, kind, peripheral, pin, signal, active_high }
+     * @returns {any}
+     */
+    get_board_io_config() {
+        const ret = wasm.wasmsimulator_get_board_io_config(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Returns the current state of all board_io bindings as a JSON array.
+     * Each entry: { id, active }
+     * Uses peripheral snapshot() to read ODR regardless of register layout.
+     * @returns {any}
+     */
+    get_board_io_states() {
+        const ret = wasm.wasmsimulator_get_board_io_states(this.__wbg_ptr);
+        return ret;
     }
     /**
      * @returns {string}
@@ -27,6 +92,7 @@ export class WasmSimulator {
         }
     }
     /**
+     * Legacy LED state query (hardcoded GPIOB pin 5 for backward compat).
      * @returns {boolean}
      */
     get_led_state() {
@@ -39,6 +105,25 @@ export class WasmSimulator {
     get_pc() {
         const ret = wasm.wasmsimulator_get_pc(this.__wbg_ptr);
         return ret >>> 0;
+    }
+    /**
+     * List all peripherals: [{ name, base_address }]
+     * @returns {any}
+     */
+    get_peripheral_list() {
+        const ret = wasm.wasmsimulator_get_peripheral_list(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Get a peripheral's full state snapshot as JSON.
+     * @param {string} name
+     * @returns {any}
+     */
+    get_peripheral_snapshot(name) {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_peripheral_snapshot(this.__wbg_ptr, ptr0, len0);
+        return ret;
     }
     /**
      * @param {number} id
@@ -56,6 +141,8 @@ export class WasmSimulator {
         return ret;
     }
     /**
+     * Legacy constructor: hardcoded STM32F107 Cortex-M3 with 128KB flash + 20KB RAM.
+     * Kept for backward compatibility with the existing landing page sandbox.
      * @param {Uint8Array} firmware
      */
     constructor(firmware) {
@@ -70,6 +157,26 @@ export class WasmSimulator {
         return this;
     }
     /**
+     * Config-driven constructor: initialize from system YAML, chip YAML, and firmware ELF.
+     * @param {string} system_yaml
+     * @param {string} chip_yaml
+     * @param {Uint8Array} firmware
+     * @returns {WasmSimulator}
+     */
+    static new_from_config(system_yaml, chip_yaml, firmware) {
+        const ptr0 = passStringToWasm0(system_yaml, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(chip_yaml, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray8ToWasm0(firmware, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_new_from_config(ptr0, len0, ptr1, len1, ptr2, len2);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmSimulator.__wrap(ret[0]);
+    }
+    /**
      * @param {number} addr
      * @param {number} len
      * @returns {Uint8Array}
@@ -81,6 +188,33 @@ export class WasmSimulator {
         return v1;
     }
     /**
+     * Inject an ADC value into a named ADC peripheral's data register.
+     * @param {string} peripheral_name
+     * @param {number} value
+     */
+    set_adc_value(peripheral_name, value) {
+        const ptr0 = passStringToWasm0(peripheral_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_adc_value(this.__wbg_ptr, ptr0, len0, value);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set an input board_io binding (e.g. button press).
+     * Writes to the GPIO IDR register bit for the specified binding.
+     * @param {string} id
+     * @param {boolean} active
+     */
+    set_board_io_input(id, active) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_board_io_input(this.__wbg_ptr, ptr0, len0, active);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * @param {number} cycles
      */
     step(cycles) {
@@ -88,6 +222,18 @@ export class WasmSimulator {
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
+    }
+    /**
+     * Execute up to max_cycles steps, returning the number actually executed.
+     * @param {number} max_cycles
+     * @returns {number}
+     */
+    step_batch(max_cycles) {
+        const ret = wasm.wasmsimulator_step_batch(this.__wbg_ptr, max_cycles);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
     }
     step_single() {
         const ret = wasm.wasmsimulator_step_single(this.__wbg_ptr);
@@ -101,6 +247,10 @@ if (Symbol.dispose) WasmSimulator.prototype[Symbol.dispose] = WasmSimulator.prot
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg_Error_4577686b3a6d9b3a: function(arg0, arg1) {
+            const ret = Error(getStringFromWasm0(arg0, arg1));
+            return ret;
+        },
         __wbg___wbindgen_debug_string_ddde1867f49c2442: function(arg0, arg1) {
             const ret = debugString(arg1);
             const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -108,19 +258,53 @@ function __wbg_get_imports() {
             getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         },
+        __wbg___wbindgen_is_string_7debe47dc1e045c2: function(arg0) {
+            const ret = typeof(arg0) === 'string';
+            return ret;
+        },
         __wbg___wbindgen_throw_39bc967c0e5a9b58: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
+        },
+        __wbg_new_92df58a8ec3bfb6b: function() {
+            const ret = new Map();
+            return ret;
         },
         __wbg_new_cbee8c0d5c479eac: function() {
             const ret = new Array();
             return ret;
         },
+        __wbg_new_ed69e637b553a997: function() {
+            const ret = new Object();
+            return ret;
+        },
         __wbg_set_4c81cfb5dc3a333c: function(arg0, arg1, arg2) {
             arg0[arg1 >>> 0] = arg2;
         },
-        __wbindgen_cast_0000000000000001: function(arg0, arg1) {
+        __wbg_set_6be42768c690e380: function(arg0, arg1, arg2) {
+            arg0[arg1] = arg2;
+        },
+        __wbg_set_cfc6de03f990decf: function(arg0, arg1, arg2) {
+            const ret = arg0.set(arg1, arg2);
+            return ret;
+        },
+        __wbindgen_cast_0000000000000001: function(arg0) {
+            // Cast intrinsic for `F64 -> Externref`.
+            const ret = arg0;
+            return ret;
+        },
+        __wbindgen_cast_0000000000000002: function(arg0) {
+            // Cast intrinsic for `I64 -> Externref`.
+            const ret = arg0;
+            return ret;
+        },
+        __wbindgen_cast_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
+            return ret;
+        },
+        __wbindgen_cast_0000000000000004: function(arg0) {
+            // Cast intrinsic for `U64 -> Externref`.
+            const ret = BigInt.asUintN(64, arg0);
             return ret;
         },
         __wbindgen_init_externref_table: function() {

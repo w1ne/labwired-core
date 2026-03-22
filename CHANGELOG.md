@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Web Playground**: `packages/playground` — interactive browser-based simulator with Monaco code editor, board canvas, sim controls, register inspector, serial monitor, and instruction trace. Ships with pre-compiled Arduino demo firmwares (STM32F103 Nucleo blinky, STM32F401RE Nucleo LED+button).
+- **labwired-ui package**: Reusable React component library (`packages/ui`) exporting `BoardCanvas`, `Led`, `PushButton`, `SimControls`, `RegisterGrid`, `MemoryInspector`, `InstructionTrace`, `SerialMonitor`, `SimulatorBridge`, and a full schematic editor.
+- **Arduino Firmware Build Pipeline**: `packages/playground/build-firmware.sh` compiles Arduino sketches for STM32 targets via `arduino-cli` + `STMicroelectronics:stm32` core and rebuilds the WASM module.
+- **Board/Chip Images**: Catalog assets now carry `image_url`; thumbnails appear in the asset table and the detail view header.
 - **Vision Completion Gaps**: Closed all 6 documented gaps blocking "vision complete" status.
 - **Determinism Proof CI Gate**: Trace-level SHA-256 hash comparison across 5 runs in `determinism-proof` job; non-deterministic HashMap serialization fixed with BTreeMap.
 - **Auto-Generated Compatibility Matrix**: `core/scripts/generate_compat_matrix.py` walks chip configs and smoke tests; uploaded as CI artifact per build.
