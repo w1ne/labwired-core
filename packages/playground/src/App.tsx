@@ -29,6 +29,12 @@ import {
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { BoardPicker } from './BoardPicker';
+import {
+  CheckIcon, UploadIcon, CodeIcon, PanelBottomIcon,
+  ShareIcon, ExportIcon, ImportIcon, UndoIcon, RedoIcon,
+  StopIcon, SidebarLeftIcon, SidebarRightIcon,
+  ChevronLeftIcon, ChevronRightIcon,
+} from './Icons';
 
 type BottomTab = 'output' | 'serial' | 'registers' | 'trace' | 'memory';
 
@@ -74,6 +80,8 @@ export function App() {
   const [bottomTab, setBottomTab] = useState<BottomTab>('output');
   const [showCode, setShowCode] = useState(true);
   const [showBottomPanel, setShowBottomPanel] = useState(true);
+  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+  const [showRightSidebar, setShowRightSidebar] = useState(true);
   const embed = isEmbedMode();
 
   // Editor state
@@ -444,15 +452,6 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [editor]);
 
-  if (loading) {
-    return (
-      <div className="loading-overlay">
-        <div className="spinner" />
-        <span>{compiling ? 'Compiling...' : 'Loading simulator engine...'}</span>
-      </div>
-    );
-  }
-
   // Bottom tab content
   const bottomContent = () => {
     switch (bottomTab) {
@@ -474,84 +473,133 @@ export function App() {
       {/* ===== Header ===== */}
       {!embed && (
         <div className="playground-header">
-          <span className="logo">LabWired</span>
-
-          {/* Board picker (from catalog) */}
-          <BoardPicker
-            catalog={catalog}
-            selectedBoardId={selectedBoard.boardId}
-            onSelect={handleBoardSelect}
-          />
-
-          {/* Example sketches */}
-          <select
-            className="project-selector"
-            value=""
-            onChange={(e) => {
-              const sketch = EXAMPLE_SKETCHES.find((s) => s.name === e.target.value);
-              if (sketch) setSource(sketch.source);
-            }}
-          >
-            <option value="" disabled>Examples...</option>
-            {EXAMPLE_SKETCHES.map((s) => (
-              <option key={s.name} value={s.name}>{s.name}</option>
-            ))}
-          </select>
+          {/* --- Project group --- */}
+          <div className="toolbar-group">
+            <span className="logo">LabWired</span>
+            <BoardPicker
+              catalog={catalog}
+              selectedBoardId={selectedBoard.boardId}
+              onSelect={handleBoardSelect}
+            />
+            <select
+              className="project-selector"
+              value=""
+              onChange={(e) => {
+                const sketch = EXAMPLE_SKETCHES.find((s) => s.name === e.target.value);
+                if (sketch) setSource(sketch.source);
+              }}
+            >
+              <option value="" disabled>Examples...</option>
+              {EXAMPLE_SKETCHES.map((s) => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          </div>
 
           <div className="header-separator" />
 
-          <button className="toolbar-btn toolbar-btn-verify" onClick={handleCompile} disabled={compiling}>
-            {compiling ? 'Compiling...' : 'Verify'}
-          </button>
-          <button className="toolbar-btn" onClick={handleRun} disabled={compiling || loading}>
-            Upload
-          </button>
+          {/* --- Build group --- */}
+          <div className="toolbar-group">
+            <button className="toolbar-btn toolbar-btn-primary toolbar-btn-verify" onClick={handleCompile} disabled={compiling}>
+              <CheckIcon size={14} /> {compiling ? 'Compiling...' : 'Verify'}
+            </button>
+            <button className="toolbar-btn toolbar-btn-primary" onClick={handleRun} disabled={compiling || loading}>
+              <UploadIcon size={14} /> Upload
+            </button>
+          </div>
 
-          {/* Sim controls inline when simulation is active */}
+          {/* --- Sim controls (inline when active) --- */}
           {simActive && (
             <>
               <div className="header-separator" />
-              <SimControls
-                running={running}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onStep={handleStep}
-                onReset={handleReset}
-                pc={simState.pc}
-                cycles={simState.cycles}
-              />
-              <button className="toolbar-btn toolbar-btn-ghost toolbar-btn-stop" onClick={handleStop}>
-                Stop
-              </button>
+              <div className="toolbar-group">
+                <SimControls
+                  variant="dark"
+                  running={running}
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onStep={handleStep}
+                  onReset={handleReset}
+                  pc={simState.pc}
+                  cycles={simState.cycles}
+                />
+                <button className="toolbar-btn toolbar-btn-ghost toolbar-btn-stop" onClick={handleStop} title="Stop simulation">
+                  <StopIcon size={14} />
+                </button>
+              </div>
             </>
           )}
 
           <div className="header-spacer" />
 
-          <button
-            className={`toolbar-btn toolbar-btn-ghost ${showCode ? 'active' : ''}`}
-            onClick={() => setShowCode(!showCode)}
-            title="Toggle code editor"
-          >
-            Code
-          </button>
-          <button className="toolbar-btn toolbar-btn-ghost" onClick={handleShare}>Share</button>
-          <button className="toolbar-btn toolbar-btn-ghost" onClick={handleExport}>Export</button>
-          <button className="toolbar-btn toolbar-btn-ghost" onClick={handleImport}>Import</button>
-          <button
-            className="toolbar-btn toolbar-btn-ghost"
-            onClick={editor.undo}
-            disabled={editor.state.undoStack.length === 0}
-          >
-            Undo
-          </button>
-          <button
-            className="toolbar-btn toolbar-btn-ghost"
-            onClick={editor.redo}
-            disabled={editor.state.redoStack.length === 0}
-          >
-            Redo
-          </button>
+          {/* --- View group --- */}
+          <div className="toolbar-group">
+            <button
+              className={`toolbar-btn toolbar-btn-ghost ${showCode ? 'active' : ''}`}
+              onClick={() => setShowCode(!showCode)}
+              title="Toggle code editor"
+            >
+              <CodeIcon size={14} />
+            </button>
+            <button
+              className={`toolbar-btn toolbar-btn-ghost ${showBottomPanel ? 'active' : ''}`}
+              onClick={() => setShowBottomPanel(!showBottomPanel)}
+              title="Toggle bottom panel"
+            >
+              <PanelBottomIcon size={14} />
+            </button>
+            <button
+              className={`toolbar-btn toolbar-btn-ghost ${showLeftSidebar ? 'active' : ''}`}
+              onClick={() => setShowLeftSidebar(!showLeftSidebar)}
+              title="Toggle components panel"
+            >
+              <SidebarLeftIcon size={14} />
+            </button>
+            <button
+              className={`toolbar-btn toolbar-btn-ghost ${showRightSidebar ? 'active' : ''}`}
+              onClick={() => setShowRightSidebar(!showRightSidebar)}
+              title="Toggle properties panel"
+            >
+              <SidebarRightIcon size={14} />
+            </button>
+          </div>
+
+          <div className="header-separator" />
+
+          {/* --- File group --- */}
+          <div className="toolbar-group">
+            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleShare} title="Share project">
+              <ShareIcon size={14} />
+            </button>
+            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleExport} title="Export project">
+              <ExportIcon size={14} />
+            </button>
+            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleImport} title="Import project">
+              <ImportIcon size={14} />
+            </button>
+          </div>
+
+          <div className="header-separator" />
+
+          {/* --- History group --- */}
+          <div className="toolbar-group">
+            <button
+              className="toolbar-btn toolbar-btn-ghost"
+              onClick={editor.undo}
+              disabled={editor.state.undoStack.length === 0}
+              title="Undo (Ctrl+Z)"
+            >
+              <UndoIcon size={14} />
+            </button>
+            <button
+              className="toolbar-btn toolbar-btn-ghost"
+              onClick={editor.redo}
+              disabled={editor.state.redoStack.length === 0}
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <RedoIcon size={14} />
+            </button>
+          </div>
 
           {error && <span className="header-error">{error}</span>}
         </div>
@@ -560,9 +608,22 @@ export function App() {
       {/* ===== Unified Layout ===== */}
       <div className="editor-layout">
         {/* Component palette (left sidebar) */}
-        <div className="editor-sidebar-left">
-          <ComponentPalette onAddPart={handleAddPartFromPalette} />
-        </div>
+        {showLeftSidebar && (
+          <div className="editor-sidebar-left">
+            <ComponentPalette onAddPart={handleAddPartFromPalette} />
+          </div>
+        )}
+
+        {/* Collapsed left sidebar tab */}
+        {!showLeftSidebar && (
+          <button
+            className="sidebar-toggle sidebar-toggle-left"
+            onClick={() => setShowLeftSidebar(true)}
+            title="Show components"
+          >
+            <ChevronRightIcon size={12} />
+          </button>
+        )}
 
         {/* Main content area */}
         <div className="editor-center">
@@ -621,7 +682,7 @@ export function App() {
                   onClick={() => setShowBottomPanel(false)}
                   title="Hide panel"
                 >
-                  ×
+                  &times;
                 </button>
               </div>
               <div className="bottom-content">
@@ -629,29 +690,40 @@ export function App() {
               </div>
             </div>
           )}
-
-          {/* Collapsed bottom panel toggle */}
-          {!showBottomPanel && (
-            <button
-              className="bottom-panel-toggle"
-              onClick={() => setShowBottomPanel(true)}
-            >
-              Output / Serial / Debug
-            </button>
-          )}
         </div>
 
         {/* Property panel (right sidebar) */}
-        <div className="editor-sidebar-right">
-          <PropertyPanel
-            parts={selectedParts}
-            onUpdateAttrs={editor.updateAttrs}
-            onDelete={editor.deleteSelected}
-            onRotate={editor.rotatePart}
-            onResize={editor.resizePart}
-          />
-        </div>
+        {showRightSidebar && (
+          <div className="editor-sidebar-right">
+            <PropertyPanel
+              parts={selectedParts}
+              onUpdateAttrs={editor.updateAttrs}
+              onDelete={editor.deleteSelected}
+              onRotate={editor.rotatePart}
+              onResize={editor.resizePart}
+            />
+          </div>
+        )}
+
+        {/* Collapsed right sidebar tab */}
+        {!showRightSidebar && (
+          <button
+            className="sidebar-toggle sidebar-toggle-right"
+            onClick={() => setShowRightSidebar(true)}
+            title="Show properties"
+          >
+            <ChevronLeftIcon size={12} />
+          </button>
+        )}
       </div>
+
+      {/* ===== Loading overlay (on top of UI, not replacing it) ===== */}
+      {loading && (
+        <div className="loading-overlay">
+          <div className="spinner" />
+          <span>{compiling ? 'Compiling...' : 'Loading simulator engine...'}</span>
+        </div>
+      )}
     </div>
   );
 }

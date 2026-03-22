@@ -10,6 +10,8 @@ export interface SimControlsProps {
   pc?: number;
   /** Total cycles executed. */
   cycles?: number;
+  /** Color variant: 'light' (default) or 'dark' for dark-themed UIs. */
+  variant?: 'light' | 'dark';
   style?: CSSProperties;
 }
 
@@ -21,35 +23,54 @@ export function SimControls({
   onReset,
   pc,
   cycles,
+  variant = 'light',
   style,
 }: SimControlsProps) {
+  const dark = variant === 'dark';
+
+  const containerStyle: CSSProperties = dark
+    ? {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        padding: '0 0.25rem',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 0,
+        boxShadow: 'none',
+        fontFamily: 'var(--lw-font-mono, monospace)',
+        fontSize: '0.8rem',
+        ...style,
+      }
+    : {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        padding: '0.5rem 1rem',
+        background: 'var(--lw-bg, #fff)',
+        border: 'var(--lw-border, 2px solid #000)',
+        borderRadius: 'var(--lw-radius-sm, 8px)',
+        boxShadow: 'var(--lw-shadow, 4px 4px 0px #000)',
+        fontFamily: 'var(--lw-font-mono, monospace)',
+        fontSize: '0.8rem',
+        ...style,
+      };
+
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.75rem',
-      padding: '0.5rem 1rem',
-      background: 'var(--lw-bg, #fff)',
-      border: 'var(--lw-border, 2px solid #000)',
-      borderRadius: 'var(--lw-radius-sm, 8px)',
-      boxShadow: 'var(--lw-shadow, 4px 4px 0px #000)',
-      fontFamily: 'var(--lw-font-mono, monospace)',
-      fontSize: '0.8rem',
-      ...style,
-    }}>
+    <div style={containerStyle}>
       {running ? (
-        <ControlButton onClick={onPause} title="Pause">
+        <ControlButton onClick={onPause} title="Pause" dark={dark}>
           <PauseIcon />
         </ControlButton>
       ) : (
-        <ControlButton onClick={onPlay} title="Run">
+        <ControlButton onClick={onPlay} title="Run" dark={dark}>
           <PlayIcon />
         </ControlButton>
       )}
-      <ControlButton onClick={onStep} title="Step" disabled={running}>
+      <ControlButton onClick={onStep} title="Step" disabled={running} dark={dark}>
         <StepIcon />
       </ControlButton>
-      <ControlButton onClick={onReset} title="Reset">
+      <ControlButton onClick={onReset} title="Reset" dark={dark}>
         <ResetIcon />
       </ControlButton>
 
@@ -57,8 +78,8 @@ export function SimControls({
         <div style={{
           marginLeft: 'auto',
           display: 'flex',
-          gap: '1rem',
-          color: 'var(--lw-gray, #444)',
+          gap: '0.75rem',
+          color: dark ? 'var(--lw-gray, #888)' : 'var(--lw-gray, #444)',
           fontSize: '0.75rem',
         }}>
           {pc !== undefined && <span>PC: 0x{pc.toString(16).toUpperCase().padStart(8, '0')}</span>}
@@ -69,18 +90,30 @@ export function SimControls({
   );
 }
 
-function ControlButton({ onClick, title, disabled, children }: {
+function ControlButton({ onClick, title, disabled, dark, children }: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
+  dark?: boolean;
   children: React.ReactNode;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      style={{
+  const btnStyle: CSSProperties = dark
+    ? {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 28,
+        height: 28,
+        padding: 0,
+        background: disabled ? 'transparent' : 'rgba(255,255,255,0.08)',
+        color: disabled ? '#555' : '#d4d4d4',
+        border: disabled ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 4,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        boxShadow: 'none',
+        transition: 'all 0.15s',
+      }
+    : {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -93,10 +126,14 @@ function ControlButton({ onClick, title, disabled, children }: {
         borderRadius: 6,
         cursor: disabled ? 'not-allowed' : 'pointer',
         boxShadow: disabled ? 'none' : '2px 2px 0px #000',
-        textTransform: 'none' as const,
-        letterSpacing: 'normal',
-        fontSize: '0.8rem',
-      }}
+      };
+
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      style={btnStyle}
     >
       {children}
     </button>
