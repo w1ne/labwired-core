@@ -4,10 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LabWired Playground</title>
-  <link rel="icon" type="image/svg+xml" href="/playground/favicon.svg" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #12121a; }
+    #root { height: 100%; }
+    #loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: #555; font: 13px/1 monospace; letter-spacing: .05em;
+    }
+  </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><div id="loading">Loading…</div></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
