@@ -1,0 +1,43 @@
+/* LabWired Design Tokens
+ * Shared across all LabWired frontends (playground, foundry, landing page).
+ * Import: @import '@labwired/ui/tokens.css';
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap');
+
+:root {
+  /* Colors */
+  --lw-bg: #ffffff;
+  --lw-bg-alt: #f8f9fa;
+  --lw-black: #000000;
+  --lw-gray: #444444;
+  --lw-gray-light: #888888;
+  --lw-pink: #e83e8c;
+  --lw-green: #27c93f;
+  --lw-red: #ff3333;
+  --lw-cyan: #00ffff;
+  --lw-yellow: #ffcc00;
+
+  /* Dark theme (for debugger panels) */
+  --lw-dark-bg: #1e1e28;
+  --lw-dark-bg-alt: #111111;
+  --lw-dark-text: #d4d4d4;
+  --lw-dark-border: #333333;
+
+  /* Borders & Shadows */
+  --lw-border: 2px solid #000000;
+  --lw-border-subtle: 1px solid #d8d8d8;
+  --lw-shadow: 4px 4px 0px #000000;
+  --lw-shadow-lg: 8px 8px 0px #000000;
+  --lw-radius: 12px;
+  --lw-radius-sm: 8px;
+  --lw-radius-pill: 20px;
+
+  /* Typography */
+  --lw-font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --lw-font-heading: 'Outfit', sans-serif;
+  --lw-font-mono: 'JetBrains Mono', monospace;
+
+  /* Transitions */
+  --lw-transition: all 0.1s ease;
+}
