@@ -127,9 +127,18 @@ jobs:
           docker compose --env-file .env -f docker-compose.prod.yml ps
           docker compose --env-file .env -f docker-compose.prod.yml logs --tail=120 foundry-backend
 
-          # Reload Caddy so any updated Caddyfile takes effect without full restart
+          # Print the Caddyfile on disk to verify it has the expected routes
+          echo "=== Caddyfile on disk ==="
+          cat "$DEPLOY_PATH/Caddyfile"
+          echo "=== End Caddyfile ==="
+
+          # Print Caddy's active in-memory config via admin API
+          echo "=== Caddy active routes (playground check) ==="
           docker compose --env-file .env -f docker-compose.prod.yml exec -T caddy \
-            caddy reload --config /etc/caddy/Caddyfile --force || \
-            docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+            wget -qO- http://localhost:2019/config/ 2>/dev/null | python3 -c "import sys,json; cfg=json.load(sys.stdin); routes=cfg.get('apps',{}).get('http',{}).get('servers',{}).get('srv0',{}).get('routes',cfg.get('apps',{}).get('http',{}).get('servers',{})); print(json.dumps(routes, indent=2))" 2>/dev/null || echo "(admin API check failed)"
+
+          # Restart Caddy to ensure it picks up the new Caddyfile
+          docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+          sleep 5
 
           verify_foundry

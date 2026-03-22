@@ -313,11 +313,12 @@ jobs:
             exit 1
           fi
 
-          # Reload Caddy config in-place (bind-mounted Caddyfile updated on disk;
-          # docker compose up -d does not restart caddy if only the file contents changed)
-          docker compose --env-file .env -f docker-compose.prod.yml exec -T caddy \
-            caddy reload --config /etc/caddy/Caddyfile --force || \
-            docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+          # Restart Caddy so it re-reads the updated Caddyfile from disk.
+          # docker compose up -d does not restart caddy when only the bind-mounted
+          # Caddyfile contents change; caddy reload alone can fail silently on
+          # config changes that require a full service restart.
+          docker compose --env-file .env -f docker-compose.prod.yml restart caddy
+          sleep 5
 
           docker compose --env-file .env -f docker-compose.prod.yml ps
 
