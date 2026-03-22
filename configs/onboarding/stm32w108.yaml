@@ -9,7 +9,7 @@ code_example: "/* Zephyr Blinky for STM32 */\n#include <zephyr/kernel.h>\n#inclu
   \    while (1) {\n        gpio_pin_toggle_dt(&led);\n        k_msleep(500);\n  \
   \  }\n}"
 pass_rate: 100
-verified: false
+verified: true
 system: systems/onboarding/stm32w108.yaml
 validation:
   method: ci-arm-fixture-simulation
@@ -18,6 +18,6 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-20T01:17:15.883680+00:00'
-  run_url: ''
+  timestamp_utc: '2026-03-22T00:04:21.066281+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/23391706095/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/stm32w108.md

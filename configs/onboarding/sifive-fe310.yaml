@@ -15,6 +15,6 @@ validation:
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-20T01:17:14.602879+00:00'
-  run_url: ''
+  timestamp_utc: '2026-03-22T00:04:20.602976+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/23391706095/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/sifive-fe310.md

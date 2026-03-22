@@ -5,7 +5,7 @@ family: NXP MPC55xx
 url: https://www.nxp.com/products/processors-and-microcontrollers/power-architecture/mpc55xx-microcontrollers/mpc5567-microcontroller:MPC5567
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 75
+pass_rate: 100
 verified: false
 system: systems/onboarding/mpc5567.yaml
 validation:
@@ -14,8 +14,8 @@ validation:
   checks:
     system_manifest: true
     chip_descriptor: true
-    flash_base_present: false
+    flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-03-20T01:17:12.976190+00:00'
-  run_url: ''
+  timestamp_utc: '2026-03-22T00:04:20.027854+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/23391706095/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/mpc5567.md

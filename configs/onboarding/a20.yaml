@@ -6,7 +6,7 @@ family: Allwinner
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: false
+verified: true
 system: systems/onboarding/a20.yaml
 validation:
   method: ci-arm-fixture-simulation
@@ -15,6 +15,6 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-03-20T01:17:10.644485+00:00'
-  run_url: ''
+  timestamp_utc: '2026-03-22T00:04:19.166765+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/23391706095/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/a20.md
