@@ -138,6 +138,16 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:${{ steps.meta.outputs.image_tag }}
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-frontend:latest
 
+      - name: Build and push playground image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.CHECKOUT_PATH }}/packages
+          file: ${{ env.CHECKOUT_PATH }}/packages/playground/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-playground:${{ steps.meta.outputs.image_tag }}
+            ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-playground:latest
+
   deploy:
     runs-on: self-hosted
     needs: build-and-push
@@ -201,6 +211,13 @@ jobs:
                 echo "FRONTEND_IMAGE_TAG=$PREV_FRONTEND_IMAGE_TAG" >> .env
               fi
             fi
+            if [ -n "${PREV_PLAYGROUND_IMAGE_TAG:-}" ]; then
+              if grep -q '^PLAYGROUND_IMAGE_TAG=' .env; then
+                sed -i "s/^PLAYGROUND_IMAGE_TAG=.*/PLAYGROUND_IMAGE_TAG=$PREV_PLAYGROUND_IMAGE_TAG/" .env
+              else
+                echo "PLAYGROUND_IMAGE_TAG=$PREV_PLAYGROUND_IMAGE_TAG" >> .env
+              fi
+            fi
 
             docker compose --env-file .env -f docker-compose.prod.yml pull
             docker compose --env-file .env -f docker-compose.prod.yml up -d
@@ -235,11 +252,13 @@ jobs:
 
           PREV_BACKEND_IMAGE_TAG="$(awk -F= '/^BACKEND_IMAGE_TAG=/{print $2}' .env | tail -n1)"
           PREV_FRONTEND_IMAGE_TAG="$(awk -F= '/^FRONTEND_IMAGE_TAG=/{print $2}' .env | tail -n1)"
+          PREV_PLAYGROUND_IMAGE_TAG="$(awk -F= '/^PLAYGROUND_IMAGE_TAG=/{print $2}' .env | tail -n1)"
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
           grep -q '^BACKEND_IMAGE=' .env || echo "BACKEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-backend" >> .env
           grep -q '^FRONTEND_IMAGE=' .env || echo "FRONTEND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-frontend" >> .env
+          grep -q '^PLAYGROUND_IMAGE=' .env || echo "PLAYGROUND_IMAGE=ghcr.io/$OWNER_LOWER/foundry-playground" >> .env
 
           if [ -z "${CLERK_SECRET_KEY}" ]; then
             echo "Missing required secret: CLERK_SECRET_KEY"
@@ -278,6 +297,11 @@ jobs:
             sed -i "s/^FRONTEND_IMAGE_TAG=.*/FRONTEND_IMAGE_TAG=$IMAGE_TAG/" .env
           else
             echo "FRONTEND_IMAGE_TAG=$IMAGE_TAG" >> .env
+          fi
+          if grep -q '^PLAYGROUND_IMAGE_TAG=' .env; then
+            sed -i "s/^PLAYGROUND_IMAGE_TAG=.*/PLAYGROUND_IMAGE_TAG=$IMAGE_TAG/" .env
+          else
+            echo "PLAYGROUND_IMAGE_TAG=$IMAGE_TAG" >> .env
           fi
 
           if ! docker compose --env-file .env -f docker-compose.prod.yml pull; then

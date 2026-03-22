@@ -57,6 +57,20 @@ services:
     networks:
       - foundry_net
 
+  foundry-playground:
+    image: "${PLAYGROUND_IMAGE:-ghcr.io/w1ne/foundry-playground}:${PLAYGROUND_IMAGE_TAG:-latest}"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    networks:
+      - foundry_net
+
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
@@ -81,6 +95,8 @@ services:
       foundry-backend:
         condition: service_healthy
       foundry-frontend:
+        condition: service_started
+      foundry-playground:
         condition: service_started
     networks:
       - foundry_net

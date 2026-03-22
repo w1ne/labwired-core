@@ -19,6 +19,11 @@ foundry.labwired.com {
   @blocked path_regexp blocked (?i)(^/\.|\.env|\.git|wp-config|phpinfo|id_rsa|credentials|/storage/|/backup/)
   respond @blocked 404
 
+  @playground path /playground*
+  handle @playground {
+    reverse_proxy foundry-playground:80
+  }
+
   @api path /v1*
   handle @api {
     request_body {
