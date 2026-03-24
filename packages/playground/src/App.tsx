@@ -40,6 +40,11 @@ import {
 
 type BottomTab = 'output' | 'serial' | 'registers' | 'trace' | 'memory';
 type WorkspaceKind = 'diagram' | 'source';
+type ActiveSimulationConfig = {
+  systemYaml: string;
+  chipYaml: string;
+  firmware: Uint8Array;
+};
 
 let partCounter = 0;
 function nextPartId(type: string): string {
@@ -146,6 +151,7 @@ const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 export function App() {
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
   const [bridge, setBridge] = useState<SimulatorBridge | null>(null);
+  const [activeSimulationConfig, setActiveSimulationConfig] = useState<ActiveSimulationConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -208,6 +214,7 @@ export function App() {
       // Stop any running simulation
       setRunning(false);
       setBridge(null);
+      setActiveSimulationConfig(null);
     },
     [editor],
   );
@@ -222,6 +229,18 @@ export function App() {
     setWasmModule(mod as WasmModule);
     return mod as WasmModule;
   }, [wasmModule]);
+
+  const launchSimulation = useCallback(async (config: ActiveSimulationConfig) => {
+    const mod = await loadWasm();
+    const nextBridge = await SimulatorBridge.fromConfig(mod, config);
+    setActiveSimulationConfig(config);
+    setBridge(nextBridge);
+    setRunning(true);
+    traceRef.current = [];
+    setTraceEntries([]);
+    setBottomTab('serial');
+    setShowBottomPanel(true);
+  }, [loadWasm]);
 
   // Compile source code
   const handleCompile = useCallback(async () => {
@@ -269,8 +288,6 @@ export function App() {
       // Try compiling first
       const result = await handleCompile();
 
-      const mod = await loadWasm();
-
       // Use compiled ELF if available, otherwise fall back to demo firmware
       let firmware: Uint8Array;
       let systemYaml: string;
@@ -300,23 +317,17 @@ export function App() {
         return;
       }
 
-      const b = await SimulatorBridge.fromConfig(mod, {
+      await launchSimulation({
         systemYaml,
         chipYaml,
         firmware,
       });
-      setBridge(b);
-      setRunning(true);
-      traceRef.current = [];
-      setTraceEntries([]);
-      setBottomTab('serial');
-      setShowBottomPanel(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [handleCompile, loadWasm, selectedBoard, editor.state.diagram]);
+  }, [handleCompile, launchSimulation, selectedBoard, editor.state.diagram]);
 
   // Stop simulation
   const handleStop = useCallback(() => {
@@ -328,7 +339,7 @@ export function App() {
   const { state: simState, stepOnce, clearUart } = useSimulationLoop({
     bridge,
     running,
-    cyclesPerFrame: 5000,
+    cyclesPerFrame: 100000,
   });
 
   // Accumulate trace entries
@@ -396,9 +407,27 @@ export function App() {
   const handlePlay = useCallback(() => setRunning(true), []);
   const handlePause = useCallback(() => setRunning(false), []);
   const handleStep = useCallback(() => { setRunning(false); stepOnce(); }, [stepOnce]);
-  const handleReset = useCallback(() => {
-    setRunning(false); clearUart(); traceRef.current = []; setTraceEntries([]);
-  }, [clearUart]);
+  const handleReset = useCallback(async () => {
+    if (!activeSimulationConfig) {
+      setRunning(false);
+      clearUart();
+      traceRef.current = [];
+      setTraceEntries([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      setRunning(false);
+      clearUart();
+      await launchSimulation(activeSimulationConfig);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [activeSimulationConfig, clearUart, launchSimulation]);
 
   const analogStates = useMemo(() => bridge?.getAnalogStates() ?? [], [bridge, simState.pc]);
 
@@ -605,6 +634,7 @@ export function App() {
     setShowBottomPanel(true);
     setRunning(false);
     setBridge(null);
+    setActiveSimulationConfig(null);
   }, [editor, selectedBoard]);
 
   // Share
