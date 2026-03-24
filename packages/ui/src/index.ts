@@ -42,6 +42,7 @@ export { ComponentPalette } from './editor/ComponentPalette';
 export { PropertyPanel } from './editor/PropertyPanel';
 export { useEditorState } from './editor/useEditorState';
 export { diagramToConfig } from './editor/diagramToConfig';
+export { validateDiagram, validateWireConnection } from './editor/circuitValidation';
 export { routeWire } from './editor/wire-router';
 export { getPinMapping, findPinFunction } from './editor/pin-mapping';
 export type { PinFunction, PinMapping } from './editor/pin-mapping';

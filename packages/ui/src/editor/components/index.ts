@@ -36,12 +36,14 @@ import { arduinoUnoComponent } from './boards/arduino-uno';
 import { esp32Component } from './boards/esp32';
 import { rpiPicoComponent } from './boards/rpi-pico';
 import { nrf52840DkComponent } from './boards/nrf52840-dk';
+import { stm32DevComponent } from './boards/stm32-dev';
 
 /** All available component definitions, keyed by type. */
 export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   // MCUs
   [mcuComponent.type, mcuComponent],
   [arduinoUnoComponent.type, arduinoUnoComponent],
+  [stm32DevComponent.type, stm32DevComponent],
   [esp32Component.type, esp32Component],
   [rpiPicoComponent.type, rpiPicoComponent],
   [nrf52840DkComponent.type, nrf52840DkComponent],

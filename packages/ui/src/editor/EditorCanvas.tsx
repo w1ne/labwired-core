@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { Part, PinDef, ComponentState, EditorState, WireEndpoint } from './types';
 import { COMPONENT_REGISTRY } from './components/index';
+import { validateWireConnection } from './circuitValidation';
 import { WireLayer } from './WireLayer';
 
 const GRID = 10;
@@ -12,6 +13,8 @@ function snap(v: number): number {
 interface EditorCanvasProps {
   state: EditorState;
   boardIoStates?: Record<string, ComponentState>;
+  validationMessage?: string | null;
+  invalidPins?: WireEndpoint[];
   onMovePart: (id: string, x: number, y: number) => void;
   onResizePart?: (id: string, scale: number) => void;
   onSelect: (id: string | null, add?: boolean) => void;
@@ -30,6 +33,8 @@ interface EditorCanvasProps {
 export function EditorCanvas({
   state,
   boardIoStates,
+  validationMessage,
+  invalidPins,
   onMovePart,
   onResizePart,
   onSelect,
@@ -65,6 +70,7 @@ export function EditorCanvas({
   } | null>(null);
   // Rubber-band selection
   const [selectBox, setSelectBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const invalidPinSet = new Set((invalidPins ?? []).map((pin) => `${pin.part}:${pin.pin}`));
 
   const clientToSvg = useCallback(
     (clientX: number, clientY: number) => {
@@ -368,16 +374,49 @@ export function EditorCanvas({
               {def.pins.map((pin: PinDef) => {
                 const isHovered = hoveredPin?.partId === part.id && hoveredPin?.pinId === pin.id;
                 const isWiring = state.wireInProgress !== null;
+                const isWireOrigin = state.wireInProgress?.part === part.id && state.wireInProgress?.pin === pin.id;
+                const isInvalid = invalidPinSet.has(`${part.id}:${pin.id}`);
+                let isSuggested = false;
+                let isBlockedTarget = false;
+
+                if (state.wireInProgress && !isWireOrigin) {
+                  const error = validateWireConnection(
+                    state.diagram,
+                    state.wireInProgress,
+                    { part: part.id, pin: pin.id },
+                  );
+                  isSuggested = error === null;
+                  isBlockedTarget = error !== null;
+                }
+
+                const fill = isInvalid
+                  ? '#ff5f56'
+                  : isWireOrigin
+                    ? '#ffd166'
+                    : isSuggested
+                      ? '#27c93f'
+                      : isWiring && isBlockedTarget
+                        ? '#7a2d34'
+                        : '#e83e8c';
+                const opacity = isInvalid || isWireOrigin || isHovered || isSuggested
+                  ? 0.98
+                  : isWiring && isBlockedTarget
+                    ? 0.42
+                    : isWiring
+                      ? 0.65
+                      : 0.5;
+                const stroke = isSuggested ? '#d7ffe0' : '#fff';
+                const radius = (isInvalid || isSuggested || isWireOrigin ? 6 : isHovered ? 6 : 4) / sc;
                 return (
                   <circle
                     key={pin.id}
                     cx={pin.x}
                     cy={pin.y}
-                    r={(isHovered ? 6 : 4) / sc}
-                    fill={isWiring ? '#27c93f' : '#e83e8c'}
-                    stroke="#fff"
-                    strokeWidth={1 / sc}
-                    opacity={isHovered || isWiring ? 0.9 : 0.5}
+                    r={radius}
+                    fill={fill}
+                    stroke={stroke}
+                    strokeWidth={(isInvalid ? 1.5 : 1) / sc}
+                    opacity={opacity}
                     style={{ cursor: 'crosshair' }}
                     onMouseDown={(e) => handlePinClick(e, part.id, pin.id)}
                     onMouseEnter={() => setHoveredPin({ partId: part.id, pinId: pin.id })}
@@ -432,6 +471,70 @@ export function EditorCanvas({
           fill="rgba(86,156,214,0.15)" stroke="#569cd6" strokeWidth={1} strokeDasharray="4,4"
           pointerEvents="none"
         />
+      )}
+
+      {validationMessage && (
+        <g transform={`translate(${viewBox.x + 16}, ${viewBox.y + 16})`} pointerEvents="none">
+          <rect
+            width={Math.min(Math.max(validationMessage.length * 7, 220), 520)}
+            height={42}
+            rx={8}
+            fill="rgba(42, 12, 16, 0.94)"
+            stroke="#ff5f56"
+            strokeWidth={1.5}
+          />
+          <text
+            x={14}
+            y={17}
+            fill="#ff8b86"
+            fontFamily="'Outfit', sans-serif"
+            fontSize={11}
+            fontWeight={700}
+          >
+            Wiring Error
+          </text>
+          <text
+            x={14}
+            y={31}
+            fill="#ffd7d5"
+            fontFamily="'JetBrains Mono', monospace"
+            fontSize={10}
+          >
+            {validationMessage}
+          </text>
+        </g>
+      )}
+
+      {state.wireInProgress && !validationMessage && (
+        <g transform={`translate(${viewBox.x + 16}, ${viewBox.y + 16})`} pointerEvents="none">
+          <rect
+            width={260}
+            height={38}
+            rx={8}
+            fill="rgba(18, 36, 22, 0.92)"
+            stroke="#27c93f"
+            strokeWidth={1.2}
+          />
+          <text
+            x={14}
+            y={16}
+            fill="#9ff0af"
+            fontFamily="'Outfit', sans-serif"
+            fontSize={11}
+            fontWeight={700}
+          >
+            Wiring Guide
+          </text>
+          <text
+            x={14}
+            y={29}
+            fill="#d7ffe0"
+            fontFamily="'JetBrains Mono', monospace"
+            fontSize={10}
+          >
+            Green pins accept this connection. Dark pins do not.
+          </text>
+        </g>
       )}
     </svg>
   );

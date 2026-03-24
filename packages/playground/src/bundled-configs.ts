@@ -396,7 +396,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: CHIP_STM32F103,
     systemYaml: SYS_STM32F103_BLINKY,
     demoFirmwarePath: `${BASE}wasm/demo-blinky.bin`,
-    mcuComponentType: 'mcu',
+    mcuComponentType: 'stm32-dev',
   },
   {
     boardId: 'nucleo-f401re',
@@ -407,7 +407,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: CHIP_STM32F401,
     systemYaml: SYS_NUCLEO_F401RE,
     demoFirmwarePath: `${BASE}wasm/demo-nucleo-f401.elf`,
-    mcuComponentType: 'mcu',
+    mcuComponentType: 'stm32-dev',
   },
   {
     boardId: 'nucleo-h563zi',
@@ -417,7 +417,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     arch: 'ARM Cortex-M33',
     chipYaml: CHIP_STM32H563,
     systemYaml: SYS_NUCLEO_H563ZI,
-    mcuComponentType: 'mcu',
+    mcuComponentType: 'stm32-dev',
   },
   {
     boardId: 'esp32c3-devkit',

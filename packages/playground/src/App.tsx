@@ -15,6 +15,8 @@ import {
   EXAMPLE_SKETCHES,
   useEditorState,
   diagramToConfig,
+  validateDiagram,
+  validateWireConnection,
   COMPONENT_REGISTRY,
   createEmptyDiagram,
   decodeProject,
@@ -37,20 +39,109 @@ import {
 } from './Icons';
 
 type BottomTab = 'output' | 'serial' | 'registers' | 'trace' | 'memory';
+type WorkspaceKind = 'diagram' | 'source';
 
 let partCounter = 0;
 function nextPartId(type: string): string {
   return `${type}${++partCounter}`;
 }
 
-function makeInitialDiagram(board: string, mcuType: string): Diagram {
+function getWorkspaceStorageKey(boardId: string, kind: WorkspaceKind): string {
+  return `labwired-${kind}:${boardId}`;
+}
+
+function hasSavedWorkspace(boardId: string): boolean {
+  return !!(
+    localStorage.getItem(getWorkspaceStorageKey(boardId, 'diagram'))
+    || localStorage.getItem(getWorkspaceStorageKey(boardId, 'source'))
+  );
+}
+
+function makeStarterDiagram(config: BoardConfig): Diagram {
+  const mcu: Part = {
+    id: 'mcu',
+    type: config.mcuComponentType,
+    x: 100,
+    y: 100,
+    rotate: 0,
+    attrs: {},
+  };
+
+  if (config.boardId === 'stm32f103-blinky') {
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'led_pa5', type: 'led', x: 380, y: 110, rotate: 0, attrs: { color: 'green' } },
+      ],
+      wires: [
+        {
+          from: { part: 'mcu', pin: 'PA5' },
+          to: { part: 'led_pa5', pin: 'A' },
+          color: '#27c93f',
+        },
+      ],
+    };
+  }
+
+  if (config.boardId === 'nucleo-f401re') {
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'led2_pa5', type: 'led', x: 380, y: 110, rotate: 0, attrs: { color: 'green' } },
+        { id: 'button_user_pc13', type: 'button', x: 320, y: -10, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        {
+          from: { part: 'mcu', pin: 'PA5' },
+          to: { part: 'led2_pa5', pin: 'A' },
+          color: '#27c93f',
+        },
+        {
+          from: { part: 'mcu', pin: 'PC13' },
+          to: { part: 'button_user_pc13', pin: '1' },
+          color: '#569cd6',
+        },
+      ],
+    };
+  }
+
   return {
-    ...createEmptyDiagram(board),
-    parts: [{ id: 'mcu', type: mcuType, x: 100, y: 100, rotate: 0, attrs: {} }],
+    ...createEmptyDiagram(config.chipId),
+    parts: [mcu],
+    wires: [],
+  };
+}
+
+function getDefaultSource(config: BoardConfig): string {
+  if (config.boardId === 'nucleo-f401re') {
+    return EXAMPLE_SKETCHES.find((sketch) => sketch.name === 'Button + LED')?.source ?? EXAMPLE_SKETCHES[0].source;
+  }
+  return EXAMPLE_SKETCHES.find((sketch) => sketch.name === 'Blink')?.source ?? EXAMPLE_SKETCHES[0].source;
+}
+
+function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: string } {
+  const savedDiagram = localStorage.getItem(getWorkspaceStorageKey(config.boardId, 'diagram'));
+  const savedSource = localStorage.getItem(getWorkspaceStorageKey(config.boardId, 'source'));
+
+  let diagram = makeStarterDiagram(config);
+  if (savedDiagram) {
+    try {
+      diagram = JSON.parse(savedDiagram) as Diagram;
+    } catch {
+      diagram = makeStarterDiagram(config);
+    }
+  }
+
+  return {
+    diagram,
+    source: savedSource ?? getDefaultSource(config),
   };
 }
 
 const DEFAULT_BOARD = BOARD_CONFIGS[0]; // stm32f103-blinky
+const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 
 export function App() {
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
@@ -60,6 +151,8 @@ export function App() {
   const [running, setRunning] = useState(false);
   const traceRef = useRef<TraceEntry[]>([]);
   const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
+  const [canvasValidationMessage, setCanvasValidationMessage] = useState<string | null>(null);
+  const [invalidPins, setInvalidPins] = useState<Array<{ part: string; pin: string }>>([]);
 
   // Board selection (from catalog + bundled configs)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
@@ -73,7 +166,7 @@ export function App() {
   });
 
   // Code editor state
-  const [source, setSource] = useState(EXAMPLE_SKETCHES[0].source);
+  const [source, setSource] = useState(() => loadBoardWorkspace(selectedBoard).source);
   const [compileErrors, setCompileErrors] = useState<CompileError[]>([]);
   const [compileOutput, setCompileOutput] = useState('');
   const [compiling, setCompiling] = useState(false);
@@ -83,10 +176,11 @@ export function App() {
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
   const [showRightSidebar, setShowRightSidebar] = useState(true);
   const embed = isEmbedMode();
+  const autostartTriggeredRef = useRef(false);
 
   // Editor state
   const editor = useEditorState(
-    makeInitialDiagram(selectedBoard.chipId, selectedBoard.mcuComponentType),
+    loadBoardWorkspace(selectedBoard).diagram,
   );
 
   // Whether simulation has been loaded (bridge exists)
@@ -105,10 +199,12 @@ export function App() {
   // Handle board selection
   const handleBoardSelect = useCallback(
     (config: BoardConfig) => {
+      const workspace = loadBoardWorkspace(config);
       setSelectedBoard(config);
-      editor.loadDiagram(
-        makeInitialDiagram(config.chipId, config.mcuComponentType),
-      );
+      editor.loadDiagram(workspace.diagram);
+      setSource(workspace.source);
+      setCanvasValidationMessage(null);
+      setInvalidPins([]);
       // Stop any running simulation
       setRunning(false);
       setBridge(null);
@@ -129,6 +225,19 @@ export function App() {
 
   // Compile source code
   const handleCompile = useCallback(async () => {
+    const diagramErrors = validateDiagram(editor.state.diagram);
+    if (diagramErrors.length > 0) {
+      setCanvasValidationMessage(diagramErrors[0]);
+      setInvalidPins([]);
+      setCompileErrors([]);
+      setCompileOutput(`Wiring error: ${diagramErrors[0]}`);
+      setBottomTab('output');
+      setShowBottomPanel(true);
+      return null;
+    }
+
+    setCanvasValidationMessage(null);
+    setInvalidPins([]);
     setCompiling(true);
     setCompileOutput('Compiling...\n');
     setCompileErrors([]);
@@ -150,7 +259,7 @@ export function App() {
     } finally {
       setCompiling(false);
     }
-  }, [source, selectedBoard.chipId]);
+  }, [editor.state.diagram, source, selectedBoard.chipId]);
 
   // "Upload" (compile + run): convert diagram → config, init simulator
   const handleRun = useCallback(async () => {
@@ -255,6 +364,35 @@ export function App() {
     [bridge],
   );
 
+  const handleCompleteWire = useCallback((endpoint: { part: string; pin: string }) => {
+    if (!editor.state.wireInProgress) return;
+    const errorMessage = validateWireConnection(editor.state.diagram, editor.state.wireInProgress, endpoint);
+    if (errorMessage) {
+      editor.cancelWire();
+      setCanvasValidationMessage(errorMessage);
+      setInvalidPins([editor.state.wireInProgress, endpoint]);
+      setCompileOutput(`Wiring error: ${errorMessage}`);
+      setBottomTab('output');
+      setShowBottomPanel(true);
+      return;
+    }
+    setCanvasValidationMessage(null);
+    setInvalidPins([]);
+    editor.completeWire(endpoint);
+  }, [editor]);
+
+  const handleStartWire = useCallback((endpoint: { part: string; pin: string }) => {
+    setCanvasValidationMessage(null);
+    setInvalidPins([]);
+    editor.startWire(endpoint);
+  }, [editor]);
+
+  const handleCancelWire = useCallback(() => {
+    setCanvasValidationMessage(null);
+    setInvalidPins([]);
+    editor.cancelWire();
+  }, [editor]);
+
   const handlePlay = useCallback(() => setRunning(true), []);
   const handlePause = useCallback(() => setRunning(false), []);
   const handleStep = useCallback(() => { setRunning(false); stepOnce(); }, [stepOnce]);
@@ -342,6 +480,32 @@ export function App() {
   );
 
   const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
+  const currentExample = EXAMPLE_SKETCHES.find((sketch) => sketch.source === source) ?? null;
+  const boardSummary = useMemo(() => {
+    const componentCount = Math.max(editor.state.diagram.parts.length - 1, 0);
+    const wireCount = editor.state.diagram.wires.length;
+    if (selectedBoard.boardId === 'stm32f103-blinky') {
+      return {
+        title: 'STM32 demo circuit',
+        description: 'PA5 drives the onboard LED. Upload runs the bundled blinky immediately.',
+        nextStep: simActive ? 'Simulation is running. Watch the LED state and serial pane.' : 'Click Run Demo to boot the bundled STM32 blinky.',
+      };
+    }
+    if (selectedBoard.boardId === 'nucleo-f401re') {
+      return {
+        title: 'LED + button starter',
+        description: 'PA5 drives the LED and PC13 is wired to the user button.',
+        nextStep: simActive ? 'Simulation is running. Press the button component to interact.' : 'Click Run Demo to boot the starter circuit.',
+      };
+    }
+    return {
+      title: `${selectedBoard.name} starter`,
+      description: `${componentCount} components and ${wireCount} wires on the canvas.`,
+      nextStep: selectedBoard.demoFirmwarePath
+        ? 'Click Run Demo to boot the bundled firmware.'
+        : 'Wire a circuit, compile the sketch, then run it.',
+    };
+  }, [editor.state.diagram.parts.length, editor.state.diagram.wires.length, selectedBoard, simActive]);
 
   // Load from URL hash (sharing) or localStorage
   useEffect(() => {
@@ -362,29 +526,39 @@ export function App() {
       return;
     }
 
-    const saved = localStorage.getItem('labwired-diagram');
-    if (saved) {
-      try {
-        const diagram = JSON.parse(saved) as Diagram;
-        editor.loadDiagram(diagram);
-        for (const p of diagram.parts) {
-          const num = parseInt(p.id.replace(/\D/g, ''), 10);
-          if (!isNaN(num) && num > partCounter) partCounter = num;
-        }
-      } catch { /* ignore */ }
+    const workspace = loadBoardWorkspace(selectedBoard);
+    editor.loadDiagram(workspace.diagram);
+    setSource(workspace.source);
+    for (const p of workspace.diagram.parts) {
+      const num = parseInt(p.id.replace(/\D/g, ''), 10);
+      if (!isNaN(num) && num > partCounter) partCounter = num;
     }
-    const savedSource = localStorage.getItem('labwired-source');
-    if (savedSource) setSource(savedSource);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('labwired-diagram', JSON.stringify(editor.state.diagram));
-  }, [editor.state.diagram]);
+    if (autostartTriggeredRef.current || embed) return;
+    const hash = window.location.hash.slice(1);
+    if (hash) return;
+    if (selectedBoard.boardId !== DEFAULT_BOARD.boardId) return;
+    if (hasSavedWorkspace(selectedBoard.boardId)) return;
+    if (localStorage.getItem(DEMO_AUTOSTART_KEY)) return;
+
+    autostartTriggeredRef.current = true;
+    localStorage.setItem(DEMO_AUTOSTART_KEY, '1');
+    void handleRun();
+  }, [embed, handleRun, selectedBoard.boardId]);
 
   useEffect(() => {
-    localStorage.setItem('labwired-source', source);
-  }, [source]);
+    localStorage.setItem(
+      getWorkspaceStorageKey(selectedBoard.boardId, 'diagram'),
+      JSON.stringify(editor.state.diagram),
+    );
+  }, [editor.state.diagram, selectedBoard.boardId]);
+
+  useEffect(() => {
+    localStorage.setItem(getWorkspaceStorageKey(selectedBoard.boardId, 'source'), source);
+  }, [source, selectedBoard.boardId]);
 
   // Export/Import
   const handleExport = useCallback(() => {
@@ -416,6 +590,22 @@ export function App() {
     };
     input.click();
   }, [editor]);
+
+  const handleResetDemo = useCallback(() => {
+    const starter = makeStarterDiagram(selectedBoard);
+    localStorage.removeItem(getWorkspaceStorageKey(selectedBoard.boardId, 'diagram'));
+    localStorage.removeItem(getWorkspaceStorageKey(selectedBoard.boardId, 'source'));
+    editor.loadDiagram(starter);
+    setSource(getDefaultSource(selectedBoard));
+    setCanvasValidationMessage(null);
+    setInvalidPins([]);
+    setCompileErrors([]);
+    setCompileOutput(`Restored ${selectedBoard.name} demo workspace.`);
+    setBottomTab('output');
+    setShowBottomPanel(true);
+    setRunning(false);
+    setBridge(null);
+  }, [editor, selectedBoard]);
 
   // Share
   const handleShare = useCallback(async () => {
@@ -484,7 +674,7 @@ export function App() {
             />
             <select
               className="project-selector"
-              value=""
+              value={currentExample?.name ?? ''}
               onChange={(e) => {
                 const sketch = EXAMPLE_SKETCHES.find((s) => s.name === e.target.value);
                 if (sketch) setSource(sketch.source);
@@ -502,10 +692,13 @@ export function App() {
           {/* --- Build group --- */}
           <div className="toolbar-group">
             <button className="toolbar-btn toolbar-btn-primary toolbar-btn-verify" onClick={handleCompile} disabled={compiling}>
-              <CheckIcon size={14} /> {compiling ? 'Compiling...' : 'Verify'}
+              <CheckIcon size={14} /> {compiling ? 'Checking...' : 'Check Wiring'}
             </button>
             <button className="toolbar-btn toolbar-btn-primary" onClick={handleRun} disabled={compiling || loading}>
-              <UploadIcon size={14} /> Upload
+              <UploadIcon size={14} /> {selectedBoard.demoFirmwarePath ? 'Run Demo' : 'Run Circuit'}
+            </button>
+            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleResetDemo} title="Reset starter workspace">
+              Reset Demo
             </button>
           </div>
 
@@ -628,6 +821,19 @@ export function App() {
 
         {/* Main content area */}
         <div className="editor-center">
+          <div className="demo-banner">
+            <div className="demo-banner-copy">
+              <span className="demo-banner-kicker">{boardSummary.title}</span>
+              <strong>{selectedBoard.name}</strong>
+              <span>{boardSummary.description}</span>
+              <span className="demo-banner-next">{boardSummary.nextStep}</span>
+            </div>
+            <div className="demo-banner-stats">
+              <span className="demo-stat"><strong>{Math.max(editor.state.diagram.parts.length - 1, 0)}</strong> parts</span>
+              <span className="demo-stat"><strong>{editor.state.diagram.wires.length}</strong> wires</span>
+              <span className={`demo-stat ${simActive ? 'live' : ''}`}><strong>{simActive ? 'Live' : 'Idle'}</strong> sim</span>
+            </div>
+          </div>
           <div className="editor-top-split">
             {/* Code editor (left pane) */}
             {showCode && (
@@ -644,13 +850,15 @@ export function App() {
               <EditorCanvas
                 state={editor.state}
                 boardIoStates={boardIoStateMap}
+                validationMessage={canvasValidationMessage}
+                invalidPins={invalidPins}
                 onMovePart={editor.movePart}
                 onResizePart={editor.resizePart}
                 onSelect={editor.select}
                 onSelectRect={editor.selectRect}
-                onStartWire={editor.startWire}
-                onCompleteWire={editor.completeWire}
-                onCancelWire={editor.cancelWire}
+                onStartWire={handleStartWire}
+                onCompleteWire={handleCompleteWire}
+                onCancelWire={handleCancelWire}
                 onDeleteWire={editor.deleteWire}
                 onDropPart={handleDropPart}
                 onButtonToggle={handleButtonToggle}
