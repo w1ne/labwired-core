@@ -966,17 +966,20 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
-        // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
-        if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
-            let byte_val = self.read_u8(phys_byte)?;
-            return Ok(((byte_val >> bit) & 1) as u32);
-        }
-
+        // RAM and flash take priority over bit-band alias translation.
+        // Some chips (e.g. ESP32-C3) map flash at 0x42000000 which overlaps the
+        // Cortex-M peripheral bit-band alias range 0x42000000-0x44000000.
         if let Some(val) = self.ram.read_u32(addr) {
             return Ok(val);
         }
         if let Some(val) = self.flash.read_u32(addr) {
             return Ok(val);
+        }
+
+        // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
+        if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
+            let byte_val = self.read_u8(phys_byte)?;
+            return Ok(((byte_val >> bit) & 1) as u32);
         }
         if self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
             if let Some(val) = self.flash.read_u32(self.flash.base_addr + addr) {

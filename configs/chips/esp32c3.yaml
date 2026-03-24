@@ -15,10 +15,9 @@ ram:
   size: "400KB"
 peripherals:
   - id: "uart0"
-    type: "declarative"
+    type: "uart"
     base_address: 0x60000000
-    config:
-      path: "../peripherals/esp32c3/uart0.yaml"
+    size: "512B"
   - id: "gpio"
     type: "declarative"
     base_address: 0x60004000
@@ -34,3 +33,9 @@ peripherals:
     base_address: 0x600C2000
     config:
       path: "../peripherals/esp32c3/interrupt_core0.yaml"
+  - id: "rom"
+    type: "declarative"
+    base_address: 0x40000000
+    size: "384KB"
+    config:
+      path: "../peripherals/esp32c3/rom.yaml"

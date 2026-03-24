@@ -130,6 +130,16 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         valid_pc_ranges: &[(0x8000_0000, 0x8001_FFFF), (0x8002_0000, 0x8002_FFFF)],
         expected_uart_output: b"OK\n",
     },
+    SurvivalCase {
+        name: "esp32c3_demo",
+        core: "rv32i",
+        family: CpuFamily::RiscV,
+        chip: "esp32c3",
+        system: "esp32c3-devkit",
+        fixture: "esp32c3-demo.elf",
+        valid_pc_ranges: &[(0x4200_0000, 0x423F_FFFF), (0x3FC8_0000, 0x3FEF_FFFF)],
+        expected_uart_output: b"ESP OK\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -370,6 +380,11 @@ fn test_stm32h563_demo_survival() {
 #[test]
 fn test_riscv_ci_fixture_survival() {
     run_survival_case(&SURVIVAL_CASES[6]);
+}
+
+#[test]
+fn test_esp32c3_demo_survival() {
+    run_survival_case(&SURVIVAL_CASES[7]);
 }
 
 #[test]
