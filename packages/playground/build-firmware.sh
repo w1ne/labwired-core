@@ -26,36 +26,10 @@ echo "Building labwired-wasm..."
 
 echo "WASM module → $OUT_DIR/labwired_wasm.js"
 
-# ── 2. STM32F103 Nucleo-F103RB Arduino Blink ─────────────────────────────────
-echo "Compiling Arduino Blink for STM32F103 (Nucleo-F103RB)..."
-SKETCH_DIR="$(mktemp -d)/blink_f103"
-mkdir -p "$SKETCH_DIR"
-cat > "$SKETCH_DIR/blink_f103.ino" << 'SKETCH'
-// Arduino Blink for STM32 Nucleo boards (LD2 on PA5).
-// Prints to Serial (USART2) for the simulator's UART monitor.
-
-void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-  Serial.begin(115200);
-  Serial.println("LabWired Playground: STM32F103 Blinky (Arduino)");
-}
-
-void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);
-  Serial.println("ON");
-  delay(500);
-  digitalWrite(LED_BUILTIN, LOW);
-  Serial.println("OFF");
-  delay(500);
-}
-SKETCH
-
-BUILD_TMP="$(mktemp -d)"
-arduino-cli compile \
-  --fqbn "STMicroelectronics:stm32:Nucleo_64:pnum=NUCLEO_F103RB" \
-  --output-dir "$BUILD_TMP" \
-  "$SKETCH_DIR"
-cp "$BUILD_TMP"/*.ino.elf "$OUT_DIR/demo-blinky.bin"
+# ── 2. STM32F103 simulator-native blink demo ─────────────────────────────────
+echo "Copying known-good STM32F103 simulator blink firmware..."
+(cd "$CORE_DIR" && cargo build -p demo-blinky --release --target thumbv7m-none-eabi)
+cp "$CORE_DIR/target/thumbv7m-none-eabi/release/demo-blinky" "$OUT_DIR/demo-blinky.bin"
 echo "STM32F103 firmware → $OUT_DIR/demo-blinky.bin"
 
 # ── 3. STM32F401RE Nucleo Arduino Blink + Button ─────────────────────────────
