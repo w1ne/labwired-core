@@ -37,6 +37,10 @@ pub struct SystemBus {
     pub nvic: Option<Arc<NvicState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
     pub config: crate::SimulationConfig,
+    /// Enable Cortex-M peripheral/SRAM bit-band alias translation.
+    /// False for architectures (e.g. RISC-V) whose memory maps collide with
+    /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
+    pub bit_band_enabled: bool,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
 }
@@ -265,6 +269,7 @@ impl SystemBus {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            bit_band_enabled: true,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -314,6 +319,7 @@ impl SystemBus {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            bit_band_enabled: matches!(chip.arch, labwired_config::Arch::Arm),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -966,20 +972,19 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
-        // RAM and flash take priority over bit-band alias translation.
-        // Some chips (e.g. ESP32-C3) map flash at 0x42000000 which overlaps the
-        // Cortex-M peripheral bit-band alias range 0x42000000-0x44000000.
+        // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
+        if self.bit_band_enabled {
+            if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
+                let byte_val = self.read_u8(phys_byte)?;
+                return Ok(((byte_val >> bit) & 1) as u32);
+            }
+        }
+
         if let Some(val) = self.ram.read_u32(addr) {
             return Ok(val);
         }
         if let Some(val) = self.flash.read_u32(addr) {
             return Ok(val);
-        }
-
-        // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
-        if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
-            let byte_val = self.read_u8(phys_byte)?;
-            return Ok(((byte_val >> bit) & 1) as u32);
         }
         if self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
             if let Some(val) = self.flash.read_u32(self.flash.base_addr + addr) {
@@ -1019,14 +1024,16 @@ impl crate::Bus for SystemBus {
         // Cortex-M bit-band alias translation (peripheral: 0x42000000-0x43FFFFFF,
         // SRAM: 0x22000000-0x23FFFFFF).  Each alias word maps to one bit of the
         // physical address.  Writing 1 sets the bit; writing 0 clears it.
-        if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
-            let old = self.read_u8(phys_byte)?;
-            let new_byte = if value & 1 != 0 {
-                old | (1 << bit)
-            } else {
-                old & !(1 << bit)
-            };
-            return self.write_u8(phys_byte, new_byte);
+        if self.bit_band_enabled {
+            if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
+                let old = self.read_u8(phys_byte)?;
+                let new_byte = if value & 1 != 0 {
+                    old | (1 << bit)
+                } else {
+                    old & !(1 << bit)
+                };
+                return self.write_u8(phys_byte, new_byte);
+            }
         }
 
         let mut wrote = self.ram.write_u32(addr, value) || self.flash.write_u32(addr, value);
@@ -1211,6 +1218,7 @@ mod tests {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            bit_band_enabled: true,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -1253,6 +1261,7 @@ mod tests {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            bit_band_enabled: true,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -1298,6 +1307,7 @@ mod tests {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            bit_band_enabled: true,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
