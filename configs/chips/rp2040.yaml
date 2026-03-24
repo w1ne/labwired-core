@@ -17,4 +17,4 @@ peripherals:
     type: "uart"
     base_address: 0x40034000
     config:
-      profile: "stm32f1"
+      profile: "stm32v2"

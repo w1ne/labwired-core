@@ -67,7 +67,9 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         });
     }
 
-    // Ensure DWT exists
+    // Ensure DWT exists. Size 0x1000 covers the full CoreSight DWT register space,
+    // including the CYCCNT enable bit at offset 0 and CYCCNT at offset 4, as well as
+    // extended offsets accessed by some HAL dwt_init routines (e.g. offset 0xfc).
     let dwt = Dwt::new();
     if let Some(p) = bus
         .peripherals
@@ -76,14 +78,14 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     {
         p.name = "dwt".to_string();
         p.base = 0xE000_1000;
-        p.size = 0x40; // minimal size
+        p.size = 0x1000;
         p.irq = None;
         p.dev = Box::new(dwt);
     } else {
         bus.peripherals.push(PeripheralEntry {
             name: "dwt".to_string(),
             base: 0xE000_1000,
-            size: 0x40,
+            size: 0x1000,
             irq: None,
             dev: Box::new(dwt),
             ticks_remaining: 0,

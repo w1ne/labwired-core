@@ -129,6 +129,14 @@ pub enum Instruction {
         rm: u8,
         imm: u8,
     }, // ASR Rd, Rm, #imm5
+    LslReg {
+        rd: u8,
+        rm: u8,
+    }, // LSL Rd, Rs
+    LsrReg {
+        rd: u8,
+        rm: u8,
+    }, // LSR Rd, Rs
     Adc {
         rd: u8,
         rm: u8,
@@ -256,6 +264,9 @@ pub enum Instruction {
     Bx {
         rm: u8,
     }, // BX Rm
+    BlxReg {
+        rm: u8,
+    }, // BLX Rm (T1) — branch with link to register address
     Mul {
         rd: u8,
         rn: u8,
@@ -383,6 +394,20 @@ pub enum Instruction {
         mask: u8,
     }, // IT <cond> <mask...ish>
 
+    /// LDMIA.W Rn(!), {registers} — 32-bit load multiple increment-after.
+    /// reg_list: bit n = register n (0-14=LR, 15=PC).
+    LdmiaW {
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+    },
+    /// STMDB Rn(!), {registers} — 32-bit store multiple decrement-before.
+    /// reg_list: bit n = register n (0-14=LR).
+    StmdbW {
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+    },
     Ldrd {
         rt: u8,
         rt2: u8,
@@ -477,6 +502,9 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         return match op_alu {
             0x0 => Instruction::And { rd, rm },        // AND
             0x1 => Instruction::Eor { rd, rm },        // EOR
+            0x2 => Instruction::LslReg { rd, rm },     // LSL (register)
+            0x3 => Instruction::LsrReg { rd, rm },     // LSR (register)
+            0x4 => Instruction::AsrReg { rd, rm },     // ASR (register)
             0x5 => Instruction::Adc { rd, rm },        // ADC
             0x6 => Instruction::Sbc { rd, rm },        // SBC
             0x7 => Instruction::Ror { rd, rm },        // ROR
@@ -517,9 +545,13 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
                 return Instruction::MovReg { rd, rm };
             }
             3 => {
-                // BX (T1)
+                // BX T1 (bit7=0) / BLX T1 (bit7=1)
                 let rm = ((opcode >> 3) & 0xF) as u8;
-                return Instruction::Bx { rm };
+                if (opcode & 0x0080) != 0 {
+                    return Instruction::BlxReg { rm };
+                } else {
+                    return Instruction::Bx { rm };
+                }
             }
             _ => return Instruction::Unknown(opcode),
         }
@@ -1002,7 +1034,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         return Instruction::Uxtb { rd, rm };
     }
 
-    // LDRD / STRD / TBB / TBH (Encoding A1)
+    // LDRD / STRD / TBB / TBH / STMDB / LDMIA.W (Encoding E8xx/E9xx)
     if (h1 & 0xFE00) == 0xE800 {
         let is_load = (h1 & (1 << 4)) != 0;
         let rn = (h1 & 0xF) as u8;
@@ -1018,6 +1050,16 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             } else {
                 return Instruction::Tbb { rn, rm };
             }
+        } else if (h1 & 0x40) == 0 {
+            // STMDB / LDMIA.W: bit6=0 distinguishes LDM/STM from STRD/LDRD (bit6=1).
+            // H2 is the full 16-bit register list (bit n = register n, bit14=LR, bit15=PC).
+            let writeback = (h1 & 0x20) != 0;
+            let reg_list = h2;
+            if is_load {
+                return Instruction::LdmiaW { rn, reg_list, writeback };
+            } else {
+                return Instruction::StmdbW { rn, reg_list, writeback };
+            }
         } else if is_load {
             return Instruction::Ldrd { rt, rt2, rn, imm8 };
         } else {
@@ -1025,8 +1067,30 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
-    // B.W / BL
-    if (h1 & 0xF800) == 0xF000 && (h2 & 0x8000) == 0x8000 {
+    // B<c>.W (Thumb-2 conditional branch, T3)
+    // 1111 0 S cond imm6 10 J1 0 J2 imm11
+    if (h1 & 0xF800) == 0xF000 && (h2 & 0xD000) == 0x8000 {
+        let s = ((h1 >> 10) & 0x1) as i32;
+        let cond = ((h1 >> 6) & 0xF) as u8;
+        if cond != 0xE && cond != 0xF {
+            let imm6 = (h1 & 0x3F) as i32;
+            let j1 = ((h2 >> 13) & 0x1) as i32;
+            let j2 = ((h2 >> 11) & 0x1) as i32;
+            let imm11 = (h2 & 0x7FF) as i32;
+
+            let mut offset = (s << 20) | (j2 << 19) | (j1 << 18) | (imm6 << 12) | (imm11 << 1);
+            if (offset & (1 << 20)) != 0 {
+                offset |= !0x001F_FFFF;
+            }
+
+            return Instruction::BranchCond { cond, offset };
+        }
+    }
+
+    // B.W / BL: H1[15:11]=11110, H2[15]=1, H2[12]=1.
+    // H2[12]=1 is required by both BL T1 and B.W T4 and distinguishes them from
+    // other 32-bit instructions with H2[15]=1 (e.g. NOP.W = F3AF 8000, where H2[12]=0).
+    if (h1 & 0xF800) == 0xF000 && (h2 & 0x9000) == 0x9000 {
         let s = ((h1 >> 10) & 0x1) as i32;
         let j1 = ((h2 >> 13) & 0x1) as i32;
         let j2 = ((h2 >> 11) & 0x1) as i32;
@@ -1034,12 +1098,9 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let i2 = (!(j2 ^ s)) & 0x1;
         let imm11 = (h2 & 0x7FF) as i32;
 
-        let is_bl = (h2 & 0x1000) != 0;
-        let imm_h1 = if is_bl {
-            (h1 & 0x3FF) as i32
-        } else {
-            (h1 & 0x7FF) as i32
-        };
+        // BL T1: H2[bit14]=1. B.W T4: H2[bit14]=0. Both have H2[bit12]=1.
+        let is_bl = (h2 & 0x4000) != 0;
+        let imm_h1 = (h1 & 0x3FF) as i32; // Both BL and B.W use 10-bit immediate from H1
 
         let mut offset = (s << 24) | (i1 << 23) | (i2 << 22) | (imm_h1 << 12) | (imm11 << 1);
 
@@ -1167,6 +1228,17 @@ mod tests {
         assert_eq!(
             decode_thumb_16(0x3A03),
             Instruction::SubImm8 { rd: 2, imm: 3 }
+        );
+    }
+
+    #[test]
+    fn test_decode_thumb2_conditional_branch() {
+        assert_eq!(
+            decode_thumb_32(0xF100, 0x809D),
+            Instruction::BranchCond {
+                cond: 0x4,
+                offset: 0x13A,
+            }
         );
     }
 

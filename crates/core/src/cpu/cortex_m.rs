@@ -38,10 +38,13 @@ pub struct CortexM {
     pub lr: u32, // R14
     pub pc: u32, // R15
     pub xpsr: u32,
-    pub pending_exceptions: u32, // Bitmask
+    pub pending_exceptions: u64, // Bitmask — u64 to support exceptions up to 63 (IRQ 47+)
     pub primask: bool,           // Interrupt mask (true = disabled)
     pub vtor: Arc<AtomicU32>,    // Shared Vector Table Offset Register
     pub it_state: u8,            // Thumb IT block state
+    /// Currently active exception number (0 = thread mode). Used to prevent re-entry
+    /// of the same or lower-priority exception while one is already being serviced.
+    pub active_exception: u32,
     pub decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
 }
 
@@ -69,6 +72,7 @@ impl Default for CortexM {
             primask: false,
             vtor: Arc::new(AtomicU32::new(0)),
             it_state: 0,
+            active_exception: 0,
             decode_cache: Box::new([None; 4096]),
         }
     }
@@ -89,6 +93,19 @@ impl CortexM {
 
     pub fn set_shared_vtor(&mut self, vtor: Arc<AtomicU32>) {
         self.vtor = vtor;
+    }
+
+    fn xpsr_with_itstate(&self, xpsr: u32) -> u32 {
+        let mut out = xpsr & !((0b11 << 25) | (0b11_1111 << 10));
+        out |= ((self.it_state as u32) & 0b11) << 25;
+        out |= (((self.it_state as u32) >> 2) & 0b11_1111) << 10;
+        out
+    }
+
+    fn itstate_from_xpsr(xpsr: u32) -> u8 {
+        let low = ((xpsr >> 25) & 0b11) as u8;
+        let high = ((xpsr >> 10) & 0b11_1111) as u8;
+        low | (high << 2)
     }
 
     fn read_reg(&self, n: u8) -> u32 {
@@ -212,12 +229,18 @@ impl CortexM {
         self.lr = bus.read_u32((frame_ptr + 20) as u64)?;
         self.pc = bus.read_u32((frame_ptr + 24) as u64)? & !1;
         self.xpsr = bus.read_u32((frame_ptr + 28) as u64)?;
+        self.it_state = Self::itstate_from_xpsr(self.xpsr);
 
         self.sp = frame_ptr + 32;
 
+        // Restore active exception from stacked xPSR IPSR bits [8:0].
+        // When taking an exception, we saved the previous active_exception in IPSR,
+        // so restoring it here correctly handles both non-nested and nested cases.
+        self.active_exception = self.xpsr & 0x1FF;
+
         tracing::debug!(
-            "EXC_RETURN: frame={:#010x} restored LR={:#010x} PC={:#010x}",
-            frame_ptr, self.lr, self.pc
+            "EXC_RETURN: frame={:#010x} restored LR={:#010x} PC={:#010x} active_exc={}",
+            frame_ptr, self.lr, self.pc, self.active_exception
         );
         Ok(())
     }
@@ -228,6 +251,7 @@ impl Cpu for CortexM {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
         self.pending_exceptions = 0;
+        self.active_exception = 0;
         self.decode_cache.fill(None);
 
         let vtor = self.vtor.load(Ordering::SeqCst) as u64;
@@ -251,8 +275,8 @@ impl Cpu for CortexM {
         self.sp = val;
     }
     fn set_exception_pending(&mut self, exception_num: u32) {
-        if exception_num < 32 {
-            self.pending_exceptions |= 1 << exception_num;
+        if exception_num < 64 {
+            self.pending_exceptions |= 1u64 << exception_num;
         }
     }
 
@@ -366,8 +390,16 @@ impl Cpu for CortexM {
 
         if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
             while executed < max_count {
+                // Break early only when there's a takeable exception (higher priority
+                // than the currently active one). Pending exceptions at the same or lower
+                // priority are handled inside step_internal without breaking the batch.
                 if self.pending_exceptions != 0 && !self.primask {
-                    break;
+                    let highest = 63 - self.pending_exceptions.leading_zeros();
+                    let can_take = self.active_exception == 0
+                        || (highest as u32) < self.active_exception;
+                    if can_take {
+                        break;
+                    }
                 }
                 let old_pc = self.pc;
                 self.step_internal(sysbus, observers, config)?;
@@ -380,7 +412,12 @@ impl Cpu for CortexM {
         } else {
             while executed < max_count {
                 if self.pending_exceptions != 0 && !self.primask {
-                    break;
+                    let highest = 63 - self.pending_exceptions.leading_zeros();
+                    let can_take = self.active_exception == 0
+                        || (highest as u32) < self.active_exception;
+                    if can_take {
+                        break;
+                    }
                 }
                 let old_pc = self.pc;
                 self.step_internal(bus, observers, config)?;
@@ -405,44 +442,69 @@ impl CortexM {
         config: &SimulationConfig,
     ) -> SimResult<()> {
         // Check for pending exceptions before executing instruction
-        if self.pending_exceptions != 0 {
-            // Find highest priority exception (Simplified: highest bit)
-            let exception_num = 31 - self.pending_exceptions.leading_zeros();
-            self.pending_exceptions &= !(1 << exception_num);
+        if self.pending_exceptions != 0 && !self.primask {
+            // Find highest priority exception (lowest number = highest priority)
+            let exception_num = 63 - self.pending_exceptions.leading_zeros();
 
-            // Perform Stacking (Simplified)
-            let sp = self.sp;
-            let frame_ptr = sp.wrapping_sub(32);
+            // Only take the exception if it has strictly higher priority (lower number)
+            // than the currently active exception. This prevents re-entry of the same
+            // or lower-priority exception while one is already being serviced (ARM IABR behavior).
+            let can_take = self.active_exception == 0
+                || (exception_num as u32) < self.active_exception;
 
-            // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR
-            let stacked_lr = self.lr;
-            let stacked_pc = self.pc;
-            let _ = bus.write_u32(frame_ptr as u64, self.r0);
-            let _ = bus.write_u32((frame_ptr + 4) as u64, self.r1);
-            let _ = bus.write_u32((frame_ptr + 8) as u64, self.r2);
-            let _ = bus.write_u32((frame_ptr + 12) as u64, self.r3);
-            let _ = bus.write_u32((frame_ptr + 16) as u64, self.r12);
-            let _ = bus.write_u32((frame_ptr + 20) as u64, self.lr);
-            let _ = bus.write_u32((frame_ptr + 24) as u64, self.pc);
-            let _ = bus.write_u32((frame_ptr + 28) as u64, self.xpsr);
+            if can_take {
+                self.pending_exceptions &= !(1u64 << exception_num);
 
-            self.sp = frame_ptr;
+                // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
+                // On real ARM hardware this happens automatically when the exception is taken.
+                bus.clear_nvic_pending(exception_num as u32);
 
-            // EXC_RETURN: Thread Mode, MSP
-            self.lr = 0xFFFF_FFF9;
+                // Perform Stacking
+                let sp = self.sp;
+                let frame_ptr = sp.wrapping_sub(32);
 
-            // Jump to ISR handler
-            let vtor = self.vtor.load(Ordering::SeqCst);
-            let vector_addr = vtor + (exception_num * 4);
-            if let Ok(handler) = bus.read_u32(vector_addr as u64) {
-                self.pc = handler & !1;
-                tracing::debug!(
-                    "EXC_ENTRY: exc={} handler={:#010x} frame={:#010x} stacked_lr={:#010x} stacked_pc={:#010x}",
-                    exception_num, self.pc, frame_ptr, stacked_lr, stacked_pc
-                );
+                // Save the previous active_exception in xPSR IPSR bits [8:0] so that
+                // exception_return can restore the correct nesting level.
+                let save_xpsr =
+                    self.xpsr_with_itstate((self.xpsr & !0x1FF) | (self.active_exception as u32));
+
+                // Update active exception before stacking so nested exceptions see
+                // the correct level.
+                self.active_exception = exception_num as u32;
+
+                // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
+                let stacked_lr = self.lr;
+                let stacked_pc = self.pc;
+                let _ = bus.write_u32(frame_ptr as u64, self.r0);
+                let _ = bus.write_u32((frame_ptr + 4) as u64, self.r1);
+                let _ = bus.write_u32((frame_ptr + 8) as u64, self.r2);
+                let _ = bus.write_u32((frame_ptr + 12) as u64, self.r3);
+                let _ = bus.write_u32((frame_ptr + 16) as u64, self.r12);
+                let _ = bus.write_u32((frame_ptr + 20) as u64, self.lr);
+                let _ = bus.write_u32((frame_ptr + 24) as u64, self.pc);
+                let _ = bus.write_u32((frame_ptr + 28) as u64, save_xpsr);
+
+                self.sp = frame_ptr;
+                self.it_state = 0;
+
+                // EXC_RETURN: Thread Mode, MSP
+                self.lr = 0xFFFF_FFF9;
+
+                // Jump to ISR handler
+                let vtor = self.vtor.load(Ordering::SeqCst);
+                let vector_addr = vtor + (exception_num * 4);
+                if let Ok(handler) = bus.read_u32(vector_addr as u64) {
+                    self.pc = handler & !1;
+                    tracing::debug!(
+                        "EXC_ENTRY: exc={} handler={:#010x} frame={:#010x} stacked_lr={:#010x} stacked_pc={:#010x}",
+                        exception_num, self.pc, frame_ptr, stacked_lr, stacked_pc
+                    );
+                }
+
+                return Ok(());
             }
-
-            return Ok(());
+            // Can't take this exception right now (lower priority than active).
+            // Fall through and execute the current instruction normally.
         }
         // Fetch/Decode with optional Cache
         let cache_idx = ((self.pc >> 1) & 0xFFF) as usize;
@@ -848,7 +910,7 @@ impl CortexM {
                     if (h1 & 0xFE00) == 0xE800 {
                         // Table branch, load/store exclusive etc (handled by Tbb/Tbh above usually, but just in case)
                         pc_increment = 4;
-                    } else if (h1 & 0xFF00) == 0xF800 {
+                    } else if (h1 & 0xFE00) == 0xF800 {
                         // LDR/STR (immediate) T3/T4
                         let op1 = (h1 >> 4) & 0xF;
                         let rn = (h1 & 0xF) as u8;
@@ -906,7 +968,12 @@ impl CortexM {
                                 }
                                 1 => {
                                     if let Ok(v) = bus.read_u8(addr as u64) {
-                                        self.write_reg(rt, v as u32);
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i8) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
                                 }
                                 2 => {
@@ -915,11 +982,17 @@ impl CortexM {
                                 }
                                 3 => {
                                     if let Ok(v) = bus.read_u16(addr as u64) {
-                                        self.write_reg(rt, v as u32);
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i16) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
                                 }
                                 4 => {
-                                    let _ = bus.write_u32(addr as u64, self.read_reg(rt));
+                                    let val = self.read_reg(rt);
+                                    let _ = bus.write_u32(addr as u64, val);
                                 }
                                 5 => {
                                     if let Ok(v) = bus.read_u32(addr as u64) {
@@ -958,15 +1031,37 @@ impl CortexM {
                             let addr = base.wrapping_add(offset);
                             let mut branch_taken = false;
                             match op1 & 0x7 {
+                                0 => {
+                                    let val = (self.read_reg(rt) & 0xFF) as u8;
+                                    let _ = bus.write_u8(addr as u64, val);
+                                }
                                 1 => {
                                     if let Ok(v) = bus.read_u8(addr as u64) {
-                                        self.write_reg(rt, v as u32);
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i8) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
+                                }
+                                2 => {
+                                    let val = (self.read_reg(rt) & 0xFFFF) as u16;
+                                    let _ = bus.write_u16(addr as u64, val);
                                 }
                                 3 => {
                                     if let Ok(v) = bus.read_u16(addr as u64) {
-                                        self.write_reg(rt, v as u32);
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i16) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
+                                }
+                                4 => {
+                                    let val = self.read_reg(rt);
+                                    let _ = bus.write_u32(addr as u64, val);
                                 }
                                 5 => {
                                     if let Ok(v) = bus.read_u32(addr as u64) {
@@ -1081,38 +1176,50 @@ impl CortexM {
                     let op2 = self.read_reg(rm);
                     let (res, c, v) = add_with_flags(op1, op2);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::AddImm3 { rd, rn, imm } => {
                     let op1 = self.read_reg(rn);
                     let (res, c, v) = add_with_flags(op1, imm as u32);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::AddImm8 { rd, imm } => {
                     let op1 = self.read_reg(rd);
                     let (res, c, v) = add_with_flags(op1, imm as u32);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::SubReg { rd, rn, rm } => {
                     let op1 = self.read_reg(rn);
                     let op2 = self.read_reg(rm);
                     let (res, c, v) = sub_with_flags(op1, op2);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::SubImm3 { rd, rn, imm } => {
                     let op1 = self.read_reg(rn);
                     let (res, c, v) = sub_with_flags(op1, imm as u32);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::SubImm8 { rd, imm } => {
                     let op1 = self.read_reg(rd);
                     let (res, c, v) = sub_with_flags(op1, imm as u32);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::AddSp { imm } => {
                     let sp = self.read_reg(13).wrapping_add(imm as u32);
@@ -1221,6 +1328,32 @@ impl CortexM {
                     } else {
                         val >> (imm as u32)
                     }) as u32;
+                    self.write_reg(rd, res);
+                    self.update_nz(res);
+                }
+                Instruction::LslReg { rd, rm } => {
+                    let val = self.read_reg(rd);
+                    let shift = self.read_reg(rm) & 0xFF;
+                    let res = if shift == 0 {
+                        val
+                    } else if shift >= 32 {
+                        0
+                    } else {
+                        val.wrapping_shl(shift)
+                    };
+                    self.write_reg(rd, res);
+                    self.update_nz(res);
+                }
+                Instruction::LsrReg { rd, rm } => {
+                    let val = self.read_reg(rd);
+                    let shift = self.read_reg(rm) & 0xFF;
+                    let res = if shift == 0 {
+                        val
+                    } else if shift >= 32 {
+                        0
+                    } else {
+                        val.wrapping_shr(shift)
+                    };
                     self.write_reg(rd, res);
                     self.update_nz(res);
                 }
@@ -1586,6 +1719,62 @@ impl CortexM {
                     }
                     self.write_reg(rn, base);
                 }
+                // STMDB Rn(!), {reg_list} — 32-bit store multiple, decrement before.
+                // Lowest-numbered register stored at lowest address.
+                Instruction::StmdbW { rn, reg_list, writeback } => {
+                    let count = reg_list.count_ones();
+                    let mut addr = self.read_reg(rn).wrapping_sub(count * 4);
+                    let start = addr;
+                    for i in 0u8..=15 {
+                        if (reg_list & (1 << i)) != 0 {
+                            let val = self.read_reg(i);
+                            if bus.write_u32(addr as u64, val).is_err() {
+                                tracing::error!("Bus Write Fault (STMDB) at {:#x}", addr);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    if writeback {
+                        self.write_reg(rn, start);
+                    }
+                    pc_increment = 4;
+                }
+                // LDMIA.W Rn(!), {reg_list} — 32-bit load multiple, increment after.
+                // Lowest-numbered register loaded from lowest address.
+                Instruction::LdmiaW { rn, reg_list, writeback } => {
+                    let mut addr = self.read_reg(rn);
+                    // Load R0-R14 (skip PC; handle separately to commit SP first)
+                    for i in 0u8..=14 {
+                        if (reg_list & (1 << i)) != 0 {
+                            if let Ok(val) = bus.read_u32(addr as u64) {
+                                self.write_reg(i, val);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    // Handle PC (bit 15) — commit writeback before branching
+                    if (reg_list & (1 << 15)) != 0 {
+                        if let Ok(pc_val) = bus.read_u32(addr as u64) {
+                            addr = addr.wrapping_add(4);
+                            if writeback {
+                                self.write_reg(rn, addr);
+                            }
+                            self.branch_to(pc_val, bus)?;
+                            pc_increment = 0;
+                        } else {
+                            addr = addr.wrapping_add(4);
+                            if writeback {
+                                self.write_reg(rn, addr);
+                            }
+                            pc_increment = 4;
+                        }
+                    } else {
+                        if writeback {
+                            self.write_reg(rn, addr);
+                        }
+                        pc_increment = 4;
+                    }
+                }
 
                 // Control Flow
                 Instruction::Bl { offset } => {
@@ -1631,6 +1820,15 @@ impl CortexM {
                     pc_increment = 0;
                 }
 
+                // BLX Rm (T1): branch-with-link to register address.
+                // Sets LR = (PC_of_blx + 2) | 1 before branching.
+                Instruction::BlxReg { rm } => {
+                    let target = self.read_reg(rm);
+                    self.lr = (self.pc.wrapping_add(2)) | 1;
+                    self.branch_to(target, bus)?;
+                    pc_increment = 0;
+                }
+
                 Instruction::Unknown(op) => {
                     tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
                     pc_increment = 2; // Skip 16-bit
@@ -1639,13 +1837,13 @@ impl CortexM {
         }
 
         if it_block_instruction && self.it_state != 0 {
-            // ITSTATEUpdate()
-            if (self.it_state & 0x7) == 0 {
+            // ITSTATEUpdate(): advance the low 5 bits, preserving only firstcond[3:1].
+            // Bit 4 of the low field becomes cond[0] for the next instruction, so the full
+            // 5-bit field must shift, not just the low nibble. This is what flips THEN/ELSE
+            // instructions inside blocks such as `ITTEE`.
+            self.it_state = (self.it_state & 0xE0) | (((self.it_state & 0x1F) << 1) & 0x1F);
+            if (self.it_state & 0x0F) == 0 {
                 self.it_state = 0;
-            } else {
-                let cond = self.it_state & 0xF0;
-                let mask = (self.it_state & 0x07) << 1;
-                self.it_state = cond | mask;
             }
         }
 

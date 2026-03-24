@@ -1119,6 +1119,45 @@ pub mod integration_tests {
     }
 
     #[test]
+    fn test_exception_return_via_pop_pc_uses_updated_sp() {
+        let mut machine = create_machine();
+
+        machine.bus.write_u32(0x3C, 0x0000_1001).unwrap();
+        machine.cpu.pc = 0x2000_0002;
+        machine.cpu.sp = 0x2002_0000;
+        machine.cpu.r0 = 0x1111_2222;
+        machine.cpu.r3 = 0x3333_4444;
+        machine.cpu.set_exception_pending(15);
+
+        machine
+            .cpu
+            .step(&mut machine.bus, &[], &machine.config)
+            .unwrap();
+        assert_eq!(machine.cpu.pc, 0x1000);
+        assert_eq!(machine.cpu.lr, 0xFFFF_FFF9);
+
+        // push {r3, lr}; pop {r3, pc}
+        machine.bus.write_u16(0x1000, 0xB508).unwrap();
+        machine.bus.write_u16(0x1002, 0xBD08).unwrap();
+
+        machine
+            .cpu
+            .step(&mut machine.bus, &[], &machine.config)
+            .unwrap();
+        assert_eq!(machine.cpu.sp, 0x2002_0000 - 40);
+
+        machine
+            .cpu
+            .step(&mut machine.bus, &[], &machine.config)
+            .unwrap();
+
+        assert_eq!(machine.cpu.pc, 0x2000_0002);
+        assert_eq!(machine.cpu.sp, 0x2002_0000);
+        assert_eq!(machine.cpu.r0, 0x1111_2222);
+        assert_eq!(machine.cpu.r3, 0x3333_4444);
+    }
+
+    #[test]
     fn test_iteration_7_instructions() {
         let mut machine: Machine<CortexM> = create_machine();
         machine.cpu.sp = 0x2000_1000;
@@ -1545,6 +1584,121 @@ pub mod integration_tests {
         machine.bus.write_u16(0x12, 0xF5B0).unwrap();
         machine.step().unwrap();
         assert_eq!(machine.cpu.r5, 0xFFFFCDAB);
+    }
+
+    #[test]
+    fn test_ittee_then_else_execution_flow() {
+        let mut machine: Machine<CortexM> = create_machine();
+
+        machine.cpu.pc = 0x0;
+        machine.cpu.r0 = 0;
+        machine.cpu.r3 = 0;
+
+        // cmp r3, r0
+        machine.bus.write_u16(0x0, 0x4283).unwrap();
+        // ittee cs
+        machine.bus.write_u16(0x2, 0xBF27).unwrap();
+        // rsbcs r3, r3, #63
+        machine.bus.write_u16(0x4, 0xF1C3).unwrap();
+        machine.bus.write_u16(0x6, 0x033F).unwrap();
+        // addcs r0, r0, r3
+        machine.bus.write_u16(0x8, 0x18C0).unwrap();
+        // subcc r0, r0, r3
+        machine.bus.write_u16(0xA, 0x1AC0).unwrap();
+        // addcc.w r0, r0, #-1
+        machine.bus.write_u16(0xC, 0xF100).unwrap();
+        machine.bus.write_u16(0xE, 0x30FF).unwrap();
+
+        for _ in 0..5 {
+            machine.step().unwrap();
+        }
+
+        assert_eq!(machine.cpu.r0, 63);
+    }
+
+    #[test]
+    fn test_itet_ls_preserves_condition_low_bit() {
+        let mut machine: Machine<CortexM> = create_machine();
+
+        machine.cpu.pc = 0x0;
+        machine.cpu.r0 = 0;
+
+        // cmp r0, #0  => Z=1, C=1, so LS is true and HI is false.
+        machine.bus.write_u16(0x0, 0x2800).unwrap();
+        // itet ls
+        machine.bus.write_u16(0x2, 0xBF96).unwrap();
+        // movls r1, #1
+        machine.bus.write_u16(0x4, 0x2101).unwrap();
+        // movhi r1, #2
+        machine.bus.write_u16(0x6, 0x2102).unwrap();
+        // movls r2, #3
+        machine.bus.write_u16(0x8, 0x2203).unwrap();
+
+        for _ in 0..5 {
+            machine.step().unwrap();
+        }
+
+        assert_eq!(machine.cpu.r1, 1);
+        assert_eq!(machine.cpu.r2, 3);
+    }
+
+    #[test]
+    fn test_thumb2_str_reg_shifted_store() {
+        let mut machine: Machine<CortexM> = create_machine();
+
+        machine.cpu.pc = 0x0;
+        machine.cpu.r3 = 0x2000_0100;
+        machine.cpu.r2 = 1;
+        machine.cpu.r6 = 0xDEAD_BEEF;
+
+        // str.w r6, [r3, r2, lsl #2]
+        machine.bus.write_u16(0x0, 0xF843).unwrap();
+        machine.bus.write_u16(0x2, 0x6022).unwrap();
+
+        machine.step().unwrap();
+
+        assert_eq!(machine.bus.read_u32(0x2000_0104).unwrap(), 0xDEAD_BEEF);
+    }
+
+    #[test]
+    fn test_ite_eq_moveq_movne_flow() {
+        let mut machine: Machine<CortexM> = create_machine();
+
+        machine.cpu.pc = 0x0;
+        machine.cpu.r0 = 0;
+        machine.cpu.r1 = 0;
+        machine.cpu.r3 = 0x4000_4400;
+
+        // cmp r1, #0
+        machine.bus.write_u16(0x0, 0x2900).unwrap();
+        // ite eq
+        machine.bus.write_u16(0x2, 0xBF0C).unwrap();
+        // moveq r0, r3
+        machine.bus.write_u16(0x4, 0x4618).unwrap();
+        // movne r0, #0
+        machine.bus.write_u16(0x6, 0x2000).unwrap();
+
+        for _ in 0..4 {
+            machine.step().unwrap();
+        }
+
+        assert_eq!(machine.cpu.r0, 0x4000_4400);
+    }
+
+    #[test]
+    fn test_thumb2_rsb_immediate_execution() {
+        let mut machine: Machine<CortexM> = create_machine();
+
+        machine.cpu.pc = 0x0;
+        machine.cpu.r3 = 0;
+
+        // rsb.w r3, r3, #63
+        machine.bus.write_u16(0x0, 0xF1C3).unwrap();
+        machine.bus.write_u16(0x2, 0x033F).unwrap();
+
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.r3, 63);
     }
 
     #[test]

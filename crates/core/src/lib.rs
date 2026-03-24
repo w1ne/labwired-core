@@ -204,6 +204,11 @@ pub trait Bus {
         None
     }
 
+    /// Clear a pending NVIC exception (called by CPU when taking an exception).
+    /// For NVIC exceptions (number >= 16), this clears the ISPR bit to prevent
+    /// immediate re-entry of the same exception.
+    fn clear_nvic_pending(&mut self, _exception_num: u32) {}
+
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;

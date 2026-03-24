@@ -27,7 +27,7 @@ pub struct ArmCpuSnapshot {
     pub pc: u32,
     pub xpsr: u32,
     pub primask: bool,
-    pub pending_exceptions: u32,
+    pub pending_exceptions: u64,
     pub vtor: u32,
 }
 

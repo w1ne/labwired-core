@@ -563,8 +563,8 @@ impl SystemBus {
     pub fn signal_nvic_irq(&self, irq: u32) {
         if let Some(nvic) = &self.nvic {
             if irq >= 16 {
-                let idx = ((irq - 16) / 32) as usize;
-                let bit = (irq - 16) % 32;
+                let idx = (irq / 32) as usize;
+                let bit = irq % 32;
                 if idx < 8 {
                     nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
                 }
@@ -719,8 +719,8 @@ impl SystemBus {
                 if let Some(irq) = p.irq {
                     if irq >= 16 {
                         if let Some(nvic) = &self.nvic {
-                            let idx = ((irq - 16) / 32) as usize;
-                            let bit = (irq - 16) % 32;
+                            let idx = (irq / 32) as usize;
+                            let bit = irq % 32;
                             if idx < 8 {
                                 nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
                             }
@@ -737,8 +737,8 @@ impl SystemBus {
                 for irq in irqs {
                     if let Some(nvic) = &self.nvic {
                         if irq >= 16 {
-                            let idx = ((irq - 16) / 32) as usize;
-                            let bit = (irq - 16) % 32;
+                            let idx = (irq / 32) as usize;
+                            let bit = irq % 32;
                             if idx < 8 {
                                 nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
                             }
@@ -837,6 +837,27 @@ impl SystemBus {
 
     pub fn find_peripheral_index_by_name(&self, name: &str) -> Option<usize> {
         self.peripherals.iter().position(|p| p.name == name)
+    }
+
+    /// Translate a Cortex-M bit-band alias address to (physical_byte_addr, bit_index).
+    ///
+    /// Peripheral bit-band: alias 0x42000000–0x43FFFFFF → physical 0x40000000–0x400FFFFF
+    /// SRAM bit-band:       alias 0x22000000–0x23FFFFFF → physical 0x20000000–0x200FFFFF
+    ///
+    /// Each alias *word* (4 bytes, naturally aligned) represents one physical bit.
+    fn bit_band_translate(addr: u64) -> Option<(u64, u8)> {
+        let (phys_base, alias_base) = if addr >= 0x42000000 && addr < 0x44000000 {
+            (0x40000000u64, 0x42000000u64)
+        } else if addr >= 0x22000000 && addr < 0x24000000 {
+            (0x20000000u64, 0x22000000u64)
+        } else {
+            return None;
+        };
+        let offset = addr - alias_base;
+        let bit_word = offset / 4; // each alias word = 1 physical bit
+        let phys_byte = phys_base + bit_word / 8;
+        let bit = (bit_word % 8) as u8;
+        Some((phys_byte, bit))
     }
 }
 
@@ -945,6 +966,12 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
+        if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
+            let byte_val = self.read_u8(phys_byte)?;
+            return Ok(((byte_val >> bit) & 1) as u32);
+        }
+
         if let Some(val) = self.ram.read_u32(addr) {
             return Ok(val);
         }
@@ -986,6 +1013,19 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        // Cortex-M bit-band alias translation (peripheral: 0x42000000-0x43FFFFFF,
+        // SRAM: 0x22000000-0x23FFFFFF).  Each alias word maps to one bit of the
+        // physical address.  Writing 1 sets the bit; writing 0 clears it.
+        if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
+            let old = self.read_u8(phys_byte)?;
+            let new_byte = if value & 1 != 0 {
+                old | (1 << bit)
+            } else {
+                old & !(1 << bit)
+            };
+            return self.write_u8(phys_byte, new_byte);
+        }
+
         let mut wrote = self.ram.write_u32(addr, value) || self.flash.write_u32(addr, value);
         if !wrote && self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
             wrote = self.flash.write_u32(self.flash.base_addr + addr, value);
@@ -1038,6 +1078,19 @@ impl crate::Bus for SystemBus {
     fn tick_peripherals(&mut self) -> Vec<u32> {
         let (interrupts, _costs) = self.tick_peripherals_fully();
         interrupts
+    }
+
+    fn clear_nvic_pending(&mut self, exception_num: u32) {
+        if exception_num >= 16 {
+            if let Some(nvic) = &self.nvic {
+                let irq = exception_num - 16;
+                let idx = (irq / 32) as usize;
+                let bit = irq % 32;
+                if idx < 8 {
+                    nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
+                }
+            }
+        }
     }
 }
 

@@ -45,6 +45,8 @@ pub struct Uart {
     #[serde(skip)]
     rx_buf: Arc<Mutex<VecDeque<u8>>>,
     echo_stdout: bool,
+    /// CR1 register (tracks TXEIE and TE bits for interrupt-driven TX simulation).
+    cr1: u32,
     cr3: u32,
     dma_tx_pending: bool,
 }
@@ -66,6 +68,7 @@ impl Uart {
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: true,
+            cr1: 0,
             cr3: 0,
             dma_tx_pending: false,
         }
@@ -105,6 +108,33 @@ impl Uart {
             UartRegisterLayout::Stm32F1 => 0x14,
             UartRegisterLayout::Stm32V2 => 0x08,
             UartRegisterLayout::Nrf52 => 0x500, // ENABLE
+        }
+    }
+
+    /// Offset of the CR1 register. Returns None for layouts without a CR1 interrupt concept.
+    fn cr1_offset(&self) -> Option<u64> {
+        match self.layout {
+            UartRegisterLayout::Stm32F1 => Some(0x0C),
+            UartRegisterLayout::Stm32V2 => Some(0x00),
+            UartRegisterLayout::Nrf52 => None,
+        }
+    }
+
+    /// Bitmask of the TXEIE bit within CR1 for interrupt-driven TX detection.
+    fn txeie_mask(&self) -> u32 {
+        match self.layout {
+            UartRegisterLayout::Stm32F1 => 1 << 7,  // TXEIE = bit 7 in STM32F1 CR1
+            UartRegisterLayout::Stm32V2 => 1 << 3,  // TXEIE/TXFNFIE = bit 3 in STM32V2 CR1
+            UartRegisterLayout::Nrf52 => 0,
+        }
+    }
+
+    /// Bitmask of the transmission-complete interrupt enable bit within CR1.
+    fn tcie_mask(&self) -> u32 {
+        match self.layout {
+            UartRegisterLayout::Stm32F1 => 1 << 6,
+            UartRegisterLayout::Stm32V2 => 1 << 6,
+            UartRegisterLayout::Nrf52 => 0,
         }
     }
 
@@ -156,6 +186,13 @@ impl crate::Peripheral for Uart {
         if offset == self.cr3_offset() {
             return Ok(self.cr3 as u8);
         }
+        // Return CR1 bytes so interrupt-driven firmware can read back TXEIE state.
+        if let Some(cr1_base) = self.cr1_offset() {
+            let byte_offset = offset.wrapping_sub(cr1_base);
+            if byte_offset < 4 {
+                return Ok(((self.cr1 >> (byte_offset * 8)) & 0xFF) as u8);
+            }
+        }
         Ok(0)
     }
 
@@ -165,9 +202,7 @@ impl crate::Peripheral for Uart {
 
         if offset == self.tx_offset() || is_legacy_tx_alias {
             self.push_tx(value);
-            // If DMAT bit is set, we might be in a DMA sequence,
-            // but usually the DMA controller writes here, and the UART signals it *needs* data.
-            // So the 'trigger' is usually when the UART buffer is EMPTY and DMAT is enabled.
+            // If DMAT bit is set, we might be in a DMA sequence.
             if (self.cr3 & (1 << 7)) != 0 {
                 self.dma_tx_pending = true;
             }
@@ -175,6 +210,13 @@ impl crate::Peripheral for Uart {
             self.cr3 = value as u32;
             if (self.cr3 & (1 << 7)) != 0 {
                 self.dma_tx_pending = true;
+            }
+        } else if let Some(cr1_base) = self.cr1_offset() {
+            // Track CR1 byte-by-byte so TXEIE state is visible to tick().
+            let byte_offset = offset.wrapping_sub(cr1_base);
+            if byte_offset < 4 {
+                let shift = byte_offset * 8;
+                self.cr1 = (self.cr1 & !(0xFF << shift)) | ((value as u32) << shift);
             }
         }
         Ok(())
@@ -187,7 +229,14 @@ impl crate::Peripheral for Uart {
             self.dma_tx_pending = false;
         }
 
+        // Fire while either TXEIE or TCIE is set:
+        // - TXEIE lets HAL push bytes into DR
+        // - TCIE delivers the final completion interrupt after the last byte
+        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
+        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
+
         crate::PeripheralTickResult {
+            irq: txeie_set || tcie_set,
             dma_signals,
             ..Default::default()
         }
@@ -212,6 +261,12 @@ impl crate::Peripheral for Uart {
         }
         if offset == self.cr3_offset() {
             return Some(self.cr3 as u8);
+        }
+        if let Some(cr1_base) = self.cr1_offset() {
+            let byte_offset = offset.wrapping_sub(cr1_base);
+            if byte_offset < 4 {
+                return Some(((self.cr1 >> (byte_offset * 8)) & 0xFF) as u8);
+            }
         }
         Some(0)
     }
@@ -264,5 +319,15 @@ mod tests {
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'Y']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
+    }
+
+    #[test]
+    fn test_uart_tick_raises_irq_for_tcie() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+
+        // CR1 bit 6 = TCIE for STM32F1.
+        uart.write(0x0C, 1 << 6).unwrap();
+
+        assert!(uart.tick().irq);
     }
 }
