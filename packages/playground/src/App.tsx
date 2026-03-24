@@ -72,7 +72,7 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
-        { id: 'led_pa5', type: 'led', x: 380, y: 110, rotate: 0, attrs: { color: 'green' } },
+        { id: 'led_pa5', type: 'led', x: 390, y: 90, rotate: 0, scale: 1.5, attrs: { color: 'green' } },
       ],
       wires: [
         {
@@ -89,8 +89,8 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
-        { id: 'led2_pa5', type: 'led', x: 380, y: 110, rotate: 0, attrs: { color: 'green' } },
-        { id: 'button_user_pc13', type: 'button', x: 320, y: -10, rotate: 0, attrs: {} },
+        { id: 'led2_pa5', type: 'led', x: 390, y: 90, rotate: 0, scale: 1.5, attrs: { color: 'green' } },
+        { id: 'button_user_pc13', type: 'button', x: 300, y: -20, rotate: 0, scale: 1.35, attrs: {} },
       ],
       wires: [
         {

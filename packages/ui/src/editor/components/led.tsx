@@ -58,6 +58,8 @@ export const ledComponent: ComponentDef = {
           </>
         )}
         {/* Labels */}
+        <text x={W / 2} y={-6} textAnchor="middle" fill="#d9e3f0"
+          fontFamily="'Outfit', sans-serif" fontSize={9} fontWeight={700}>LED</text>
         <text x={W / 2} y={12} textAnchor="middle" fill="#888"
           fontFamily="monospace" fontSize={8}>A</text>
         <text x={W / 2} y={H - 4} textAnchor="middle" fill="#888"

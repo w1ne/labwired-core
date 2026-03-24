@@ -72,6 +72,8 @@ export const buttonComponent: ComponentDef = {
         )}
 
         {/* Pin labels */}
+        <text x={W / 2} y={-6} textAnchor="middle" fill="#d9e3f0"
+          fontFamily="'Outfit', sans-serif" fontSize={9} fontWeight={700}>BUTTON</text>
         <text x={8} y={H / 2 + 4} fill="#888" fontFamily="monospace" fontSize={8}>1</text>
         <text x={W - 8} y={H / 2 + 4} textAnchor="end" fill="#888" fontFamily="monospace" fontSize={8}>2</text>
 
