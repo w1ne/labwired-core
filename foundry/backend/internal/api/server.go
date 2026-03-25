@@ -9,7 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -19,6 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/labwired/foundry-backend/internal/catalog"
 	"github.com/labwired/foundry-backend/internal/db"
+	"github.com/labwired/foundry-backend/internal/synthesis"
 	"github.com/labwired/foundry-backend/internal/verification"
 	stripe "github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/webhook"
@@ -35,6 +38,271 @@ func sanitizeInput(s string) string {
 		return s[:maxInputLen]
 	}
 	return s
+}
+
+func normalizeSynthesisRequest(req synthesisAPIRequest) (normalizedSynthesisRequest, error) {
+	req.Kind = strings.TrimSpace(req.Kind)
+	req.PromotionMode = strings.TrimSpace(req.PromotionMode)
+	req.ComponentName = strings.TrimSpace(req.ComponentName)
+	req.Requirements = strings.TrimSpace(req.Requirements)
+	req.DatasheetURL = strings.TrimSpace(req.DatasheetURL)
+	for i := range req.DocumentationURLs {
+		req.DocumentationURLs[i] = strings.TrimSpace(req.DocumentationURLs[i])
+	}
+	if req.Board != nil {
+		req.Board.Vendor = strings.TrimSpace(req.Board.Vendor)
+		req.Board.MarketingName = strings.TrimSpace(req.Board.MarketingName)
+		req.Board.BoardID = strings.TrimSpace(req.Board.BoardID)
+		req.Board.MCU = strings.TrimSpace(req.Board.MCU)
+	}
+	if req.Workload != nil {
+		req.Workload.Type = strings.TrimSpace(req.Workload.Type)
+		req.Workload.FirmwarePath = strings.TrimSpace(req.Workload.FirmwarePath)
+		req.Workload.Example = strings.TrimSpace(req.Workload.Example)
+	}
+	if req.Constraints != nil {
+		req.Constraints.BLEScope = strings.TrimSpace(req.Constraints.BLEScope)
+	}
+	req.DesiredCapabilities = nonEmptyStrings(req.DesiredCapabilities)
+	req.ValidationTargets = nonEmptyStrings(req.ValidationTargets)
+
+	normalized := normalizedSynthesisRequest{
+		Kind:              req.Kind,
+		DryRun:            req.DryRun,
+		PromotionMode:     req.PromotionMode,
+		ComponentName:     req.ComponentName,
+		Requirements:      req.Requirements,
+		DatasheetURL:      req.DatasheetURL,
+		DocumentationURLs: append([]string(nil), req.DocumentationURLs...),
+		Original:          req,
+	}
+	if !isValidPromotionMode(normalized.PromotionMode) {
+		return normalizedSynthesisRequest{}, fmt.Errorf("unsupported promotion_mode %q", normalized.PromotionMode)
+	}
+
+	if req.Kind == "" {
+		if normalized.PromotionMode == "" {
+			normalized.PromotionMode = "artifact_only"
+		}
+		if normalized.DryRun {
+			normalized.PromotionMode = "artifact_only"
+		}
+		if normalized.ComponentName == "" || normalized.Requirements == "" {
+			return normalizedSynthesisRequest{}, fmt.Errorf("component_name and requirements are required")
+		}
+		return normalized, nil
+	}
+
+	switch req.Kind {
+	case "board_onboarding":
+		if normalized.PromotionMode == "" {
+			normalized.PromotionMode = "apply_to_repo"
+		}
+		if normalized.DryRun {
+			normalized.PromotionMode = "artifact_only"
+		}
+		if req.Board == nil {
+			return normalizedSynthesisRequest{}, fmt.Errorf("board is required for kind=board_onboarding")
+		}
+		if req.Board.MarketingName == "" && req.Board.BoardID == "" {
+			return normalizedSynthesisRequest{}, fmt.Errorf("board.marketing_name or board.board_id is required for kind=board_onboarding")
+		}
+		if len(req.DesiredCapabilities) == 0 {
+			return normalizedSynthesisRequest{}, fmt.Errorf("desired_capabilities is required for kind=board_onboarding")
+		}
+		if missing := missingBoardDocs(req); len(missing) > 0 {
+			return normalizedSynthesisRequest{}, fmt.Errorf("insufficient docs for kind=board_onboarding: missing %s", strings.Join(missing, ", "))
+		}
+		normalized.ComponentName = buildBoardComponentName(req)
+		normalized.Requirements = buildBoardRequirements(req)
+		return normalized, nil
+	case "peripheral_model_ingest":
+		if normalized.PromotionMode == "" {
+			normalized.PromotionMode = "artifact_only"
+		}
+		if normalized.DryRun {
+			normalized.PromotionMode = "artifact_only"
+		}
+		if normalized.ComponentName == "" {
+			return normalizedSynthesisRequest{}, fmt.Errorf("component_name is required for kind=peripheral_model_ingest")
+		}
+		if normalized.Requirements == "" {
+			return normalizedSynthesisRequest{}, fmt.Errorf("requirements are required for kind=peripheral_model_ingest")
+		}
+		if strings.TrimSpace(normalized.DatasheetURL) == "" {
+			return normalizedSynthesisRequest{}, fmt.Errorf("datasheet_url is required for kind=peripheral_model_ingest")
+		}
+		return normalized, nil
+	default:
+		return normalizedSynthesisRequest{}, fmt.Errorf("unsupported synthesis kind %q", req.Kind)
+	}
+}
+
+func missingBoardDocs(req synthesisAPIRequest) []string {
+	missing := []string{}
+	if strings.TrimSpace(req.DatasheetURL) == "" {
+		missing = append(missing, "datasheet_url")
+	}
+
+	hasBoardDoc := false
+	hasReferenceManual := false
+	hasExampleDoc := false
+	for _, raw := range req.DocumentationURLs {
+		doc := strings.ToLower(strings.TrimSpace(raw))
+		switch {
+		case strings.Contains(doc, "schematic"), strings.Contains(doc, "board"), strings.Contains(doc, "manual"), strings.Contains(doc, "um"):
+			hasBoardDoc = true
+		}
+		switch {
+		case strings.Contains(doc, "reference"), strings.Contains(doc, "refman"), strings.Contains(doc, "/rm"), strings.Contains(doc, "programming"):
+			hasReferenceManual = true
+		}
+		switch {
+		case strings.Contains(doc, "example"), strings.Contains(doc, "examples"), strings.Contains(doc, "github"), strings.Contains(doc, "cube"), strings.Contains(doc, "sdk"):
+			hasExampleDoc = true
+		}
+	}
+	if !hasBoardDoc {
+		missing = append(missing, "board manual or schematic in documentation_urls")
+	}
+	if !hasReferenceManual {
+		missing = append(missing, "reference manual or programming reference in documentation_urls")
+	}
+	if boardNeedsVendorExample(req) && !hasExampleDoc {
+		missing = append(missing, "vendor example or firmware reference in documentation_urls")
+	}
+	return missing
+}
+
+func boardNeedsVendorExample(req synthesisAPIRequest) bool {
+	parts := []string{req.Requirements}
+	parts = append(parts, req.DesiredCapabilities...)
+	parts = append(parts, req.ValidationTargets...)
+	if req.Constraints != nil {
+		parts = append(parts, req.Constraints.BLEScope)
+	}
+	if req.Workload != nil {
+		parts = append(parts, req.Workload.Type, req.Workload.Example)
+	}
+	lower := strings.ToLower(strings.Join(parts, " "))
+	return strings.Contains(lower, "ble") || strings.Contains(lower, "example") || strings.Contains(lower, "firmware")
+}
+
+func isValidPromotionMode(mode string) bool {
+	switch mode {
+	case "", "artifact_only", "apply_to_repo":
+		return true
+	default:
+		return false
+	}
+}
+
+func buildBoardComponentName(req synthesisAPIRequest) string {
+	if req.Board == nil {
+		return req.ComponentName
+	}
+	parts := []string{}
+	if req.Board.BoardID != "" {
+		parts = append(parts, req.Board.BoardID)
+	}
+	if req.Board.MarketingName != "" {
+		parts = append(parts, req.Board.MarketingName)
+	}
+	if len(parts) == 0 && req.Board.MCU != "" {
+		parts = append(parts, req.Board.MCU)
+	}
+	if len(parts) == 0 {
+		return req.ComponentName
+	}
+	return strings.Join(parts, " / ") + " board onboarding proof"
+}
+
+func buildBoardRequirements(req synthesisAPIRequest) string {
+	lines := []string{"Board onboarding contract:"}
+	if req.Board != nil {
+		if req.Board.MCU != "" {
+			lines = append(lines, "MCU: "+req.Board.MCU)
+		}
+		if req.Board.Vendor != "" {
+			lines = append(lines, "Vendor: "+req.Board.Vendor)
+		}
+	}
+	if len(req.DesiredCapabilities) > 0 {
+		lines = append(lines, "Desired capabilities: "+strings.Join(req.DesiredCapabilities, ", "))
+	}
+	if len(req.ValidationTargets) > 0 {
+		lines = append(lines, "Validation targets: "+strings.Join(req.ValidationTargets, ", "))
+	}
+	if req.Workload != nil {
+		if req.Workload.Type != "" {
+			lines = append(lines, "Workload type: "+req.Workload.Type)
+		}
+		if req.Workload.Example != "" {
+			lines = append(lines, "Preferred example: "+req.Workload.Example)
+		}
+		if req.Workload.FirmwarePath != "" {
+			lines = append(lines, "Firmware path: "+req.Workload.FirmwarePath)
+		}
+	}
+	if req.Constraints != nil {
+		if req.Constraints.BLEScope != "" {
+			lines = append(lines, "BLE scope: "+req.Constraints.BLEScope)
+		}
+		if req.Constraints.MustWriteRepoAssets {
+			lines = append(lines, "Must write repo assets: true")
+		}
+		if req.Constraints.MustRunE2EValidation {
+			lines = append(lines, "Must run e2e validation: true")
+		}
+	}
+	if req.Requirements != "" {
+		lines = append(lines, "Additional notes: "+req.Requirements)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func nonEmptyStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func toSynthesisBoardSpec(spec *synthesisBoardSpec) *synthesis.BoardSpec {
+	if spec == nil {
+		return nil
+	}
+	return &synthesis.BoardSpec{
+		Vendor:        spec.Vendor,
+		MarketingName: spec.MarketingName,
+		BoardID:       spec.BoardID,
+		MCU:           spec.MCU,
+	}
+}
+
+func toSynthesisWorkloadSpec(spec *synthesisWorkloadSpec) *synthesis.WorkloadSpec {
+	if spec == nil {
+		return nil
+	}
+	return &synthesis.WorkloadSpec{
+		Type:         spec.Type,
+		FirmwarePath: spec.FirmwarePath,
+		Example:      spec.Example,
+	}
+}
+
+func toSynthesisConstraintSpec(spec *synthesisConstraintSpec) *synthesis.ConstraintSpec {
+	if spec == nil {
+		return nil
+	}
+	return &synthesis.ConstraintSpec{
+		BLEScope:             spec.BLEScope,
+		MustWriteRepoAssets:  spec.MustWriteRepoAssets,
+		MustRunE2EValidation: spec.MustRunE2EValidation,
+	}
 }
 
 func getIdempotencyKey(r *http.Request) string {
@@ -77,14 +345,70 @@ const (
 
 // Job carries the data needed by the background worker to execute a simulation or synthesis.
 type Job struct {
-	ID            string
-	WorkspaceID   string
-	Type          JobType
-	IRPath        string // temp file containing the submitted YAML/JSON (Verify)
-	ArtifactDir   string // directory where output files will be written
-	DatasheetURL  string // (Synthesize) URL to parse
-	ComponentName string // (Synthesize) Name of the component
-	Requirements  string // (Synthesize)
+	ID                  string
+	WorkspaceID         string
+	Type                JobType
+	IRPath              string // temp file containing the submitted YAML/JSON (Verify)
+	ArtifactDir         string // directory where output files will be written
+	DatasheetURL        string // (Synthesize) URL to parse
+	DocumentationURLs   []string
+	LabWiredPath        string
+	RepoRootDir         string
+	SynthesisKind       string
+	DryRun              bool
+	PromotionMode       string
+	Board               *synthesis.BoardSpec
+	DesiredCapabilities []string
+	ValidationTargets   []string
+	Workload            *synthesis.WorkloadSpec
+	Constraints         *synthesis.ConstraintSpec
+	ComponentName       string // (Synthesize) Name of the component
+	Requirements        string // (Synthesize)
+}
+
+type synthesisBoardSpec struct {
+	Vendor        string `json:"vendor,omitempty"`
+	MarketingName string `json:"marketing_name,omitempty"`
+	BoardID       string `json:"board_id,omitempty"`
+	MCU           string `json:"mcu,omitempty"`
+}
+
+type synthesisWorkloadSpec struct {
+	Type         string `json:"type,omitempty"`
+	FirmwarePath string `json:"firmware_path,omitempty"`
+	Example      string `json:"example,omitempty"`
+}
+
+type synthesisConstraintSpec struct {
+	BLEScope             string `json:"ble_scope,omitempty"`
+	MustWriteRepoAssets  bool   `json:"must_write_repo_assets,omitempty"`
+	MustRunE2EValidation bool   `json:"must_run_e2e_validation,omitempty"`
+}
+
+type synthesisAPIRequest struct {
+	Kind                string                   `json:"kind,omitempty"`
+	DryRun              bool                     `json:"dry_run,omitempty"`
+	PromotionMode       string                   `json:"promotion_mode,omitempty"`
+	ComponentName       string                   `json:"component_name,omitempty"`
+	Requirements        string                   `json:"requirements,omitempty"`
+	DatasheetURL        string                   `json:"datasheet_url,omitempty"`
+	DocumentationURLs   []string                 `json:"documentation_urls,omitempty"`
+	Board               *synthesisBoardSpec      `json:"board,omitempty"`
+	DesiredCapabilities []string                 `json:"desired_capabilities,omitempty"`
+	ValidationTargets   []string                 `json:"validation_targets,omitempty"`
+	Workload            *synthesisWorkloadSpec   `json:"workload,omitempty"`
+	Constraints         *synthesisConstraintSpec `json:"constraints,omitempty"`
+}
+
+type normalizedSynthesisRequest struct {
+	Kind              string
+	DryRun            bool
+	PromotionMode     string
+	ComponentName     string
+	Requirements      string
+	DatasheetURL      string
+	DocumentationURLs []string
+	Original          synthesisAPIRequest
 }
 
 type Server struct {
@@ -97,6 +421,7 @@ type Server struct {
 	catalog        *catalog.Manager
 	artifactsDir   string
 	dataDir        string
+	repoRootDir    string
 	clerkSecretKey string
 
 	scheduleMu         sync.Mutex
@@ -140,6 +465,7 @@ type ServerOptions struct {
 	RateLimitPerWorkspace    int
 	RateLimitWindow          time.Duration
 	ClerkSecretKey           string
+	RepoRootDir              string
 }
 
 func DefaultServerOptions() ServerOptions {
@@ -233,6 +559,7 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 		catalog:                  cat,
 		artifactsDir:             artifactsDir,
 		dataDir:                  dataDir,
+		repoRootDir:              opts.RepoRootDir,
 		pendingByWorkspace:       make(map[string][]*Job),
 		maxPendingJobs:           100,
 		maxInflightPerWorkspace:  opts.MaxInflightPerWorkspace,
@@ -870,7 +1197,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // ── Estimate ─────────────────────────────────────────────────────────────────
 
-func calculateSynthesisCost(componentName, requirements string) int {
+func calculateSynthesisCost(kind, componentName, requirements string, desiredCapabilities, validationTargets []string) int {
+	if kind == "board_onboarding" {
+		cost := 1200
+		cost += 50 * len(nonEmptyStrings(desiredCapabilities))
+		cost += 75 * len(nonEmptyStrings(validationTargets))
+		return cost
+	}
 	cost := 15
 	lower := strings.ToLower(componentName + " " + requirements)
 	switch {
@@ -884,11 +1217,7 @@ func calculateSynthesisCost(componentName, requirements string) int {
 
 func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxSynthesisBodyBytes)
-	var req struct {
-		ComponentName string `json:"component_name"`
-		Requirements  string `json:"requirements"`
-		DatasheetURL  string `json:"datasheet_url,omitempty"`
-	}
+	var req synthesisAPIRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if strings.Contains(err.Error(), "http: request body too large") {
 			sendError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Request body exceeds size limit.", "Reduce request size and retry.")
@@ -897,19 +1226,23 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax.")
 		return
 	}
-	if req.ComponentName == "" || req.Requirements == "" {
-		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "component_name and requirements are required.", "")
+	normalized, err := normalizeSynthesisRequest(req)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", err.Error(), "")
 		return
 	}
-	req.ComponentName = sanitizeInput(req.ComponentName)
-	req.Requirements = sanitizeInput(req.Requirements)
+	normalized.ComponentName = sanitizeInput(normalized.ComponentName)
+	normalized.Requirements = sanitizeInput(normalized.Requirements)
 
-	cost := calculateSynthesisCost(req.ComponentName, req.Requirements)
+	cost := calculateSynthesisCost(normalized.Kind, normalized.ComponentName, normalized.Requirements, normalized.Original.DesiredCapabilities, normalized.Original.ValidationTargets)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"component_name":      req.ComponentName,
+		"kind":                normalized.Kind,
+		"dry_run":             normalized.DryRun,
+		"promotion_mode":      normalized.PromotionMode,
+		"component_name":      normalized.ComponentName,
 		"estimated_cost_runs": cost,
-		"message":             fmt.Sprintf("Synthesizing %s will cost approximately %d runs.", req.ComponentName, cost),
+		"message":             fmt.Sprintf("Synthesizing %s will cost approximately %d runs.", normalized.ComponentName, cost),
 	})
 }
 
@@ -917,11 +1250,7 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxSynthesisBodyBytes)
-	var req struct {
-		ComponentName string `json:"component_name"`
-		Requirements  string `json:"requirements"`
-		DatasheetURL  string `json:"datasheet_url,omitempty"`
-	}
+	var req synthesisAPIRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if strings.Contains(err.Error(), "http: request body too large") {
 			sendError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Request body exceeds size limit.", "Reduce request size and retry.")
@@ -930,14 +1259,15 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "INVALID_JSON", "The request body could not be parsed as valid JSON.", "Verify the JSON syntax.")
 		return
 	}
-	if req.ComponentName == "" || req.Requirements == "" {
-		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", "component_name and requirements are required.", "")
+	normalized, err := normalizeSynthesisRequest(req)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELDS", err.Error(), "")
 		return
 	}
-	req.ComponentName = sanitizeInput(req.ComponentName)
-	req.Requirements = sanitizeInput(req.Requirements)
+	normalized.ComponentName = sanitizeInput(normalized.ComponentName)
+	normalized.Requirements = sanitizeInput(normalized.Requirements)
 
-	cost := calculateSynthesisCost(req.ComponentName, req.Requirements)
+	cost := calculateSynthesisCost(normalized.Kind, normalized.ComponentName, normalized.Requirements, normalized.Original.DesiredCapabilities, normalized.Original.ValidationTargets)
 	jobID := fmt.Sprintf("synth-%d", time.Now().UnixNano())
 	primaryRunID := fmt.Sprintf("%s-%d", jobID, 0)
 	apiKey, ok := apiKeyFromContext(r.Context())
@@ -993,10 +1323,9 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create artifact directory.", "")
 		return
 	}
-	reqPayload, err := json.Marshal(map[string]string{
-		"component_name": req.ComponentName,
-		"requirements":   req.Requirements,
-		"datasheet_url":  req.DatasheetURL,
+	reqPayload, err := json.Marshal(map[string]any{
+		"request":    normalized.Original,
+		"normalized": normalized,
 	})
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to persist synthesis input.", "")
@@ -1008,13 +1337,24 @@ func (s *Server) handleSynthesize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job := &Job{
-		ID:            primaryRunID,
-		WorkspaceID:   apiKey.WorkspaceID,
-		Type:          JobTypeSynthesize,
-		ArtifactDir:   artifactDir,
-		DatasheetURL:  req.DatasheetURL,
-		ComponentName: req.ComponentName,
-		Requirements:  req.Requirements,
+		ID:                  primaryRunID,
+		WorkspaceID:         apiKey.WorkspaceID,
+		Type:                JobTypeSynthesize,
+		ArtifactDir:         artifactDir,
+		DatasheetURL:        normalized.DatasheetURL,
+		LabWiredPath:        s.orchestrator.LabwiredPath,
+		RepoRootDir:         s.repoRootDir,
+		SynthesisKind:       normalized.Kind,
+		DryRun:              normalized.DryRun,
+		PromotionMode:       normalized.PromotionMode,
+		Board:               toSynthesisBoardSpec(normalized.Original.Board),
+		DesiredCapabilities: append([]string(nil), normalized.Original.DesiredCapabilities...),
+		ValidationTargets:   append([]string(nil), normalized.Original.ValidationTargets...),
+		Workload:            toSynthesisWorkloadSpec(normalized.Original.Workload),
+		Constraints:         toSynthesisConstraintSpec(normalized.Original.Constraints),
+		ComponentName:       normalized.ComponentName,
+		Requirements:        normalized.Requirements,
+		DocumentationURLs:   normalized.DocumentationURLs,
 	}
 
 	// Reserve primary run with atomic quota+global-inflight check.
@@ -1628,14 +1968,23 @@ func runSynthesisJob(_ context.Context, job *Job) (*verification.Result, error) 
 		return nil, err
 	}
 
-	output := map[string]any{
-		"name":          job.ComponentName,
-		"source":        "foundry-synthesis",
-		"requirements":  job.Requirements,
-		"datasheet_url": job.DatasheetURL,
-		"generated_at":  time.Now().UTC().Format(time.RFC3339),
+	artifact, err := synthesis.GenerateArtifact(context.Background(), synthesis.Request{
+		Kind:                job.SynthesisKind,
+		ComponentName:       job.ComponentName,
+		Requirements:        job.Requirements,
+		DatasheetURL:        job.DatasheetURL,
+		DocumentationURLs:   append([]string(nil), job.DocumentationURLs...),
+		Board:               job.Board,
+		DesiredCapabilities: append([]string(nil), job.DesiredCapabilities...),
+		ValidationTargets:   append([]string(nil), job.ValidationTargets...),
+		Workload:            job.Workload,
+		Constraints:         job.Constraints,
+	})
+	if err != nil {
+		return nil, err
 	}
-	payload, err := json.MarshalIndent(output, "", "  ")
+
+	payload, err := json.MarshalIndent(artifact, "", "  ")
 	if err != nil {
 		return nil, err
 	}
@@ -1643,14 +1992,287 @@ func runSynthesisJob(_ context.Context, job *Job) (*verification.Result, error) 
 		return nil, err
 	}
 
-	resultPayload := []byte(`{"pass":true,"assertions_passed":1,"assertions_total":1}`)
-	if err := os.WriteFile(filepath.Join(job.ArtifactDir, "result.json"), resultPayload, 0644); err != nil {
+	assertionsTotal, err := synthesis.ValidateArtifact(artifact)
+	if err != nil {
+		return failSynthesisResult(job, 0, 1, err), nil
+	}
+
+	if artifact.RepoBundle != nil && len(artifact.RepoBundle.Files) > 0 {
+		bundleAssertions, bundleErr := materializeAndValidateRepoBundle(job, artifact.RepoBundle)
+		if bundleErr != nil {
+			return failSynthesisResult(job, assertionsTotal, assertionsTotal+1, bundleErr), nil
+		}
+		assertionsTotal += bundleAssertions
+		if shouldApplyRepoPromotion(job) {
+			if err := applyRepoBundleToRepo(job, artifact.RepoBundle); err != nil {
+				return failSynthesisResult(job, assertionsTotal, assertionsTotal+1, err), nil
+			}
+			assertionsTotal++
+		}
+		if shouldRunBoardProof(job) {
+			validationAssertions, validationErr := runBoardSmokeValidation(job, artifact.RepoBundle)
+			if validationErr != nil {
+				return failSynthesisResult(job, assertionsTotal, assertionsTotal+1, validationErr), nil
+			}
+			assertionsTotal += validationAssertions
+		}
+	}
+
+	if err := writeSynthesisResult(job, true, assertionsTotal, assertionsTotal, ""); err != nil {
 		return nil, err
 	}
 
 	return &verification.Result{
 		Pass:             true,
-		AssertionsPassed: 1,
-		AssertionsTotal:  1,
+		AssertionsPassed: assertionsTotal,
+		AssertionsTotal:  assertionsTotal,
 	}, nil
+}
+
+func failSynthesisResult(job *Job, passed int, total int, failure error) *verification.Result {
+	if failure == nil {
+		failure = fmt.Errorf("unknown synthesis failure")
+	}
+	_ = writeSynthesisResult(job, false, passed, total, failure.Error())
+	return &verification.Result{
+		Pass:             false,
+		AssertionsPassed: passed,
+		AssertionsTotal:  total,
+		Error:            failure.Error(),
+	}
+}
+
+func writeSynthesisResult(job *Job, pass bool, passed int, total int, errText string) error {
+	payload := map[string]any{
+		"pass":              pass,
+		"assertions_passed": passed,
+		"assertions_total":  total,
+	}
+	if strings.TrimSpace(errText) != "" {
+		payload["error"] = errText
+	}
+	resultPayload, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(job.ArtifactDir, "result.json"), resultPayload, 0o644)
+}
+
+func shouldApplyRepoPromotion(job *Job) bool {
+	if job == nil {
+		return false
+	}
+	return strings.TrimSpace(job.PromotionMode) == "apply_to_repo"
+}
+
+func shouldRunBoardProof(job *Job) bool {
+	if job == nil {
+		return false
+	}
+	if job.DryRun {
+		return false
+	}
+	return shouldApplyRepoPromotion(job)
+}
+
+func materializeAndValidateRepoBundle(job *Job, bundle *synthesis.RepoBundle) (int, error) {
+	root := filepath.Join(job.ArtifactDir, "repo_bundle")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return 0, fmt.Errorf("failed to create repo bundle dir: %w", err)
+	}
+
+	var chipPath string
+	var systemPath string
+	for _, file := range bundle.Files {
+		target := filepath.Join(root, filepath.FromSlash(file.Path))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return 0, fmt.Errorf("failed to create repo bundle parent dir: %w", err)
+		}
+		if err := os.WriteFile(target, []byte(file.Content), 0o644); err != nil {
+			return 0, fmt.Errorf("failed to write generated file %s: %w", file.Path, err)
+		}
+		if strings.Contains(file.Path, "core/configs/chips/") && strings.HasSuffix(file.Path, ".yaml") {
+			chipPath = target
+		}
+		if strings.Contains(file.Path, "core/configs/systems/") && strings.HasSuffix(file.Path, ".yaml") {
+			systemPath = target
+		}
+	}
+
+	if chipPath == "" || systemPath == "" {
+		return 0, fmt.Errorf("repo bundle missing chip or system yaml for validation")
+	}
+	if strings.TrimSpace(job.LabWiredPath) == "" {
+		return 0, fmt.Errorf("labwired path unavailable for repo bundle validation")
+	}
+
+	assertions := 0
+	if err := runLabWiredAssetValidate(job, root, "--chip", chipPath, "validate_chip.json"); err != nil {
+		return assertions, err
+	}
+	assertions++
+	if err := runLabWiredAssetValidate(job, root, "--system", systemPath, "validate_system.json"); err != nil {
+		return assertions, err
+	}
+	assertions++
+	return assertions, nil
+}
+
+func runLabWiredAssetValidate(job *Job, workdir string, argName string, argValue string, outputName string) error {
+	cmd := exec.Command(job.LabWiredPath, "asset", "validate", "--json", argName, argValue)
+	cmd.Dir = workdir
+	output, err := cmd.CombinedOutput()
+	_ = os.WriteFile(filepath.Join(job.ArtifactDir, outputName), output, 0o644)
+	if err != nil {
+		return fmt.Errorf("labwired asset validate failed for %s: %w", argValue, err)
+	}
+
+	var parsed struct {
+		Valid bool `json:"valid"`
+	}
+	if json.Unmarshal(output, &parsed) != nil {
+		return fmt.Errorf("labwired asset validate returned non-json output for %s", argValue)
+	}
+	if !parsed.Valid {
+		return fmt.Errorf("labwired asset validate reported invalid bundle for %s", argValue)
+	}
+	return nil
+}
+
+func runBoardSmokeValidation(job *Job, bundle *synthesis.RepoBundle) (int, error) {
+	repoRoot := strings.TrimSpace(job.RepoRootDir)
+	if repoRoot == "" || bundle == nil {
+		return 0, nil
+	}
+	coreDir := filepath.Join(repoRoot, "core")
+	if _, err := os.Stat(filepath.Join(coreDir, "Cargo.toml")); err != nil {
+		return 0, nil
+	}
+	if _, err := os.Stat(filepath.Join(coreDir, "scripts", "unsupported_instruction_audit.sh")); err != nil {
+		return 0, nil
+	}
+
+	var firmwareManifest string
+	var smokeScript string
+	var smokeScriptContent string
+	var systemManifest string
+	var boardID string
+	for _, file := range bundle.Files {
+		switch {
+		case strings.HasSuffix(file.Path, "/board_firmware/Cargo.toml"):
+			firmwareManifest = filepath.Join(repoRoot, filepath.FromSlash(file.Path))
+			boardID = filepath.Base(filepath.Dir(filepath.Dir(filepath.FromSlash(file.Path))))
+		case strings.HasSuffix(file.Path, "/uart-smoke.yaml"):
+			smokeScript = filepath.Join(repoRoot, filepath.FromSlash(file.Path))
+			smokeScriptContent = file.Content
+			if boardID == "" {
+				boardID = filepath.Base(filepath.Dir(filepath.FromSlash(file.Path)))
+			}
+		case strings.Contains(file.Path, "core/configs/systems/") && strings.HasSuffix(file.Path, ".yaml"):
+			systemManifest = filepath.Join(repoRoot, filepath.FromSlash(file.Path))
+			if boardID == "" {
+				boardID = strings.TrimSuffix(filepath.Base(file.Path), ".yaml")
+			}
+		}
+	}
+	if firmwareManifest == "" || smokeScript == "" || systemManifest == "" {
+		return 0, nil
+	}
+
+	firmwarePackage := "firmware-" + boardID + "-demo"
+	rustTarget := inferRustTargetFromSmokeScript(smokeScriptContent)
+	firmwareBinary := filepath.Join(filepath.Dir(firmwareManifest), "target", rustTarget, "release", firmwarePackage)
+	smokeOutputDir := filepath.Join(coreDir, "out", boardID, "uart-smoke")
+	auditOutputDir := filepath.Join(coreDir, "out", "unsupported-audit", boardID)
+
+	assertions := 0
+	if err := runCommandLogged(job, coreDir, "build_smoke.log", 5*time.Minute, "cargo", "build", "--manifest-path", relPath(coreDir, firmwareManifest), "--release", "--target", rustTarget); err != nil {
+		return assertions, fmt.Errorf("smoke firmware build failed: %w", err)
+	}
+	assertions++
+	if err := runCommandLogged(job, coreDir, "run_smoke.log", 5*time.Minute, "cargo", "run", "-q", "-p", "labwired-cli", "--", "test", "--script", relPath(coreDir, smokeScript), "--output-dir", relPath(coreDir, smokeOutputDir), "--no-uart-stdout"); err != nil {
+		return assertions, fmt.Errorf("uart smoke validation failed: %w", err)
+	}
+	assertions++
+	if err := runCommandLogged(job, coreDir, "unsupported_audit.log", 10*time.Minute, "./scripts/unsupported_instruction_audit.sh", "--firmware", relPath(coreDir, firmwareBinary), "--system", relPath(coreDir, systemManifest), "--max-steps", "200000", "--out-dir", relPath(coreDir, auditOutputDir)); err != nil {
+		return assertions, fmt.Errorf("unsupported instruction audit failed: %w", err)
+	}
+	assertions++
+
+	if err := copyIfExists(filepath.Join(auditOutputDir, "report.md"), filepath.Join(job.ArtifactDir, "unsupported_audit_report.md")); err == nil {
+		assertions++
+	}
+	if err := copyIfExists(filepath.Join(smokeOutputDir, "result.json"), filepath.Join(job.ArtifactDir, "uart_smoke_result.json")); err == nil {
+		assertions++
+	}
+	return assertions, nil
+}
+
+func inferRustTargetFromSmokeScript(script string) string {
+	re := regexp.MustCompile(`(?m)^\s*firmware:\s+"\.\/board_firmware\/target\/([^/]+)\/release\/[^"]+"`)
+	matches := re.FindStringSubmatch(script)
+	if len(matches) == 2 && strings.TrimSpace(matches[1]) != "" {
+		return strings.TrimSpace(matches[1])
+	}
+	return "thumbv7em-none-eabi"
+}
+
+func runCommandLogged(job *Job, workdir string, outputName string, timeout time.Duration, name string, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = workdir
+	output, err := cmd.CombinedOutput()
+	_ = os.WriteFile(filepath.Join(job.ArtifactDir, outputName), output, 0o644)
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("%s timed out", name)
+	}
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+	}
+	return nil
+}
+
+func relPath(base string, target string) string {
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return target
+	}
+	return filepath.ToSlash(rel)
+}
+
+func copyIfExists(src string, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
+func applyRepoBundleToRepo(job *Job, bundle *synthesis.RepoBundle) error {
+	repoRoot := strings.TrimSpace(job.RepoRootDir)
+	if repoRoot == "" {
+		return fmt.Errorf("repo root unavailable for bundle promotion")
+	}
+	repoRootAbs, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return fmt.Errorf("failed to resolve repo root: %w", err)
+	}
+	for _, file := range bundle.Files {
+		target := filepath.Join(repoRootAbs, filepath.FromSlash(file.Path))
+		targetAbs, err := filepath.Abs(target)
+		if err != nil {
+			return fmt.Errorf("failed to resolve target path %s: %w", file.Path, err)
+		}
+		if !strings.HasPrefix(targetAbs, repoRootAbs+string(os.PathSeparator)) && targetAbs != repoRootAbs {
+			return fmt.Errorf("refusing to write bundle file outside repo root: %s", file.Path)
+		}
+		if err := os.MkdirAll(filepath.Dir(targetAbs), 0o755); err != nil {
+			return fmt.Errorf("failed to create repo parent dir for %s: %w", file.Path, err)
+		}
+		if err := os.WriteFile(targetAbs, []byte(file.Content), 0o644); err != nil {
+			return fmt.Errorf("failed to write repo bundle file %s: %w", file.Path, err)
+		}
+	}
+	return nil
 }

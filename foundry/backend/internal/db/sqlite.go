@@ -291,30 +291,40 @@ func (s *Store) IncrementRateWindow(scope, subject string, now time.Time, window
 	windowStart := now.UTC().Truncate(window)
 	windowStartStr := windowStart.Format("2006-01-02 15:04:05")
 	resetAt := windowStart.Add(window)
+	cutoff := windowStart.Add(-2 * window).Format("2006-01-02 15:04:05")
 
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		count, err := s.incrementRateWindowOnce(scope, subject, windowStartStr, cutoff)
+		if err == nil {
+			return count, resetAt, nil
+		}
+		lastErr = err
+		if !isSQLiteBusyErr(err) {
+			return 0, time.Time{}, err
+		}
+		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+	}
+	return 0, time.Time{}, lastErr
+}
+
+func (s *Store) incrementRateWindowOnce(scope, subject, windowStartStr, cutoff string) (int, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
-		return 0, time.Time{}, err
+		return 0, err
 	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
 
 	if _, err := tx.Exec(
-		`INSERT OR IGNORE INTO request_rate_windows (scope, subject, window_start, request_count)
-		 VALUES (?, ?, ?, 0)`,
+		`INSERT INTO request_rate_windows (scope, subject, window_start, request_count)
+		 VALUES (?, ?, ?, 1)
+		 ON CONFLICT(scope, subject, window_start)
+		 DO UPDATE SET request_count = request_count + 1`,
 		scope, subject, windowStartStr,
 	); err != nil {
-		return 0, time.Time{}, err
-	}
-
-	if _, err := tx.Exec(
-		`UPDATE request_rate_windows
-		 SET request_count = request_count + 1
-		 WHERE scope = ? AND subject = ? AND window_start = ?`,
-		scope, subject, windowStartStr,
-	); err != nil {
-		return 0, time.Time{}, err
+		return 0, err
 	}
 
 	var count int
@@ -323,21 +333,27 @@ func (s *Store) IncrementRateWindow(scope, subject string, now time.Time, window
 		 WHERE scope = ? AND subject = ? AND window_start = ?`,
 		scope, subject, windowStartStr,
 	).Scan(&count); err != nil {
-		return 0, time.Time{}, err
+		return 0, err
 	}
 
-	cutoff := windowStart.Add(-2 * window).Format("2006-01-02 15:04:05")
-	if _, err := tx.Exec(
+	// Best-effort cleanup; avoid failing the request path if pruning contends.
+	_, _ = tx.Exec(
 		`DELETE FROM request_rate_windows WHERE datetime(window_start) < datetime(?)`,
 		cutoff,
-	); err != nil {
-		return 0, time.Time{}, err
-	}
+	)
 
 	if err := tx.Commit(); err != nil {
-		return 0, time.Time{}, err
+		return 0, err
 	}
-	return count, resetAt, nil
+	return count, nil
+}
+
+func isSQLiteBusyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "sqlite_busy")
 }
 
 // isAlreadyExistsErr returns true for SQLite "duplicate column" errors produced

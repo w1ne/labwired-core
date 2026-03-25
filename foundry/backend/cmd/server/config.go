@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ type config struct {
 	DBPath                  string
 	HardwareJSONPath        string
 	CoreConfigsDir          string
+	RepoRootDir             string
 	KeyPrefixBackfillPath   string
 	AllowInsecureStripeHook bool
 	StripeWebhookSecret     string
@@ -35,12 +37,13 @@ func loadConfigFromEnv() (config, error) {
 	cfg := config{
 		Port:                  envOrDefault("PORT", "8080"),
 		BuildCommit:           envOrDefault("BUILD_COMMIT", envOrDefault("GITHUB_SHA", "unknown")),
-		LabWiredPath:          envOrDefault("LABWIRED_PATH", "labwired"),
+		LabWiredPath:          defaultLabWiredPath(),
 		ArtifactsDir:          envOrDefault("ARTIFACTS_DIR", "/tmp/foundry/artifacts"),
 		DataDir:               envOrDefault("DATA_DIR", "data"),
 		DBPath:                envOrDefault("DB_PATH", "foundry.db"),
 		HardwareJSONPath:      envOrDefault("HARDWARE_JSON_PATH", "configs/hardware.json"),
 		CoreConfigsDir:        envOrDefault("CORE_CONFIGS_DIR", "../../core/configs"),
+		RepoRootDir:           defaultRepoRootDir(),
 		KeyPrefixBackfillPath: strings.TrimSpace(os.Getenv("KEY_PREFIX_BACKFILL_PATH")),
 		StripeWebhookSecret:   strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		AppEnv:                strings.ToLower(strings.TrimSpace(envOrDefault("APP_ENV", "development"))),
@@ -105,6 +108,7 @@ func loadConfigFromEnv() (config, error) {
 	}
 
 	cfg.ServerOptions.ClerkSecretKey = cfg.ClerkSecretKey
+	cfg.ServerOptions.RepoRootDir = cfg.RepoRootDir
 
 	return cfg, nil
 }
@@ -115,6 +119,38 @@ func envOrDefault(name, defaultValue string) string {
 		return defaultValue
 	}
 	return v
+}
+
+func defaultLabWiredPath() string {
+	if v := strings.TrimSpace(os.Getenv("LABWIRED_PATH")); v != "" {
+		return v
+	}
+
+	candidates := []string{
+		"labwired",
+		filepath.Clean("../../core/target/debug/labwired"),
+		filepath.Clean("../../core/target/release/labwired"),
+	}
+	for _, candidate := range candidates[1:] {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			if abs, absErr := filepath.Abs(candidate); absErr == nil {
+				return abs
+			}
+			return candidate
+		}
+	}
+	return candidates[0]
+}
+
+func defaultRepoRootDir() string {
+	if v := strings.TrimSpace(os.Getenv("REPO_ROOT_DIR")); v != "" {
+		return v
+	}
+	candidate := filepath.Clean("../..")
+	if abs, err := filepath.Abs(candidate); err == nil {
+		return abs
+	}
+	return candidate
 }
 
 func parsePositiveIntEnv(name string, defaultValue int) (int, error) {

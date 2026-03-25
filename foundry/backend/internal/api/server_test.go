@@ -16,6 +16,7 @@ import (
 
 	"github.com/labwired/foundry-backend/internal/catalog"
 	"github.com/labwired/foundry-backend/internal/db"
+	"github.com/labwired/foundry-backend/internal/synthesis"
 	"github.com/labwired/foundry-backend/internal/verification"
 )
 
@@ -94,6 +95,28 @@ func doAuthRequestWithHeaders(t *testing.T, srv *Server, method, path, key strin
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
 	return rr
+}
+
+func waitForRunCompletion(t *testing.T, srv *Server, key string, runID string) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		rr := doAuthRequest(t, srv, http.MethodGet, "/v1/runs/"+runID, key, nil)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("poll run failed: status=%d body=%s", rr.Code, rr.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("poll decode failed: %v", err)
+		}
+		status, _ := payload["status"].(string)
+		if status == "pass" || status == "fail" || status == "error" {
+			return payload
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for run %s", runID)
+	return nil
 }
 
 func TestGetRunArtifact_EnforcesWorkspaceOwnership(t *testing.T) {
@@ -545,6 +568,704 @@ func TestSynthesize_PayloadTooLargeReturns413(t *testing.T) {
 	}
 	if used != 0 {
 		t.Fatalf("expected no quota usage for oversized payload, got %d", used)
+	}
+}
+
+func TestEstimate_BoardOnboardingPayloadReturnsNormalizedContract(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-estimate-board")
+
+	body := []byte(`{
+	  "kind":"board_onboarding",
+	  "datasheet_url":"https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf",
+	  "documentation_urls":[
+	    "https://www.st.com/resource/en/user_manual/um2819-stm32wb-nucleo64-board-mb1355-stmicroelectronics.pdf",
+	    "https://www.st.com/resource/en/reference_manual/rm0434-stm32wb55xx-stm32wb35xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf",
+	    "https://github.com/STMicroelectronics/STM32CubeWB/tree/master/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_p2pServer"
+	  ],
+	  "board":{"vendor":"ST","marketing_name":"NUCLEO-WB55RG","board_id":"MB1355C","mcu":"STM32WB55RG"},
+	  "desired_capabilities":["boot","uart_console","led_control","button_input"],
+	  "validation_targets":["uart_smoke","unsupported_instruction_audit"],
+	  "workload":{"type":"generated_smoke_firmware","example":"BLE_p2pServer"},
+	  "constraints":{"ble_scope":"example_selection_only","must_write_repo_assets":true,"must_run_e2e_validation":true}
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/estimate", key, body)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if got["kind"] != "board_onboarding" {
+		t.Fatalf("expected kind=board_onboarding, got=%v", got["kind"])
+	}
+	componentName, _ := got["component_name"].(string)
+	if !strings.Contains(componentName, "MB1355C / NUCLEO-WB55RG") {
+		t.Fatalf("unexpected component_name: %q", componentName)
+	}
+}
+
+func TestSynthesize_BoardOnboardingPayloadRequiresDesiredCapabilities(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-synth-board-missing-caps")
+
+	body := []byte(`{
+	  "kind":"board_onboarding",
+	  "datasheet_url":"https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf",
+	  "documentation_urls":[
+	    "https://www.st.com/resource/en/user_manual/um2819-stm32wb-nucleo64-board-mb1355-stmicroelectronics.pdf",
+	    "https://www.st.com/resource/en/reference_manual/rm0434-stm32wb55xx-stm32wb35xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf"
+	  ],
+	  "board":{"marketing_name":"NUCLEO-WB55RG","board_id":"MB1355C"}
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/synthesize", key, body)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "desired_capabilities") {
+		t.Fatalf("expected desired_capabilities error, got %s", rr.Body.String())
+	}
+}
+
+func TestEstimate_BoardOnboardingDryRunDefaultsToArtifactOnly(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-estimate-board-dry-run")
+
+	body := []byte(`{
+	  "kind":"board_onboarding",
+	  "dry_run":true,
+	  "datasheet_url":"https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf",
+	  "documentation_urls":[
+	    "https://www.st.com/resource/en/user_manual/um2819-stm32wb-nucleo64-board-mb1355-stmicroelectronics.pdf",
+	    "https://www.st.com/resource/en/reference_manual/rm0434-stm32wb55xx-stm32wb35xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf"
+	  ],
+	  "board":{"marketing_name":"NUCLEO-WB55RG","board_id":"MB1355C","mcu":"STM32WB55RG"},
+	  "desired_capabilities":["boot","uart_console"]
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/estimate", key, body)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if got["dry_run"] != true {
+		t.Fatalf("expected dry_run=true, got=%v", got["dry_run"])
+	}
+	if got["promotion_mode"] != "artifact_only" {
+		t.Fatalf("expected promotion_mode=artifact_only, got=%v", got["promotion_mode"])
+	}
+}
+
+func TestEstimate_PeripheralModelIngestPayloadPreservesComponentIdentity(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-estimate-peripheral")
+
+	body := []byte(`{
+	  "kind":"peripheral_model_ingest",
+	  "component_name":"ADXL345",
+	  "requirements":"I2C interface required. Register 0x00 should return Device ID 0xE5.",
+	  "datasheet_url":"https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL345.pdf"
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/estimate", key, body)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if got["kind"] != "peripheral_model_ingest" {
+		t.Fatalf("expected kind=peripheral_model_ingest, got=%v", got["kind"])
+	}
+	if got["component_name"] != "ADXL345" {
+		t.Fatalf("unexpected component_name: %v", got["component_name"])
+	}
+}
+
+func TestEstimate_BoardOnboardingMissingDocsRejected(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-estimate-board-missing-docs")
+
+	body := []byte(`{
+	  "kind":"board_onboarding",
+	  "board":{"marketing_name":"NUCLEO-WB55RG","board_id":"MB1355C","mcu":"STM32WB55RG"},
+	  "desired_capabilities":["boot","uart_console"]
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/estimate", key, body)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "insufficient docs") || !strings.Contains(rr.Body.String(), "datasheet_url") {
+		t.Fatalf("expected missing-doc details, got %s", rr.Body.String())
+	}
+}
+
+func TestEstimate_PeripheralModelIngestMissingDatasheetRejected(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-estimate-peripheral-missing-datasheet")
+
+	body := []byte(`{
+	  "kind":"peripheral_model_ingest",
+	  "component_name":"ADXL345",
+	  "requirements":"I2C interface required. Register 0x00 should return Device ID 0xE5."
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/estimate", key, body)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "datasheet_url is required") {
+		t.Fatalf("expected datasheet requirement error, got %s", rr.Body.String())
+	}
+}
+
+func TestSynthesize_BoardOnboardingDryRun_EndToEndArtifacts(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	const workspaceID = "ws-synth-board-e2e"
+	key := createKey(t, store, workspaceID)
+	if err := store.AddQuotaRuns(workspaceID, 5000); err != nil {
+		t.Fatalf("AddQuotaRuns failed: %v", err)
+	}
+
+	fakeLabwiredDir := t.TempDir()
+	fakeLabwired := filepath.Join(fakeLabwiredDir, "labwired")
+	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true}'\n"), 0o755); err != nil {
+		t.Fatalf("failed to write fake labwired: %v", err)
+	}
+	srv.orchestrator = verification.NewOrchestrator(fakeLabwired)
+
+	body := []byte(`{
+	  "kind":"board_onboarding",
+	  "dry_run":true,
+	  "datasheet_url":"https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf",
+	  "documentation_urls":[
+	    "https://www.st.com/resource/en/user_manual/um2819-stm32wb-nucleo64-board-mb1355-stmicroelectronics.pdf",
+	    "https://www.st.com/resource/en/reference_manual/rm0434-stm32wb55xx-stm32wb35xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf"
+	  ],
+	  "board":{"vendor":"ST","marketing_name":"NUCLEO-WB55RG","board_id":"MB1355C","mcu":"STM32WB55RG"},
+	  "desired_capabilities":["boot","uart_console","led_control","button_input"],
+	  "validation_targets":["uart_smoke","unsupported_instruction_audit"]
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/synthesize", key, body)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var accepted map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &accepted); err != nil {
+		t.Fatalf("decode accepted response failed: %v", err)
+	}
+	runID, _ := accepted["run_id"].(string)
+	if runID == "" {
+		t.Fatalf("missing run_id in response: %s", rr.Body.String())
+	}
+
+	final := waitForRunCompletion(t, srv, key, runID)
+	if final["status"] != "pass" {
+		t.Fatalf("expected pass final status, got=%v payload=%v", final["status"], final)
+	}
+
+	out := doAuthRequest(t, srv, http.MethodGet, "/v1/runs/"+runID+"/artifacts/output.json", key, nil)
+	if out.Code != http.StatusOK {
+		t.Fatalf("expected output artifact 200, got %d body=%s", out.Code, out.Body.String())
+	}
+	var artifact map[string]any
+	if err := json.Unmarshal(out.Body.Bytes(), &artifact); err != nil {
+		t.Fatalf("decode output artifact failed: %v", err)
+	}
+	contract, ok := artifact["contract_result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected contract_result object, got=%T", artifact["contract_result"])
+	}
+	if contract["request_kind"] != "board_onboarding" {
+		t.Fatalf("unexpected request_kind: %v", contract["request_kind"])
+	}
+	if contract["promotion_mode"] != "artifact_only" {
+		t.Fatalf("unexpected promotion_mode: %v", contract["promotion_mode"])
+	}
+
+	result := doAuthRequest(t, srv, http.MethodGet, "/v1/runs/"+runID+"/artifacts/result.json", key, nil)
+	if result.Code != http.StatusOK {
+		t.Fatalf("expected result artifact 200, got %d body=%s", result.Code, result.Body.String())
+	}
+	var resultPayload map[string]any
+	if err := json.Unmarshal(result.Body.Bytes(), &resultPayload); err != nil {
+		t.Fatalf("decode result artifact failed: %v", err)
+	}
+	if resultPayload["pass"] != true {
+		t.Fatalf("expected result pass=true, got %v", resultPayload["pass"])
+	}
+}
+
+func TestSynthesize_PeripheralModelIngest_EndToEndArtifacts(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	key := createKey(t, store, "ws-synth-peripheral-e2e")
+
+	body := []byte(`{
+	  "kind":"peripheral_model_ingest",
+	  "component_name":"ADXL345",
+	  "requirements":"I2C interface required. Register 0x00 should return Device ID 0xE5.",
+	  "datasheet_url":"https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL345.pdf"
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/synthesize", key, body)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var accepted map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &accepted); err != nil {
+		t.Fatalf("decode accepted response failed: %v", err)
+	}
+	runID, _ := accepted["run_id"].(string)
+	if runID == "" {
+		t.Fatalf("missing run_id in response: %s", rr.Body.String())
+	}
+
+	final := waitForRunCompletion(t, srv, key, runID)
+	if final["status"] != "pass" {
+		t.Fatalf("expected pass final status, got=%v payload=%v", final["status"], final)
+	}
+
+	out := doAuthRequest(t, srv, http.MethodGet, "/v1/runs/"+runID+"/artifacts/output.json", key, nil)
+	if out.Code != http.StatusOK {
+		t.Fatalf("expected output artifact 200, got %d body=%s", out.Code, out.Body.String())
+	}
+	var artifact map[string]any
+	if err := json.Unmarshal(out.Body.Bytes(), &artifact); err != nil {
+		t.Fatalf("decode output artifact failed: %v", err)
+	}
+	if artifact["artifact_type"] != "strict_ir_draft" {
+		t.Fatalf("unexpected artifact_type: %v", artifact["artifact_type"])
+	}
+	contract, ok := artifact["contract_result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected contract_result object, got=%T", artifact["contract_result"])
+	}
+	if contract["request_kind"] != "peripheral_model_ingest" {
+		t.Fatalf("unexpected request_kind: %v", contract["request_kind"])
+	}
+}
+
+func TestSynthesize_UnknownBoardDryRunFailsWithoutGroundedFacts(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	const workspaceID = "ws-synth-unknown-board-e2e"
+	key := createKey(t, store, workspaceID)
+	if err := store.AddQuotaRuns(workspaceID, 5000); err != nil {
+		t.Fatalf("AddQuotaRuns failed: %v", err)
+	}
+
+	fakeLabwiredDir := t.TempDir()
+	fakeLabwired := filepath.Join(fakeLabwiredDir, "labwired")
+	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true}'\n"), 0o755); err != nil {
+		t.Fatalf("failed to write fake labwired: %v", err)
+	}
+	srv.orchestrator = verification.NewOrchestrator(fakeLabwired)
+
+	body := []byte(`{
+	  "kind":"board_onboarding",
+	  "dry_run":true,
+	  "datasheet_url":"https://example.com/protospark-x9-mcu.pdf",
+	  "documentation_urls":[
+	    "https://example.com/protospark-x9-board.pdf",
+	    "https://example.com/protospark-x9-reference-manual.pdf"
+	  ],
+	  "board":{"vendor":"Acme","marketing_name":"ProtoSpark X9","board_id":"PSX9-REV-A","mcu":"XMegaFoo123"},
+	  "desired_capabilities":["boot","uart_console","led_control"],
+	  "validation_targets":["uart_smoke"]
+	}`)
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/synthesize", key, body)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var accepted map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &accepted); err != nil {
+		t.Fatalf("decode accepted response failed: %v", err)
+	}
+	runID, _ := accepted["run_id"].(string)
+	if runID == "" {
+		t.Fatalf("missing run_id in response: %s", rr.Body.String())
+	}
+
+	final := waitForRunCompletion(t, srv, key, runID)
+	if final["status"] != "error" {
+		t.Fatalf("expected error final status, got=%v payload=%v", final["status"], final)
+	}
+
+	if _, ok := final["artifacts"]; ok {
+		t.Fatalf("expected no artifacts for early grounded-facts failure, got=%v", final["artifacts"])
+	}
+}
+
+func TestSynthesize_LocalDocExtraction_EndToEndArtifacts(t *testing.T) {
+	srv, store, _ := newTestServer(t)
+	const workspaceID = "ws-synth-doc-extract-e2e"
+	key := createKey(t, store, workspaceID)
+	if err := store.AddQuotaRuns(workspaceID, 5000); err != nil {
+		t.Fatalf("AddQuotaRuns failed: %v", err)
+	}
+
+	fakeLabwiredDir := t.TempDir()
+	fakeLabwired := filepath.Join(fakeLabwiredDir, "labwired")
+	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true}'\n"), 0o755); err != nil {
+		t.Fatalf("failed to write fake labwired: %v", err)
+	}
+	srv.orchestrator = verification.NewOrchestrator(fakeLabwired)
+
+	docDir := t.TempDir()
+	datasheetPath := filepath.Join(docDir, "sparkfun-x1-datasheet.pdf")
+	boardDocPath := filepath.Join(docDir, "sparkfun-x1-board.pdf")
+	schematicPath := filepath.Join(docDir, "sparkfun-x1-schematic.pdf")
+	referencePath := filepath.Join(docDir, "sparkfun-x1-reference-manual.pdf")
+	if err := os.WriteFile(datasheetPath, []byte("MCU STM32F411RE\nFLASH 512KB\nRAM 128KB\nRCC 0x40023800\nGPIOA 0x40020000\nGPIOB 0x40020400\nGPIOC 0x40020800\nUSART2 0x40004400 IRQ 38\nTX GPIOA 2\nRX GPIOA 3\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile datasheet failed: %v", err)
+	}
+	if err := os.WriteFile(boardDocPath, []byte("led_status GPIOC 13 active_high\nbutton_user GPIOA 0 active_low\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile board doc failed: %v", err)
+	}
+	if err := os.WriteFile(schematicPath, []byte("board SparkFun X1 RevA\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile schematic failed: %v", err)
+	}
+	if err := os.WriteFile(referencePath, []byte("reference manual STM32F411RE\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile reference failed: %v", err)
+	}
+
+	body, err := json.Marshal(map[string]any{
+		"kind":          "board_onboarding",
+		"dry_run":       true,
+		"datasheet_url": datasheetPath,
+		"documentation_urls": []string{
+			boardDocPath,
+			schematicPath,
+			referencePath,
+		},
+		"board": map[string]any{
+			"vendor":         "SparkFun",
+			"marketing_name": "X1",
+			"board_id":       "sparkfun-x1-reva",
+			"mcu":            "STM32F411RE",
+		},
+		"desired_capabilities": []string{"boot", "uart_console", "led_control", "button_input"},
+		"validation_targets":   []string{"uart_smoke", "io_smoke"},
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	rr := doAuthRequest(t, srv, http.MethodPost, "/v1/synthesize", key, body)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var accepted map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &accepted); err != nil {
+		t.Fatalf("decode accepted response failed: %v", err)
+	}
+	runID, _ := accepted["run_id"].(string)
+	if runID == "" {
+		t.Fatalf("missing run_id in response: %s", rr.Body.String())
+	}
+
+	final := waitForRunCompletion(t, srv, key, runID)
+	if final["status"] != "pass" {
+		t.Fatalf("expected pass final status, got=%v payload=%v", final["status"], final)
+	}
+
+	out := doAuthRequest(t, srv, http.MethodGet, "/v1/runs/"+runID+"/artifacts/output.json", key, nil)
+	if out.Code != http.StatusOK {
+		t.Fatalf("expected output artifact 200, got %d body=%s", out.Code, out.Body.String())
+	}
+	var artifact map[string]any
+	if err := json.Unmarshal(out.Body.Bytes(), &artifact); err != nil {
+		t.Fatalf("decode output artifact failed: %v", err)
+	}
+	boardDraft, ok := artifact["board_draft"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected board_draft object, got=%T", artifact["board_draft"])
+	}
+	if boardDraft["chip_guess"] != "stm32f411re" {
+		t.Fatalf("expected chip_guess from local docs, got=%v", boardDraft["chip_guess"])
+	}
+	repoBundle, ok := artifact["repo_bundle"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected repo_bundle object, got=%T", artifact["repo_bundle"])
+	}
+	files, ok := repoBundle["files"].([]any)
+	if !ok || len(files) == 0 {
+		t.Fatalf("expected repo bundle files, got=%v", repoBundle["files"])
+	}
+	foundChip := false
+	foundSystem := false
+	for _, entry := range files {
+		fileObj, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		path, _ := fileObj["path"].(string)
+		content, _ := fileObj["content"].(string)
+		if path == "core/configs/chips/stm32f411re.yaml" {
+			foundChip = true
+			if !strings.Contains(content, "size: \"512KB\"") || !strings.Contains(content, "size: \"128KB\"") || !strings.Contains(content, "0x40004400") || !strings.Contains(content, "irq: 38") {
+				t.Fatalf("expected extracted chip facts in chip yaml, got=%s", content)
+			}
+		}
+		if path == "core/configs/systems/sparkfun_x1_reva.yaml" {
+			foundSystem = true
+			if !strings.Contains(content, "led_status") || !strings.Contains(content, "button_user") {
+				t.Fatalf("expected extracted GPIO mappings in system yaml, got=%s", content)
+			}
+		}
+	}
+	if !foundChip || !foundSystem {
+		t.Fatalf("expected extracted chip/system files, foundChip=%t foundSystem=%t", foundChip, foundSystem)
+	}
+}
+
+func TestRunSynthesisJob_BoardRequestWritesStructuredDraft(t *testing.T) {
+	t.Setenv("XAI_API_KEY", "")
+
+	dir := t.TempDir()
+	repoRoot := t.TempDir()
+	fakeLabwired := filepath.Join(dir, "labwired")
+	script := "#!/bin/sh\nprintf '{\"valid\":true}'\n"
+	if err := os.WriteFile(fakeLabwired, []byte(script), 0o755); err != nil {
+		t.Fatalf("failed to write fake labwired: %v", err)
+	}
+	result, err := runSynthesisJob(context.Background(), &Job{
+		ID:                  "synth-board-test",
+		Type:                JobTypeSynthesize,
+		ArtifactDir:         dir,
+		LabWiredPath:        fakeLabwired,
+		RepoRootDir:         repoRoot,
+		SynthesisKind:       "board_onboarding",
+		PromotionMode:       "apply_to_repo",
+		ComponentName:       "MB1355C / NUCLEO-WB55RG board onboarding proof",
+		Requirements:        "Need deterministic board onboarding proof for STM32WB55RG app core, LED mapping, user button mapping, UART debug path, and BLE-oriented example selection.",
+		Board:               &synthesis.BoardSpec{MarketingName: "NUCLEO-WB55RG", BoardID: "MB1355C", MCU: "STM32WB55RG"},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke", "unsupported_instruction_audit"},
+	})
+	if err != nil {
+		t.Fatalf("runSynthesisJob failed: %v", err)
+	}
+	if !result.Pass {
+		t.Fatalf("expected synthesis pass, got fail: %+v", result)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "output.json"))
+	if err != nil {
+		t.Fatalf("ReadFile output.json failed: %v", err)
+	}
+	var artifact map[string]any
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if got := artifact["artifact_type"]; got != "board_onboarding_draft" {
+		t.Fatalf("unexpected artifact_type: got=%v", got)
+	}
+	contractResult, ok := artifact["contract_result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected contract_result object, got=%T", artifact["contract_result"])
+	}
+	if contractResult["request_kind"] != "board_onboarding" {
+		t.Fatalf("unexpected contract_result.request_kind: %v", contractResult["request_kind"])
+	}
+	boardDraft, ok := artifact["board_draft"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected board_draft object, got=%T", artifact["board_draft"])
+	}
+	requestedCapabilities, ok := boardDraft["requested_capabilities"].([]any)
+	if !ok || len(requestedCapabilities) == 0 {
+		t.Fatalf("expected requested_capabilities in board draft, got=%v", boardDraft["requested_capabilities"])
+	}
+	repoArtifacts, ok := boardDraft["repo_artifacts"].([]any)
+	if !ok || len(repoArtifacts) < 3 {
+		t.Fatalf("expected repo_artifacts in board draft, got=%v", boardDraft["repo_artifacts"])
+	}
+	repoBundle, ok := artifact["repo_bundle"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected repo_bundle object, got=%T", artifact["repo_bundle"])
+	}
+	files, ok := repoBundle["files"].([]any)
+	if !ok || len(files) < 7 {
+		t.Fatalf("expected generated file bundle, got=%v", repoBundle["files"])
+	}
+	contents := map[string]string{}
+	for _, entry := range files {
+		fileObj, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		path, _ := fileObj["path"].(string)
+		content, _ := fileObj["content"].(string)
+		contents[path] = content
+	}
+	if strings.Contains(contents["core/configs/chips/stm32wb55.yaml"], "TODO") {
+		t.Fatalf("expected mb1355c chip profile to be fully populated, got: %s", contents["core/configs/chips/stm32wb55.yaml"])
+	}
+	if strings.Contains(contents["core/configs/systems/mb1355c.yaml"], "TODO") {
+		t.Fatalf("expected mb1355c system profile to be fully populated, got: %s", contents["core/configs/systems/mb1355c.yaml"])
+	}
+	sourceDocs, ok := artifact["source_docs"].([]any)
+	if !ok || len(sourceDocs) < 3 {
+		t.Fatalf("expected auto-resolved source docs, got=%v", artifact["source_docs"])
+	}
+	if _, exists := artifact["requirements"]; exists {
+		t.Fatalf("legacy placeholder shape leaked into artifact: %s", string(data))
+	}
+	appliedChip := filepath.Join(repoRoot, "core/configs/chips/stm32wb55.yaml")
+	if _, err := os.Stat(appliedChip); err != nil {
+		t.Fatalf("expected promoted repo bundle file at %s: %v", appliedChip, err)
+	}
+	appliedSmokeManifest := filepath.Join(repoRoot, "core/examples/mb1355c/board_firmware/Cargo.toml")
+	if _, err := os.Stat(appliedSmokeManifest); err != nil {
+		t.Fatalf("expected smoke firmware manifest at %s: %v", appliedSmokeManifest, err)
+	}
+	if _, ok := contents["core/examples/mb1355c/uart-smoke.yaml"]; !ok {
+		t.Fatalf("expected uart smoke script in generated bundle")
+	}
+}
+
+func TestRunSynthesisJob_PeripheralRequestWritesStrictIRDraft(t *testing.T) {
+	t.Setenv("XAI_API_KEY", "")
+
+	dir := t.TempDir()
+	result, err := runSynthesisJob(context.Background(), &Job{
+		ID:            "synth-peripheral-test",
+		Type:          JobTypeSynthesize,
+		ArtifactDir:   dir,
+		ComponentName: "ADXL345",
+		Requirements:  "I2C interface required. Register 0x00 should return Device ID 0xE5.",
+		DatasheetURL:  "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL345.pdf",
+	})
+	if err != nil {
+		t.Fatalf("runSynthesisJob failed: %v", err)
+	}
+	if !result.Pass {
+		t.Fatalf("expected synthesis pass, got fail: %+v", result)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "output.json"))
+	if err != nil {
+		t.Fatalf("ReadFile output.json failed: %v", err)
+	}
+	var artifact map[string]any
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if got := artifact["artifact_type"]; got != "strict_ir_draft" {
+		t.Fatalf("unexpected artifact_type: got=%v", got)
+	}
+	contractResult, ok := artifact["contract_result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected contract_result object, got=%T", artifact["contract_result"])
+	}
+	if contractResult["request_kind"] != "peripheral_model_ingest" {
+		t.Fatalf("unexpected contract_result.request_kind: %v", contractResult["request_kind"])
+	}
+	modelDraft, ok := artifact["model_draft"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected model_draft object, got=%T", artifact["model_draft"])
+	}
+	registers, ok := modelDraft["registers"].([]any)
+	if !ok || len(registers) == 0 {
+		t.Fatalf("expected register hints in model draft, got=%v", modelDraft["registers"])
+	}
+	if _, exists := artifact["requirements"]; exists {
+		t.Fatalf("legacy placeholder shape leaked into artifact: %s", string(data))
+	}
+}
+
+func TestRunSynthesisJob_ArtifactOnlyDoesNotWriteRepo(t *testing.T) {
+	t.Setenv("XAI_API_KEY", "")
+
+	dir := t.TempDir()
+	repoRoot := t.TempDir()
+	fakeLabwired := filepath.Join(dir, "labwired")
+	script := "#!/bin/sh\nprintf '{\"valid\":true}'\n"
+	if err := os.WriteFile(fakeLabwired, []byte(script), 0o755); err != nil {
+		t.Fatalf("failed to write fake labwired: %v", err)
+	}
+	result, err := runSynthesisJob(context.Background(), &Job{
+		ID:                  "synth-board-artifact-only",
+		Type:                JobTypeSynthesize,
+		ArtifactDir:         dir,
+		LabWiredPath:        fakeLabwired,
+		RepoRootDir:         repoRoot,
+		SynthesisKind:       "board_onboarding",
+		DryRun:              true,
+		PromotionMode:       "artifact_only",
+		ComponentName:       "MB1355C / NUCLEO-WB55RG board onboarding proof",
+		Requirements:        "Board onboarding contract: boot and uart_console.",
+		Board:               &synthesis.BoardSpec{MarketingName: "NUCLEO-WB55RG", BoardID: "MB1355C", MCU: "STM32WB55RG"},
+		DesiredCapabilities: []string{"boot", "uart_console"},
+		ValidationTargets:   []string{"uart_smoke"},
+	})
+	if err != nil {
+		t.Fatalf("runSynthesisJob failed: %v", err)
+	}
+	if !result.Pass {
+		t.Fatalf("expected synthesis pass, got fail: %+v", result)
+	}
+	appliedChip := filepath.Join(repoRoot, "core/configs/chips/stm32wb55.yaml")
+	if _, err := os.Stat(appliedChip); !os.IsNotExist(err) {
+		t.Fatalf("expected no repo write for artifact_only mode, stat err=%v", err)
+	}
+}
+
+func TestApplyRepoBundleToRepo_RejectsPathTraversal(t *testing.T) {
+	repoRoot := t.TempDir()
+	err := applyRepoBundleToRepo(&Job{RepoRootDir: repoRoot}, &synthesis.RepoBundle{
+		Files: []synthesis.GeneratedFile{
+			{
+				Path:    "../escape.txt",
+				Content: "nope",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected path traversal rejection, got nil")
+	}
+	if !strings.Contains(err.Error(), "outside repo root") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyRepoBundleToRepo_RequiresRepoRoot(t *testing.T) {
+	err := applyRepoBundleToRepo(&Job{}, &synthesis.RepoBundle{
+		Files: []synthesis.GeneratedFile{
+			{
+				Path:    "core/configs/chips/test.yaml",
+				Content: "schema_version: \"1.0\"\n",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected repo root validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "repo root unavailable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInferRustTargetFromSmokeScript(t *testing.T) {
+	script := `schema_version: "1.0"
+inputs:
+  firmware: "./board_firmware/target/thumbv8m.main-none-eabi/release/firmware-demo"
+  system: "./system.yaml"
+`
+	if got := inferRustTargetFromSmokeScript(script); got != "thumbv8m.main-none-eabi" {
+		t.Fatalf("unexpected target: %s", got)
+	}
+	if got := inferRustTargetFromSmokeScript(`schema_version: "1.0"`); got != "thumbv7em-none-eabi" {
+		t.Fatalf("unexpected default target: %s", got)
 	}
 }
 
