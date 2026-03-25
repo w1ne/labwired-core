@@ -1,0 +1,41 @@
+schema_version: "1.0"
+name: "nucleo_wba52cg"
+chip: ../../configs/chips/stm32wba52.yaml
+board_io:
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 4
+    signal: "output"
+    active_high: true
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 9
+    signal: "output"
+    active_high: true
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 8
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true
+  - id: "button_b2"
+    kind: "button"
+    peripheral: "gpiob"
+    pin: 6
+    signal: "input"
+    active_high: true
+  - id: "button_b3"
+    kind: "button"
+    peripheral: "gpiob"
+    pin: 7
+    signal: "input"
+    active_high: true
+

@@ -1,0 +1,16 @@
+[workspace]
+members = []
+
+[package]
+name = "firmware-nucleo_wba52cg-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nucleo_wba52cg-demo"
+path = "src/main.rs"
+test = false
+bench = false
