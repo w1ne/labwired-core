@@ -57,14 +57,14 @@ fn test_demo_blinky_gpio_toggle() {
 
     // We want to detect writes to GPIOA_ODR (PA5 is the LED on Nucleo)
     // Run in batches of 10,000 steps for performance
-    while total_steps < 10_000_000 {
+    while total_steps < 100_000_000 {
         match machine.run(Some(10_000)) {
             Ok(_) => {}
             Err(e) => panic!("Execution failed at step {}: {}", total_steps, e),
         }
         total_steps += 10_000;
 
-        if total_steps % 100_000 == 0 {
+        if total_steps % 1_000_000 == 0 {
             println!("Step {}, PC: {:#x}", total_steps, machine.get_pc());
         }
 

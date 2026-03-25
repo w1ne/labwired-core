@@ -28,7 +28,7 @@ const I2C1_TRISE: *mut u32 = (I2C1_BASE + 0x20) as *mut u32;
 const RCC_APB2ENR_IOPAEN: u32 = 1 << 2;
 const RCC_APB1ENR_I2C1EN: u32 = 1 << 21;
 const GPIO_ODR_ODR5: u32 = 1 << 5;
-const BLINK_DELAY_NOPS: u32 = 20_000;
+const BLINK_DELAY_NOPS: u32 = 2_000_000;
 
 #[entry]
 fn main() -> ! {
