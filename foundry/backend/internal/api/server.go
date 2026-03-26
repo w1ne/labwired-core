@@ -123,6 +123,9 @@ func normalizeSynthesisRequest(req synthesisAPIRequest) (normalizedSynthesisRequ
 		if normalized.DryRun {
 			normalized.PromotionMode = "artifact_only"
 		}
+		if normalized.PromotionMode != "artifact_only" {
+			return normalizedSynthesisRequest{}, fmt.Errorf("promotion_mode %q is unsupported for kind=peripheral_model_ingest", normalized.PromotionMode)
+		}
 		if normalized.ComponentName == "" {
 			return normalizedSynthesisRequest{}, fmt.Errorf("component_name is required for kind=peripheral_model_ingest")
 		}
@@ -190,7 +193,7 @@ func boardNeedsVendorExample(req synthesisAPIRequest) bool {
 
 func isValidPromotionMode(mode string) bool {
 	switch mode {
-	case "", "artifact_only", "apply_to_repo":
+	case "", "artifact_only", "apply_to_repo", "commit_to_branch", "open_pr":
 		return true
 	default:
 		return false
@@ -422,6 +425,7 @@ type Server struct {
 	artifactsDir   string
 	dataDir        string
 	repoRootDir    string
+	coreConfigsDir string
 	clerkSecretKey string
 
 	scheduleMu         sync.Mutex
@@ -466,6 +470,7 @@ type ServerOptions struct {
 	RateLimitWindow          time.Duration
 	ClerkSecretKey           string
 	RepoRootDir              string
+	CoreConfigsDir           string
 }
 
 func DefaultServerOptions() ServerOptions {
@@ -560,6 +565,7 @@ func NewServer(orch *verification.Orchestrator, store *db.Store, cat *catalog.Ma
 		artifactsDir:             artifactsDir,
 		dataDir:                  dataDir,
 		repoRootDir:              opts.RepoRootDir,
+		coreConfigsDir:           opts.CoreConfigsDir,
 		pendingByWorkspace:       make(map[string][]*Job),
 		maxPendingJobs:           100,
 		maxInflightPerWorkspace:  opts.MaxInflightPerWorkspace,
@@ -843,6 +849,7 @@ func (s *Server) removeWorkspaceAtLocked(idx int) {
 func (s *Server) routes() {
 	// Public endpoints
 	s.router.HandleFunc("/v1/catalog", s.handleListCatalog).Methods("GET")
+	s.router.HandleFunc("/v1/catalog/{id:.*}/source", s.handleGetCatalogSource).Methods("GET")
 	s.router.HandleFunc("/v1/catalog/{id:.*}", s.handleGetCatalogAsset).Methods("GET")
 	s.router.HandleFunc("/v1/info", s.handleInfo).Methods("GET")
 	s.router.HandleFunc("/v1/hardware", s.handleListHardware).Methods("GET")
@@ -1063,6 +1070,35 @@ func (s *Server) handleGetCatalogAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(asset)
+}
+
+func (s *Server) handleGetCatalogSource(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	// Strip the trailing "/source" that the router leaves in the wildcard.
+	id = strings.TrimSuffix(id, "/source")
+	asset, ok := s.catalog.Get(id)
+	if !ok {
+		sendError(w, http.StatusNotFound, "ASSET_NOT_FOUND", "The requested asset ID does not exist in the catalog.", "Check /v1/catalog for a list of valid asset IDs.")
+		return
+	}
+	if s.coreConfigsDir == "" || strings.TrimSpace(asset.SourceRef) == "" {
+		sendError(w, http.StatusNotFound, "SOURCE_NOT_AVAILABLE", "No source YAML is available for this asset.", "")
+		return
+	}
+	// Resolve safely — reject path traversal.
+	cleaned := filepath.Clean(asset.SourceRef)
+	if strings.Contains(cleaned, "..") {
+		sendError(w, http.StatusBadRequest, "INVALID_SOURCE_REF", "Source reference contains invalid path.", "")
+		return
+	}
+	fullPath := filepath.Join(s.coreConfigsDir, cleaned)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		sendError(w, http.StatusNotFound, "SOURCE_NOT_AVAILABLE", "Source file not found on disk.", "")
+		return
+	}
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	w.Write(data)
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
@@ -1983,6 +2019,9 @@ func runSynthesisJob(_ context.Context, job *Job) (*verification.Result, error) 
 	if err != nil {
 		return nil, err
 	}
+	if artifact.ContractResult != nil && strings.TrimSpace(job.PromotionMode) != "" {
+		artifact.ContractResult.PromotionMode = strings.TrimSpace(job.PromotionMode)
+	}
 
 	payload, err := json.MarshalIndent(artifact, "", "  ")
 	if err != nil {
@@ -2015,6 +2054,13 @@ func runSynthesisJob(_ context.Context, job *Job) (*verification.Result, error) 
 				return failSynthesisResult(job, assertionsTotal, assertionsTotal+1, validationErr), nil
 			}
 			assertionsTotal += validationAssertions
+		}
+		if shouldRunGitPromotion(job) {
+			promotionAssertions, promotionErr := promoteRepoBundleWithGit(job, artifact.RepoBundle)
+			if promotionErr != nil {
+				return failSynthesisResult(job, assertionsTotal, assertionsTotal+1, promotionErr), nil
+			}
+			assertionsTotal += promotionAssertions
 		}
 	}
 
@@ -2062,7 +2108,12 @@ func shouldApplyRepoPromotion(job *Job) bool {
 	if job == nil {
 		return false
 	}
-	return strings.TrimSpace(job.PromotionMode) == "apply_to_repo"
+	switch strings.TrimSpace(job.PromotionMode) {
+	case "apply_to_repo", "commit_to_branch", "open_pr":
+		return true
+	default:
+		return false
+	}
 }
 
 func shouldRunBoardProof(job *Job) bool {
@@ -2073,6 +2124,18 @@ func shouldRunBoardProof(job *Job) bool {
 		return false
 	}
 	return shouldApplyRepoPromotion(job)
+}
+
+func shouldRunGitPromotion(job *Job) bool {
+	if job == nil {
+		return false
+	}
+	switch strings.TrimSpace(job.PromotionMode) {
+	case "commit_to_branch", "open_pr":
+		return true
+	default:
+		return false
+	}
 }
 
 func materializeAndValidateRepoBundle(job *Job, bundle *synthesis.RepoBundle) (int, error) {
@@ -2128,13 +2191,19 @@ func runLabWiredAssetValidate(job *Job, workdir string, argName string, argValue
 	}
 
 	var parsed struct {
-		Valid bool `json:"valid"`
+		Valid      bool `json:"valid"`
+		Statistics struct {
+			TotalChecks int `json:"total_checks"`
+		} `json:"statistics"`
 	}
 	if json.Unmarshal(output, &parsed) != nil {
 		return fmt.Errorf("labwired asset validate returned non-json output for %s", argValue)
 	}
 	if !parsed.Valid {
 		return fmt.Errorf("labwired asset validate reported invalid bundle for %s", argValue)
+	}
+	if parsed.Statistics.TotalChecks < 1 {
+		return fmt.Errorf("labwired asset validate reported no substantive checks for %s", argValue)
 	}
 	return nil
 }
@@ -2275,4 +2344,285 @@ func applyRepoBundleToRepo(job *Job, bundle *synthesis.RepoBundle) error {
 		}
 	}
 	return nil
+}
+
+type gitPromotionResult struct {
+	Mode      string `json:"mode"`
+	Branch    string `json:"branch,omitempty"`
+	Commit    string `json:"commit,omitempty"`
+	PRURL     string `json:"pr_url,omitempty"`
+	Base      string `json:"base_branch,omitempty"`
+	Remote    string `json:"remote,omitempty"`
+	Worktree  string `json:"worktree,omitempty"`
+	Files     int    `json:"files"`
+	CreatedAt string `json:"created_at"`
+}
+
+func promoteRepoBundleWithGit(job *Job, bundle *synthesis.RepoBundle) (int, error) {
+	repoRoot := strings.TrimSpace(job.RepoRootDir)
+	if repoRoot == "" {
+		return 0, fmt.Errorf("repo root unavailable for git promotion")
+	}
+	repoRootAbs, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return 0, fmt.Errorf("failed to resolve repo root: %w", err)
+	}
+	if err := runGitCommand(repoRootAbs, nil, "rev-parse", "--show-toplevel"); err != nil {
+		return 0, fmt.Errorf("repo root is not a git repository: %w", err)
+	}
+
+	worktreeDir := filepath.Join(job.ArtifactDir, "git_promotion_worktree")
+	if err := os.RemoveAll(worktreeDir); err != nil {
+		return 0, fmt.Errorf("failed to clear git promotion worktree: %w", err)
+	}
+	if err := runGitCommand(repoRootAbs, nil, "worktree", "add", "--detach", worktreeDir, "HEAD"); err != nil {
+		return 0, fmt.Errorf("failed to create git worktree: %w", err)
+	}
+	defer func() {
+		_ = runGitCommand(repoRootAbs, nil, "worktree", "remove", "--force", worktreeDir)
+	}()
+
+	if err := applyBundleToPath(worktreeDir, bundle); err != nil {
+		return 0, err
+	}
+
+	branch := promotionBranchName(job)
+	if err := runGitCommand(worktreeDir, gitAuthorEnv(), "switch", "-c", branch); err != nil {
+		return 0, fmt.Errorf("failed to create promotion branch %s: %w", branch, err)
+	}
+
+	addArgs := []string{"add"}
+	for _, path := range bundlePaths(bundle) {
+		addArgs = append(addArgs, filepath.ToSlash(path))
+	}
+	if err := runGitCommand(worktreeDir, gitAuthorEnv(), addArgs...); err != nil {
+		return 0, fmt.Errorf("failed to stage generated files: %w", err)
+	}
+	if err := runGitCommand(worktreeDir, gitAuthorEnv(), "commit", "-m", promotionCommitMessage(job)); err != nil {
+		return 0, fmt.Errorf("failed to commit generated files: %w", err)
+	}
+	commitSHA, err := gitOutput(worktreeDir, nil, "rev-parse", "HEAD")
+	if err != nil {
+		return 0, fmt.Errorf("failed to resolve promotion commit: %w", err)
+	}
+
+	result := gitPromotionResult{
+		Mode:      strings.TrimSpace(job.PromotionMode),
+		Branch:    branch,
+		Commit:    strings.TrimSpace(commitSHA),
+		Files:     len(bundle.Files),
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Worktree:  worktreeDir,
+	}
+	assertions := 1
+
+	if strings.TrimSpace(job.PromotionMode) == "open_pr" {
+		baseBranch, err := gitDefaultBranch(repoRootAbs)
+		if err != nil {
+			return assertions, err
+		}
+		if err := runGitCommand(worktreeDir, gitAuthorEnv(), "push", "-u", "origin", branch); err != nil {
+			return assertions, fmt.Errorf("failed to push promotion branch: %w", err)
+		}
+		prURL, err := createPullRequest(worktreeDir, branch, baseBranch, promotionPRTitle(job), promotionPRBody(job))
+		if err != nil {
+			return assertions, err
+		}
+		result.PRURL = strings.TrimSpace(prURL)
+		result.Base = baseBranch
+		result.Remote = "origin"
+		assertions++
+	}
+
+	if err := writeGitPromotionResult(job, result); err != nil {
+		return assertions, err
+	}
+	assertions++
+	return assertions, nil
+}
+
+func writeGitPromotionResult(job *Job, result gitPromotionResult) error {
+	payload, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(job.ArtifactDir, "git_promotion_result.json"), payload, 0o644)
+}
+
+func applyBundleToPath(root string, bundle *synthesis.RepoBundle) error {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("failed to resolve bundle root: %w", err)
+	}
+	for _, file := range bundle.Files {
+		target := filepath.Join(rootAbs, filepath.FromSlash(file.Path))
+		targetAbs, err := filepath.Abs(target)
+		if err != nil {
+			return fmt.Errorf("failed to resolve target path %s: %w", file.Path, err)
+		}
+		if !strings.HasPrefix(targetAbs, rootAbs+string(os.PathSeparator)) && targetAbs != rootAbs {
+			return fmt.Errorf("refusing to write bundle file outside repo root: %s", file.Path)
+		}
+		if err := os.MkdirAll(filepath.Dir(targetAbs), 0o755); err != nil {
+			return fmt.Errorf("failed to create repo parent dir for %s: %w", file.Path, err)
+		}
+		if err := os.WriteFile(targetAbs, []byte(file.Content), 0o644); err != nil {
+			return fmt.Errorf("failed to write repo bundle file %s: %w", file.Path, err)
+		}
+	}
+	return nil
+}
+
+func bundlePaths(bundle *synthesis.RepoBundle) []string {
+	if bundle == nil {
+		return nil
+	}
+	paths := make([]string, 0, len(bundle.Files))
+	for _, file := range bundle.Files {
+		if trimmed := strings.TrimSpace(file.Path); trimmed != "" {
+			paths = append(paths, filepath.FromSlash(trimmed))
+		}
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func promotionBranchName(job *Job) string {
+	base := sanitizeGitIdent(job.ComponentName)
+	if job.Board != nil {
+		if board := strings.TrimSpace(job.Board.BoardID); board != "" {
+			base = sanitizeGitIdent(board)
+		} else if board := strings.TrimSpace(job.Board.MarketingName); board != "" {
+			base = sanitizeGitIdent(board)
+		}
+	}
+	if base == "" {
+		base = "onboarding"
+	}
+	suffix := job.ID
+	if idx := strings.LastIndex(suffix, "-"); idx > 0 {
+		suffix = suffix[idx+1:]
+	}
+	return "foundry/onboard-" + base + "-" + suffix
+}
+
+func promotionCommitMessage(job *Job) string {
+	name := strings.TrimSpace(job.ComponentName)
+	if job.Board != nil {
+		if board := strings.TrimSpace(job.Board.MarketingName); board != "" {
+			name = board
+		}
+	}
+	if name == "" {
+		name = "generated board assets"
+	}
+	return "Onboard " + name
+}
+
+func promotionPRTitle(job *Job) string {
+	return promotionCommitMessage(job)
+}
+
+func promotionPRBody(job *Job) string {
+	lines := []string{
+		"Generated by Foundry ingestion pipeline.",
+		"",
+		"Run ID: `" + job.ID + "`",
+	}
+	if job.Board != nil {
+		if board := strings.TrimSpace(job.Board.MCU); board != "" {
+			lines = append(lines, "MCU: `"+board+"`")
+		}
+		if caps := strings.Join(job.DesiredCapabilities, ", "); strings.TrimSpace(caps) != "" {
+			lines = append(lines, "Capabilities: `"+caps+"`")
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func sanitizeGitIdent(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if ok {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	return out
+}
+
+func gitAuthorEnv() []string {
+	return []string{
+		"GIT_AUTHOR_NAME=Foundry Bot",
+		"GIT_AUTHOR_EMAIL=foundry@labwired.local",
+		"GIT_COMMITTER_NAME=Foundry Bot",
+		"GIT_COMMITTER_EMAIL=foundry@labwired.local",
+	}
+}
+
+func runGitCommand(workdir string, extraEnv []string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = workdir
+	cmd.Env = append(os.Environ(), extraEnv...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func gitOutput(workdir string, extraEnv []string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = workdir
+	cmd.Env = append(os.Environ(), extraEnv...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return string(output), nil
+}
+
+func gitDefaultBranch(repoRoot string) (string, error) {
+	ref, err := gitOutput(repoRoot, nil, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err == nil {
+		ref = strings.TrimSpace(ref)
+		if idx := strings.LastIndex(ref, "/"); idx >= 0 && idx < len(ref)-1 {
+			return ref[idx+1:], nil
+		}
+	}
+	current, currentErr := gitOutput(repoRoot, nil, "branch", "--show-current")
+	current = strings.TrimSpace(current)
+	if current != "" {
+		return current, nil
+	}
+	if currentErr != nil {
+		return "", fmt.Errorf("failed to resolve base branch: %w", currentErr)
+	}
+	return "main", nil
+}
+
+func createPullRequest(workdir string, branch string, base string, title string, body string) (string, error) {
+	ghPath := strings.TrimSpace(os.Getenv("GH_PATH"))
+	if ghPath == "" {
+		ghPath = "gh"
+	}
+	cmd := exec.Command(ghPath, "pr", "create", "--title", title, "--body", body, "--base", base, "--head", branch)
+	cmd.Dir = workdir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to create pull request: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
 }

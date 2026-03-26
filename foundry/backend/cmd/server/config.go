@@ -109,6 +109,7 @@ func loadConfigFromEnv() (config, error) {
 
 	cfg.ServerOptions.ClerkSecretKey = cfg.ClerkSecretKey
 	cfg.ServerOptions.RepoRootDir = cfg.RepoRootDir
+	cfg.ServerOptions.CoreConfigsDir = cfg.CoreConfigsDir
 
 	return cfg, nil
 }
