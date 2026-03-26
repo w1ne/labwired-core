@@ -142,7 +142,7 @@ jobs:
       - name: Build and push playground image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ env.CHECKOUT_PATH }}/packages
+          context: ${{ env.CHECKOUT_PATH }}
           file: ${{ env.CHECKOUT_PATH }}/packages/playground/Dockerfile
           push: true
           tags: |

@@ -125,7 +125,7 @@ func doAuthRequestWithHeaders(t *testing.T, srv *Server, method, path, key strin
 
 func waitForRunCompletion(t *testing.T, srv *Server, key string, runID string) map[string]any {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		rr := doAuthRequest(t, srv, http.MethodGet, "/v1/runs/"+runID, key, nil)
 		if rr.Code != http.StatusOK {

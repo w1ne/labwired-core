@@ -1,23 +1,24 @@
 FROM node:20-alpine AS build
 
-WORKDIR /packages
+WORKDIR /repo
 
 # Build @labwired/ui first (playground depends on it via file: reference)
-COPY ui/package.json ui/package-lock.json* ui/
-WORKDIR /packages/ui
+COPY packages/ui/package.json packages/ui/package-lock.json* packages/ui/
+WORKDIR /repo/packages/ui
 RUN npm ci --ignore-scripts
-COPY ui/ .
+COPY packages/ui/ .
 RUN npm run build
 
 # Build the playground
-WORKDIR /packages/playground
-COPY playground/package.json playground/package-lock.json* ./
+WORKDIR /repo/packages/playground
+COPY packages/playground/package.json packages/playground/package-lock.json* ./
 RUN npm ci --ignore-scripts
-COPY playground/ .
+COPY packages/playground/ .
+COPY core/ /repo/core/
 RUN npm run build
 
 FROM nginx:1.27-alpine
-COPY --from=build /packages/playground/dist /usr/share/nginx/html/playground
+COPY --from=build /repo/packages/playground/dist /usr/share/nginx/html/playground
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
