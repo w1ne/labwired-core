@@ -27,6 +27,8 @@ import {
   type WasmModule,
   type Part,
   type Diagram,
+  type BoardIoBinding,
+  type ComponentState,
 } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
@@ -60,6 +62,39 @@ function hasSavedWorkspace(boardId: string): boolean {
     localStorage.getItem(getWorkspaceStorageKey(boardId, 'diagram'))
     || localStorage.getItem(getWorkspaceStorageKey(boardId, 'source'))
   );
+}
+
+function parseDiagramMcuPin(pinLabel: string): { peripheral: string; pin: number } | null {
+  const stm = pinLabel.match(/^P([A-Z])(\d+)$/i);
+  if (!stm) return null;
+  return {
+    peripheral: `gpio${stm[1].toLowerCase()}`,
+    pin: parseInt(stm[2], 10),
+  };
+}
+
+function resolveBindingPartId(diagram: Diagram, binding: BoardIoBinding): string {
+  if (diagram.parts.some((part) => part.id === binding.id)) {
+    return binding.id;
+  }
+
+  for (const wire of diagram.wires) {
+    const mcuEnd = wire.from.part === 'mcu' ? wire.from : wire.to.part === 'mcu' ? wire.to : null;
+    const partEnd = mcuEnd === wire.from ? wire.to : mcuEnd === wire.to ? wire.from : null;
+    if (!mcuEnd || !partEnd) continue;
+
+    const parsedPin = parseDiagramMcuPin(mcuEnd.pin);
+    if (!parsedPin) continue;
+    if (parsedPin.peripheral !== binding.peripheral || parsedPin.pin !== binding.pin) continue;
+
+    const part = diagram.parts.find((candidate) => candidate.id === partEnd.part);
+    const def = part ? COMPONENT_REGISTRY.get(part.type) : null;
+    if (def?.boardIoKind === binding.kind) {
+      return partEnd.part;
+    }
+  }
+
+  return binding.id;
 }
 
 function makeStarterDiagram(config: BoardConfig): Diagram {
@@ -432,31 +467,42 @@ export function App() {
   const analogStates = useMemo(() => bridge?.getAnalogStates() ?? [], [bridge, simState.pc]);
 
   const boardIoStateMap = useMemo(() => {
-    const map: Record<string, { active?: boolean; analogValue?: number; displayText?: string; frequency?: number; angle?: number }> = {};
-    for (const s of simState.boardIoStates) map[s.id] = { active: s.active };
+    const map: Record<string, ComponentState> = {};
+    const ioConfig = bridge?.getBoardIoConfig() ?? [];
+    const bindingPartIds = new Map(ioConfig.map((binding) => [
+      binding.id,
+      resolveBindingPartId(editor.state.diagram, binding),
+    ]));
+
+    for (const s of simState.boardIoStates) {
+      const partId = bindingPartIds.get(s.id) ?? s.id;
+      map[partId] = { ...(map[partId] ?? {}), active: s.active };
+    }
+
     for (const a of analogStates) {
-      if (!map[a.id]) map[a.id] = {};
+      const partId = bindingPartIds.get(a.id) ?? a.id;
+      if (!map[partId]) map[partId] = {};
       if (a.kind === 'adc_input' && a.value !== undefined) {
-        map[a.id].analogValue = a.value;
+        map[partId].analogValue = a.value;
       }
       if (a.kind === 'pwm_output') {
-        map[a.id].active = a.active;
+        map[partId].active = a.active;
       }
     }
 
     if (bridge) {
-      const ioConfig = bridge.getBoardIoConfig();
       for (const binding of ioConfig) {
-        if (binding.kind !== 'pwm_output' || !map[binding.id]) continue;
+        const partId = bindingPartIds.get(binding.id) ?? binding.id;
+        if (binding.kind !== 'pwm_output' || !map[partId]) continue;
         try {
           const snap = bridge.getPeripheralSnapshot(binding.peripheral) as
             { psc?: number; arr?: number; cnt?: number } | null;
           if (snap && typeof snap.arr === 'number' && snap.arr > 0) {
             const clockHz = 8_000_000;
             const freq = Math.round(clockHz / ((snap.psc ?? 0) + 1) / (snap.arr + 1));
-            map[binding.id].frequency = freq;
+            map[partId].frequency = freq;
             if (freq >= 40 && freq <= 60) {
-              map[binding.id].angle = map[binding.id].active ? 90 : 0;
+              map[partId].angle = map[partId].active ? 90 : 0;
             }
           }
         } catch {
@@ -466,7 +512,7 @@ export function App() {
     }
 
     return map;
-  }, [simState.boardIoStates, analogStates, bridge]);
+  }, [simState.boardIoStates, analogStates, bridge, editor.state.diagram]);
 
   // Interactive analog component handler
   const handleAnalogChange = useCallback(
