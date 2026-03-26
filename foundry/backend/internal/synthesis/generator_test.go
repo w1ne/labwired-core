@@ -2,6 +2,8 @@ package synthesis
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -275,6 +277,324 @@ reference manual STM32F411RE
 	}
 }
 
+func TestGenerateArtifact_ExtractsBoardFactsFromRemoteDocs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/datasheet.txt":
+			_, _ = w.Write([]byte("MCU STM32F411RE\nFLASH 512KB\nRAM 128KB\nRCC 0x40023800\nGPIOA 0x40020000\nGPIOB 0x40020400\nGPIOC 0x40020800\nUSART2 0x40004400 IRQ 38\nTX GPIOA 2\nRX GPIOA 3\n"))
+		case "/board.txt":
+			_, _ = w.Write([]byte("led_status GPIOC 13 active_high\nbutton_user GPIOA 0 active_low\n"))
+		case "/schematic.txt":
+			_, _ = w.Write([]byte("board SparkFun X1 RevA\n"))
+		case "/reference.txt":
+			_, _ = w.Write([]byte("reference manual STM32F411RE\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	req := Request{
+		Kind:          "board_onboarding",
+		ComponentName: "SparkFun X1 board bring-up",
+		DatasheetURL:  server.URL + "/datasheet.txt",
+		DocumentationURLs: []string{
+			server.URL + "/board.txt",
+			server.URL + "/schematic.txt",
+			server.URL + "/reference.txt",
+		},
+		Board: &BoardSpec{
+			Vendor:        "SparkFun",
+			MarketingName: "X1",
+			BoardID:       "sparkfun-x1-reva",
+			MCU:           "STM32F411RE",
+		},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke", "io_smoke"},
+	}
+
+	artifact, err := GenerateArtifact(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GenerateArtifact failed: %v", err)
+	}
+	if artifact.BoardDraft == nil || artifact.BoardDraft.ChipGuess != "stm32f411re" {
+		t.Fatalf("expected remote docs to ground chip identity, got %+v", artifact.BoardDraft)
+	}
+	if artifact.BoardFacts == nil || len(artifact.BoardFacts.ExtractedFacts) < 4 {
+		t.Fatalf("expected extracted board facts from remote docs, got %+v", artifact.BoardFacts)
+	}
+}
+
+func TestGenerateArtifact_NRF52840DocsAreRecognized(t *testing.T) {
+	dir := t.TempDir()
+	datasheetPath := filepath.Join(dir, "nrf52840-datasheet.txt")
+	boardPath := filepath.Join(dir, "nrf52840-board.txt")
+	referencePath := filepath.Join(dir, "nrf52840-reference.txt")
+	if err := os.WriteFile(datasheetPath, []byte("MCU NRF52840\nFLASH 1024KB\nRAM 256KB\nUARTE0 0x40002000 IRQ 2\nP0 0x50000000\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile datasheet failed: %v", err)
+	}
+	if err := os.WriteFile(boardPath, []byte("led_user P0 13 active_high\nbutton_user P0 11 active_low\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile board failed: %v", err)
+	}
+	if err := os.WriteFile(referencePath, []byte("reference manual NRF52840\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile reference failed: %v", err)
+	}
+	req := Request{
+		Kind:          "board_onboarding",
+		ComponentName: "nRF52840 DK onboarding",
+		DatasheetURL:  datasheetPath,
+		DocumentationURLs: []string{
+			boardPath,
+			referencePath,
+		},
+		Board: &BoardSpec{
+			Vendor:        "Nordic",
+			MarketingName: "PCA10056 DK",
+			BoardID:       "nrf52840_dk",
+			MCU:           "NRF52840",
+		},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke"},
+	}
+
+	artifact, err := GenerateArtifact(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GenerateArtifact failed: %v", err)
+	}
+	if artifact.BoardDraft == nil || artifact.BoardDraft.ChipGuess != "nrf52840" {
+		t.Fatalf("expected nrf chip guess, got %+v", artifact.BoardDraft)
+	}
+	if artifact.BoardFacts == nil || len(artifact.BoardFacts.ExtractedFacts) < 5 {
+		t.Fatalf("expected extracted board facts, got %+v", artifact.BoardFacts)
+	}
+}
+
+func TestGenerateArtifact_SAMD21DocsAreRecognized(t *testing.T) {
+	dir := t.TempDir()
+	datasheetPath := filepath.Join(dir, "samd21-datasheet.txt")
+	boardPath := filepath.Join(dir, "samd21-board.txt")
+	referencePath := filepath.Join(dir, "samd21-reference.txt")
+	if err := os.WriteFile(datasheetPath, []byte("MCU SAMD21J18A\nFLASH 256KB\nRAM 32KB\nPORTA 0x41004400\nSERCOM3 USART 0x42000C00 IRQ 12\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile datasheet failed: %v", err)
+	}
+	if err := os.WriteFile(boardPath, []byte("led_user PA17 active_high\nbutton_user PA28 active_low\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile board failed: %v", err)
+	}
+	if err := os.WriteFile(referencePath, []byte("reference manual SAMD21J18A\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile reference failed: %v", err)
+	}
+	req := Request{
+		Kind:          "board_onboarding",
+		ComponentName: "ATSAMD21 Xplained onboarding",
+		DatasheetURL:  datasheetPath,
+		DocumentationURLs: []string{
+			boardPath,
+			referencePath,
+		},
+		Board: &BoardSpec{
+			Vendor:        "Microchip",
+			MarketingName: "ATSAMD21 Xplained Pro",
+			BoardID:       "atsamd21_xplained",
+			MCU:           "SAMD21J18A",
+		},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke"},
+	}
+
+	artifact, err := GenerateArtifact(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GenerateArtifact failed: %v", err)
+	}
+	if artifact.BoardDraft == nil || artifact.BoardDraft.ChipGuess != "samd21j18a" {
+		t.Fatalf("expected samd chip guess, got %+v", artifact.BoardDraft)
+	}
+	paths := map[string]string{}
+	for _, file := range artifact.RepoBundle.Files {
+		paths[file.Path] = file.Content
+	}
+	buildRS := paths["core/examples/atsamd21_xplained/board_firmware/build.rs"]
+	if !strings.Contains(buildRS, "generated placeholder") {
+		t.Fatalf("expected placeholder link.x generation, got: %s", buildRS)
+	}
+}
+
+func TestInferChipGuessFromCorpus_AdditionalFamilies(t *testing.T) {
+	cases := map[string]string{
+		"MCU GD32F103CB": "gd32f103cb",
+		"MCU CH32V003":   "ch32v003",
+		"MCU SAME54P20A": "same54p20a",
+		"MCU EFR32BG22":  "efr32bg22",
+		"MCU FE310":      "fe310",
+		"MCU ESP32C3":    "esp32c3",
+		"MCU RA6M5":      "ra6m5",
+	}
+	for corpus, want := range cases {
+		if got := inferChipGuessFromCorpus(corpus); got != want {
+			t.Fatalf("inferChipGuessFromCorpus(%q) = %q, want %q", corpus, got, want)
+		}
+	}
+}
+
+func TestGenerateArtifact_EFR32SharedGPIOBaseMaterializesBoardPorts(t *testing.T) {
+	dir := t.TempDir()
+	datasheetPath := filepath.Join(dir, "efr32bg22-datasheet.txt")
+	boardPath := filepath.Join(dir, "efr32bg22-board.txt")
+	referencePath := filepath.Join(dir, "efr32bg22-reference.txt")
+	if err := os.WriteFile(datasheetPath, []byte("MCU EFR32BG22\nFLASH 512KB\nRAM 32KB\nGPIO 0x4000A400\nUSART0 0x40010000 IRQ 13\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile datasheet failed: %v", err)
+	}
+	if err := os.WriteFile(boardPath, []byte("led_user PA4 active_high\nbutton_user PB1 active_low\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile board failed: %v", err)
+	}
+	if err := os.WriteFile(referencePath, []byte("reference manual EFR32BG22\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile reference failed: %v", err)
+	}
+	req := Request{
+		Kind:          "board_onboarding",
+		ComponentName: "EFR32BG22 DK onboarding",
+		DatasheetURL:  datasheetPath,
+		DocumentationURLs: []string{
+			boardPath,
+			referencePath,
+		},
+		Board: &BoardSpec{
+			Vendor:        "Silicon Labs",
+			MarketingName: "BRD4184",
+			BoardID:       "efr32bg22_dk",
+			MCU:           "EFR32BG22",
+		},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke"},
+	}
+	artifact, err := GenerateArtifact(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GenerateArtifact failed: %v", err)
+	}
+	paths := map[string]string{}
+	for _, file := range artifact.RepoBundle.Files {
+		paths[file.Path] = file.Content
+	}
+	chipYAML := paths["core/configs/chips/efr32bg22.yaml"]
+	systemYAML := paths["core/configs/systems/efr32bg22_dk.yaml"]
+	if !strings.Contains(chipYAML, "id: \"gpioa\"") || strings.Contains(chipYAML, "id: \"gpiob\"") {
+		t.Fatalf("expected one shared gpio controller, got: %s", chipYAML)
+	}
+	if !strings.Contains(systemYAML, "peripheral: \"gpioa\"") {
+		t.Fatalf("expected shared gpio controller references, got: %s", systemYAML)
+	}
+}
+
+func TestGenerateArtifact_RP2040SingleTokenGPIOIsRecognized(t *testing.T) {
+	dir := t.TempDir()
+	datasheetPath := filepath.Join(dir, "rp2040-datasheet.txt")
+	boardPath := filepath.Join(dir, "rp2040-board.txt")
+	referencePath := filepath.Join(dir, "rp2040-reference.txt")
+	if err := os.WriteFile(datasheetPath, []byte("MCU RP2040\nFLASH 2048KB\nRAM 264KB\nUART0 0x40034000 IRQ 20\nSIO 0xD0000000\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile datasheet failed: %v", err)
+	}
+	if err := os.WriteFile(boardPath, []byte("led_user GPIO25 active_high\nbutton_user GPIO14 active_high\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile board failed: %v", err)
+	}
+	if err := os.WriteFile(referencePath, []byte("reference manual RP2040\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile reference failed: %v", err)
+	}
+	req := Request{
+		Kind:          "board_onboarding",
+		ComponentName: "RP2040 Pico onboarding",
+		DatasheetURL:  datasheetPath,
+		DocumentationURLs: []string{
+			boardPath,
+			referencePath,
+		},
+		Board: &BoardSpec{
+			Vendor:        "Raspberry Pi",
+			MarketingName: "Pico",
+			BoardID:       "rp2040_pico",
+			MCU:           "RP2040",
+		},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke"},
+	}
+
+	artifact, err := GenerateArtifact(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GenerateArtifact failed: %v", err)
+	}
+	paths := map[string]string{}
+	for _, file := range artifact.RepoBundle.Files {
+		paths[file.Path] = file.Content
+	}
+	systemYAML := paths["core/configs/systems/rp2040_pico.yaml"]
+	chipYAML := paths["core/configs/chips/rp2040.yaml"]
+	if !strings.Contains(systemYAML, "led_user") || !strings.Contains(systemYAML, "button_user") {
+		t.Fatalf("expected GPIO25/GPIO14 extraction, got: %s", systemYAML)
+	}
+	if !strings.Contains(chipYAML, "arch: \"arm\"") || !strings.Contains(chipYAML, "base: 0x10000000") {
+		t.Fatalf("expected RP2040 flash base, got: %s", chipYAML)
+	}
+}
+
+func TestGenerateArtifact_RiscVBoardsUseRiscVSmokeBundle(t *testing.T) {
+	dir := t.TempDir()
+	datasheetPath := filepath.Join(dir, "rv32i-datasheet.txt")
+	boardPath := filepath.Join(dir, "rv32i-board.txt")
+	referencePath := filepath.Join(dir, "rv32i-reference.txt")
+	if err := os.WriteFile(datasheetPath, []byte("MCU GENERIC-RV32I\nFLASH 256KB\nRAM 64KB\nUART0 0x10013000 IRQ 3\nGPIO 0x10012000\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile datasheet failed: %v", err)
+	}
+	if err := os.WriteFile(boardPath, []byte("led_user GPIO0 5 active_high\nbutton_user GPIO0 6 active_high\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile board failed: %v", err)
+	}
+	if err := os.WriteFile(referencePath, []byte("reference manual GENERIC-RV32I\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile reference failed: %v", err)
+	}
+	req := Request{
+		Kind:          "board_onboarding",
+		ComponentName: "GENERIC-RV32I fixture onboarding",
+		DatasheetURL:  datasheetPath,
+		DocumentationURLs: []string{
+			boardPath,
+			referencePath,
+		},
+		Board: &BoardSpec{
+			Vendor:        "LabWired",
+			MarketingName: "RV32I Fixture",
+			BoardID:       "generic_rv32i_fixture",
+			MCU:           "GENERIC-RV32I",
+		},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke"},
+	}
+
+	artifact, err := GenerateArtifact(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GenerateArtifact failed: %v", err)
+	}
+	paths := map[string]string{}
+	for _, file := range artifact.RepoBundle.Files {
+		paths[file.Path] = file.Content
+	}
+	chipYAML := paths["core/configs/chips/generic-rv32i.yaml"]
+	cargoToml := paths["core/examples/generic_rv32i_fixture/board_firmware/Cargo.toml"]
+	mainRS := paths["core/examples/generic_rv32i_fixture/board_firmware/src/main.rs"]
+	minimalLD := paths["core/examples/generic_rv32i_fixture/board_firmware/minimal.ld"]
+	if !strings.Contains(chipYAML, "arch: \"riscv\"") || !strings.Contains(chipYAML, "base: 0x80000000") {
+		t.Fatalf("expected RISC-V chip emission, got: %s", chipYAML)
+	}
+	if !strings.Contains(chipYAML, "profile: \"stm32f1\"") || strings.Contains(chipYAML, "profile: \"stm32v2\"") {
+		t.Fatalf("expected generic RISC-V UART layout, got: %s", chipYAML)
+	}
+	if !strings.Contains(cargoToml, "riscv-rt") {
+		t.Fatalf("expected RISC-V smoke dependencies, got: %s", cargoToml)
+	}
+	if !strings.Contains(mainRS, "use riscv_rt::entry;") || !strings.Contains(mainRS, "(0x10013000 + 0x04) as *mut u8") {
+		t.Fatalf("expected RISC-V smoke main, got: %s", mainRS)
+	}
+	if !strings.Contains(minimalLD, "RISC-V uses riscv-rt") {
+		t.Fatalf("expected RISC-V linker placeholder, got: %s", minimalLD)
+	}
+}
+
 func TestGenerateArtifact_WBA52BoardUsesFamilyAwareOutputs(t *testing.T) {
 	dir := t.TempDir()
 	datasheetPath := filepath.Join(dir, "stm32wba52cg-datasheet.pdf")
@@ -442,5 +762,94 @@ RX GPIOA 3
 	systemYAML := paths["core/configs/systems/pdf_board.yaml"]
 	if !strings.Contains(systemYAML, "led_status") || !strings.Contains(systemYAML, "button_user") {
 		t.Fatalf("expected PDF-extracted board IO, got: %s", systemYAML)
+	}
+}
+
+func TestGenerateArtifact_G474BoardUsesFamilyAwareVendorPackageAndStackTop(t *testing.T) {
+	dir := t.TempDir()
+	datasheetPath := filepath.Join(dir, "stm32g474re-datasheet.txt")
+	boardDocPath := filepath.Join(dir, "nucleo-g474re-board.txt")
+	referencePath := filepath.Join(dir, "stm32g474-reference.txt")
+	examplePath := filepath.Join(dir, "stm32cubeg4-example.txt")
+
+	if err := os.WriteFile(datasheetPath, []byte(`
+MCU STM32G474RE
+FLASH 512KB
+RAM 128KB
+RCC 0x40021000
+GPIOA 0x48000000
+GPIOB 0x48000400
+GPIOC 0x48000800
+GPIOD 0x48000C00
+USART2 0x40004400 IRQ 38
+TX GPIOA 2
+RX GPIOA 3
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile datasheet failed: %v", err)
+	}
+	if err := os.WriteFile(boardDocPath, []byte(`
+led_user GPIOA 5 active_high
+button_b1 GPIOC 13 active_high
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile board doc failed: %v", err)
+	}
+	if err := os.WriteFile(referencePath, []byte("reference manual STM32G474RE\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile reference failed: %v", err)
+	}
+	if err := os.WriteFile(examplePath, []byte("STM32CubeG4 UART_Printf\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile example failed: %v", err)
+	}
+
+	req := Request{
+		Kind:          "board_onboarding",
+		ComponentName: "NUCLEO-G474RE board onboarding proof",
+		DatasheetURL:  datasheetPath,
+		DocumentationURLs: []string{
+			boardDocPath,
+			referencePath,
+			examplePath,
+		},
+		Board: &BoardSpec{
+			Vendor:        "STMicroelectronics",
+			MarketingName: "NUCLEO-G474RE",
+			BoardID:       "nucleo_g474re",
+			MCU:           "STM32G474RE",
+		},
+		DesiredCapabilities: []string{"boot", "uart_console", "led_control", "button_input"},
+		ValidationTargets:   []string{"uart_smoke", "io_smoke", "unsupported_instruction_audit"},
+		Workload:            &WorkloadSpec{Type: "generated_smoke_firmware", Example: "STM32CubeG4 UART_Printf"},
+		Constraints:         &ConstraintSpec{MustWriteRepoAssets: true, MustRunE2EValidation: true},
+	}
+
+	artifact, err := GenerateArtifact(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GenerateArtifact failed: %v", err)
+	}
+	paths := map[string]string{}
+	for _, file := range artifact.RepoBundle.Files {
+		paths[file.Path] = file.Content
+	}
+	readme := paths["core/examples/nucleo_g474re/README.md"]
+	if !strings.Contains(readme, "Reference package: STM32CubeG4") {
+		t.Fatalf("expected STM32CubeG4 vendor package, got: %s", readme)
+	}
+	if strings.Contains(readme, "BLE example selection reference only") {
+		t.Fatalf("did not expect BLE scope line for G474, got: %s", readme)
+	}
+	if !strings.Contains(readme, "Vendor example selection reference only") {
+		t.Fatalf("expected generic vendor-example scope line, got: %s", readme)
+	}
+	if strings.Contains(readme, "Confirm whether BLE scope is documentation-only or full simulator behavior") {
+		t.Fatalf("did not expect BLE confirmation line for G474, got: %s", readme)
+	}
+	minimalLD := paths["core/examples/nucleo_g474re/board_firmware/minimal.ld"]
+	if !strings.Contains(minimalLD, "0x20020000") {
+		t.Fatalf("expected 128KB stack top for G474, got: %s", minimalLD)
+	}
+	if artifact.ContractResult == nil {
+		t.Fatal("expected contract_result")
+	}
+	if len(artifact.ContractResult.DeferredCapabilities) != 0 {
+		t.Fatalf("did not expect deferred wireless capabilities for G474, got: %+v", artifact.ContractResult.DeferredCapabilities)
 	}
 }

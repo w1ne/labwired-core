@@ -128,7 +128,10 @@ type GeneratedFile struct {
 type boardProfile struct {
 	ChipName          string
 	Family            string
+	Arch              string
+	FlashBase         string
 	FlashSize         string
+	RAMBase           string
 	RAMSize           string
 	RCCBase           string
 	GPIOABase         string

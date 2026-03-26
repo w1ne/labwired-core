@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +20,31 @@ import (
 	"github.com/labwired/foundry-backend/internal/synthesis"
 	"github.com/labwired/foundry-backend/internal/verification"
 )
+
+func initGitRepo(t *testing.T, root string) {
+	t.Helper()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=Test Bot",
+			"GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=Test Bot",
+			"GIT_COMMITTER_EMAIL=test@example.com",
+		)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s failed: %v (%s)", strings.Join(args, " "), err, string(output))
+		}
+	}
+	run("init", "-b", "main")
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("seed\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile seed failed: %v", err)
+	}
+	run("add", "README.md")
+	run("commit", "-m", "seed")
+}
 
 func newTestServer(t *testing.T) (*Server, *db.Store, string) {
 	return newTestServerWithOptions(t, nil)
@@ -737,7 +763,7 @@ func TestSynthesize_BoardOnboardingDryRun_EndToEndArtifacts(t *testing.T) {
 
 	fakeLabwiredDir := t.TempDir()
 	fakeLabwired := filepath.Join(fakeLabwiredDir, "labwired")
-	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true}'\n"), 0o755); err != nil {
+	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true,\"statistics\":{\"total_checks\":3}}'\n"), 0o755); err != nil {
 		t.Fatalf("failed to write fake labwired: %v", err)
 	}
 	srv.orchestrator = verification.NewOrchestrator(fakeLabwired)
@@ -864,7 +890,7 @@ func TestSynthesize_UnknownBoardDryRunFailsWithoutGroundedFacts(t *testing.T) {
 
 	fakeLabwiredDir := t.TempDir()
 	fakeLabwired := filepath.Join(fakeLabwiredDir, "labwired")
-	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true}'\n"), 0o755); err != nil {
+	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true,\"statistics\":{\"total_checks\":3}}'\n"), 0o755); err != nil {
 		t.Fatalf("failed to write fake labwired: %v", err)
 	}
 	srv.orchestrator = verification.NewOrchestrator(fakeLabwired)
@@ -915,7 +941,7 @@ func TestSynthesize_LocalDocExtraction_EndToEndArtifacts(t *testing.T) {
 
 	fakeLabwiredDir := t.TempDir()
 	fakeLabwired := filepath.Join(fakeLabwiredDir, "labwired")
-	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true}'\n"), 0o755); err != nil {
+	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true,\"statistics\":{\"total_checks\":3}}'\n"), 0o755); err != nil {
 		t.Fatalf("failed to write fake labwired: %v", err)
 	}
 	srv.orchestrator = verification.NewOrchestrator(fakeLabwired)
@@ -1034,7 +1060,7 @@ func TestRunSynthesisJob_BoardRequestWritesStructuredDraft(t *testing.T) {
 	dir := t.TempDir()
 	repoRoot := t.TempDir()
 	fakeLabwired := filepath.Join(dir, "labwired")
-	script := "#!/bin/sh\nprintf '{\"valid\":true}'\n"
+	script := "#!/bin/sh\nprintf '{\"valid\":true,\"statistics\":{\"total_checks\":3}}'\n"
 	if err := os.WriteFile(fakeLabwired, []byte(script), 0o755); err != nil {
 		t.Fatalf("failed to write fake labwired: %v", err)
 	}
@@ -1189,7 +1215,7 @@ func TestRunSynthesisJob_ArtifactOnlyDoesNotWriteRepo(t *testing.T) {
 	dir := t.TempDir()
 	repoRoot := t.TempDir()
 	fakeLabwired := filepath.Join(dir, "labwired")
-	script := "#!/bin/sh\nprintf '{\"valid\":true}'\n"
+	script := "#!/bin/sh\nprintf '{\"valid\":true,\"statistics\":{\"total_checks\":3}}'\n"
 	if err := os.WriteFile(fakeLabwired, []byte(script), 0o755); err != nil {
 		t.Fatalf("failed to write fake labwired: %v", err)
 	}
@@ -1252,6 +1278,125 @@ func TestApplyRepoBundleToRepo_RequiresRepoRoot(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "repo root unavailable") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNormalizeSynthesisRequest_RejectsPeripheralGitPromotion(t *testing.T) {
+	_, err := normalizeSynthesisRequest(synthesisAPIRequest{
+		Kind:          "peripheral_model_ingest",
+		PromotionMode: "open_pr",
+		ComponentName: "ADXL345",
+		Requirements:  "I2C register model",
+		DatasheetURL:  "https://example.com/adxl345.pdf",
+	})
+	if err == nil {
+		t.Fatal("expected peripheral promotion mode rejection")
+	}
+	if !strings.Contains(err.Error(), "unsupported for kind=peripheral_model_ingest") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPromoteRepoBundleWithGit_CommitToBranch(t *testing.T) {
+	repoRoot := t.TempDir()
+	initGitRepo(t, repoRoot)
+
+	job := &Job{
+		ID:            "synth-pr-1",
+		ArtifactDir:   t.TempDir(),
+		RepoRootDir:   repoRoot,
+		PromotionMode: "commit_to_branch",
+		ComponentName: "NUCLEO-G474RE board onboarding proof",
+		Board:         &synthesis.BoardSpec{MarketingName: "NUCLEO-G474RE", BoardID: "nucleo_g474re", MCU: "STM32G474RE"},
+	}
+	bundle := &synthesis.RepoBundle{
+		Files: []synthesis.GeneratedFile{
+			{Path: "core/configs/chips/stm32g474re.yaml", Content: "schema_version: \"1.0\"\nname: \"STM32G474RE\"\narch: \"arm\"\nflash:\n  base: 0x08000000\n  size: \"512KB\"\nram:\n  base: 0x20000000\n  size: \"128KB\"\nperipherals: []\n"},
+			{Path: "core/configs/systems/nucleo_g474re.yaml", Content: "schema_version: \"1.0\"\nname: \"nucleo_g474re\"\nchip: \"../chips/stm32g474re.yaml\"\nboard_io: []\n"},
+		},
+	}
+
+	assertions, err := promoteRepoBundleWithGit(job, bundle)
+	if err != nil {
+		t.Fatalf("promoteRepoBundleWithGit failed: %v", err)
+	}
+	if assertions < 2 {
+		t.Fatalf("expected git promotion assertions, got %d", assertions)
+	}
+
+	branchOutput, err := gitOutput(repoRoot, nil, "branch", "--list", "foundry/onboard-nucleo-g474re-1")
+	if err != nil {
+		t.Fatalf("git branch list failed: %v", err)
+	}
+	if !strings.Contains(branchOutput, "foundry/onboard-nucleo-g474re-1") {
+		t.Fatalf("expected promotion branch, got %q", branchOutput)
+	}
+	data, err := os.ReadFile(filepath.Join(job.ArtifactDir, "git_promotion_result.json"))
+	if err != nil {
+		t.Fatalf("expected git promotion artifact: %v", err)
+	}
+	if !strings.Contains(string(data), "\"mode\": \"commit_to_branch\"") {
+		t.Fatalf("unexpected promotion result: %s", string(data))
+	}
+}
+
+func TestPromoteRepoBundleWithGit_OpenPR(t *testing.T) {
+	repoRoot := t.TempDir()
+	initGitRepo(t, repoRoot)
+	remoteRoot := t.TempDir()
+	cmd := exec.Command("git", "init", "--bare", remoteRoot)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare failed: %v (%s)", err, string(output))
+	}
+	if err := runGitCommand(repoRoot, gitAuthorEnv(), "remote", "add", "origin", remoteRoot); err != nil {
+		t.Fatalf("failed to add remote: %v", err)
+	}
+	if err := runGitCommand(repoRoot, gitAuthorEnv(), "push", "-u", "origin", "main"); err != nil {
+		t.Fatalf("failed to seed remote main: %v", err)
+	}
+
+	fakeGHDir := t.TempDir()
+	fakeGH := filepath.Join(fakeGHDir, "gh")
+	if err := os.WriteFile(fakeGH, []byte("#!/bin/sh\nprintf 'https://example.com/pr/123\\n'\n"), 0o755); err != nil {
+		t.Fatalf("failed to write fake gh: %v", err)
+	}
+	t.Setenv("GH_PATH", fakeGH)
+
+	job := &Job{
+		ID:            "synth-pr-2",
+		ArtifactDir:   t.TempDir(),
+		RepoRootDir:   repoRoot,
+		PromotionMode: "open_pr",
+		ComponentName: "ESP32-C3 DevKit board onboarding proof",
+		Board:         &synthesis.BoardSpec{MarketingName: "ESP32-C3 DevKit", BoardID: "esp32c3_devkit", MCU: "ESP32C3"},
+	}
+	bundle := &synthesis.RepoBundle{
+		Files: []synthesis.GeneratedFile{
+			{Path: "core/configs/chips/esp32c3.yaml", Content: "schema_version: \"1.0\"\nname: \"ESP32C3\"\narch: \"riscv\"\nflash:\n  base: 0x42000000\n  size: \"4MB\"\nram:\n  base: 0x3FC80000\n  size: \"400KB\"\nperipherals: []\n"},
+		},
+	}
+
+	assertions, err := promoteRepoBundleWithGit(job, bundle)
+	if err != nil {
+		t.Fatalf("promoteRepoBundleWithGit failed: %v", err)
+	}
+	if assertions < 3 {
+		t.Fatalf("expected open_pr assertions, got %d", assertions)
+	}
+
+	data, err := os.ReadFile(filepath.Join(job.ArtifactDir, "git_promotion_result.json"))
+	if err != nil {
+		t.Fatalf("expected git promotion artifact: %v", err)
+	}
+	if !strings.Contains(string(data), "https://example.com/pr/123") {
+		t.Fatalf("expected PR URL in promotion result, got %s", string(data))
+	}
+	refs, err := exec.Command("git", "--git-dir", remoteRoot, "for-each-ref", "--format=%(refname)", "refs/heads/foundry/onboard-esp32c3-devkit-2").CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to list remote refs: %v (%s)", err, string(refs))
+	}
+	if !strings.Contains(string(refs), "refs/heads/foundry/onboard-esp32c3-devkit-2") {
+		t.Fatalf("expected pushed branch in bare remote, got %q", string(refs))
 	}
 }
 
@@ -1799,5 +1944,30 @@ func TestRefillQueueFromDB_MarksUnrecoverableRunError(t *testing.T) {
 	}
 	if record.Status != "error" {
 		t.Fatalf("expected unrecoverable queued run to transition to error, got %s", record.Status)
+	}
+}
+
+func TestRunLabWiredAssetValidate_RejectsZeroCheckValidation(t *testing.T) {
+	dir := t.TempDir()
+	fakeLabwired := filepath.Join(dir, "labwired")
+	if err := os.WriteFile(fakeLabwired, []byte("#!/bin/sh\nprintf '{\"valid\":true,\"statistics\":{\"total_checks\":0}}'\n"), 0o755); err != nil {
+		t.Fatalf("failed to write fake labwired: %v", err)
+	}
+
+	job := &Job{
+		LabWiredPath: fakeLabwired,
+		ArtifactDir:  dir,
+	}
+	dummyAsset := filepath.Join(dir, "chip.yaml")
+	if err := os.WriteFile(dummyAsset, []byte("schema_version: \"1.0\"\nname: test\narch: arm\nflash:\n  base: 0x08000000\n  size: \"64KB\"\nram:\n  base: 0x20000000\n  size: \"16KB\"\nperipherals: []\n"), 0o644); err != nil {
+		t.Fatalf("failed to write dummy asset: %v", err)
+	}
+
+	err := runLabWiredAssetValidate(job, dir, "--chip", dummyAsset, "validate_chip.json")
+	if err == nil {
+		t.Fatal("expected zero-check validation to fail")
+	}
+	if !strings.Contains(err.Error(), "no substantive checks") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

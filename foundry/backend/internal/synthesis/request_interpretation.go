@@ -118,6 +118,12 @@ func inferChipGuess(req Request) string {
 	}
 	lower := strings.ToLower(input)
 	switch {
+	case strings.Contains(lower, "stm32g474"):
+		return "stm32g474re"
+	case strings.Contains(lower, "stm32l476"):
+		return "stm32l476rg"
+	case strings.Contains(lower, "stm32f429"):
+		return "stm32f429"
 	case strings.Contains(lower, "stm32wba52"):
 		return "stm32wba52"
 	case strings.Contains(lower, "stm32wba"):
@@ -128,6 +134,16 @@ func inferChipGuess(req Request) string {
 		return "stm32wb"
 	case strings.Contains(lower, "stm32f411"):
 		return "stm32f411re"
+	case strings.Contains(lower, "generic-rv32i") || strings.Contains(lower, "rv32i"):
+		return "generic-rv32i"
+	case strings.Contains(lower, "rp2040"):
+		return "rp2040"
+	case strings.Contains(lower, "ch32v003"):
+		return "ch32v003"
+	case strings.Contains(lower, "fe310"):
+		return "fe310"
+	case strings.Contains(lower, "esp32c3"):
+		return "esp32c3"
 	case strings.Contains(lower, "nrf52840"):
 		return "nrf52840"
 	default:
@@ -146,6 +162,10 @@ func inferBoardID(req Request) string {
 	switch {
 	case strings.Contains(lower, "mb1355"):
 		return "mb1355c"
+	case strings.Contains(lower, "nucleo-g474re"):
+		return "nucleo_g474re"
+	case strings.Contains(lower, "nucleo-l476rg"):
+		return "nucleo_l476rg"
 	case strings.Contains(lower, "nucleo-wba52cg"):
 		return "nucleo_wba52cg"
 	case strings.Contains(lower, "nucleo-wb55rg"):

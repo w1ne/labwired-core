@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -24,7 +26,7 @@ func boardOpenQuestions(req Request, resolution boardResolution) []string {
 	if resolution.ChipGuess == "" {
 		questions = append(questions, "Which exact MCU package is populated on the target board?")
 	}
-	if !strings.Contains(strings.ToLower(req.Requirements), "ble") {
+	if !boardHasWirelessScope(req, resolution.Profile, resolution.ChipGuess) {
 		return questions
 	}
 	return append(questions, "Is BLE scope limited to example selection and documentation, or is CPU2/radio behavior expected in simulation?")
@@ -281,16 +283,24 @@ func resolvedBoardProfile(draft *BoardDraft) (boardProfile, bool) {
 	}
 }
 
-func renderBoardIOList(items []boardGPIO, hasProfile bool, fallbackID string, fallbackPeripheral string, kind string) string {
+func renderBoardIOList(items []boardGPIO, profile boardProfile, hasProfile bool, fallbackID string, fallbackPeripheral string, kind string) string {
 	if !hasProfile || len(items) == 0 {
 		return fmt.Sprintf("  - id: \"%s\"\n    kind: \"%s\"\n    peripheral: \"%s\"\n    pin: 0\n    signal: \"%s\"\n    active_high: true\n", fallbackID, kind, fallbackPeripheral, boardSignal(kind))
 	}
+	available := map[string]bool{}
+	for _, entry := range boardGPIOPeripheralEntries(profile, hasProfile) {
+		available[entry.ID] = true
+	}
 	lines := make([]string, 0, len(items)*6)
 	for _, item := range items {
+		peripheral := strings.ToLower(item.Port)
+		if !available[peripheral] {
+			peripheral = fallbackPeripheral
+		}
 		lines = append(lines,
 			fmt.Sprintf("  - id: \"%s\"", item.ID),
 			fmt.Sprintf("    kind: \"%s\"", kind),
-			fmt.Sprintf("    peripheral: \"%s\"", strings.ToLower(item.Port)),
+			fmt.Sprintf("    peripheral: \"%s\"", peripheral),
 			fmt.Sprintf("    pin: %s", item.Pin),
 			fmt.Sprintf("    signal: \"%s\"", boardSignal(kind)),
 			fmt.Sprintf("    active_high: %t", item.Active == "high"),
@@ -334,27 +344,23 @@ func extractBoardProfileFromDocs(req Request, docs []SourceDoc) boardResolution 
 	rccMatch := findPeripheralBaseWithEvidence(docTexts, "rcc")
 	profile.RCCBase = normalizeHex(rccMatch.Value)
 	addDocFact(&facts.ExtractedFacts, "rcc_base", profile.RCCBase, rccMatch)
-	gpioAMatch := findPeripheralBaseWithEvidence(docTexts, "gpioa")
+	gpioAMatch := findPeripheralBaseAliasesWithEvidence(docTexts, "gpioa")
 	profile.GPIOABase = normalizeHex(gpioAMatch.Value)
 	addDocFact(&facts.ExtractedFacts, "gpioa_base", profile.GPIOABase, gpioAMatch)
-	gpioBMatch := findPeripheralBaseWithEvidence(docTexts, "gpiob")
+	gpioBMatch := findPeripheralBaseAliasesWithEvidence(docTexts, "gpiob")
 	profile.GPIOBBase = normalizeHex(gpioBMatch.Value)
 	addDocFact(&facts.ExtractedFacts, "gpiob_base", profile.GPIOBBase, gpioBMatch)
-	gpioCMatch := findPeripheralBaseWithEvidence(docTexts, "gpioc")
+	gpioCMatch := findPeripheralBaseAliasesWithEvidence(docTexts, "gpioc")
 	profile.GPIOCBase = normalizeHex(gpioCMatch.Value)
 	addDocFact(&facts.ExtractedFacts, "gpioc_base", profile.GPIOCBase, gpioCMatch)
-	gpioDMatch := findPeripheralBaseWithEvidence(docTexts, "gpiod")
+	gpioDMatch := findPeripheralBaseAliasesWithEvidence(docTexts, "gpiod")
 	profile.GPIODBase = normalizeHex(gpioDMatch.Value)
 	addDocFact(&facts.ExtractedFacts, "gpiod_base", profile.GPIODBase, gpioDMatch)
-	gpioHMatch := findPeripheralBaseWithEvidence(docTexts, "gpioh")
+	gpioHMatch := findPeripheralBaseAliasesWithEvidence(docTexts, "gpioh")
 	profile.GPIOHBase = normalizeHex(gpioHMatch.Value)
 	addDocFact(&facts.ExtractedFacts, "gpioh_base", profile.GPIOHBase, gpioHMatch)
-	uartIDMatch := findFirstDocMatch(docTexts, `(?i)\b(usart\d+|uart\d+)\b`)
+	uartIDMatch := findUARTIDWithEvidence(docTexts)
 	profile.UARTID = strings.ToLower(uartIDMatch.Value)
-	if profile.UARTID == "" {
-		uartIDMatch = findFirstDocMatch(docTexts, `(?i)\b(lpuart\d+)\b`)
-		profile.UARTID = strings.ToLower(uartIDMatch.Value)
-	}
 	addDocFact(&facts.ExtractedFacts, "uart_id", profile.UARTID, uartIDMatch)
 	uartBaseMatch := findPeripheralBaseWithEvidence(docTexts, profile.UARTID)
 	profile.UARTBase = normalizeHex(uartBaseMatch.Value)
@@ -408,8 +414,13 @@ func loadDocText(ref string) string {
 	if path == "" {
 		return ""
 	}
-	if parsed, err := url.Parse(path); err == nil && parsed.Scheme == "file" {
-		path = parsed.Path
+	if parsed, err := url.Parse(path); err == nil {
+		switch parsed.Scheme {
+		case "file":
+			path = parsed.Path
+		case "http", "https":
+			return fetchRemoteDocText(parsed.String())
+		}
 	}
 	if !filepath.IsAbs(path) {
 		return ""
@@ -425,6 +436,38 @@ func loadDocText(ref string) string {
 	}
 	text := string(data)
 	if !isMostlyText(text) {
+		return ""
+	}
+	return text
+}
+
+func fetchRemoteDocText(rawURL string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return ""
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil || len(body) == 0 {
+		return ""
+	}
+
+	contentType := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+	if strings.Contains(contentType, "pdf") || strings.EqualFold(filepath.Ext(strings.ToLower(rawURL)), ".pdf") {
+		return extractPDFBytes(body)
+	}
+	text := strings.TrimSpace(string(bytes.TrimSpace(body)))
+	if text == "" || !isMostlyText(text) {
 		return ""
 	}
 	return text
@@ -455,6 +498,27 @@ func extractPDFText(path string) string {
 	if err != nil {
 		return ""
 	}
+	return normalizeExtractedPDFText(output)
+}
+
+func extractPDFBytes(data []byte) string {
+	tmpFile, err := os.CreateTemp("", "labwired-doc-*.pdf")
+	if err != nil {
+		return ""
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return ""
+	}
+	if err := tmpFile.Close(); err != nil {
+		return ""
+	}
+	return extractPDFText(tmpPath)
+}
+
+func normalizeExtractedPDFText(output []byte) string {
 	text := strings.TrimSpace(string(bytes.TrimSpace(output)))
 	if text == "" || !isMostlyText(text) {
 		return ""
@@ -476,7 +540,7 @@ func findPeripheralBase(corpus, peripheral string) string {
 	if peripheral == "" {
 		return ""
 	}
-	pattern := fmt.Sprintf(`(?i)\b%s\b[^0-9a-f]{0,24}(0x[0-9a-f]+)`, regexp.QuoteMeta(peripheral))
+	pattern := fmt.Sprintf(`(?i)\b%s\b[^\n]{0,64}?(0x[0-9a-f]+)`, regexp.QuoteMeta(peripheral))
 	return findFirstMatch(corpus, pattern)
 }
 
@@ -490,34 +554,67 @@ func findUARTIRQ(corpus, uartID string) string {
 }
 
 func findSignalPin(corpus, signal string) (string, string) {
-	pattern := fmt.Sprintf(`(?i)\b%s\b[^A-Z0-9]{0,16}(GPIO[A-Z])\s*([0-9]{1,2})`, regexp.QuoteMeta(signal))
-	re := regexp.MustCompile(pattern)
-	matches := re.FindStringSubmatch(corpus)
-	if len(matches) < 3 {
-		return "", ""
+	patterns := []string{
+		fmt.Sprintf(`(?i)\b%s\b[^A-Z0-9]{0,16}(GPIO[A-Z])\s*([0-9]{1,2})`, regexp.QuoteMeta(signal)),
+		fmt.Sprintf(`(?i)\b%s\b[^A-Z0-9]{0,16}(P[A-Z])\s*([0-9]{1,2})`, regexp.QuoteMeta(signal)),
+		fmt.Sprintf(`(?i)\b%s\b[^A-Z0-9]{0,16}(P[0-9])\s*([0-9]{1,2})`, regexp.QuoteMeta(signal)),
+		fmt.Sprintf(`(?i)\b%s\b[^A-Z0-9]{0,16}(P[0-9])([0-9]{2})`, regexp.QuoteMeta(signal)),
 	}
-	return strings.ToUpper(matches[1]), matches[2]
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(corpus)
+		if len(matches) < 3 {
+			continue
+		}
+		port, pin := normalizeBoardPortPin(matches[1], matches[2])
+		if port != "" && pin != "" {
+			return port, pin
+		}
+	}
+	return "", ""
 }
 
 func extractBoardGPIOs(corpus, kind string) []boardGPIO {
-	re := regexp.MustCompile(fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(GPIO[A-Z])\s*([0-9]{1,2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)))
-	matches := re.FindAllStringSubmatch(corpus, -1)
-	items := make([]boardGPIO, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 4 {
-			continue
+	patterns := []string{
+		fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(GPIO[A-Z])\s*([0-9]{1,2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)),
+		fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(GPIO)\s*([0-9]{1,2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)),
+		fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(GPIO[0-9]+)\s+([0-9]{1,2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)),
+		fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(GPIO)([0-9]{1,2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)),
+		fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(P[A-Z])\s*([0-9]{1,2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)),
+		fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(P[0-9])\s*([0-9]{1,2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)),
+		fmt.Sprintf(`(?im)^\s*(%s[\w-]*)\s+(P[0-9])([0-9]{2})(?:\s+(active_(?:high|low)|high|low))?`, regexp.QuoteMeta(kind)),
+	}
+	items := []boardGPIO{}
+	seen := map[string]bool{}
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatch(corpus, -1)
+		for _, match := range matches {
+			if len(match) < 4 {
+				continue
+			}
+			port, pin := normalizeBoardPortPin(match[2], match[3])
+			if port == "" || pin == "" {
+				continue
+			}
+			active := "high"
+			if len(match) >= 5 && strings.TrimSpace(match[4]) != "" {
+				value := strings.TrimSpace(strings.ToLower(match[4]))
+				active = strings.TrimPrefix(value, "active_")
+			}
+			id := SanitizeIdent(match[1])
+			key := id + ":" + port + ":" + pin
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			items = append(items, boardGPIO{
+				ID:     id,
+				Port:   port,
+				Pin:    pin,
+				Active: active,
+			})
 		}
-		active := "high"
-		if len(match) >= 5 && strings.TrimSpace(match[4]) != "" {
-			value := strings.TrimSpace(strings.ToLower(match[4]))
-			active = strings.TrimPrefix(value, "active_")
-		}
-		items = append(items, boardGPIO{
-			ID:     SanitizeIdent(match[1]),
-			Port:   strings.ToUpper(match[2]),
-			Pin:    match[3],
-			Active: active,
-		})
 	}
 	return items
 }
@@ -537,7 +634,7 @@ func normalizeHex(value string) string {
 }
 
 func inferChipGuessFromCorpus(corpus string) string {
-	re := regexp.MustCompile(`(?i)\b(stm32[a-z0-9]+|nrf[0-9a-z]+|rp2040|samd[0-9a-z]+)\b`)
+	re := regexp.MustCompile(`(?i)\b(stm32[a-z0-9]+|gd32[a-z0-9]+|ch32[a-z0-9]+|nrf[0-9a-z]+|generic-rv32i|rp2040|samd[0-9a-z]+|same[0-9a-z]+|efr32[0-9a-z]+|fe310|esp32c3|ra6m5)\b`)
 	match := re.FindStringSubmatch(corpus)
 	if len(match) < 2 {
 		return ""
@@ -553,35 +650,322 @@ func applyDerivedProfileDefaults(profile *boardProfile, chipGuess string) {
 	switch {
 	case strings.HasPrefix(chipGuess, "stm32wba"):
 		profile.Family = "stm32wba"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x08000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
 		if profile.RustTarget == "" {
 			profile.RustTarget = "thumbv8m.main-none-eabi"
 		}
-		if profile.StackTop == "" && profile.RAMSize == "128KB" {
-			profile.StackTop = "0x20020000"
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
 		}
 		if profile.VendorExamplesPkg == "" {
 			profile.VendorExamplesPkg = "STM32CubeWBA"
 		}
 	case strings.HasPrefix(chipGuess, "stm32wb"):
 		profile.Family = "stm32wb"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x08000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
 		if profile.RustTarget == "" {
 			profile.RustTarget = "thumbv7em-none-eabi"
 		}
-		if profile.StackTop == "" && profile.RAMSize == "256KB" {
-			profile.StackTop = "0x20040000"
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
 		}
 		if profile.VendorExamplesPkg == "" {
 			profile.VendorExamplesPkg = "STM32CubeWB"
 		}
-	case strings.HasPrefix(chipGuess, "stm32f"):
-		profile.Family = "stm32f"
+	case strings.HasPrefix(chipGuess, "stm32g"):
+		profile.Family = "stm32g"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x08000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
 		if profile.RustTarget == "" {
 			profile.RustTarget = "thumbv7em-none-eabi"
 		}
-		if profile.StackTop == "" && profile.RAMSize == "128KB" {
-			profile.StackTop = "0x20020000"
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+		if profile.VendorExamplesPkg == "" {
+			profile.VendorExamplesPkg = "STM32CubeG4"
+		}
+	case strings.HasPrefix(chipGuess, "stm32l"):
+		profile.Family = "stm32l"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x08000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv7em-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+		if profile.VendorExamplesPkg == "" {
+			profile.VendorExamplesPkg = "STM32CubeL4"
+		}
+	case strings.HasPrefix(chipGuess, "stm32f"):
+		profile.Family = "stm32f"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x08000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv7em-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+	case strings.HasPrefix(chipGuess, "gd32f"):
+		profile.Family = "gd32f"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x08000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv7m-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+	case strings.HasPrefix(chipGuess, "nrf52"):
+		profile.Family = "nrf52"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x00000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv7em-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+	case chipGuess == "rp2040" || strings.HasPrefix(chipGuess, "samd21"):
+		profile.Family = chipGuess
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			if chipGuess == "rp2040" {
+				profile.FlashBase = "0x10000000"
+			} else {
+				profile.FlashBase = "0x00000000"
+			}
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if chipGuess == "rp2040" && profile.GPIOABase == "" {
+			profile.GPIOABase = "0xD0000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv6m-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+	case strings.HasPrefix(chipGuess, "same54"):
+		profile.Family = "same54"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x00000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv7em-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+	case strings.HasPrefix(chipGuess, "efr32"):
+		profile.Family = "efr32"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x00000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv8m.main-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForRAM(profile.RAMSize)
+		}
+	case strings.HasPrefix(chipGuess, "ra6m5"):
+		profile.Family = "ra6m5"
+		profile.Arch = "arm"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x00000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "thumbv8m.main-none-eabi"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForBaseAndRAM(profile.RAMBase, profile.RAMSize)
+		}
+	case chipGuess == "generic-rv32i":
+		profile.Family = "generic-rv32i"
+		profile.Arch = "riscv"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x80000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x80040000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "riscv32i-unknown-none-elf"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForBaseAndRAM(profile.RAMBase, profile.RAMSize)
+		}
+	case strings.HasPrefix(chipGuess, "ch32v"):
+		profile.Family = "ch32v"
+		profile.Arch = "riscv"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x08000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x20000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "riscv32i-unknown-none-elf"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForBaseAndRAM(profile.RAMBase, profile.RAMSize)
+		}
+	case chipGuess == "fe310":
+		profile.Family = "fe310"
+		profile.Arch = "riscv"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x20000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x80000000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "riscv32i-unknown-none-elf"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForBaseAndRAM(profile.RAMBase, profile.RAMSize)
+		}
+	case chipGuess == "esp32c3":
+		profile.Family = "esp32c3"
+		profile.Arch = "riscv"
+		if profile.FlashBase == "" {
+			profile.FlashBase = "0x42000000"
+		}
+		if profile.RAMBase == "" {
+			profile.RAMBase = "0x3FC80000"
+		}
+		if profile.RustTarget == "" {
+			profile.RustTarget = "riscv32i-unknown-none-elf"
+		}
+		if profile.StackTop == "" {
+			profile.StackTop = stackTopForBaseAndRAM(profile.RAMBase, profile.RAMSize)
 		}
 	}
+	if profile.Arch == "" {
+		profile.Arch = "arm"
+	}
+	if profile.FlashBase == "" {
+		profile.FlashBase = "0x08000000"
+	}
+	if profile.RAMBase == "" {
+		profile.RAMBase = "0x20000000"
+	}
+}
+
+func stackTopForRAM(ramSize string) string {
+	return stackTopForBaseAndRAM("0x20000000", ramSize)
+}
+
+func stackTopForBaseAndRAM(ramBase string, ramSize string) string {
+	base, ok := parseHex(ramBase)
+	if !ok {
+		return ""
+	}
+	ramSize = strings.TrimSpace(strings.ToUpper(ramSize))
+	if ramSize == "" {
+		return ""
+	}
+	multiplier := 1
+	switch {
+	case strings.HasSuffix(ramSize, "KB"):
+		ramSize = strings.TrimSuffix(ramSize, "KB")
+		multiplier = 1024
+	case strings.HasSuffix(ramSize, "MB"):
+		ramSize = strings.TrimSuffix(ramSize, "MB")
+		multiplier = 1024 * 1024
+	case strings.HasSuffix(ramSize, "K"):
+		ramSize = strings.TrimSuffix(ramSize, "K")
+		multiplier = 1024
+	case strings.HasSuffix(ramSize, "M"):
+		ramSize = strings.TrimSuffix(ramSize, "M")
+		multiplier = 1024 * 1024
+	default:
+		return ""
+	}
+	ramSize = strings.TrimSpace(ramSize)
+	var qty int
+	for _, ch := range ramSize {
+		if ch < '0' || ch > '9' {
+			return ""
+		}
+		qty = qty*10 + int(ch-'0')
+	}
+	if qty <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("0x%08X", base+qty*multiplier)
+}
+
+func parseHex(value string) (int, bool) {
+	value = strings.TrimSpace(strings.TrimPrefix(strings.ToLower(value), "0x"))
+	if value == "" {
+		return 0, false
+	}
+	total := 0
+	for _, ch := range value {
+		total <<= 4
+		switch {
+		case ch >= '0' && ch <= '9':
+			total += int(ch - '0')
+		case ch >= 'a' && ch <= 'f':
+			total += int(ch-'a') + 10
+		default:
+			return 0, false
+		}
+	}
+	return total, true
 }
 
 func requiredFactGaps(req Request, resolution boardResolution) []string {
@@ -704,7 +1088,16 @@ func findPeripheralBaseWithEvidence(docs []docText, peripheral string) docMatch 
 	if peripheral == "" {
 		return docMatch{}
 	}
-	return findFirstDocMatch(docs, fmt.Sprintf(`(?i)\b%s\b[^0-9a-f]{0,24}(0x[0-9a-f]+)`, regexp.QuoteMeta(peripheral)))
+	return findFirstDocMatch(docs, fmt.Sprintf(`(?i)\b%s\b[^\n]{0,64}?(0x[0-9a-f]+)`, regexp.QuoteMeta(peripheral)))
+}
+
+func findPeripheralBaseAliasesWithEvidence(docs []docText, peripheral string) docMatch {
+	for _, alias := range peripheralAliases(peripheral) {
+		if match := findPeripheralBaseWithEvidence(docs, alias); match.Found {
+			return match
+		}
+	}
+	return docMatch{}
 }
 
 func findUARTIRQWithEvidence(docs []docText, uartID string) docMatch {
@@ -713,6 +1106,62 @@ func findUARTIRQWithEvidence(docs []docText, uartID string) docMatch {
 		return docMatch{}
 	}
 	return findFirstDocMatch(docs, fmt.Sprintf(`(?i)\b%s\b.{0,80}?\birq\b[^0-9]{0,8}(\d+)`, regexp.QuoteMeta(uartID)))
+}
+
+func findUARTIDWithEvidence(docs []docText) docMatch {
+	patterns := []string{
+		`(?i)\b(usart\d+|uart\d+)\b`,
+		`(?i)\b(lpuart\d+)\b`,
+		`(?i)\b(uarte\d+)\b`,
+		`(?i)\b(sercom\d+)\s+(?:usart|uart)\b`,
+		`(?i)\b(sci\d+)\b`,
+	}
+	for _, pattern := range patterns {
+		if match := findFirstDocMatch(docs, pattern); match.Found {
+			return match
+		}
+	}
+	return docMatch{}
+}
+
+func peripheralAliases(peripheral string) []string {
+	peripheral = strings.TrimSpace(strings.ToLower(peripheral))
+	switch peripheral {
+	case "gpioa":
+		return []string{"gpioa", "gpio", "porta", "port0", "pa", "p0", "gpio0"}
+	case "gpiob":
+		return []string{"gpiob", "portb", "port1", "pb", "p1", "gpio1"}
+	case "gpioc":
+		return []string{"gpioc", "portc", "port2", "pc", "p2", "gpio2"}
+	case "gpiod":
+		return []string{"gpiod", "portd", "port3", "pd", "p3", "gpio3"}
+	case "gpioh":
+		return []string{"gpioh", "porth", "ph", "p7", "gpio7"}
+	default:
+		return []string{peripheral}
+	}
+}
+
+func normalizeBoardPortPin(rawPort string, rawPin string) (string, string) {
+	port := strings.ToUpper(strings.TrimSpace(rawPort))
+	pin := strings.TrimLeft(strings.TrimSpace(rawPin), "0")
+	if pin == "" {
+		pin = "0"
+	}
+	switch {
+	case port == "GPIO":
+		return "GPIO", pin
+	case strings.HasPrefix(port, "GPIO") && len(port) > 4 && port[4] >= '0' && port[4] <= '9':
+		return "GPIO", pin
+	case strings.HasPrefix(port, "GPIO"):
+		return port, pin
+	case len(port) == 2 && port[0] == 'P' && port[1] >= 'A' && port[1] <= 'Z':
+		return "GPIO" + port[1:], pin
+	case len(port) == 2 && port[0] == 'P' && port[1] >= '0' && port[1] <= '9':
+		return "GPIO" + string(rune('A'+(port[1]-'0'))), pin
+	default:
+		return "", ""
+	}
 }
 
 func addDocFact(facts *[]FactEvidence, name string, value string, match docMatch) {
@@ -751,6 +1200,9 @@ func confidenceForValue(ok bool) float64 {
 }
 
 func appendDerivedDefaults(facts *[]FactEvidence, profile boardProfile) {
+	addValueFact(facts, "arch", profile.Arch, "derived", "", "", 0.85)
+	addValueFact(facts, "flash_base", profile.FlashBase, "derived", "", "", 0.85)
+	addValueFact(facts, "ram_base", profile.RAMBase, "derived", "", "", 0.85)
 	addValueFact(facts, "family", profile.Family, "derived", "", "", 0.85)
 	addValueFact(facts, "rust_target", profile.RustTarget, "derived", "", "", 0.85)
 	addValueFact(facts, "stack_top", profile.StackTop, "derived", "", "", 0.85)
