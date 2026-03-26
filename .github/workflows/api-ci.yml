@@ -20,7 +20,7 @@ defaults:
 jobs:
   test:
     name: go-test-api
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     container: ubuntu:22.04
     steps:
       - name: Install baseline tools

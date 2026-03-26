@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     env:
       CHECKOUT_PATH: run-${{ github.run_id }}-test
     steps:
@@ -67,7 +67,7 @@ jobs:
           npm run build
 
   build-and-push:
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     needs: test
     env:
       CHECKOUT_PATH: run-${{ github.run_id }}-build
@@ -150,7 +150,7 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-playground:latest
 
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     env:

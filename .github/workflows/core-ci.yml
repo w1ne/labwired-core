@@ -18,7 +18,7 @@ defaults:
 jobs:
   integration-smoke:
     name: core-integration-smoke
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -110,7 +110,7 @@ jobs:
 
   determinism-gate:
     name: determinism-proof
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     needs: integration-smoke
     steps:
       - uses: actions/checkout@v4
@@ -188,7 +188,7 @@ jobs:
 
   compatibility-matrix:
     name: generate-compat-matrix
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     needs: integration-smoke
     steps:
       - uses: actions/checkout@v4

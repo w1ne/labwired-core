@@ -16,7 +16,7 @@ on:
 
 jobs:
   foundry-emergency-repair:
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     timeout-minutes: 15
     concurrency:
       group: pluto-foundry-emergency-repair
@@ -51,7 +51,7 @@ jobs:
 
   cleanup:
     if: github.event_name == 'schedule' || github.event.inputs.task == 'cleanup' || github.event.inputs.task == ''
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     timeout-minutes: 20
     concurrency:
       group: pluto-maintenance
@@ -95,7 +95,7 @@ jobs:
 
   foundry_repair:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'foundry-repair'
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     timeout-minutes: 20
     steps:
       - name: Repair Foundry on Pluto

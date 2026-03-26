@@ -20,7 +20,7 @@ on:
 jobs:
   backend:
     name: foundry-backend-ci
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     container: ubuntu:22.04
     defaults:
       run:
@@ -77,7 +77,7 @@ jobs:
 
   frontend:
     name: foundry-frontend-ci
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     container: ubuntu:22.04
     defaults:
       run:
