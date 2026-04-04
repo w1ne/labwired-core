@@ -35,6 +35,7 @@ mod tests;
 pub enum Arch {
     Arm,
     RiscV,
+    Xtensa,
     Unknown,
 }
 

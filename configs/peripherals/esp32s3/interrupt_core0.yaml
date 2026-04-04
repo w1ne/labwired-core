@@ -1,0 +1,219 @@
+# ESP32-S3 Interrupt Matrix - CPU Core 0
+# Based on ESP32-S3 Technical Reference Manual
+
+peripheral: "INTERRUPT_CORE0"
+version: "0.1.0"
+
+registers:
+  - id: "MAC_INTR_MAP"
+    address_offset: 0x000
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "MAC_NMI_MAP"
+    address_offset: 0x004
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PWR_INTR_MAP"
+    address_offset: 0x008
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "BB_INT_MAP"
+    address_offset: 0x00C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "BT_MAC_INT_MAP"
+    address_offset: 0x010
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "BT_BB_INT_MAP"
+    address_offset: 0x014
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "BT_BB_NMI_MAP"
+    address_offset: 0x018
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "GPIO_INTERRUPT_PRO_MAP"
+    address_offset: 0x040
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "GPIO_INTERRUPT_PRO_NMI_MAP"
+    address_offset: 0x044
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "SPI_INTR_2_MAP"
+    address_offset: 0x04C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "SPI_INTR_3_MAP"
+    address_offset: 0x050
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "UART_INTR_MAP"
+    address_offset: 0x058
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "UART1_INTR_MAP"
+    address_offset: 0x05C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "UART2_INTR_MAP"
+    address_offset: 0x060
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "LEDC_INT_MAP"
+    address_offset: 0x068
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "USB_INTR_MAP"
+    address_offset: 0x088
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "TG_T0_INT_MAP"
+    address_offset: 0x0A0
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "TG_T1_INT_MAP"
+    address_offset: 0x0A4
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "TG_WDT_INT_MAP"
+    address_offset: 0x0A8
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "TG1_T0_INT_MAP"
+    address_offset: 0x0AC
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "TG1_T1_INT_MAP"
+    address_offset: 0x0B0
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "TG1_WDT_INT_MAP"
+    address_offset: 0x0B4
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "CPU_INT_ENABLE"
+    address_offset: 0x104
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+    fields:
+      - name: "ENABLE"
+        bit_range: [31, 0]
+        description: "Enable each of 32 CPU interrupts"
+
+  - id: "CPU_INT_TYPE"
+    address_offset: 0x108
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+    fields:
+      - name: "TYPE"
+        bit_range: [31, 0]
+        description: "Interrupt type (0=level, 1=edge)"
+
+  - id: "CPU_INT_CLEAR"
+    address_offset: 0x10C
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+    side_effects:
+      write_action: oneToClear
+
+  - id: "CPU_INT_EIP_STATUS"
+    address_offset: 0x110
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  # CPU interrupt priority registers (0-31)
+  - id: "CPU_INT_PRI_0"
+    address_offset: 0x114
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "CPU_INT_PRI_1"
+    address_offset: 0x118
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "CPU_INT_THRESH"
+    address_offset: 0x194
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "INTR_STATUS_REG_0"
+    address_offset: 0x198
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "INTR_STATUS_REG_1"
+    address_offset: 0x19C
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "CLOCK_GATE"
+    address_offset: 0x1A0
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000001
+
+interrupts:
+  WIFI_MAC: 0
+  WIFI_MAC_NMI: 1
+  GPIO: 16
+  GPIO_NMI: 17
+  FROM_CPU_INTR0: 50
+  FROM_CPU_INTR1: 51
+  FROM_CPU_INTR2: 52
+  FROM_CPU_INTR3: 53

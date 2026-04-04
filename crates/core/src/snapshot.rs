@@ -19,6 +19,7 @@ pub struct MachineSnapshot {
 pub enum CpuSnapshot {
     Arm(ArmCpuSnapshot),
     RiscV(RiscVCpuSnapshot),
+    Xtensa(XtensaCpuSnapshot),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -47,4 +48,22 @@ pub struct RiscVCpuSnapshot {
 
     pub mtime: u64,
     pub mtimecmp: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct XtensaCpuSnapshot {
+    pub registers: Vec<u32>,
+    pub pc: u32,
+
+    pub ps: u32,
+    pub sar: u32,
+    pub lbeg: u32,
+    pub lend: u32,
+    pub lcount: u32,
+    pub vecbase: u32,
+
+    pub epc1: u32,
+    pub exccause: u32,
+    pub excsave1: u32,
+    pub excvaddr: u32,
 }

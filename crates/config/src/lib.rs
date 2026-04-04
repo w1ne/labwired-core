@@ -49,6 +49,8 @@ pub enum Arch {
     Arm,
     #[serde(alias = "riscv32", alias = "rv32i", alias = "rv32imac")]
     RiscV,
+    #[serde(alias = "xtensa-lx7", alias = "xtensa-lx6")]
+    Xtensa,
     Unknown,
 }
 
@@ -417,6 +419,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
         let arch = match ir.arch.to_uppercase().as_str() {
             "CM3" | "CM4" | "CM7" | "ARM" => Arch::Arm,
             "RISCV" | "RV32" => Arch::RiscV,
+            "XTENSA" | "LX7" | "LX6" => Arch::Xtensa,
             _ => Arch::Arm, // Default to Arm for CMSIS-SVD
         };
 

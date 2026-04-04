@@ -124,6 +124,12 @@ impl Machine {
                 m.load_firmware(&program).map_err(PySimulationError)?;
                 Box::new(m)
             }
+            Arch::Xtensa => {
+                let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
+                let mut m = labwired_core::Machine::new(cpu, bus);
+                m.load_firmware(&program).map_err(PySimulationError)?;
+                Box::new(m)
+            }
             _ => {
                 return Err(pyo3::exceptions::PyValueError::new_err(
                     "Unsupported architecture",

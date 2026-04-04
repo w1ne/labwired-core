@@ -1115,6 +1115,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
         let prog_arch = match program.arch {
             labwired_core::Arch::Arm => labwired_config::Arch::Arm,
             labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
+            labwired_core::Arch::Xtensa => labwired_config::Arch::Xtensa,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -1130,6 +1131,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
     match cpu_arch {
         labwired_config::Arch::Arm => run_interactive_arm(cli, bus, program, metrics),
         labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
+        labwired_config::Arch::Xtensa => run_interactive_xtensa(cli, bus, program, metrics),
         _ => {
             emit_error(
                 cli.json,
@@ -1209,6 +1211,7 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
     let arch = match program.arch {
         labwired_core::Arch::Arm => labwired_config::Arch::Arm,
         labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
+        labwired_core::Arch::Xtensa => labwired_config::Arch::Xtensa,
         _ => {
             error!("Unknown architecture in firmware");
             return ExitCode::from(EXIT_CONFIG_ERROR);
@@ -1284,6 +1287,45 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
             }
 
             info!("Resuming simulation (RISC-V)...");
+            let cli = Cli {
+                firmware: Some(config.firmware),
+                system: config.system,
+                snapshot: None,
+                breakpoint: vec![],
+                trace: args.trace,
+                max_steps: args.max_steps.unwrap_or(config.max_steps),
+                gdb: None,
+                command: None,
+                json: false,
+                vcd: None,
+            };
+            run_simulation_loop(&cli, &mut machine, &metrics);
+            ExitCode::from(EXIT_PASS)
+        }
+        labwired_config::Arch::Xtensa => {
+            let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
+            let mut machine = labwired_core::Machine::new(cpu, bus);
+            machine.observers.push(metrics.clone());
+            if let Err(e) = machine.load_firmware(&program) {
+                error!("Failed to load firmware: {}", e);
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+
+            machine.cpu.apply_snapshot(&cpu_snapshot);
+            for ps in peripherals_snapshot {
+                if let Some(state) = ps.state {
+                    for p in &mut machine.bus.peripherals {
+                        if p.name == ps.name {
+                            if let Err(e) = p.dev.restore(state.clone()) {
+                                error!("Failed to restore peripheral {}: {}", p.name, e);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            info!("Resuming simulation (Xtensa)...");
             let cli = Cli {
                 firmware: Some(config.firmware),
                 system: config.system,
@@ -1410,6 +1452,64 @@ fn run_interactive_riscv(
             return ExitCode::from(EXIT_RUNTIME_ERROR);
         }
         return ExitCode::from(EXIT_PASS);
+    }
+
+    let result = run_simulation_loop(&cli, &mut machine, &metrics);
+
+    if let Some(path) = &cli.snapshot {
+        let firmware_path = cli.firmware.as_ref().expect("Firmware path required");
+        let system_path = cli.system.as_ref();
+
+        write_interactive_snapshot(
+            path,
+            &metrics,
+            &machine,
+            InteractiveSnapshotInputs {
+                firmware_path,
+                system_path,
+                max_steps: cli.max_steps,
+                steps_executed: result.steps_executed,
+                stop_reason: result.stop_reason,
+                message: result.stop_message,
+            },
+        );
+    }
+
+    report_metrics(&cli, &machine.cpu, &metrics);
+    ExitCode::from(EXIT_PASS)
+}
+
+fn run_interactive_xtensa(
+    cli: Cli,
+    mut bus: labwired_core::bus::SystemBus,
+    program: labwired_core::memory::ProgramImage,
+    metrics: Arc<labwired_core::metrics::PerformanceMetrics>,
+) -> ExitCode {
+    let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.observers.push(metrics.clone());
+
+    if let Some(vcd_path) = &cli.vcd {
+        let file = std::fs::File::create(vcd_path).expect("Failed to create VCD file");
+        let observer = std::sync::Arc::new(vcd_trace::VcdObserver::new(file));
+        machine.observers.push(observer);
+    }
+
+    if let Err(e) = machine.load_firmware(&program) {
+        tracing::error!("Failed to load firmware into memory: {}", e);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    info!("Starting Simulation (Xtensa LX7)...");
+    info!(
+        "Initial PC: {:#x}, SP: {:#x}",
+        machine.cpu.pc,
+        machine.cpu.a[1] // SP is a1 in Xtensa
+    );
+
+    if cli.gdb.is_some() {
+        error!("GDB server is not yet supported for Xtensa architecture");
+        return ExitCode::from(EXIT_CONFIG_ERROR);
     }
 
     let result = run_simulation_loop(&cli, &mut machine, &metrics);
@@ -1780,10 +1880,10 @@ fn run_test(args: TestArgs) -> ExitCode {
     };
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
-    let (_cpu_configured, machine_arm, machine_riscv) = match program.arch {
-        labwired_core::Arch::Arm => {
-            let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
-            let mut machine = labwired_core::Machine::new(cpu, bus);
+
+    macro_rules! setup_and_run {
+        ($cpu:expr) => {{
+            let mut machine = labwired_core::Machine::new($cpu, bus);
             machine.observers.push(metrics.clone());
             if let Err(e) = machine.load_firmware(&program) {
                 return handle_load_error(
@@ -1798,26 +1898,32 @@ fn run_test(args: TestArgs) -> ExitCode {
                     e,
                 );
             }
-            (true, Some(machine), None)
+            execute_test_loop(
+                &args,
+                &mut machine,
+                &resolved_limits,
+                &assertions,
+                &firmware_bytes,
+                &uart_tx,
+                &metrics,
+                &firmware_path,
+                system_path.as_ref(),
+            )
+        }};
+    }
+
+    match program.arch {
+        labwired_core::Arch::Arm => {
+            let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+            setup_and_run!(cpu)
         }
         labwired_core::Arch::RiscV => {
             let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
-            let mut machine = labwired_core::Machine::new(cpu, bus);
-            machine.observers.push(metrics.clone());
-            if let Err(e) = machine.load_firmware(&program) {
-                return handle_load_error(
-                    &args,
-                    &metrics,
-                    &resolved_limits,
-                    &firmware_bytes,
-                    &uart_tx,
-                    &machine.cpu,
-                    &firmware_path,
-                    system_path.as_ref(),
-                    e,
-                );
-            }
-            (true, None, Some(machine))
+            setup_and_run!(cpu)
+        }
+        labwired_core::Arch::Xtensa => {
+            let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
+            setup_and_run!(cpu)
         }
         _ => {
             let msg = format!("Unsupported architecture: {:?}", program.arch);
@@ -1830,36 +1936,8 @@ fn run_test(args: TestArgs) -> ExitCode {
                 Some(&resolved_limits),
                 msg,
             );
-            return ExitCode::from(EXIT_CONFIG_ERROR);
+            ExitCode::from(EXIT_CONFIG_ERROR)
         }
-    };
-
-    if let Some(mut machine) = machine_arm {
-        execute_test_loop(
-            &args,
-            &mut machine,
-            &resolved_limits,
-            &assertions,
-            &firmware_bytes,
-            &uart_tx,
-            &metrics,
-            &firmware_path,
-            system_path.as_ref(),
-        )
-    } else if let Some(mut machine) = machine_riscv {
-        execute_test_loop(
-            &args,
-            &mut machine,
-            &resolved_limits,
-            &assertions,
-            &firmware_bytes,
-            &uart_tx,
-            &metrics,
-            &firmware_path,
-            system_path.as_ref(),
-        )
-    } else {
-        unreachable!()
     }
 }
 

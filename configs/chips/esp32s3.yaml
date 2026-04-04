@@ -1,0 +1,34 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: "esp32s3"
+arch: "xtensa"
+flash:
+  base: 0x42000000
+  size: "16MB"
+ram:
+  base: 0x3FC88000
+  size: "512KB"
+peripherals:
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+  - id: "gpio"
+    type: "declarative"
+    base_address: 0x60004000
+    config:
+      path: "../peripherals/esp32s3/gpio.yaml"
+  - id: "timg0"
+    type: "declarative"
+    base_address: 0x6001F000
+    config:
+      path: "../peripherals/esp32s3/timg0.yaml"
+  - id: "interrupt_core0"
+    type: "declarative"
+    base_address: 0x600C2000
+    config:
+      path: "../peripherals/esp32s3/interrupt_core0.yaml"

@@ -72,6 +72,11 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
             let mut machine = Machine::new(cpu, bus);
             validate_registers(&mut machine, &chip)?;
         }
+        Arch::Xtensa => {
+            let cpu = system::xtensa::configure_xtensa(&mut bus);
+            let mut machine = Machine::new(cpu, bus);
+            validate_registers(&mut machine, &chip)?;
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }
