@@ -1,0 +1,196 @@
+# ESP32-S3 Timer Group 0 (TIMG0)
+# Based on ESP32-S3 Technical Reference Manual
+
+peripheral: "TIMG0"
+version: "0.1.0"
+
+registers:
+  - id: "T0CONFIG"
+    address_offset: 0x000
+    size: 32
+    access: "R/W"
+    reset_value: 0x60013000
+    fields:
+      - name: "USE_XTAL"
+        bit_range: [9, 9]
+      - name: "ALARM_EN"
+        bit_range: [10, 10]
+      - name: "DIVCNT_RST"
+        bit_range: [12, 12]
+      - name: "DIVIDER"
+        bit_range: [28, 13]
+      - name: "AUTORELOAD"
+        bit_range: [29, 29]
+      - name: "INCREASE"
+        bit_range: [30, 30]
+      - name: "EN"
+        bit_range: [31, 31]
+
+  - id: "T0LO"
+    address_offset: 0x004
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "T0HI"
+    address_offset: 0x008
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "T0UPDATE"
+    address_offset: 0x00C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "T0ALARMLO"
+    address_offset: 0x010
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "T0ALARMHI"
+    address_offset: 0x014
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "T0LOADLO"
+    address_offset: 0x018
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "T0LOADHI"
+    address_offset: 0x01C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "T0LOAD"
+    address_offset: 0x020
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "T1CONFIG"
+    address_offset: 0x024
+    size: 32
+    access: "R/W"
+    reset_value: 0x60013000
+
+  - id: "T1LO"
+    address_offset: 0x028
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "T1HI"
+    address_offset: 0x02C
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "T1UPDATE"
+    address_offset: 0x030
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "WDTCONFIG0"
+    address_offset: 0x048
+    size: 32
+    access: "R/W"
+    reset_value: 0x00048D00
+
+  - id: "WDTCONFIG1"
+    address_offset: 0x04C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00010000
+
+  - id: "WDTCONFIG2"
+    address_offset: 0x050
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "WDTCONFIG3"
+    address_offset: 0x054
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "WDTCONFIG4"
+    address_offset: 0x058
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "WDTCONFIG5"
+    address_offset: 0x05C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "WDTFEED"
+    address_offset: 0x060
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "WDTWPROTECT"
+    address_offset: 0x064
+    size: 32
+    access: "R/W"
+    reset_value: 0x50D83AA1
+
+  - id: "INT_ENA_TIMERS"
+    address_offset: 0x070
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "INT_RAW_TIMERS"
+    address_offset: 0x074
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "INT_ST_TIMERS"
+    address_offset: 0x078
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "INT_CLR_TIMERS"
+    address_offset: 0x07C
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+    side_effects:
+      write_action: oneToClear
+
+  - id: "RTCCALICFG"
+    address_offset: 0x068
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "RTCCALICFG1"
+    address_offset: 0x06C
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "REGCLK"
+    address_offset: 0x0FC
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+interrupts:
+  TG0_T0_LEVEL: 32
+  TG0_T1_LEVEL: 33
+  TG0_WDT_LEVEL: 34
