@@ -29,6 +29,7 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
     let arch = match elf.header.e_machine {
         goblin::elf::header::EM_ARM => labwired_core::Arch::Arm,
         goblin::elf::header::EM_RISCV => labwired_core::Arch::RiscV,
+        94 => labwired_core::Arch::Xtensa, // EM_XTENSA = 94
         _ => {
             warn!("Unknown ELF machine type: {}", elf.header.e_machine);
             labwired_core::Arch::Unknown

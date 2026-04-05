@@ -1,0 +1,342 @@
+# ESP32-S3 GPIO Peripheral
+# 49 GPIO pins (GPIO0-GPIO48)
+# Based on ESP32-S3 Technical Reference Manual
+
+peripheral: "GPIO"
+version: "0.1.0"
+
+registers:
+  - id: "BT_SELECT"
+    address_offset: 0x000
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "OUT"
+    address_offset: 0x004
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+    fields:
+      - name: "DATA"
+        bit_range: [31, 0]
+        description: "GPIO output value for GPIO0-31"
+
+  - id: "OUT_W1TS"
+    address_offset: 0x008
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+    side_effects:
+      write_action: oneToClear
+
+  - id: "OUT_W1TC"
+    address_offset: 0x00C
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "OUT1"
+    address_offset: 0x010
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+    fields:
+      - name: "DATA"
+        bit_range: [16, 0]
+        description: "GPIO output value for GPIO32-48"
+
+  - id: "OUT1_W1TS"
+    address_offset: 0x014
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "OUT1_W1TC"
+    address_offset: 0x018
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "ENABLE"
+    address_offset: 0x020
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "ENABLE_W1TS"
+    address_offset: 0x024
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "ENABLE_W1TC"
+    address_offset: 0x028
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "ENABLE1"
+    address_offset: 0x02C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "ENABLE1_W1TS"
+    address_offset: 0x030
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "ENABLE1_W1TC"
+    address_offset: 0x034
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "STRAP"
+    address_offset: 0x038
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "IN"
+    address_offset: 0x03C
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+    fields:
+      - name: "DATA"
+        bit_range: [31, 0]
+        description: "GPIO input value for GPIO0-31"
+
+  - id: "IN1"
+    address_offset: 0x040
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+    fields:
+      - name: "DATA"
+        bit_range: [16, 0]
+        description: "GPIO input value for GPIO32-48"
+
+  - id: "STATUS"
+    address_offset: 0x044
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "STATUS_W1TS"
+    address_offset: 0x048
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "STATUS_W1TC"
+    address_offset: 0x04C
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "STATUS1"
+    address_offset: 0x050
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "STATUS1_W1TS"
+    address_offset: 0x054
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "STATUS1_W1TC"
+    address_offset: 0x058
+    size: 32
+    access: "WO"
+    reset_value: 0x00000000
+
+  - id: "PCPU_INT"
+    address_offset: 0x05C
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "PCPU_NMI_INT"
+    address_offset: 0x060
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "PCPU_INT1"
+    address_offset: 0x068
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  - id: "PCPU_NMI_INT1"
+    address_offset: 0x06C
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+
+  # PIN configuration registers (GPIO0..GPIO48)
+  # Only including a representative subset for simulation
+  - id: "PIN0"
+    address_offset: 0x074
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+    fields:
+      - name: "PAD_DRIVER"
+        bit_range: [2, 2]
+        description: "Pad driver selection"
+      - name: "INT_TYPE"
+        bit_range: [9, 7]
+        description: "Interrupt mode"
+      - name: "WAKEUP_ENABLE"
+        bit_range: [10, 10]
+      - name: "INT_ENA"
+        bit_range: [17, 13]
+
+  - id: "PIN1"
+    address_offset: 0x078
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN2"
+    address_offset: 0x07C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN3"
+    address_offset: 0x080
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN4"
+    address_offset: 0x084
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN5"
+    address_offset: 0x088
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN6"
+    address_offset: 0x08C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN7"
+    address_offset: 0x090
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN8"
+    address_offset: 0x094
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN9"
+    address_offset: 0x098
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN10"
+    address_offset: 0x09C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN11"
+    address_offset: 0x0A0
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN12"
+    address_offset: 0x0A4
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN13"
+    address_offset: 0x0A8
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN14"
+    address_offset: 0x0AC
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN15"
+    address_offset: 0x0B0
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN16"
+    address_offset: 0x0B4
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN17"
+    address_offset: 0x0B8
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN18"
+    address_offset: 0x0BC
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN19"
+    address_offset: 0x0C0
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN20"
+    address_offset: 0x0C4
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "PIN21"
+    address_offset: 0x0C8
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000000
+
+  - id: "CLOCK_GATE"
+    address_offset: 0x62C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000001
+
+  - id: "REG_DATE"
+    address_offset: 0x6FC
+    size: 32
+    access: "R/W"
+    reset_value: 0x02108190
+
+interrupts:
+  GPIO: 16
+  GPIO_NMI: 17

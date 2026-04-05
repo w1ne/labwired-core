@@ -28,15 +28,16 @@ fn test_rp2040_full_smoke() {
     bus.attach_uart_tx_sink(sink.clone(), false);
 
     // Thumb-1 Code for Cortex-M0+ (RP2040)
-    // ldr r0, [pc, #8]  -> 4802 (loads 0x40034000 into r0)
-    // movs r1, #79 ('O') -> 214F
-    // str r1, [r0, #0]   -> 6001
-    // movs r1, #75 ('K') -> 214B
-    // str r1, [r0, #0]   -> 6001
-    // b .                -> E7FE
-    // .word 0x40034000   -> 40034000
+    // UART0 uses stm32v2 layout where TX data register (TDR) is at offset 0x28.
+    // ldr r0, [pc, #8]     -> 4802 (loads 0x40034000 into r0)
+    // movs r1, #79 ('O')   -> 214F
+    // str r1, [r0, #0x28]  -> 6281
+    // movs r1, #75 ('K')   -> 214B
+    // str r1, [r0, #0x28]  -> 6281
+    // b .                  -> E7FE
+    // .word 0x40034000     -> 40034000
     let code = vec![
-        0x02, 0x48, 0x4F, 0x21, 0x01, 0x60, 0x4B, 0x21, 0x01, 0x60, 0xFE, 0xE7, 0x00, 0x40, 0x03,
+        0x02, 0x48, 0x4F, 0x21, 0x81, 0x62, 0x4B, 0x21, 0x81, 0x62, 0xFE, 0xE7, 0x00, 0x40, 0x03,
         0x40,
     ];
 

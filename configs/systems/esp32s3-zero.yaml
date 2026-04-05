@@ -1,0 +1,12 @@
+# LabWired - ESP32-S3-Zero System Configuration
+# Waveshare ESP32-S3-Zero: compact board with USB-C, RGB LED on GPIO48
+name: "esp32s3-zero"
+chip: "../chips/esp32s3.yaml"
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 48
+    signal: "output"
+    active_high: true
