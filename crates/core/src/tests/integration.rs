@@ -303,7 +303,11 @@ pub mod integration_tests {
         );
 
         let ispr0 = nvic_state.ispr[0].load(Ordering::SeqCst);
-        assert_eq!(ispr0 & 0x1, 0x1, "NVIC ISPR0 bit 0 should be set");
+        assert_eq!(
+            ispr0 & (1 << 16),
+            1 << 16,
+            "NVIC ISPR0 bit 16 should be set for IRQ 16"
+        );
     }
 
     #[test]
