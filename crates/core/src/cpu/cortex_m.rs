@@ -1150,7 +1150,9 @@ impl CortexM {
                 Instruction::Nop => { /* Do nothing */ }
                 Instruction::MovImm { rd, imm } => {
                     self.write_reg(rd, imm as u32);
-                    self.update_nz(imm as u32);
+                    if !it_block_instruction {
+                        self.update_nz(imm as u32);
+                    }
                 }
                 // Control Flow
                 Instruction::Cbz { rn, imm } => {

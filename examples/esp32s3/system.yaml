@@ -1,0 +1,4 @@
+# LabWired - ESP32-S3 Example System Configuration
+name: "esp32s3-example"
+chip: "../../configs/chips/esp32s3.yaml"
+external_devices: []
