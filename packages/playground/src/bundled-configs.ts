@@ -5,12 +5,14 @@
  */
 
 import chipEsp32c3 from '../../../core/configs/chips/esp32c3.yaml?raw';
+import chipEsp32s3 from '../../../core/configs/chips/esp32s3.yaml?raw';
 import chipNrf52840 from '../../../core/configs/chips/nrf52840.yaml?raw';
 import chipRp2040 from '../../../core/configs/chips/rp2040.yaml?raw';
 import chipStm32f103 from '../../../core/configs/chips/stm32f103.yaml?raw';
 import chipStm32f401 from '../../../core/configs/chips/stm32f401.yaml?raw';
 import chipStm32h563 from '../../../core/configs/chips/stm32h563.yaml?raw';
 import systemEsp32c3Devkit from '../../../core/configs/systems/esp32c3-devkit.yaml?raw';
+import systemEsp32s3Zero from '../../../core/configs/systems/esp32s3-zero.yaml?raw';
 import systemNrf52840Dk from '../../../core/configs/systems/nrf52840-dk.yaml?raw';
 import systemNucleoF401re from '../../../core/configs/systems/nucleo-f401re.yaml?raw';
 import systemNucleoH563zi from '../../../core/configs/systems/nucleo-h563zi-demo.yaml?raw';
@@ -73,6 +75,16 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipEsp32c3,
     systemYaml: systemEsp32c3Devkit,
     mcuComponentType: 'esp32',
+  },
+  {
+    boardId: 'esp32s3-zero',
+    chipId: 'esp32s3',
+    name: 'ESP32-S3-Zero',
+    description: 'Xtensa LX7 dual-core ESP32-S3 with USB-C. RGB LED on GPIO48.',
+    arch: 'Xtensa LX7',
+    chipYaml: chipEsp32s3,
+    systemYaml: systemEsp32s3Zero,
+    mcuComponentType: 'esp32-s3-zero',
   },
   {
     boardId: 'rp2040-pico',
