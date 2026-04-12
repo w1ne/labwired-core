@@ -16,6 +16,6 @@ validation:
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-04-05T00:06:33.510676+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/23990388028/attempts/1
+  timestamp_utc: '2026-04-12T00:07:51.022956+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/24294589517/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/beaglev-fire.md
