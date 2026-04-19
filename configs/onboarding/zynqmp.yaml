@@ -15,6 +15,6 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-04-12T00:07:52.794162+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/24294589517/attempts/1
+  timestamp_utc: '2026-04-19T00:08:43.602571+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/24616907224/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/zynqmp.md
