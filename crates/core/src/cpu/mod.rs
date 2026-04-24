@@ -6,8 +6,10 @@
 
 pub mod cortex_m;
 pub mod riscv;
+pub mod xtensa_lx7;
 pub mod xtensa_regs;
 pub mod xtensa_sr;
 
 pub use cortex_m::CortexM;
 pub use riscv::RiscV;
+pub use xtensa_lx7::XtensaLx7;
