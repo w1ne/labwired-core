@@ -7,8 +7,24 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// On-disk schema version for `MachineSnapshot`. Bump whenever the wire
+/// format changes in a non-backwards-compatible way (new required fields,
+/// renamed variants, changed semantics). Older snapshots whose version
+/// does not match are rejected by `Machine::apply_snapshot` rather than
+/// silently ignored — a zero-filled field is worse than a clean refusal.
+pub const SCHEMA_VERSION: u32 = 1;
+
+fn default_schema_version() -> u32 {
+    // Treat a missing field as v0 (pre-versioned snapshots). `apply_snapshot`
+    // will reject anything that isn't the current SCHEMA_VERSION, so this
+    // default means "old snapshot, please re-record".
+    0
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MachineSnapshot {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub cpu: CpuSnapshot,
     pub peripherals: HashMap<String, serde_json::Value>,
     // Future: metrics

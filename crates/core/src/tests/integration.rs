@@ -1851,6 +1851,53 @@ pub mod integration_tests {
     }
 
     #[test]
+    fn test_snapshot_schema_mismatch_rejected() {
+        use crate::snapshot::{MachineSnapshot, SCHEMA_VERSION};
+
+        let mut machine = create_machine();
+        let mut snap = machine.snapshot();
+        snap.schema_version = SCHEMA_VERSION.wrapping_add(1);
+
+        match machine.apply_snapshot(snap) {
+            Err(crate::SimulationError::SnapshotSchemaMismatch { expected, got }) => {
+                assert_eq!(expected, SCHEMA_VERSION);
+                assert_eq!(got, SCHEMA_VERSION.wrapping_add(1));
+            }
+            other => panic!("expected SnapshotSchemaMismatch, got {:?}", other),
+        }
+
+        // Round-trip through JSON: same mismatched version must still reject.
+        let bad = MachineSnapshot {
+            schema_version: 999,
+            cpu: machine.snapshot().cpu,
+            peripherals: std::collections::HashMap::new(),
+        };
+        assert!(matches!(
+            machine.apply_snapshot(bad),
+            Err(crate::SimulationError::SnapshotSchemaMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn test_snapshot_missing_version_defaults_to_v0() {
+        // An old snapshot file written before we added `schema_version` will
+        // serde-deserialize with schema_version = 0 via the default.
+        let mut machine = create_machine();
+        let v1 = machine.snapshot();
+        assert_eq!(v1.schema_version, crate::snapshot::SCHEMA_VERSION);
+
+        let mut obj = serde_json::to_value(&v1).unwrap();
+        obj.as_object_mut().unwrap().remove("schema_version");
+        let roundtrip: crate::snapshot::MachineSnapshot =
+            serde_json::from_value(obj).expect("snapshot deserializes without version");
+        assert_eq!(roundtrip.schema_version, 0);
+        assert!(matches!(
+            machine.apply_snapshot(roundtrip),
+            Err(crate::SimulationError::SnapshotSchemaMismatch { got: 0, .. })
+        ));
+    }
+
+    #[test]
     fn test_declarative_peripheral_integration() {
         use crate::peripherals::declarative::GenericPeripheral;
         use labwired_config::PeripheralDescriptor;

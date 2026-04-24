@@ -47,6 +47,8 @@ pub enum SimulationError {
     DecodeError(u64),
     #[error("Simulation halted")]
     Halt,
+    #[error("Snapshot schema mismatch: expected v{expected}, got v{got}")]
+    SnapshotSchemaMismatch { expected: u32, got: u32 },
     #[error("Simulation error: {0}")]
     Other(String),
 }
@@ -370,6 +372,7 @@ impl<C: Cpu> Machine<C> {
 
     pub fn snapshot(&self) -> snapshot::MachineSnapshot {
         snapshot::MachineSnapshot {
+            schema_version: snapshot::SCHEMA_VERSION,
             cpu: self.cpu.snapshot(),
             peripherals: self
                 .bus
@@ -381,6 +384,12 @@ impl<C: Cpu> Machine<C> {
     }
 
     pub fn apply_snapshot(&mut self, snapshot: snapshot::MachineSnapshot) -> SimResult<()> {
+        if snapshot.schema_version != snapshot::SCHEMA_VERSION {
+            return Err(SimulationError::SnapshotSchemaMismatch {
+                expected: snapshot::SCHEMA_VERSION,
+                got: snapshot.schema_version,
+            });
+        }
         self.cpu.apply_snapshot(&snapshot.cpu);
         for p in &mut self.bus.peripherals {
             if let Some(state) = snapshot.peripherals.get(&p.name) {

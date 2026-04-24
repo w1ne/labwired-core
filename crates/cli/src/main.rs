@@ -1583,6 +1583,9 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                     labwired_core::SimulationError::Halt => StopReason::Halt,
+                    labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
+                        StopReason::Exception
+                    }
                     labwired_core::SimulationError::Other(_) => StopReason::Exception,
                 };
                 stop_message = Some(e.to_string());
@@ -2115,6 +2118,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         }
                         labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                         labwired_core::SimulationError::Halt => StopReason::Halt,
+                        labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
+                            StopReason::Exception
+                        }
                         labwired_core::SimulationError::Other(_) => StopReason::Exception,
                     };
                     if stop_reason != StopReason::Halt {
@@ -2133,6 +2139,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                     labwired_core::SimulationError::Halt => StopReason::Halt,
+                    labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
+                        StopReason::Exception
+                    }
                     labwired_core::SimulationError::Other(_) => StopReason::Exception,
                 };
                 if stop_reason != StopReason::Halt {
