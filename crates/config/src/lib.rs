@@ -128,6 +128,16 @@ pub struct SideEffectsDescriptor {
     pub on_write: Option<String>,
 }
 
+/// Specifies how a value must match for a word-granular write trigger to fire.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TriggerMatch {
+    /// Match if the 32-bit word write exactly equals this value.
+    Word(u32),
+    /// Match if `(written_value & mask) == (value & mask)`.
+    WordMasked { value: u32, mask: u32 },
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TimingTrigger {
@@ -137,6 +147,13 @@ pub enum TimingTrigger {
         value: Option<u32>,
         #[serde(default)]
         mask: Option<u32>,
+    },
+    /// Like `Write` but fires only on coherent 32-bit word writes, not byte writes.
+    /// Use this for MMIO control registers that firmware always writes as a full word.
+    WriteWord {
+        register: String,
+        #[serde(default)]
+        match_value: Option<TriggerMatch>,
     },
     Read {
         register: String,

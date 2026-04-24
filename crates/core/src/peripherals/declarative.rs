@@ -115,6 +115,9 @@ impl GenericPeripheral {
                             true // Any write triggers it
                         }
                     }
+                    // WriteWord triggers are only fired from write_word_32, never
+                    // from the byte-level write path. Skip them here.
+                    labwired_config::TimingTrigger::WriteWord { .. } => false,
                     labwired_config::TimingTrigger::Periodic { .. } => false,
                 };
 
@@ -236,16 +239,57 @@ impl Peripheral for GenericPeripheral {
                     data[offset as usize] = value;
                 }
 
-                // For triggers, we need the full register value being written (ideally).
-                // But GenericPeripheral writes byte-by-byte.
-                // This is a limitation: multi-byte write triggers might be tricky.
-                // However, most SVD tools/emulators assume 32-bit writes for control registers.
-                // Let's at least trigger on the byte write.
-                // TODO: Buffer multi-byte writes for trigger matching?
-                // For now, simple byte-level trigger is okay if we only match bits within that byte.
-                // Or we can pass the written 'value' shifted as if it was a 32-bit write if we knew the alignment.
+                // Fire byte-level write triggers. Note: WriteWord triggers are
+                // intentionally skipped here — they fire from write_word_32 only,
+                // which is called by the bus after a coherent 32-bit write.
                 self.check_triggers(&reg.id, true, Some(value as u32));
 
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    fn write_word_32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // Find the 32-bit register whose range fully covers `offset`.
+        for reg in &self.descriptor.registers {
+            let reg_end = reg.address_offset + (reg.size as u64 / 8);
+            if offset >= reg.address_offset && offset < reg_end && reg.size == 32 {
+                // Only fire word triggers when the write is aligned to the register base.
+                if offset == reg.address_offset {
+                    if let Some(timing) = &self.descriptor.timing {
+                        for hook in timing {
+                            if let labwired_config::TimingTrigger::WriteWord {
+                                register,
+                                match_value,
+                            } = &hook.trigger
+                            {
+                                if register != &reg.id {
+                                    continue;
+                                }
+                                let fired = match match_value {
+                                    None => true, // Any word write triggers
+                                    Some(labwired_config::TriggerMatch::Word(expected)) => {
+                                        value == *expected
+                                    }
+                                    Some(labwired_config::TriggerMatch::WordMasked {
+                                        value: v,
+                                        mask: m,
+                                    }) => (value & *m) == (*v & *m),
+                                };
+                                if fired {
+                                    self.inflight_events.borrow_mut().push(InflightEvent {
+                                        id: hook.id.clone(),
+                                        delay_remaining: hook.delay_cycles,
+                                        action: hook.action.clone(),
+                                        interrupt: hook.interrupt.clone(),
+                                        periodic_interval: None,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
                 return Ok(());
             }
         }

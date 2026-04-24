@@ -93,6 +93,14 @@ pub trait Cpu: Send {
 pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
+
+    /// Word-granular write path. The bus calls this after performing the four
+    /// byte writes, giving peripherals a single coherent 32-bit view of the
+    /// write. Default: no-op. Peripherals with 32-bit word triggers override.
+    fn write_word_32(&mut self, _offset: u64, _value: u32) -> SimResult<()> {
+        Ok(())
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }
@@ -132,11 +140,22 @@ pub trait Bus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
+    /// Default implementation decomposes into 4 byte writes AND emits a
+    /// word-granular trigger event through `notify_word_write`. Concrete
+    /// implementations (SystemBus) may override for efficiency but must
+    /// preserve the `notify_word_write` call.
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
         self.write_u8(addr + 3, ((value >> 24) & 0xFF) as u8)?;
+        self.notify_word_write(addr, value)
+    }
+
+    /// Hook called by `write_u32` after the four byte writes to allow
+    /// peripherals to observe the coherent 32-bit value. Default: no-op for
+    /// buses that don't have routable peripherals.
+    fn notify_word_write(&mut self, _addr: u64, _value: u32) -> SimResult<()> {
         Ok(())
     }
 

@@ -302,7 +302,26 @@ impl SystemBus {
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
         self.write_u8(addr + 3, ((value >> 24) & 0xFF) as u8)?;
-        Ok(())
+        self.notify_word_write(addr, value)
+    }
+
+    /// Append a peripheral to the bus at runtime. Useful for tests and
+    /// dynamic configuration that bypasses `from_config`.
+    pub fn add_peripheral(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
+        dev: Box<dyn Peripheral>,
+    ) {
+        self.peripherals.push(PeripheralEntry {
+            name: name.to_string(),
+            base,
+            size,
+            irq,
+            dev,
+        });
     }
 
     pub fn read_u16(&self, addr: u64) -> SimResult<u16> {
@@ -540,6 +559,17 @@ impl crate::Bus for SystemBus {
         }
 
         interrupts
+    }
+
+    fn notify_word_write(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        for entry in &mut self.peripherals {
+            if addr >= entry.base && addr < entry.base + entry.size {
+                let offset = addr - entry.base;
+                entry.dev.write_word_32(offset, value)?;
+                return Ok(());
+            }
+        }
+        Ok(())
     }
 
     fn execute_dma(&mut self, requests: &[DmaRequest]) -> SimResult<()> {
