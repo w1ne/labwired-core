@@ -25,6 +25,7 @@ mod tests;
 pub enum Arch {
     Arm,
     RiscV,
+    XtensaLx7,
     Unknown,
 }
 
@@ -34,6 +35,8 @@ pub enum SimulationError {
     MemoryViolation(u64),
     #[error("Instruction decoding error at {0:#x}")]
     DecodeError(u64),
+    #[error("not implemented: {0}")]
+    NotImplemented(String),
 }
 
 pub type SimResult<T> = Result<T, SimulationError>;

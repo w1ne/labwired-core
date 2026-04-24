@@ -433,6 +433,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
         let prog_arch = match program.arch {
             labwired_core::Arch::Arm => labwired_config::Arch::Arm,
             labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
+            labwired_core::Arch::XtensaLx7 => labwired_config::Arch::XtensaLx7,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -448,6 +449,10 @@ fn run_interactive(cli: Cli) -> ExitCode {
     match cpu_arch {
         labwired_config::Arch::Arm => run_interactive_arm(cli, bus, program, metrics),
         labwired_config::Arch::RiscV => run_interactive_riscv(cli, bus, program, metrics),
+        labwired_config::Arch::XtensaLx7 => {
+            error!("xtensa-lx7 CPU backend not yet wired; see Plan 1 Task C4");
+            ExitCode::from(EXIT_CONFIG_ERROR)
+        }
         _ => {
             error!("Unsupported architecture: {:?}", cpu_arch);
             ExitCode::from(EXIT_CONFIG_ERROR)
@@ -519,6 +524,7 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
     let arch = match program.arch {
         labwired_core::Arch::Arm => labwired_config::Arch::Arm,
         labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
+        labwired_core::Arch::XtensaLx7 => labwired_config::Arch::XtensaLx7,
         _ => {
             error!("Unknown architecture in firmware");
             return ExitCode::from(EXIT_CONFIG_ERROR);
@@ -604,6 +610,10 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)
+        }
+        labwired_config::Arch::XtensaLx7 => {
+            error!("xtensa-lx7 CPU backend not yet wired; see Plan 1 Task C4");
+            ExitCode::from(EXIT_CONFIG_ERROR)
         }
         _ => {
             error!("Unsupported architecture for snapshot load");
@@ -776,6 +786,7 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                         StopReason::MemoryViolation
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                    labwired_core::SimulationError::NotImplemented(_) => StopReason::ConfigError,
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1081,6 +1092,19 @@ fn run_test(args: TestArgs) -> ExitCode {
             }
             (true, None, Some(machine))
         }
+        labwired_core::Arch::XtensaLx7 => {
+            let msg = "xtensa-lx7 CPU backend not yet wired; see Plan 1 Task C4".to_string();
+            error!("{}", msg);
+            write_config_error_outputs(
+                &args,
+                Some(&firmware_path),
+                system_path.as_ref(),
+                Some(&firmware_bytes),
+                Some(&resolved_limits),
+                msg,
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
         _ => {
             let msg = format!("Unsupported architecture: {:?}", program.arch);
             error!("{}", msg);
@@ -1228,6 +1252,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             stop_reason = match e {
                 labwired_core::SimulationError::MemoryViolation(_) => StopReason::MemoryViolation,
                 labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                labwired_core::SimulationError::NotImplemented(_) => StopReason::ConfigError,
             };
             error!("Simulation error at step {}: {}", step, e);
             break;

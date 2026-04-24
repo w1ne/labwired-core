@@ -109,6 +109,7 @@ impl LabwiredAdapter {
         let arch = match image.arch {
             labwired_core::Arch::Arm => labwired_core::Arch::Arm,
             labwired_core::Arch::RiscV => labwired_core::Arch::RiscV,
+            labwired_core::Arch::XtensaLx7 => labwired_core::Arch::XtensaLx7,
             _ => {
                 // Fallback or guess from system config?
                 // For now, assume Arm if unclear
@@ -134,6 +135,11 @@ impl LabwiredAdapter {
                     .load_firmware(&image)
                     .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
                 *self.machine.lock().unwrap() = Some(Box::new(machine));
+            }
+            labwired_core::Arch::XtensaLx7 => {
+                return Err(anyhow!(
+                    "xtensa-lx7 CPU backend not yet wired; see Plan 1 Task C4"
+                ));
             }
             _ => return Err(anyhow!("Unsupported architecture: {:?}", arch)),
         }

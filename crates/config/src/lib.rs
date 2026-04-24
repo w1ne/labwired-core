@@ -16,6 +16,8 @@ pub enum Arch {
     Arm,
     #[serde(alias = "riscv32", alias = "rv32i", alias = "rv32imac")]
     RiscV,
+    #[serde(alias = "xtensa-lx7")]
+    XtensaLx7,
     Unknown,
 }
 
