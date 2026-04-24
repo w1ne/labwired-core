@@ -11,7 +11,7 @@ use std::any::Any;
 ///
 /// In a real system, this would be on a separate bus. For simulation,
 /// we provide a memory-mapped version to demonstrate register modeling.
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Tmp102 {
     pub temp: i16,   // 0x00 - Temperature (12-bit)
     pub config: u16, // 0x01 - Configuration
@@ -97,6 +97,13 @@ impl Peripheral for Tmp102 {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        if let Ok(restored) = serde_json::from_value::<Self>(state) {
+            *self = restored;
+        }
+        Ok(())
     }
 
     fn as_any(&self) -> Option<&dyn Any> {

@@ -7,7 +7,7 @@
 use crate::SimResult;
 
 /// STM32F1 compatible I2C peripheral (Master mode only)
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct I2c {
     cr1: u16,
     cr2: u16,
@@ -103,6 +103,13 @@ impl crate::Peripheral for I2c {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        if let Ok(restored) = serde_json::from_value::<Self>(state) {
+            *self = restored;
+        }
+        Ok(())
     }
 }
 

@@ -7,7 +7,7 @@
 use crate::{DmaDirection, DmaRequest, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 struct DmaChannel {
     ccr: u32,
     cndtr: u32,
@@ -17,7 +17,7 @@ struct DmaChannel {
 }
 
 /// STM32F1 DMA1 Controller (7 channels)
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Dma1 {
     isr: u32,
     ifcr: u32,
@@ -189,5 +189,12 @@ impl Peripheral for Dma1 {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        if let Ok(restored) = serde_json::from_value::<Self>(state) {
+            *self = restored;
+        }
+        Ok(())
     }
 }

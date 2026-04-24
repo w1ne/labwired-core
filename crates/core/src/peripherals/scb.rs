@@ -100,4 +100,24 @@ impl crate::Peripheral for Scb {
         }
         value
     }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        // VTOR is an Arc<AtomicU32> shared with the CPU; we must not
+        // replace the pointer, only its atomic contents. Other fields
+        // are owned by this SCB — update them by name-lookup.
+        let Some(obj) = state.as_object() else {
+            return Ok(());
+        };
+        let u32_of = |k: &str| obj.get(k).and_then(|v| v.as_u64()).map(|v| v as u32);
+        if let Some(v) = u32_of("cpuid") { self.cpuid = v; }
+        if let Some(v) = u32_of("icsr") { self.icsr = v; }
+        if let Some(v) = u32_of("vtor") { self.vtor.store(v, Ordering::Relaxed); }
+        if let Some(v) = u32_of("aircr") { self.aircr = v; }
+        if let Some(v) = u32_of("scr") { self.scr = v; }
+        if let Some(v) = u32_of("ccr") { self.ccr = v; }
+        if let Some(v) = u32_of("shpr1") { self.shpr1 = v; }
+        if let Some(v) = u32_of("shpr2") { self.shpr2 = v; }
+        if let Some(v) = u32_of("shpr3") { self.shpr3 = v; }
+        Ok(())
+    }
 }

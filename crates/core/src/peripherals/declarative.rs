@@ -306,6 +306,23 @@ impl Peripheral for GenericPeripheral {
             "data": *self.data.borrow()
         })
     }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        // Only restore the backing byte vector; the descriptor is read-only
+        // metadata that the caller is responsible for providing consistently.
+        // In-flight timing events are dropped — they will rearm via the
+        // descriptor's periodic hooks on subsequent ticks.
+        if let Some(data) = state.get("data").and_then(|v| v.as_array()) {
+            let bytes: Vec<u8> = data
+                .iter()
+                .filter_map(|v| v.as_u64().map(|b| b as u8))
+                .collect();
+            if bytes.len() == self.data.borrow().len() {
+                *self.data.borrow_mut() = bytes;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 
 /// STM32F1 External Interrupt/Event Controller (EXTI)
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Exti {
     pub imr: u32,   // 0x00 - Interrupt mask register
     pub emr: u32,   // 0x04 - Event mask register
@@ -121,5 +121,12 @@ impl Peripheral for Exti {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        if let Ok(restored) = serde_json::from_value::<Self>(state) {
+            *self = restored;
+        }
+        Ok(())
     }
 }

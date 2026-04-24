@@ -129,4 +129,24 @@ impl Peripheral for Nvic {
             "ispr": ispr,
         })
     }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        // NvicState is Arc-shared with the CPU. We must preserve the Arc
+        // identity and only update the atomic cells inside it.
+        let Some(obj) = state.as_object() else {
+            return Ok(());
+        };
+        let load_array = |key: &str, target: &[AtomicU32; 8]| {
+            if let Some(arr) = obj.get(key).and_then(|v| v.as_array()) {
+                for (i, cell) in target.iter().enumerate() {
+                    if let Some(v) = arr.get(i).and_then(|v| v.as_u64()) {
+                        cell.store(v as u32, Ordering::Relaxed);
+                    }
+                }
+            }
+        };
+        load_array("iser", &self.state.iser);
+        load_array("ispr", &self.state.ispr);
+        Ok(())
+    }
 }

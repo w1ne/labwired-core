@@ -76,6 +76,13 @@ mod integration_tests {
                 explicit_irqs: Vec::new(),
             }
         }
+
+        fn restore(&mut self, _state: serde_json::Value) -> SimResult<()> {
+            // RecordingPeripheral is a test spy; no meaningful state to
+            // restore. Kept explicit to satisfy the now-required trait
+            // method.
+            Ok(())
+        }
     }
 
     #[test]
@@ -1350,6 +1357,44 @@ mod integration_tests {
             "decode cache hit rate collapsed to {:.4}% (hits={hits}, misses={misses})",
             hit_rate * 100.0
         );
+    }
+
+    #[test]
+    fn test_snapshot_restore_roundtrip_preserves_peripheral_state() {
+        // Before this session the Peripheral trait defaulted restore to
+        // Ok(()) — so snapshot wrote real state and restore silently
+        // threw it away. Nail that shut: write distinct values to every
+        // peripheral we can easily poke, snapshot, clobber live state,
+        // then restore and verify each value came back.
+
+        let mut bus = crate::bus::SystemBus::stm32f103();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut machine = Machine::new(cpu, bus);
+
+        // Poke real values into several peripherals.
+        machine.bus.write_u32(0x4001_080C, 0xAA).unwrap();  // GPIOA ODR
+        machine.bus.write_u32(0x4001_0C0C, 0xBB).unwrap();  // GPIOB ODR
+        machine.bus.write_u32(0x4000_0024, 0x1234).unwrap(); // TIM2 CNT (offset 0x24)
+        machine.cpu.regs[0] = 0xCAFEBABE;
+        machine.cpu.set_pc(0x0800_00F0);
+
+        let snap = machine.snapshot();
+
+        // Stomp live state flat.
+        machine.bus.write_u32(0x4001_080C, 0).unwrap();
+        machine.bus.write_u32(0x4001_0C0C, 0).unwrap();
+        machine.cpu.regs[0] = 0;
+        machine.cpu.set_pc(0);
+
+        // Restore.
+        machine.apply_snapshot(snap).expect("apply_snapshot");
+
+        assert_eq!(machine.bus.read_u32(0x4001_080C).unwrap(), 0xAA,
+            "GPIOA ODR lost across restore");
+        assert_eq!(machine.bus.read_u32(0x4001_0C0C).unwrap(), 0xBB,
+            "GPIOB ODR lost across restore");
+        assert_eq!(machine.cpu.regs[0], 0xCAFEBABE, "R0 lost across restore");
+        assert_eq!(machine.cpu.get_pc(), 0x0800_00F0, "PC lost across restore");
     }
 
     #[test]

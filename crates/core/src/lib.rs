@@ -104,9 +104,11 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn snapshot(&self) -> serde_json::Value {
         serde_json::Value::Null
     }
-    fn restore(&mut self, _state: serde_json::Value) -> SimResult<()> {
-        Ok(())
-    }
+    /// Restore peripheral state from a JSON value produced by `snapshot`.
+    /// Every in-tree peripheral provides an explicit implementation — the
+    /// trait has no default so a future peripheral cannot silently drop
+    /// its restore path.
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()>;
 }
 
 /// Trait representing the system bus

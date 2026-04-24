@@ -7,7 +7,7 @@
 use crate::SimResult;
 
 /// STM32F1-compatible GPIO peripheral
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct GpioPort {
     crl: u32,  // 0x00: configuration register low
     crh: u32,  // 0x04: configuration register high
@@ -133,6 +133,13 @@ impl crate::Peripheral for GpioPort {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        if let Ok(restored) = serde_json::from_value::<Self>(state) {
+            *self = restored;
+        }
+        Ok(())
     }
 }
 

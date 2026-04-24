@@ -7,7 +7,7 @@
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Adc {
     // Registers
     pub sr: u32,  // 0x00 - Status Register
@@ -155,6 +155,13 @@ impl Peripheral for Adc {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        if let Ok(restored) = serde_json::from_value::<Self>(state) {
+            *self = restored;
+        }
+        Ok(())
     }
 }
 

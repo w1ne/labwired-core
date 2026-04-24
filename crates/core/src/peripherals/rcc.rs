@@ -8,7 +8,7 @@ use crate::SimResult;
 
 /// Minimal RCC (Reset and Clock Control) peripheral
 /// Base address: 0x4002_1000
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Rcc {
     apb1enr: u32,
     apb2enr: u32,
@@ -59,5 +59,12 @@ impl crate::Peripheral for Rcc {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn restore(&mut self, state: serde_json::Value) -> SimResult<()> {
+        if let Ok(restored) = serde_json::from_value::<Self>(state) {
+            *self = restored;
+        }
+        Ok(())
     }
 }
