@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 mod helpers;
 mod step;
+mod step_thumb2;
 
 // Register-file indices. Reads/writes to the `regs` array use these.
 pub const SP: usize = 13; // R13 — Stack Pointer
