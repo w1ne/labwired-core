@@ -152,3 +152,44 @@ fn decode_ssl_ssr_ssai() {
     let w = rrr(0x4, 0x0, 4, 9, 0);
     assert_eq!(decode(w), Instruction::Ssai { shamt: 9 });
 }
+
+#[test]
+fn decode_l32r() {
+    // at=3, imm16 = 0xFFFE => signed -2 => offset in bytes = -2*4 = -8
+    // Word encoding: op0=0x1 at bits[3:0], at=3 at bits[7:4], imm16=0xFFFE at bits[23:8]
+    let w = 0x0001u32 | (3u32 << 4) | (0xFFFEu32 << 8);
+    match decode(w) {
+        Instruction::L32r { at, pc_rel_byte_offset } => {
+            assert_eq!(at, 3);
+            assert_eq!(pc_rel_byte_offset, -8);
+        }
+        other => panic!("expected L32R, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_l32r_positive_imm() {
+    // at=5, imm16 = 0x0001 => signed +1 => offset = +4 bytes
+    let w = 0x0001u32 | (5u32 << 4) | (0x0001u32 << 8);
+    match decode(w) {
+        Instruction::L32r { at, pc_rel_byte_offset } => {
+            assert_eq!(at, 5);
+            assert_eq!(pc_rel_byte_offset, 4);
+        }
+        other => panic!("expected L32R, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_l32r_large_negative() {
+    // at=1, imm16 = 0x8000 (most negative 16-bit signed) => -32768 word-offset
+    // byte-offset = -32768 * 4 = -131072
+    let w = 0x0001u32 | (1u32 << 4) | (0x8000u32 << 8);
+    match decode(w) {
+        Instruction::L32r { at, pc_rel_byte_offset } => {
+            assert_eq!(at, 1);
+            assert_eq!(pc_rel_byte_offset, -131072);
+        }
+        other => panic!("expected L32R, got {:?}", other),
+    }
+}

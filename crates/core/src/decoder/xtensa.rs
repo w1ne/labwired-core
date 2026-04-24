@@ -260,7 +260,14 @@ fn decode_st3_shiftsetup(w: u32, r: u8, s: u8, t: u8) -> Instruction {
     }
 }
 
-fn decode_l32r(w: u32) -> Instruction { Instruction::Unknown(w) }
+fn decode_l32r(w: u32) -> Instruction {
+    let at = ((w >> 4) & 0xF) as u8;
+    let imm16 = (w >> 8) & 0xFFFF;
+    // Sign-extend 16-bit value (2's complement), interpret as word-count.
+    let sext = ((imm16 ^ 0x8000).wrapping_sub(0x8000)) as i32;
+    let pc_rel_byte_offset = sext * 4;
+    Instruction::L32r { at, pc_rel_byte_offset }
+}
 fn decode_lsai(w: u32) -> Instruction { Instruction::Unknown(w) }
 fn decode_lsci(w: u32) -> Instruction { Instruction::Unknown(w) }
 fn decode_mac16(w: u32) -> Instruction { Instruction::Unknown(w) }
