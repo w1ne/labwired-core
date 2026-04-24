@@ -52,6 +52,10 @@ pub struct CortexM {
     /// Self-modifying code writing to flash at runtime is not tracked; this
     /// is a deliberate trade-off — documented in docs/architecture.md.
     decode_cache: Box<[DecodeCacheEntry; DECODE_CACHE_SIZE]>,
+    /// Running counters: number of decode-cache hits vs misses since the
+    /// last flush. Reset by `decode_flush` and `reset`.
+    decode_hits: u64,
+    decode_misses: u64,
 }
 
 impl std::fmt::Debug for CortexM {
@@ -73,6 +77,8 @@ impl Default for CortexM {
             primask: false,
             vtor: Arc::default(),
             decode_cache: Box::new([DecodeCacheEntry::EMPTY; DECODE_CACHE_SIZE]),
+            decode_hits: 0,
+            decode_misses: 0,
         }
     }
 }
@@ -94,13 +100,24 @@ impl CortexM {
         self.vtor = vtor;
     }
 
-    /// Look up a previously decoded instruction at `pc` in the decode cache.
-    pub(super) fn decode_lookup(&self, pc: u32) -> Option<(u16, Instruction)> {
+    /// Look up a previously decoded instruction at `pc` in the decode
+    /// cache. In debug builds we also tick the hit / miss counters; in
+    /// release builds the counters stay zero and the lookup compiles to
+    /// a pure tag compare + branch on the hot path.
+    pub(super) fn decode_lookup(&mut self, pc: u32) -> Option<(u16, Instruction)> {
         let idx = (pc >> 1) as usize & DECODE_CACHE_MASK;
         let e = &self.decode_cache[idx];
         if e.pc == pc {
+            #[cfg(debug_assertions)]
+            {
+                self.decode_hits = self.decode_hits.wrapping_add(1);
+            }
             Some((e.opcode, e.instruction))
         } else {
+            #[cfg(debug_assertions)]
+            {
+                self.decode_misses = self.decode_misses.wrapping_add(1);
+            }
             None
         }
     }
@@ -111,12 +128,24 @@ impl CortexM {
         self.decode_cache[idx] = DecodeCacheEntry { pc, opcode, instruction };
     }
 
-    /// Drop every cached decode. Call on reset, snapshot restore, or any
-    /// time the flash/ROM contents may have changed.
+    /// Drop every cached decode and reset the hit / miss counters. Called
+    /// on reset, snapshot restore, or any time the flash/ROM contents may
+    /// have changed.
     pub(super) fn decode_flush(&mut self) {
         for e in self.decode_cache.iter_mut() {
             *e = DecodeCacheEntry::EMPTY;
         }
+        self.decode_hits = 0;
+        self.decode_misses = 0;
+    }
+
+    /// Cache performance counters since the last flush. Returns
+    /// `(hits, misses)`; compute `hits / (hits + misses)` for a hit rate.
+    /// Counters are only updated in debug builds — release builds always
+    /// return `(0, 0)`. This keeps the interpreter hot path free of the
+    /// per-step atomics-equivalent overhead in production.
+    pub fn decode_cache_stats(&self) -> (u64, u64) {
+        (self.decode_hits, self.decode_misses)
     }
 
     fn read_reg(&self, n: u8) -> u32 {

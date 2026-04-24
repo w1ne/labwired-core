@@ -1306,6 +1306,53 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_decode_cache_hit_rate_on_tight_loop() {
+        // Write a minimal Thumb "branch-to-self" program at PC=0
+        // (B #-4 encodes as 0xE7FE) and step it many times. After the
+        // first fetch at PC=0, every subsequent fetch at PC=0 should
+        // hit the decode cache.
+        let mut bus = crate::bus::SystemBus::stm32f103();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut machine = Machine::new(cpu, bus);
+
+        // Reset clears the cache, and configure_cortex_m doesn't trigger
+        // reset; Machine::reset() does.
+        machine.reset().expect("reset");
+
+        // Overwrite flash[0] = 0xE7FE (B PC-4 → infinite loop back to 0).
+        machine.bus.flash.data[0] = 0xFE;
+        machine.bus.flash.data[1] = 0xE7;
+        machine.cpu.set_pc(0);
+
+        // Counters should be fresh right after reset.
+        assert_eq!(machine.cpu.decode_cache_stats(), (0, 0));
+
+        // One miss on the first fetch, and every subsequent fetch hits.
+        for _ in 0..10_000 {
+            machine.step().expect("step");
+        }
+
+        let (hits, misses) = machine.cpu.decode_cache_stats();
+        let total = hits + misses;
+        let hit_rate = hits as f64 / total as f64;
+
+        println!(
+            "decode cache over 10k steps of branch-to-self: {hits} hits, {misses} misses, {:.4}% hit rate",
+            hit_rate * 100.0
+        );
+
+        // One miss expected (the initial decode at PC=0); everything
+        // afterward must hit. Allow a tiny slack for exception machinery
+        // or similar, but a tight branch-to-self should hit >99.9%.
+        assert!(total >= 10_000, "ran fewer instructions than expected");
+        assert!(
+            hit_rate > 0.999,
+            "decode cache hit rate collapsed to {:.4}% (hits={hits}, misses={misses})",
+            hit_rate * 100.0
+        );
+    }
+
+    #[test]
     fn test_snapshot_missing_version_treated_as_v0() {
         // Legacy JSON without a `schema_version` field deserializes via
         // serde(default) to version 0 and is rejected on restore.
