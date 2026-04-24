@@ -350,11 +350,12 @@ fn decode_mac16(w: u32) -> Instruction { Instruction::Unknown(w) }
 /// Encoding (ISA RM §8 CALL format):
 ///   bits[3:0]  = op0 = 0x5
 ///   bits[5:4]  = n   (selects CALL0/4/8/12)
-///   bits[23:6] = imm18 (signed 18-bit word offset from (PC+4)&~3)
+///   bits[23:6] = imm18 (signed 18-bit word offset from (PC+3)&~3 per ISA RM §4.4)
 ///
-/// HW-oracle verified: imm18=0 → target = PC+4 (offset=0 words from PC+4).
-/// Decoder convention: `offset` is signed byte displacement from PC+4,
-/// i.e. offset = sign_extend18(imm18) * 4.
+/// HW-oracle verified: imm18=0 → target = (PC+3)&~3 (i.e. PC itself when PC is 4-aligned).
+/// Decoder convention: `offset` is signed byte displacement from (PC+3)&~3,
+/// i.e. offset = sign_extend18(imm18) * 4.  The executor applies the base as
+/// ((pc+3)&!3) + offset.
 fn decode_calln(w: u32) -> Instruction {
     let n = ((w >> 4) & 0x3) as u8;
     let imm18 = (w >> 6) & 0x3_FFFF;

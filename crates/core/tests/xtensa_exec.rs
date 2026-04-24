@@ -205,9 +205,14 @@ fn enc_jx(as_: u32) -> u32 {
 }
 
 /// Encode CALL0/4/8/12 (op0=0x5, n=0/1/2/3).
-/// `offset_bytes` is the signed byte displacement from `((pc+4)&!3)` to the target;
-/// must be a multiple of 4.
-fn enc_call(n: u32, offset_bytes: i32) -> u32 {
+///
+/// Computes imm18 from the ISA RM §4.4 formula:
+///   base = (pc + 3) & !3
+///   offset_bytes = target - base  (must be a multiple of 4)
+///   imm18 = offset_bytes / 4
+fn enc_call(n: u32, pc: u32, target: u32) -> u32 {
+    let base = (pc.wrapping_add(3)) & !3u32;
+    let offset_bytes = target.wrapping_sub(base) as i32;
     let imm18 = ((offset_bytes / 4) as u32) & 0x3_FFFF;
     0x5 | (n << 4) | (imm18 << 6)
 }
@@ -1857,7 +1862,7 @@ fn test_exec_jx() {
 /// CALL0 + RET round-trip: spec scenario "subroutine that returns a constant in a2."
 ///
 /// Layout:
-///   PC+0:  CALL0 subroutine          (target = PC+12, offset=8 from ((PC+4)&!3)=PC+4)
+///   PC+0:  CALL0 subroutine          (target = PC+12, offset=12 from (PC+3)&!3=PC)
 ///   PC+3:  BREAK                     (halts after return; inspects a2)
 ///   PC+6:  (padding — 3 bytes not reached; needed to align subroutine to PC+12)
 ///   PC+12: MOVI a2, 42               (subroutine body)
@@ -1871,10 +1876,10 @@ fn test_exec_call0_returns_via_ret() {
     cpu.reset(&mut bus).unwrap();
     cpu.set_pc(TEST_PC);
 
-    // ((TEST_PC + 4) & !3) = TEST_PC + 4  (TEST_PC is 4-aligned)
-    // Target = TEST_PC + 12 → offset_bytes = 12 - 4 = 8
+    // ((TEST_PC + 3) & !3) = TEST_PC  (TEST_PC is 4-aligned per ISA RM §4.4)
+    // Target = TEST_PC + 12 → offset_bytes = 12 - 0 = 12
     write_insns(&mut bus, TEST_PC as u64, &[
-        enc_call(0, 8), // CALL0 target=PC+12 (offset from aligned base = 8)
+        enc_call(0, TEST_PC, TEST_PC + 12), // CALL0 target=PC+12
         st0(4, 1, 0xF), // BREAK at PC+3
         movi(2, 0),     // padding at PC+6 (not reached)
     ]);
@@ -1932,7 +1937,7 @@ fn test_exec_call4_sets_callinc() {
 
     // CALL4 + BREAK at subroutine so we can inspect state.
     write_insns(&mut bus, TEST_PC as u64, &[
-        enc_call(1, 8), // CALL4 target=PC+12
+        enc_call(1, TEST_PC, TEST_PC + 12), // CALL4 target=PC+12
     ]);
     write_insns(&mut bus, (TEST_PC + 12) as u64, &[
         st0(4, 1, 0xF), // BREAK at subroutine entry
@@ -1951,7 +1956,7 @@ fn test_exec_call8_sets_callinc() {
     cpu.set_pc(TEST_PC);
 
     write_insns(&mut bus, TEST_PC as u64, &[
-        enc_call(2, 8), // CALL8 target=PC+12
+        enc_call(2, TEST_PC, TEST_PC + 12), // CALL8 target=PC+12
     ]);
     write_insns(&mut bus, (TEST_PC + 12) as u64, &[
         st0(4, 1, 0xF), // BREAK
@@ -1970,7 +1975,7 @@ fn test_exec_call12_sets_callinc() {
     cpu.set_pc(TEST_PC);
 
     write_insns(&mut bus, TEST_PC as u64, &[
-        enc_call(3, 8), // CALL12 target=PC+12
+        enc_call(3, TEST_PC, TEST_PC + 12), // CALL12 target=PC+12
     ]);
     write_insns(&mut bus, (TEST_PC + 12) as u64, &[
         st0(4, 1, 0xF), // BREAK
@@ -1991,7 +1996,7 @@ fn test_exec_call4_writes_return_pc_to_a4() {
     cpu.set_pc(TEST_PC);
 
     write_insns(&mut bus, TEST_PC as u64, &[
-        enc_call(1, 8), // CALL4 at TEST_PC; a4 ← TEST_PC+3
+        enc_call(1, TEST_PC, TEST_PC + 12), // CALL4 at TEST_PC; a4 ← TEST_PC+3
     ]);
     write_insns(&mut bus, (TEST_PC + 12) as u64, &[
         st0(4, 1, 0xF), // BREAK at subroutine entry
