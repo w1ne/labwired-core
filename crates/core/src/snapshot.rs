@@ -7,8 +7,23 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Current on-disk schema version for `MachineSnapshot`. Bump this when any
+/// field added / removed / reinterpreted would cause a silent mis-restore.
+/// A v0 snapshot (missing field, thanks to `serde(default)`) is treated as
+/// "pre-versioning" and rejected by `Machine::apply_snapshot`.
+pub const SCHEMA_VERSION: u32 = 1;
+
+fn default_schema_version() -> u32 {
+    0
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MachineSnapshot {
+    /// Schema version of this snapshot. Produced snapshots carry
+    /// `SCHEMA_VERSION`; older JSON without the field deserializes to `0`
+    /// via `serde(default)` and is rejected on restore.
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub cpu: CpuSnapshot,
     pub peripherals: HashMap<String, serde_json::Value>,
     // Future: metrics

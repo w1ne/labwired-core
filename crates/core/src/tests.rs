@@ -1277,6 +1277,57 @@ mod integration_tests {
 
         // Check deserialization
         let _snap_restored: MachineSnapshot = serde_json::from_str(&json_str).unwrap();
+
+        // Schema version must be stamped on every fresh snapshot.
+        assert_eq!(snap.schema_version, crate::snapshot::SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_snapshot_schema_mismatch_rejected() {
+        // A snapshot with a bogus schema version must be rejected by
+        // Machine::apply_snapshot rather than silently accepted.
+        use crate::snapshot::MachineSnapshot;
+
+        let mut bus = crate::bus::SystemBus::stm32f103();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut machine = Machine::new(cpu, bus);
+
+        let mut snap: MachineSnapshot = machine.snapshot();
+        snap.schema_version = 9999; // intentionally wrong.
+
+        let err = machine.apply_snapshot(snap).unwrap_err();
+        match err {
+            crate::SimulationError::SnapshotSchemaMismatch { expected, got } => {
+                assert_eq!(expected, crate::snapshot::SCHEMA_VERSION);
+                assert_eq!(got, 9999);
+            }
+            other => panic!("expected SnapshotSchemaMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_snapshot_missing_version_treated_as_v0() {
+        // Legacy JSON without a `schema_version` field deserializes via
+        // serde(default) to version 0 and is rejected on restore.
+        use crate::snapshot::MachineSnapshot;
+
+        let legacy_json = r#"{
+            "cpu": { "type": "arm", "registers": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], "xpsr": 0, "primask": false, "pending_exceptions": 0, "vtor": 0 },
+            "peripherals": {}
+        }"#;
+
+        let snap: MachineSnapshot = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(snap.schema_version, 0);
+
+        let mut bus = crate::bus::SystemBus::stm32f103();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut machine = Machine::new(cpu, bus);
+
+        let err = machine.apply_snapshot(snap).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::SimulationError::SnapshotSchemaMismatch { got: 0, .. }
+        ));
     }
 
     #[test]

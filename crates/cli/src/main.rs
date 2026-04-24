@@ -776,6 +776,12 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                         StopReason::MemoryViolation
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                    // Snapshot-schema mismatch cannot originate from step(),
+                    // but the match must stay exhaustive; treat any future
+                    // non-CPU error class as a decode error for the runner.
+                    labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
+                        StopReason::DecodeError
+                    }
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1228,6 +1234,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             stop_reason = match e {
                 labwired_core::SimulationError::MemoryViolation(_) => StopReason::MemoryViolation,
                 labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
+                labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
+                    StopReason::DecodeError
+                }
             };
             error!("Simulation error at step {}: {}", step, e);
             break;
