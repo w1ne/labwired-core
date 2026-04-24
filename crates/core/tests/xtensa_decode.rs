@@ -739,3 +739,47 @@ fn test_decode_narrow_ill_n() {
     // HW-oracle: addr 0x1a: 6d f0
     assert_eq!(decode_narrow(0xf06d), Instruction::Ill);
 }
+
+// ── E1: MUL family decoder tests (HW-oracle verified) ────────────────────────
+//
+// Source: xtensa-esp32s3-elf-as + xtensa-esp32s3-elf-objdump (esp-15.2.0_20250920)
+// Assembly: mull a3, a4, a5  etc.
+// Full hex dump from --full-contents: 50 34 82  50 34 a2  50 34 b2  50 34 c1  50 34 d1
+// Packed as LE 24-bit words: 0x823450  0xa23450  0xb23450  0xc13450  0xd13450
+// Field breakdown (op0=[3:0], t=[7:4], s=[11:8], r=[15:12], op1=[19:16], op2=[23:20]):
+//   MULL:   op0=0, op1=0x2, op2=0x8, r=3, s=4, t=5
+//   MULUH:  op0=0, op1=0x2, op2=0xA, r=3, s=4, t=5
+//   MULSH:  op0=0, op1=0x2, op2=0xB, r=3, s=4, t=5
+//   MUL16U: op0=0x1 (note: low nibble=1!), op1=0x1, op2=0xC, r=3, s=4, t=5
+//   MUL16S: op0=0x1, op1=0x1, op2=0xD, r=3, s=4, t=5
+
+#[test]
+fn test_decode_mull() {
+    // HW-oracle: mull a3, a4, a5 → bytes [50 34 82] → word 0x823450
+    assert_eq!(decode(0x823450), Instruction::Mull { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_muluh() {
+    // HW-oracle: muluh a3, a4, a5 → bytes [50 34 a2] → word 0xa23450
+    assert_eq!(decode(0xa23450), Instruction::Muluh { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_mulsh() {
+    // HW-oracle: mulsh a3, a4, a5 → bytes [50 34 b2] → word 0xb23450
+    assert_eq!(decode(0xb23450), Instruction::Mulsh { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_mul16u() {
+    // HW-oracle: mul16u a3, a4, a5 → bytes [50 34 c1] → word 0xc13450
+    // op0=0x0 (QRST group), op1=0x1, op2=0xC — all MUL family lives in QRST.
+    assert_eq!(decode(0xc13450), Instruction::Mul16u { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_mul16s() {
+    // HW-oracle: mul16s a3, a4, a5 → bytes [50 34 d1] → word 0xd13450
+    assert_eq!(decode(0xd13450), Instruction::Mul16s { ar: 3, as_: 4, at: 5 });
+}

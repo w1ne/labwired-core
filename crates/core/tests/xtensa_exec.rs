@@ -2171,3 +2171,159 @@ fn test_exec_movi_n_negative_value() {
         "movi.n a3,-32: a3 should be 0xFFFFFFE0"
     );
 }
+
+// ── E1: MUL family execution tests ───────────────────────────────────────────
+//
+// Encoding helpers (HW-oracle verified):
+//   MULL   a3,a4,a5 → rrr(0x8, 0x2, ar, as_, at)   op2=0x8 op1=0x2
+//   MULUH  a3,a4,a5 → rrr(0xA, 0x2, ar, as_, at)   op2=0xA op1=0x2
+//   MULSH  a3,a4,a5 → rrr(0xB, 0x2, ar, as_, at)   op2=0xB op1=0x2
+//   MUL16U a3,a4,a5 → rrr(0xC, 0x1, ar, as_, at)   op2=0xC op1=0x1
+//   MUL16S a3,a4,a5 → rrr(0xD, 0x1, ar, as_, at)   op2=0xD op1=0x1
+
+fn enc_mull(ar: u32, as_: u32, at: u32)   -> u32 { rrr(0x8, 0x2, ar, as_, at) }
+fn enc_muluh(ar: u32, as_: u32, at: u32)  -> u32 { rrr(0xA, 0x2, ar, as_, at) }
+fn enc_mulsh(ar: u32, as_: u32, at: u32)  -> u32 { rrr(0xB, 0x2, ar, as_, at) }
+fn enc_mul16u(ar: u32, as_: u32, at: u32) -> u32 { rrr(0xC, 0x1, ar, as_, at) }
+fn enc_mul16s(ar: u32, as_: u32, at: u32) -> u32 { rrr(0xD, 0x1, ar, as_, at) }
+
+/// MULL basic: 0x12345678 * 2 = 0x2468ACF0 (low 32 bits).
+#[test]
+fn test_exec_mull_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x12345678);
+    cpu.set_register(5, 2);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_mull(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0x2468ACF0, "mull: 0x12345678 * 2 should give 0x2468ACF0");
+}
+
+/// MULL overflow wraps: 0xFFFFFFFF * 0xFFFFFFFF low-32 = 0x00000001.
+#[test]
+fn test_exec_mull_overflow_wraps() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xFFFFFFFF);
+    cpu.set_register(5, 0xFFFFFFFF);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_mull(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    // 0xFFFFFFFF * 0xFFFFFFFF = 0xFFFFFFFE_00000001 → low32 = 0x00000001
+    assert_eq!(cpu.get_register(3), 0x00000001, "mull: 0xFFFFFFFF * 0xFFFFFFFF low32 should wrap to 0x1");
+}
+
+/// MULUH basic: upper 32 bits of unsigned 0x80000000 * 0x80000000 = 0x40000000.
+///
+/// 0x80000000 * 0x80000000 = 0x4000_0000_0000_0000 → upper32 = 0x40000000.
+#[test]
+fn test_exec_muluh_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x80000000);
+    cpu.set_register(5, 0x80000000);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_muluh(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0x40000000, "muluh: 0x80000000*0x80000000 upper32 should be 0x40000000");
+}
+
+/// MULSH positive × positive: upper 32 bits of small product fits in 32 bits → upper = 0.
+#[test]
+fn test_exec_mulsh_positive() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 100);
+    cpu.set_register(5, 200);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_mulsh(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    // 100 * 200 = 20000; fits in 32 bits → upper32 = 0
+    assert_eq!(cpu.get_register(3), 0, "mulsh: 100*200 upper32 should be 0");
+}
+
+/// MULSH negative × negative: (-2^30) * (-2^30) = 2^60 → upper32 = 0x10000000.
+#[test]
+fn test_exec_mulsh_negative() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    // -0x40000000 as i32 = 0xC0000000 as u32
+    cpu.set_register(4, (-0x40000000i32) as u32);
+    cpu.set_register(5, (-0x40000000i32) as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_mulsh(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    // (-2^30) * (-2^30) = 2^60 = 0x1000_0000_0000_0000 → upper32 = 0x10000000
+    assert_eq!(cpu.get_register(3), 0x10000000, "mulsh: (-2^30)*(-2^30) upper32 should be 0x10000000");
+}
+
+/// MULSH mixed sign: (-2^30) * (2^30) = -2^60 → upper32 = 0xF0000000.
+#[test]
+fn test_exec_mulsh_mixed() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, (-0x40000000i32) as u32);  // 0xC0000000
+    cpu.set_register(5, 0x40000000u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_mulsh(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    // (-2^30) * (2^30) = -2^60; upper32 of -2^60 sign-extended = 0xF0000000
+    assert_eq!(cpu.get_register(3), 0xF0000000, "mulsh: (-2^30)*(2^30) upper32 should be 0xF0000000");
+}
+
+/// MUL16U zero-extend: only low 16 bits of each operand used; high bits ignored.
+///
+/// a4 = 0xABCD_1234, a5 = 0xFFFF_5678 → only 0x1234 * 0x5678 = 0x06260060.
+#[test]
+fn test_exec_mul16u_zero_extend() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xABCD1234);
+    cpu.set_register(5, 0xFFFF5678);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_mul16u(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    // 0x1234 * 0x5678 = 0x06260060; high bits of inputs are ignored
+    assert_eq!(cpu.get_register(3), 0x06260060, "mul16u: 0x1234*0x5678 = 0x06260060; high bits ignored");
+}
+
+/// MUL16S sign-extend: low 16 bits sign-extended before multiply.
+///
+/// a4 = 0xFFFF_8000 (low16 = 0x8000 = -32768), a5 = 2 → -32768*2 = -65536 = 0xFFFF_0000.
+#[test]
+fn test_exec_mul16s_sign_extend() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xFFFF8000);  // low16 = 0x8000 = -32768 as i16
+    cpu.set_register(5, 2);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_mul16s(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    // (-32768) * 2 = -65536 = 0xFFFF0000 as u32
+    assert_eq!(cpu.get_register(3), 0xFFFF0000, "mul16s: 0x8000 (=-32768) * 2 = 0xFFFF0000");
+}

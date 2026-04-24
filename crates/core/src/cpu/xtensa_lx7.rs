@@ -558,6 +558,44 @@ impl XtensaLx7 {
                 self.branch(offset, len, cond);
             }
 
+            // ── MUL family ────────────────────────────────────────────────────────
+            // MULL: low 32 bits of unsigned 32×32 product (same bits as signed).
+            Mull { ar, as_, at } => {
+                let v = self.regs.read_logical(as_).wrapping_mul(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // MULUH: upper 32 bits of unsigned 64-bit product.
+            Muluh { ar, as_, at } => {
+                let a = self.regs.read_logical(as_) as u64;
+                let b = self.regs.read_logical(at) as u64;
+                let v = (a.wrapping_mul(b) >> 32) as u32;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // MULSH: upper 32 bits of signed 64-bit product.
+            Mulsh { ar, as_, at } => {
+                let a = self.regs.read_logical(as_) as i32 as i64;
+                let b = self.regs.read_logical(at) as i32 as i64;
+                let v = (a.wrapping_mul(b) >> 32) as u32;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // MUL16U: unsigned 16×16 → 32 product; only low 16 bits of each source used.
+            Mul16u { ar, as_, at } => {
+                let a = self.regs.read_logical(as_) & 0xFFFF;
+                let b = self.regs.read_logical(at) & 0xFFFF;
+                self.regs.write_logical(ar, a * b);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // MUL16S: signed 16×16 → 32 product; low 16 sign-extended before multiply.
+            Mul16s { ar, as_, at } => {
+                let a = self.regs.read_logical(as_) as i16 as i32;
+                let b = self.regs.read_logical(at) as i16 as i32;
+                self.regs.write_logical(ar, (a * b) as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())
