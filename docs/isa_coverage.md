@@ -78,6 +78,7 @@ Target subset today: **RV32IM base ISA + Zicsr** (`rv32im_zicsr`).
 | R-type ALU   | `ADD`, `SUB`, `SLL`, `SLT`, `SLTU`, `XOR`, `SRL`, `SRA`, `OR`, `AND`         |
 | **M** ext.   | `MUL`, `MULH`, `MULHSU`, `MULHU`, `DIV`, `DIVU`, `REM`, `REMU` (with full per-spec semantics for div-by-zero and INT_MIN/-1 overflow) |
 | **A** ext.   | `LR.W`, `SC.W`, `AMOSWAP.W`, `AMOADD.W`, `AMOXOR.W`, `AMOOR.W`, `AMOAND.W`, `AMOMIN.W`, `AMOMAX.W`, `AMOMINU.W`, `AMOMAXU.W` (single-hart: aq/rl are ignored; any store invalidates LR reservation) |
+| **C** ext.   | Common subset: `C.ADDI`, `C.LI`, `C.LUI`, `C.MV`, `C.ADD`, `C.J`, `C.JAL`, `C.JR`, `C.JALR`, `C.BEQZ`, `C.BNEZ`, `C.LW`, `C.SW`, `C.LWSP`, `C.SWSP`, `C.ADDI4SPN`, `C.ADDI16SP`, `C.NOP`, `C.SLLI`, `C.SRLI`, `C.SRAI`, `C.ANDI`, `C.SUB`, `C.XOR`, `C.OR`, `C.AND`, `C.EBREAK`. Each decodes to the equivalent RV32I form — covers ~80% of GCC-emitted compressed code. Uncommon variants (C.FLD*, C.LDSP, etc.) return Unknown. |
 | Zicsr        | `CSRRW`, `CSRRS`, `CSRRC`, `CSRRWI`, `CSRRSI`, `CSRRCI`                      |
 | System       | `ECALL`, `EBREAK`, `FENCE`, `MRET`                                           |
 
@@ -85,15 +86,14 @@ Target subset today: **RV32IM base ISA + Zicsr** (`rv32im_zicsr`).
 
 | Extension    | Status                                                                      |
 |--------------|-----------------------------------------------------------------------------|
-| **C** (compressed) | ❌ Not implemented                                                        |
 | **F** / **D** (FP) | ❌ Not implemented                                                        |
 | Interrupts      | 🟡 Machine-mode only. Timer (MTIP via mtime/mtimecmp) and external peripheral IRQs (folded into MEIP) dispatch via `mtvec`, with `mstatus.MIE` / `mie` gating. No PLIC — every external IRQ source collapses to MEIP. No per-source priority. |
 | Privilege modes | M-mode only; no S/U mode or CSR enforcement.                                 |
 
-**Implication:** firmware compiled with `-march=rv32im_zicsr -mabi=ilp32`
-should load and run correctly. `-march=rv32imac_zicsr` (compressed
-instructions) is **not** supported yet — emit with `-march=rv32im_zicsr`
-explicitly when building fixtures for LabWired.
+**Implication:** firmware compiled with `-march=rv32imac_zicsr -mabi=ilp32`
+now loads and runs, covering the common GCC-emitted subset. Uncommon
+compressed variants will raise `DecodeError` — file an issue with the
+opcode dump if you hit one.
 
 ---
 

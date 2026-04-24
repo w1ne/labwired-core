@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::decoder::riscv::{decode_rv32, Instruction};
+use crate::decoder::riscv::{decode_rv32, decode_rv32c, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
@@ -114,13 +114,23 @@ impl Cpu for RiscV {
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
     ) -> SimResult<()> {
-        let opcode = bus.read_u32(self.pc)?;
+        // RV32C: low two bits of the first halfword distinguish
+        // compressed (16-bit, bits[1:0] != 0b11) from standard
+        // (32-bit, bits[1:0] == 0b11). We fetch the halfword first and
+        // only fetch the second halfword when we need the full word.
+        let h0 = bus.read_u16(self.pc)?;
+        let is_compressed = (h0 & 0x3) != 0x3;
+        let (opcode, instruction, insn_len) = if is_compressed {
+            (h0 as u32, decode_rv32c(h0), 2u32)
+        } else {
+            let opcode = bus.read_u32(self.pc)?;
+            (opcode, decode_rv32(opcode), 4u32)
+        };
 
         for observer in observers {
             observer.on_step_start(self.pc, opcode);
         }
 
-        let instruction = decode_rv32(opcode);
         tracing::debug!(
             "PC={:#x}, Op={:#08x}, Instr={:?}",
             self.pc,
@@ -128,7 +138,7 @@ impl Cpu for RiscV {
             instruction
         );
 
-        let mut next_pc = self.pc.wrapping_add(4);
+        let mut next_pc = self.pc.wrapping_add(insn_len);
 
         match instruction {
             Instruction::Lui { rd, imm } => {
@@ -140,13 +150,13 @@ impl Cpu for RiscV {
             }
             Instruction::Jal { rd, imm } => {
                 let target = self.pc.wrapping_add(imm as u32);
-                self.write_reg(rd, self.pc.wrapping_add(4));
+                self.write_reg(rd, self.pc.wrapping_add(insn_len));
                 next_pc = target;
             }
             Instruction::Jalr { rd, rs1, imm } => {
                 let base = self.read_reg(rs1);
                 let target = base.wrapping_add(imm as u32) & !1;
-                self.write_reg(rd, self.pc.wrapping_add(4));
+                self.write_reg(rd, self.pc.wrapping_add(insn_len));
                 next_pc = target;
             }
             Instruction::Beq { rs1, rs2, imm } => {
@@ -917,6 +927,92 @@ mod tests {
             1,
             "x1 must not have incremented twice (async IRQ must not replay)"
         );
+    }
+
+    #[test]
+    fn test_riscv_rv32c_compressed() {
+        // Execute a handful of compressed instructions end-to-end, mixed
+        // with a full-width RV32I instruction to verify the dispatcher
+        // picks the right size. Stream:
+        //   0x0: C.LI  x8, 5          (0x4015)  sets x8 = 5
+        //   0x2: C.LI  x9, 7          (0x401D) wait — encoding note below
+        //   0x4: C.MV  x10, x8        (0x852A) x10 = x8 = 5
+        //   0x6: C.ADD x10, x9        (0x9526) x10 += x9
+        //   0x8: C.J   -8             (0xBFD5) jump back to 0x0
+
+        // Use the decoder-level assertions to pin the bit-patterns so the
+        // end-to-end test reads the right encoding; this also exercises
+        // decode_rv32c directly.
+        use crate::decoder::riscv::{decode_rv32c, Instruction};
+
+        // C.LI x8, 5:
+        //   funct3=010, imm[5]=0, rd=01000, imm[4:0]=00101, op=01
+        //   Binary: 010_0_01000_00101_01 → 0x4415
+        assert_eq!(
+            decode_rv32c(0x4415),
+            Instruction::Addi { rd: 8, rs1: 0, imm: 5 },
+        );
+
+        // C.MV x10, x8:
+        //   funct4=1000, rd=01010, rs2=01000, op=10
+        //   0b1000_01010_01000_10 = 0x8522
+        assert_eq!(
+            decode_rv32c(0x8522),
+            Instruction::Add { rd: 10, rs1: 0, rs2: 8 },
+        );
+
+        // C.ADD x10, x9:
+        //   funct4=1001, rd=01010, rs2=01001, op=10
+        //   0b1001_01010_01001_10 = 0x9526
+        assert_eq!(
+            decode_rv32c(0x9526),
+            Instruction::Add { rd: 10, rs1: 10, rs2: 9 },
+        );
+
+        // C.J +2:   funct3=101, imm=+2, op=01 → one valid encoding:
+        //   Check just that it decodes to a Jal x0 with some imm.
+        match decode_rv32c(0xA009) {
+            Instruction::Jal { rd: 0, .. } => {}
+            other => panic!("C.J decoded as {other:?}"),
+        }
+
+        // End-to-end via the Machine: run three compressed instructions
+        // and confirm registers and PC advance by 2 each step.
+        let mut bus = SystemBus::stm32f103();
+        let mut cpu = RiscV::new();
+        cpu.pc = 0x0;
+
+        // C.LI x8, 5 at 0x0
+        bus.write_u16(0x0, 0x4415).unwrap();
+        // C.LI x9, 7 (funct3=010, imm[5]=0, rd=01001, imm[4:0]=00111, op=01)
+        //   0b010_0_01001_00111_01 = 0x411D... let me compute:
+        //   010_0_01001_00111_01 → binary 0100010010011101 → 0x4 4 9 D
+        //   actually: bits 15:13 = 010, bit 12 = 0, bits 11:7 = 01001,
+        //   bits 6:2 = 00111, bits 1:0 = 01.
+        //   → 010_0 0100 1001 11_01 = 0100_0100_1001_1101 = 0x449D
+        bus.write_u16(0x2, 0x449D).unwrap();
+        // C.MV x10, x8 at 0x4
+        bus.write_u16(0x4, 0x8522).unwrap();
+        // C.ADD x10, x9 at 0x6
+        bus.write_u16(0x6, 0x9526).unwrap();
+
+        let mut machine = Machine::new(cpu, bus);
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.read_reg(8), 5);
+        assert_eq!(machine.cpu.pc, 0x2, "PC advances by 2 after a compressed insn");
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.read_reg(9), 7);
+        assert_eq!(machine.cpu.pc, 0x4);
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.read_reg(10), 5);
+        assert_eq!(machine.cpu.pc, 0x6);
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.read_reg(10), 12, "x10 = 5 + 7");
+        assert_eq!(machine.cpu.pc, 0x8);
     }
 
     #[test]

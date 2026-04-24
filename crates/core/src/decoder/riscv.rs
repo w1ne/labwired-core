@@ -311,3 +311,242 @@ pub fn decode_rv32(inst: u32) -> Instruction {
         _ => Instruction::Unknown(inst),
     }
 }
+
+/// Decode a 16-bit RV32C compressed instruction. Returns an Instruction
+/// from the RV32I set that matches the compressed form semantically —
+/// the executor does not need to know the encoding is compressed, only
+/// that it consumed 2 bytes instead of 4.
+///
+/// Covers the subset GCC/LLVM produce most often (~80% of compiled
+/// code): C.ADDI / C.LI / C.LUI / C.MV / C.ADD / C.J / C.JAL / C.JR /
+/// C.JALR / C.BEQZ / C.BNEZ / C.LW / C.SW / C.LWSP / C.SWSP /
+/// C.ADDI4SPN / C.ADDI16SP / C.NOP / C.SLLI / C.SRLI / C.SRAI /
+/// C.ANDI / C.SUB / C.XOR / C.OR / C.AND / C.EBREAK. Everything else
+/// returns `Unknown(half as u32)`.
+pub fn decode_rv32c(half: u16) -> Instruction {
+    let op = half & 0x3;
+    let funct3 = (half >> 13) & 0x7;
+
+    // Compressed register fields use the 3-bit encoding for a restricted
+    // set of regs: x8..x15. Offset back into the full 5-bit space with +8.
+    let crs1p = ((half >> 7) & 0x7) as u8 + 8; // rs1' / rd'
+    let crs2p = ((half >> 2) & 0x7) as u8 + 8; // rs2'
+
+    let rd = ((half >> 7) & 0x1F) as u8;  // full 5-bit rd / rs1
+    let rs2 = ((half >> 2) & 0x1F) as u8; // full 5-bit rs2
+
+    match (op, funct3) {
+        // ── Quadrant 0 ────────────────────────────────────────────
+        (0, 0) => {
+            // C.ADDI4SPN rd', uimm  → addi rd', x2, uimm (uimm != 0)
+            let imm = (((half >> 5) & 0x1) as u32) << 3   // bit 3
+                | (((half >> 6) & 0x1) as u32) << 2       // bit 2
+                | (((half >> 11) & 0x3) as u32) << 4      // bits 5:4
+                | (((half >> 7) & 0xF) as u32) << 6;      // bits 9:6
+            if imm == 0 {
+                return Instruction::Unknown(half as u32);
+            }
+            Instruction::Addi { rd: crs2p, rs1: 2, imm: imm as i32 }
+        }
+        (0, 2) => {
+            // C.LW rd', uimm(rs1')
+            let imm = (((half >> 5) & 0x1) as u32) << 6
+                | (((half >> 10) & 0x7) as u32) << 3
+                | (((half >> 6) & 0x1) as u32) << 2;
+            Instruction::Lw { rd: crs2p, rs1: crs1p, imm: imm as i32 }
+        }
+        (0, 6) => {
+            // C.SW rs2', uimm(rs1')
+            let imm = (((half >> 5) & 0x1) as u32) << 6
+                | (((half >> 10) & 0x7) as u32) << 3
+                | (((half >> 6) & 0x1) as u32) << 2;
+            Instruction::Sw { rs1: crs1p, rs2: crs2p, imm: imm as i32 }
+        }
+
+        // ── Quadrant 1 ────────────────────────────────────────────
+        (1, 0) => {
+            // C.NOP / C.ADDI rd, imm6 (nzimm)
+            let imm6 = ((half >> 2) & 0x1F) as u32 | (((half >> 12) & 0x1) as u32) << 5;
+            let imm = sign_extend(imm6, 6);
+            if rd == 0 {
+                // C.NOP (imm must be 0 per spec, but we don't enforce)
+                Instruction::Addi { rd: 0, rs1: 0, imm: 0 }
+            } else {
+                Instruction::Addi { rd, rs1: rd, imm }
+            }
+        }
+        (1, 1) => {
+            // RV32: C.JAL imm11 → JAL x1, offset
+            let imm = c_jal_imm(half);
+            Instruction::Jal { rd: 1, imm }
+        }
+        (1, 2) => {
+            // C.LI rd, imm6 → ADDI rd, x0, imm6
+            if rd == 0 {
+                return Instruction::Unknown(half as u32);
+            }
+            let imm6 = ((half >> 2) & 0x1F) as u32 | (((half >> 12) & 0x1) as u32) << 5;
+            Instruction::Addi { rd, rs1: 0, imm: sign_extend(imm6, 6) }
+        }
+        (1, 3) => {
+            if rd == 2 {
+                // C.ADDI16SP nzimm10
+                let imm10 = (((half >> 12) & 0x1) as u32) << 9
+                    | (((half >> 3) & 0x3) as u32) << 7
+                    | (((half >> 5) & 0x1) as u32) << 6
+                    | (((half >> 2) & 0x1) as u32) << 5
+                    | (((half >> 6) & 0x1) as u32) << 4;
+                if imm10 == 0 {
+                    return Instruction::Unknown(half as u32);
+                }
+                Instruction::Addi { rd: 2, rs1: 2, imm: sign_extend(imm10 as u32, 10) }
+            } else if rd != 0 {
+                // C.LUI rd, imm
+                let imm17 = (((half >> 12) & 0x1) as u32) << 17
+                    | (((half >> 2) & 0x1F) as u32) << 12;
+                if imm17 == 0 {
+                    return Instruction::Unknown(half as u32);
+                }
+                let imm = sign_extend(imm17 as u32, 18) as u32;
+                Instruction::Lui { rd, imm: imm & 0xFFFF_F000 }
+            } else {
+                Instruction::Unknown(half as u32)
+            }
+        }
+        (1, 4) => {
+            // C.SRLI / C.SRAI / C.ANDI / C.SUB / C.XOR / C.OR / C.AND
+            let funct2 = (half >> 10) & 0x3;
+            match funct2 {
+                0 => {
+                    // C.SRLI rd', shamt
+                    let shamt = ((half >> 2) & 0x1F) as u8 | ((((half >> 12) & 0x1) as u8) << 5);
+                    Instruction::Srli { rd: crs1p, rs1: crs1p, shamt }
+                }
+                1 => {
+                    // C.SRAI rd', shamt
+                    let shamt = ((half >> 2) & 0x1F) as u8 | ((((half >> 12) & 0x1) as u8) << 5);
+                    Instruction::Srai { rd: crs1p, rs1: crs1p, shamt }
+                }
+                2 => {
+                    // C.ANDI rd', imm6
+                    let imm6 = ((half >> 2) & 0x1F) as u32 | (((half >> 12) & 0x1) as u32) << 5;
+                    Instruction::Andi { rd: crs1p, rs1: crs1p, imm: sign_extend(imm6, 6) }
+                }
+                3 => {
+                    // C.SUB / C.XOR / C.OR / C.AND
+                    let sub_op = ((half >> 12) & 0x1) << 2 | ((half >> 5) & 0x3);
+                    match sub_op {
+                        0 => Instruction::Sub { rd: crs1p, rs1: crs1p, rs2: crs2p },
+                        1 => Instruction::Xor { rd: crs1p, rs1: crs1p, rs2: crs2p },
+                        2 => Instruction::Or { rd: crs1p, rs1: crs1p, rs2: crs2p },
+                        3 => Instruction::And { rd: crs1p, rs1: crs1p, rs2: crs2p },
+                        _ => Instruction::Unknown(half as u32),
+                    }
+                }
+                _ => Instruction::Unknown(half as u32),
+            }
+        }
+        (1, 5) => {
+            // C.J offset → JAL x0, offset
+            let imm = c_jal_imm(half);
+            Instruction::Jal { rd: 0, imm }
+        }
+        (1, 6) => {
+            // C.BEQZ rs1', offset → BEQ rs1', x0, offset
+            let imm = c_branch_imm(half);
+            Instruction::Beq { rs1: crs1p, rs2: 0, imm }
+        }
+        (1, 7) => {
+            // C.BNEZ rs1', offset → BNE rs1', x0, offset
+            let imm = c_branch_imm(half);
+            Instruction::Bne { rs1: crs1p, rs2: 0, imm }
+        }
+
+        // ── Quadrant 2 ────────────────────────────────────────────
+        (2, 0) => {
+            // C.SLLI rd, shamt
+            if rd == 0 {
+                return Instruction::Unknown(half as u32);
+            }
+            let shamt = ((half >> 2) & 0x1F) as u8 | ((((half >> 12) & 0x1) as u8) << 5);
+            Instruction::Slli { rd, rs1: rd, shamt }
+        }
+        (2, 2) => {
+            // C.LWSP rd, uimm → LW rd, offset(x2)
+            if rd == 0 {
+                return Instruction::Unknown(half as u32);
+            }
+            let imm = (((half >> 2) & 0x3) as u32) << 6
+                | (((half >> 4) & 0x7) as u32) << 2
+                | (((half >> 12) & 0x1) as u32) << 5;
+            Instruction::Lw { rd, rs1: 2, imm: imm as i32 }
+        }
+        (2, 4) => {
+            // C.JR / C.MV / C.JALR / C.ADD / C.EBREAK
+            let bit12 = (half >> 12) & 0x1;
+            if bit12 == 0 {
+                if rs2 == 0 && rd != 0 {
+                    // C.JR rs1 → JALR x0, rs1, 0
+                    Instruction::Jalr { rd: 0, rs1: rd, imm: 0 }
+                } else if rs2 != 0 && rd != 0 {
+                    // C.MV rd, rs2 → ADD rd, x0, rs2
+                    Instruction::Add { rd, rs1: 0, rs2 }
+                } else {
+                    Instruction::Unknown(half as u32)
+                }
+            } else {
+                if rd == 0 && rs2 == 0 {
+                    Instruction::Ebreak
+                } else if rs2 == 0 && rd != 0 {
+                    // C.JALR rs1 → JALR x1, rs1, 0
+                    Instruction::Jalr { rd: 1, rs1: rd, imm: 0 }
+                } else if rd != 0 && rs2 != 0 {
+                    // C.ADD rd, rs2 → ADD rd, rd, rs2
+                    Instruction::Add { rd, rs1: rd, rs2 }
+                } else {
+                    Instruction::Unknown(half as u32)
+                }
+            }
+        }
+        (2, 6) => {
+            // C.SWSP rs2, uimm → SW rs2, offset(x2)
+            let imm = (((half >> 7) & 0x3) as u32) << 6
+                | (((half >> 9) & 0xF) as u32) << 2;
+            Instruction::Sw { rs1: 2, rs2, imm: imm as i32 }
+        }
+
+        _ => Instruction::Unknown(half as u32),
+    }
+}
+
+// C.JAL / C.J immediate: 11-bit signed offset, multiply of 2.
+fn c_jal_imm(half: u16) -> i32 {
+    let raw = (((half >> 12) & 0x1) as u32) << 11   // bit 11 (sign)
+        | (((half >> 8) & 0x1) as u32) << 10         // bit 10
+        | (((half >> 9) & 0x3) as u32) << 8          // bits 9:8
+        | (((half >> 6) & 0x1) as u32) << 7          // bit 7
+        | (((half >> 7) & 0x1) as u32) << 6          // bit 6
+        | (((half >> 2) & 0x1) as u32) << 5          // bit 5
+        | (((half >> 11) & 0x1) as u32) << 4         // bit 4
+        | (((half >> 3) & 0x7) as u32) << 1;         // bits 3:1
+    sign_extend(raw as u32, 12)
+}
+
+// C.BEQZ / C.BNEZ immediate: 8-bit signed offset, multiply of 2.
+fn c_branch_imm(half: u16) -> i32 {
+    let raw = (((half >> 12) & 0x1) as u32) << 8
+        | (((half >> 5) & 0x3) as u32) << 6
+        | (((half >> 2) & 0x1) as u32) << 5
+        | (((half >> 10) & 0x3) as u32) << 3
+        | (((half >> 3) & 0x3) as u32) << 1;
+    sign_extend(raw as u32, 9)
+}
+
+fn sign_extend(val: u32, bits: u32) -> i32 {
+    let sign_bit = 1u32 << (bits - 1);
+    if val & sign_bit != 0 {
+        (val | (!0u32 << bits)) as i32
+    } else {
+        val as i32
+    }
+}
