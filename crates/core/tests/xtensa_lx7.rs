@@ -73,20 +73,31 @@ fn step_with_wide_instruction_returns_notimplemented_without_advancing_pc() {
 
 #[test]
 fn step_dispatches_narrow_via_length_predecoder() {
-    // op0 = 0x8 in byte 0 → narrow (2-byte) instruction.
-    // Write halfword 0x0008 little-endian: byte[0]=0x08, byte[1]=0x00.
-    // xtensa_length::instruction_length(0x08) == 2 → narrow path.
-    // decode_narrow returns Unknown(...) in Plan 1 — that causes NotImplemented.
+    // op0 = 0xD in byte 0 → narrow (2-byte) instruction.
+    // Write NOP.N halfword 0xf03d little-endian: byte[0]=0x3d, byte[1]=0xf0.
+    // xtensa_length::instruction_length(0x3d & 0xF = 0xD) == 2 → narrow path.
+    // decode_narrow(0xf03d) → Instruction::Nop — executes successfully, PC advances by 2.
+    // (D8: narrow decoder fully implemented; NOP.N is the cleanest test case.)
     let mut cpu = XtensaLx7::new();
-    let mut bus = build_bus_with_instruction_at(TEST_PC as u64, 0x0008);
+    let mut bus = SystemBus::new();
     cpu.reset(&mut bus).unwrap();
     cpu.set_pc(TEST_PC);
+    // Write NOP.N (0xf03d) at TEST_PC then a BREAK-style unknown instruction to halt.
+    bus.write_u8(TEST_PC as u64,     0x3d).unwrap();  // byte0: op0=0xD
+    bus.write_u8(TEST_PC as u64 + 1, 0xf0).unwrap();  // byte1: r=0xF, t=0 → NOP.N
+    // After NOP.N (2 bytes), put an unimplemented wide instruction to halt the loop.
+    // BREAK instruction at TEST_PC+2 (wide, op0=0x0, r=4 → Break{0,0})
+    bus.write_u8(TEST_PC as u64 + 2, 0x00).unwrap();
+    bus.write_u8(TEST_PC as u64 + 3, 0x40).unwrap();
+    bus.write_u8(TEST_PC as u64 + 4, 0x00).unwrap();
 
-    let err = cpu.step(&mut bus, &[]).unwrap_err();
-    assert!(
-        matches!(err, SimulationError::NotImplemented(_)),
-        "narrow fetch stub should return NotImplemented for Unknown, got: {:?}",
-        err
+    // NOP.N executes fine; then BREAK triggers BreakpointHit at TEST_PC+2.
+    cpu.step(&mut bus, &[]).unwrap(); // NOP.N should succeed
+    // PC must have advanced by 2 (narrow instruction).
+    assert_eq!(
+        cpu.get_pc(),
+        TEST_PC + 2,
+        "after NOP.N, PC should advance by 2 (narrow = 2 bytes)"
     );
 }
 

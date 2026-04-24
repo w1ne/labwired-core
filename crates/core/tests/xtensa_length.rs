@@ -7,13 +7,15 @@
 //! Integration tests for the Xtensa instruction length predecoder (Task B1).
 //!
 //! Verifies that `instruction_length` classifies every possible byte0 value
-//! correctly against the authoritative narrow op0 set {0x8, 0x9, 0xA, 0xD}
-//! from the Xtensa ISA RM §3.3 (RRRN narrow encoding format).
+//! correctly against the authoritative narrow op0 set {0x8, 0x9, 0xA, 0xB, 0xC, 0xD}
+//! from the Xtensa ISA RM §3.3 (RRRN/RRI7/BN narrow encoding formats).
+//!
+//! HW-oracle verified (D8): 0xB = ADDI.N, 0xC = MOVI.N/BEQZ.N/BNEZ.N.
 
 use labwired_core::decoder::xtensa_length::instruction_length;
 
 fn is_narrow(b0: u8) -> bool {
-    matches!(b0 & 0x0F, 0x08 | 0x09 | 0x0A | 0x0D)
+    matches!(b0 & 0x0F, 0x08..=0x0D)
 }
 
 #[test]
@@ -41,11 +43,13 @@ fn known_wide_opcodes_are_three_bytes() {
 
 #[test]
 fn known_narrow_opcodes_are_two_bytes() {
-    // Narrow op0 values per the RRRN format:
+    // Narrow op0 values — HW-oracle verified (D8):
     assert_eq!(instruction_length(0x08), 2); // L32I.N
     assert_eq!(instruction_length(0x09), 2); // S32I.N
-    assert_eq!(instruction_length(0x0A), 2); // ADD.N / ADDI.N
-    assert_eq!(instruction_length(0x0D), 2); // MOV.N / MOVI.N / zero-op narrows
+    assert_eq!(instruction_length(0x0A), 2); // ADD.N
+    assert_eq!(instruction_length(0x0B), 2); // ADDI.N
+    assert_eq!(instruction_length(0x0C), 2); // MOVI.N / BEQZ.N / BNEZ.N
+    assert_eq!(instruction_length(0x0D), 2); // MOV.N / NOP.N / RET.N / RETW.N / BREAK.N / ILL.N
 }
 
 #[test]

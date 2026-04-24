@@ -1,4 +1,5 @@
 use labwired_core::decoder::xtensa::{decode, Instruction};
+use labwired_core::decoder::xtensa_narrow::decode_narrow;
 
 #[test]
 fn unknown_words_decode_as_unknown() {
@@ -571,4 +572,159 @@ fn decode_break_st0() {
     // BREAK imm_s=3, imm_t=5: r=4, s=3, t=5
     // HW: 0x004350 → "break 3, 5"
     assert_eq!(decode(st0_pack(4, 3, 5)), Instruction::Break { imm_s: 3, imm_t: 5 });
+}
+
+// ── Task D8: Narrow (Code Density) decoder tests ──────────────────────────────
+//
+// All byte values are HW-oracle verified via xtensa-esp32s3-elf-as + objdump.
+// Field layout: bits[3:0]=op0, bits[7:4]=s, bits[11:8]=t, bits[15:12]=r.
+// Note: for each instruction, which role s/t/r plays differs — see comments.
+
+#[test]
+fn test_decode_narrow_l32i_n() {
+    // l32i.n a3, a4, 4  →  0x1438
+    // at=s=3, as_=t=4, imm=r<<2=1<<2=4
+    // HW-oracle: addr 0x0e: 38 14
+    assert_eq!(decode_narrow(0x1438), Instruction::L32i { at: 3, as_: 4, imm: 4 });
+    // l32i.n a3, a4, 0  →  imm=0: r=0
+    assert_eq!(decode_narrow(0x0438), Instruction::L32i { at: 3, as_: 4, imm: 0 });
+    // l32i.n a3, a4, 60  →  imm=60: r=15
+    assert_eq!(decode_narrow(0xF438), Instruction::L32i { at: 3, as_: 4, imm: 60 });
+}
+
+#[test]
+fn test_decode_narrow_s32i_n() {
+    // s32i.n a3, a4, 8  →  0x2439
+    // at=s=3, as_=t=4, imm=r<<2=2<<2=8
+    // HW-oracle: addr 0x10: 39 24
+    assert_eq!(decode_narrow(0x2439), Instruction::S32i { at: 3, as_: 4, imm: 8 });
+    // s32i.n a3, a4, 0  →  imm=0: r=0
+    assert_eq!(decode_narrow(0x0439), Instruction::S32i { at: 3, as_: 4, imm: 0 });
+    // s32i.n a3, a4, 60  →  imm=60: r=15
+    assert_eq!(decode_narrow(0xF439), Instruction::S32i { at: 3, as_: 4, imm: 60 });
+}
+
+#[test]
+fn test_decode_narrow_add_n() {
+    // add.n a3, a4, a5  →  0x345a
+    // ar=r=3, as_=t=4, at=s=5
+    // HW-oracle: addr 0x00: 5a 34
+    assert_eq!(decode_narrow(0x345a), Instruction::Add { ar: 3, as_: 4, at: 5 });
+    // add.n a1, a2, a3  →  r=1, t=2, s=3  →  hw = (1<<12)|(2<<8)|(3<<4)|0xA = 0x123a
+    assert_eq!(decode_narrow(0x123a), Instruction::Add { ar: 1, as_: 2, at: 3 });
+}
+
+#[test]
+fn test_decode_narrow_addi_n() {
+    // addi.n a3, a4, 5  →  0x345b
+    // at=r=3, as_=t=4, imm=sext4_nonzero(s=5)=5
+    // HW-oracle: addr 0x02: 5b 34
+    assert_eq!(decode_narrow(0x345b), Instruction::Addi { at: 3, as_: 4, imm8: 5 });
+    // addi.n a3, a4, -1  →  0x340b: s=0 encodes imm=-1
+    // HW-oracle: addr 0x04: 0b 34
+    assert_eq!(decode_narrow(0x340b), Instruction::Addi { at: 3, as_: 4, imm8: -1 });
+    // addi.n a3, a4, 15  →  maximum positive imm (s=0xF)
+    assert_eq!(decode_narrow(0x34fb), Instruction::Addi { at: 3, as_: 4, imm8: 15 });
+    // addi.n a3, a4, 1  →  minimum positive imm (s=1)
+    assert_eq!(decode_narrow(0x341b), Instruction::Addi { at: 3, as_: 4, imm8: 1 });
+}
+
+#[test]
+fn test_decode_narrow_mov_n() {
+    // mov.n a3, a4  →  0x043d
+    // MOV.N = OR ar=s=3, as_=t=4, at=t=4  (OR with same src twice)
+    // HW-oracle: addr 0x06: 3d 04
+    assert_eq!(decode_narrow(0x043d), Instruction::Or { ar: 3, as_: 4, at: 4 });
+    // mov.n a0, a1  →  r=0, t=1, s=0  →  hw = (0<<12)|(1<<8)|(0<<4)|0xD = 0x010d
+    assert_eq!(decode_narrow(0x010d), Instruction::Or { ar: 0, as_: 1, at: 1 });
+}
+
+#[test]
+fn test_decode_narrow_movi_n_positive() {
+    // movi.n a3, 5  →  0x530c: t=3=at, s=0, r=5; raw7=(0<<4)|5=5; imm=5
+    // HW-oracle: addr 0x08: 0c 53
+    assert_eq!(decode_narrow(0x530c), Instruction::Movi { at: 3, imm: 5 });
+    // movi.n a3, 0  →  0x030c: s=0, r=0; raw7=0; imm=0
+    assert_eq!(decode_narrow(0x030c), Instruction::Movi { at: 3, imm: 0 });
+    // movi.n a3, 63  →  0xf33c: s=3, r=15; raw7=(3<<4)|15=63; imm=63
+    assert_eq!(decode_narrow(0xf33c), Instruction::Movi { at: 3, imm: 63 });
+    // movi.n a3, 95  →  0xf35c: s=5, r=15; raw7=(5<<4)|15=95; imm=95 (POSITIVE despite bit6=1)
+    // HW-oracle: addr 0x0c: 5c f3
+    assert_eq!(decode_narrow(0xf35c), Instruction::Movi { at: 3, imm: 95 });
+    // movi.n a3, 64  →  0x034c: s=4, r=0; raw7=64; imm=64 (not -64!)
+    assert_eq!(decode_narrow(0x034c), Instruction::Movi { at: 3, imm: 64 });
+}
+
+#[test]
+fn test_decode_narrow_movi_n_negative() {
+    // movi.n a3, -32  →  0x036c: s=6, r=0; raw7=(6<<4)|0=96; 96>=96 → imm=96-128=-32
+    // HW-oracle: addr 0x0a: 6c 03
+    assert_eq!(decode_narrow(0x036c), Instruction::Movi { at: 3, imm: -32 });
+    // movi.n a3, -1  →  0xf37c: s=7, r=15; raw7=(7<<4)|15=127; 127>=96 → imm=127-128=-1
+    assert_eq!(decode_narrow(0xf37c), Instruction::Movi { at: 3, imm: -1 });
+    // movi.n a3, -16  →  0x037c: s=7, r=0; raw7=112; 112>=96 → imm=112-128=-16
+    assert_eq!(decode_narrow(0x037c), Instruction::Movi { at: 3, imm: -16 });
+    // boundary: raw7=95 → positive (95 < 96)
+    assert_eq!(decode_narrow(0xf35c), Instruction::Movi { at: 3, imm: 95 });
+    // boundary: raw7=96 → negative
+    assert_eq!(decode_narrow(0x036c), Instruction::Movi { at: 3, imm: -32 });
+}
+
+#[test]
+fn test_decode_narrow_beqz_n() {
+    // beqz.n a3, +4  →  0x238c: t=3=as_, r=2, bit4=0; offset=(2+2)*(1+0)=4
+    // HW-oracle: addr 0x00: 8c 23
+    assert_eq!(decode_narrow(0x238c), Instruction::Beqz { as_: 3, offset: 4 });
+    // beqz.n a2, +4  →  0x228c: t=2=as_, r=2, bit4=0; offset=4
+    assert_eq!(decode_narrow(0x228c), Instruction::Beqz { as_: 2, offset: 4 });
+    // beqz.n a5, +2  →  0x058c: t=5=as_, r=0, bit4=0; offset=(0+2)*(1)=2
+    assert_eq!(decode_narrow(0x058c), Instruction::Beqz { as_: 5, offset: 2 });
+    // beqz.n a3, +15  →  0xd38c: t=3=as_, r=13, bit4=0; offset=(13+2)*(1)=15
+    assert_eq!(decode_narrow(0xd38c), Instruction::Beqz { as_: 3, offset: 15 });
+    // beqz.n a3, +32  →  0xe39c: t=3=as_, r=14, bit4=1; offset=(14+2)*(2)=32
+    assert_eq!(decode_narrow(0xe39c), Instruction::Beqz { as_: 3, offset: 32 });
+}
+
+#[test]
+fn test_decode_narrow_bnez_n() {
+    // bnez.n a3, +2  →  0x03cc: t=3=as_, r=0, bit4=0; offset=(0+2)*(1)=2
+    // HW-oracle: addr 0x02: cc 03 (bnez.n a3, target at 0+2+2=4... actually verified separately)
+    assert_eq!(decode_narrow(0x03cc), Instruction::Bnez { as_: 3, offset: 2 });
+    // bnez.n a4, +4  →  0x24cc: t=4=as_, r=2, bit4=0; offset=4
+    assert_eq!(decode_narrow(0x24cc), Instruction::Bnez { as_: 4, offset: 4 });
+}
+
+#[test]
+fn test_decode_narrow_ret_n() {
+    // ret.n  →  0xf00d: r=0xF, s=0, t=0
+    // HW-oracle: addr 0x14: 0d f0
+    assert_eq!(decode_narrow(0xf00d), Instruction::Ret);
+}
+
+#[test]
+fn test_decode_narrow_retw_n() {
+    // retw.n  →  0xf01d: r=0xF, s=1, t=0
+    // HW-oracle: addr 0x16: 1d f0
+    assert_eq!(decode_narrow(0xf01d), Instruction::Retw);
+}
+
+#[test]
+fn test_decode_narrow_break_n() {
+    // break.n 0  →  0xf02d: r=0xF, s=2, t=0  → Break{imm_s=0,imm_t=0}
+    // HW-oracle: addr 0x18: 2d f0
+    assert_eq!(decode_narrow(0xf02d), Instruction::Break { imm_s: 0, imm_t: 0 });
+}
+
+#[test]
+fn test_decode_narrow_nop_n() {
+    // nop.n  →  0xf03d: r=0xF, s=3, t=0
+    // HW-oracle: addr 0x12: 3d f0
+    assert_eq!(decode_narrow(0xf03d), Instruction::Nop);
+}
+
+#[test]
+fn test_decode_narrow_ill_n() {
+    // ill.n  →  0xf06d: r=0xF, s=6, t=0
+    // HW-oracle: addr 0x1a: 6d f0
+    assert_eq!(decode_narrow(0xf06d), Instruction::Ill);
 }

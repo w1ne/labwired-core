@@ -2054,3 +2054,120 @@ fn test_exec_retw_returns_not_implemented() {
         "RETW must return NotImplemented, got {:?}", err
     );
 }
+
+// ── D8: Narrow (Code Density) exec tests ────────────────────────────────────
+//
+// Narrow instructions are 2 bytes. The fetch loop in step() reads byte0, calls
+// instruction_length(), and dispatches to decode_narrow() when len=2. PC must
+// advance by 2, not 3, after each narrow instruction.
+//
+// Helper: write a narrow (2-byte) instruction to the bus at a specific address.
+fn write_narrow(bus: &mut SystemBus, addr: u64, hw: u16) {
+    bus.write_u8(addr,     (hw & 0xFF) as u8).unwrap();
+    bus.write_u8(addr + 1, (hw >> 8) as u8).unwrap();
+}
+
+/// ADD.N: PC advances by 2, not 3.
+///
+/// Layout:
+///   TEST_PC+0: add.n a3, a4, a5   (2 bytes, 0x345a)
+///   TEST_PC+2: BREAK               (3 bytes, to halt)
+///
+/// a4=10, a5=7 → a3=17. PC should advance by 2 from TEST_PC.
+#[test]
+fn test_exec_add_n_advances_pc_by_2() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 10);
+    cpu.set_register(5, 7);
+
+    // add.n a3, a4, a5 → 0x345a (HW-oracle verified)
+    write_narrow(&mut bus, TEST_PC as u64, 0x345a);
+    // BREAK at TEST_PC+2 (3 bytes)
+    write_insns(&mut bus, (TEST_PC + 2) as u64, &[break_insn()]);
+
+    let err = run_until_error(&mut cpu, &mut bus);
+    assert!(matches!(err, SimulationError::BreakpointHit(_)), "expected BREAK, got {:?}", err);
+    assert_eq!(cpu.get_register(3), 17, "a3 = a4+a5 = 10+7 = 17");
+    // The BREAK was at TEST_PC+2, confirming narrow advanced PC by 2
+    if let SimulationError::BreakpointHit(pc) = err {
+        assert_eq!(pc, TEST_PC + 2, "BREAK at TEST_PC+2 means PC advanced by 2");
+    }
+}
+
+/// MOV.N: implemented as OR ar, as_, as_. Reads correctly.
+///
+/// Layout:
+///   TEST_PC+0: mov.n a3, a4   (2 bytes, 0x043d)
+///   TEST_PC+2: BREAK
+///
+/// a4=0xDEAD_BEEF → a3=0xDEAD_BEEF.
+#[test]
+fn test_exec_mov_n_via_or() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xDEAD_BEEF);
+
+    // mov.n a3, a4 → 0x043d (HW-oracle verified)
+    write_narrow(&mut bus, TEST_PC as u64, 0x043d);
+    write_insns(&mut bus, (TEST_PC + 2) as u64, &[break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0xDEAD_BEEF, "mov.n should copy a4 to a3");
+}
+
+/// RET.N: restores PC from a0, advances PC by 2 internally (then sets to a0).
+///
+/// Layout:
+///   TEST_PC+0: ret.n   (2 bytes, 0xf00d)
+///   Execution resumes at a0.
+///
+/// Set a0 = TEST_PC + 100; after ret.n, PC should be TEST_PC+100.
+#[test]
+fn test_exec_ret_n_returns() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(0, TEST_PC + 100);  // return address
+
+    // ret.n → 0xf00d (HW-oracle verified)
+    write_narrow(&mut bus, TEST_PC as u64, 0xf00d);
+    // BREAK at return address
+    write_insns(&mut bus, (TEST_PC + 100) as u64, &[break_insn()]);
+
+    let err = run_until_error(&mut cpu, &mut bus);
+    match err {
+        SimulationError::BreakpointHit(pc) => {
+            assert_eq!(pc, TEST_PC + 100, "ret.n should set PC = a0 = TEST_PC+100");
+        }
+        other => panic!("expected BreakpointHit, got {:?}", other),
+    }
+}
+
+/// MOVI.N with negative value: sign extension end-to-end.
+///
+/// movi.n a3, -32 → 0x036c (HW-oracle verified)
+/// Expected: a3 = 0xFFFFFFE0 (two's complement -32 sign-extended to 32 bits).
+#[test]
+fn test_exec_movi_n_negative_value() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // movi.n a3, -32 → 0x036c (HW-oracle: bytes 6c 03)
+    write_narrow(&mut bus, TEST_PC as u64, 0x036c);
+    write_insns(&mut bus, (TEST_PC + 2) as u64, &[break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(
+        cpu.get_register(3),
+        (-32i32) as u32,
+        "movi.n a3,-32: a3 should be 0xFFFFFFE0"
+    );
+}
