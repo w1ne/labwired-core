@@ -472,8 +472,12 @@ impl Cpu for RiscV {
                 };
 
                 if irq != 0xFFFFFFFF {
-                    self.handle_trap(0x80000000 | irq, self.pc);
-                    // Trap taken, next instruction will be handled in trap handler
+                    // Async interrupt: save the address of the NEXT
+                    // instruction in mepc so MRET resumes forward rather
+                    // than re-executing the one we just completed. For
+                    // branch ops next_pc is the branch target, which is
+                    // also correct — MRET returns to the loop head.
+                    self.handle_trap(0x80000000 | irq, next_pc);
                     return Ok(());
                 }
             }
@@ -761,6 +765,65 @@ mod tests {
         machine.cpu.mip = 0;
         machine.cpu.set_exception_pending(3);
         assert_eq!(machine.cpu.mip & (1 << 3), 1 << 3);
+    }
+
+    #[test]
+    fn test_riscv_async_irq_mepc_points_to_next_instruction() {
+        // Regression guard for the async-interrupt mepc semantics.
+        // Before the fix, `handle_trap(cause, self.pc)` saved the address
+        // of the *just-executed* instruction, so MRET would re-execute
+        // it. For non-branch instructions this doubled side effects
+        // (e.g. ADDI x1, x1, 1 → x1 incremented twice per interrupted
+        // completion). Fix saves `next_pc` instead.
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+
+        cpu.mtvec = 0x2000;
+        cpu.mie = 1 << 11; // MEIE
+        cpu.mstatus = 1 << 3; // MIE
+
+        bus.flash.data = vec![0; 0x3000];
+        // 0x0: ADDI x1, x1, 1    (0x00108093)
+        bus.write_u32(0x0, 0x0010_8093).unwrap();
+        // 0x4: JAL x0, 0  — infinite loop at 0x4 (encoded as 0x0000006F).
+        bus.write_u32(0x4, 0x0000_006F).unwrap();
+        // 0x2000: MRET
+        bus.write_u32(0x2000, 0x3020_0073).unwrap();
+
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+
+        // Pend external IRQ BEFORE the first step.
+        machine.cpu.set_exception_pending(11);
+
+        // Step 1: execute ADDI x1, x1, 1 (x1 = 1). Interrupt check fires
+        // because mip.MEIP & mie.MEIE & mstatus.MIE all match.
+        machine.step().unwrap();
+        assert_eq!(
+            machine.cpu.read_reg(1),
+            1,
+            "ADDI should have executed exactly once before the trap"
+        );
+        assert_eq!(machine.cpu.pc, 0x2000, "trapped to mtvec");
+        // CRITICAL: mepc must point to the NEXT instruction, not the one
+        // we just ran. Before the fix this was 0x0 (re-execute ADDI);
+        // correct value is 0x4.
+        assert_eq!(
+            machine.cpu.mepc, 0x4,
+            "mepc must point to the instruction after ADDI, not ADDI itself"
+        );
+
+        // Clear MEIP as a peripheral ACK would — otherwise the trap
+        // handler would re-enter on every subsequent step — then MRET
+        // and verify PC lands on mepc (0x4), not on the ADDI we ran.
+        machine.cpu.mip &= !(1 << 11);
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x4, "MRET returns to next instruction");
+        assert_eq!(
+            machine.cpu.read_reg(1),
+            1,
+            "x1 must not have incremented twice (async IRQ must not replay)"
+        );
     }
 
     #[test]
