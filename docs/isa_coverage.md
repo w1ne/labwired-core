@@ -77,6 +77,7 @@ Target subset today: **RV32IM base ISA + Zicsr** (`rv32im_zicsr`).
 | I-type ALU   | `ADDI`, `SLTI`, `SLTIU`, `XORI`, `ORI`, `ANDI`, `SLLI`, `SRLI`, `SRAI`       |
 | R-type ALU   | `ADD`, `SUB`, `SLL`, `SLT`, `SLTU`, `XOR`, `SRL`, `SRA`, `OR`, `AND`         |
 | **M** ext.   | `MUL`, `MULH`, `MULHSU`, `MULHU`, `DIV`, `DIVU`, `REM`, `REMU` (with full per-spec semantics for div-by-zero and INT_MIN/-1 overflow) |
+| **A** ext.   | `LR.W`, `SC.W`, `AMOSWAP.W`, `AMOADD.W`, `AMOXOR.W`, `AMOOR.W`, `AMOAND.W`, `AMOMIN.W`, `AMOMAX.W`, `AMOMINU.W`, `AMOMAXU.W` (single-hart: aq/rl are ignored; any store invalidates LR reservation) |
 | Zicsr        | `CSRRW`, `CSRRS`, `CSRRC`, `CSRRWI`, `CSRRSI`, `CSRRCI`                      |
 | System       | `ECALL`, `EBREAK`, `FENCE`, `MRET`                                           |
 
@@ -84,7 +85,6 @@ Target subset today: **RV32IM base ISA + Zicsr** (`rv32im_zicsr`).
 
 | Extension    | Status                                                                      |
 |--------------|-----------------------------------------------------------------------------|
-| **A** (atomic)  | ❌ Not implemented (`LR`, `SC`, `AMO*`)                                      |
 | **C** (compressed) | ❌ Not implemented                                                        |
 | **F** / **D** (FP) | ❌ Not implemented                                                        |
 | Interrupts      | 🟡 Machine-mode only. Timer (MTIP via mtime/mtimecmp) and external peripheral IRQs (folded into MEIP) dispatch via `mtvec`, with `mstatus.MIE` / `mie` gating. No PLIC — every external IRQ source collapses to MEIP. No per-source priority. |

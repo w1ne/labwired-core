@@ -471,7 +471,7 @@ mod integration_tests {
         machine.step().unwrap();
 
         // Verify Memory at SP+4
-        let val = machine.bus.read_u32((stack_top + 4)).unwrap();
+        let val = machine.bus.read_u32(stack_top + 4).unwrap();
         assert_eq!(val, 0xCAFEBABE);
 
         // 2. LDR R1, [SP, #4]

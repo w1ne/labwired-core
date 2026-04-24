@@ -63,6 +63,19 @@ pub enum Instruction {
     Divu { rd: u8, rs1: u8, rs2: u8 },
     Rem { rd: u8, rs1: u8, rs2: u8 },
     Remu { rd: u8, rs1: u8, rs2: u8 },
+    // RV32A — Atomics. `aq` / `rl` encoded ordering bits are ignored by
+    // this single-threaded interpreter.
+    LrW { rd: u8, rs1: u8 },
+    ScW { rd: u8, rs1: u8, rs2: u8 },
+    AmoSwapW { rd: u8, rs1: u8, rs2: u8 },
+    AmoAddW { rd: u8, rs1: u8, rs2: u8 },
+    AmoXorW { rd: u8, rs1: u8, rs2: u8 },
+    AmoOrW { rd: u8, rs1: u8, rs2: u8 },
+    AmoAndW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMinW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMaxW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMinuW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMaxuW { rd: u8, rs1: u8, rs2: u8 },
     Unknown(u32),
 }
 
@@ -247,6 +260,28 @@ pub fn decode_rv32(inst: u32) -> Instruction {
                 (5, 0x01) => Instruction::Divu { rd, rs1, rs2 },
                 (6, 0x01) => Instruction::Rem { rd, rs1, rs2 },
                 (7, 0x01) => Instruction::Remu { rd, rs1, rs2 },
+                _ => Instruction::Unknown(inst),
+            }
+        }
+        0x2F => {
+            // RV32A — AMO. funct3 == 0x2 selects 32-bit word ops; we don't
+            // model the `aq`/`rl` ordering bits (single-threaded).
+            if funct3 != 0x2 {
+                return Instruction::Unknown(inst);
+            }
+            let funct5 = (funct7 >> 2) & 0x1F;
+            match funct5 {
+                0x02 => Instruction::LrW { rd, rs1 },
+                0x03 => Instruction::ScW { rd, rs1, rs2 },
+                0x01 => Instruction::AmoSwapW { rd, rs1, rs2 },
+                0x00 => Instruction::AmoAddW { rd, rs1, rs2 },
+                0x04 => Instruction::AmoXorW { rd, rs1, rs2 },
+                0x08 => Instruction::AmoOrW { rd, rs1, rs2 },
+                0x0C => Instruction::AmoAndW { rd, rs1, rs2 },
+                0x10 => Instruction::AmoMinW { rd, rs1, rs2 },
+                0x14 => Instruction::AmoMaxW { rd, rs1, rs2 },
+                0x18 => Instruction::AmoMinuW { rd, rs1, rs2 },
+                0x1C => Instruction::AmoMaxuW { rd, rs1, rs2 },
                 _ => Instruction::Unknown(inst),
             }
         }
