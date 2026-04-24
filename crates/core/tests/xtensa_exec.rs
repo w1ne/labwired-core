@@ -1139,6 +1139,566 @@ fn test_exec_s32i() {
     assert_eq!(stored, 0xDEAD_BEEF, "S32I: full 32-bit word stored");
 }
 
+// ── D6: Branch instruction encoders ────────────────────────────────────────
+
+/// Encode a BR-format (op0=0x7) instruction: rri8_pack(op0=7, t, s, r, imm8).
+/// `imm8` is the raw 8-bit field; decoder adds +4 to make the offset.
+/// Caller provides the raw imm8 field value (i.e. desired_offset - 4, sign-truncated to u8).
+fn enc_br(t: u32, s: u32, r: u32, imm8: u32) -> u32 {
+    0x7 | ((t & 0xF) << 4) | ((s & 0xF) << 8) | ((r & 0xF) << 12) | ((imm8 & 0xFF) << 16)
+}
+
+/// Encode a BRI12-format branch: op0=6, n at bits[5:4], m at bits[7:6], s at bits[11:8], imm12 at bits[23:12].
+/// `imm12` is the raw 12-bit field; decoder adds +4.
+fn enc_bri12(m: u32, n: u32, s: u32, imm12: u32) -> u32 {
+    0x6 | ((n & 0x3) << 4) | ((m & 0x3) << 6) | ((s & 0xF) << 8) | ((imm12 & 0xFFF) << 12)
+}
+
+/// Encode a BI/BIU-format branch: op0=6, n at bits[5:4], m at bits[7:6], s at bits[11:8],
+/// r (B4CONST/B4CONSTU index) at bits[15:12], imm8 (offset raw) at bits[23:16].
+fn enc_bi(m: u32, n: u32, s: u32, r: u32, imm8: u32) -> u32 {
+    0x6 | ((n & 0x3) << 4) | ((m & 0x3) << 6) | ((s & 0xF) << 8) | ((r & 0xF) << 12) | ((imm8 & 0xFF) << 16)
+}
+
+/// BREAK instruction at position 0 (halts unconditionally).
+fn break_insn() -> u32 { 4 << 12 }  // st0(r=4,s=0,t=0) = BREAK 0,0
+
+// ── D6: Branch test infrastructure ─────────────────────────────────────────
+//
+// Layout for each branch test:
+//   INSN_PC+0: the branch instruction (3 bytes)
+//   INSN_PC+3: BREAK (not-taken path)
+//   INSN_PC+6: BREAK (placeholder — not reached; taken target is elsewhere)
+//
+// For taken branch: target = INSN_PC + offset (offset pre-baked with +4 already).
+// We pick offset = 9 (raw imm8 = 5, +4 = 9) to place taken BREAK at INSN_PC+9 (= 4th slot).
+// Not-taken BREAK is at INSN_PC+3.
+//
+// Branch instruction is at TEST_PC.
+//   offset_taken = 9  → target = TEST_PC + 9
+//   not-taken falls through to TEST_PC + 3
+//
+// We write:
+//   [0] branch insn     @ TEST_PC+0
+//   [1] BREAK 0,0       @ TEST_PC+3   (not-taken marker)
+//   [2] NOP (or BREAK)  @ TEST_PC+6   (padding — never hit)
+//   [3] BREAK 0,0       @ TEST_PC+9   (taken marker)
+
+/// Expect a taken branch: run until BREAK, assert PC == TEST_PC + 9 (taken target).
+fn check_taken(cpu: &mut XtensaLx7, bus: &mut SystemBus) {
+    let err = run_until_error(cpu, bus);
+    match err {
+        SimulationError::BreakpointHit(pc) => {
+            assert_eq!(pc, TEST_PC + 9, "expected taken branch (PC = TEST_PC+9), got PC = {:#010x}", pc);
+        }
+        other => panic!("expected BreakpointHit, got {:?}", other),
+    }
+}
+
+/// Expect a not-taken branch: run until BREAK, assert PC == TEST_PC + 3 (fall-through).
+fn check_not_taken(cpu: &mut XtensaLx7, bus: &mut SystemBus) {
+    let err = run_until_error(cpu, bus);
+    match err {
+        SimulationError::BreakpointHit(pc) => {
+            assert_eq!(pc, TEST_PC + 3, "expected not-taken branch (PC = TEST_PC+3), got PC = {:#010x}", pc);
+        }
+        other => panic!("expected BreakpointHit, got {:?}", other),
+    }
+}
+
+/// Write branch + two BREAK sentinels.
+/// slot[0] = branch insn, slot[1] = not-taken BREAK, slot[2] = padding NOP, slot[3] = taken BREAK.
+/// offset 9 = raw_imm8 5 + 4 (pre-baked by decoder).
+fn write_branch_test(bus: &mut SystemBus, branch_insn: u32) {
+    write_insns(bus, TEST_PC as u64, &[
+        branch_insn,   // @ TEST_PC+0  — the branch, offset field = 9 (targets TEST_PC+9)
+        break_insn(),  // @ TEST_PC+3  — not-taken sentinel
+        0x000002,      // @ TEST_PC+6  — NOP (padding; never hit)
+        break_insn(),  // @ TEST_PC+9  — taken sentinel
+    ]);
+}
+
+/// Fresh CPU + bus with PC = TEST_PC.
+fn make_cpu_bus() -> (XtensaLx7, SystemBus) {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    (cpu, bus)
+}
+
+// ── D6 Tests ─────────────────────────────────────────────────────────────────
+//
+// For BR-format branches (8-bit offset), raw_imm8=5 → offset = sext8(5)+4 = 9.
+// Taken target = TEST_PC + 9; not-taken = TEST_PC + 3.
+
+// BEQ: as_ == at
+#[test]
+fn test_exec_beq_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 42);
+    cpu.set_register(3, 42);
+    // BEQ a2, a3, offset=9 (r=0x1, imm8=5)
+    write_branch_test(&mut bus, enc_br(3, 2, 0x1, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_beq_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 42);
+    cpu.set_register(3, 99);
+    write_branch_test(&mut bus, enc_br(3, 2, 0x1, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BNE: as_ != at
+#[test]
+fn test_exec_bne_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 1);
+    cpu.set_register(3, 2);
+    // BNE r=0x9
+    write_branch_test(&mut bus, enc_br(3, 2, 0x9, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bne_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 7);
+    cpu.set_register(3, 7);
+    write_branch_test(&mut bus, enc_br(3, 2, 0x9, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BLT: signed as_ < at
+#[test]
+fn test_exec_blt_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, (-5i32) as u32);  // -5 signed
+    cpu.set_register(3, 3);
+    // BLT r=0x2
+    write_branch_test(&mut bus, enc_br(3, 2, 0x2, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_blt_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 10);
+    cpu.set_register(3, 3);
+    write_branch_test(&mut bus, enc_br(3, 2, 0x2, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BGE: signed as_ >= at
+#[test]
+fn test_exec_bge_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 5);
+    cpu.set_register(3, 5);
+    // BGE r=0xA
+    write_branch_test(&mut bus, enc_br(3, 2, 0xA, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bge_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, (-1i32) as u32);  // -1 signed < 0
+    cpu.set_register(3, 0);
+    write_branch_test(&mut bus, enc_br(3, 2, 0xA, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BLTU: unsigned as_ < at
+#[test]
+fn test_exec_bltu_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 3);
+    cpu.set_register(3, 10);
+    // BLTU r=0x3
+    write_branch_test(&mut bus, enc_br(3, 2, 0x3, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bltu_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0xFFFF_FFFFu32);  // large unsigned
+    cpu.set_register(3, 1);
+    write_branch_test(&mut bus, enc_br(3, 2, 0x3, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BGEU: unsigned as_ >= at
+#[test]
+fn test_exec_bgeu_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0xFFFF_FFFFu32);
+    cpu.set_register(3, 1);
+    // BGEU r=0xB
+    write_branch_test(&mut bus, enc_br(3, 2, 0xB, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bgeu_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0);
+    cpu.set_register(3, 1);
+    write_branch_test(&mut bus, enc_br(3, 2, 0xB, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BANY: (as_ & at) != 0
+#[test]
+fn test_exec_bany_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);
+    cpu.set_register(3, 0b0011);
+    // BANY r=0x8
+    write_branch_test(&mut bus, enc_br(3, 2, 0x8, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bany_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);
+    cpu.set_register(3, 0b0101);  // no bits in common
+    write_branch_test(&mut bus, enc_br(3, 2, 0x8, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BALL: (as_ & at) == at  (all bits of at set in as_)
+#[test]
+fn test_exec_ball_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1111);
+    cpu.set_register(3, 0b1010);  // all bits of at are in as_
+    // BALL r=0x4
+    write_branch_test(&mut bus, enc_br(3, 2, 0x4, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_ball_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);
+    cpu.set_register(3, 0b1111);  // at has bits not in as_
+    write_branch_test(&mut bus, enc_br(3, 2, 0x4, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BNONE: (as_ & at) == 0
+#[test]
+fn test_exec_bnone_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);
+    cpu.set_register(3, 0b0101);
+    // BNONE r=0x0
+    write_branch_test(&mut bus, enc_br(3, 2, 0x0, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bnone_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);
+    cpu.set_register(3, 0b0011);  // bit 1 in common
+    write_branch_test(&mut bus, enc_br(3, 2, 0x0, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BNALL: (as_ & at) != at  (at least one bit of at missing in as_)
+#[test]
+fn test_exec_bnall_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);
+    cpu.set_register(3, 0b1111);  // at has bit0,bit2 not in as_
+    // BNALL r=0xC
+    write_branch_test(&mut bus, enc_br(3, 2, 0xC, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bnall_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1111);
+    cpu.set_register(3, 0b1010);  // all bits of at are in as_
+    write_branch_test(&mut bus, enc_br(3, 2, 0xC, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BBC: bit (at & 0x1F) of as_ is CLEAR
+#[test]
+fn test_exec_bbc_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 2 is CLEAR
+    cpu.set_register(3, 2);       // check bit 2
+    // BBC r=0x5
+    write_branch_test(&mut bus, enc_br(3, 2, 0x5, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bbc_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 1 is SET
+    cpu.set_register(3, 1);       // check bit 1
+    write_branch_test(&mut bus, enc_br(3, 2, 0x5, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BBS: bit (at & 0x1F) of as_ is SET
+#[test]
+fn test_exec_bbs_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 3 is SET
+    cpu.set_register(3, 3);       // check bit 3
+    // BBS r=0xD
+    write_branch_test(&mut bus, enc_br(3, 2, 0xD, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bbs_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 2 is CLEAR
+    cpu.set_register(3, 2);       // check bit 2
+    write_branch_test(&mut bus, enc_br(3, 2, 0xD, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BBCI: bit (imm & 0x1F) of as_ is CLEAR
+// Encode: r=0x6, t=bit_index (for bits 0..15, r & 1 = 0).
+#[test]
+fn test_exec_bbci_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 2 is CLEAR
+    // BBCI as_=a2, bit=2: r=0x6, t=2, s=2
+    write_branch_test(&mut bus, enc_br(2, 2, 0x6, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bbci_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 3 is SET
+    // BBCI as_=a2, bit=3: r=0x6, t=3, s=2
+    write_branch_test(&mut bus, enc_br(3, 2, 0x6, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BBSI: bit (imm & 0x1F) of as_ is SET
+// Encode: r=0xE, t=bit_index (for bits 0..15, r & 1 = 0 → high bit of index = 0).
+#[test]
+fn test_exec_bbsi_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 1 is SET
+    // BBSI as_=a2, bit=1: r=0xE, t=1, s=2
+    write_branch_test(&mut bus, enc_br(1, 2, 0xE, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bbsi_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0b1010);  // bit 2 is CLEAR
+    // BBSI as_=a2, bit=2: r=0xE, t=2, s=2
+    write_branch_test(&mut bus, enc_br(2, 2, 0xE, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BEQZ: as_ == 0
+// BRI12 format: n=1, m=0, imm12=5 → offset = sext12(5)+4 = 9
+#[test]
+fn test_exec_beqz_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0);
+    // BEQZ a2: n=1, m=0, s=2, imm12=5 → offset=9
+    write_branch_test(&mut bus, enc_bri12(0, 1, 2, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_beqz_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 1);
+    write_branch_test(&mut bus, enc_bri12(0, 1, 2, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BNEZ: as_ != 0
+#[test]
+fn test_exec_bnez_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 99);
+    // BNEZ a2: n=1, m=1
+    write_branch_test(&mut bus, enc_bri12(1, 1, 2, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bnez_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0);
+    write_branch_test(&mut bus, enc_bri12(1, 1, 2, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BLTZ: (as_ as i32) < 0
+#[test]
+fn test_exec_bltz_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0x8000_0000u32);  // MSB set → negative
+    // BLTZ a2: n=1, m=2
+    write_branch_test(&mut bus, enc_bri12(2, 1, 2, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bltz_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0);
+    write_branch_test(&mut bus, enc_bri12(2, 1, 2, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BGEZ: (as_ as i32) >= 0
+#[test]
+fn test_exec_bgez_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0);
+    // BGEZ a2: n=1, m=3
+    write_branch_test(&mut bus, enc_bri12(3, 1, 2, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bgez_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0xFFFF_FFFFu32);  // -1 as i32
+    write_branch_test(&mut bus, enc_bri12(3, 1, 2, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BEQI: as_ == B4CONST[r]
+// B4CONST[5] = 5. Encode: n=2, m=0, s=2, r=5, imm8=5 → offset=9.
+#[test]
+fn test_exec_beqi_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 5);  // B4CONST[5] = 5
+    // BEQI a2, B4CONST[5]: n=2, m=0, r=5, imm8=5
+    write_branch_test(&mut bus, enc_bi(0, 2, 2, 5, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_beqi_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 7);  // != B4CONST[5]=5
+    write_branch_test(&mut bus, enc_bi(0, 2, 2, 5, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BNEI: as_ != B4CONST[r]
+// B4CONST[3] = 3.
+#[test]
+fn test_exec_bnei_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 99);  // != B4CONST[3]=3
+    // BNEI a2, B4CONST[3]: n=2, m=1, r=3
+    write_branch_test(&mut bus, enc_bi(1, 2, 2, 3, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bnei_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 3);  // == B4CONST[3]=3
+    write_branch_test(&mut bus, enc_bi(1, 2, 2, 3, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BLTI: (as_ as i32) < B4CONST[r]  (signed)
+// B4CONST[4] = 4.
+#[test]
+fn test_exec_blti_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, (-1i32) as u32);  // -1 < 4
+    // BLTI a2, B4CONST[4]: n=2, m=2, r=4
+    write_branch_test(&mut bus, enc_bi(2, 2, 2, 4, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_blti_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 10);  // 10 >= 4
+    write_branch_test(&mut bus, enc_bi(2, 2, 2, 4, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BGEI: (as_ as i32) >= B4CONST[r]  (signed)
+// B4CONST[0] = -1.
+#[test]
+fn test_exec_bgei_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0);  // 0 >= -1
+    // BGEI a2, B4CONST[0]=-1: n=2, m=3, r=0
+    write_branch_test(&mut bus, enc_bi(3, 2, 2, 0, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bgei_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, (-2i32) as u32);  // -2 < -1
+    write_branch_test(&mut bus, enc_bi(3, 2, 2, 0, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BLTUI: as_ < B4CONSTU[r]  (unsigned)
+// B4CONSTU[5] = 5.
+#[test]
+fn test_exec_bltui_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 3);  // 3 < 5
+    // BLTUI a2, B4CONSTU[5]: n=3, m=2, r=5
+    write_branch_test(&mut bus, enc_bi(2, 3, 2, 5, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bltui_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0xFFFF_FFFFu32);  // huge unsigned >= 5
+    write_branch_test(&mut bus, enc_bi(2, 3, 2, 5, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
+// BGEUI: as_ >= B4CONSTU[r]  (unsigned)
+// B4CONSTU[0] = 32768.
+#[test]
+fn test_exec_bgeui_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 0xFFFF_FFFFu32);  // >= 32768
+    // BGEUI a2, B4CONSTU[0]=32768: n=3, m=3, r=0
+    write_branch_test(&mut bus, enc_bi(3, 3, 2, 0, 5));
+    check_taken(&mut cpu, &mut bus);
+}
+
+#[test]
+fn test_exec_bgeui_not_taken() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    cpu.set_register(2, 100);  // 100 < 32768
+    write_branch_test(&mut bus, enc_bi(3, 3, 2, 0, 5));
+    check_not_taken(&mut cpu, &mut bus);
+}
+
 /// S8I + S16I roundtrip: store, then load back.
 #[test]
 fn test_exec_store_then_load_roundtrip() {

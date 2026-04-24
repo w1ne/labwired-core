@@ -330,9 +330,152 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // ── D6: Branch instructions ───────────────────────────────────
+            // Decoder pre-bakes +4 into all branch offsets, so:
+            //   taken:     self.pc = self.pc.wrapping_add(offset as u32)
+            //   not-taken: self.pc = self.pc.wrapping_add(len)
+
+            // BEQ: taken if as_ == at
+            Beq { as_, at, offset } => {
+                let cond = self.regs.read_logical(as_) == self.regs.read_logical(at);
+                self.branch(offset, len, cond);
+            }
+            // BNE: taken if as_ != at
+            Bne { as_, at, offset } => {
+                let cond = self.regs.read_logical(as_) != self.regs.read_logical(at);
+                self.branch(offset, len, cond);
+            }
+            // BLT: taken if (as_ as i32) < (at as i32)
+            Blt { as_, at, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) < (self.regs.read_logical(at) as i32);
+                self.branch(offset, len, cond);
+            }
+            // BGE: taken if (as_ as i32) >= (at as i32)
+            Bge { as_, at, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) >= (self.regs.read_logical(at) as i32);
+                self.branch(offset, len, cond);
+            }
+            // BLTU: taken if as_ < at (unsigned)
+            Bltu { as_, at, offset } => {
+                let cond = self.regs.read_logical(as_) < self.regs.read_logical(at);
+                self.branch(offset, len, cond);
+            }
+            // BGEU: taken if as_ >= at (unsigned)
+            Bgeu { as_, at, offset } => {
+                let cond = self.regs.read_logical(as_) >= self.regs.read_logical(at);
+                self.branch(offset, len, cond);
+            }
+            // BANY: taken if (as_ & at) != 0
+            Bany { as_, at, offset } => {
+                let cond = (self.regs.read_logical(as_) & self.regs.read_logical(at)) != 0;
+                self.branch(offset, len, cond);
+            }
+            // BALL: taken if (as_ & at) == at  (all bits of at set in as_)
+            Ball { as_, at, offset } => {
+                let a = self.regs.read_logical(as_);
+                let b = self.regs.read_logical(at);
+                let cond = (a & b) == b;
+                self.branch(offset, len, cond);
+            }
+            // BNONE: taken if (as_ & at) == 0
+            Bnone { as_, at, offset } => {
+                let cond = (self.regs.read_logical(as_) & self.regs.read_logical(at)) == 0;
+                self.branch(offset, len, cond);
+            }
+            // BNALL: taken if (as_ & at) != at  (at least one bit of at missing in as_)
+            Bnall { as_, at, offset } => {
+                let a = self.regs.read_logical(as_);
+                let b = self.regs.read_logical(at);
+                let cond = (a & b) != b;
+                self.branch(offset, len, cond);
+            }
+            // BBC: taken if bit (at & 0x1F) of as_ is CLEAR
+            Bbc { as_, at, offset } => {
+                let bit = self.regs.read_logical(at) & 0x1F;
+                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 0;
+                self.branch(offset, len, cond);
+            }
+            // BBS: taken if bit (at & 0x1F) of as_ is SET
+            Bbs { as_, at, offset } => {
+                let bit = self.regs.read_logical(at) & 0x1F;
+                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 1;
+                self.branch(offset, len, cond);
+            }
+            // BBCI: taken if bit `bit` (0..=31) of as_ is CLEAR
+            Bbci { as_, bit, offset } => {
+                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 0;
+                self.branch(offset, len, cond);
+            }
+            // BBSI: taken if bit `bit` (0..=31) of as_ is SET
+            Bbsi { as_, bit, offset } => {
+                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 1;
+                self.branch(offset, len, cond);
+            }
+            // BEQZ: taken if as_ == 0
+            Beqz { as_, offset } => {
+                let cond = self.regs.read_logical(as_) == 0;
+                self.branch(offset, len, cond);
+            }
+            // BNEZ: taken if as_ != 0
+            Bnez { as_, offset } => {
+                let cond = self.regs.read_logical(as_) != 0;
+                self.branch(offset, len, cond);
+            }
+            // BLTZ: taken if (as_ as i32) < 0
+            Bltz { as_, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) < 0;
+                self.branch(offset, len, cond);
+            }
+            // BGEZ: taken if (as_ as i32) >= 0
+            Bgez { as_, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) >= 0;
+                self.branch(offset, len, cond);
+            }
+            // BEQI: taken if as_ == imm  (decoder resolved B4CONST[r] into imm: i32)
+            Beqi { as_, imm, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) == imm;
+                self.branch(offset, len, cond);
+            }
+            // BNEI: taken if as_ != imm
+            Bnei { as_, imm, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) != imm;
+                self.branch(offset, len, cond);
+            }
+            // BLTI: taken if (as_ as i32) < imm  (signed)
+            Blti { as_, imm, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) < imm;
+                self.branch(offset, len, cond);
+            }
+            // BGEI: taken if (as_ as i32) >= imm  (signed)
+            Bgei { as_, imm, offset } => {
+                let cond = (self.regs.read_logical(as_) as i32) >= imm;
+                self.branch(offset, len, cond);
+            }
+            // BLTUI: taken if as_ < imm  (unsigned; decoder resolved B4CONSTU[r] into imm: u32)
+            Bltui { as_, imm, offset } => {
+                let cond = self.regs.read_logical(as_) < imm;
+                self.branch(offset, len, cond);
+            }
+            // BGEUI: taken if as_ >= imm  (unsigned)
+            Bgeui { as_, imm, offset } => {
+                let cond = self.regs.read_logical(as_) >= imm;
+                self.branch(offset, len, cond);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())
+    }
+
+    /// Apply branch condition: if taken, jump to `pc + offset` (offset pre-baked with +4);
+    /// otherwise advance by `len` bytes.
+    #[inline]
+    fn branch(&mut self, offset: i32, len: u32, cond: bool) {
+        if cond {
+            self.pc = self.pc.wrapping_add(offset as u32);
+        } else {
+            self.pc = self.pc.wrapping_add(len);
+        }
     }
 }
 
