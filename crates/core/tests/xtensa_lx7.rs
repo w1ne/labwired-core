@@ -34,7 +34,8 @@ fn reset_establishes_lx7_initial_state() {
         0x4000_0400,
         "reset PC must be 0x40000400 (ROM reset vector)"
     );
-    assert_eq!(cpu.ps.intlevel(), 0, "PS.INTLEVEL=0 at reset");
+    // HW-verified via OpenOCD on real S3-Zero: ps = 0x1f → INTLEVEL=0xF, EXCM=1.
+    assert_eq!(cpu.ps.intlevel(), 0xF, "PS.INTLEVEL=0xF at reset (all interrupts masked)");
     assert!(cpu.ps.excm(), "PS.EXCM=1 at reset (exception mode active)");
     assert!(!cpu.ps.woe(), "PS.WOE=0 at reset (window overflow disabled)");
     assert_eq!(cpu.regs.windowbase(), 0, "WindowBase=0 at reset");

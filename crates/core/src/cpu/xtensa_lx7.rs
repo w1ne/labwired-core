@@ -24,7 +24,9 @@ impl XtensaLx7 {
     pub fn new() -> Self {
         Self {
             regs: ArFile::new(),
-            ps: Ps::from_raw(0x10), // EXCM=1, INTLEVEL=0
+            // HW-verified: PS reset = 0x1F (EXCM=1, INTLEVEL=0xF).
+            // Confirmed via OpenOCD `reset halt` on real S3-Zero: ps = 0x0000001f.
+            ps: Ps::from_raw(0x1F),
             sr: XtensaSrFile::new(),
             pc: 0x4000_0400,
         }
@@ -52,7 +54,9 @@ impl Default for XtensaLx7 {
 impl Cpu for XtensaLx7 {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.regs = ArFile::new();
-        self.ps = Ps::from_raw(0x10); // EXCM=1, INTLEVEL=0
+        // HW-verified: PS reset = 0x1F (EXCM=1, INTLEVEL=0xF — all ints masked).
+        // Confirmed via OpenOCD `reset halt` on real S3-Zero: ps = 0x0000001f.
+        self.ps = Ps::from_raw(0x1F);
         self.sr = XtensaSrFile::new(); // sets VECBASE=0x40000000, PRID=0xCDCD
         self.pc = 0x4000_0400;
         Ok(())
