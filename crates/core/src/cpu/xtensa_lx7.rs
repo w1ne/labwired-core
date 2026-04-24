@@ -38,7 +38,7 @@ impl XtensaLx7 {
     fn execute(
         &mut self,
         ins: xtensa::Instruction,
-        _bus: &mut dyn Bus,
+        bus: &mut dyn Bus,
         len: u32,
     ) -> SimResult<()> {
         use xtensa::Instruction::*;
@@ -243,6 +243,63 @@ impl XtensaLx7 {
             Addmi { at, as_, imm } => {
                 let v = self.regs.read_logical(as_).wrapping_add(imm as u32);
                 self.regs.write_logical(at, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // ── D4: Load instructions ──────────────────────────────────────────
+
+            // L8UI at, as_, imm: at = zero_extend(mem[as_ + imm]).
+            // imm is the raw byte offset (0..=255); no alignment requirement.
+            L8ui { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                let val = bus.read_u8(ea)? as u32;
+                self.regs.write_logical(at, val);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // L16UI at, as_, imm: at = zero_extend(mem16[as_ + imm]).
+            // Decoder pre-shifts imm by 1 (imm = raw_imm8 << 1), so imm is already
+            // the byte offset. Requires 2-byte alignment; alignment check deferred to Phase G.
+            L16ui { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                let val = bus.read_u16(ea)? as u32;
+                self.regs.write_logical(at, val);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // L16SI at, as_, imm: at = sign_extend(mem16[as_ + imm]).
+            // Decoder pre-shifts imm by 1. Sign-extend 16-bit to 32-bit.
+            // Alignment check deferred to Phase G.
+            L16si { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                let raw = bus.read_u16(ea)?;
+                // Sign-extend 16-bit: cast to i16 then to i32, reinterpret as u32.
+                let val = (raw as i16) as i32 as u32;
+                self.regs.write_logical(at, val);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // L32I at, as_, imm: at = mem32[as_ + imm].
+            // Decoder pre-shifts imm by 2 (imm = raw_imm8 << 2). Requires 4-byte alignment;
+            // alignment check deferred to Phase G.
+            L32i { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                let val = bus.read_u32(ea)?;
+                self.regs.write_logical(at, val);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // L32R at, pc_rel_byte_offset:
+            //   EA = ((pc + 3) & !3) + pc_rel_byte_offset
+            // Decoder sign-extends imm16 as a word count and multiplies by 4 to
+            // produce pc_rel_byte_offset (always negative in real code; literal pool
+            // precedes the instruction). The resulting EA is always 4-byte aligned
+            // (both the aligned base and the offset are multiples of 4).
+            L32r { at, pc_rel_byte_offset } => {
+                let base = (self.pc.wrapping_add(3)) & !3u32;
+                let ea = base.wrapping_add(pc_rel_byte_offset as u32) as u64;
+                let val = bus.read_u32(ea)?;
+                self.regs.write_logical(at, val);
                 self.pc = self.pc.wrapping_add(len);
             }
 

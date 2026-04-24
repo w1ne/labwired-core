@@ -107,6 +107,45 @@ fn enc_ssa8b(as_: u32) -> u32 { rrr(0x4, 0x0, 0x3, as_, 0) }
 /// So s = shamt & 0xF, t = shamt >> 4 (0 or 1).
 fn enc_ssai(shamt: u32) -> u32 { rrr(0x4, 0x0, 0x4, shamt & 0xF, shamt >> 4) }
 
+// ── D4 load encoding helpers ──
+
+/// Encode L8UI at, as_, imm8 (op0=0x2, r=0x0).
+/// LSAI format: (imm8<<16) | (r<<12) | (s<<8) | (t<<4) | op0.
+/// imm is the raw byte offset (0..=255); no pre-shift in encoding.
+fn enc_l8ui(at: u32, as_: u32, imm8: u32) -> u32 {
+    0x2 | (at << 4) | (as_ << 8) | ((imm8 & 0xFF) << 16)
+}
+
+/// Encode L16UI at, as_, imm (op0=0x2, r=0x1).
+/// The hardware imm field is the byte offset >> 1 (i.e. the word offset).
+/// Pass the final byte offset here; this fn will right-shift by 1 for encoding.
+fn enc_l16ui(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 1) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0x1 << 12) | (imm8 << 16)
+}
+
+/// Encode L16SI at, as_, imm (op0=0x2, r=0x9). Same layout as L16UI.
+fn enc_l16si(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 1) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0x9 << 12) | (imm8 << 16)
+}
+
+/// Encode L32I at, as_, imm (op0=0x2, r=0x2).
+/// The hardware imm field is the byte offset >> 2 (i.e. the word offset).
+/// Pass the final byte offset here; this fn will right-shift by 2 for encoding.
+fn enc_l32i(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 2) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0x2 << 12) | (imm8 << 16)
+}
+
+/// Encode L32R at, imm16 (op0=0x1).
+/// `imm16` is the raw 16-bit field (already the encoded word-count offset as
+/// an unsigned 16-bit value). The decoder sign-extends it and multiplies by 4.
+/// Layout: op0=0x1 in bits[3:0], at in bits[7:4], imm16 in bits[23:8].
+fn enc_l32r(at: u32, imm16: u32) -> u32 {
+    0x1 | (at << 4) | ((imm16 & 0xFFFF) << 8)
+}
+
 // ── D3 LSAI encoding helpers (ADDI/ADDMI) ──
 
 /// Encode ADDI at, as_, imm8 (op0=0x2, r=0xC).
@@ -804,4 +843,179 @@ fn test_exec_addmi_negative() {
 
     run_until_error(&mut cpu, &mut bus);
     assert_eq!(cpu.get_register(3), 256, "ADDMI: 512 + (-256) = 256");
+}
+
+// ── D4 Tests: Load instructions ────────────────────────────────────────────────
+
+/// L8UI: zero-extends an 8-bit byte load.
+/// Store 0xAB at DATA_ADDR; set a2 = DATA_ADDR; L8UI a3, a2, 0; expect a3 = 0xAB.
+#[test]
+fn test_exec_l8ui() {
+    // Data lives at 0x2000_4000, instructions at TEST_PC (0x2000_0000).
+    const DATA_ADDR: u64 = 0x2000_4000;
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Write test byte into RAM data region.
+    bus.write_u8(DATA_ADDR, 0xAB).unwrap();
+
+    // Set a2 = DATA_ADDR, then L8UI a3, a2, 0.
+    // Note: MOVI only handles 12-bit signed immediates; load address via set_register.
+    cpu.set_register(2, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_l8ui(3, 2, 0),  // L8UI a3, a2, 0 → a3 = mem[a2]
+        st0(4, 0, 0),        // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0xAB, "L8UI: zero-extended byte load");
+}
+
+/// L16UI: zero-extends a 16-bit halfword load.
+/// Store 0xBEEF at a 2-byte-aligned address; expect a3 = 0x0000BEEF.
+#[test]
+fn test_exec_l16ui() {
+    const DATA_ADDR: u64 = 0x2000_4000; // 2-byte aligned
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Write 0xBEEF little-endian at DATA_ADDR.
+    bus.write_u8(DATA_ADDR,     0xEF).unwrap();
+    bus.write_u8(DATA_ADDR + 1, 0xBE).unwrap();
+
+    cpu.set_register(2, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_l16ui(3, 2, 0),  // L16UI a3, a2, 0 → a3 = 0x0000BEEF
+        st0(4, 0, 0),         // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0x0000_BEEF, "L16UI: zero-extended halfword");
+}
+
+/// L16SI positive: MSB of loaded 16-bit value is 0 → no sign-extension change.
+/// Store 0x7FFE → a3 = 0x00007FFE.
+#[test]
+fn test_exec_l16si_positive() {
+    const DATA_ADDR: u64 = 0x2000_4002; // 2-byte aligned
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // 0x7FFE little-endian: byte0=0xFE, byte1=0x7F.
+    bus.write_u8(DATA_ADDR,     0xFE).unwrap();
+    bus.write_u8(DATA_ADDR + 1, 0x7F).unwrap();
+
+    cpu.set_register(2, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_l16si(3, 2, 0),  // L16SI a3, a2, 0 → a3 = sign_ext16(0x7FFE)
+        st0(4, 0, 0),
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0x0000_7FFE, "L16SI positive: no sign-fill");
+}
+
+/// L16SI negative: MSB of loaded 16-bit value is 1 → sign-extends to 0xFFFF8000.
+/// Store 0x8000 → a3 = 0xFFFF8000.
+#[test]
+fn test_exec_l16si_negative() {
+    const DATA_ADDR: u64 = 0x2000_4004; // 2-byte aligned
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // 0x8000 little-endian: byte0=0x00, byte1=0x80.
+    bus.write_u8(DATA_ADDR,     0x00).unwrap();
+    bus.write_u8(DATA_ADDR + 1, 0x80).unwrap();
+
+    cpu.set_register(2, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_l16si(3, 2, 0),  // L16SI a3, a2, 0 → sign_ext16(0x8000) = 0xFFFF8000
+        st0(4, 0, 0),
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0xFFFF_8000, "L16SI negative: sign-fill");
+}
+
+/// L32I: loads a full 32-bit word.
+/// Store 0xDEAD_BEEF at a 4-byte-aligned address; expect a3 = 0xDEADBEEF.
+#[test]
+fn test_exec_l32i() {
+    const DATA_ADDR: u64 = 0x2000_4008; // 4-byte aligned
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // 0xDEADBEEF little-endian.
+    bus.write_u8(DATA_ADDR,     0xEF).unwrap();
+    bus.write_u8(DATA_ADDR + 1, 0xBE).unwrap();
+    bus.write_u8(DATA_ADDR + 2, 0xAD).unwrap();
+    bus.write_u8(DATA_ADDR + 3, 0xDE).unwrap();
+
+    cpu.set_register(2, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_l32i(3, 2, 0),  // L32I a3, a2, 0 → a3 = 0xDEADBEEF
+        st0(4, 0, 0),
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0xDEAD_BEEF, "L32I: full 32-bit word load");
+}
+
+/// L32R: PC-relative load from literal pool.
+///
+/// Encoding math:
+///   PC = 0x2000_1000 (instruction start for this test).
+///   Literal at 0x2000_0F00.
+///   base = (PC + 3) & !3 = 0x2000_1000 (already 4-byte aligned).
+///   pc_rel_byte_offset = literal_addr - base = 0x2000_0F00 - 0x2000_1000 = -256.
+///   word_offset = -256 / 4 = -64.
+///   imm16 = (-64i32 as u16) = 0xFFC0.
+///   Verify: sext16(0xFFC0) = -64; *4 = -256; EA = 0x2000_1000 + (-256) = 0x2000_0F00. ✓
+#[test]
+fn test_exec_l32r() {
+    const INSN_PC: u32  = 0x2000_1000; // Instructions at this address.
+    const LIT_ADDR: u64 = 0x2000_0F00; // Literal pool address (before PC).
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(INSN_PC);
+
+    // Store literal value 0x1234_5678 at LIT_ADDR (4-byte aligned).
+    bus.write_u8(LIT_ADDR,     0x78).unwrap();
+    bus.write_u8(LIT_ADDR + 1, 0x56).unwrap();
+    bus.write_u8(LIT_ADDR + 2, 0x34).unwrap();
+    bus.write_u8(LIT_ADDR + 3, 0x12).unwrap();
+
+    // Compute imm16: word_offset = (LIT_ADDR as i64 - INSN_PC as i64) / 4 = -64
+    //   imm16 = (-64i32 as u32) & 0xFFFF = 0xFFC0
+    let imm16: u32 = (-64i32 as u32) & 0xFFFF;
+
+    write_insns(&mut bus, INSN_PC as u64, &[
+        enc_l32r(3, imm16),  // L32R a3, literal → a3 = 0x12345678
+        st0(4, 0, 0),
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0x1234_5678, "L32R: PC-relative load");
 }
