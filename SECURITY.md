@@ -2,18 +2,14 @@
 
 ## Supported Versions
 
-Currently, only the latest release of LabWired Core is supported for security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+Only the latest release on `main` receives security updates.
 
 ## Reporting a Vulnerability
 
-We take the security of LabWired seriously. If you find a vulnerability, please do NOT open a public issue. Instead, please report it to us by following these steps:
+Please do **not** open a public GitHub issue for vulnerabilities.
 
-1. Email your findings to [INSERT SECURITY EMAIL OR DM ON SOCIALS].
-2. Include a detailed description of the vulnerability and steps to reproduce it.
-3. We will acknowledge your report within 48 hours and provide a timeline for a fix.
+Use GitHub's private [Security Advisories](https://github.com/w1ne/labwired-core/security/advisories/new)
+to report privately. Include a description, reproduction steps, and the affected version or commit.
 
-Thank you for helping keep LabWired secure!
+We aim to acknowledge reports within a few days. If you don't hear back, feel free to nudge via
+a public issue (without disclosing the vulnerability itself).

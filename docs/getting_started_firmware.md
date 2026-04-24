@@ -27,10 +27,11 @@ peripherals:
 
 ## 3. Loading Firmware
 
-Run the simulator pointing to your firmware and chip descriptor:
+Run the simulator pointing to your firmware and system manifest (which
+references the chip descriptor):
 
 ```bash
-labwired run --config config/chips/my_chip.yaml -f build/firmware.elf
+labwired --firmware build/firmware.elf --system system.yaml
 ```
 
 The loader will:
@@ -79,6 +80,10 @@ This firmware blinks an LED on PC13, demonstrating:
 - `cortex-m::asm::delay` usage
 
 ### Common Challenges with HALs
-Since hardware flags are often partially mocked, you may encounter hangs where the HAL waits for a bit to set.
-1.  **Use `StubPeripheral`** for unknown registers (see [Peripheral Development Guide](peripheral_development.md)).
-2.  **Enable `--trace`** to see which register accesses are failing or where the code is spinning.
+Since hardware flags are often partially mocked, you may encounter hangs
+where the HAL waits for a bit to set.
+1.  Model the missing registers with a [declarative peripheral](declarative_peripherals.md)
+    or replace the STM32 peripheral with a real Rust implementation in
+    `crates/core/src/peripherals/`.
+2.  Enable `--trace` to see which register accesses are failing or where
+    the code is spinning.

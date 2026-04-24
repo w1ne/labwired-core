@@ -1,54 +1,87 @@
-# Interactive Debugging with LabWired
+# Debugging Firmware
 
-LabWired supports interactive debugging using the **Debug Adapter Protocol (DAP)**. This allows you to use standard IDEs like **Visual Studio Code** to step through firmware, set breakpoints, and inspect the CPU state.
+LabWired exposes two debug interfaces — both talk to the same running
+simulator, so pick whichever your IDE supports:
 
-## 🚀 Quick Start (VS Code)
+- **GDB RSP** on `localhost:3333` — standard GDB, VS Code Cortex-Debug,
+  Ozone, any tool that speaks Remote Serial Protocol.
+- **DAP** (Debug Adapter Protocol) — used by the LabWired VS Code
+  extension directly, no GDB required.
 
-### 1. Prerequisites
-- **LabWired DAP Server**: Build the server using `cargo build -p labwired-dap`.
-- **LabWired VS Code Extension**:
-  - Navigate to `vscode`.
-  - Run `npm install && npm run compile`.
-  - Open the `vscode` folder in a new VS Code window and press `F5` to launch the extension.
+## GDB from the command line
 
-### 2. Configuration
-Create a `.vscode/launch.json` file in your firmware project:
+```bash
+labwired --firmware path/to/fw.elf --system system.yaml --gdb 3333
+```
+
+In another terminal:
+
+```bash
+arm-none-eabi-gdb path/to/fw.elf        # or riscv64-unknown-elf-gdb
+(gdb) target remote localhost:3333
+(gdb) b main
+(gdb) c
+```
+
+Supported RSP packets: `g`/`G` (all regs), `P` (single reg), `m`/`M`
+(memory), `Z0`/`z0` (sw breakpoints), `vCont` (step/continue),
+`qSupported`, `Ctrl-C` (break).
+
+## VS Code + Cortex-Debug (ARM)
+
+Install [Cortex-Debug](https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug),
+then in `.vscode/launch.json`:
 
 ```json
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "type": "labwired",
-            "request": "launch",
-            "name": "Debug Firmware",
-            "program": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/firmware",
-            "stopOnEntry": true
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [{
+    "type": "cortex-debug",
+    "request": "launch",
+    "name": "LabWired",
+    "servertype": "external",
+    "gdbTarget": "localhost:3333",
+    "executable": "${workspaceRoot}/target/thumbv7m-none-eabi/debug/firmware",
+    "cwd": "${workspaceRoot}",
+    "runToEntryPoint": "main",
+    "armToolchainPath": "/usr/bin"
+  }]
 }
 ```
 
-### 3. Debugging Features
-- **Source-Level Debugging**: If your ELF file contains DWARF debug information, LabWired will automatically map instruction addresses back to your C or Rust source code.
-- **Breakpoints**: Set breakpoints directly in your source code.
-- **Stepping**: Use the standard Step Over, Step Into, and Continue commands.
-- **Register Inspection**: View the current values of CPU registers in the **Variables** view:
-  - **ARM**: R0-R15 (including SP, LR, and PC).
-  - **RISC-V**: x0-x31 and PC.
+For RISC-V use the generic C/C++ extension and point it at
+`riscv64-unknown-elf-gdb`.
 
-## 🛠 Advanced Usage
+## VS Code + LabWired extension (DAP)
 
-### Manual DAP Launch
-You can run the DAP server manually for non-VS Code integrations or debugging the server itself:
-```bash
-labwired-dap --log-file debug.log
+The LabWired VS Code extension ships its own `labwired` debug adapter
+and does not require a GDB toolchain. See the extension README for
+installation; the launch config is simply:
+
+```json
+{
+  "type": "labwired",
+  "request": "launch",
+  "name": "Debug Firmware",
+  "program": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/firmware",
+  "system": "${workspaceFolder}/system.yaml"
+}
 ```
-The server communicates via stdin/stdout using the DAP JSON-RPC protocol.
 
-### Symbol Resolution
-LabWired uses the `addr2line` and `gimli` crates to resolve symbols. Ensure your firmware is compiled with debug symbols (e.g., `debug = true` in `Cargo.toml` profiles or `-g` in GCC).
+## What works
 
-## 📝 Troubleshooting
-- **No Source Code appearing**: Ensure the `program` path in `launch.json` points to an ELF with debug symbols.
-- **"Unknown Instruction" during debug**: This usually means the firmware hit a Thumb-2 instruction or FPU operation not yet implemented in the core engine.
+Breakpoints, step over/into/out, register view (R0–R15 ARM / x0–x31
+RISC-V + PC), memory view across flash / RAM / MMIO, and watch
+expressions. Cortex-Debug can render peripheral registers from an SVD
+file alongside the simulator.
+
+## Troubleshooting
+
+- **Connection refused** — the simulator didn't start. Check the task
+  terminal for an error loading the ELF or the system YAML.
+- **GDB binary not found** — install the target toolchain
+  (`arm-none-eabi-gdb` / `riscv64-unknown-elf-gdb`) and make sure it's
+  on `PATH`.
+- **Instruction trace** — add `--trace` when launching `labwired` to
+  log every decoded instruction. Noisy but useful for debugging the
+  decoder itself, not application code.

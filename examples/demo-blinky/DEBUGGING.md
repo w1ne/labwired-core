@@ -72,4 +72,5 @@ code --install-extension .
 
 ## Next Steps
 
-For advanced features (peripheral viewers, memory inspector), see the [VS Code Extension Research](../../../docs/vscode_extension_research.md) document.
+For a full debugging walkthrough (GDB CLI, Cortex-Debug, DAP) see
+[docs/debugging.md](../../docs/debugging.md).

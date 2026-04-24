@@ -40,11 +40,12 @@ We welcome contributions! Please see our community guides:
 Full setup guide: [Getting Started](./docs/getting_started_firmware.md)
 
 ## Documentation
+- [Getting Started](./docs/getting_started_firmware.md)
 - [Architecture](./docs/architecture.md)
-- [ISA Coverage Matrix](./docs/isa_coverage.md)
-- [CI Integration](./docs/ci_integration.md)
-- [GDB Integration](./docs/GDB_INTEGRATION.md)
-- [VS Code Debugging](./docs/vscode_debugging.md)
+- [ISA Coverage](./docs/isa_coverage.md)
+- [Debugging (GDB + VS Code)](./docs/debugging.md)
+- [CI Integration](./docs/ci.md)
+- [Declarative Peripherals](./docs/declarative_peripherals.md)
 
 ## License
 MIT

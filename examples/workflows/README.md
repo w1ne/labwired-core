@@ -201,6 +201,5 @@ strategy:
 ## Support
 
 For more information:
-- [LabWired Documentation](../../docs/)
-- [Test Script Schema](../../docs/test_script_schema.md)
-- [GitHub Issues](https://github.com/w1ne/labwired/issues)
+- [CI integration & test script schema](../../docs/ci.md)
+- [GitHub Issues](https://github.com/w1ne/labwired-core/issues)

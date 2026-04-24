@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SVD Ingestor**: New tool (`crates/svd-ingestor`) to automatically generate `PeripheralDescriptor` YAMLs from CMSIS-SVD files.
     - Supports nested clusters and register arrays (unrolling).
     - Includes rigorous quality gates: E2E tests, Property-Based Fuzzing, and strict documentation.
-- **Strategic Horizon**: Integrated long-term vision into `docs/plan.md`, prioritized by revenue impact (Browser Wedge, Enterprise Safety, Digital Twin).
+- **RV32M (multiply/divide)**: Full RISC-V `M` extension with per-spec semantics for division-by-zero and `INT_MIN / -1` overflow. Firmware compiled with `-march=rv32im_zicsr` now loads and runs.
+- **RISC-V external interrupts**: `Cpu::set_exception_pending` routes peripheral IRQs into `mip` (collapsed into MEIP until a PLIC lands); timer interrupts via `mtime`/`mtimecmp` already worked.
 - **Python Bindings (`crates/python`)**: pyo3 extension module exposing `Machine` and `StopReason` to Python for AI / scripting workflows. Supports `run`, `step`, register / memory access, breakpoints, snapshot / restore. Rewritten against the current `DebugControl` trait; `cargo check --workspace` now passes.
 - **Benchmark harness (`crates/core/benches/fetch_ips.rs`)**: Criterion bench with two targets — `fetch_u16::linear_sweep` (bus read floor) and `step::uart_fixture_1k_steps` (full interpreter IPS on the UART CI fixture). Establishes a regression gate for hot-path changes.
 - **ISA Coverage Matrix (`docs/isa_coverage.md`)**: source-of-truth document for ARM Thumb/Thumb-2 and RISC-V RV32I coverage, including explicit gap list (FPU, DSP, wide multiply, divide, RV32M/A/C, RISC-V interrupts). README claims now derive from this document.
@@ -27,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Modeling**: Enabled peripheral definition via YAML descriptors using `labwired-config`.
     - **Simulation**: Implemented `GenericPeripheral` in `labwired-core` supporting dynamic MMR modeling, bitwise masking, and reset state.
     - **Integration**: Added support for `type: "declarative"` in chip descriptors, allowing zero-code peripheral additions.
-    - **Documentation**: New [Peripheral Modeling Tutorial](file:///home/andrii/Projects/labwired/docs/tutorial_peripheral_modeling.md) for declarative IP cores.
+    - **Documentation**: Declarative peripheral modeling covered in [docs/declarative_peripherals.md](docs/declarative_peripherals.md).
 - **ISA Extensions**:
     - **Misc Thumb-2**: Implemented `CLZ` (Count Leading Zeros), `RBIT` (Bit Reverse), `REV`, `REV16`, `REVSH` instructions.
     - **RISC-V Support**: Initial support for RV32I Base Integer Instruction Set with multi-arch GDB support.
@@ -59,8 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **GDB Remote Serial Protocol**: New `labwired-gdbstub` crate allowing connection from standard GDB clients.
     - **Interactive Debugging (DAP)**: `labwired-dap` server for VS Code integration with variable and register inspection.
 - **Documentation**:
-    - [Peripheral Development Guide](file:///home/andrii/Projects/labwired/docs/peripheral_development.md).
-    - [Getting Started with Real Firmware](file:///home/andrii/Projects/labwired/docs/getting_started_firmware.md) onboarding guide.
+    - [Getting Started with Real Firmware](docs/getting_started_firmware.md) onboarding guide.
 
 ## [0.9.0] - 2026-02-04
 

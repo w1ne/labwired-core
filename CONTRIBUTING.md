@@ -15,9 +15,10 @@ First off, thank you for considering contributing to LabWired! It's people like 
 
 ### Adding New Architectures or Peripherals
 - We love new hardware support!
-- Check out our [Peripheral Development Guide](docs/peripheral_development.md).
+- For zero-code peripherals, see [Declarative Peripherals](docs/declarative_peripherals.md).
+- For custom Rust peripherals, read `crates/core/src/peripherals/*.rs` — every
+  peripheral in-tree is a worked example of the `Peripheral` trait.
 - Ensure you include unit tests for new peripherals.
-- Use the **New Peripheral** PR template.
 
 ## Style Guide
 - Run `cargo fmt` before committing.
