@@ -34,14 +34,14 @@ impl CortexM {
             let frame_ptr = sp.wrapping_sub(32);
 
             // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR
-            let _ = bus.write_u32(frame_ptr as u64, self.regs[0]);
-            let _ = bus.write_u32((frame_ptr + 4) as u64, self.regs[1]);
-            let _ = bus.write_u32((frame_ptr + 8) as u64, self.regs[2]);
-            let _ = bus.write_u32((frame_ptr + 12) as u64, self.regs[3]);
-            let _ = bus.write_u32((frame_ptr + 16) as u64, self.regs[12]);
-            let _ = bus.write_u32((frame_ptr + 20) as u64, self.regs[14]);
-            let _ = bus.write_u32((frame_ptr + 24) as u64, self.regs[15]);
-            let _ = bus.write_u32((frame_ptr + 28) as u64, self.regs[16]);
+            let _ = bus.write_u32(frame_ptr, self.regs[0]);
+            let _ = bus.write_u32(frame_ptr + 4, self.regs[1]);
+            let _ = bus.write_u32(frame_ptr + 8, self.regs[2]);
+            let _ = bus.write_u32(frame_ptr + 12, self.regs[3]);
+            let _ = bus.write_u32(frame_ptr + 16, self.regs[12]);
+            let _ = bus.write_u32(frame_ptr + 20, self.regs[14]);
+            let _ = bus.write_u32(frame_ptr + 24, self.regs[15]);
+            let _ = bus.write_u32(frame_ptr + 28, self.regs[16]);
 
             self.regs[13] = frame_ptr;
 
@@ -51,7 +51,7 @@ impl CortexM {
             // Jump to ISR handler
             let vtor = self.vtor.load(Ordering::SeqCst);
             let vector_addr = vtor + (exception_num * 4);
-            if let Ok(handler) = bus.read_u32(vector_addr as u64) {
+            if let Ok(handler) = bus.read_u32(vector_addr) {
                 self.regs[15] = handler & !1;
                 tracing::info!(
                     "Exception {} trigger, jump to {:#x} (VTOR={:#x})",
@@ -72,7 +72,7 @@ impl CortexM {
         let (opcode, instruction) = if let Some(hit) = self.decode_lookup(fetch_pc) {
             hit
         } else {
-            let opcode = bus.read_u16(fetch_pc as u64)?;
+            let opcode = bus.read_u16(fetch_pc)?;
             let instruction = decode_thumb_16(opcode);
             self.decode_store(fetch_pc, opcode, instruction);
             (opcode, instruction)
@@ -295,7 +295,7 @@ impl CortexM {
             Instruction::LdrImm { rt, rn, imm } => {
                 let base = self.read_reg(rn);
                 let addr = base.wrapping_add(imm as u32);
-                if let Ok(val) = bus.read_u32(addr as u64) {
+                if let Ok(val) = bus.read_u32(addr) {
                     self.write_reg(rt, val);
                 } else {
                     tracing::error!("Bus Read Fault at {:#x}", addr);
@@ -305,13 +305,13 @@ impl CortexM {
                 let base = self.read_reg(rn);
                 let addr = base.wrapping_add(imm as u32);
                 let val = self.read_reg(rt);
-                if bus.write_u32(addr as u64, val).is_err() {
+                if bus.write_u32(addr, val).is_err() {
                     tracing::error!("Bus Write Fault at {:#x}", addr);
                 }
             }
             Instruction::LdrReg { rt, rn, rm } => {
                 let addr = self.read_reg(rn).wrapping_add(self.read_reg(rm));
-                if let Ok(val) = bus.read_u32(addr as u64) {
+                if let Ok(val) = bus.read_u32(addr) {
                     self.write_reg(rt, val);
                 } else {
                     tracing::error!("Bus Read Fault (LDR reg) at {:#x}", addr);
@@ -322,7 +322,7 @@ impl CortexM {
                 // ... (existing)
                 let pc_val = (self.regs[15] & !3) + 4;
                 let addr = pc_val.wrapping_add(imm as u32);
-                if let Ok(val) = bus.read_u32(addr as u64) {
+                if let Ok(val) = bus.read_u32(addr) {
                     self.write_reg(rt, val);
                 } else {
                     tracing::error!("Bus Read Fault (LdrLit) at {:#x}", addr);
@@ -331,7 +331,7 @@ impl CortexM {
 
             Instruction::LdrSp { rt, imm } => {
                 let addr = self.regs[13].wrapping_add(imm as u32);
-                if let Ok(val) = bus.read_u32(addr as u64) {
+                if let Ok(val) = bus.read_u32(addr) {
                     self.write_reg(rt, val);
                 } else {
                     tracing::error!("Bus Read Fault (LdrSp) at {:#x}", addr);
@@ -340,7 +340,7 @@ impl CortexM {
             Instruction::StrSp { rt, imm } => {
                 let addr = self.regs[13].wrapping_add(imm as u32);
                 let val = self.read_reg(rt);
-                if bus.write_u32(addr as u64, val).is_err() {
+                if bus.write_u32(addr, val).is_err() {
                     tracing::error!("Bus Write Fault (StrSp) at {:#x}", addr);
                 }
             }
@@ -362,7 +362,7 @@ impl CortexM {
             Instruction::LdrbImm { rt, rn, imm } => {
                 let base = self.read_reg(rn);
                 let addr = base.wrapping_add(imm as u32);
-                if let Ok(val) = bus.read_u8(addr as u64) {
+                if let Ok(val) = bus.read_u8(addr) {
                     self.write_reg(rt, val as u32);
                 } else {
                     tracing::error!("Bus Read Fault (LDRB) at {:#x}", addr);
@@ -372,14 +372,14 @@ impl CortexM {
                 let base = self.read_reg(rn);
                 let addr = base.wrapping_add(imm as u32);
                 let val = (self.read_reg(rt) & 0xFF) as u8;
-                if bus.write_u8(addr as u64, val).is_err() {
+                if bus.write_u8(addr, val).is_err() {
                     tracing::error!("Bus Write Fault (STRB) at {:#x}", addr);
                 }
             }
             Instruction::LdrhImm { rt, rn, imm } => {
                 let base = self.read_reg(rn);
                 let addr = base.wrapping_add(imm as u32);
-                if let Ok(val) = bus.read_u16(addr as u64) {
+                if let Ok(val) = bus.read_u16(addr) {
                     self.write_reg(rt, val as u32);
                 } else {
                     tracing::error!("Bus Read Fault (LDRH) at {:#x}", addr);
@@ -389,7 +389,7 @@ impl CortexM {
                 let base = self.read_reg(rn);
                 let addr = base.wrapping_add(imm as u32);
                 let val = (self.read_reg(rt) & 0xFFFF) as u16;
-                if bus.write_u16(addr as u64, val).is_err() {
+                if bus.write_u16(addr, val).is_err() {
                     tracing::error!("Bus Write Fault (STRH) at {:#x}", addr);
                 }
             }
@@ -403,7 +403,7 @@ impl CortexM {
                 if m {
                     sp = sp.wrapping_sub(4);
                     let val = self.read_reg(14);
-                    if bus.write_u32(sp as u64, val).is_err() {
+                    if bus.write_u32(sp, val).is_err() {
                         tracing::error!("Stack Overflow (PUSH LR)");
                     }
                 }
@@ -413,7 +413,7 @@ impl CortexM {
                     if (registers & (1 << i)) != 0 {
                         sp = sp.wrapping_sub(4);
                         let val = self.read_reg(i);
-                        if bus.write_u32(sp as u64, val).is_err() {
+                        if bus.write_u32(sp, val).is_err() {
                             tracing::error!("Stack Overflow (PUSH R{})", i);
                         }
                     }
@@ -427,7 +427,7 @@ impl CortexM {
                 // Registers R0 up to R7
                 for i in 0..=7 {
                     if (registers & (1 << i)) != 0 {
-                        if let Ok(val) = bus.read_u32(sp as u64) {
+                        if let Ok(val) = bus.read_u32(sp) {
                             self.write_reg(i, val);
                         }
                         sp = sp.wrapping_add(4);
@@ -452,7 +452,7 @@ impl CortexM {
                 // 2. If PC, read, add 4.
 
                 if p {
-                    if let Ok(val) = bus.read_u32(sp as u64) {
+                    if let Ok(val) = bus.read_u32(sp) {
                         self.branch_to(val, bus)?;
                         pc_increment = 0; // Branch taken
                     }
@@ -465,7 +465,7 @@ impl CortexM {
                 let mut base = self.read_reg(rn);
                 for i in 0..=7 {
                     if (registers & (1 << i)) != 0 {
-                        if let Ok(val) = bus.read_u32(base as u64) {
+                        if let Ok(val) = bus.read_u32(base) {
                             self.write_reg(i, val);
                         }
                         base = base.wrapping_add(4);
@@ -478,7 +478,7 @@ impl CortexM {
                 for i in 0..=7 {
                     if (registers & (1 << i)) != 0 {
                         let val = self.read_reg(i);
-                        if bus.write_u32(base as u64, val).is_err() {
+                        if bus.write_u32(base, val).is_err() {
                             tracing::error!("Bus Write Fault (STM) at {:#x}", base);
                         }
                         base = base.wrapping_add(4);

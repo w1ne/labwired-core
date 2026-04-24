@@ -108,7 +108,7 @@ impl Cpu for RiscV {
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
     ) -> SimResult<()> {
-        let opcode = bus.read_u32(self.pc as u64)?;
+        let opcode = bus.read_u32(self.pc)?;
 
         for observer in observers {
             observer.on_step_start(self.pc, opcode);
@@ -175,43 +175,43 @@ impl Cpu for RiscV {
             }
             Instruction::Lb { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)? as i8;
+                let val = bus.read_u8(addr)? as i8;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lh { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)? as i16;
+                let val = bus.read_u16(addr)? as i16;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u32(addr as u64)?;
+                let val = bus.read_u32(addr)?;
                 self.write_reg(rd, val);
             }
             Instruction::Lbu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)?;
+                let val = bus.read_u8(addr)?;
                 self.write_reg(rd, val as u32);
             }
             Instruction::Lhu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)?;
+                let val = bus.read_u16(addr)?;
                 self.write_reg(rd, val as u32);
             }
             Instruction::Sb { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u8;
-                bus.write_u8(addr as u64, val)?;
+                bus.write_u8(addr, val)?;
             }
             Instruction::Sh { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u16;
-                bus.write_u16(addr as u64, val)?;
+                bus.write_u16(addr, val)?;
             }
             Instruction::Sw { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                bus.write_u32(addr, val)?;
             }
             Instruction::Addi { rd, rs1, imm } => {
                 let res = self.read_reg(rs1).wrapping_add(imm as u32);
@@ -443,7 +443,7 @@ impl Cpu for RiscV {
             }
             Instruction::Unknown(inst) => {
                 tracing::error!("Unknown instruction {:#x} at {:#x}", inst, self.pc);
-                return Err(crate::SimulationError::DecodeError(self.pc as u64));
+                return Err(crate::SimulationError::DecodeError(self.pc));
             }
         }
 

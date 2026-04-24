@@ -10,7 +10,7 @@ use std::collections::HashMap;
 /// A simple stub peripheral that returns fixed values on read.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct StubPeripheral {
-    pub values: HashMap<u64, u32>, // mapping offset to value
+    pub values: HashMap<u32, u32>, // mapping offset to value
     pub default_val: u32,
 }
 
@@ -24,7 +24,7 @@ impl StubPeripheral {
 }
 
 impl crate::Peripheral for StubPeripheral {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         // Simple byte mapping
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
@@ -36,7 +36,7 @@ impl crate::Peripheral for StubPeripheral {
         Ok(((val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
-    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+    fn write(&mut self, _offset: u32, _value: u8) -> SimResult<()> {
         // Ignores writes for now
         Ok(())
     }

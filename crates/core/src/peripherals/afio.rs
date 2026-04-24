@@ -31,7 +31,7 @@ impl Afio {
         ((self.exticr[reg_idx] >> shift) & 0xF) as u8
     }
 
-    fn read_reg(&self, offset: u64) -> u32 {
+    fn read_reg(&self, offset: u32) -> u32 {
         match offset {
             0x00 => self.evcr,
             0x04 => self.mapr,
@@ -44,7 +44,7 @@ impl Afio {
         }
     }
 
-    fn write_reg(&mut self, offset: u64, value: u32) {
+    fn write_reg(&mut self, offset: u32, value: u32) {
         match offset {
             0x00 => self.evcr = value,
             0x04 => self.mapr = value,
@@ -59,14 +59,14 @@ impl Afio {
 }
 
 impl Peripheral for Afio {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 

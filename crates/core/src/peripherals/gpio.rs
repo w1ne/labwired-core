@@ -29,7 +29,7 @@ impl GpioPort {
         }
     }
 
-    fn read_reg(&self, offset: u64) -> u32 {
+    fn read_reg(&self, offset: u32) -> u32 {
         match offset {
             0x00 => self.crl,
             0x04 => self.crh,
@@ -40,7 +40,7 @@ impl GpioPort {
         }
     }
 
-    fn write_reg(&mut self, offset: u64, value: u32) {
+    fn write_reg(&mut self, offset: u32, value: u32) {
         match offset {
             0x00 => self.crl = value,
             0x04 => self.crh = value,
@@ -62,7 +62,7 @@ impl GpioPort {
         }
     }
 
-    fn handle_write_only_buffer(&mut self, reg_offset: u64, byte_offset: u32, value: u8) -> bool {
+    fn handle_write_only_buffer(&mut self, reg_offset: u32, byte_offset: u32, value: u8) -> bool {
         let (buf, mask) = if reg_offset == 0x10 {
             (&mut self.bsrr_buf, &mut self.bsrr_mask)
         } else {
@@ -104,14 +104,14 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 

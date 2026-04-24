@@ -29,7 +29,7 @@ pub fn load_elf(path: &Path) -> Result<ProgramImage> {
         }
     };
 
-    let mut program_image = ProgramImage::new(elf.entry, arch);
+    let mut program_image = ProgramImage::new(elf.entry as u32, arch);
 
     for ph in elf.program_headers {
         if ph.p_type == PT_LOAD {
@@ -52,7 +52,7 @@ pub fn load_elf(path: &Path) -> Result<ProgramImage> {
             }
 
             let segment_data = buffer[offset..offset + size].to_vec();
-            program_image.add_segment(start_addr, segment_data);
+            program_image.add_segment(start_addr as u32, segment_data);
         }
     }
 

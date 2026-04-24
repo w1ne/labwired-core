@@ -52,13 +52,13 @@ mod integration_tests {
     }
 
     impl Peripheral for RecordingPeripheral {
-        fn read(&self, offset: u64) -> SimResult<u8> {
-            self.last_read.store(offset, Ordering::SeqCst);
+        fn read(&self, offset: u32) -> SimResult<u8> {
+            self.last_read.store(offset as u64, Ordering::SeqCst);
             Ok(self.regs.get(offset as usize).copied().unwrap_or(0))
         }
 
-        fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-            self.last_write.store(offset, Ordering::SeqCst);
+        fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
+            self.last_write.store(offset as u64, Ordering::SeqCst);
             self.last_write_value.store(value, Ordering::SeqCst);
             if let Some(byte) = self.regs.get_mut(offset as usize) {
                 *byte = value;
@@ -105,7 +105,7 @@ mod integration_tests {
     fn test_cpu_execute_mov() {
         let mut machine = create_machine();
         // Use RAM address because Flash via Bus is read-only
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         // Write opcode to memory
@@ -123,7 +123,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_branch() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         // Unconditional Branch: B <offset>
@@ -151,7 +151,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_ldr_str() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         // 1. STR R0, [R1, #0]
@@ -187,7 +187,7 @@ mod integration_tests {
     fn test_uart_write() {
         let mut machine = create_machine();
         // Base PC = RAM
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         // Code:
@@ -453,7 +453,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_sp_rel() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         // Setup Stack Pointer
@@ -471,7 +471,7 @@ mod integration_tests {
         machine.step().unwrap();
 
         // Verify Memory at SP+4
-        let val = machine.bus.read_u32((stack_top + 4) as u64).unwrap();
+        let val = machine.bus.read_u32((stack_top + 4)).unwrap();
         assert_eq!(val, 0xCAFEBABE);
 
         // 2. LDR R1, [SP, #4]
@@ -487,7 +487,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_cond_branch() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         // 1. CMP R0, #0 -> Z=1
@@ -534,7 +534,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_shifts() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         // LSLS R0, R1, #4
@@ -560,7 +560,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_cmp_reg() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         machine.cpu.regs[1] = 10;
@@ -580,7 +580,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_mov_reg() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         machine.cpu.regs[13] = 0x2002_0000;
@@ -595,7 +595,7 @@ mod integration_tests {
     #[test]
     fn test_cpu_execute_strb_imm() {
         let mut machine = create_machine();
-        let base_addr: u64 = 0x2000_0000;
+        let base_addr: u32 = 0x2000_0000;
         machine.cpu.regs[15] = base_addr as u32;
 
         machine.cpu.regs[1] = 0xAB;
@@ -670,7 +670,7 @@ mod integration_tests {
         assert_eq!(machine.cpu.regs[14], 0xFFFF_FFF9);
 
         // Check if R0 was stacked correctly at [SP]
-        let stacked_r0 = machine.bus.read_u32(machine.cpu.regs[13] as u64).unwrap();
+        let stacked_r0 = machine.bus.read_u32(machine.cpu.regs[13]).unwrap();
         assert_eq!(stacked_r0, 0x12345678);
     }
 

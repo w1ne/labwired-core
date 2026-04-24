@@ -16,14 +16,14 @@ use std::sync::Mutex;
 
 pub struct PeripheralEntry {
     pub name: String,
-    pub base: u64,
-    pub size: u64,
+    pub base: u32,
+    pub size: u32,
     pub irq: Option<u32>,
     pub dev: Box<dyn Peripheral>,
 }
 
 #[inline]
-fn slice_from(mem: &LinearMemory, addr: u64, len: usize) -> Option<&[u8]> {
+fn slice_from(mem: &LinearMemory, addr: u32, len: usize) -> Option<&[u8]> {
     if addr < mem.base_addr {
         return None;
     }
@@ -32,7 +32,7 @@ fn slice_from(mem: &LinearMemory, addr: u64, len: usize) -> Option<&[u8]> {
 }
 
 #[inline]
-fn slice_from_mut(mem: &mut LinearMemory, addr: u64, len: usize) -> Option<&mut [u8]> {
+fn slice_from_mut(mem: &mut LinearMemory, addr: u32, len: usize) -> Option<&mut [u8]> {
     if addr < mem.base_addr {
         return None;
     }
@@ -215,8 +215,8 @@ impl SystemBus {
         let ram_size = parse_size(&chip.ram.size)?;
 
         let mut bus = Self {
-            flash: LinearMemory::new(flash_size as usize, chip.flash.base),
-            ram: LinearMemory::new(ram_size as usize, chip.ram.base),
+            flash: LinearMemory::new(flash_size as usize, chip.flash.base as u32),
+            ram: LinearMemory::new(ram_size as usize, chip.ram.base as u32),
             peripherals: Vec::new(),
             nvic: None,
         };
@@ -288,8 +288,8 @@ impl SystemBus {
 
             bus.peripherals.push(PeripheralEntry {
                 name: p_cfg.id.clone(),
-                base: p_cfg.base_address,
-                size,
+                base: p_cfg.base_address as u32,
+                size: size as u32,
                 irq,
                 dev,
             });
@@ -314,7 +314,7 @@ impl SystemBus {
         }
     }
 
-    pub fn read_u32(&self, addr: u64) -> SimResult<u32> {
+    pub fn read_u32(&self, addr: u32) -> SimResult<u32> {
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
         let b2 = self.read_u8(addr + 2)? as u32;
@@ -322,7 +322,7 @@ impl SystemBus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
-    pub fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+    pub fn write_u32(&mut self, addr: u32, value: u32) -> SimResult<()> {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
@@ -330,13 +330,13 @@ impl SystemBus {
         Ok(())
     }
 
-    pub fn read_u16(&self, addr: u64) -> SimResult<u16> {
+    pub fn read_u16(&self, addr: u32) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
         Ok(b0 | (b1 << 8))
     }
 
-    pub fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+    pub fn write_u16(&mut self, addr: u32, value: u16) -> SimResult<()> {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
@@ -521,14 +521,14 @@ impl SystemBus {
 
 impl SystemBus {
     #[inline]
-    fn peripheral_at(&self, addr: u64) -> Option<&PeripheralEntry> {
+    fn peripheral_at(&self, addr: u32) -> Option<&PeripheralEntry> {
         self.peripherals
             .iter()
             .find(|p| addr >= p.base && addr < p.base + p.size)
     }
 
     #[inline]
-    fn peripheral_at_mut(&mut self, addr: u64) -> Option<&mut PeripheralEntry> {
+    fn peripheral_at_mut(&mut self, addr: u32) -> Option<&mut PeripheralEntry> {
         self.peripherals
             .iter_mut()
             .find(|p| addr >= p.base && addr < p.base + p.size)
@@ -536,7 +536,7 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
-    fn read_u8(&self, addr: u64) -> SimResult<u8> {
+    fn read_u8(&self, addr: u32) -> SimResult<u8> {
         // Flash first: instruction fetch dominates load/store on most workloads.
         if let Some(val) = self.flash.read_u8(addr) {
             return Ok(val);
@@ -550,7 +550,7 @@ impl crate::Bus for SystemBus {
         Err(SimulationError::MemoryViolation(addr))
     }
 
-    fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+    fn write_u8(&mut self, addr: u32, value: u8) -> SimResult<()> {
         // RAM first for writes: flash writes shouldn't be a hot path.
         if self.ram.write_u8(addr, value) {
             return Ok(());
@@ -568,7 +568,7 @@ impl crate::Bus for SystemBus {
     // byte reads per word when the address lives in flash or RAM. Falls
     // back to byte-wise access for peripherals, which are strictly
     // byte-addressable in this model.
-    fn read_u16(&self, addr: u64) -> SimResult<u16> {
+    fn read_u16(&self, addr: u32) -> SimResult<u16> {
         if let Some(bytes) = slice_from(&self.flash, addr, 2) {
             return Ok(u16::from_le_bytes([bytes[0], bytes[1]]));
         }
@@ -580,7 +580,7 @@ impl crate::Bus for SystemBus {
         Ok(b0 | (b1 << 8))
     }
 
-    fn read_u32(&self, addr: u64) -> SimResult<u32> {
+    fn read_u32(&self, addr: u32) -> SimResult<u32> {
         if let Some(bytes) = slice_from(&self.flash, addr, 4) {
             return Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]));
         }
@@ -594,7 +594,7 @@ impl crate::Bus for SystemBus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
-    fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+    fn write_u16(&mut self, addr: u32, value: u16) -> SimResult<()> {
         if slice_from_mut(&mut self.ram, addr, 2)
             .map(|s| s.copy_from_slice(&value.to_le_bytes()))
             .is_some()
@@ -605,7 +605,7 @@ impl crate::Bus for SystemBus {
         self.write_u8(addr + 1, (value >> 8) as u8)
     }
 
-    fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+    fn write_u32(&mut self, addr: u32, value: u32) -> SimResult<()> {
         if slice_from_mut(&mut self.ram, addr, 4)
             .map(|s| s.copy_from_slice(&value.to_le_bytes()))
             .is_some()

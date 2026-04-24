@@ -28,9 +28,9 @@ pub enum Arch {
 #[derive(Debug, thiserror::Error)]
 pub enum SimulationError {
     #[error("Memory access violation at {0:#x}")]
-    MemoryViolation(u64),
+    MemoryViolation(u32),
     #[error("Instruction decoding error at {0:#x}")]
-    DecodeError(u64),
+    DecodeError(u32),
     #[error("Snapshot schema mismatch: expected v{expected}, got v{got}")]
     SnapshotSchemaMismatch { expected: u32, got: u32 },
 }
@@ -45,7 +45,7 @@ pub enum DmaDirection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DmaRequest {
-    pub addr: u64,
+    pub addr: u32,
     pub val: u8,
     pub direction: DmaDirection,
 }
@@ -90,8 +90,8 @@ pub trait Cpu: Send {
 
 /// Trait representing a memory-mapped peripheral
 pub trait Peripheral: std::fmt::Debug + Send {
-    fn read(&self, offset: u64) -> SimResult<u8>;
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
+    fn read(&self, offset: u32) -> SimResult<u8>;
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()>;
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }
@@ -114,19 +114,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
 
 /// Trait representing the system bus
 pub trait Bus {
-    fn read_u8(&self, addr: u64) -> SimResult<u8>;
-    fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()>;
+    fn read_u8(&self, addr: u32) -> SimResult<u8>;
+    fn write_u8(&mut self, addr: u32, value: u8) -> SimResult<()>;
     fn tick_peripherals(&mut self) -> Vec<u32>; // Returns list of pending exception numbers
     fn execute_dma(&mut self, requests: &[DmaRequest]) -> SimResult<()>;
 
-    fn read_u16(&self, addr: u64) -> SimResult<u16> {
+    fn read_u16(&self, addr: u32) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
         // Little Endian
         Ok(b0 | (b1 << 8))
     }
 
-    fn read_u32(&self, addr: u64) -> SimResult<u32> {
+    fn read_u32(&self, addr: u32) -> SimResult<u32> {
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
         let b2 = self.read_u8(addr + 2)? as u32;
@@ -134,7 +134,7 @@ pub trait Bus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
-    fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+    fn write_u32(&mut self, addr: u32, value: u32) -> SimResult<()> {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
@@ -142,7 +142,7 @@ pub trait Bus {
         Ok(())
     }
 
-    fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+    fn write_u16(&mut self, addr: u32, value: u16) -> SimResult<()> {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
@@ -359,7 +359,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
     fn read_memory(&self, addr: u32, len: usize) -> SimResult<Vec<u8>> {
         let mut data = Vec::with_capacity(len);
         for i in 0..len {
-            let byte = self.bus.read_u8((addr as u64) + (i as u64))?;
+            let byte = self.bus.read_u8((addr) + (i as u32))?;
             data.push(byte);
         }
         Ok(data)
@@ -367,7 +367,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
     fn write_memory(&mut self, addr: u32, data: &[u8]) -> SimResult<()> {
         for (i, byte) in data.iter().enumerate() {
-            self.bus.write_u8((addr as u64) + (i as u64), *byte)?;
+            self.bus.write_u8((addr) + (i as u32), *byte)?;
         }
         Ok(())
     }

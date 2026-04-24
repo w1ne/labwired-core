@@ -217,14 +217,14 @@ impl CortexM {
         // Perform Unstacking
         let frame_ptr = self.regs[13];
 
-        self.regs[0] = bus.read_u32(frame_ptr as u64)?;
-        self.regs[1] = bus.read_u32((frame_ptr + 4) as u64)?;
-        self.regs[2] = bus.read_u32((frame_ptr + 8) as u64)?;
-        self.regs[3] = bus.read_u32((frame_ptr + 12) as u64)?;
-        self.regs[12] = bus.read_u32((frame_ptr + 16) as u64)?;
-        self.regs[14] = bus.read_u32((frame_ptr + 20) as u64)?;
-        self.regs[15] = bus.read_u32((frame_ptr + 24) as u64)?;
-        self.regs[16] = bus.read_u32((frame_ptr + 28) as u64)?;
+        self.regs[0] = bus.read_u32(frame_ptr)?;
+        self.regs[1] = bus.read_u32(frame_ptr + 4)?;
+        self.regs[2] = bus.read_u32(frame_ptr + 8)?;
+        self.regs[3] = bus.read_u32(frame_ptr + 12)?;
+        self.regs[12] = bus.read_u32(frame_ptr + 16)?;
+        self.regs[14] = bus.read_u32(frame_ptr + 20)?;
+        self.regs[15] = bus.read_u32(frame_ptr + 24)?;
+        self.regs[16] = bus.read_u32(frame_ptr + 28)?;
 
         self.regs[13] = frame_ptr + 32;
 
@@ -240,7 +240,7 @@ impl Cpu for CortexM {
         self.pending_exceptions = 0;
         self.decode_flush();
 
-        let vtor = self.vtor.load(Ordering::SeqCst) as u64;
+        let vtor = self.vtor.load(Ordering::SeqCst);
         if let Ok(sp) = bus.read_u32(vtor) {
             self.regs[13] = sp;
         }

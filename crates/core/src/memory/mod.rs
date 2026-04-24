@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Segment {
-    pub start_addr: u64,
+    pub start_addr: u32,
     pub data: Vec<u8>,
 }
 
@@ -16,13 +16,13 @@ use crate::Arch;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgramImage {
-    pub entry_point: u64,
+    pub entry_point: u32,
     pub segments: Vec<Segment>,
     pub arch: Arch,
 }
 
 impl ProgramImage {
-    pub fn new(entry_point: u64, arch: Arch) -> Self {
+    pub fn new(entry_point: u32, arch: Arch) -> Self {
         Self {
             entry_point,
             segments: Vec::new(),
@@ -30,7 +30,7 @@ impl ProgramImage {
         }
     }
 
-    pub fn add_segment(&mut self, start_addr: u64, data: Vec<u8>) {
+    pub fn add_segment(&mut self, start_addr: u32, data: Vec<u8>) {
         self.segments.push(Segment { start_addr, data });
     }
 }
@@ -38,27 +38,27 @@ impl ProgramImage {
 /// A simple flat memory storage
 pub struct LinearMemory {
     pub data: Vec<u8>,
-    pub base_addr: u64,
+    pub base_addr: u32,
 }
 
 impl LinearMemory {
-    pub fn new(size: usize, base_addr: u64) -> Self {
+    pub fn new(size: usize, base_addr: u32) -> Self {
         Self {
             data: vec![0; size],
             base_addr,
         }
     }
 
-    pub fn read_u8(&self, addr: u64) -> Option<u8> {
-        if addr >= self.base_addr && addr < self.base_addr + self.data.len() as u64 {
+    pub fn read_u8(&self, addr: u32) -> Option<u8> {
+        if addr >= self.base_addr && (addr - self.base_addr) < self.data.len() as u32 {
             Some(self.data[(addr - self.base_addr) as usize])
         } else {
             None
         }
     }
 
-    pub fn write_u8(&mut self, addr: u64, value: u8) -> bool {
-        if addr >= self.base_addr && addr < self.base_addr + self.data.len() as u64 {
+    pub fn write_u8(&mut self, addr: u32, value: u8) -> bool {
+        if addr >= self.base_addr && (addr - self.base_addr) < self.data.len() as u32 {
             self.data[(addr - self.base_addr) as usize] = value;
             true
         } else {
@@ -67,9 +67,12 @@ impl LinearMemory {
     }
 
     pub fn load_from_segment(&mut self, segment: &Segment) -> bool {
-        // Simple overlap check
-        let end_addr = segment.start_addr + segment.data.len() as u64;
-        let mem_end = self.base_addr + self.data.len() as u64;
+        // Simple overlap check. Use saturating arithmetic so a segment
+        // whose high address wraps past u32::MAX fails the fit check
+        // instead of silently succeeding.
+        let len = segment.data.len() as u32;
+        let end_addr = segment.start_addr.saturating_add(len);
+        let mem_end = self.base_addr.saturating_add(self.data.len() as u32);
 
         if segment.start_addr >= self.base_addr && end_addr <= mem_end {
             let offset = (segment.start_addr - self.base_addr) as usize;

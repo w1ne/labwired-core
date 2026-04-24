@@ -68,7 +68,7 @@ impl Nvic {
 }
 
 impl Peripheral for Nvic {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         let reg_idx = (offset / 4) as usize;
         let byte_offset = (offset % 4) as usize;
 
@@ -86,7 +86,7 @@ impl Peripheral for Nvic {
         Ok(((val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         let reg_idx = (offset / 4) as usize;
         let byte_offset = (offset % 4) as usize;
         let mask = (value as u32) << (byte_offset * 8);

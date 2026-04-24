@@ -208,8 +208,8 @@ use labwired_core::snapshot::CpuSnapshot;
 #[derive(Debug, Serialize, Deserialize)]
 struct PeripheralSnapshot {
     name: String,
-    base: u64,
-    size: u64,
+    base: u32,
+    size: u32,
     irq: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     state: Option<serde_json::Value>,

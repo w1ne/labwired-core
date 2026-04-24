@@ -25,7 +25,7 @@ impl I2c {
         Self::default()
     }
 
-    fn read_reg(&self, offset: u64) -> u16 {
+    fn read_reg(&self, offset: u32) -> u16 {
         match offset {
             0x00 => self.cr1,
             0x04 => self.cr2,
@@ -40,7 +40,7 @@ impl I2c {
         }
     }
 
-    fn write_reg(&mut self, offset: u64, value: u16) {
+    fn write_reg(&mut self, offset: u32, value: u16) {
         match offset {
             0x00 => {
                 self.cr1 = value;
@@ -75,7 +75,7 @@ impl I2c {
 }
 
 impl crate::Peripheral for I2c {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
@@ -86,7 +86,7 @@ impl crate::Peripheral for I2c {
         }
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         // Registers are 16-bit but aligned to 32-bit boundaries

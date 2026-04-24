@@ -51,7 +51,7 @@ impl Adc {
 }
 
 impl Peripheral for Adc {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         let val = match offset {
             0x00..=0x03 => self.sr,
             0x04..=0x07 => self.cr1,
@@ -64,7 +64,7 @@ impl Peripheral for Adc {
         Ok(((val >> shift) & 0xFF) as u8)
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         let shift = (offset % 4) * 8;
         let mask = 0xFF << shift;
         let val_shifted = (value as u32) << shift;

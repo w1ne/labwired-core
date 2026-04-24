@@ -32,7 +32,7 @@ impl Uart {
 }
 
 impl crate::Peripheral for Uart {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         match offset {
             0x00 => Ok(0xC0), // SR: TXE=1, TC=1 (Ready)
             0x04 => Ok(0x00), // DR: Always return 0 for reads
@@ -40,7 +40,7 @@ impl crate::Peripheral for Uart {
         }
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         // STM32 USART DR is at offset 0x04
         if offset == 0x04 || offset == 0x00 {
             if let Some(sink) = &self.sink {

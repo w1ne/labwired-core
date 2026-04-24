@@ -33,7 +33,7 @@ impl Tmp102 {
         }
     }
 
-    fn read_reg(&self, offset: u64) -> u16 {
+    fn read_reg(&self, offset: u32) -> u16 {
         match offset {
             0x00 => self.temp as u16,
             0x04 => self.config,
@@ -43,7 +43,7 @@ impl Tmp102 {
         }
     }
 
-    fn write_reg(&mut self, offset: u64, value: u16) {
+    fn write_reg(&mut self, offset: u32, value: u16) {
         match offset {
             0x04 => self.config = value,
             0x08 => self.t_low = value as i16,
@@ -60,14 +60,14 @@ impl Default for Tmp102 {
 }
 
 impl Peripheral for Tmp102 {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 

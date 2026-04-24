@@ -179,11 +179,11 @@ impl GenericPeripheral {
 }
 
 impl Peripheral for GenericPeripheral {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u32) -> SimResult<u8> {
         // Find register containing this offset
         for reg in &self.descriptor.registers {
-            let reg_start = reg.address_offset;
-            let reg_end = reg_start + (reg.size as u64 / 8);
+            let reg_start = reg.address_offset as u32;
+            let reg_end = reg_start + (reg.size as u32 / 8);
             if offset >= reg_start && offset < reg_end {
                 if reg.access == labwired_config::Access::WriteOnly {
                     return Ok(0);
@@ -207,11 +207,11 @@ impl Peripheral for GenericPeripheral {
         Ok(0)
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u32, value: u8) -> SimResult<()> {
         // Find register containing this offset
         for reg in &self.descriptor.registers {
-            let reg_start = reg.address_offset;
-            let reg_end = reg_start + (reg.size as u64 / 8);
+            let reg_start = reg.address_offset as u32;
+            let reg_end = reg_start + (reg.size as u32 / 8);
             if offset >= reg_start && offset < reg_end {
                 if reg.access == labwired_config::Access::ReadOnly {
                     return Ok(());

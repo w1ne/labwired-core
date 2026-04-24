@@ -24,7 +24,7 @@ impl CortexM {
         let mut pc_increment: u32 = 2;
         let cycles: u32 = 2;
         let next_pc = (self.regs[15] & !1) + 2;
-    if let Ok(h2) = bus.read_u16(next_pc as u64) {
+    if let Ok(h2) = bus.read_u16(next_pc) {
         // Use the new modular decoder
         let instruction32 = crate::decoder::arm::decode_thumb_32(h1, h2);
 
@@ -288,14 +288,14 @@ impl CortexM {
 
                         if is_tbh {
                             let addr = base.wrapping_add(index << 1);
-                            if let Ok(halfword) = bus.read_u16(addr as u64) {
+                            if let Ok(halfword) = bus.read_u16(addr) {
                                 let offset = (halfword as u32) << 1;
                                 self.regs[15] = self.regs[15].wrapping_add(4).wrapping_add(offset);
                                 pc_increment = 0;
                             }
                         } else {
                             let addr = base.wrapping_add(index);
-                            if let Ok(byte) = bus.read_u8(addr as u64) {
+                            if let Ok(byte) = bus.read_u8(addr) {
                                 let offset = (byte as u32) << 1;
                                 self.regs[15] = self.regs[15].wrapping_add(4).wrapping_add(offset);
                                 pc_increment = 0;
@@ -308,17 +308,17 @@ impl CortexM {
                         let addr = base.wrapping_add(imm8 << 2);
 
                         if is_load {
-                            if let Ok(v1) = bus.read_u32(addr as u64) {
+                            if let Ok(v1) = bus.read_u32(addr) {
                                 self.write_reg(rt, v1);
                             }
-                            if let Ok(v2) = bus.read_u32((addr + 4) as u64) {
+                            if let Ok(v2) = bus.read_u32(addr + 4) {
                                 self.write_reg(rt2, v2);
                             }
                         } else {
                             let v1 = self.read_reg(rt);
                             let v2 = self.read_reg(rt2);
-                            let _ = bus.write_u32(addr as u64, v1);
-                            let _ = bus.write_u32((addr + 4) as u64, v2);
+                            let _ = bus.write_u32(addr, v1);
+                            let _ = bus.write_u32(addr + 4, v2);
                         }
                         pc_increment = 4;
                     } else {
@@ -522,28 +522,28 @@ impl CortexM {
                         match op1 & 0x7 {
                             0 => {
                                 let val = (self.read_reg(rt) & 0xFF) as u8;
-                                let _ = bus.write_u8(addr as u64, val);
+                                let _ = bus.write_u8(addr, val);
                             }
                             1 => {
-                                if let Ok(v) = bus.read_u8(addr as u64) {
+                                if let Ok(v) = bus.read_u8(addr) {
                                     self.write_reg(rt, v as u32);
                                 }
                             }
                             2 => {
                                 let val = (self.read_reg(rt) & 0xFFFF) as u16;
-                                let _ = bus.write_u16(addr as u64, val);
+                                let _ = bus.write_u16(addr, val);
                             }
                             3 => {
-                                if let Ok(v) = bus.read_u16(addr as u64) {
+                                if let Ok(v) = bus.read_u16(addr) {
                                     self.write_reg(rt, v as u32);
                                 }
                             }
                             4 => {
                                 let val = self.read_reg(rt);
-                                let _ = bus.write_u32(addr as u64, val);
+                                let _ = bus.write_u32(addr, val);
                             }
                             5 => {
-                                if let Ok(v) = bus.read_u32(addr as u64) {
+                                if let Ok(v) = bus.read_u32(addr) {
                                     self.write_reg(rt, v);
                                 }
                             }
@@ -566,28 +566,28 @@ impl CortexM {
                         match op1 & 0x7 {
                             0 => {
                                 let val = (self.read_reg(rt) & 0xFF) as u8;
-                                let _ = bus.write_u8(addr as u64, val);
+                                let _ = bus.write_u8(addr, val);
                             }
                             1 => {
-                                if let Ok(v) = bus.read_u8(addr as u64) {
+                                if let Ok(v) = bus.read_u8(addr) {
                                     self.write_reg(rt, v as u32);
                                 }
                             }
                             2 => {
                                 let val = (self.read_reg(rt) & 0xFFFF) as u16;
-                                let _ = bus.write_u16(addr as u64, val);
+                                let _ = bus.write_u16(addr, val);
                             }
                             3 => {
-                                if let Ok(v) = bus.read_u16(addr as u64) {
+                                if let Ok(v) = bus.read_u16(addr) {
                                     self.write_reg(rt, v as u32);
                                 }
                             }
                             4 => {
                                 let val = self.read_reg(rt);
-                                let _ = bus.write_u32(addr as u64, val);
+                                let _ = bus.write_u32(addr, val);
                             }
                             5 => {
-                                if let Ok(v) = bus.read_u32(addr as u64) {
+                                if let Ok(v) = bus.read_u32(addr) {
                                     self.write_reg(rt, v);
                                 }
                             }
