@@ -14,7 +14,7 @@ use super::helpers::{add_with_flags, sub_with_flags, thumb_expand_imm, PSR_C};
 use super::CortexM;
 use crate::decoder::arm::{decode_thumb_16, Instruction};
 use crate::{Bus, SimResult, SimulationObserver};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 impl CortexM {
@@ -23,7 +23,6 @@ impl CortexM {
         bus: &mut dyn Bus,
         observers: &[Arc<dyn SimulationObserver>],
     ) -> SimResult<()> {
-        static STEP_COUNT: AtomicU32 = AtomicU32::new(0);
         // Check for pending exceptions before executing instruction
         if self.pending_exceptions != 0 {
             // Find highest priority exception (Simplified: highest bit)
@@ -76,18 +75,6 @@ impl CortexM {
 
         // Decode
         let instruction = decode_thumb_16(opcode);
-
-        let count = STEP_COUNT.fetch_add(1, Ordering::SeqCst);
-        if count.is_multiple_of(100000) {
-            tracing::info!("CPU STEP {}: PC={:#x}", count, self.regs[15]);
-        }
-
-        tracing::debug!(
-            "PC={:#x}, Opcode={:#04x}, Instr={:?}",
-            self.regs[15],
-            opcode,
-            instruction
-        );
 
         // Execute
         let mut pc_increment = 2; // Default for 16-bit instruction
