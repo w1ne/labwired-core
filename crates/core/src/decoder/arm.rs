@@ -432,6 +432,76 @@ pub enum Instruction {
     Bkpt {
         imm8: u8,
     },
+
+    // --- Thumb-2 additions (ARMv7-M data-processing bits that common
+    //     firmware compilers emit, but which were missing from main).
+
+    /// DMB / DSB / ISB — all modelled as architectural no-ops on our
+    /// single-threaded simulator. Decoding them separately (vs raising
+    /// DecodeError) is important because startup code and HAL inline-asm
+    /// emit them routinely.
+    Barrier,
+
+    /// MRS Rd, <sysm> — read a system register into a GP register.
+    /// Only PRIMASK (sysm = 0x10) is modelled; other sysm values are
+    /// accepted and return 0 from the executor.
+    Mrs {
+        rd: u8,
+        sysm: u8,
+    },
+
+    /// MSR <sysm>, Rn — write a GP register to a system register.
+    Msr {
+        sysm: u8,
+        rn: u8,
+    },
+
+    /// 32×32 → 64-bit signed multiply (ARMv7-M). rd_lo, rd_hi receive
+    /// the low/high halves of the 64-bit result.
+    Smull {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+    },
+    /// 32×32 → 64-bit unsigned multiply.
+    Umull {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+    },
+    /// Signed multiply-accumulate (64-bit).
+    /// result = (rd_hi:rd_lo) + (Rn * Rm), signed.
+    Smlal {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+    },
+    /// Unsigned multiply-accumulate (64-bit).
+    Umlal {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+    },
+
+    /// 32-bit MLA: Rd = Ra + (Rn * Rm).
+    Mla {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        ra: u8,
+    },
+    /// 32-bit MLS: Rd = Ra - (Rn * Rm).
+    Mls {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        ra: u8,
+    },
+
     Unknown(u16),
     Unknown32(u16, u16),
 }
@@ -805,6 +875,83 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
 pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // 32-bit Thumb instruction encoding:
     // First Halfword: 1110 1... or 1111 ...
+
+    // ------------------------------------------------------------------
+    // Thumb-2 special patterns checked *first* because the generic
+    // data-processing matcher below is greedy and would otherwise claim
+    // them and decode nonsense. Order within this block doesn't matter
+    // as each pattern has a unique h1/h2 mask.
+    // ------------------------------------------------------------------
+
+    // DMB / DSB / ISB — ARMv7-M A7.7.31/30/37.
+    //   h1 = 0xF3BF, h2 = 0x8F_<func>_<option>, func ∈ {4,5,6}.
+    if h1 == 0xF3BF && (h2 & 0xFF00) == 0x8F00 {
+        let func = (h2 >> 4) & 0xF;
+        if (4..=6).contains(&func) {
+            return Instruction::Barrier;
+        }
+    }
+
+    // MRS: 1111 0011 1110 1111 <1000 rd4 sysm8>
+    //      h1 = 0xF3EF, h2 & 0xF000 == 0x8000, rd in h2[11:8], sysm in h2[7:0].
+    if h1 == 0xF3EF && (h2 & 0xF000) == 0x8000 {
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let sysm = (h2 & 0xFF) as u8;
+        return Instruction::Mrs { rd, sysm };
+    }
+
+    // MSR: 1111 0011 100 rn4 <1000 mask4 sysm8>
+    //      h1 & 0xFFE0 == 0xF380, h2 & 0xFF00 == 0x8800 (mask=0x88 in upper nibble).
+    if (h1 & 0xFFE0) == 0xF380 && (h2 & 0xFF00) == 0x8800 {
+        let rn = (h1 & 0xF) as u8;
+        let sysm = (h2 & 0xFF) as u8;
+        return Instruction::Msr { sysm, rn };
+    }
+
+    // SMULL / UMULL / SMLAL / UMLAL — ARMv7-M A7.7.156/204/154/202.
+    //   Shared family mask: h1 & 0xFF80 == 0xFB80, h2[7:4] == 0.
+    //   h1[7:4] op selector:
+    //     SMULL: h1 = 1111_1011_1000_rn4  -> h1[7:4] = 0x8
+    //     UMULL: h1 = 1111_1011_1010_rn4  -> h1[7:4] = 0xA
+    //     SMLAL: h1 = 1111_1011_1100_rn4  -> h1[7:4] = 0xC
+    //     UMLAL: h1 = 1111_1011_1110_rn4  -> h1[7:4] = 0xE
+    if (h1 & 0xFF80) == 0xFB80 && (h2 & 0x00F0) == 0x0000 {
+        let op = (h1 >> 4) & 0xF;
+        let rn = (h1 & 0xF) as u8;
+        let rd_lo = ((h2 >> 12) & 0xF) as u8;
+        let rd_hi = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        match op {
+            0x8 => return Instruction::Smull { rd_lo, rd_hi, rn, rm },
+            0xA => return Instruction::Umull { rd_lo, rd_hi, rn, rm },
+            0xC => return Instruction::Smlal { rd_lo, rd_hi, rn, rm },
+            0xE => return Instruction::Umlal { rd_lo, rd_hi, rn, rm },
+            _ => {}
+        }
+    }
+
+    // MLA / MLS — ARMv7-M A7.7.100/101.
+    //   h1 & 0xFFF0 == 0xFB00, h2[7:4] distinguishes:
+    //     MLA: h2[7:4] = 0x0
+    //     MLS: h2[7:4] = 0x1
+    //   Encoding: rd in h2[11:8], rn in h1[3:0], rm in h2[3:0], ra in h2[15:12].
+    if (h1 & 0xFFF0) == 0xFB00 {
+        let ra = ((h2 >> 12) & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rn = (h1 & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        match (h2 >> 4) & 0xF {
+            0x0 if ra != 0xF => return Instruction::Mla { rd, rn, rm, ra },
+            0x0 if ra == 0xF => {
+                // ra == 0xF is MUL (already handled elsewhere in the decoder tree),
+                // fall through to existing logic.
+            }
+            0x1 => return Instruction::Mls { rd, rn, rm, ra },
+            _ => {}
+        }
+    }
+
+    // ------------------------------------------------------------------
 
     // Data processing (modified immediate) / Plain binary immediate
     // 1111 0 <i1> 0 <op> <S> <Rn> 0 <imm3> <Rd> <imm8>

@@ -1831,6 +1831,78 @@ impl CortexM {
                     pc_increment = 0;
                 }
 
+                // --- Thumb-2 ARMv7-M additions ---
+                Instruction::Barrier => {
+                    // DMB / DSB / ISB — architectural no-ops on a single-threaded
+                    // simulator. They're modelled explicitly so they don't raise
+                    // DecodeError; startup code and HAL inline-asm emit them
+                    // routinely.
+                    pc_increment = 4;
+                }
+                Instruction::Mrs { rd, sysm } => {
+                    // Only PRIMASK (sysm = 0x10) is modelled; other sysm values
+                    // read as zero. Matches the behaviour firmware expects when
+                    // calling __get_PRIMASK().
+                    let val: u32 = match sysm {
+                        0x10 => self.primask as u32,
+                        _ => 0,
+                    };
+                    self.write_reg(rd, val);
+                    pc_increment = 4;
+                }
+                Instruction::Msr { sysm, rn } => {
+                    let val = self.read_reg(rn);
+                    if sysm == 0x10 {
+                        self.primask = (val & 1) != 0;
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::Smull { rd_lo, rd_hi, rn, rm } => {
+                    let lhs = self.read_reg(rn) as i32 as i64;
+                    let rhs = self.read_reg(rm) as i32 as i64;
+                    let prod = lhs.wrapping_mul(rhs) as u64;
+                    self.write_reg(rd_lo, prod as u32);
+                    self.write_reg(rd_hi, (prod >> 32) as u32);
+                    pc_increment = 4;
+                }
+                Instruction::Umull { rd_lo, rd_hi, rn, rm } => {
+                    let prod = (self.read_reg(rn) as u64).wrapping_mul(self.read_reg(rm) as u64);
+                    self.write_reg(rd_lo, prod as u32);
+                    self.write_reg(rd_hi, (prod >> 32) as u32);
+                    pc_increment = 4;
+                }
+                Instruction::Smlal { rd_lo, rd_hi, rn, rm } => {
+                    let acc = ((self.read_reg(rd_hi) as u64) << 32) | (self.read_reg(rd_lo) as u64);
+                    let lhs = self.read_reg(rn) as i32 as i64;
+                    let rhs = self.read_reg(rm) as i32 as i64;
+                    let new = (acc as i64).wrapping_add(lhs.wrapping_mul(rhs)) as u64;
+                    self.write_reg(rd_lo, new as u32);
+                    self.write_reg(rd_hi, (new >> 32) as u32);
+                    pc_increment = 4;
+                }
+                Instruction::Umlal { rd_lo, rd_hi, rn, rm } => {
+                    let acc = ((self.read_reg(rd_hi) as u64) << 32) | (self.read_reg(rd_lo) as u64);
+                    let prod = (self.read_reg(rn) as u64).wrapping_mul(self.read_reg(rm) as u64);
+                    let new = acc.wrapping_add(prod);
+                    self.write_reg(rd_lo, new as u32);
+                    self.write_reg(rd_hi, (new >> 32) as u32);
+                    pc_increment = 4;
+                }
+                Instruction::Mla { rd, rn, rm, ra } => {
+                    let res = self
+                        .read_reg(ra)
+                        .wrapping_add(self.read_reg(rn).wrapping_mul(self.read_reg(rm)));
+                    self.write_reg(rd, res);
+                    pc_increment = 4;
+                }
+                Instruction::Mls { rd, rn, rm, ra } => {
+                    let res = self
+                        .read_reg(ra)
+                        .wrapping_sub(self.read_reg(rn).wrapping_mul(self.read_reg(rm)));
+                    self.write_reg(rd, res);
+                    pc_increment = 4;
+                }
+
                 Instruction::Unknown(op) => {
                     tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
                     pc_increment = 2; // Skip 16-bit
@@ -2117,5 +2189,80 @@ mod tests {
         run_test_instr(&mut cpu, &mut bus, 0xE9D23402, true);
         assert_eq!(cpu.r3, 0x11111111);
         assert_eq!(cpu.r4, 0x22222222);
+    }
+
+    #[test]
+    fn test_thumb2_barrier_is_nop() {
+        // DMB SY = F3BF 8F5F. Executor must advance PC by 4 and not fault.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        let pc_before = cpu.pc;
+        run_test_instr(&mut cpu, &mut bus, 0xF3BF_8F5F, true);
+        assert_eq!(cpu.pc, pc_before + 4, "DMB advances PC by 4");
+    }
+
+    #[test]
+    fn test_thumb2_msr_mrs_primask() {
+        // MSR PRIMASK, r0 = F380 8810 ; MRS r1, PRIMASK = F3EF 8110.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.r0 = 1; // request PRIMASK = 1 (interrupts disabled)
+        run_test_instr(&mut cpu, &mut bus, 0xF380_8810, true);
+        assert!(cpu.primask, "MSR PRIMASK set primask from r0");
+
+        run_test_instr(&mut cpu, &mut bus, 0xF3EF_8110, true);
+        assert_eq!(cpu.r1, 1, "MRS reads primask back into r1");
+
+        // Clearing: MSR PRIMASK, r0 with r0 = 0.
+        cpu.r0 = 0;
+        run_test_instr(&mut cpu, &mut bus, 0xF380_8810, true);
+        assert!(!cpu.primask);
+    }
+
+    #[test]
+    fn test_thumb2_wide_multiplies() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+
+        // SMULL rd_lo=r0, rd_hi=r1, rn=r2, rm=r3.
+        // Encoding: 1111 1011 1000 rn4 | rd_lo4 rd_hi4 0000 rm4
+        //         = F B 8 2 | 0 1 0 3 = FB82_0103
+        cpu.r2 = u32::MAX; // -1
+        cpu.r3 = 2;
+        run_test_instr(&mut cpu, &mut bus, 0xFB82_0103, true);
+        // -1 * 2 = -2 → 64-bit 0xFFFF_FFFF_FFFF_FFFE
+        assert_eq!(cpu.r0, 0xFFFF_FFFE, "SMULL low half");
+        assert_eq!(cpu.r1, 0xFFFF_FFFF, "SMULL high half (sign-extended)");
+
+        // UMULL same operands: u32::MAX * 2 = 0x1_FFFF_FFFE.
+        // Encoding: 1111 1011 1010 rn4 | rd_lo4 rd_hi4 0000 rm4 = FBA2_0103
+        cpu.r2 = u32::MAX;
+        cpu.r3 = 2;
+        run_test_instr(&mut cpu, &mut bus, 0xFBA2_0103, true);
+        assert_eq!(cpu.r0, 0xFFFF_FFFE, "UMULL low half");
+        assert_eq!(cpu.r1, 0x0000_0001, "UMULL high half");
+    }
+
+    #[test]
+    fn test_thumb2_mla_mls() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+
+        // MLA r0 = r3 + (r1 * r2)
+        // Encoding: 1111 1011 0000 rn4 | ra4 rd4 0000 rm4
+        //         = F B 0 1 | 3 0 0 2 = FB01_3002
+        cpu.r1 = 2;
+        cpu.r2 = 3;
+        cpu.r3 = 100;
+        run_test_instr(&mut cpu, &mut bus, 0xFB01_3002, true);
+        assert_eq!(cpu.r0, 106, "MLA: 100 + 2*3 = 106");
+
+        // MLS r0 = r3 - (r1 * r2) — op selector 0x1 in h2[7:4].
+        // Encoding: FB01_3012
+        cpu.r1 = 2;
+        cpu.r2 = 3;
+        cpu.r3 = 100;
+        run_test_instr(&mut cpu, &mut bus, 0xFB01_3012, true);
+        assert_eq!(cpu.r0, 94, "MLS: 100 - 2*3 = 94");
     }
 }
