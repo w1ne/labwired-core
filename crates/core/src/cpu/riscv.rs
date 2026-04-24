@@ -556,7 +556,13 @@ impl Cpu for RiscV {
                 };
 
                 if irq != 0xFFFFFFFF {
-                    self.handle_trap(0x80000000 | irq, self.pc);
+                    // Per RISC-V privileged spec §3.1.17, an async interrupt
+                    // must save the address of the *next* instruction into
+                    // mepc so MRET resumes forward. self.pc is still pointing
+                    // at the instruction we just finished executing — passing
+                    // it would cause MRET to re-execute, doubling side effects
+                    // (ADDI counted twice, stores applied twice, etc).
+                    self.handle_trap(0x80000000 | irq, next_pc);
                     // Trap taken, next instruction will be handled in trap handler
                     return Ok(());
                 }
@@ -811,6 +817,63 @@ mod tests {
         assert!(
             (machine.cpu.mstatus & (1 << 3)) != 0,
             "MIE should be re-enabled"
+        );
+    }
+
+    #[test]
+    fn test_riscv_async_irq_mepc_points_to_next_instruction() {
+        // Regression test for the "doubled side effect" bug. Prior to fix,
+        // an async IRQ taken at a non-branch instruction stored self.pc
+        // (= the just-executed PC) into mepc. MRET then re-executed that
+        // instruction, incrementing the ADDI counter twice. Branch
+        // instructions (like JAL-to-self) accidentally masked the bug
+        // because next_pc == self.pc for self-loops.
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+
+        cpu.mtvec = 0x2000;
+        cpu.mie = 1 << 7; // MTIE
+        cpu.mstatus = 1 << 3; // MIE
+        cpu.mtimecmp = 3;
+
+        bus.flash.data = vec![0; 0x3000];
+        // Straight-line code: every step advances PC by 4, next_pc != pc.
+        // 0x0:  ADDI x10, x10, 1     ; x10 = 1
+        // 0x4:  ADDI x10, x10, 1     ; x10 = 2, mtime hits mtimecmp here
+        // 0x8:  ADDI x10, x10, 1     ; would make x10 = 3 but interrupt intervenes
+        bus.write_u32(0x0, 0x00150513).unwrap();
+        bus.write_u32(0x4, 0x00150513).unwrap();
+        bus.write_u32(0x8, 0x00150513).unwrap();
+        // ISR at 0x2000: just MRET so we can observe mepc on return.
+        bus.write_u32(0x2000, 0x30200073).unwrap();
+
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+
+        machine.step().unwrap(); // PC 0x0 -> 0x4, x10 = 1, mtime = 1
+        machine.step().unwrap(); // PC 0x4 -> 0x8, x10 = 2, mtime = 2
+        // This step executes 0x8 (x10 = 3, next_pc = 0xC). Then mtime -> 3
+        // hits mtimecmp and the trap fires. mepc must be saved as 0xC,
+        // not 0x8, so MRET doesn't re-execute the ADDI.
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.read_reg(10), 3, "third ADDI executed once");
+        assert_eq!(machine.cpu.pc, 0x2000, "trapped into ISR");
+        assert_eq!(
+            machine.cpu.mepc, 0xC,
+            "mepc must be the address of the next instruction, not the one we just finished"
+        );
+
+        // Clear MTIP so the next step doesn't re-trap.
+        machine.cpu.mip &= !(1 << 7);
+        machine.cpu.mtimecmp = u64::MAX;
+
+        machine.step().unwrap(); // MRET: jump to mepc
+        assert_eq!(machine.cpu.pc, 0xC, "MRET returned to mepc");
+        // Not re-executing the ADDI at 0x8 is what we really care about:
+        assert_eq!(
+            machine.cpu.read_reg(10),
+            3,
+            "ADDI at 0x8 must not be re-executed (would read 4 if bug present)"
         );
     }
 
