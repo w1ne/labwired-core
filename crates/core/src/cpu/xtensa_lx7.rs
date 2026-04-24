@@ -161,7 +161,10 @@ impl XtensaLx7 {
             // (as_ as u64) << 32 = 0 for any as_, which matches ISA RM §8.
             Sll { ar, as_ } => {
                 let sar = self.sr.read(SAR);
-                let shift = 32u32.wrapping_sub(sar); // shift count; SAR is 0..=31 from SSL/SSR
+                let shift = 32u32.wrapping_sub(sar);
+                // SAR ranges by setter: SSL 1..=32, SSR 0..=31, SSAI 0..=31, SSA8L {0,8,16,24}, SSA8B {32,24,16,8}.
+                // wrapping_sub handles SAR=32 → shift=0 (passthrough); SAR=0 → shift=32 (u64 << 32 yields 0).
+                // u64 cast is required because a u32 << 32 is undefined in Rust.
                 let v = ((self.regs.read_logical(as_) as u64) << shift) as u32;
                 self.regs.write_logical(ar, v);
                 self.pc = self.pc.wrapping_add(len);

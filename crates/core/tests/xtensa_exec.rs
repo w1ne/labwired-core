@@ -8,7 +8,9 @@
 //! - D2: Shift instructions (SLL/SRL/SRA/SRC/SLLI/SRLI/SRAI) and SAR-setup
 //!   (SSL/SSR/SSAI/SSA8L/SSA8B).
 //!
-//! All instruction byte encodings verified via xtensa-esp-elf-objdump.
+//! D1 encodings verified via xtensa-esp-elf-objdump; D2 encodings cross-referenced against
+//! Xtensa LX ISA RM (assembler not available on this host — objdump verification TODO when
+//! toolchain is accessible).
 //! Bus: default SystemBus::new() provides RAM at 0x2000_0000..0x2010_0000.
 
 use labwired_core::bus::SystemBus;
@@ -18,7 +20,7 @@ use labwired_core::{Bus, Cpu, SimulationError};
 
 const TEST_PC: u32 = 0x2000_0000;
 
-// ── Encoding helpers (all HW-oracle verified via xtensa-esp-elf-objdump) ────
+// ── D1 encoding helpers (HW-oracle verified via xtensa-esp-elf-objdump) ────
 
 /// Pack a wide (3-byte) RRR instruction.
 /// Layout: bits[3:0]=op0=0, bits[7:4]=t, bits[11:8]=s, bits[15:12]=r,
@@ -41,7 +43,7 @@ fn movi(at: u32, imm: i32) -> u32 {
     0x2 | (at << 4) | (s << 8) | (0xA << 12) | (imm8 << 16)
 }
 
-// ── D2 encoding helpers ──────────────────────────────────────────────────────
+// ── D2 shift/SAR encoding helpers — ISA RM cross-referenced; objdump verification pending assembler availability ──
 
 /// Encode SLL ar, as_  (op0=0, op1=0x1, op2=0xA, r=ar, s=as_, t=0).
 fn enc_sll(ar: u32, as_: u32) -> u32 { rrr(0xA, 0x1, ar, as_, 0) }
