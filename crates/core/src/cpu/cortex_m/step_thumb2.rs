@@ -198,6 +198,11 @@ impl CortexM {
                 }
                 pc_increment = 4;
             }
+            Instruction::Barrier => {
+                // DMB / DSB / ISB are all architectural no-ops in this
+                // single-threaded simulator; we just consume 4 bytes.
+                pc_increment = 4;
+            }
             _ => {
                 // Fallback to legacy decoding
                 if (h1 & 0xFE00) == 0xE800 {

@@ -40,13 +40,13 @@ to execute them raises `DecodeError`.
 | Sign/zero ext.  | `UXTB`                                                                       |
 | Thumb-2 bitops  | `BFI`, `BFC`, `SBFX`, `UBFX`, `CLZ`, `RBIT`, `REV`, `REV16`, `REVSH`         |
 | Thumb-2 data    | `DataProc32` cluster, `MOVW`, `MOVT`                                         |
+| Barriers        | `DMB`, `DSB`, `ISB` — decoded; no-ops in our single-threaded sim            |
 
 ### Known gaps (ARMv7-M that we do **not** yet implement)
 
 | Category         | Missing                                                                     |
 |------------------|-----------------------------------------------------------------------------|
 | System registers | `MSR`, `MRS`                                                                |
-| Barriers         | `DMB`, `DSB`, `ISB`                                                         |
 | Wide multiply    | `MLA`, `MLS`, `SMULL`, `UMULL`, `SMLAL`, `UMLAL`                            |
 | Integer divide   | `SDIV`, `UDIV`                                                              |
 | Saturating arith | `QADD`, `QSUB`, `SSAT`, `USAT`                                              |

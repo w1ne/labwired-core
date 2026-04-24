@@ -289,6 +289,11 @@ pub enum Instruction {
     Unknown(u16),
     // Intermediate state for 32-bit instruction (First half)
     Prefix32(u16),
+    /// ARMv7-M memory / instruction barrier (DMB / DSB / ISB). These
+    /// are all architectural no-ops in a single-threaded simulator —
+    /// we decode them so firmware that emits them does not trip a
+    /// DecodeError.
+    Barrier,
 }
 
 /// Decodes a 16-bit Thumb instruction
@@ -615,6 +620,18 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
 
 /// Decodes a 32-bit Thumb instruction (requires two 16-bit halfwords)
 pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
+    // Memory/instruction barriers: DSB / DMB / ISB.
+    // Encoding T1 (ARMv7-M ARM A7.7.31 etc.):
+    //   h1 = 0xF3BF, h2 = 0x8F_<func><option> with func ∈ {4,5,6}.
+    // DSB func=4, DMB func=5, ISB func=6. The option field is ignored
+    // by the architecture for single-threaded execution.
+    if h1 == 0xF3BF && (h2 & 0xFF00) == 0x8F00 {
+        let func = ((h2 >> 4) & 0xF) as u8;
+        if (4..=6).contains(&func) {
+            return Instruction::Barrier;
+        }
+    }
+
     // 32-bit Thumb instruction encoding:
     // First Halfword: 1110 1... or 1111 ...
 

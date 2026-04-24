@@ -98,7 +98,8 @@ impl CortexM {
             | Instruction::RevSh { .. }
             | Instruction::DataProc32 { .. }
             | Instruction::Movw { .. }
-            | Instruction::Movt { .. } => {
+            | Instruction::Movt { .. }
+            | Instruction::Barrier => {
                 unreachable!(
                     "32-bit instruction {:?} should be handled via Prefix32",
                     instruction

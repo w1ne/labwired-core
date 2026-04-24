@@ -1089,6 +1089,40 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_thumb2_barrier_instructions_are_nops() {
+        // DMB / DSB / ISB decode cleanly and advance PC by 4 without
+        // touching registers or raising DecodeError. Before this
+        // change firmware that emitted any of them (GCC does on M4+
+        // memory-mapped peripheral writes) would trip Unknown/Unreachable.
+        use crate::decoder::arm::{decode_thumb_32, Instruction};
+
+        assert_eq!(decode_thumb_32(0xF3BF, 0x8F4F), Instruction::Barrier, "DSB");
+        assert_eq!(decode_thumb_32(0xF3BF, 0x8F5F), Instruction::Barrier, "DMB");
+        assert_eq!(decode_thumb_32(0xF3BF, 0x8F6F), Instruction::Barrier, "ISB");
+
+        let mut machine: Machine<CortexM> = create_machine();
+
+        // DMB at PC=0x0: encoded as F3BF 8F5F (little-endian halfwords).
+        let base = 0x2000_0000;
+        machine.bus.write_u16(base, 0xF3BF).unwrap();
+        machine.bus.write_u16(base + 2, 0x8F5F).unwrap();
+        machine.cpu.regs[0] = 0xDEADBEEF;
+        machine.cpu.set_pc(base as u32);
+
+        machine.step().unwrap();
+
+        assert_eq!(
+            machine.cpu.get_pc(),
+            base as u32 + 4,
+            "DMB should advance PC by 4"
+        );
+        assert_eq!(
+            machine.cpu.regs[0], 0xDEADBEEF,
+            "Barriers must not perturb registers"
+        );
+    }
+
+    #[test]
     fn test_misc_thumb2_instructions() {
         let mut machine: Machine<CortexM> = create_machine();
 
