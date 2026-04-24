@@ -630,7 +630,7 @@ fn run_interactive_arm(
     info!("Starting Simulation (ARM Cortex-M)...");
     info!(
         "Initial PC: {:#x}, SP: {:#x}",
-        machine.cpu.pc, machine.cpu.sp
+        machine.cpu.regs[15], machine.cpu.regs[13]
     );
 
     // Check if GDB server is requested

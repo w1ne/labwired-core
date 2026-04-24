@@ -91,7 +91,7 @@ mod integration_tests {
         let mut machine = create_machine();
         // Use RAM address because Flash via Bus is read-only
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
         // Write opcode to memory
         // 0x202A -> Little Endian: 2A 20
@@ -101,15 +101,15 @@ mod integration_tests {
         // Step
         machine.step().unwrap();
 
-        assert_eq!(machine.cpu.r0, 42);
-        assert_eq!(machine.cpu.pc, (base_addr + 2) as u32);
+        assert_eq!(machine.cpu.regs[0], 42);
+        assert_eq!(machine.cpu.regs[15], (base_addr + 2) as u32);
     }
 
     #[test]
     fn test_cpu_execute_branch() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
         // Unconditional Branch: B <offset>
         // We want to skip over a NOP.
@@ -131,19 +131,19 @@ mod integration_tests {
         // Target = PC + 4 + (2 << 1) = PC + 8
         // So valid target is 0x2000_0008.
 
-        assert_eq!(machine.cpu.pc, (base_addr + 8) as u32);
+        assert_eq!(machine.cpu.regs[15], (base_addr + 8) as u32);
     }
     #[test]
     fn test_cpu_execute_ldr_str() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
         // 1. STR R0, [R1, #0]
         // R0 = 0xDEADBEEF
         // R1 = 0x2000_0010 (Target RAM)
-        machine.cpu.r0 = 0xDEADBEEF;
-        machine.cpu.r1 = 0x2000_0010;
+        machine.cpu.regs[0] = 0xDEADBEEF;
+        machine.cpu.regs[1] = 0x2000_0010;
 
         // Opcode STR R0, [R1, #0] -> 0x6008
         // 0110 0 00000 001 000
@@ -165,7 +165,7 @@ mod integration_tests {
 
         machine.step().unwrap();
 
-        assert_eq!(machine.cpu.r2, 0xDEADBEEF);
+        assert_eq!(machine.cpu.regs[2], 0xDEADBEEF);
     }
 
     #[test]
@@ -173,15 +173,15 @@ mod integration_tests {
         let mut machine = create_machine();
         // Base PC = RAM
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
         // Code:
         // MOV R0, #72 ('H')
         // STR R0, [R1] (where R1 points to UART)
 
         // Manual setup for simplicity
-        machine.cpu.r0 = 72; // 'H'
-        machine.cpu.r1 = 0x4000_C000;
+        machine.cpu.regs[0] = 72; // 'H'
+        machine.cpu.regs[1] = 0x4000_C000;
 
         // STR R0, [R1, #0] -> 0x6008
         // 0110 0 00000 001 000
@@ -439,15 +439,15 @@ mod integration_tests {
     fn test_cpu_execute_sp_rel() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
         // Setup Stack Pointer
         let stack_top = 0x2000_1000;
-        machine.cpu.sp = stack_top;
+        machine.cpu.regs[13] = stack_top;
 
         // 1. STR R0, [SP, #4]
         // R0 = 0xCAFEBABE
-        machine.cpu.r0 = 0xCAFEBABE;
+        machine.cpu.regs[0] = 0xCAFEBABE;
 
         // Opcode: 1001 0 000 00000001 (STR R0, [SP, 4]) -> 0x9001
         machine.bus.write_u8(base_addr, 0x01).unwrap();
@@ -466,18 +466,18 @@ mod integration_tests {
 
         machine.step().unwrap();
 
-        assert_eq!(machine.cpu.r1, 0xCAFEBABE);
+        assert_eq!(machine.cpu.regs[1], 0xCAFEBABE);
     }
 
     #[test]
     fn test_cpu_execute_cond_branch() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
         // 1. CMP R0, #0 -> Z=1
         // MOV R0, #0
-        machine.cpu.r0 = 0;
+        machine.cpu.regs[0] = 0;
         // CMP R0, #0 -> 0x2800 (0010 1000 0000 0000)
 
         // Manual store of CMP R0, #0
@@ -487,7 +487,7 @@ mod integration_tests {
         machine.step().unwrap();
 
         // Check Z flag in XPSR (Bit 30)
-        assert_eq!(machine.cpu.xpsr & (1 << 30), 1 << 30);
+        assert_eq!(machine.cpu.regs[16] & (1 << 30), 1 << 30);
 
         // 2. BEQ +4 (If Z=1, Branch)
         // Encoding: 0xD002 (Cond=0 EQ, Offset=4)
@@ -513,50 +513,50 @@ mod integration_tests {
         // Offset = 4.
         // Target = 0x2000_000A.
 
-        assert_eq!(machine.cpu.pc, 0x2000_000A);
+        assert_eq!(machine.cpu.regs[15], 0x2000_000A);
     }
 
     #[test]
     fn test_cpu_execute_shifts() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
         // LSLS R0, R1, #4
-        machine.cpu.r1 = 0x0000_0001;
+        machine.cpu.regs[1] = 0x0000_0001;
         // 0x0110 -> (000 00 00100 001 000) ?
         // 00000 00100 001 000 -> 0x0108
         machine.bus.write_u8(base_addr, 0x08).unwrap();
         machine.bus.write_u8(base_addr + 1, 0x01).unwrap();
 
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, 0x10);
+        assert_eq!(machine.cpu.regs[0], 0x10);
 
         // LSRS R2, R3, #2
-        machine.cpu.r3 = 0x10;
+        machine.cpu.regs[3] = 0x10;
         // 00001 00010 011 010 -> 0x089A
         machine.bus.write_u8(base_addr + 2, 0x9A).unwrap();
         machine.bus.write_u8(base_addr + 3, 0x08).unwrap();
 
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r2, 0x04);
+        assert_eq!(machine.cpu.regs[2], 0x04);
     }
 
     #[test]
     fn test_cpu_execute_cmp_reg() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
-        machine.cpu.r1 = 10;
-        machine.cpu.r0 = 5;
+        machine.cpu.regs[1] = 10;
+        machine.cpu.regs[0] = 5;
         // CMP R1, R0 -> 0x4281
         machine.bus.write_u8(base_addr, 0x81).unwrap();
         machine.bus.write_u8(base_addr + 1, 0x42).unwrap();
 
         machine.step().unwrap();
         // 10 - 5 = 5. N=0, Z=0, C=1 (no borrow), V=0
-        let xpsr = machine.cpu.xpsr >> 28;
+        let xpsr = machine.cpu.regs[16] >> 28;
         assert_eq!(xpsr & 0b1000, 0); // N
         assert_eq!(xpsr & 0b0100, 0); // Z
         assert_eq!(xpsr & 0b0010, 0b0010); // C
@@ -566,25 +566,25 @@ mod integration_tests {
     fn test_cpu_execute_mov_reg() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
-        machine.cpu.sp = 0x2002_0000;
+        machine.cpu.regs[13] = 0x2002_0000;
         // MOV R7, SP -> 0x466F
         machine.bus.write_u8(base_addr, 0x6F).unwrap();
         machine.bus.write_u8(base_addr + 1, 0x46).unwrap();
 
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r7, 0x2002_0000);
+        assert_eq!(machine.cpu.regs[7], 0x2002_0000);
     }
 
     #[test]
     fn test_cpu_execute_strb_imm() {
         let mut machine = create_machine();
         let base_addr: u64 = 0x2000_0000;
-        machine.cpu.pc = base_addr as u32;
+        machine.cpu.regs[15] = base_addr as u32;
 
-        machine.cpu.r1 = 0xAB;
-        machine.cpu.r0 = 0x2000_1000;
+        machine.cpu.regs[1] = 0xAB;
+        machine.cpu.regs[0] = 0x2000_1000;
         // STRB R1, [R0, #0] -> 0x7001
         machine.bus.write_u8(base_addr, 0x01).unwrap();
         machine.bus.write_u8(base_addr + 1, 0x70).unwrap();
@@ -634,9 +634,9 @@ mod integration_tests {
         machine.bus.write_u32(0x3C, isr_addr | 1).unwrap(); // Thumb address
 
         // 2. Setup initial state
-        machine.cpu.pc = 0x2000_0000;
-        machine.cpu.sp = 0x2002_0000;
-        machine.cpu.r0 = 0x12345678;
+        machine.cpu.regs[15] = 0x2000_0000;
+        machine.cpu.regs[13] = 0x2002_0000;
+        machine.cpu.regs[0] = 0x12345678;
 
         // 3. Trigger SysTick (Reload=1, Enable=3 [ENABLE|TICKINT])
         machine.bus.write_u32(0xE000_E014, 1).unwrap();
@@ -650,12 +650,12 @@ mod integration_tests {
         // It should perform stacking and jump to 0x1000.
         let _ = machine.step();
 
-        assert_eq!(machine.cpu.pc, 0x1000);
-        assert_eq!(machine.cpu.sp, 0x2002_0000 - 32);
-        assert_eq!(machine.cpu.lr, 0xFFFF_FFF9);
+        assert_eq!(machine.cpu.regs[15], 0x1000);
+        assert_eq!(machine.cpu.regs[13], 0x2002_0000 - 32);
+        assert_eq!(machine.cpu.regs[14], 0xFFFF_FFF9);
 
         // Check if R0 was stacked correctly at [SP]
-        let stacked_r0 = machine.bus.read_u32(machine.cpu.sp as u64).unwrap();
+        let stacked_r0 = machine.bus.read_u32(machine.cpu.regs[13] as u64).unwrap();
         assert_eq!(stacked_r0, 0x12345678);
     }
 
@@ -668,10 +668,10 @@ mod integration_tests {
         machine.bus.write_u32(0x3C, isr_addr | 1).unwrap();
 
         // 2. Setup initial state
-        machine.cpu.pc = 0x2000_0000;
-        machine.cpu.sp = 0x2002_0000;
-        machine.cpu.r0 = 10;
-        machine.cpu.r7 = 20;
+        machine.cpu.regs[15] = 0x2000_0000;
+        machine.cpu.regs[13] = 0x2002_0000;
+        machine.cpu.regs[0] = 10;
+        machine.cpu.regs[7] = 20;
 
         // 3. Trigger SysTick
         machine.bus.write_u32(0xE000_E014, 100).unwrap();
@@ -682,8 +682,8 @@ mod integration_tests {
 
         // Step 2: Handle Exception (Entry)
         machine.step().unwrap();
-        assert_eq!(machine.cpu.pc, 0x1000);
-        assert_eq!(machine.cpu.lr, 0xFFFF_FFF9);
+        assert_eq!(machine.cpu.regs[15], 0x1000);
+        assert_eq!(machine.cpu.regs[14], 0xFFFF_FFF9);
 
         // 4. In ISR: Modify R0, then BX LR
         // MOV R0, #42 -> 0x202A
@@ -695,51 +695,51 @@ mod integration_tests {
 
         // Step 3: Execute MOV R0, #42 in ISR
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, 42);
+        assert_eq!(machine.cpu.regs[0], 42);
 
         // Step 4: Execute BX LR (Exception Return)
         machine.step().unwrap();
 
         // 5. Verify restored state
-        assert_eq!(machine.cpu.pc, 0x2000_0002); // Back at original PC + 2
-        assert_eq!(machine.cpu.r0, 10); // Original R0 restored!
-        assert_eq!(machine.cpu.sp, 0x2002_0000); // SP restored
-        assert_eq!(machine.cpu.r7, 20); // R7 was untouched
+        assert_eq!(machine.cpu.regs[15], 0x2000_0002); // Back at original PC + 2
+        assert_eq!(machine.cpu.regs[0], 10); // Original R0 restored!
+        assert_eq!(machine.cpu.regs[13], 0x2002_0000); // SP restored
+        assert_eq!(machine.cpu.regs[7], 20); // R7 was untouched
     }
 
     #[test]
     fn test_iteration_7_instructions() {
         let mut machine: Machine<CortexM> = create_machine();
-        machine.cpu.sp = 0x2000_1000;
+        machine.cpu.regs[13] = 0x2000_1000;
 
         // 1. ADD SP, #12 (3 * 4) -> 0xB003
         machine.bus.write_u16(0, 0xB003).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.sp, 0x2000_100C);
+        assert_eq!(machine.cpu.regs[13], 0x2000_100C);
 
         // 2. SUB SP, #16 (4 * 4) -> 0xB084
-        machine.cpu.pc = 2;
+        machine.cpu.regs[15] = 2;
         machine.bus.write_u16(2, 0xB084).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.sp, 0x2000_0FFC);
+        assert_eq!(machine.cpu.regs[13], 0x2000_0FFC);
 
         // 3. ADD R0, R8 (High Reg) -> 0x4440 (Rd=R0, Rm=R8)
-        machine.cpu.r0 = 10;
-        machine.cpu.r8 = 20;
-        machine.cpu.pc = 4;
+        machine.cpu.regs[0] = 10;
+        machine.cpu.regs[8] = 20;
+        machine.cpu.regs[15] = 4;
         machine.bus.write_u16(4, 0x4440).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, 30);
+        assert_eq!(machine.cpu.regs[0], 30);
 
         // 4. CPSID i -> 0xB672
         machine.cpu.primask = false;
-        machine.cpu.pc = 6;
+        machine.cpu.regs[15] = 6;
         machine.bus.write_u16(6, 0xB672).unwrap();
         machine.step().unwrap();
         assert!(machine.cpu.primask);
 
         // 5. CPSIE i -> 0xB662
-        machine.cpu.pc = 8;
+        machine.cpu.regs[15] = 8;
         machine.bus.write_u16(8, 0xB662).unwrap();
         machine.step().unwrap();
         assert!(!machine.cpu.primask);
@@ -750,47 +750,47 @@ mod integration_tests {
         let mut machine: Machine<CortexM> = create_machine();
 
         // 1. STRH R1, [R0, #4] -> 0x8081 (Rn=R0, Rt=R1, imm5=2 so imm=4)
-        machine.cpu.r0 = 0x2000_1000;
-        machine.cpu.r1 = 0xABCD;
+        machine.cpu.regs[0] = 0x2000_1000;
+        machine.cpu.regs[1] = 0xABCD;
         machine.bus.write_u16(0, 0x8081).unwrap();
         machine.step().unwrap();
         assert_eq!(machine.bus.read_u16(0x2000_1004).unwrap(), 0xABCD);
 
         // 2. LDRH R2, [R0, #4] -> 0x8882 (Rn=R0, Rt=R2, imm5=2 so imm=4)
-        machine.cpu.pc = 2;
+        machine.cpu.regs[15] = 2;
         machine.bus.write_u16(2, 0x8882).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r2, 0xABCD);
+        assert_eq!(machine.cpu.regs[2], 0xABCD);
 
         // 3. STM R0!, {R1, R2} -> 0xC006 (Rn=R0, Regs=0x06 (R1,R2))
-        machine.cpu.r0 = 0x2000_2000;
-        machine.cpu.r1 = 0x11223344;
-        machine.cpu.r2 = 0x55667788;
-        machine.cpu.pc = 4;
+        machine.cpu.regs[0] = 0x2000_2000;
+        machine.cpu.regs[1] = 0x11223344;
+        machine.cpu.regs[2] = 0x55667788;
+        machine.cpu.regs[15] = 4;
         machine.bus.write_u16(4, 0xC006).unwrap();
         machine.step().unwrap();
         assert_eq!(machine.bus.read_u32(0x2000_2000).unwrap(), 0x11223344);
         assert_eq!(machine.bus.read_u32(0x2000_2004).unwrap(), 0x55667788);
-        assert_eq!(machine.cpu.r0, 0x2000_2008); // Rn updated
+        assert_eq!(machine.cpu.regs[0], 0x2000_2008); // Rn updated
 
         // 4. LDM R0!, {R3, R4} -> 0xC818 (Rn=R0, Regs=0x18 (R3,R4))
         // Base is 0x2000_2008 now. Let's write some data there.
         machine.bus.write_u32(0x2000_2008, 0xAAAAAAAA).unwrap();
         machine.bus.write_u32(0x2000_200C, 0xBBBBBBBB).unwrap();
-        machine.cpu.pc = 6;
+        machine.cpu.regs[15] = 6;
         machine.bus.write_u16(6, 0xC818).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r3, 0xAAAAAAAA);
-        assert_eq!(machine.cpu.r4, 0xBBBBBBBB);
-        assert_eq!(machine.cpu.r0, 0x2000_2010); // Rn updated
+        assert_eq!(machine.cpu.regs[3], 0xAAAAAAAA);
+        assert_eq!(machine.cpu.regs[4], 0xBBBBBBBB);
+        assert_eq!(machine.cpu.regs[0], 0x2000_2010); // Rn updated
 
         // 5. MULS R0, R1 -> 0x4348 (Rd=R0, Rn=R1)
-        machine.cpu.r0 = 10;
-        machine.cpu.r1 = 20;
-        machine.cpu.pc = 8;
+        machine.cpu.regs[0] = 10;
+        machine.cpu.regs[1] = 20;
+        machine.cpu.regs[15] = 8;
         machine.bus.write_u16(8, 0x4348).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, 200);
+        assert_eq!(machine.cpu.regs[0], 200);
     }
 
     #[test]
@@ -817,13 +817,13 @@ mod integration_tests {
         // Manually pend it in NVIC ISPR
         machine.bus.write_u8(0xE000E100 + 0x100, 1).unwrap(); // ISPR0 bit 0
         machine.step().unwrap();
-        assert_ne!(machine.cpu.pc, isr_addr); // Should NOT have jumped (disabled)
+        assert_ne!(machine.cpu.regs[15], isr_addr); // Should NOT have jumped (disabled)
 
         // 2. Enable in NVIC ISER
         machine.bus.write_u8(0xE000E100, 1).unwrap(); // ISER0 bit 0
         machine.step().unwrap(); // Step instruction, collect interrupt
         machine.step().unwrap(); // Handle interrupt
-        assert_eq!(machine.cpu.pc, isr_addr); // Should JUMP now
+        assert_eq!(machine.cpu.regs[15], isr_addr); // Should JUMP now
     }
 
     #[test]
@@ -841,20 +841,20 @@ mod integration_tests {
         machine.bus.write_u32(0x2000_0000, 0x2002_0000).unwrap(); // SP
         machine.bus.write_u32(0x2000_0004, 0x1000).unwrap(); // PC
         machine.reset().unwrap();
-        assert_eq!(machine.cpu.pc, 0x1000);
-        assert_eq!(machine.cpu.sp, 0x2002_0000);
+        assert_eq!(machine.cpu.regs[15], 0x1000);
+        assert_eq!(machine.cpu.regs[13], 0x2002_0000);
 
         // Verify exception uses new VTOR
         machine.cpu.set_exception_pending(15);
         machine.step().unwrap();
-        assert_eq!(machine.cpu.pc, isr_addr);
+        assert_eq!(machine.cpu.regs[15], isr_addr);
     }
 
     #[test]
     fn test_mov_w_instruction() {
         let mut machine: Machine<CortexM> = create_machine();
-        machine.cpu.pc = 0;
-        machine.cpu.sp = 0x2000_1000;
+        machine.cpu.regs[15] = 0;
+        machine.cpu.regs[13] = 0x2000_1000;
 
         // Test MOV.W R0, #0x55
         // Encoding: 0xF04F 0x0055
@@ -863,26 +863,26 @@ mod integration_tests {
         machine.bus.write_u16(0, 0xF04F).unwrap();
         machine.bus.write_u16(2, 0x0055).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, 0x55, "MOV.W R0, #0x55 failed");
-        assert_eq!(machine.cpu.pc, 4, "PC should advance by 4");
+        assert_eq!(machine.cpu.regs[0], 0x55, "MOV.W R0, #0x55 failed");
+        assert_eq!(machine.cpu.regs[15], 4, "PC should advance by 4");
 
         // Test MOV.W R1, #0x42
         // Encoding: 0xF04F 0x0142
         // imm12 = 0x042 (i=0, imm3=0, imm8=0x42)
         // Pattern 0, no rotation -> result = 0x42
-        machine.cpu.pc = 4;
+        machine.cpu.regs[15] = 4;
         machine.bus.write_u16(4, 0xF04F).unwrap();
         machine.bus.write_u16(6, 0x0142).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r1, 0x42, "MOV.W R1, #0x42 failed");
-        assert_eq!(machine.cpu.pc, 8, "PC should advance by 4");
+        assert_eq!(machine.cpu.regs[1], 0x42, "MOV.W R1, #0x42 failed");
+        assert_eq!(machine.cpu.regs[15], 8, "PC should advance by 4");
     }
 
     #[test]
     fn test_mvn_w_instruction() {
         let mut machine: Machine<CortexM> = create_machine();
-        machine.cpu.pc = 0;
-        machine.cpu.sp = 0x2000_1000;
+        machine.cpu.regs[15] = 0;
+        machine.cpu.regs[13] = 0x2000_1000;
 
         // Test MVN.W R0, #0x55
         // Encoding: 0xF06F 0x0055
@@ -890,45 +890,45 @@ mod integration_tests {
         machine.bus.write_u16(0, 0xF06F).unwrap();
         machine.bus.write_u16(2, 0x0055).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, !0x55, "MVN.W R0, #0x55 failed");
-        assert_eq!(machine.cpu.pc, 4, "PC should advance by 4");
+        assert_eq!(machine.cpu.regs[0], !0x55, "MVN.W R0, #0x55 failed");
+        assert_eq!(machine.cpu.regs[15], 4, "PC should advance by 4");
     }
 
     #[test]
     fn test_division_instructions() {
         let mut machine: Machine<CortexM> = create_machine();
-        machine.cpu.pc = 0;
-        machine.cpu.sp = 0x2000_1000;
+        machine.cpu.regs[15] = 0;
+        machine.cpu.regs[13] = 0x2000_1000;
 
         // Test UDIV: R0 = R1 / R2 (100 / 5 = 20)
         // Encoding: 0xFBB1 0xF0F2 (UDIV R0, R1, R2)
-        machine.cpu.r1 = 100;
-        machine.cpu.r2 = 5;
+        machine.cpu.regs[1] = 100;
+        machine.cpu.regs[2] = 5;
         machine.bus.write_u16(0, 0xFBB1).unwrap();
         machine.bus.write_u16(2, 0xF0F2).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, 20, "UDIV 100/5 failed");
-        assert_eq!(machine.cpu.pc, 4);
+        assert_eq!(machine.cpu.regs[0], 20, "UDIV 100/5 failed");
+        assert_eq!(machine.cpu.regs[15], 4);
 
         // Test SDIV: R3 = R4 / R5 (-100 / 5 = -20)
         // Encoding: 0xFB94 0xF3F5 (SDIV R3, R4, R5)
-        machine.cpu.pc = 4;
-        machine.cpu.r4 = (-100i32) as u32;
-        machine.cpu.r5 = 5;
+        machine.cpu.regs[15] = 4;
+        machine.cpu.regs[4] = (-100i32) as u32;
+        machine.cpu.regs[5] = 5;
         machine.bus.write_u16(4, 0xFB94).unwrap();
         machine.bus.write_u16(6, 0xF3F5).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r3 as i32, -20, "SDIV -100/5 failed");
-        assert_eq!(machine.cpu.pc, 8);
+        assert_eq!(machine.cpu.regs[3] as i32, -20, "SDIV -100/5 failed");
+        assert_eq!(machine.cpu.regs[15], 8);
 
         // Test division by zero (should return 0)
-        machine.cpu.pc = 8;
-        machine.cpu.r6 = 100;
-        machine.cpu.r7 = 0;
+        machine.cpu.regs[15] = 8;
+        machine.cpu.regs[6] = 100;
+        machine.cpu.regs[7] = 0;
         machine.bus.write_u16(8, 0xFBB6).unwrap();
         machine.bus.write_u16(10, 0xF8F7).unwrap(); // UDIV R8, R6, R7
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r8, 0, "Division by zero should return 0");
+        assert_eq!(machine.cpu.regs[8], 0, "Division by zero should return 0");
     }
 
     #[test]
@@ -981,7 +981,7 @@ mod integration_tests {
         // Setup: R0 = 10 (16-bit MOV)
         // Code: 200A (MOV R0, #10)
         machine.bus.write_u16(0x0, 0x200A).unwrap();
-        machine.cpu.pc = 0x0;
+        machine.cpu.regs[15] = 0x0;
 
         machine.step().unwrap();
         assert_eq!(metrics.get_instructions(), 1);
@@ -991,7 +991,7 @@ mod integration_tests {
         // Code: F000 F800 (BL +0)
         machine.bus.write_u16(0x2, 0xF000).unwrap();
         machine.bus.write_u16(0x4, 0xF800).unwrap();
-        machine.cpu.pc = 0x2;
+        machine.cpu.regs[15] = 0x2;
 
         machine.step().unwrap();
         assert_eq!(metrics.get_instructions(), 2);
@@ -1011,7 +1011,7 @@ mod integration_tests {
 
         // MOV R0, #10 (16-bit)
         machine.bus.write_u16(0x0, 0x200A).unwrap();
-        machine.cpu.pc = 0x0;
+        machine.cpu.regs[15] = 0x0;
 
         machine.step().unwrap();
 
@@ -1033,12 +1033,12 @@ mod integration_tests {
         // lsb = 4 = (imm3<<2)|imm2 = (1<<2)|0 = 4
         // widthm1 = 3 (width-1)
         // h2 = 0001 0001 0000 0011 = 0x1103
-        machine.cpu.r0 = 0xABCD1234;
-        machine.cpu.pc = 0x0;
+        machine.cpu.regs[0] = 0xABCD1234;
+        machine.cpu.regs[15] = 0x0;
         machine.bus.write_u16(0x0, 0xF3C0).unwrap();
         machine.bus.write_u16(0x2, 0x1103).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r1, 0x3); // Bits [7:4] = 0x3
+        assert_eq!(machine.cpu.regs[1], 0x3); // Bits [7:4] = 0x3
 
         // Test SBFX (Signed Bit Field Extract)
         // Extract bits [7:4] from 0xFFFFFFF0 (negative)
@@ -1046,12 +1046,12 @@ mod integration_tests {
         // lsb=4: imm3=1, imm2=0 -> (1<<2)|0 = 4
         // widthm1=3 (width-1)
         // h1 = 0xF340, h2 = 0x1203
-        machine.cpu.r0 = 0xFFFFFFF0;
-        machine.cpu.pc = 0x4;
+        machine.cpu.regs[0] = 0xFFFFFFF0;
+        machine.cpu.regs[15] = 0x4;
         machine.bus.write_u16(0x4, 0xF340).unwrap();
         machine.bus.write_u16(0x6, 0x1203).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r2, 0xFFFFFFFF); // Sign-extended 0xF
+        assert_eq!(machine.cpu.regs[2], 0xFFFFFFFF); // Sign-extended 0xF
 
         // Test BFC (Bit Field Clear)
         // Clear bits [7:4] in R3
@@ -1059,12 +1059,12 @@ mod integration_tests {
         // lsb=4: imm3=1, imm2=0
         // msb=7 (lsb+width-1)
         // h1 = 0xF36F (Rn=0xF for BFC), h2 = 0x1307
-        machine.cpu.r3 = 0xFFFFFFFF;
-        machine.cpu.pc = 0x8;
+        machine.cpu.regs[3] = 0xFFFFFFFF;
+        machine.cpu.regs[15] = 0x8;
         machine.bus.write_u16(0x8, 0xF36F).unwrap();
         machine.bus.write_u16(0xA, 0x1307).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r3, 0xFFFFFF0F); // Bits [7:4] cleared
+        assert_eq!(machine.cpu.regs[3], 0xFFFFFF0F); // Bits [7:4] cleared
 
         // Test BFI (Bit Field Insert)
         // Insert bits [3:0] of R0 into bits [7:4] of R4
@@ -1072,13 +1072,13 @@ mod integration_tests {
         // lsb=4: imm3=1, imm2=0
         // msb=7
         // h1 = 0xF360 (Rn=0), h2 = 0x1407
-        machine.cpu.r0 = 0x0000000A;
-        machine.cpu.r4 = 0xFFFFFF0F;
-        machine.cpu.pc = 0xC;
+        machine.cpu.regs[0] = 0x0000000A;
+        machine.cpu.regs[4] = 0xFFFFFF0F;
+        machine.cpu.regs[15] = 0xC;
         machine.bus.write_u16(0xC, 0xF360).unwrap();
         machine.bus.write_u16(0xE, 0x1407).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r4, 0xFFFFFFAF); // Inserted 0xA into bits [7:4]
+        assert_eq!(machine.cpu.regs[4], 0xFFFFFFAF); // Inserted 0xA into bits [7:4]
     }
 
     #[test]
@@ -1088,51 +1088,51 @@ mod integration_tests {
         // Test CLZ (Count Leading Zeros)
         // CLZ R1, R0
         // h1 = 0xFAB0, h2 = 0xF180 (for R0, R1)
-        machine.cpu.r0 = 0x00000100; // 23 leading zeros
-        machine.cpu.pc = 0x0;
+        machine.cpu.regs[0] = 0x00000100; // 23 leading zeros
+        machine.cpu.regs[15] = 0x0;
         machine.bus.write_u16(0x0, 0xFAB0).unwrap();
         machine.bus.write_u16(0x2, 0xF180).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r1, 23);
+        assert_eq!(machine.cpu.regs[1], 23);
 
         // Test RBIT (Reverse Bits)
         // RBIT R2, R0
-        machine.cpu.r0 = 0x12345678;
-        machine.cpu.pc = 0x4;
+        machine.cpu.regs[0] = 0x12345678;
+        machine.cpu.regs[15] = 0x4;
         machine.bus.write_u16(0x4, 0xFA90).unwrap();
         machine.bus.write_u16(0x6, 0xF2A0).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r2, 0x1E6A2C48); // Bit-reversed
+        assert_eq!(machine.cpu.regs[2], 0x1E6A2C48); // Bit-reversed
 
         // Test REV (Byte-Reverse Word)
         // REV R3, R0
-        machine.cpu.r0 = 0x12345678;
-        machine.cpu.pc = 0x8;
+        machine.cpu.regs[0] = 0x12345678;
+        machine.cpu.regs[15] = 0x8;
         machine.bus.write_u16(0x8, 0xFA90).unwrap();
         machine.bus.write_u16(0xA, 0xF380).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r3, 0x78563412); // Byte-reversed
+        assert_eq!(machine.cpu.regs[3], 0x78563412); // Byte-reversed
 
         // Test REV16 (Byte-Reverse Packed Halfword)
         // REV16 R4, R0
-        machine.cpu.r0 = 0x12345678;
-        machine.cpu.pc = 0xC;
+        machine.cpu.regs[0] = 0x12345678;
+        machine.cpu.regs[15] = 0xC;
         machine.bus.write_u16(0xC, 0xFA90).unwrap();
         machine.bus.write_u16(0xE, 0xF490).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r4, 0x34127856); // Halfwords byte-reversed
+        assert_eq!(machine.cpu.regs[4], 0x34127856); // Halfwords byte-reversed
 
         // Test REVSH (Reverse byte order in lower halfword, sign extend)
         // REVSH R5, R0
         // h1 = 0xFA90 (Rm=0 in bits 3:0)
         // h2: 1111 dddd 1011 mmmm where dddd=Rd=5, mmmm=Rm=0
         // h2 = 0xF5B0
-        machine.cpu.r0 = 0x1234ABCD;
-        machine.cpu.pc = 0x10;
+        machine.cpu.regs[0] = 0x1234ABCD;
+        machine.cpu.regs[15] = 0x10;
         machine.bus.write_u16(0x10, 0xFA90).unwrap();
         machine.bus.write_u16(0x12, 0xF5B0).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r5, 0xFFFFCDAB);
+        assert_eq!(machine.cpu.regs[5], 0xFFFFCDAB);
     }
 
     #[test]
@@ -1142,39 +1142,39 @@ mod integration_tests {
         // 1. BFI R0, R1, #4, #8
         // Rd=0, Rn=1, lsb=4, width=8. msb=11.
         // imm3=1, imm2=0, msb=11 (0x0B). h2 = 0x100B.
-        machine.cpu.r0 = 0xFFFF_FFFF;
-        machine.cpu.r1 = 0x0000_00AB;
-        machine.cpu.pc = 0x0;
+        machine.cpu.regs[0] = 0xFFFF_FFFF;
+        machine.cpu.regs[1] = 0x0000_00AB;
+        machine.cpu.regs[15] = 0x0;
         machine.bus.write_u16(0x0, 0xF361).unwrap();
         machine.bus.write_u16(0x2, 0x100B).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r0, 0xFFFFFABF);
+        assert_eq!(machine.cpu.regs[0], 0xFFFFFABF);
 
         // 2. BFC R2, #8, #16
         // Rd=2, lsb=8, width=16. msb=23 (0x17).
-        machine.cpu.r2 = 0xFFFF_FFFF;
-        machine.cpu.pc = 0x4;
+        machine.cpu.regs[2] = 0xFFFF_FFFF;
+        machine.cpu.regs[15] = 0x4;
         machine.bus.write_u16(0x4, 0xF36F).unwrap();
         machine.bus.write_u16(0x6, 0x2217).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r2, 0xFF0000FF);
+        assert_eq!(machine.cpu.regs[2], 0xFF0000FF);
 
         // 3. UBFX R3, R4, #4, #8
-        machine.cpu.r4 = 0x0000_ABCD;
-        machine.cpu.pc = 0x8;
+        machine.cpu.regs[4] = 0x0000_ABCD;
+        machine.cpu.regs[15] = 0x8;
         machine.bus.write_u16(0x8, 0xF3C4).unwrap();
         machine.bus.write_u16(0xA, 0x1307).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r3, 0xBC);
+        assert_eq!(machine.cpu.regs[3], 0xBC);
 
         // 4. SBFX R5, R6, #4, #8
         // R6 binary: ... 1010 1000 0000. Bits 11:4 = 0xA8.
-        machine.cpu.r6 = 0x0000_0A80;
-        machine.cpu.pc = 0xC;
+        machine.cpu.regs[6] = 0x0000_0A80;
+        machine.cpu.regs[15] = 0xC;
         machine.bus.write_u16(0xC, 0xF346).unwrap();
         machine.bus.write_u16(0xE, 0x1507).unwrap();
         machine.step().unwrap();
-        assert_eq!(machine.cpu.r5, 0xFFFFFFA8);
+        assert_eq!(machine.cpu.regs[5], 0xFFFFFFA8);
     }
 
     #[test]
@@ -1208,7 +1208,7 @@ mod integration_tests {
         // We need to execute instructions or just tick.
         // Let's run NOPs.
         machine.bus.write_u16(0x0, 0xBF00).unwrap(); // NOP
-        machine.cpu.pc = 0x0;
+        machine.cpu.regs[15] = 0x0;
 
         // Run enough steps for conversion
         for _ in 0..20 {
@@ -1241,7 +1241,7 @@ mod integration_tests {
         let mut machine = Machine::new(cpu, bus);
 
         // Modify CPU state
-        machine.cpu.r0 = 42;
+        machine.cpu.regs[0] = 42;
         machine.cpu.set_pc(0x0800_0000);
 
         // Modify Peripheral state (GPIOA ODR)

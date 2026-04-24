@@ -32,7 +32,7 @@ fn test_cli_test_mode_breakpoint_halts_immediately() {
     let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
     let mut machine = labwired_core::Machine::new(cpu, bus);
     machine.load_firmware(&program).unwrap();
-    let initial_pc = machine.cpu.pc;
+    let initial_pc = machine.cpu.regs[15];
 
     let script = write_temp_file(
         "script-breakpoint",
