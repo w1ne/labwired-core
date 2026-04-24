@@ -931,6 +931,10 @@ fn board_io_kind_str(kind: labwired_config::BoardIoKind) -> &'static str {
     match kind {
         labwired_config::BoardIoKind::Led => "led",
         labwired_config::BoardIoKind::Button => "button",
+        labwired_config::BoardIoKind::AdcInput => "adc_input",
+        labwired_config::BoardIoKind::PwmOutput => "pwm_output",
+        labwired_config::BoardIoKind::I2cDevice => "i2c_device",
+        labwired_config::BoardIoKind::SpiDevice => "spi_device",
     }
 }
 
@@ -1099,6 +1103,8 @@ mod tests {
                 pin: 5,
                 signal: labwired_config::BoardIoSignal::Output,
                 active_high: true,
+                device_type: None,
+                i2c_address: None,
             }],
             peripherals: Vec::new(),
         };
@@ -1148,6 +1154,8 @@ mod tests {
                     pin: 0,
                     signal: labwired_config::BoardIoSignal::Output,
                     active_high: true,
+                    device_type: None,
+                    i2c_address: None,
                 },
                 labwired_config::BoardIoBinding {
                     id: "button".to_string(),
@@ -1156,6 +1164,8 @@ mod tests {
                     pin: 13,
                     signal: labwired_config::BoardIoSignal::Input,
                     active_high: true,
+                    device_type: None,
+                    i2c_address: None,
                 },
             ],
             peripherals: Vec::new(),
@@ -1206,6 +1216,8 @@ mod tests {
                 pin: 0,
                 signal: labwired_config::BoardIoSignal::Output,
                 active_high: true,
+                device_type: None,
+                i2c_address: None,
             }],
             peripherals: Vec::new(),
         };
