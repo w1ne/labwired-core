@@ -284,125 +284,130 @@ fn decode_lsai_unknown_subop() {
 
 // BR format (op0=0x7): BEQ/BNE/BLT/BGE/BLTU/BGEU/BANY/BALL/BNONE/BNALL/BBC/BBS/BBCI/BBSI
 //
-// Xtensa BR format (ISA RM §3.2):
+// Xtensa BR format (ISA RM §3.2, RRI8):
 //   bits[3:0]  = op0 = 0x7
-//   bits[7:4]  = t   (second register / at)
+//   bits[7:4]  = t   (second register / at, or low 4 bits of bit-index for BBCI/BBSI)
 //   bits[11:8] = s   (first register / as_)
-//   bits[15:12]= r   (bit-index for BBCI/BBSI; unused for reg-reg branches)
-//   bits[23:16]= imm8 (8-bit signed branch offset, PC-relative to PC+4)
-//   bits[23:20]= op2 (the branch condition sub-opcode, occupies HIGH NIBBLE of imm8)
+//   bits[15:12]= r   (sub-op selector; high bit of bit-index for BBCI/BBSI)
+//   bits[23:16]= imm8 (8-bit signed branch byte offset, PC-relative to PC+4)
 //
-// Note: op2 and imm8 share bits[23:16]. op2 is the high nibble of imm8. This means
-// for a given branch type (fixed op2), valid offsets are restricted to the range where
-// sext8((op2<<4)|low_nibble) is a meaningful offset. The decoder simply extracts the
-// full 8-bit imm8 field and sign-extends it; the test must place a consistent byte.
-//
-// Helper: build a BR-format word. `imm8` is the full 8-bit offset byte (bits[23:16]);
-// op2 must match the top nibble of imm8 (the decoder extracts op2 from bits[23:20]).
-fn br_word(op2: u32, r: u32, s: u32, t: u32, imm8: u32) -> u32 {
-    // Caller must ensure (imm8 >> 4) == op2 for a consistent word.
-    debug_assert_eq!(imm8 >> 4, op2, "imm8 top nibble must equal op2 in BR format");
-    0x7 | (t << 4) | (s << 8) | (r << 12) | ((imm8 & 0xFF) << 16)
+// Dispatch is on r (bits[15:12]).
+// For BBCI/BBSI the 5-bit bit-index = ((r & 1) << 4) | (t & 0xF).
+
+/// Pack an RRI8-format instruction.
+/// op0 at bits[3:0], t at bits[7:4], s at bits[11:8], r at bits[15:12], imm8 at bits[23:16].
+fn rri8_pack(op0: u32, t: u32, s: u32, r: u32, imm8: u32) -> u32 {
+    (op0 & 0xF) | ((t & 0xF) << 4) | ((s & 0xF) << 8) | ((r & 0xF) << 12) | ((imm8 & 0xFF) << 16)
+}
+
+/// Pack a BRI12-format instruction. op0=6, n at bits[5:4], m at bits[7:6], s at bits[11:8], imm12 at bits[23:12].
+fn bri12_pack(m: u32, n: u32, s: u32, imm12: u32) -> u32 {
+    0x6 | ((n & 0x3) << 4) | ((m & 0x3) << 6) | ((s & 0xF) << 8) | ((imm12 & 0xFFF) << 12)
+}
+
+/// Pack J (CALL format with op0=6, n=0): imm18 at bits[23:6].
+fn j_pack(imm18: u32) -> u32 {
+    0x6 | ((imm18 & 0x3_FFFF) << 6)
 }
 
 #[test]
 fn decode_beq() {
-    // BEQ as_, at, offset : op0=0x7, op2=0x1.
-    // imm8 must have top nibble = op2 = 0x1, e.g. imm8=0x10 → sext8(0x10)+4 = 16+4 = 20.
-    let w = br_word(0x1, 0, 2, 3, 0x10);
+    // BEQ as_=2, at=3, imm8=0x10 → decoded offset = sext8(0x10)+4 = 16+4 = 20
+    let w = rri8_pack(0x7, 3, 2, 0x1, 0x10);
     assert_eq!(decode(w), Instruction::Beq { as_: 2, at: 3, offset: 20 });
 }
 
 #[test]
 fn decode_bne_bge_blt_bltu_bgeu() {
-    // BNE op2=0x9: imm8 top nibble = 0x9 → use imm8=0x90 → sext8(0x90)+4 = -112+4 = -108.
-    let w = br_word(0x9, 0, 2, 3, 0x90);
-    assert_eq!(decode(w), Instruction::Bne { as_: 2, at: 3, offset: -108 });
-    // BGE op2=0xA: imm8=0xA0 → sext8(0xA0)+4 = -96+4 = -92.
-    let w = br_word(0xA, 0, 2, 3, 0xA0);
-    assert_eq!(decode(w), Instruction::Bge { as_: 2, at: 3, offset: -92 });
-    // BLT op2=0x2: imm8=0x25 → sext8(0x25)+4 = 37+4 = 41.
-    let w = br_word(0x2, 0, 2, 3, 0x25);
-    assert_eq!(decode(w), Instruction::Blt { as_: 2, at: 3, offset: 41 });
-    // BLTU op2=0x3: imm8=0x30 → sext8(0x30)+4 = 48+4 = 52.
-    let w = br_word(0x3, 0, 2, 3, 0x30);
-    assert_eq!(decode(w), Instruction::Bltu { as_: 2, at: 3, offset: 52 });
-    // BGEU op2=0xB: imm8=0xB0 → sext8(0xB0)+4 = -80+4 = -76.
-    let w = br_word(0xB, 0, 2, 3, 0xB0);
-    assert_eq!(decode(w), Instruction::Bgeu { as_: 2, at: 3, offset: -76 });
+    // BNE r=0x9, imm8=0x05 → sext8(5)+4 = 9
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x9, 0x05)), Instruction::Bne   { as_: 2, at: 3, offset: 9 });
+    // BGE r=0xA
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xA, 0x05)), Instruction::Bge   { as_: 2, at: 3, offset: 9 });
+    // BLT r=0x2
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x2, 0x05)), Instruction::Blt   { as_: 2, at: 3, offset: 9 });
+    // BLTU r=0x3
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x3, 0x05)), Instruction::Bltu  { as_: 2, at: 3, offset: 9 });
+    // BGEU r=0xB
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xB, 0x05)), Instruction::Bgeu  { as_: 2, at: 3, offset: 9 });
 }
 
 #[test]
 fn decode_bany_ball_bnone_bnall() {
-    // BANY op2=0x8: imm8=0x80 → sext8(0x80)+4 = -128+4 = -124.
-    let w = br_word(0x8, 0, 2, 3, 0x80);
-    assert_eq!(decode(w), Instruction::Bany { as_: 2, at: 3, offset: -124 });
-    // BALL op2=0x4: imm8=0x44 → sext8(0x44)+4 = 68+4 = 72.
-    let w = br_word(0x4, 0, 2, 3, 0x44);
-    assert_eq!(decode(w), Instruction::Ball { as_: 2, at: 3, offset: 72 });
-    // BNONE op2=0x0: imm8=0x04 → sext8(0x04)+4 = 4+4 = 8.
-    let w = br_word(0x0, 0, 2, 3, 0x04);
-    assert_eq!(decode(w), Instruction::Bnone { as_: 2, at: 3, offset: 8 });
-    // BNALL op2=0xC: imm8=0xC4 → sext8(0xC4)+4 = -60+4 = -56.
-    let w = br_word(0xC, 0, 2, 3, 0xC4);
-    assert_eq!(decode(w), Instruction::Bnall { as_: 2, at: 3, offset: -56 });
+    // BANY r=0x8, imm8=0x04 → offset = 4+4 = 8
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x8, 0x04)), Instruction::Bany  { as_: 2, at: 3, offset: 8 });
+    // BALL r=0x4
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x4, 0x04)), Instruction::Ball  { as_: 2, at: 3, offset: 8 });
+    // BNONE r=0x0
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x0, 0x04)), Instruction::Bnone { as_: 2, at: 3, offset: 8 });
+    // BNALL r=0xC
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xC, 0x04)), Instruction::Bnall { as_: 2, at: 3, offset: 8 });
 }
 
 #[test]
 fn decode_bbc_bbs_bbci_bbsi() {
-    // BBC op2=0x5: imm8=0x54 → sext8(0x54)+4 = 84+4 = 88.
-    let w = br_word(0x5, 0, 2, 3, 0x54);
-    assert_eq!(decode(w), Instruction::Bbc { as_: 2, at: 3, offset: 88 });
-    // BBS op2=0xD: imm8=0xD4 → sext8(0xD4)+4 = -44+4 = -40.
-    let w = br_word(0xD, 0, 2, 3, 0xD4);
-    assert_eq!(decode(w), Instruction::Bbs { as_: 2, at: 3, offset: -40 });
-    // BBCI op2=0x6, r=7: bit = (7&0xF) | ((0x6&0x1)<<4) = 7|0 = 7. imm8=0x64 → offset=104.
-    let w = br_word(0x6, 7, 2, 3, 0x64);
-    assert_eq!(decode(w), Instruction::Bbci { as_: 2, bit: 7, offset: 104 });
-    // BBCI op2=0x7, r=7: bit = 7 | ((0x7&0x1)<<4) = 7|16 = 23. imm8=0x74 → offset=120.
-    let w = br_word(0x7, 7, 2, 3, 0x74);
-    assert_eq!(decode(w), Instruction::Bbci { as_: 2, bit: 23, offset: 120 });
-    // BBSI op2=0xE, r=7: bit = 7 | ((0xE&0x1)<<4) = 7|0 = 7. imm8=0xE4 → offset=-24.
-    let w = br_word(0xE, 7, 2, 3, 0xE4);
-    assert_eq!(decode(w), Instruction::Bbsi { as_: 2, bit: 7, offset: -24 });
+    // BBC r=0x5, BBS r=0xD — use t=3 as at, imm8=0x04 → offset=8
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x5, 0x04)), Instruction::Bbc { as_: 2, at: 3, offset: 8 });
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xD, 0x04)), Instruction::Bbs { as_: 2, at: 3, offset: 8 });
+    // BBCI r=0x6 (high bit of bit-index=0), t=7 → bit = ((0&1)<<4)|7 = 7
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0x6, 0x04)), Instruction::Bbci { as_: 2, bit: 7,  offset: 8 });
+    // BBCI r=0x7 (high bit=1), t=7 → bit = ((1&1)<<4)|7 = 7|16 = 23
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0x7, 0x04)), Instruction::Bbci { as_: 2, bit: 23, offset: 8 });
+    // BBSI r=0xE (high bit=0), t=7 → bit=7
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0xE, 0x04)), Instruction::Bbsi { as_: 2, bit: 7,  offset: 8 });
+    // BBSI r=0xF (high bit=1), t=7 → bit=23
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0xF, 0x04)), Instruction::Bbsi { as_: 2, bit: 23, offset: 8 });
 }
 
-// J instruction (op0=0x6, m=0, n=0)
+// BZ family (op0=6, n=1): BEQZ/BNEZ/BLTZ/BGEZ, m selects sub-op.
 
 #[test]
-fn decode_j() {
-    // J offset: imm18 = bits[23:6]; encode imm18=0 → offset = 0+4 = 4
-    let w = 0x6u32;
-    assert_eq!(decode(w), Instruction::J { offset: 4 });
-
-    // imm18 = 0x10 → offset = 16+4 = 20
-    let w = 0x6u32 | (0x10u32 << 6);
-    assert_eq!(decode(w), Instruction::J { offset: 20 });
+fn decode_beqz_bnez_bltz_bgez() {
+    // imm12=0x010 → sext12(0x010)=16 → offset = 16+4 = 20
+    assert_eq!(decode(bri12_pack(0, 1, 2, 0x010)), Instruction::Beqz { as_: 2, offset: 20 });
+    assert_eq!(decode(bri12_pack(1, 1, 2, 0x010)), Instruction::Bnez { as_: 2, offset: 20 });
+    assert_eq!(decode(bri12_pack(2, 1, 2, 0x010)), Instruction::Bltz { as_: 2, offset: 20 });
+    assert_eq!(decode(bri12_pack(3, 1, 2, 0x010)), Instruction::Bgez { as_: 2, offset: 20 });
+    // Negative imm12: 0xFFE = -2 → offset = -2+4 = 2
+    assert_eq!(decode(bri12_pack(0, 1, 2, 0xFFE)), Instruction::Beqz { as_: 2, offset: 2 });
 }
 
-// BI group (op0=0x6, m=1): BEQI/BNEI/BLTI/BGEI with B4CONST table
+// BI group (op0=6, n=2): BEQI/BNEI/BLTI/BGEI with B4CONST table, m selects sub-op.
 
 #[test]
 fn decode_beqi_bnei_blti_bgei() {
-    // BEQI: m=1 (bits[7:6]=01), n=0 (bits[5:4]=00), s=as_, r=b4const index, imm8=offset
-    // b4const(5) = 5; offset = sext8(0x10)+4 = 16+4 = 20
-    let w = 0x6u32 | (0x40u32) | (0u32 << 4) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16);
-    assert_eq!(decode(w), Instruction::Beqi { as_: 2, imm: 5, offset: 20 });
-
-    // BGEI: n=3, r=15 → b4const(15)=256
-    let w = 0x6u32 | (0x40u32) | (3u32 << 4) | (2u32 << 8) | (15u32 << 12) | (0x10u32 << 16);
-    assert_eq!(decode(w), Instruction::Bgei { as_: 2, imm: 256, offset: 20 });
+    // BEQI: n=2, m=0, s=2, r=5 → b4const[5]=5, imm8=0x10 → offset=20
+    assert_eq!(decode(0x6u32 | (2u32 << 4) | (0u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
+        Instruction::Beqi { as_: 2, imm: 5, offset: 20 });
+    // BGEI: n=2, m=3, r=15 → b4const[15]=256
+    assert_eq!(decode(0x6u32 | (2u32 << 4) | (3u32 << 6) | (2u32 << 8) | (15u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bgei { as_: 2, imm: 256, offset: 20 });
 }
 
-// BIU group (op0=0x6, m=2): BLTUI/BGEUI with B4CONSTU table
+// BIU group (op0=6, n=3): BLTUI/BGEUI with B4CONSTU table; m=0,1 reserved.
 
 #[test]
 fn decode_bltui_bgeui() {
-    // BLTUI: m=2 (bits[7:6]=10), n=0, b4constu(5)=5
-    let w = 0x6u32 | (0x80u32) | (0u32 << 4) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16);
-    assert_eq!(decode(w), Instruction::Bltui { as_: 2, imm: 5, offset: 20 });
+    // BLTUI: n=3, m=2, s=2, r=5 → b4constu[5]=5, imm8=0x10 → offset=20
+    assert_eq!(decode(0x6u32 | (3u32 << 4) | (2u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bltui { as_: 2, imm: 5, offset: 20 });
+    // BGEUI: n=3, m=3, r=0 → b4constu[0]=32768
+    assert_eq!(decode(0x6u32 | (3u32 << 4) | (3u32 << 6) | (2u32 << 8) | (0u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bgeui { as_: 2, imm: 32768, offset: 20 });
+    // BIU m=0 is reserved → Unknown
+    match decode(0x6u32 | (3u32 << 4) | (0u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)) {
+        Instruction::Unknown(_) => (),
+        other => panic!("expected Unknown for reserved BIU m=0, got {:?}", other),
+    }
+}
 
-    // BGEUI: n=1, b4constu(0)=32768
-    let w = 0x6u32 | (0x80u32) | (1u32 << 4) | (2u32 << 8) | (0u32 << 12) | (0x10u32 << 16);
-    assert_eq!(decode(w), Instruction::Bgeui { as_: 2, imm: 32768, offset: 20 });
+// J instruction (op0=0x6, n=0)
+
+#[test]
+fn decode_j() {
+    // imm18=0 → offset = 0+4 = 4
+    assert_eq!(decode(j_pack(0)), Instruction::J { offset: 4 });
+    // imm18=0x10 → offset = 16+4 = 20
+    assert_eq!(decode(j_pack(0x10)), Instruction::J { offset: 20 });
+    // imm18=0x3_FFFE (sign-extended = -2) → offset = -2+4 = 2
+    assert_eq!(decode(j_pack(0x3_FFFE)), Instruction::J { offset: 2 });
 }
