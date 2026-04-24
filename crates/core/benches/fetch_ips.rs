@@ -85,7 +85,7 @@ fn bench_step_from_fixture(c: &mut Criterion) {
             || {
                 let program =
                     labwired_loader::load_elf(&elf).expect("load uart fixture elf");
-                let mut bus = SystemBus::new();
+                let mut bus = SystemBus::stm32f103();
                 let (cpu, _nvic) = cortex_m::configure_cortex_m(&mut bus);
                 let mut m = Machine::new(cpu, bus);
                 m.load_firmware(&program).expect("load firmware");

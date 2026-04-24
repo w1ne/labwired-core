@@ -17,7 +17,7 @@ mod integration_tests {
 
     fn create_machine() -> VariableMachine {
         // Placeholder name collision? No.
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
         Machine::new(cpu, bus)
     }
@@ -197,7 +197,7 @@ mod integration_tests {
 
     #[test]
     fn test_bus_routes_peripheral_reads_writes() {
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         let base = 0x5000_0000;
         bus.peripherals.push(crate::bus::PeripheralEntry {
             name: "recording".to_string(),
@@ -214,7 +214,7 @@ mod integration_tests {
 
     #[test]
     fn test_bus_u32_roundtrip_peripheral() {
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         let base = 0x5000_1000;
         bus.peripherals.push(crate::bus::PeripheralEntry {
             name: "recording32".to_string(),
@@ -232,7 +232,7 @@ mod integration_tests {
 
     #[test]
     fn test_tick_peripheral_sets_nvic_pending() {
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         let nvic_state = Arc::new(NvicState::default());
         bus.nvic = Some(nvic_state.clone());
 
@@ -256,7 +256,7 @@ mod integration_tests {
 
     #[test]
     fn test_tick_peripheral_without_nvic_returns_irq() {
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         bus.nvic = None;
 
         bus.peripherals.push(crate::bus::PeripheralEntry {
@@ -319,7 +319,7 @@ mod integration_tests {
 
     #[test]
     fn test_gpio_bsrr_brr_buffered_writes() {
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         let gpioa_base = 0x4001_0800;
         let odr = gpioa_base + 0x0C;
         let bsrr = gpioa_base + 0x10;
@@ -1182,7 +1182,7 @@ mod integration_tests {
         use crate::peripherals::adc::Adc;
 
         // 1. Setup Machine with ADC
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         bus.peripherals.push(crate::bus::PeripheralEntry {
             name: "adc1".to_string(),
             base: 0x4001_2400,
@@ -1234,7 +1234,7 @@ mod integration_tests {
     fn test_state_snapshot() {
         use crate::snapshot::MachineSnapshot;
 
-        let mut bus = crate::bus::SystemBus::new();
+        let mut bus = crate::bus::SystemBus::stm32f103();
         // Use default peripherals (Rest of setup matches SystemBus defaults)
 
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);

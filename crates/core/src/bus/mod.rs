@@ -60,8 +60,27 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
+    /// Build an empty bus: 1 MiB flash at 0x0, 1 MiB RAM at 0x2000_0000, no
+    /// peripherals. Arch-neutral — pair with a chip-specific config via
+    /// `from_config`, or use one of the named preset constructors below.
     pub fn new() -> Self {
-        // Default initialization for tests
+        Self {
+            flash: LinearMemory::new(1024 * 1024, 0x0),
+            ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
+            peripherals: Vec::new(),
+            nvic: None,
+        }
+    }
+
+    /// STM32F103 "Blue Pill"–class preset. 1 MiB flash at 0x0 for test
+    /// convenience (real STM32F103 has flash at 0x0800_0000, aliased at 0x0
+    /// after boot), 1 MiB RAM at 0x2000_0000, and a fixed set of
+    /// peripherals at their canonical STM32F103 addresses: DMA1, AFIO, EXTI,
+    /// SysTick, USART1, GPIOA/B/C, RCC, TIM2/3, I2C1/2, SPI1/2.
+    ///
+    /// Use this when you want the historical `SystemBus::new()` behavior.
+    /// Prefer `from_config()` for anything production.
+    pub fn stm32f103() -> Self {
         Self {
             flash: LinearMemory::new(1024 * 1024, 0x0),
             ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
