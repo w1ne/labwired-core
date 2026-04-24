@@ -111,6 +111,14 @@ impl Peripheral for Nvic {
         Ok(())
     }
 
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         let iser: Vec<u32> = self
             .state

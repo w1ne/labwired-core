@@ -95,12 +95,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }
-    fn as_any(&self) -> Option<&dyn Any> {
-        None
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
-        None
-    }
+    /// Expose the concrete peripheral type for downcasting. Every
+    /// in-tree peripheral provides an explicit implementation — the
+    /// trait has no default so a new peripheral cannot silently become
+    /// un-downcastable. Return `Some(self)` unless you deliberately
+    /// want to hide the concrete type.
+    fn as_any(&self) -> Option<&dyn Any>;
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any>;
     fn snapshot(&self) -> serde_json::Value {
         serde_json::Value::Null
     }
