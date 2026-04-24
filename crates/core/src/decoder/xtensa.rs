@@ -299,8 +299,158 @@ fn sext8(v: u32) -> i32 {
 fn decode_lsci(w: u32) -> Instruction { Instruction::Unknown(w) }
 fn decode_mac16(w: u32) -> Instruction { Instruction::Unknown(w) }
 fn decode_calln(w: u32) -> Instruction { Instruction::Unknown(w) }
-fn decode_si(w: u32) -> Instruction { Instruction::Unknown(w) }
-fn decode_b(w: u32) -> Instruction { Instruction::Unknown(w) }
+
+/// Decode op0=0x7 — BR format: two-register conditional branches and bit-test branches.
+///
+/// Encoding (ISA RM §3.2 BR format):
+///   bits [3:0]  = op0 = 0x7
+///   bits [7:4]  = t   (second source register for register-register branches)
+///   bits [11:8] = s   (first source register)
+///   bits [15:12]= r   (bit-index for BBCI/BBSI)
+///   bits [23:16]= imm8 (signed 8-bit branch offset, added to PC+4)
+///   bits [23:20]= op2 (high-4 bits of imm8 field overlap with sub-opcode)
+///
+/// Note: bits[23:20] select the branch variant; bits[23:16] form the signed offset.
+fn decode_b(w: u32) -> Instruction {
+    let op2 = ((w >> 20) & 0xF) as u8;
+    let r   = ((w >> 12) & 0xF) as u8;
+    let s   = ((w >> 8)  & 0xF) as u8;
+    let t   = ((w >> 4)  & 0xF) as u8;
+    let imm8 = ((w >> 16) & 0xFF) as u32;
+    let offset8 = sext8(imm8);
+
+    match op2 {
+        0x0 => Instruction::Bnone { as_: s, at: t, offset: offset8 + 4 },
+        0x1 => Instruction::Beq   { as_: s, at: t, offset: offset8 + 4 },
+        0x2 => Instruction::Blt   { as_: s, at: t, offset: offset8 + 4 },
+        0x3 => Instruction::Bltu  { as_: s, at: t, offset: offset8 + 4 },
+        0x4 => Instruction::Ball  { as_: s, at: t, offset: offset8 + 4 },
+        0x5 => Instruction::Bbc   { as_: s, at: t, offset: offset8 + 4 },
+        0x6 | 0x7 => Instruction::Bbci { as_: s, bit: (r & 0xF) | ((op2 & 0x1) << 4), offset: offset8 + 4 },
+        0x8 => Instruction::Bany  { as_: s, at: t, offset: offset8 + 4 },
+        0x9 => Instruction::Bne   { as_: s, at: t, offset: offset8 + 4 },
+        0xA => Instruction::Bge   { as_: s, at: t, offset: offset8 + 4 },
+        0xB => Instruction::Bgeu  { as_: s, at: t, offset: offset8 + 4 },
+        0xC => Instruction::Bnall { as_: s, at: t, offset: offset8 + 4 },
+        0xD => Instruction::Bbs   { as_: s, at: t, offset: offset8 + 4 },
+        0xE | 0xF => Instruction::Bbsi { as_: s, bit: (r & 0xF) | ((op2 & 0x1) << 4), offset: offset8 + 4 },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// Decode op0=0x6 — SI format: J (unconditional jump), BZ family (BEQZ/BNEZ),
+/// BI family (BEQI/BNEI/BLTI/BGEI), and BIU family (BLTUI/BGEUI).
+///
+/// Field layout (ISA RM §3.2 BRI12 / SI format):
+///   bits [3:0]  = op0 = 0x6
+///   bits [5:4]  = n   (2-bit sub-family selector)
+///   bits [7:6]  = m   (2-bit family selector)
+///   bits [11:8] = s   (source register index)
+///   bits [23:12]= imm12 (12-bit signed offset for BRI12 BZ family)
+///   bits [23:16]= imm8  (8-bit signed offset for BI/BIU families)
+///   bits [15:12]= r   (B4CONST/B4CONSTU table index for BI/BIU families)
+///
+/// Family dispatch by m:
+///   m=0: J (n=0), reserved (n=1), BZ group (n=2,3)
+///   m=1: BI  — BEQI/BNEI/BLTI/BGEI (n selects which; r → B4CONST; imm8 = offset)
+///   m=2: BIU — BLTUI/BGEUI         (n selects which; r → B4CONSTU; imm8 = offset)
+///   m=3: reserved / Unknown
+///
+/// BZ (BEQZ/BNEZ/BLTZ/BGEZ) encoding note — ISA RM §8:
+///   The plan spec (lines 1264-1273) erroneously dispatches on `s` (the register
+///   field) rather than on `n`. Based on widely available Xtensa ISA references,
+///   the correct BRI12 BZ dispatch is: m=0, n=2 → BEQZ; m=0, n=3 → BNEZ.
+///   BLTZ and BGEZ do NOT appear to exist as BRI12 variants in the LX7 base ISA;
+///   they may appear in some Xtensa option sets or as BRI8 sub-ops in a different
+///   position. Until verified against ISA RM §8 Table 3-24 and real hardware
+///   (Task H oracle tests), BLTZ/BGEZ are emitted as Unknown.
+///
+///   TODO(Task H): verify BEQZ (m=0,n=2) and BNEZ (m=0,n=3) against HW traces;
+///   locate BLTZ/BGEZ in the ISA RM encoding table and implement here.
+fn decode_si(w: u32) -> Instruction {
+    let n = ((w >> 4) & 0x3) as u8;
+    let m = ((w >> 6) & 0x3) as u8;
+    let s = ((w >> 8) & 0xF) as u8;
+    let imm12 = (w >> 12) & 0xFFF;
+    let offset12 = ((imm12 ^ 0x800).wrapping_sub(0x800)) as i32;
+    let imm8 = ((w >> 16) & 0xFF) as u32;
+    let offset8 = sext8(imm8);
+
+    match m {
+        0 => match n {
+            0 => {
+                // J: imm18 = bits[23:6]; 18-bit signed offset.
+                let imm18 = (w >> 6) & 0x3_FFFF;
+                let off = ((imm18 ^ 0x2_0000).wrapping_sub(0x2_0000)) as i32;
+                Instruction::J { offset: off + 4 }
+            }
+            1 => Instruction::Unknown(w), // reserved
+            2 => Instruction::Beqz { as_: s, offset: offset12 + 4 },
+            3 => Instruction::Bnez { as_: s, offset: offset12 + 4 },
+            // BLTZ/BGEZ: not confirmed for m=0 in LX7 base ISA — see doc comment above.
+            _ => Instruction::Unknown(w),
+        },
+        1 => decode_bi(w, n, s, imm8 as i32, offset8),
+        2 => decode_bi_u(w, n, s, imm8, offset8),
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// Look up the B4CONST table (ISA RM Appendix B4CONST).
+///
+/// Maps a 4-bit register-field index r to the immediate constant used by
+/// BEQI/BNEI/BLTI/BGEI.
+fn b4const(r: u8) -> i32 {
+    match r & 0xF {
+        0 => -1, 1 => 1,  2 => 2,   3 => 3,
+        4 => 4,  5 => 5,  6 => 6,   7 => 7,
+        8 => 8,  9 => 10, 10 => 12, 11 => 16,
+        12 => 32, 13 => 64, 14 => 128, 15 => 256,
+        _ => unreachable!(),
+    }
+}
+
+/// Look up the B4CONSTU table (ISA RM Appendix B4CONSTU).
+///
+/// Maps a 4-bit register-field index r to the unsigned immediate constant used
+/// by BLTUI/BGEUI.
+fn b4constu(r: u8) -> u32 {
+    match r & 0xF {
+        0 => 32768, 1 => 65536, 2 => 2,  3 => 3,
+        4 => 4,     5 => 5,     6 => 6,  7 => 7,
+        8 => 8,     9 => 10,   10 => 12, 11 => 16,
+        12 => 32,  13 => 64,   14 => 128, 15 => 256,
+        _ => unreachable!(),
+    }
+}
+
+/// Decode BI sub-family (m=1): BEQI/BNEI/BLTI/BGEI.
+///
+/// n selects the comparison; r (bits[15:12]) indexes into B4CONST for the immediate;
+/// offset is the sign-extended imm8 field (bits[23:16]) + 4.
+fn decode_bi(w: u32, n: u8, s: u8, _imm8: i32, offset: i32) -> Instruction {
+    let r = ((w >> 12) & 0xF) as u8;
+    match n {
+        0 => Instruction::Beqi { as_: s, imm: b4const(r), offset: offset + 4 },
+        1 => Instruction::Bnei { as_: s, imm: b4const(r), offset: offset + 4 },
+        2 => Instruction::Blti { as_: s, imm: b4const(r), offset: offset + 4 },
+        3 => Instruction::Bgei { as_: s, imm: b4const(r), offset: offset + 4 },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// Decode BIU sub-family (m=2): BLTUI/BGEUI.
+///
+/// n selects the comparison; r (bits[15:12]) indexes into B4CONSTU for the unsigned
+/// immediate; offset is the sign-extended imm8 field (bits[23:16]) + 4.
+fn decode_bi_u(w: u32, n: u8, s: u8, _imm8: u32, offset: i32) -> Instruction {
+    let r = ((w >> 12) & 0xF) as u8;
+    match n {
+        0 => Instruction::Bltui { as_: s, imm: b4constu(r), offset: offset + 4 },
+        1 => Instruction::Bgeui { as_: s, imm: b4constu(r), offset: offset + 4 },
+        _ => Instruction::Unknown(w),
+    }
+}
 
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
