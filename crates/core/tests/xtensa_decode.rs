@@ -193,3 +193,89 @@ fn decode_l32r_large_negative() {
         other => panic!("expected L32R, got {:?}", other),
     }
 }
+
+fn rri8(r: u32, s: u32, t: u32, imm8: u32) -> u32 {
+    0x2 | (t << 4) | (s << 8) | (r << 12) | ((imm8 & 0xFF) << 16)
+}
+
+#[test]
+fn decode_l8ui() {
+    let w = rri8(0x0, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L8ui { at: 5, as_: 4, imm: 0x10 });
+}
+
+#[test]
+fn decode_l16ui() {
+    let w = rri8(0x1, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L16ui { at: 5, as_: 4, imm: 0x20 }); // 0x10 << 1
+}
+
+#[test]
+fn decode_l32i() {
+    let w = rri8(0x2, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L32i { at: 5, as_: 4, imm: 0x40 }); // 0x10 << 2
+}
+
+#[test]
+fn decode_s8i_s16i_s32i() {
+    assert_eq!(decode(rri8(0x4, 4, 5, 0x10)), Instruction::S8i  { at: 5, as_: 4, imm: 0x10 });
+    assert_eq!(decode(rri8(0x5, 4, 5, 0x10)), Instruction::S16i { at: 5, as_: 4, imm: 0x20 });
+    assert_eq!(decode(rri8(0x6, 4, 5, 0x10)), Instruction::S32i { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_l16si() {
+    let w = rri8(0x9, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L16si { at: 5, as_: 4, imm: 0x20 });
+}
+
+#[test]
+fn decode_l32ai() {
+    let w = rri8(0xB, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L32ai { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_addi_positive() {
+    let w = rri8(0xC, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::Addi { at: 5, as_: 4, imm8: 0x10 });
+}
+
+#[test]
+fn decode_addi_negative() {
+    // imm8 = 0xFF => sext => -1
+    let w = rri8(0xC, 4, 5, 0xFF);
+    assert_eq!(decode(w), Instruction::Addi { at: 5, as_: 4, imm8: -1 });
+}
+
+#[test]
+fn decode_addmi() {
+    // ADDMI: imm is sext8 << 8
+    let w = rri8(0xD, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::Addmi { at: 5, as_: 4, imm: 0x1000 }); // 0x10 << 8
+    // negative case: imm8 = 0xFF => sext=-1 => imm = -256
+    let w = rri8(0xD, 4, 5, 0xFF);
+    assert_eq!(decode(w), Instruction::Addmi { at: 5, as_: 4, imm: -256 });
+}
+
+#[test]
+fn decode_s32c1i() {
+    let w = rri8(0xE, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::S32c1i { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_s32ri() {
+    let w = rri8(0xF, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::S32ri { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_lsai_unknown_subop() {
+    // r=0x3 is unassigned in LSAI — should be Unknown
+    let w = rri8(0x3, 4, 5, 0x10);
+    match decode(w) {
+        Instruction::Unknown(_) => (),
+        other => panic!("expected Unknown, got {:?}", other),
+    }
+}

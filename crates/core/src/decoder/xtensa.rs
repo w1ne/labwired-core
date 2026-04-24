@@ -268,7 +268,34 @@ fn decode_l32r(w: u32) -> Instruction {
     let pc_rel_byte_offset = sext * 4;
     Instruction::L32r { at, pc_rel_byte_offset }
 }
-fn decode_lsai(w: u32) -> Instruction { Instruction::Unknown(w) }
+fn decode_lsai(w: u32) -> Instruction {
+    let imm8 = ((w >> 16) & 0xFF) as u32;
+    let r    = ((w >> 12) & 0xF) as u8;
+    let s    = ((w >> 8)  & 0xF) as u8;
+    let t    = ((w >> 4)  & 0xF) as u8;
+
+    match r {
+        0x0 => Instruction::L8ui  { at: t, as_: s, imm: imm8 },
+        0x1 => Instruction::L16ui { at: t, as_: s, imm: imm8 << 1 },
+        0x2 => Instruction::L32i  { at: t, as_: s, imm: imm8 << 2 },
+        0x4 => Instruction::S8i   { at: t, as_: s, imm: imm8 },
+        0x5 => Instruction::S16i  { at: t, as_: s, imm: imm8 << 1 },
+        0x6 => Instruction::S32i  { at: t, as_: s, imm: imm8 << 2 },
+        0x9 => Instruction::L16si { at: t, as_: s, imm: imm8 << 1 },
+        0xB => Instruction::L32ai { at: t, as_: s, imm: imm8 << 2 },
+        0xC => Instruction::Addi  { at: t, as_: s, imm8: sext8(imm8) },
+        0xD => Instruction::Addmi { at: t, as_: s, imm: sext8(imm8) << 8 },
+        0xE => Instruction::S32c1i { at: t, as_: s, imm: imm8 << 2 },
+        0xF => Instruction::S32ri  { at: t, as_: s, imm: imm8 << 2 },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// Sign-extend an 8-bit value in a u32 to i32, range [-128, 127].
+#[inline]
+fn sext8(v: u32) -> i32 {
+    ((v ^ 0x80) as i32).wrapping_sub(0x80)
+}
 fn decode_lsci(w: u32) -> Instruction { Instruction::Unknown(w) }
 fn decode_mac16(w: u32) -> Instruction { Instruction::Unknown(w) }
 fn decode_calln(w: u32) -> Instruction { Instruction::Unknown(w) }
