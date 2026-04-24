@@ -411,3 +411,164 @@ fn decode_j() {
     // imm18=0x3_FFFE (sign-extended = -2) → offset = -2+4 = 2
     assert_eq!(decode(j_pack(0x3_FFFE)), Instruction::J { offset: 2 });
 }
+
+// ── Task B8: CALL / CALLX / RET / RETW / JX / RFE+family / SYSCALL ──────────
+//
+// CALLN format (op0=5): bits[5:4]=n, bits[23:6]=imm18 (signed word offset from PC+4).
+// ST0 format (op0=0, op1=0, op2=0): dispatches on r field:
+//   r=0, t=8      → RET      (s ignored)
+//   r=0, t=9      → RETW     (s ignored)
+//   r=0, s=<as>, t=0xA → JX
+//   r=0, s=<as>, t=0xC..F → CALLX0/4/8/12
+//   r=2, s=0, t=0..3,0xC,0xD,0xF → ISYNC/RSYNC/ESYNC/DSYNC/MEMW/EXTW/NOP
+//   r=3, s=0,t=0 → RFE; s=2,t=0 → RFDE; s=4,t=0 → RFWO; s=5,t=0 → RFWU
+//   r=3, s=<level>,t=1 → RFI
+//   r=4, s=<imm_s>,t=<imm_t> → BREAK
+//   r=5, s=0,t=0 → SYSCALL
+//
+// All encoding values HW-oracle verified against xtensa-esp-elf-objdump.
+
+/// Pack a CALLN instruction: op0=5, n at bits[5:4], imm18 at bits[23:6].
+fn calln_pack(n: u32, imm18: u32) -> u32 {
+    0x5 | ((n & 0x3) << 4) | ((imm18 & 0x3_FFFF) << 6)
+}
+
+/// Pack a ST0 instruction (op0=0, op1=0, op2=0): r at bits[15:12], s at bits[11:8], t at bits[7:4].
+fn st0_pack(r: u32, s: u32, t: u32) -> u32 {
+    (r << 12) | (s << 8) | (t << 4) | 0x0
+}
+
+#[test]
+fn decode_call0_4_8_12() {
+    // CALL0 imm18=0 → offset = 0 * 4 = 0 bytes
+    // HW: "call0 0x4" when PC=0 (target = PC+4+0 = 4); offset stored = 0
+    assert_eq!(decode(calln_pack(0, 0)), Instruction::Call0 { offset: 0 });
+
+    // CALL4 imm18=1 → offset = 1 * 4 = 4 bytes
+    // HW: "call4 0x8" when PC=0 (target = PC+4+4 = 8)
+    assert_eq!(decode(calln_pack(1, 1)), Instruction::Call4 { offset: 4 });
+
+    // CALL8 imm18=0x10 → offset = 0x10 * 4 = 0x40 = 64 bytes
+    // HW: "call8 0x44" when PC=0 (target = PC+4+64 = 68 = 0x44)
+    assert_eq!(decode(calln_pack(2, 0x10)), Instruction::Call8 { offset: 0x40 });
+
+    // CALL12 imm18=0x3FFFF (all ones = signed -1) → offset = -1 * 4 = -4 bytes
+    // HW: "call12 0x0" when PC=0 (target = PC+4-4 = 0)
+    assert_eq!(decode(calln_pack(3, 0x3FFFF)), Instruction::Call12 { offset: -4 });
+}
+
+#[test]
+fn decode_callx0_4_8_12() {
+    // CALLX0 as_=5: r=0, s=5, t=0xC
+    // HW: 0x0C0500 → "callx0 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xC)), Instruction::Callx0 { as_: 5 });
+    // CALLX4 as_=5: r=0, s=5, t=0xD
+    // HW: 0x0D0500 → "callx4 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xD)), Instruction::Callx4 { as_: 5 });
+    // CALLX8 as_=5: r=0, s=5, t=0xE
+    // HW: 0x0E0500 → "callx8 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xE)), Instruction::Callx8 { as_: 5 });
+    // CALLX12 as_=5: r=0, s=5, t=0xF
+    // HW: 0x0F0500 → "callx12 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xF)), Instruction::Callx12 { as_: 5 });
+}
+
+#[test]
+fn decode_ret_retw() {
+    // RET: r=0, s=0, t=8
+    // HW: 0x000080 → "ret"
+    assert_eq!(decode(st0_pack(0, 0, 8)), Instruction::Ret);
+    // RETW: r=0, s=0, t=9
+    // HW: 0x000090 → "retw"
+    assert_eq!(decode(st0_pack(0, 0, 9)), Instruction::Retw);
+    // RET with non-zero s (s field ignored per ISA RM): r=0, s=3, t=8
+    // HW: confirmed "ret" regardless of s
+    assert_eq!(decode(st0_pack(0, 3, 8)), Instruction::Ret);
+    // RETW with non-zero s: r=0, s=3, t=9
+    assert_eq!(decode(st0_pack(0, 3, 9)), Instruction::Retw);
+}
+
+#[test]
+fn decode_jx() {
+    // JX as_=4: r=0, s=4, t=0xA
+    // HW: 0x0A0400 → "jx a4"
+    assert_eq!(decode(st0_pack(0, 4, 0xA)), Instruction::Jx { as_: 4 });
+    // JX as_=1: r=0, s=1, t=0xA
+    // HW: 0x0A0100 → "jx a1"
+    assert_eq!(decode(st0_pack(0, 1, 0xA)), Instruction::Jx { as_: 1 });
+}
+
+#[test]
+fn decode_isync_rsync_esync_dsync() {
+    // ISYNC: r=2, s=0, t=0
+    // HW: 0x002000 → "isync"
+    assert_eq!(decode(st0_pack(2, 0, 0)), Instruction::Isync);
+    // RSYNC: r=2, s=0, t=1
+    // HW: 0x002010 → "rsync"
+    assert_eq!(decode(st0_pack(2, 0, 1)), Instruction::Rsync);
+    // ESYNC: r=2, s=0, t=2
+    // HW: 0x002020 → "esync"
+    assert_eq!(decode(st0_pack(2, 0, 2)), Instruction::Esync);
+    // DSYNC: r=2, s=0, t=3
+    // HW: 0x002030 → "dsync"
+    assert_eq!(decode(st0_pack(2, 0, 3)), Instruction::Dsync);
+    // MEMW: r=2, s=0, t=0xC
+    // HW: 0x0020C0 → "memw"
+    assert_eq!(decode(st0_pack(2, 0, 0xC)), Instruction::Memw);
+    // EXTW: r=2, s=0, t=0xD
+    // HW: 0x0020D0 → "extw"
+    assert_eq!(decode(st0_pack(2, 0, 0xD)), Instruction::Extw);
+    // NOP: r=2, s=0, t=0xF
+    // HW: 0x0020F0 → "nop"
+    assert_eq!(decode(st0_pack(2, 0, 0xF)), Instruction::Nop);
+}
+
+#[test]
+fn decode_rfe_rfde_rfwo_rfwu() {
+    // RFE: r=3, s=0, t=0
+    // HW: 0x003000 → "rfe"
+    assert_eq!(decode(st0_pack(3, 0, 0)), Instruction::Rfe);
+    // RFDE: r=3, s=2, t=0
+    // HW: 0x003200 → "rfde"
+    assert_eq!(decode(st0_pack(3, 2, 0)), Instruction::Rfde);
+    // RFWO: r=3, s=4, t=0
+    // HW: 0x003400 → "rfwo"
+    assert_eq!(decode(st0_pack(3, 4, 0)), Instruction::Rfwo);
+    // RFWU: r=3, s=5, t=0
+    // HW: 0x003500 → "rfwu"
+    assert_eq!(decode(st0_pack(3, 5, 0)), Instruction::Rfwu);
+}
+
+#[test]
+fn decode_rfi_level() {
+    // RFI takes interrupt level in s field; t=1.
+    // RFI level=0: r=3, s=0, t=1
+    // HW: 0x003010 → "rfi 0"
+    assert_eq!(decode(st0_pack(3, 0, 1)), Instruction::Rfi { level: 0 });
+    // RFI level=2: r=3, s=2, t=1
+    // HW: 0x003210 → "rfi 2"
+    assert_eq!(decode(st0_pack(3, 2, 1)), Instruction::Rfi { level: 2 });
+    // RFI level=7: r=3, s=7, t=1
+    // HW: 0x003710 → "rfi 7"
+    assert_eq!(decode(st0_pack(3, 7, 1)), Instruction::Rfi { level: 7 });
+    // RFI level=15: r=3, s=15, t=1
+    // HW: 0x003F10 → "rfi 15"
+    assert_eq!(decode(st0_pack(3, 15, 1)), Instruction::Rfi { level: 15 });
+}
+
+#[test]
+fn decode_syscall() {
+    // SYSCALL: r=5, s=0, t=0
+    // HW: 0x005000 → "syscall"
+    assert_eq!(decode(st0_pack(5, 0, 0)), Instruction::Syscall);
+}
+
+#[test]
+fn decode_break_st0() {
+    // BREAK imm_s=0, imm_t=0: r=4, s=0, t=0
+    // HW: 0x004000 → "break 0, 0"
+    assert_eq!(decode(st0_pack(4, 0, 0)), Instruction::Break { imm_s: 0, imm_t: 0 });
+    // BREAK imm_s=3, imm_t=5: r=4, s=3, t=5
+    // HW: 0x004350 → "break 3, 5"
+    assert_eq!(decode(st0_pack(4, 3, 5)), Instruction::Break { imm_s: 3, imm_t: 5 });
+}

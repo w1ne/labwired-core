@@ -219,27 +219,66 @@ fn decode_qrst(w: u32) -> Instruction {
 
 /// ST0 group — miscellaneous single-operand / zero-operand instructions.
 ///
-/// Covers RET, RETW, JX, CALLX*, NOP, ISYNC/RSYNC/ESYNC/DSYNC, MEMW/EXTW,
-/// RFE/RFDE/RFI, BREAK, SYSCALL. RSR/WSR/XSR are in ST1 (not here).
-/// This task implements NOP / BREAK / sync-barrier family; the rest are
-/// stubbed as Unknown and filled in later tasks (B8 for CALLX/RET, G2 for
-/// RFE/RFDE/RFI, D1 already consumes BREAK).
+/// Encoding: op0=0, op1=0, op2=0. Fields: r at bits[15:12], s at bits[11:8], t at bits[7:4].
+///
+/// HW-oracle verified encoding table (xtensa-esp-elf-objdump):
+///
+/// r=0, t=8              → RET           (s field ignored per ISA RM)
+/// r=0, t=9              → RETW          (s field ignored)
+/// r=0, s=<as>, t=0xA    → JX as_
+/// r=0, s=<as>, t=0xC    → CALLX0 as_
+/// r=0, s=<as>, t=0xD    → CALLX4 as_
+/// r=0, s=<as>, t=0xE    → CALLX8 as_
+/// r=0, s=<as>, t=0xF    → CALLX12 as_
+/// r=2, s=0, t=0          → ISYNC
+/// r=2, s=0, t=1          → RSYNC
+/// r=2, s=0, t=2          → ESYNC
+/// r=2, s=0, t=3          → DSYNC
+/// r=2, s=0, t=0xC        → MEMW
+/// r=2, s=0, t=0xD        → EXTW
+/// r=2, s=0, t=0xF        → NOP
+/// r=3, s=0, t=0          → RFE
+/// r=3, s=2, t=0          → RFDE
+/// r=3, s=4, t=0          → RFWO
+/// r=3, s=5, t=0          → RFWU
+/// r=3, s=<level>, t=1    → RFI level
+/// r=4, s=<imm_s>, t=<imm_t> → BREAK
+/// r=5, s=0, t=0          → SYSCALL
 fn decode_st0(w: u32, r: u8, s: u8, t: u8) -> Instruction {
     match r {
-        0x0 => match s {
-            0x0 => match t {
-                0x0 => Instruction::Isync,
-                0x1 => Instruction::Rsync,
-                0x2 => Instruction::Esync,
-                0x3 => Instruction::Dsync,
-                0xC => Instruction::Memw,
-                0xD => Instruction::Extw,
-                0xF => Instruction::Nop,
-                _ => Instruction::Unknown(w),
-            },
-            _ => Instruction::Unknown(w),
+        0x0 => match t {
+            0x8 => Instruction::Ret,
+            0x9 => Instruction::Retw,
+            0xA => Instruction::Jx { as_: s },
+            0xC => Instruction::Callx0  { as_: s },
+            0xD => Instruction::Callx4  { as_: s },
+            0xE => Instruction::Callx8  { as_: s },
+            0xF => Instruction::Callx12 { as_: s },
+            _   => Instruction::Unknown(w),
+        },
+        0x2 => match (s, t) {
+            (0, 0x0) => Instruction::Isync,
+            (0, 0x1) => Instruction::Rsync,
+            (0, 0x2) => Instruction::Esync,
+            (0, 0x3) => Instruction::Dsync,
+            (0, 0xC) => Instruction::Memw,
+            (0, 0xD) => Instruction::Extw,
+            (0, 0xF) => Instruction::Nop,
+            _        => Instruction::Unknown(w),
+        },
+        0x3 => match (t, s) {
+            (0x0, 0) => Instruction::Rfe,
+            (0x0, 2) => Instruction::Rfde,
+            (0x0, 4) => Instruction::Rfwo,
+            (0x0, 5) => Instruction::Rfwu,
+            (0x1, _) => Instruction::Rfi { level: s },
+            _        => Instruction::Unknown(w),
         },
         0x4 => Instruction::Break { imm_s: s, imm_t: t },
+        0x5 => match (s, t) {
+            (0, 0) => Instruction::Syscall,
+            _      => Instruction::Unknown(w),
+        },
         _ => Instruction::Unknown(w),
     }
 }
@@ -298,7 +337,30 @@ fn sext8(v: u32) -> i32 {
 }
 fn decode_lsci(w: u32) -> Instruction { Instruction::Unknown(w) }
 fn decode_mac16(w: u32) -> Instruction { Instruction::Unknown(w) }
-fn decode_calln(w: u32) -> Instruction { Instruction::Unknown(w) }
+
+/// CALLN family (op0=5): CALL0, CALL4, CALL8, CALL12.
+///
+/// Encoding (ISA RM §8 CALL format):
+///   bits[3:0]  = op0 = 0x5
+///   bits[5:4]  = n   (selects CALL0/4/8/12)
+///   bits[23:6] = imm18 (signed 18-bit word offset from (PC+4)&~3)
+///
+/// HW-oracle verified: imm18=0 → target = PC+4 (offset=0 words from PC+4).
+/// Decoder convention: `offset` is signed byte displacement from PC+4,
+/// i.e. offset = sign_extend18(imm18) * 4.
+fn decode_calln(w: u32) -> Instruction {
+    let n = ((w >> 4) & 0x3) as u8;
+    let imm18 = (w >> 6) & 0x3_FFFF;
+    // Sign-extend 18-bit: XOR with 0x2_0000 (bit 17) then subtract.
+    let off = (((imm18 ^ 0x2_0000).wrapping_sub(0x2_0000)) as i32) * 4;
+    match n {
+        0 => Instruction::Call0  { offset: off },
+        1 => Instruction::Call4  { offset: off },
+        2 => Instruction::Call8  { offset: off },
+        3 => Instruction::Call12 { offset: off },
+        _ => unreachable!(),
+    }
+}
 
 /// Decode op0=0x7 — BR format: two-register conditional branches and bit-test branches.
 ///
