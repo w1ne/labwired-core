@@ -64,17 +64,23 @@ impl CortexM {
             return Ok(());
         }
 
-        // ... (existing logic)
-        // Fetch 16-bit thumb instruction
+        // Fetch 16-bit thumb instruction; consult the decode cache first
+        // so we can skip both the bus read and the decoder on a hit. The
+        // cache is flushed on reset / apply_snapshot; see the note on
+        // `CortexM::decode_cache` for the self-modifying-code caveat.
         let fetch_pc = self.regs[15] & !1;
-        let opcode = bus.read_u16(fetch_pc as u64)?;
+        let (opcode, instruction) = if let Some(hit) = self.decode_lookup(fetch_pc) {
+            hit
+        } else {
+            let opcode = bus.read_u16(fetch_pc as u64)?;
+            let instruction = decode_thumb_16(opcode);
+            self.decode_store(fetch_pc, opcode, instruction);
+            (opcode, instruction)
+        };
 
         for observer in observers {
             observer.on_step_start(self.regs[15], opcode as u32);
         }
-
-        // Decode
-        let instruction = decode_thumb_16(opcode);
 
         // Execute
         let mut pc_increment = 2; // Default for 16-bit instruction

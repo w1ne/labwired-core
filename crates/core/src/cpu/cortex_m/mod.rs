@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::decoder::arm::Instruction;
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -17,13 +18,63 @@ pub const LR: usize = 14; // R14 — Link Register
 pub const PC: usize = 15; // R15 — Program Counter
 pub const XPSR: usize = 16;
 
-#[derive(Debug, Default)]
+/// Direct-mapped decode cache size. Must be a power of two. A 256-entry
+/// cache covers ~512 bytes of hot code per way, which is enough for the
+/// inner loops of typical embedded firmware.
+const DECODE_CACHE_SIZE: usize = 256;
+const DECODE_CACHE_MASK: usize = DECODE_CACHE_SIZE - 1;
+
+#[derive(Clone, Copy)]
+struct DecodeCacheEntry {
+    // `pc` is the full 32-bit instruction address that produced this decode.
+    // Sentinel value `u32::MAX` (never a legal Thumb PC — would be unaligned)
+    // marks the slot empty.
+    pc: u32,
+    opcode: u16,
+    instruction: Instruction,
+}
+
+impl DecodeCacheEntry {
+    const EMPTY: Self = Self {
+        pc: u32::MAX,
+        opcode: 0,
+        instruction: Instruction::Unknown(0),
+    };
+}
+
 pub struct CortexM {
     /// General-purpose + special registers: R0..R12, SP (13), LR (14), PC (15), XPSR (16).
     pub regs: [u32; 17],
     pub pending_exceptions: u32, // Bitmask
     pub primask: bool,           // Interrupt mask (true = disabled)
     pub vtor: Arc<AtomicU32>,    // Shared Vector Table Offset Register
+    /// Direct-mapped decode cache. Flushed on reset / apply_snapshot.
+    /// Self-modifying code writing to flash at runtime is not tracked; this
+    /// is a deliberate trade-off — documented in docs/architecture.md.
+    decode_cache: Box<[DecodeCacheEntry; DECODE_CACHE_SIZE]>,
+}
+
+impl std::fmt::Debug for CortexM {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CortexM")
+            .field("regs", &self.regs)
+            .field("pending_exceptions", &self.pending_exceptions)
+            .field("primask", &self.primask)
+            .field("vtor", &self.vtor)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Default for CortexM {
+    fn default() -> Self {
+        Self {
+            regs: [0; 17],
+            pending_exceptions: 0,
+            primask: false,
+            vtor: Arc::default(),
+            decode_cache: Box::new([DecodeCacheEntry::EMPTY; DECODE_CACHE_SIZE]),
+        }
+    }
 }
 
 impl CortexM {
@@ -41,6 +92,31 @@ impl CortexM {
 
     pub fn set_shared_vtor(&mut self, vtor: Arc<AtomicU32>) {
         self.vtor = vtor;
+    }
+
+    /// Look up a previously decoded instruction at `pc` in the decode cache.
+    pub(super) fn decode_lookup(&self, pc: u32) -> Option<(u16, Instruction)> {
+        let idx = (pc >> 1) as usize & DECODE_CACHE_MASK;
+        let e = &self.decode_cache[idx];
+        if e.pc == pc {
+            Some((e.opcode, e.instruction))
+        } else {
+            None
+        }
+    }
+
+    /// Record a fresh decode result so future fetches at the same `pc` hit.
+    pub(super) fn decode_store(&mut self, pc: u32, opcode: u16, instruction: Instruction) {
+        let idx = (pc >> 1) as usize & DECODE_CACHE_MASK;
+        self.decode_cache[idx] = DecodeCacheEntry { pc, opcode, instruction };
+    }
+
+    /// Drop every cached decode. Call on reset, snapshot restore, or any
+    /// time the flash/ROM contents may have changed.
+    pub(super) fn decode_flush(&mut self) {
+        for e in self.decode_cache.iter_mut() {
+            *e = DecodeCacheEntry::EMPTY;
+        }
     }
 
     fn read_reg(&self, n: u8) -> u32 {
@@ -132,6 +208,7 @@ impl Cpu for CortexM {
         self.regs[15] = 0x0000_0000;
         self.regs[13] = 0x2000_0000;
         self.pending_exceptions = 0;
+        self.decode_flush();
 
         let vtor = self.vtor.load(Ordering::SeqCst) as u64;
         if let Ok(sp) = bus.read_u32(vtor) {
@@ -185,6 +262,9 @@ impl Cpu for CortexM {
             self.primask = s.primask;
             self.pending_exceptions = s.pending_exceptions;
             self.vtor.store(s.vtor, Ordering::Relaxed);
+            // Snapshot restore implies the flash/vector-table contents may
+            // differ from whatever we had cached; drop every decoded entry.
+            self.decode_flush();
         }
     }
 
