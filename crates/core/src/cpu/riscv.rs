@@ -308,6 +308,62 @@ impl Cpu for RiscV {
                 let res = self.read_reg(rs1) & self.read_reg(rs2);
                 self.write_reg(rd, res);
             }
+            // RV32M — per spec §7. All results fully defined; no traps.
+            Instruction::Mul { rd, rs1, rs2 } => {
+                let res = (self.read_reg(rs1) as i32).wrapping_mul(self.read_reg(rs2) as i32);
+                self.write_reg(rd, res as u32);
+            }
+            Instruction::Mulh { rd, rs1, rs2 } => {
+                let a = self.read_reg(rs1) as i32 as i64;
+                let b = self.read_reg(rs2) as i32 as i64;
+                self.write_reg(rd, ((a * b) >> 32) as u32);
+            }
+            Instruction::Mulhsu { rd, rs1, rs2 } => {
+                let a = self.read_reg(rs1) as i32 as i64;
+                let b = self.read_reg(rs2) as u64 as i64;
+                self.write_reg(rd, ((a * b) >> 32) as u32);
+            }
+            Instruction::Mulhu { rd, rs1, rs2 } => {
+                let a = self.read_reg(rs1) as u64;
+                let b = self.read_reg(rs2) as u64;
+                self.write_reg(rd, ((a * b) >> 32) as u32);
+            }
+            Instruction::Div { rd, rs1, rs2 } => {
+                let a = self.read_reg(rs1) as i32;
+                let b = self.read_reg(rs2) as i32;
+                let res = if b == 0 {
+                    u32::MAX // Division by zero -> all ones (per spec).
+                } else if a == i32::MIN && b == -1 {
+                    a as u32 // Signed overflow -> dividend.
+                } else {
+                    a.wrapping_div(b) as u32
+                };
+                self.write_reg(rd, res);
+            }
+            Instruction::Divu { rd, rs1, rs2 } => {
+                let a = self.read_reg(rs1);
+                let b = self.read_reg(rs2);
+                let res = if b == 0 { u32::MAX } else { a / b };
+                self.write_reg(rd, res);
+            }
+            Instruction::Rem { rd, rs1, rs2 } => {
+                let a = self.read_reg(rs1) as i32;
+                let b = self.read_reg(rs2) as i32;
+                let res = if b == 0 {
+                    a as u32 // Division by zero -> dividend (per spec).
+                } else if a == i32::MIN && b == -1 {
+                    0 // Signed overflow -> 0.
+                } else {
+                    a.wrapping_rem(b) as u32
+                };
+                self.write_reg(rd, res);
+            }
+            Instruction::Remu { rd, rs1, rs2 } => {
+                let a = self.read_reg(rs1);
+                let b = self.read_reg(rs2);
+                let res = if b == 0 { a } else { a % b };
+                self.write_reg(rd, res);
+            }
             Instruction::Fence => {
                 // No-op in single threaded core model
             }
@@ -705,6 +761,117 @@ mod tests {
         machine.cpu.mip = 0;
         machine.cpu.set_exception_pending(3);
         assert_eq!(machine.cpu.mip & (1 << 3), 1 << 3);
+    }
+
+    #[test]
+    fn test_riscv_rv32m_multiply_divide() {
+        // Verifies RV32M per-spec semantics, including the two edge
+        // cases the spec mandates:
+        //   1. Division by zero returns all-ones (DIV/DIVU) or dividend (REM/REMU).
+        //   2. Signed overflow (INT_MIN / -1) returns dividend (DIV) or 0 (REM).
+        let mut cpu = RiscV::new();
+
+        // MUL: low 32 bits of signed product. 5 * 3 = 15.
+        cpu.write_reg(1, 5);
+        cpu.write_reg(2, 3);
+        let i = Instruction::Mul { rd: 3, rs1: 1, rs2: 2 };
+        execute_unit(&mut cpu, i);
+        assert_eq!(cpu.read_reg(3), 15);
+
+        // MUL wraps on overflow (low 32 bits only).
+        cpu.write_reg(1, 0x1_0000_0000u64 as u32); // doesn't fit, truncate to 0
+        cpu.write_reg(1, 0xFFFF_FFFE); // -2 as signed
+        cpu.write_reg(2, 2);
+        execute_unit(&mut cpu, Instruction::Mul { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), 0xFFFF_FFFC); // -4
+
+        // MULH: high bits of signed × signed. (-1) * (-1) = 1 → high = 0.
+        cpu.write_reg(1, u32::MAX);
+        cpu.write_reg(2, u32::MAX);
+        execute_unit(&mut cpu, Instruction::Mulh { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), 0);
+
+        // MULHU: unsigned × unsigned. 0xFFFF_FFFF * 0xFFFF_FFFF high = 0xFFFF_FFFE.
+        execute_unit(&mut cpu, Instruction::Mulhu { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), 0xFFFF_FFFE);
+
+        // DIV signed: 20 / -4 = -5.
+        cpu.write_reg(1, 20);
+        cpu.write_reg(2, (-4i32) as u32);
+        execute_unit(&mut cpu, Instruction::Div { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3) as i32, -5);
+
+        // DIV by zero returns all-ones.
+        cpu.write_reg(1, 42);
+        cpu.write_reg(2, 0);
+        execute_unit(&mut cpu, Instruction::Div { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), u32::MAX);
+
+        // DIV signed overflow: INT_MIN / -1 returns INT_MIN.
+        cpu.write_reg(1, i32::MIN as u32);
+        cpu.write_reg(2, (-1i32) as u32);
+        execute_unit(&mut cpu, Instruction::Div { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), i32::MIN as u32);
+
+        // REM signed: 20 % -3 = 2.
+        cpu.write_reg(1, 20);
+        cpu.write_reg(2, (-3i32) as u32);
+        execute_unit(&mut cpu, Instruction::Rem { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3) as i32, 2);
+
+        // REM by zero returns dividend.
+        cpu.write_reg(1, 42);
+        cpu.write_reg(2, 0);
+        execute_unit(&mut cpu, Instruction::Rem { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), 42);
+
+        // REM signed overflow: INT_MIN % -1 returns 0.
+        cpu.write_reg(1, i32::MIN as u32);
+        cpu.write_reg(2, (-1i32) as u32);
+        execute_unit(&mut cpu, Instruction::Rem { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), 0);
+
+        // REMU by zero returns dividend.
+        cpu.write_reg(1, 42);
+        cpu.write_reg(2, 0);
+        execute_unit(&mut cpu, Instruction::Remu { rd: 3, rs1: 1, rs2: 2 });
+        assert_eq!(cpu.read_reg(3), 42);
+    }
+
+    // Helper: invoke the RV32M executor path without going through a full
+    // fetch/decode round-trip. We encode the instruction into a proper
+    // opcode, drop it at PC=0, and step once.
+    fn execute_unit(cpu: &mut RiscV, inst: Instruction) {
+        let encoded = encode_rv32m(&inst);
+        let mut bus = SystemBus::new();
+        bus.flash.data = vec![0; 16];
+        bus.write_u32(0x0, encoded).unwrap();
+        cpu.pc = 0x0;
+        // Inline step without observers / peripherals.
+        let observers: [Arc<dyn SimulationObserver>; 0] = [];
+        // Preserve register file state in-place by taking cpu by &mut.
+        // SystemBus::step equivalent:
+        Cpu::step(cpu, &mut bus, &observers).unwrap();
+    }
+
+    fn encode_rv32m(inst: &Instruction) -> u32 {
+        let (funct3, rd, rs1, rs2) = match *inst {
+            Instruction::Mul { rd, rs1, rs2 } => (0, rd, rs1, rs2),
+            Instruction::Mulh { rd, rs1, rs2 } => (1, rd, rs1, rs2),
+            Instruction::Mulhsu { rd, rs1, rs2 } => (2, rd, rs1, rs2),
+            Instruction::Mulhu { rd, rs1, rs2 } => (3, rd, rs1, rs2),
+            Instruction::Div { rd, rs1, rs2 } => (4, rd, rs1, rs2),
+            Instruction::Divu { rd, rs1, rs2 } => (5, rd, rs1, rs2),
+            Instruction::Rem { rd, rs1, rs2 } => (6, rd, rs1, rs2),
+            Instruction::Remu { rd, rs1, rs2 } => (7, rd, rs1, rs2),
+            _ => unreachable!("encode_rv32m: non-M instruction"),
+        };
+        0x33u32
+            | ((rd as u32) << 7)
+            | ((funct3 as u32) << 12)
+            | ((rs1 as u32) << 15)
+            | ((rs2 as u32) << 20)
+            | (0x01u32 << 25)
     }
 
     #[test]

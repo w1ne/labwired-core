@@ -54,6 +54,15 @@ pub enum Instruction {
     Csrrwi { rd: u8, imm: u8, csr: u16 }, // CSRRWI
     Csrrsi { rd: u8, imm: u8, csr: u16 }, // CSRRSI
     Csrrci { rd: u8, imm: u8, csr: u16 }, // CSRRCI
+    // RV32M — Integer Multiplication and Division
+    Mul { rd: u8, rs1: u8, rs2: u8 },
+    Mulh { rd: u8, rs1: u8, rs2: u8 },
+    Mulhsu { rd: u8, rs1: u8, rs2: u8 },
+    Mulhu { rd: u8, rs1: u8, rs2: u8 },
+    Div { rd: u8, rs1: u8, rs2: u8 },
+    Divu { rd: u8, rs1: u8, rs2: u8 },
+    Rem { rd: u8, rs1: u8, rs2: u8 },
+    Remu { rd: u8, rs1: u8, rs2: u8 },
     Unknown(u32),
 }
 
@@ -218,7 +227,7 @@ pub fn decode_rv32(inst: u32) -> Instruction {
             }
         }
         0x33 => {
-            // OP
+            // OP — RV32I base + RV32M multiply/divide (funct7 == 0x01).
             match (funct3, funct7) {
                 (0, 0x00) => Instruction::Add { rd, rs1, rs2 },
                 (0, 0x20) => Instruction::Sub { rd, rs1, rs2 },
@@ -230,6 +239,14 @@ pub fn decode_rv32(inst: u32) -> Instruction {
                 (5, 0x20) => Instruction::Sra { rd, rs1, rs2 },
                 (6, 0x00) => Instruction::Or { rd, rs1, rs2 },
                 (7, 0x00) => Instruction::And { rd, rs1, rs2 },
+                (0, 0x01) => Instruction::Mul { rd, rs1, rs2 },
+                (1, 0x01) => Instruction::Mulh { rd, rs1, rs2 },
+                (2, 0x01) => Instruction::Mulhsu { rd, rs1, rs2 },
+                (3, 0x01) => Instruction::Mulhu { rd, rs1, rs2 },
+                (4, 0x01) => Instruction::Div { rd, rs1, rs2 },
+                (5, 0x01) => Instruction::Divu { rd, rs1, rs2 },
+                (6, 0x01) => Instruction::Rem { rd, rs1, rs2 },
+                (7, 0x01) => Instruction::Remu { rd, rs1, rs2 },
                 _ => Instruction::Unknown(inst),
             }
         }

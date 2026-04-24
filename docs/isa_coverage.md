@@ -65,7 +65,7 @@ opcodes bubble up as `SimulationError::DecodeError`.
 
 ## RISC-V
 
-Target subset today: **RV32I base ISA.**
+Target subset today: **RV32IM base ISA + Zicsr** (`rv32im_zicsr`).
 
 | Category     | Instructions                                                                 |
 |--------------|------------------------------------------------------------------------------|
@@ -75,6 +75,7 @@ Target subset today: **RV32I base ISA.**
 | Stores       | `SB`, `SH`, `SW`                                                             |
 | I-type ALU   | `ADDI`, `SLTI`, `SLTIU`, `XORI`, `ORI`, `ANDI`, `SLLI`, `SRLI`, `SRAI`       |
 | R-type ALU   | `ADD`, `SUB`, `SLL`, `SLT`, `SLTU`, `XOR`, `SRL`, `SRA`, `OR`, `AND`         |
+| **M** ext.   | `MUL`, `MULH`, `MULHSU`, `MULHU`, `DIV`, `DIVU`, `REM`, `REMU` (with full per-spec semantics for div-by-zero and INT_MIN/-1 overflow) |
 | Zicsr        | `CSRRW`, `CSRRS`, `CSRRC`, `CSRRWI`, `CSRRSI`, `CSRRCI`                      |
 | System       | `ECALL`, `EBREAK`, `FENCE`, `MRET`                                           |
 
@@ -82,16 +83,16 @@ Target subset today: **RV32I base ISA.**
 
 | Extension    | Status                                                                      |
 |--------------|-----------------------------------------------------------------------------|
-| **M** (mul/div) | ❌ Not implemented (`MUL`, `DIV`, `REM`, …)                                  |
 | **A** (atomic)  | ❌ Not implemented (`LR`, `SC`, `AMO*`)                                      |
 | **C** (compressed) | ❌ Not implemented                                                        |
 | **F** / **D** (FP) | ❌ Not implemented                                                        |
 | Interrupts      | 🟡 Machine-mode only. Timer (MTIP via mtime/mtimecmp) and external peripheral IRQs (folded into MEIP) dispatch via `mtvec`, with `mstatus.MIE` / `mie` gating. No PLIC — every external IRQ source collapses to MEIP. No per-source priority. |
 | Privilege modes | M-mode only; no S/U mode or CSR enforcement.                                 |
 
-**Implication:** firmware compiled with default `-march=rv32imac_zicsr` will
-**not** load correctly. Use `-march=rv32i -mabi=ilp32` when building
-fixtures for LabWired.
+**Implication:** firmware compiled with `-march=rv32im_zicsr -mabi=ilp32`
+should load and run correctly. `-march=rv32imac_zicsr` (compressed
+instructions) is **not** supported yet — emit with `-march=rv32im_zicsr`
+explicitly when building fixtures for LabWired.
 
 ---
 
