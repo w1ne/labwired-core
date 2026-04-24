@@ -26,6 +26,12 @@ pub struct RiscV {
     // CLINT-like internal state (minimal)
     pub mtime: u64,
     pub mtimecmp: u64,
+
+    /// Active LR/SC reservation address. `None` means no outstanding
+    /// reservation; the next SC.W to any address will fail. On a single
+    /// hart any intervening store (including any AMO*) invalidates the
+    /// reservation per RISC-V ISA §8.2.
+    pub reservation: Option<u32>,
 }
 
 impl RiscV {
@@ -204,16 +210,19 @@ impl Cpu for RiscV {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u8;
                 bus.write_u8(addr as u64, val)?;
+                self.reservation = None;
             }
             Instruction::Sh { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u16;
                 bus.write_u16(addr as u64, val)?;
+                self.reservation = None;
             }
             Instruction::Sw { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2);
                 bus.write_u32(addr as u64, val)?;
+                self.reservation = None;
             }
             Instruction::Addi { rd, rs1, imm } => {
                 let res = self.read_reg(rs1).wrapping_add(imm as u32);
@@ -485,6 +494,7 @@ impl Cpu for RiscV {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
                 let val = self.read_reg(rs2);
                 bus.write_u32(addr as u64, val)?;
+                self.reservation = None;
             }
             Instruction::CLwsp { rd, imm } => {
                 let sp = self.read_reg(2);
@@ -497,6 +507,7 @@ impl Cpu for RiscV {
                 let addr = sp.wrapping_add(imm);
                 let val = self.read_reg(rs2);
                 bus.write_u32(addr as u64, val)?;
+                self.reservation = None;
             }
             Instruction::CJr { rs1 } => {
                 next_pc = self.read_reg(rs1) & !1;
@@ -525,6 +536,100 @@ impl Cpu for RiscV {
                     self.write_reg(rd, res);
                 }
             }
+
+            // ---- RV32A: atomic memory operations (word) ----
+            //
+            // Single-hart semantics: aq/rl are ignored. LR.W records a
+            // reservation on the effective address; SC.W succeeds iff the
+            // current reservation matches its effective address. Any store
+            // (including any AMO*) invalidates the reservation per §8.2.
+            Instruction::LrW { rd, rs1 } => {
+                let addr = self.read_reg(rs1);
+                let val = bus.read_u32(addr as u64)?;
+                self.write_reg(rd, val);
+                self.reservation = Some(addr);
+            }
+            Instruction::ScW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let store_ok = self.reservation == Some(addr);
+                if store_ok {
+                    bus.write_u32(addr as u64, self.read_reg(rs2))?;
+                    self.write_reg(rd, 0); // success
+                } else {
+                    self.write_reg(rd, 1); // failure
+                }
+                self.reservation = None;
+            }
+            Instruction::AmoSwapW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                bus.write_u32(addr as u64, self.read_reg(rs2))?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoAddW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                bus.write_u32(addr as u64, old.wrapping_add(self.read_reg(rs2)))?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoXorW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                bus.write_u32(addr as u64, old ^ self.read_reg(rs2))?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoOrW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                bus.write_u32(addr as u64, old | self.read_reg(rs2))?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoAndW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                bus.write_u32(addr as u64, old & self.read_reg(rs2))?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoMinW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                let rhs = self.read_reg(rs2);
+                let new = (old as i32).min(rhs as i32) as u32;
+                bus.write_u32(addr as u64, new)?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoMaxW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                let rhs = self.read_reg(rs2);
+                let new = (old as i32).max(rhs as i32) as u32;
+                bus.write_u32(addr as u64, new)?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoMinuW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                let new = old.min(self.read_reg(rs2));
+                bus.write_u32(addr as u64, new)?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+            Instruction::AmoMaxuW { rd, rs1, rs2 } => {
+                let addr = self.read_reg(rs1);
+                let old = bus.read_u32(addr as u64)?;
+                let new = old.max(self.read_reg(rs2));
+                bus.write_u32(addr as u64, new)?;
+                self.write_reg(rd, old);
+                self.reservation = None;
+            }
+
             Instruction::Unknown(inst) => {
                 tracing::error!("Unknown instruction {:#x} at {:#x}", inst, self.pc);
                 return Err(crate::SimulationError::DecodeError(self.pc as u64));
@@ -875,6 +980,94 @@ mod tests {
             3,
             "ADDI at 0x8 must not be re-executed (would read 4 if bug present)"
         );
+    }
+
+    #[test]
+    fn test_riscv_rv32a_atomics() {
+        // Smoke-test the RV32A word atomics. Build a small program in RAM and
+        // run instructions by placing them in flash one at a time via step().
+        //
+        // Layout: put the memory cell we'll operate on at 0x2000_0010 in RAM.
+        // Put the program at flash 0x0.
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x200];
+
+        // Helper: encode an R-type (opcode=0x2F) atomic. All RV32A word
+        // atomics share funct3 = 0b010.
+        fn amo(funct5: u32, rs2: u32, rs1: u32, rd: u32) -> u32 {
+            (funct5 << 27) | (rs2 << 20) | (rs1 << 15) | (0b010 << 12) | (rd << 7) | 0x2F
+        }
+
+        // Program layout in flash:
+        // 0x00: LUI   x5, 0x20000       ; x5 = 0x20000000
+        // 0x04: ADDI  x5, x5, 0x10      ; x5 = 0x20000010   (our atomic cell)
+        // 0x08: ADDI  x6, x0, 7         ; x6 = 7
+        // 0x0C: ADDI  x7, x0, 42        ; x7 = 42
+        // 0x10: SW    x6, 0(x5)         ; mem[x5] = 7
+        // 0x14: LR.W  x8, (x5)          ; x8 = 7 (reservation on x5)
+        // 0x18: SC.W  x9, x7, (x5)      ; x9 = 0 (success), mem[x5] = 42
+        // 0x1C: AMOADD.W x10, x7, (x5)  ; x10 = 42, mem[x5] = 42 + 42 = 84
+        // 0x20: AMOMAX.W x11, x0, (x5)  ; x11 = 84, mem[x5] = max(84, 0) = 84
+        // 0x24: SC.W  x12, x7, (x5)     ; x12 = 1 (failure — reservation cleared)
+        //
+        // LUI rd=5, imm[31:12]=0x20000 — rd = 0x20000000.
+        let lui = 0x20000000u32 | (5 << 7) | 0x37;
+        // ADDI x5, x5, 0x10 -> imm=0x10 rs1=5 funct3=0 rd=5 op=0x13
+        let addi_x5 = (0x10 << 20) | (5 << 15) | (5 << 7) | 0x13;
+        // ADDI x6, x0, 7
+        let addi_x6_7 = (7 << 20) | (6 << 7) | 0x13;
+        // ADDI x7, x0, 42
+        let addi_x7_42 = (42 << 20) | (7 << 7) | 0x13;
+        // SW x6, 0(x5) -> imm=0, funct3=0b010, rs1=5, rs2=6, op=0x23
+        let sw = (6 << 20) | (5 << 15) | (0b010 << 12) | 0x23;
+        let lr_w = amo(0x02, 0, 5, 8);
+        let sc_w = amo(0x03, 7, 5, 9);
+        let amoadd = amo(0x00, 7, 5, 10);
+        let amomax = amo(0x14, 0, 5, 11);
+        let sc_w_fail = amo(0x03, 7, 5, 12);
+
+        let prog = [
+            lui,
+            addi_x5,
+            addi_x6_7,
+            addi_x7_42,
+            sw,
+            lr_w,
+            sc_w,
+            amoadd,
+            amomax,
+            sc_w_fail,
+        ];
+        for (i, w) in prog.iter().enumerate() {
+            bus.write_u32((i as u64) * 4, *w).unwrap();
+        }
+
+        cpu.pc = 0;
+        let mut machine = Machine::new(cpu, bus);
+
+        for _ in 0..prog.len() {
+            machine.step().unwrap();
+        }
+
+        // After the whole program:
+        assert_eq!(machine.cpu.read_reg(5), 0x20000010, "x5 = cell address");
+        assert_eq!(machine.cpu.read_reg(8), 7, "LR.W loaded initial value 7");
+        assert_eq!(machine.cpu.read_reg(9), 0, "first SC.W succeeded");
+        assert_eq!(machine.cpu.read_reg(10), 42, "AMOADD.W returned pre-add value");
+        assert_eq!(
+            machine.cpu.read_reg(11),
+            84,
+            "AMOMAX.W returned pre-op value (post-AMOADD result)"
+        );
+        assert_eq!(
+            machine.cpu.read_reg(12),
+            1,
+            "second SC.W fails: AMOADD invalidated the reservation"
+        );
+        // Final memory state: 84.
+        let final_val = machine.bus.read_u32(0x20000010).unwrap();
+        assert_eq!(final_val, 84);
     }
 
     #[test]

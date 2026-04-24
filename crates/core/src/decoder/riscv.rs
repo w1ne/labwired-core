@@ -81,6 +81,20 @@ pub enum Instruction {
     CBeqz { rs1: u8, imm: i32 },
     CBnez { rs1: u8, imm: i32 },
 
+    // RV32A Atomics (word). aq/rl ignored on a single-hart simulator;
+    // any store invalidates any outstanding LR reservation per ISA §8.2.
+    LrW { rd: u8, rs1: u8 },
+    ScW { rd: u8, rs1: u8, rs2: u8 },
+    AmoSwapW { rd: u8, rs1: u8, rs2: u8 },
+    AmoAddW { rd: u8, rs1: u8, rs2: u8 },
+    AmoXorW { rd: u8, rs1: u8, rs2: u8 },
+    AmoOrW { rd: u8, rs1: u8, rs2: u8 },
+    AmoAndW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMinW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMaxW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMinuW { rd: u8, rs1: u8, rs2: u8 },
+    AmoMaxuW { rd: u8, rs1: u8, rs2: u8 },
+
     Unknown(u32),
 }
 
@@ -292,6 +306,36 @@ pub fn decode_rv32(inst: u32) -> Instruction {
                 5 => Instruction::Csrrwi { rd, imm: rs1, csr },
                 6 => Instruction::Csrrsi { rd, imm: rs1, csr },
                 7 => Instruction::Csrrci { rd, imm: rs1, csr },
+                _ => Instruction::Unknown(inst),
+            }
+        }
+        0x2F => {
+            // RV32A: atomic memory operations (word only — funct3 must be 0b010).
+            // Layout: funct5 | aq | rl | rs2 | rs1 | funct3 | rd | opcode
+            // aq (bit 26) and rl (bit 25) are ignored on a single hart.
+            if funct3 != 0b010 {
+                return Instruction::Unknown(inst);
+            }
+            let funct5 = (inst >> 27) & 0x1F;
+            match funct5 {
+                0x02 => {
+                    // LR.W has rs2 == 0 by encoding.
+                    if rs2 != 0 {
+                        Instruction::Unknown(inst)
+                    } else {
+                        Instruction::LrW { rd, rs1 }
+                    }
+                }
+                0x03 => Instruction::ScW { rd, rs1, rs2 },
+                0x01 => Instruction::AmoSwapW { rd, rs1, rs2 },
+                0x00 => Instruction::AmoAddW { rd, rs1, rs2 },
+                0x04 => Instruction::AmoXorW { rd, rs1, rs2 },
+                0x0C => Instruction::AmoAndW { rd, rs1, rs2 },
+                0x08 => Instruction::AmoOrW { rd, rs1, rs2 },
+                0x10 => Instruction::AmoMinW { rd, rs1, rs2 },
+                0x14 => Instruction::AmoMaxW { rd, rs1, rs2 },
+                0x18 => Instruction::AmoMinuW { rd, rs1, rs2 },
+                0x1C => Instruction::AmoMaxuW { rd, rs1, rs2 },
                 _ => Instruction::Unknown(inst),
             }
         }
