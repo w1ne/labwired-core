@@ -436,8 +436,17 @@ impl Cpu for RiscV {
     fn set_sp(&mut self, val: u32) {
         self.write_reg(2, val); // x2 is SP
     }
-    fn set_exception_pending(&mut self, _exception_num: u32) {
-        // TODO: RISC-V Interrupts
+    fn set_exception_pending(&mut self, exception_num: u32) {
+        // Route peripheral-level IRQs into mip. We fold everything into
+        // MEIP (bit 11) because this crate does not yet model a PLIC that
+        // can distinguish individual sources. Standard machine-mode bits
+        // (MSIP=3, MTIP=7, MEIP=11) pass through unchanged when the caller
+        // already uses the mip bit position.
+        let bit = match exception_num {
+            3 | 7 | 11 => exception_num,
+            _ => 11, // Any external source collapses into MEIP.
+        };
+        self.mip |= 1 << bit;
     }
 
     fn get_register(&self, id: u8) -> u32 {
@@ -650,6 +659,52 @@ mod tests {
             (machine.cpu.mstatus & (1 << 3)) != 0,
             "MIE should be re-enabled"
         );
+    }
+
+    #[test]
+    fn test_riscv_external_interrupt_from_peripheral() {
+        // Verifies that Cpu::set_exception_pending (called by Machine when a
+        // peripheral fires an IRQ) actually pends the machine-external
+        // interrupt bit in mip and dispatches the trap.
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+
+        cpu.mtvec = 0x2000;
+        cpu.mie = 1 << 11; // MEIE
+        cpu.mstatus = 1 << 3; // MIE
+
+        bus.flash.data = vec![0; 0x3000];
+        // 0x0: JAL x0, 0 (infinite loop)
+        bus.write_u32(0x0, 0x0000006F).unwrap();
+        // 0x2000: MRET
+        bus.write_u32(0x2000, 0x30200073).unwrap();
+
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+
+        // Simulate a peripheral firing IRQ 28 (STM32 TIM2-style number).
+        // Collapses into MEIP (bit 11) via set_exception_pending.
+        machine.cpu.set_exception_pending(28);
+        assert_eq!(machine.cpu.mip & (1 << 11), 1 << 11, "MEIP should be set");
+
+        // Step once: JAL self runs, then interrupt check sees MEIP & MEIE
+        // with MIE globally enabled -> trap to mtvec.
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x2000, "Trap should jump to mtvec");
+        assert_eq!(
+            machine.cpu.mcause, 0x8000_000B,
+            "mcause should encode async MEIP (0x8..0b)"
+        );
+        assert_eq!(
+            machine.cpu.mstatus & (1 << 3),
+            0,
+            "MIE should be cleared on trap entry"
+        );
+
+        // MSIP bit position passthrough (3 -> bit 3 directly).
+        machine.cpu.mip = 0;
+        machine.cpu.set_exception_pending(3);
+        assert_eq!(machine.cpu.mip & (1 << 3), 1 << 3);
     }
 
     #[test]

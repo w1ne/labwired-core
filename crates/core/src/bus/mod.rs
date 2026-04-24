@@ -500,6 +500,22 @@ impl SystemBus {
     }
 }
 
+impl SystemBus {
+    #[inline]
+    fn peripheral_at(&self, addr: u64) -> Option<&PeripheralEntry> {
+        self.peripherals
+            .iter()
+            .find(|p| addr >= p.base && addr < p.base + p.size)
+    }
+
+    #[inline]
+    fn peripheral_at_mut(&mut self, addr: u64) -> Option<&mut PeripheralEntry> {
+        self.peripherals
+            .iter_mut()
+            .find(|p| addr >= p.base && addr < p.base + p.size)
+    }
+}
+
 impl crate::Bus for SystemBus {
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // Flash first: instruction fetch dominates load/store on most workloads.
@@ -509,13 +525,9 @@ impl crate::Bus for SystemBus {
         if let Some(val) = self.ram.read_u8(addr) {
             return Ok(val);
         }
-
-        for p in &self.peripherals {
-            if addr >= p.base && addr < p.base + p.size {
-                return p.dev.read(addr - p.base);
-            }
+        if let Some(p) = self.peripheral_at(addr) {
+            return p.dev.read(addr - p.base);
         }
-
         Err(SimulationError::MemoryViolation(addr))
     }
 
@@ -527,13 +539,9 @@ impl crate::Bus for SystemBus {
         if self.flash.write_u8(addr, value) {
             return Ok(());
         }
-
-        for p in &mut self.peripherals {
-            if addr >= p.base && addr < p.base + p.size {
-                return p.dev.write(addr - p.base, value);
-            }
+        if let Some(p) = self.peripheral_at_mut(addr) {
+            return p.dev.write(addr - p.base, value);
         }
-
         Err(SimulationError::MemoryViolation(addr))
     }
 

@@ -86,7 +86,7 @@ Target subset today: **RV32I base ISA.**
 | **A** (atomic)  | ❌ Not implemented (`LR`, `SC`, `AMO*`)                                      |
 | **C** (compressed) | ❌ Not implemented                                                        |
 | **F** / **D** (FP) | ❌ Not implemented                                                        |
-| Interrupts      | ❌ **Not implemented** — tracked as `TODO: RISC-V Interrupts` in source.     |
+| Interrupts      | 🟡 Machine-mode only. Timer (MTIP via mtime/mtimecmp) and external peripheral IRQs (folded into MEIP) dispatch via `mtvec`, with `mstatus.MIE` / `mie` gating. No PLIC — every external IRQ source collapses to MEIP. No per-source priority. |
 | Privilege modes | M-mode only; no S/U mode or CSR enforcement.                                 |
 
 **Implication:** firmware compiled with default `-march=rv32imac_zicsr` will
