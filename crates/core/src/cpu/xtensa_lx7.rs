@@ -365,6 +365,102 @@ impl XtensaLx7 {
                 let cond = self.regs.read_logical(as_) >= self.regs.read_logical(at);
                 self.branch(offset, len, cond);
             }
+
+            // ── D7: Jumps and calls ───────────────────────────────────────────
+
+            // J offset: unconditional jump; decoder pre-bakes +4 into offset.
+            // pc = pc + offset  (offset = sign_extend18(imm18) + 4)
+            J { offset } => {
+                self.pc = self.pc.wrapping_add(offset as u32);
+            }
+
+            // JX as_: register-indirect unconditional jump.
+            // pc = a[as_]
+            Jx { as_ } => {
+                self.pc = self.regs.read_logical(as_);
+            }
+
+            // CALL0 offset: save return address in a0, jump to target.
+            // a0 = pc + 3  (return address: byte after this 3-byte instruction)
+            // target = ((pc + 4) & !3) + offset  (decoder: offset = sext18 * 4, no +4 bias)
+            Call0 { offset } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
+                self.regs.write_logical(0, ret_pc);
+                self.pc = target;
+            }
+
+            // CALLX0 as_: register-indirect CALL0.
+            // a0 = pc + 3, pc = a[as_]
+            Callx0 { as_ } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = self.regs.read_logical(as_);
+                self.regs.write_logical(0, ret_pc);
+                self.pc = target;
+            }
+
+            // CALL4/8/12 offset: windowed call (window rotation deferred to ENTRY in Phase F1).
+            // a[N] = pc + 3  (return PC, placed in register that becomes a0 after ENTRY rotates)
+            // PS.CALLINC = N / 4  (1, 2, or 3 for CALL4, CALL8, CALL12)
+            // target = ((pc + 4) & !3) + offset
+            Call4 { offset } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
+                self.regs.write_logical(4, ret_pc);
+                self.ps.set_callinc(1);
+                self.pc = target;
+            }
+            Call8 { offset } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
+                self.regs.write_logical(8, ret_pc);
+                self.ps.set_callinc(2);
+                self.pc = target;
+            }
+            Call12 { offset } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
+                self.regs.write_logical(12, ret_pc);
+                self.ps.set_callinc(3);
+                self.pc = target;
+            }
+
+            // CALLX4/8/12 as_: register-indirect windowed calls.
+            // Same semantics as CALL4/8/12 but target = a[as_] (before we overwrite a[N]).
+            Callx4 { as_ } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = self.regs.read_logical(as_);
+                self.regs.write_logical(4, ret_pc);
+                self.ps.set_callinc(1);
+                self.pc = target;
+            }
+            Callx8 { as_ } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = self.regs.read_logical(as_);
+                self.regs.write_logical(8, ret_pc);
+                self.ps.set_callinc(2);
+                self.pc = target;
+            }
+            Callx12 { as_ } => {
+                let ret_pc = self.pc.wrapping_add(3);
+                let target = self.regs.read_logical(as_);
+                self.regs.write_logical(12, ret_pc);
+                self.ps.set_callinc(3);
+                self.pc = target;
+            }
+
+            // RET: CALL0 return. pc = a0.
+            Ret => {
+                self.pc = self.regs.read_logical(0);
+            }
+
+            // RETW: windowed return — deferred to Phase F2.
+            Retw => {
+                return Err(SimulationError::NotImplemented(
+                    "RETW: windowed return deferred to Phase F2".to_string(),
+                ));
+            }
+
             // BANY: taken if (as_ & at) != 0
             Bany { as_, at, offset } => {
                 let cond = (self.regs.read_logical(as_) & self.regs.read_logical(at)) != 0;

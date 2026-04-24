@@ -187,6 +187,48 @@ fn enc_addmi(at: u32, as_: u32, imm8: i32) -> u32 {
     0x2 | (at << 4) | (as_ << 8) | (0xD << 12) | (imm << 16)
 }
 
+// ── D7 jump/call/ret encoding helpers ───────────────────────────────────────
+
+/// Encode J offset (op0=0x6, n=0).
+/// `offset_with_bias` is the signed byte displacement **including** the +4 pre-baked
+/// by the decoder, i.e. `offset_with_bias = sign_extend18(imm18) + 4`.
+/// Execute: `pc = pc.wrapping_add(offset_with_bias as u32)`.
+fn enc_j(offset_with_bias: i32) -> u32 {
+    // Remove the +4 bias to recover raw imm18.
+    let imm18 = ((offset_with_bias - 4) as u32) & 0x3_FFFF;
+    0x6 | (imm18 << 6)
+}
+
+/// Encode JX as_  (op0=0, op1=0, op2=0, r=0, t=0xA, s=as_).
+fn enc_jx(as_: u32) -> u32 {
+    st0(0, as_, 0xA)
+}
+
+/// Encode CALL0/4/8/12 (op0=0x5, n=0/1/2/3).
+/// `offset_bytes` is the signed byte displacement from `((pc+4)&!3)` to the target;
+/// must be a multiple of 4.
+fn enc_call(n: u32, offset_bytes: i32) -> u32 {
+    let imm18 = ((offset_bytes / 4) as u32) & 0x3_FFFF;
+    0x5 | (n << 4) | (imm18 << 6)
+}
+
+/// Encode CALLX0/4/8/12 (op0=0, op1=0, op2=0, r=0, s=as_).
+/// t field: 0xC=x0, 0xD=x4, 0xE=x8, 0xF=x12.
+fn enc_callx(n: u32, as_: u32) -> u32 {
+    let t = 0xC + n;
+    st0(0, as_, t)
+}
+
+/// Encode RET  (op0=0, op1=0, op2=0, r=0, t=0x8).
+fn enc_ret() -> u32 {
+    st0(0, 0, 0x8)
+}
+
+/// Encode RETW  (op0=0, op1=0, op2=0, r=0, t=0x9).
+fn enc_retw() -> u32 {
+    st0(0, 0, 0x9)
+}
+
 // ── Bus helpers ─────────────────────────────────────────────────────────────
 
 /// Write a sequence of 3-byte wide instructions to the bus starting at `addr`.
@@ -1726,4 +1768,284 @@ fn test_exec_store_then_load_roundtrip() {
 
     run_until_error(&mut cpu, &mut bus);
     assert_eq!(cpu.get_register(4), 0xABCD1234, "roundtrip: store then load");
+}
+
+// ── D7: Jump / CALL / RET / CALLX / RETW tests ─────────────────────────────
+
+/// J forward: jump over a MOVI, land on MOVI a2=42, then BREAK.
+///
+/// Layout (each instruction is 3 bytes):
+///   PC+0: J +6  (offset_with_bias=6, sext18=2)
+///   PC+3: MOVI a2, 99  ← should be skipped
+///   PC+6: MOVI a2, 42
+///   PC+9: BREAK
+#[test]
+fn test_exec_j_forward() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_j(6),           // J → PC+6
+        movi(2, 99),        // skipped
+        movi(2, 42),        // target
+        st0(4, 1, 0xF),     // BREAK
+    ]);
+
+    let err = run_until_error(&mut cpu, &mut bus);
+    assert!(matches!(err, SimulationError::BreakpointHit(_)), "expected BreakpointHit");
+    assert_eq!(cpu.get_register(2), 42, "a2 should be 42 (MOVI at landing target)");
+}
+
+/// J backward: CPU starts at the J instruction and jumps back to BREAK.
+///
+/// Layout:
+///   PC+0: BREAK
+///   PC+3: J backward to PC+0  (offset_with_bias = (PC+0)-(PC+3) = -3)
+///
+/// CPU starts at PC+3; J lands at PC+0 (BREAK).
+#[test]
+fn test_exec_j_backward() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+
+    // Write instructions at TEST_PC; start execution at the J instruction (TEST_PC+3).
+    write_insns(&mut bus, TEST_PC as u64, &[
+        st0(4, 1, 0xF),     // BREAK at PC+0
+        enc_j(-3),          // J → PC+0  (offset_with_bias = -3)
+    ]);
+
+    cpu.set_pc(TEST_PC + 3);
+    let err = run_until_error(&mut cpu, &mut bus);
+    assert!(
+        matches!(err, SimulationError::BreakpointHit(pc) if pc == TEST_PC),
+        "expected BreakpointHit at TEST_PC, got {:?}", err
+    );
+}
+
+/// JX as_: load target address into a3, JX a3 jumps there.
+///
+/// Layout:
+///   PC+0: JX a3                 (a3 pre-loaded = PC+6)
+///   PC+3: MOVI a2, 99           ← skipped
+///   PC+6: MOVI a2, 42
+///   PC+9: BREAK
+#[test]
+fn test_exec_jx() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Pre-load a3 with the target address.
+    cpu.set_register(3, TEST_PC + 6);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_jx(3),          // JX a3 → PC+6
+        movi(2, 99),        // skipped
+        movi(2, 42),        // target
+        st0(4, 1, 0xF),     // BREAK
+    ]);
+
+    let err = run_until_error(&mut cpu, &mut bus);
+    assert!(matches!(err, SimulationError::BreakpointHit(_)), "expected BreakpointHit");
+    assert_eq!(cpu.get_register(2), 42, "a2 should be 42 (JX landed at MOVI)");
+}
+
+/// CALL0 + RET round-trip: spec scenario "subroutine that returns a constant in a2."
+///
+/// Layout:
+///   PC+0:  CALL0 subroutine          (target = PC+12, offset=8 from ((PC+4)&!3)=PC+4)
+///   PC+3:  BREAK                     (halts after return; inspects a2)
+///   PC+6:  (padding — 3 bytes not reached; needed to align subroutine to PC+12)
+///   PC+12: MOVI a2, 42               (subroutine body)
+///   PC+15: RET                        (returns to PC+3)
+///
+/// a0 after CALL0 = PC+3 (return address). RET → pc = a0 = PC+3 (BREAK).
+#[test]
+fn test_exec_call0_returns_via_ret() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // ((TEST_PC + 4) & !3) = TEST_PC + 4  (TEST_PC is 4-aligned)
+    // Target = TEST_PC + 12 → offset_bytes = 12 - 4 = 8
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_call(0, 8), // CALL0 target=PC+12 (offset from aligned base = 8)
+        st0(4, 1, 0xF), // BREAK at PC+3
+        movi(2, 0),     // padding at PC+6 (not reached)
+    ]);
+    write_insns(&mut bus, (TEST_PC + 12) as u64, &[
+        movi(2, 42),    // MOVI a2, 42  at PC+12
+        enc_ret(),      // RET           at PC+15
+    ]);
+
+    let err = run_until_error(&mut cpu, &mut bus);
+    assert!(matches!(err, SimulationError::BreakpointHit(_)), "expected BreakpointHit");
+    assert_eq!(cpu.get_register(2), 42, "a2 should be 42 (returned from subroutine)");
+    assert_eq!(
+        cpu.get_register(0),
+        TEST_PC + 3,
+        "a0 should be return address (PC+3)"
+    );
+}
+
+/// CALLX0 + RET: register-indirect call round-trip.
+///
+/// a5 pre-loaded with subroutine address. CALLX0 a5 → a0 = PC+3, jump.
+/// Subroutine: MOVI a2, 77; RET.
+#[test]
+fn test_exec_callx0_returns() {
+    const SUBR: u32 = TEST_PC + 12;
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(5, SUBR);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_callx(0, 5), // CALLX0 a5 → jump to SUBR; a0 = PC+3
+        st0(4, 1, 0xF),  // BREAK at PC+3
+        movi(2, 0),      // padding at PC+6
+    ]);
+    write_insns(&mut bus, SUBR as u64, &[
+        movi(2, 77),     // MOVI a2, 77
+        enc_ret(),       // RET → pc = a0 = PC+3
+    ]);
+
+    let err = run_until_error(&mut cpu, &mut bus);
+    assert!(matches!(err, SimulationError::BreakpointHit(_)), "expected BreakpointHit");
+    assert_eq!(cpu.get_register(2), 77, "a2 should be 77");
+}
+
+/// CALL4: PS.CALLINC must be 1 after execution.
+#[test]
+fn test_exec_call4_sets_callinc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // CALL4 + BREAK at subroutine so we can inspect state.
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_call(1, 8), // CALL4 target=PC+12
+    ]);
+    write_insns(&mut bus, (TEST_PC + 12) as u64, &[
+        st0(4, 1, 0xF), // BREAK at subroutine entry
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.ps.callinc(), 1, "PS.CALLINC should be 1 after CALL4");
+}
+
+/// CALL8: PS.CALLINC must be 2 after execution.
+#[test]
+fn test_exec_call8_sets_callinc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_call(2, 8), // CALL8 target=PC+12
+    ]);
+    write_insns(&mut bus, (TEST_PC + 12) as u64, &[
+        st0(4, 1, 0xF), // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.ps.callinc(), 2, "PS.CALLINC should be 2 after CALL8");
+}
+
+/// CALL12: PS.CALLINC must be 3 after execution.
+#[test]
+fn test_exec_call12_sets_callinc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_call(3, 8), // CALL12 target=PC+12
+    ]);
+    write_insns(&mut bus, (TEST_PC + 12) as u64, &[
+        st0(4, 1, 0xF), // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.ps.callinc(), 3, "PS.CALLINC should be 3 after CALL12");
+}
+
+/// CALL4 writes the return PC into a4 (the register that becomes a0 after ENTRY rotates).
+///
+/// Return PC = call_site_PC + 3.
+#[test]
+fn test_exec_call4_writes_return_pc_to_a4() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_call(1, 8), // CALL4 at TEST_PC; a4 ← TEST_PC+3
+    ]);
+    write_insns(&mut bus, (TEST_PC + 12) as u64, &[
+        st0(4, 1, 0xF), // BREAK at subroutine entry
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(
+        cpu.get_register(4),
+        TEST_PC + 3,
+        "a4 should hold return PC (call site + 3)"
+    );
+}
+
+/// CALLX8 + register-indirect: verify jump target and return-PC placement in a8.
+///
+/// a7 pre-loaded with subroutine address. CALLX8 a7 → a8 = PC+3, jump to a7.
+#[test]
+fn test_exec_callx8_jumps_and_writes_return_pc() {
+    const SUBR: u32 = TEST_PC + 12;
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(7, SUBR);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_callx(2, 7), // CALLX8 a7 → a8 = PC+3, jump to SUBR
+    ]);
+    write_insns(&mut bus, SUBR as u64, &[
+        st0(4, 1, 0xF),  // BREAK at subroutine entry
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_pc(), SUBR, "PC should be at subroutine");
+    assert_eq!(cpu.get_register(8), TEST_PC + 3, "a8 should hold return PC");
+    assert_eq!(cpu.ps.callinc(), 2, "PS.CALLINC should be 2 for CALLX8");
+}
+
+/// RETW must return NotImplemented (deferred to Phase F2).
+#[test]
+fn test_exec_retw_returns_not_implemented() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_retw(), // RETW — should error immediately
+    ]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    assert!(
+        matches!(err, SimulationError::NotImplemented(_)),
+        "RETW must return NotImplemented, got {:?}", err
+    );
 }
