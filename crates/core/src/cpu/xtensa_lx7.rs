@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: MIT
 
 //! Xtensa LX7 CPU backend. Glues AR file, PS, SR file with the fetch loop
-//! and `Cpu` trait. Exec is stubbed in Plan 1 (returns NotImplemented for
-//! all decoded instructions); Phase D fills it in.
+//! and `Cpu` trait.
+//!
+//! D1: ALU reg-reg (ADD/SUB/AND/OR/XOR/NEG/ABS/ADDX*/SUBX*), MOVI, NOP/fences, BREAK.
+//! D2: Shift exec (SLL/SRL/SRA/SRC/SLLI/SRLI/SRAI) + SAR-setup (SSL/SSR/SSAI/SSA8L/SSA8B).
+//! Remaining instruction classes in progress.
 
 use crate::cpu::xtensa_regs::{ArFile, Ps};
-use crate::cpu::xtensa_sr::{XtensaSrFile, VECBASE};
+use crate::cpu::xtensa_sr::{XtensaSrFile, SAR, VECBASE};
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
@@ -117,6 +120,114 @@ impl XtensaLx7 {
             Nop | Memw | Extw | Isync | Rsync | Esync | Dsync => {
                 self.pc = self.pc.wrapping_add(len);
             }
+
+            // ── D2: SAR-setup instructions ───────────────────────────────────
+            // SSL as_: SAR = 32 - (as_ & 0x1F).
+            // When as_ & 0x1F == 0, SAR = 32 — valid 6-bit value per ISA RM §8.
+            Ssl { as_ } => {
+                let v = 32u32 - (self.regs.read_logical(as_) & 0x1F);
+                self.sr.write(SAR, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SSR as_: SAR = as_ & 0x1F.
+            Ssr { as_ } => {
+                let v = self.regs.read_logical(as_) & 0x1F;
+                self.sr.write(SAR, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SSAI shamt: SAR = shamt & 0x1F (decoder already bounds shamt to 5 bits).
+            Ssai { shamt } => {
+                self.sr.write(SAR, shamt as u32 & 0x1F);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SSA8L as_: SAR = (as_ & 3) * 8. (little-endian byte-select; ISA RM §4.3.7)
+            Ssa8l { as_ } => {
+                let v = (self.regs.read_logical(as_) & 3) * 8;
+                self.sr.write(SAR, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SSA8B as_: SAR = 32 - (as_ & 3) * 8. (big-endian byte-select; ISA RM §4.3.7)
+            // When as_ & 3 == 0, SAR = 32 — valid 6-bit value (SAR accommodates 0..=63).
+            Ssa8b { as_ } => {
+                let v = 32u32 - (self.regs.read_logical(as_) & 3) * 8;
+                self.sr.write(SAR, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // ── D2: Shift register instructions ──────────────────────────────
+            // SLL ar, as_: ar = as_ << (32 - SAR).
+            // When SAR=0, shift count = 32. Use u64 cast to avoid Rust UB
+            // (u64 shifts are defined for counts 0..=63 per Rust reference).
+            // (as_ as u64) << 32 = 0 for any as_, which matches ISA RM §8.
+            Sll { ar, as_ } => {
+                let sar = self.sr.read(SAR);
+                let shift = 32u32.wrapping_sub(sar); // shift count; SAR is 0..=31 from SSL/SSR
+                let v = ((self.regs.read_logical(as_) as u64) << shift) as u32;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SRL ar, at: ar = at >> SAR (unsigned). SAR is 0..=31.
+            // For SAR >= 32 (possible if set via WSR), result is 0 per ISA RM §8.
+            Srl { ar, at } => {
+                let sar = self.sr.read(SAR);
+                let v = if sar >= 32 {
+                    0
+                } else {
+                    self.regs.read_logical(at) >> sar
+                };
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SRA ar, at: ar = (at as i32) >> SAR (arithmetic). SAR is 0..=31.
+            // For SAR >= 32 result is all sign bits: 0xFFFFFFFF or 0x00000000.
+            Sra { ar, at } => {
+                let sar = self.sr.read(SAR);
+                let src = self.regs.read_logical(at) as i32;
+                let v = if sar >= 32 {
+                    if src < 0 { u32::MAX } else { 0 }
+                } else {
+                    (src >> sar) as u32
+                };
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SRC ar, as_, at: ar = low32((as_ : at) >> SAR).
+            // Concatenate as_ (upper 32b) and at (lower 32b) into 64b, shift right by SAR.
+            // SAR is 0..=63; u64 shifts for counts 0..=63 are safe in Rust.
+            Src { ar, as_, at } => {
+                let sar = self.sr.read(SAR);
+                let hi = self.regs.read_logical(as_) as u64;
+                let lo = self.regs.read_logical(at) as u64;
+                let w = (hi << 32) | lo;
+                let v = (w >> sar) as u32;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // ── D2: Shift immediate instructions ─────────────────────────────
+            // SLLI ar, as_, shamt: ar = as_ << shamt. shamt is 1..=31 (decoder
+            // computes shamt = 32 - raw, so it's the actual count, never 0 or 32).
+            Slli { ar, as_, shamt } => {
+                let v = self.regs.read_logical(as_) << shamt;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SRLI ar, at, shamt: ar = at >> shamt (unsigned). shamt 0..=15 from decoder.
+            // Note: `at` is the t field (= shamt & 0xF per ISA encoding).
+            Srli { ar, at, shamt } => {
+                let v = self.regs.read_logical(at) >> shamt;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SRAI ar, at, shamt: ar = (at as i32) >> shamt (arithmetic). shamt 0..=31.
+            // shamt < 32 always here (decoder range), so no need for SAR-guard.
+            Srai { ar, at, shamt } => {
+                let src = self.regs.read_logical(at) as i32;
+                let v = (src >> shamt) as u32;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())
