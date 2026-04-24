@@ -37,7 +37,7 @@
 //! | `movi.n a3,95`       | 0xC  | `5c f3`       | raw=95→positive 95      |
 //! | `l32i.n a3,a4,4`     | 0x8  | `38 14`       | at=s, as_=t, imm=r<<2   |
 //! | `s32i.n a3,a4,8`     | 0x9  | `39 24`       | at=s, as_=t, imm=r<<2   |
-//! | `beqz.n a3,+4`       | 0xC  | `8c 23`       | as_=t, off=(r+2)*(1+b4) |
+//! | `beqz.n a3,+4`       | 0xC  | `8c 03`       | as_=t, off=((b4<<4)\|r)+4 |
 //! | `bnez.n a3,+4`       | 0xC  | `cc 03`       | same formula as BEQZ.N  |
 //! | `nop.n`              | 0xD  | `3d f0`       | r=0xF, s=3              |
 //! | `ret.n`              | 0xD  | `0d f0`       | r=0xF, s=0              |
@@ -115,19 +115,26 @@ fn decode_narrow_c(hw: u16, r: u8, s: u8, t: u8) -> Instruction {
     } else if s & 0x4 == 0 {
         // BEQZ.N  as_, offset
         // as_ = t (bits[11:8])
-        // offset = (r + 2) * (1 + bit4)  where bit4 = (hw >> 4) & 1
-        // Offsets are forward-only (range 2..=32), relative to PC + 2.
-        // Verified: beqz.n a3,+4 → 0x238c → t=3=as_, r=2, bit4=0 → (2+2)*1=4
-        //           beqz.n a3,+32 → 0xe39c → t=3=as_, r=14, bit4=1 → (14+2)*2=32
-        let bit4 = ((hw >> 4) & 1) as u32;
-        let offset = (r as u32 + 2) * (1 + bit4);
+        // bit4 = bit 4 of the 16-bit halfword = s[0] = (hw >> 4) & 1
+        // offset = ((bit4 << 4) | r) + 4
+        // Range: 4..=35 bytes, forward-only, relative to PC (exec does pc += offset).
+        // HW-oracle verified (xtensa-esp32s3-elf-as):
+        //   beqz.n a3,+4  → 0x038c: r=0,  b4=0 → ((0<<4)|0)+4  = 4
+        //   beqz.n a3,+6  → 0x238c: r=2,  b4=0 → ((0<<4)|2)+4  = 6
+        //   beqz.n a3,+18 → 0xe38c: r=14, b4=0 → ((0<<4)|14)+4 = 18
+        //   beqz.n a3,+21 → 0x139c: r=1,  b4=1 → ((1<<4)|1)+4  = 21
+        //   beqz.n a3,+35 → 0xf39c: r=15, b4=1 → ((1<<4)|15)+4 = 35
+        let b4 = ((hw >> 4) & 1) as u32;
+        let offset = ((b4 << 4) | r as u32) + 4;
         Instruction::Beqz { as_: t, offset: offset as i32 }
     } else {
         // BNEZ.N  as_, offset
-        // Same offset formula as BEQZ.N.
-        // Verified: bnez.n a3,+2 → 0x03cc → t=3=as_, r=0, bit4=0 → (0+2)*1=2
-        let bit4 = ((hw >> 4) & 1) as u32;
-        let offset = (r as u32 + 2) * (1 + bit4);
+        // Same offset formula as BEQZ.N; BNEZ.N has s[2]=1 (s & 0x4 != 0).
+        // HW-oracle verified (xtensa-esp32s3-elf-as):
+        //   bnez.n a3,+4  → 0x03cc: r=0,  b4=0 → ((0<<4)|0)+4  = 4
+        //   bnez.n a3,+35 → 0xf3dc: r=15, b4=1 → ((1<<4)|15)+4 = 35
+        let b4 = ((hw >> 4) & 1) as u32;
+        let offset = ((b4 << 4) | r as u32) + 4;
         Instruction::Bnez { as_: t, offset: offset as i32 }
     }
 }

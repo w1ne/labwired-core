@@ -672,26 +672,37 @@ fn test_decode_narrow_movi_n_negative() {
 
 #[test]
 fn test_decode_narrow_beqz_n() {
-    // beqz.n a3, +4  →  0x238c: t=3=as_, r=2, bit4=0; offset=(2+2)*(1+0)=4
-    // HW-oracle: addr 0x00: 8c 23
-    assert_eq!(decode_narrow(0x238c), Instruction::Beqz { as_: 3, offset: 4 });
-    // beqz.n a2, +4  →  0x228c: t=2=as_, r=2, bit4=0; offset=4
-    assert_eq!(decode_narrow(0x228c), Instruction::Beqz { as_: 2, offset: 4 });
-    // beqz.n a5, +2  →  0x058c: t=5=as_, r=0, bit4=0; offset=(0+2)*(1)=2
-    assert_eq!(decode_narrow(0x058c), Instruction::Beqz { as_: 5, offset: 2 });
-    // beqz.n a3, +15  →  0xd38c: t=3=as_, r=13, bit4=0; offset=(13+2)*(1)=15
-    assert_eq!(decode_narrow(0xd38c), Instruction::Beqz { as_: 3, offset: 15 });
-    // beqz.n a3, +32  →  0xe39c: t=3=as_, r=14, bit4=1; offset=(14+2)*(2)=32
-    assert_eq!(decode_narrow(0xe39c), Instruction::Beqz { as_: 3, offset: 32 });
+    // HW-oracle bytes from xtensa-esp32s3-elf-as (correct formula: ((b4<<4)|r)+4).
+    // beqz.n a3, +4  →  hw=0x038c [bytes 8c 03]: r=0, b4=0 → offset=4
+    assert_eq!(decode_narrow(0x038c), Instruction::Beqz { as_: 3, offset: 4 });
+    // beqz.n a2, +4  →  hw=0x028c [bytes 8c 02]: r=0, b4=0, as_=2 → offset=4
+    assert_eq!(decode_narrow(0x028c), Instruction::Beqz { as_: 2, offset: 4 });
+    // beqz.n a3, +6  →  hw=0x238c [bytes 8c 23]: r=2, b4=0 → offset=6
+    assert_eq!(decode_narrow(0x238c), Instruction::Beqz { as_: 3, offset: 6 });
+    // beqz.n a3, +18 →  hw=0xe38c [bytes 8c e3]: r=14, b4=0 → offset=18
+    assert_eq!(decode_narrow(0xe38c), Instruction::Beqz { as_: 3, offset: 18 });
+    // beqz.n a3, +19 →  hw=0xf38c [bytes 8c f3]: r=15, b4=0 → offset=19 (b4=0 boundary)
+    assert_eq!(decode_narrow(0xf38c), Instruction::Beqz { as_: 3, offset: 19 });
+    // beqz.n a3, +21 →  hw=0x139c [bytes 9c 13]: r=1,  b4=1 → offset=21 (b4=1 minimum)
+    assert_eq!(decode_narrow(0x139c), Instruction::Beqz { as_: 3, offset: 21 });
+    // beqz.n a3, +35 →  hw=0xf39c [bytes 9c f3]: r=15, b4=1 → offset=35 (maximum)
+    assert_eq!(decode_narrow(0xf39c), Instruction::Beqz { as_: 3, offset: 35 });
 }
 
 #[test]
 fn test_decode_narrow_bnez_n() {
-    // bnez.n a3, +2  →  0x03cc: t=3=as_, r=0, bit4=0; offset=(0+2)*(1)=2
-    // HW-oracle: addr 0x02: cc 03 (bnez.n a3, target at 0+2+2=4... actually verified separately)
-    assert_eq!(decode_narrow(0x03cc), Instruction::Bnez { as_: 3, offset: 2 });
-    // bnez.n a4, +4  →  0x24cc: t=4=as_, r=2, bit4=0; offset=4
-    assert_eq!(decode_narrow(0x24cc), Instruction::Bnez { as_: 4, offset: 4 });
+    // HW-oracle bytes from xtensa-esp32s3-elf-as (same formula as BEQZ.N; s[2]=1 distinguishes BNEZ.N).
+    // bnez.n a3, +4  →  hw=0x03cc [bytes cc 03]: r=0, b4=0 → offset=4
+    assert_eq!(decode_narrow(0x03cc), Instruction::Bnez { as_: 3, offset: 4 });
+    // bnez.n a4, +4  →  hw=0x04cc [bytes cc 04]: r=0, b4=0, as_=4 → offset=4
+    assert_eq!(decode_narrow(0x04cc), Instruction::Bnez { as_: 4, offset: 4 });
+    // bnez.n a3, +6  →  hw=0x23cc [bytes cc 23]: r=2, b4=0 → offset=6
+    assert_eq!(decode_narrow(0x23cc), Instruction::Bnez { as_: 3, offset: 6 });
+    // bnez.n a3, +18 →  hw=0xe3cc [bytes cc e3]: r=14, b4=0 → offset=18
+    assert_eq!(decode_narrow(0xe3cc), Instruction::Bnez { as_: 3, offset: 18 });
+    // bnez.n a3, +35 →  hw=0xf3dc [bytes dc f3]: r=15, b4=1 → offset=35 (maximum)
+    // HW-oracle: xtensa-esp32s3-elf-as assembles bnez.n a3, +35 → 0xf3dc
+    assert_eq!(decode_narrow(0xf3dc), Instruction::Bnez { as_: 3, offset: 35 });
 }
 
 #[test]
