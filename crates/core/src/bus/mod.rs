@@ -22,6 +22,24 @@ pub struct PeripheralEntry {
     pub dev: Box<dyn Peripheral>,
 }
 
+#[inline]
+fn slice_from(mem: &LinearMemory, addr: u64, len: usize) -> Option<&[u8]> {
+    if addr < mem.base_addr {
+        return None;
+    }
+    let off = (addr - mem.base_addr) as usize;
+    mem.data.get(off..off + len)
+}
+
+#[inline]
+fn slice_from_mut(mem: &mut LinearMemory, addr: u64, len: usize) -> Option<&mut [u8]> {
+    if addr < mem.base_addr {
+        return None;
+    }
+    let off = (addr - mem.base_addr) as usize;
+    mem.data.get_mut(off..off + len)
+}
+
 pub struct SystemBus {
     pub flash: LinearMemory,
     pub ram: LinearMemory,
@@ -232,18 +250,6 @@ impl SystemBus {
                     continue;
                 }
             };
-
-            let dev = dev;
-            // Stubbing out peripherals with external devices is deprecated.
-            // For now, we keep the original peripheral.
-            /*
-            for ext in &_manifest.external_devices {
-                if ext.connection == p_cfg.id {
-                    tracing::info!("Stubbing {} on {}", ext.id, p_cfg.id);
-                    dev = Box::new(crate::peripherals::stub::StubPeripheral::new(0x42));
-                }
-            }
-            */
 
             // Map peripheral window size + IRQ from descriptor when provided.
             // Defaults keep older descriptors working.
@@ -496,14 +502,14 @@ impl SystemBus {
 
 impl crate::Bus for SystemBus {
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
-        if let Some(val) = self.ram.read_u8(addr) {
-            return Ok(val);
-        }
+        // Flash first: instruction fetch dominates load/store on most workloads.
         if let Some(val) = self.flash.read_u8(addr) {
             return Ok(val);
         }
+        if let Some(val) = self.ram.read_u8(addr) {
+            return Ok(val);
+        }
 
-        // Dynamic Peripherals
         for p in &self.peripherals {
             if addr >= p.base && addr < p.base + p.size {
                 return p.dev.read(addr - p.base);
@@ -514,6 +520,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+        // RAM first for writes: flash writes shouldn't be a hot path.
         if self.ram.write_u8(addr, value) {
             return Ok(());
         }
@@ -521,7 +528,6 @@ impl crate::Bus for SystemBus {
             return Ok(());
         }
 
-        // Dynamic Peripherals
         for p in &mut self.peripherals {
             if addr >= p.base && addr < p.base + p.size {
                 return p.dev.write(addr - p.base, value);
@@ -529,6 +535,61 @@ impl crate::Bus for SystemBus {
         }
 
         Err(SimulationError::MemoryViolation(addr))
+    }
+
+    // Aligned fast path for multi-byte reads: avoids four dynamic-dispatch
+    // byte reads per word when the address lives in flash or RAM. Falls
+    // back to byte-wise access for peripherals, which are strictly
+    // byte-addressable in this model.
+    fn read_u16(&self, addr: u64) -> SimResult<u16> {
+        if let Some(bytes) = slice_from(&self.flash, addr, 2) {
+            return Ok(u16::from_le_bytes([bytes[0], bytes[1]]));
+        }
+        if let Some(bytes) = slice_from(&self.ram, addr, 2) {
+            return Ok(u16::from_le_bytes([bytes[0], bytes[1]]));
+        }
+        let b0 = self.read_u8(addr)? as u16;
+        let b1 = self.read_u8(addr + 1)? as u16;
+        Ok(b0 | (b1 << 8))
+    }
+
+    fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        if let Some(bytes) = slice_from(&self.flash, addr, 4) {
+            return Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]));
+        }
+        if let Some(bytes) = slice_from(&self.ram, addr, 4) {
+            return Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]));
+        }
+        let b0 = self.read_u8(addr)? as u32;
+        let b1 = self.read_u8(addr + 1)? as u32;
+        let b2 = self.read_u8(addr + 2)? as u32;
+        let b3 = self.read_u8(addr + 3)? as u32;
+        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
+    }
+
+    fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+        if slice_from_mut(&mut self.ram, addr, 2)
+            .map(|s| s.copy_from_slice(&value.to_le_bytes()))
+            .is_some()
+        {
+            return Ok(());
+        }
+        self.write_u8(addr, value as u8)?;
+        self.write_u8(addr + 1, (value >> 8) as u8)
+    }
+
+    fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        if slice_from_mut(&mut self.ram, addr, 4)
+            .map(|s| s.copy_from_slice(&value.to_le_bytes()))
+            .is_some()
+        {
+            return Ok(());
+        }
+        let bytes = value.to_le_bytes();
+        self.write_u8(addr, bytes[0])?;
+        self.write_u8(addr + 1, bytes[1])?;
+        self.write_u8(addr + 2, bytes[2])?;
+        self.write_u8(addr + 3, bytes[3])
     }
 
     fn tick_peripherals(&mut self) -> Vec<u32> {

@@ -7,12 +7,9 @@
 pub mod bus;
 pub mod cpu;
 pub mod decoder;
-pub mod interrupt;
 pub mod memory;
 pub mod metrics;
-pub mod multi_core;
 pub mod peripherals;
-pub mod signals;
 pub mod snapshot;
 pub mod system;
 
