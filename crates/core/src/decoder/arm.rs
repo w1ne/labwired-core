@@ -294,6 +294,13 @@ pub enum Instruction {
     /// we decode them so firmware that emits them does not trip a
     /// DecodeError.
     Barrier,
+    /// MRS Rd, SYSm — read ARMv7-M special-purpose register into Rd.
+    /// Only PRIMASK (SYSm=0x10) is meaningful in this simulator; other
+    /// sysm values read as 0 so firmware probing does not trap.
+    Mrs { rd: u8, sysm: u8 },
+    /// MSR SYSm, Rn — write Rn into ARMv7-M special-purpose register.
+    /// Only PRIMASK (SYSm=0x10) actually takes effect here.
+    Msr { sysm: u8, rn: u8 },
 }
 
 /// Decodes a 16-bit Thumb instruction
@@ -630,6 +637,24 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         if (4..=6).contains(&func) {
             return Instruction::Barrier;
         }
+    }
+
+    // MRS Rd, <spec_reg>  (ARMv7-M A7.7.82, T1)
+    //   h1 = 1111 0011 1110 1111 = 0xF3EF
+    //   h2 = 1000 <Rd:4> <SYSm:8>
+    if h1 == 0xF3EF && (h2 & 0xF000) == 0x8000 {
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let sysm = (h2 & 0xFF) as u8;
+        return Instruction::Mrs { rd, sysm };
+    }
+
+    // MSR <spec_reg>, Rn  (ARMv7-M A7.7.81, T1)
+    //   h1 = 1111 0011 100_ <Rn:4>   i.e. 0xF380..0xF38F
+    //   h2 = 1000 xxxx 00 <SYSm:8>   (we only inspect bits [11:8] == 0 and [15] = 1)
+    if (h1 & 0xFFE0) == 0xF380 && (h2 & 0xFF00) == 0x8800 {
+        let rn = (h1 & 0xF) as u8;
+        let sysm = (h2 & 0xFF) as u8;
+        return Instruction::Msr { sysm, rn };
     }
 
     // 32-bit Thumb instruction encoding:

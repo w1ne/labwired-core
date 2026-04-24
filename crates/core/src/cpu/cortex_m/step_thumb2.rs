@@ -203,6 +203,30 @@ impl CortexM {
                 // single-threaded simulator; we just consume 4 bytes.
                 pc_increment = 4;
             }
+            Instruction::Mrs { rd, sysm } => {
+                // Read ARMv7-M special register. Only PRIMASK (0x10) is
+                // modeled meaningfully today; other SYSm values read 0.
+                let val = match sysm {
+                    // APSR / IAPSR / EAPSR / xPSR all alias bits of xPSR.
+                    0x00 | 0x01 | 0x02 | 0x03 => self.regs[16],
+                    0x05 => self.regs[16] & 0x1FF, // IPSR exception num
+                    0x10 => self.primask as u32,   // PRIMASK
+                    _ => 0,
+                };
+                self.write_reg(rd, val);
+                pc_increment = 4;
+            }
+            Instruction::Msr { sysm, rn } => {
+                // Write ARMv7-M special register. PRIMASK is the only
+                // target wired up; writes to MSP/PSP/BASEPRI/etc. are
+                // accepted but ignored (they don't alter sim behavior
+                // in this cut).
+                let val = self.read_reg(rn);
+                if sysm == 0x10 {
+                    self.primask = (val & 1) != 0;
+                }
+                pc_increment = 4;
+            }
             _ => {
                 // Fallback to legacy decoding
                 if (h1 & 0xFE00) == 0xE800 {

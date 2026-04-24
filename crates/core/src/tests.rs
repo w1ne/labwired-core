@@ -1089,6 +1089,49 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_thumb2_msr_mrs_primask() {
+        // MSR PRIMASK, Rn  and  MRS Rd, PRIMASK. We only model PRIMASK
+        // today, which is enough for __disable_irq() / __enable_irq()
+        // compiled via GCC's MSR form (rather than CPSID/CPSIE).
+        use crate::decoder::arm::{decode_thumb_32, Instruction};
+
+        // MSR PRIMASK, R0:   h1 = 0xF380, h2 = 0x8810
+        //   h1[3:0] = Rn = 0, h2[11:8] = 0000, h2[7:0] = SYSm = 0x10.
+        assert_eq!(
+            decode_thumb_32(0xF380, 0x8810),
+            Instruction::Msr { sysm: 0x10, rn: 0 }
+        );
+        // MRS R1, PRIMASK:   h1 = 0xF3EF, h2 = 0x8110
+        //   h2[11:8] = Rd = 1, h2[7:0] = SYSm = 0x10.
+        assert_eq!(
+            decode_thumb_32(0xF3EF, 0x8110),
+            Instruction::Mrs { rd: 1, sysm: 0x10 }
+        );
+
+        let mut machine: Machine<CortexM> = create_machine();
+        let base = 0x2000_0000;
+
+        // MSR PRIMASK, R0  at base
+        machine.bus.write_u16(base, 0xF380).unwrap();
+        machine.bus.write_u16(base + 2, 0x8810).unwrap();
+        // MRS R1, PRIMASK  at base + 4
+        machine.bus.write_u16(base + 4, 0xF3EF).unwrap();
+        machine.bus.write_u16(base + 6, 0x8110).unwrap();
+
+        machine.cpu.regs[0] = 1;
+        machine.cpu.primask = false;
+        machine.cpu.set_pc(base as u32);
+
+        machine.step().unwrap();
+        assert!(machine.cpu.primask, "MSR PRIMASK should have set primask");
+        assert_eq!(machine.cpu.get_pc(), base as u32 + 4);
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.regs[1], 1, "MRS should read primask back into R1");
+        assert_eq!(machine.cpu.get_pc(), base as u32 + 8);
+    }
+
+    #[test]
     fn test_thumb2_barrier_instructions_are_nops() {
         // DMB / DSB / ISB decode cleanly and advance PC by 4 without
         // touching registers or raising DecodeError. Before this
