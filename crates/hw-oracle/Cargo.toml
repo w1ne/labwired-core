@@ -1,0 +1,15 @@
+[package]
+name = "labwired-hw-oracle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "HW oracle harness: JTAG-driven cross-validation against physical boards."
+
+[dependencies]
+labwired-hw-oracle-macros = { path = "../hw-oracle-macros" }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+default = []

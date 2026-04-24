@@ -18,6 +18,10 @@ members = [
     "examples/arm-cortex-m0",
     "examples/riscv-virt",
     "examples/demo-blinky",
+    "crates/hw-trace",
+    "crates/hw-runner",
+    "crates/hw-oracle",
+    "crates/hw-oracle-macros",
 ]
 exclude = ["crates/firmware-hal-test"]
 default-members = ["crates/cli", "crates/core", "crates/loader"]

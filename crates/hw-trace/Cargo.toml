@@ -1,0 +1,8 @@
+[package]
+name = "labwired-hw-trace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared hardware trace event model for labwired-core (stub in Plan 1)."
+
+[dependencies]

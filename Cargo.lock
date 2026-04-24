@@ -646,6 +646,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "labwired-hw-oracle"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "labwired-hw-oracle-macros",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "labwired-hw-oracle-macros"
+version = "0.11.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "labwired-hw-runner"
+version = "0.11.0"
+
+[[package]]
+name = "labwired-hw-trace"
+version = "0.11.0"
+
+[[package]]
 name = "labwired-loader"
 version = "0.11.0"
 dependencies = [
