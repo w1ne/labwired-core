@@ -297,8 +297,14 @@ impl DapServer {
                     return Ok(());
                 }
                 "setBreakpoints" => {
-                    let args = arguments.unwrap();
-                    let source = args.get("source").unwrap();
+                    let Some(args) = arguments else {
+                        sender.send_error_response(req_seq, "setBreakpoints", "missing arguments")?;
+                        continue;
+                    };
+                    let Some(source) = args.get("source") else {
+                        sender.send_error_response(req_seq, "setBreakpoints", "missing `source` argument")?;
+                        continue;
+                    };
                     let path = source
                         .get("path")
                         .and_then(|v| v.as_str())
@@ -450,7 +456,10 @@ impl DapServer {
                     }
                 }
                 "disassemble" => {
-                    let args = arguments.unwrap();
+                    let Some(args) = arguments else {
+                        sender.send_error_response(req_seq, "disassemble", "missing arguments")?;
+                        continue;
+                    };
                     let addr_str = args
                         .get("memoryReference")
                         .and_then(|v| v.as_str())
@@ -511,7 +520,10 @@ impl DapServer {
                     )?;
                 }
                 "readMemory" => {
-                    let args = arguments.unwrap();
+                    let Some(args) = arguments else {
+                        sender.send_error_response(req_seq, "readMemory", "missing arguments")?;
+                        continue;
+                    };
                     let addr_str = args
                         .get("memoryReference")
                         .and_then(|v| v.as_str())
@@ -596,9 +608,15 @@ impl DapServer {
                 }
                 "gotoTargets" => {
                     // VS Code calls this to find where it can jump
-                    let args = arguments.unwrap();
+                    let Some(args) = arguments else {
+                        sender.send_error_response(req_seq, "gotoTargets", "missing arguments")?;
+                        continue;
+                    };
                     let line = args.get("line").and_then(|v| v.as_i64()).unwrap_or(0);
-                    let source = args.get("source").unwrap();
+                    let Some(source) = args.get("source") else {
+                        sender.send_error_response(req_seq, "gotoTargets", "missing `source` argument")?;
+                        continue;
+                    };
                     let path = source
                         .get("path")
                         .and_then(|v| v.as_str())
@@ -623,7 +641,10 @@ impl DapServer {
                     )?;
                 }
                 "goto" => {
-                    let args = arguments.unwrap();
+                    let Some(args) = arguments else {
+                        sender.send_error_response(req_seq, "goto", "missing arguments")?;
+                        continue;
+                    };
                     let _target_id = args.get("targetId").and_then(|v| v.as_i64()).unwrap_or(0);
                     // For now we only have one target id = 1 which means "the resolved instruction"
                     // In a real implementation we'd lookup the target by ID.
