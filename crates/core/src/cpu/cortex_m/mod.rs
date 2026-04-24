@@ -9,8 +9,8 @@ use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-// PSR Bits (Internal usage) - Omitted if unused
-const PSR_C: u32 = 1 << 29;
+mod helpers;
+use helpers::{add_with_flags, sub_with_flags, thumb_expand_imm, PSR_C};
 
 // Register-file indices. Reads/writes to the `regs` array use these.
 pub const SP: usize = 13; // R13 — Stack Pointer
@@ -1271,48 +1271,3 @@ impl Cpu for CortexM {
     }
 }
 
-fn add_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
-    let (res, overflow1) = op1.overflowing_add(op2);
-    let carry = overflow1;
-    let neg_op1 = (op1 as i32) < 0;
-    let neg_op2 = (op2 as i32) < 0;
-    let neg_res = (res as i32) < 0;
-    let overflow = (neg_op1 == neg_op2) && (neg_res != neg_op1);
-    (res, carry, overflow)
-}
-
-fn sub_with_flags(op1: u32, op2: u32) -> (u32, bool, bool) {
-    let (res, borrow) = op1.overflowing_sub(op2);
-    let carry = !borrow;
-    let neg_op1 = (op1 as i32) < 0;
-    let neg_op2 = (op2 as i32) < 0;
-    let neg_res = (res as i32) < 0;
-    let overflow = (neg_op1 != neg_op2) && (neg_res != neg_op1);
-    (res, carry, overflow)
-}
-
-// Thumb expand immediate - implements ARM's modified immediate constant expansion
-fn thumb_expand_imm(imm12: u32) -> u32 {
-    let i = (imm12 >> 11) & 1;
-    let imm3 = (imm12 >> 8) & 7;
-    let imm8 = imm12 & 0xFF;
-
-    if i == 0 && (imm3 >> 2) == 0 {
-        // i:imm3 is 0000, 0001, 0010, 0011.
-        // Match repetition patterns:
-        match imm3 {
-            0 => imm8,                       // 00000000 00000000 00000000 abcdefgh
-            1 => (imm8 << 16) | imm8,        // 00000000 abcdefgh 00000000 abcdefgh
-            2 => (imm8 << 24) | (imm8 << 8), // abcdefgh 00000000 abcdefgh 00000000
-            3 => (imm8 << 24) | (imm8 << 16) | (imm8 << 8) | imm8, // abcdefgh abcdefgh abcdefgh abcdefgh
-            _ => unreachable!(),
-        }
-    } else {
-        // Rotated immediate
-        // The value to rotate is '1' concatenated with bits 6:0 of imm8.
-        let val = 0x80 | (imm8 & 0x7F);
-        // The rotation amount 'n' is i:imm3:imm8[7]
-        let n = (i << 4) | (imm3 << 1) | (imm8 >> 7);
-        val.rotate_right(n)
-    }
-}
