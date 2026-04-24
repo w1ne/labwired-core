@@ -301,6 +301,14 @@ pub enum Instruction {
     /// MSR SYSm, Rn — write Rn into ARMv7-M special-purpose register.
     /// Only PRIMASK (SYSm=0x10) actually takes effect here.
     Msr { sysm: u8, rn: u8 },
+    /// SMULL RdLo, RdHi, Rn, Rm — 32×32 → 64-bit signed multiply.
+    Smull { rd_lo: u8, rd_hi: u8, rn: u8, rm: u8 },
+    /// UMULL RdLo, RdHi, Rn, Rm — 32×32 → 64-bit unsigned multiply.
+    Umull { rd_lo: u8, rd_hi: u8, rn: u8, rm: u8 },
+    /// SMLAL RdLo, RdHi, Rn, Rm — [RdHi:RdLo] += signed Rn*Rm.
+    Smlal { rd_lo: u8, rd_hi: u8, rn: u8, rm: u8 },
+    /// UMLAL RdLo, RdHi, Rn, Rm — [RdHi:RdLo] += unsigned Rn*Rm.
+    Umlal { rd_lo: u8, rd_hi: u8, rn: u8, rm: u8 },
 }
 
 /// Decodes a 16-bit Thumb instruction
@@ -655,6 +663,30 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let rn = (h1 & 0xF) as u8;
         let sysm = (h2 & 0xFF) as u8;
         return Instruction::Msr { sysm, rn };
+    }
+
+    // Wide (long) multiply — ARMv7-M A7.7.149/164/150/163:
+    //   SMULL  h1 = 0xFB80 | Rn, h2 = RdLo:RdHi:0x0:Rm
+    //   UMULL  h1 = 0xFBA0 | Rn, h2 = RdLo:RdHi:0x0:Rm
+    //   SMLAL  h1 = 0xFBC0 | Rn, h2 = RdLo:RdHi:0x0:Rm
+    //   UMLAL  h1 = 0xFBE0 | Rn, h2 = RdLo:RdHi:0x0:Rm
+    // We additionally require h2[7:4] == 0 so encodings with the same
+    // h1 but a different operation field (SMLALxy, SMLALD, etc. which
+    // we do not yet model) fall through to Unknown instead of being
+    // misdecoded as a plain SMLAL.
+    if (h1 & 0xFF80) == 0xFB80 && (h2 & 0xF0) == 0x00 {
+        let rn = (h1 & 0xF) as u8;
+        let rd_lo = ((h2 >> 12) & 0xF) as u8;
+        let rd_hi = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let op = (h1 >> 4) & 0xF; // 0x8 SMULL, 0xA UMULL, 0xC SMLAL, 0xE UMLAL
+        return match op {
+            0x8 => Instruction::Smull { rd_lo, rd_hi, rn, rm },
+            0xA => Instruction::Umull { rd_lo, rd_hi, rn, rm },
+            0xC => Instruction::Smlal { rd_lo, rd_hi, rn, rm },
+            0xE => Instruction::Umlal { rd_lo, rd_hi, rn, rm },
+            _ => Instruction::Unknown(h2),
+        };
     }
 
     // 32-bit Thumb instruction encoding:

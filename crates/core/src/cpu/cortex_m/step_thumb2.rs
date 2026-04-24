@@ -216,6 +216,44 @@ impl CortexM {
                 self.write_reg(rd, val);
                 pc_increment = 4;
             }
+            Instruction::Smull { rd_lo, rd_hi, rn, rm } => {
+                let a = self.read_reg(rn) as i32 as i64;
+                let b = self.read_reg(rm) as i32 as i64;
+                let prod = a.wrapping_mul(b) as u64;
+                self.write_reg(rd_lo, prod as u32);
+                self.write_reg(rd_hi, (prod >> 32) as u32);
+                pc_increment = 4;
+            }
+            Instruction::Umull { rd_lo, rd_hi, rn, rm } => {
+                let a = self.read_reg(rn) as u64;
+                let b = self.read_reg(rm) as u64;
+                let prod = a.wrapping_mul(b);
+                self.write_reg(rd_lo, prod as u32);
+                self.write_reg(rd_hi, (prod >> 32) as u32);
+                pc_increment = 4;
+            }
+            Instruction::Smlal { rd_lo, rd_hi, rn, rm } => {
+                let acc = ((self.read_reg(rd_hi) as u64) << 32)
+                    | (self.read_reg(rd_lo) as u64);
+                let a = self.read_reg(rn) as i32 as i64;
+                let b = self.read_reg(rm) as i32 as i64;
+                let prod = a.wrapping_mul(b) as u64;
+                let out = acc.wrapping_add(prod);
+                self.write_reg(rd_lo, out as u32);
+                self.write_reg(rd_hi, (out >> 32) as u32);
+                pc_increment = 4;
+            }
+            Instruction::Umlal { rd_lo, rd_hi, rn, rm } => {
+                let acc = ((self.read_reg(rd_hi) as u64) << 32)
+                    | (self.read_reg(rd_lo) as u64);
+                let a = self.read_reg(rn) as u64;
+                let b = self.read_reg(rm) as u64;
+                let prod = a.wrapping_mul(b);
+                let out = acc.wrapping_add(prod);
+                self.write_reg(rd_lo, out as u32);
+                self.write_reg(rd_hi, (out >> 32) as u32);
+                pc_increment = 4;
+            }
             Instruction::Msr { sysm, rn } => {
                 // Write ARMv7-M special register. PRIMASK is the only
                 // target wired up; writes to MSP/PSP/BASEPRI/etc. are

@@ -1089,6 +1089,70 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_thumb2_wide_multiplies() {
+        // SMULL / UMULL / SMLAL / UMLAL — 32×32 → 64-bit multiply/
+        // accumulate forms that GCC emits for (u)int64_t math on
+        // Cortex-M3/M4. Before this patch every one of them was
+        // Unknown.
+        use crate::decoder::arm::{decode_thumb_32, Instruction};
+
+        // SMULL R0, R1, R2, R3   h1 = 0xFB82 (op=0x8, Rn=2)
+        //                         h2 = 0x0103 (RdLo=0, RdHi=1, Rm=3)
+        assert_eq!(
+            decode_thumb_32(0xFB82, 0x0103),
+            Instruction::Smull { rd_lo: 0, rd_hi: 1, rn: 2, rm: 3 }
+        );
+        // UMULL R0, R1, R2, R3   h1 = 0xFBA2, h2 = 0x0103
+        assert_eq!(
+            decode_thumb_32(0xFBA2, 0x0103),
+            Instruction::Umull { rd_lo: 0, rd_hi: 1, rn: 2, rm: 3 }
+        );
+        // SMLAL / UMLAL same pattern
+        assert_eq!(
+            decode_thumb_32(0xFBC2, 0x0103),
+            Instruction::Smlal { rd_lo: 0, rd_hi: 1, rn: 2, rm: 3 }
+        );
+        assert_eq!(
+            decode_thumb_32(0xFBE2, 0x0103),
+            Instruction::Umlal { rd_lo: 0, rd_hi: 1, rn: 2, rm: 3 }
+        );
+
+        let mut machine: Machine<CortexM> = create_machine();
+        let base = 0x2000_0000;
+
+        // SMULL R0, R1, R2, R3 : signed -2 * 3 = -6
+        machine.bus.write_u16(base, 0xFB82).unwrap();
+        machine.bus.write_u16(base + 2, 0x0103).unwrap();
+        machine.cpu.regs[2] = (-2i32) as u32;
+        machine.cpu.regs[3] = 3;
+        machine.cpu.set_pc(base as u32);
+        machine.step().unwrap();
+        let prod = ((machine.cpu.regs[1] as u64) << 32) | (machine.cpu.regs[0] as u64);
+        assert_eq!(prod as i64, -6);
+        assert_eq!(machine.cpu.get_pc(), base as u32 + 4);
+
+        // UMULL same regs: 0xFFFF_FFFE * 3 = 0x2_FFFF_FFFA
+        machine.bus.write_u16(base + 4, 0xFBA2).unwrap();
+        machine.bus.write_u16(base + 6, 0x0103).unwrap();
+        machine.cpu.regs[2] = 0xFFFF_FFFE;
+        machine.cpu.regs[3] = 3;
+        machine.step().unwrap();
+        let prod = ((machine.cpu.regs[1] as u64) << 32) | (machine.cpu.regs[0] as u64);
+        assert_eq!(prod, 0x2_FFFF_FFFA);
+
+        // SMLAL: start with acc = 10 in [R1:R0], then +(-2 * 3) = -6 → 4.
+        machine.bus.write_u16(base + 8, 0xFBC2).unwrap();
+        machine.bus.write_u16(base + 10, 0x0103).unwrap();
+        machine.cpu.regs[0] = 10; // lo
+        machine.cpu.regs[1] = 0; // hi
+        machine.cpu.regs[2] = (-2i32) as u32;
+        machine.cpu.regs[3] = 3;
+        machine.step().unwrap();
+        let acc = ((machine.cpu.regs[1] as u64) << 32) | (machine.cpu.regs[0] as u64);
+        assert_eq!(acc as i64, 4);
+    }
+
+    #[test]
     fn test_thumb2_msr_mrs_primask() {
         // MSR PRIMASK, Rn  and  MRS Rd, PRIMASK. We only model PRIMASK
         // today, which is enough for __disable_irq() / __enable_irq()

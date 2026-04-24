@@ -42,12 +42,13 @@ to execute them raises `DecodeError`.
 | Thumb-2 data    | `DataProc32` cluster, `MOVW`, `MOVT`                                         |
 | Barriers        | `DMB`, `DSB`, `ISB` — decoded; no-ops in our single-threaded sim            |
 | System regs     | `MSR` / `MRS` for PRIMASK (SYSm=0x10); other SYSm accepted but unmodeled    |
+| Wide multiply   | `SMULL`, `UMULL`, `SMLAL`, `UMLAL` — 32×32 → 64-bit multiply/accumulate      |
 
 ### Known gaps (ARMv7-M that we do **not** yet implement)
 
 | Category         | Missing                                                                     |
 |------------------|-----------------------------------------------------------------------------|
-| Wide multiply    | `MLA`, `MLS`, `SMULL`, `UMULL`, `SMLAL`, `UMLAL`                            |
+| Wide multiply    | `MLA`, `MLS` (`SMULL`/`UMULL`/`SMLAL`/`UMLAL` implemented — see above)       |
 | Integer divide   | `SDIV`, `UDIV`                                                              |
 | Saturating arith | `QADD`, `QSUB`, `SSAT`, `USAT`                                              |
 | Sign/zero ext.   | `SXTB`, `SXTH`, `UXTH`                                                      |
