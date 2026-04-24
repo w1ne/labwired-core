@@ -1097,6 +1097,37 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_thumb2_mla_mls() {
+        // MLA Rd, Rn, Rm, Ra:  h1 = 0xFB00 | Rn, h2 = Ra<<12 | Rd<<8 | 0x0 | Rm
+        use crate::decoder::arm::{decode_thumb_32, Instruction};
+        assert_eq!(
+            decode_thumb_32(0xFB01, 0x3002),
+            Instruction::Mla { rd: 0, rn: 1, rm: 2, ra: 3 }
+        );
+        assert_eq!(
+            decode_thumb_32(0xFB01, 0x3012),
+            Instruction::Mls { rd: 0, rn: 1, rm: 2, ra: 3 }
+        );
+
+        let mut machine: Machine<CortexM> = create_machine();
+        let base = 0x2000_0000;
+        machine.bus.write_u16(base, 0xFB01).unwrap();
+        machine.bus.write_u16(base + 2, 0x3002).unwrap(); // MLA R0, R1, R2, R3
+        machine.bus.write_u16(base + 4, 0xFB01).unwrap();
+        machine.bus.write_u16(base + 6, 0x3012).unwrap(); // MLS R0, R1, R2, R3
+
+        machine.cpu.regs[1] = 2;
+        machine.cpu.regs[2] = 3;
+        machine.cpu.regs[3] = 100;
+        machine.cpu.set_pc(base as u32);
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.regs[0], 106, "MLA: Ra + Rn*Rm");
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.regs[0], 94, "MLS: Ra - Rn*Rm");
+    }
+
+    #[test]
     fn test_thumb2_wide_multiplies() {
         // SMULL / UMULL / SMLAL / UMLAL — 32×32 → 64-bit multiply/
         // accumulate forms that GCC emits for (u)int64_t math on

@@ -43,12 +43,12 @@ to execute them raises `DecodeError`.
 | Barriers        | `DMB`, `DSB`, `ISB` — decoded; no-ops in our single-threaded sim            |
 | System regs     | `MSR` / `MRS` for PRIMASK (SYSm=0x10); other SYSm accepted but unmodeled    |
 | Wide multiply   | `SMULL`, `UMULL`, `SMLAL`, `UMLAL` — 32×32 → 64-bit multiply/accumulate      |
+| Mul-accumulate  | `MLA`, `MLS` — 32-bit `Rd = Ra ± (Rn*Rm)`                                    |
 
 ### Known gaps (ARMv7-M that we do **not** yet implement)
 
 | Category         | Missing                                                                     |
 |------------------|-----------------------------------------------------------------------------|
-| Wide multiply    | `MLA`, `MLS` (`SMULL`/`UMULL`/`SMLAL`/`UMLAL` implemented — see above)       |
 | Integer divide   | `SDIV`, `UDIV`                                                              |
 | Saturating arith | `QADD`, `QSUB`, `SSAT`, `USAT`                                              |
 | Sign/zero ext.   | `SXTB`, `SXTH`, `UXTH`                                                      |

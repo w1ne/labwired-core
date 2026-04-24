@@ -216,6 +216,18 @@ impl CortexM {
                 self.write_reg(rd, val);
                 pc_increment = 4;
             }
+            Instruction::Mla { rd, rn, rm, ra } => {
+                let prod = self.read_reg(rn).wrapping_mul(self.read_reg(rm));
+                let result = self.read_reg(ra).wrapping_add(prod);
+                self.write_reg(rd, result);
+                pc_increment = 4;
+            }
+            Instruction::Mls { rd, rn, rm, ra } => {
+                let prod = self.read_reg(rn).wrapping_mul(self.read_reg(rm));
+                let result = self.read_reg(ra).wrapping_sub(prod);
+                self.write_reg(rd, result);
+                pc_increment = 4;
+            }
             Instruction::Smull { rd_lo, rd_hi, rn, rm } => {
                 let a = self.read_reg(rn) as i32 as i64;
                 let b = self.read_reg(rm) as i32 as i64;

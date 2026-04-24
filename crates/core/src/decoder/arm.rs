@@ -301,6 +301,10 @@ pub enum Instruction {
     /// MSR SYSm, Rn — write Rn into ARMv7-M special-purpose register.
     /// Only PRIMASK (SYSm=0x10) actually takes effect here.
     Msr { sysm: u8, rn: u8 },
+    /// MLA Rd, Rn, Rm, Ra — multiply and accumulate (32-bit truncated).
+    Mla { rd: u8, rn: u8, rm: u8, ra: u8 },
+    /// MLS Rd, Rn, Rm, Ra — multiply and subtract (Ra - Rn*Rm, 32-bit).
+    Mls { rd: u8, rn: u8, rm: u8, ra: u8 },
     /// SMULL RdLo, RdHi, Rn, Rm — 32×32 → 64-bit signed multiply.
     Smull { rd_lo: u8, rd_hi: u8, rn: u8, rm: u8 },
     /// UMULL RdLo, RdHi, Rn, Rm — 32×32 → 64-bit unsigned multiply.
@@ -663,6 +667,27 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let rn = (h1 & 0xF) as u8;
         let sysm = (h2 & 0xFF) as u8;
         return Instruction::Msr { sysm, rn };
+    }
+
+    // Multiply-accumulate 32-bit: MLA / MLS (ARMv7-M A7.7.56 / A7.7.61).
+    //   h1 = 0xFB00 | Rn
+    //   h2 = Ra:Rd:<op:4>:Rm  with op=0x0 MLA, op=0x1 MLS.
+    //   Ra == 0xF degenerates MLA into the non-accumulating MUL (T2)
+    //   encoding, which we decode as a plain multiply rather than MLA.
+    if (h1 & 0xFFF0) == 0xFB00 {
+        let rn = (h1 & 0xF) as u8;
+        let ra = ((h2 >> 12) & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let op = ((h2 >> 4) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        return match op {
+            0x0 if ra != 0xF => Instruction::Mla { rd, rn, rm, ra },
+            0x1 => Instruction::Mls { rd, rn, rm, ra },
+            // op=0 with Ra=0xF is MUL (T2) — treat as MLA with Ra=0,
+            // which the executor will add to get rd = rn*rm.
+            0x0 => Instruction::Mla { rd, rn, rm, ra: 0 },
+            _ => Instruction::Unknown(h2),
+        };
     }
 
     // Wide (long) multiply — ARMv7-M A7.7.149/164/150/163:

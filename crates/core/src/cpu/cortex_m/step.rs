@@ -105,7 +105,9 @@ impl CortexM {
             | Instruction::Smull { .. }
             | Instruction::Umull { .. }
             | Instruction::Smlal { .. }
-            | Instruction::Umlal { .. } => {
+            | Instruction::Umlal { .. }
+            | Instruction::Mla { .. }
+            | Instruction::Mls { .. } => {
                 unreachable!(
                     "32-bit instruction {:?} should be handled via Prefix32",
                     instruction
