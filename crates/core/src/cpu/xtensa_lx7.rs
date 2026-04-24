@@ -36,12 +36,90 @@ impl XtensaLx7 {
         &mut self,
         ins: xtensa::Instruction,
         _bus: &mut dyn Bus,
-        _len: u32,
+        len: u32,
     ) -> SimResult<()> {
-        Err(SimulationError::NotImplemented(format!(
-            "xtensa exec stub: {:?}",
-            ins
-        )))
+        use xtensa::Instruction::*;
+        match ins {
+            Add { ar, as_, at } => {
+                let v = self.regs.read_logical(as_).wrapping_add(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Sub { ar, as_, at } => {
+                let v = self.regs.read_logical(as_).wrapping_sub(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            And { ar, as_, at } => {
+                let v = self.regs.read_logical(as_) & self.regs.read_logical(at);
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Or { ar, as_, at } => {
+                let v = self.regs.read_logical(as_) | self.regs.read_logical(at);
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Xor { ar, as_, at } => {
+                let v = self.regs.read_logical(as_) ^ self.regs.read_logical(at);
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Neg { ar, at } => {
+                let v = 0u32.wrapping_sub(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Abs { ar, at } => {
+                // ISA RM: result is unsigned abs of the 2's-complement value.
+                // i32::unsigned_abs() returns 0x80000000 for i32::MIN — matches HW behaviour.
+                let x = self.regs.read_logical(at) as i32;
+                self.regs.write_logical(ar, x.unsigned_abs());
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Addx2 { ar, as_, at } => {
+                let v = (self.regs.read_logical(as_) << 1).wrapping_add(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Addx4 { ar, as_, at } => {
+                let v = (self.regs.read_logical(as_) << 2).wrapping_add(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Addx8 { ar, as_, at } => {
+                let v = (self.regs.read_logical(as_) << 3).wrapping_add(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Subx2 { ar, as_, at } => {
+                let v = (self.regs.read_logical(as_) << 1).wrapping_sub(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Subx4 { ar, as_, at } => {
+                let v = (self.regs.read_logical(as_) << 2).wrapping_sub(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Subx8 { ar, as_, at } => {
+                let v = (self.regs.read_logical(as_) << 3).wrapping_sub(self.regs.read_logical(at));
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Movi { at, imm } => {
+                self.regs.write_logical(at, imm as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Break { .. } => {
+                return Err(SimulationError::BreakpointHit(self.pc));
+            }
+            Nop | Memw | Extw | Isync | Rsync | Esync | Dsync => {
+                self.pc = self.pc.wrapping_add(len);
+            }
+            _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
+        }
+        Ok(())
     }
 }
 

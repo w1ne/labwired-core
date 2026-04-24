@@ -322,6 +322,13 @@ fn decode_lsai(w: u32) -> Instruction {
         0x6 => Instruction::S32i  { at: t, as_: s, imm: imm8 << 2 },
         0x9 => Instruction::L16si { at: t, as_: s, imm: imm8 << 1 },
         0xB => Instruction::L32ai { at: t, as_: s, imm: imm8 << 2 },
+        // MOVI at, imm12: 12-bit signed immediate; imm12 = {s[3:0], imm8[7:0]}.
+        // HW-oracle verified: `movi a3, -100` → 0x9caf32, s=0xf, imm8=0x9c → 0xf9c → sext12=-100.
+        0xA => {
+            let imm12 = ((s as u32) << 8) | imm8;
+            let sext = ((imm12 ^ 0x800).wrapping_sub(0x800)) as i32;
+            Instruction::Movi { at: t, imm: sext }
+        }
         0xC => Instruction::Addi  { at: t, as_: s, imm8: sext8(imm8) },
         0xD => Instruction::Addmi { at: t, as_: s, imm: sext8(imm8) << 8 },
         0xE => Instruction::S32c1i { at: t, as_: s, imm: imm8 << 2 },

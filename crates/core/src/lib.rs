@@ -37,6 +37,8 @@ pub enum SimulationError {
     DecodeError(u64),
     #[error("not implemented: {0}")]
     NotImplemented(String),
+    #[error("Breakpoint hit at {0:#x}")]
+    BreakpointHit(u32),
 }
 
 pub type SimResult<T> = Result<T, SimulationError>;
