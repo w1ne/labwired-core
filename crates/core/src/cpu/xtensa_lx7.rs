@@ -303,6 +303,33 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // ── D5: Store instructions ──────────────────────────────────────
+            // S8I at, as_, imm: EA = as_ + imm; mem8[EA] = at[0:7].
+            // imm is the raw byte offset (0..=255); no alignment requirement.
+            S8i { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                bus.write_u8(ea, (self.regs.read_logical(at) & 0xFF) as u8)?;
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // S16I at, as_, imm: EA = as_ + imm; mem16[EA] = at[0:15].
+            // Decoder pre-shifts imm by 1. Requires 2-byte alignment;
+            // alignment check deferred to Phase G.
+            S16i { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                bus.write_u16(ea, (self.regs.read_logical(at) & 0xFFFF) as u16)?;
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // S32I at, as_, imm: EA = as_ + imm; mem32[EA] = at.
+            // Decoder pre-shifts imm by 2. Requires 4-byte alignment;
+            // alignment check deferred to Phase G.
+            S32i { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                bus.write_u32(ea, self.regs.read_logical(at))?;
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())

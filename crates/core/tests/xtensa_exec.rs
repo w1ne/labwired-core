@@ -146,6 +146,31 @@ fn enc_l32r(at: u32, imm16: u32) -> u32 {
     0x1 | (at << 4) | ((imm16 & 0xFFFF) << 8)
 }
 
+// ── D5 store encoding helpers ──
+
+/// Encode S8I at, as_, imm8 (op0=0x2, r=0x4).
+/// LSAI format: (imm8<<16) | (r<<12) | (s<<8) | (t<<4) | op0.
+/// imm is the raw byte offset (0..=255); no pre-shift in encoding.
+fn enc_s8i(at: u32, as_: u32, imm8: u32) -> u32 {
+    0x2 | (at << 4) | (as_ << 8) | (0x4 << 12) | ((imm8 & 0xFF) << 16)
+}
+
+/// Encode S16I at, as_, imm (op0=0x2, r=0x5).
+/// The hardware imm field is the byte offset >> 1 (i.e. the word offset).
+/// Pass the final byte offset here; this fn will right-shift by 1 for encoding.
+fn enc_s16i(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 1) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0x5 << 12) | (imm8 << 16)
+}
+
+/// Encode S32I at, as_, imm (op0=0x2, r=0x6).
+/// The hardware imm field is the byte offset >> 2 (i.e. the word offset).
+/// Pass the final byte offset here; this fn will right-shift by 2 for encoding.
+fn enc_s32i(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 2) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0x6 << 12) | (imm8 << 16)
+}
+
 // ── D3 LSAI encoding helpers (ADDI/ADDMI) ──
 
 /// Encode ADDI at, as_, imm8 (op0=0x2, r=0xC).
@@ -1018,4 +1043,127 @@ fn test_exec_l32r() {
 
     run_until_error(&mut cpu, &mut bus);
     assert_eq!(cpu.get_register(3), 0x1234_5678, "L32R: PC-relative load");
+}
+
+// ── D5 Store Tests ──────────────────────────────────────────────────────────
+
+/// S8I: store low byte of register to memory.
+/// Write 0xAB12CD34 to a2, store byte 0x34 at memory address.
+#[test]
+fn test_exec_s8i() {
+    const DATA_ADDR: u64 = 0x2000_4000;
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Initialize data area with zeros.
+    bus.write_u8(DATA_ADDR, 0x00).unwrap();
+
+    // Set a2 = 0xAB12CD34 (value to store); a3 = DATA_ADDR (address).
+    cpu.set_register(2, 0xAB12CD34);
+    cpu.set_register(3, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_s8i(2, 3, 0),  // S8I a2, a3, 0 → mem[a3] = 0x34 (low byte)
+        st0(4, 0, 0),       // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(bus.read_u8(DATA_ADDR).unwrap(), 0x34, "S8I: low byte stored");
+}
+
+/// S16I: store low 16 bits of register to memory.
+/// Write 0xAB12CD34 to a2, store 0xCD34 at 2-byte-aligned address.
+#[test]
+fn test_exec_s16i() {
+    const DATA_ADDR: u64 = 0x2000_4000; // 2-byte aligned
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Initialize data area with zeros.
+    bus.write_u8(DATA_ADDR,     0x00).unwrap();
+    bus.write_u8(DATA_ADDR + 1, 0x00).unwrap();
+
+    // Set a2 = 0xAB12CD34; a3 = DATA_ADDR.
+    cpu.set_register(2, 0xAB12CD34);
+    cpu.set_register(3, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_s16i(2, 3, 0),  // S16I a2, a3, 0 → mem16[a3] = 0xCD34
+        st0(4, 0, 0),
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+
+    // Verify little-endian: 0xCD34 = [0x34, 0xCD]
+    let byte0 = bus.read_u8(DATA_ADDR).unwrap();
+    let byte1 = bus.read_u8(DATA_ADDR + 1).unwrap();
+    let loaded = (byte1 as u32) << 8 | (byte0 as u32);
+    assert_eq!(loaded, 0xCD34, "S16I: 16-bit halfword stored");
+}
+
+/// S32I: store full 32-bit register to memory.
+/// Write 0xDEADBEEF to a2, store at 4-byte-aligned address.
+#[test]
+fn test_exec_s32i() {
+    const DATA_ADDR: u64 = 0x2000_4008; // 4-byte aligned
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Initialize data area with zeros.
+    for i in 0..4 {
+        bus.write_u8(DATA_ADDR + i, 0x00).unwrap();
+    }
+
+    // Set a2 = 0xDEADBEEF; a3 = DATA_ADDR.
+    cpu.set_register(2, 0xDEAD_BEEF);
+    cpu.set_register(3, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_s32i(2, 3, 0),  // S32I a2, a3, 0 → mem32[a3] = 0xDEADBEEF
+        st0(4, 0, 0),
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+
+    // Verify little-endian: 0xDEADBEEF = [0xEF, 0xBE, 0xAD, 0xDE]
+    let stored = bus.read_u32(DATA_ADDR).unwrap();
+    assert_eq!(stored, 0xDEAD_BEEF, "S32I: full 32-bit word stored");
+}
+
+/// S8I + S16I roundtrip: store, then load back.
+#[test]
+fn test_exec_store_then_load_roundtrip() {
+    const DATA_ADDR: u64 = 0x2000_4000;
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Initialize data area.
+    for i in 0..4 {
+        bus.write_u8(DATA_ADDR + i, 0x00).unwrap();
+    }
+
+    // Set a2 = 0xABCD1234; a3 = DATA_ADDR.
+    cpu.set_register(2, 0xABCD1234);
+    cpu.set_register(3, DATA_ADDR as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_s32i(2, 3, 0),    // S32I a2, a3, 0 → store 0xABCD1234
+        enc_l32i(4, 3, 0),    // L32I a4, a3, 0 → load back
+        st0(5, 0, 0),          // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(4), 0xABCD1234, "roundtrip: store then load");
 }
