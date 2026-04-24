@@ -215,7 +215,7 @@ impl PyMachine {
 }
 
 #[pymodule]
-fn labwired(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn labwired(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMachine>()?;
     m.add_class::<PyStopReason>()?;
     Ok(())
