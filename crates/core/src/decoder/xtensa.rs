@@ -172,6 +172,7 @@ fn decode_qrst(w: u32) -> Instruction {
             0x1 => Instruction::And { ar: r, as_: s, at: t },
             0x2 => Instruction::Or  { ar: r, as_: s, at: t },
             0x3 => Instruction::Xor { ar: r, as_: s, at: t },
+            0x4 => decode_st3_shiftsetup(w, r, s, t),
             0x6 => match s {
                 0x0 => Instruction::Neg { ar: r, at: t },
                 0x1 => Instruction::Abs { ar: r, at: t },
@@ -187,7 +188,30 @@ fn decode_qrst(w: u32) -> Instruction {
             0xF => Instruction::Subx8 { ar: r, as_: s, at: t },
             _ => Instruction::Unknown(w),
         },
-        // op1 = 0x1, 0x2, 0x3 (shifts) — fill in Task B4.
+        0x1 => match op2 {
+            // SLLI: 5-bit shift amount split across op2[0] (high bit) and t (low 4 bits).
+            // ISA RM §8: encodes 1_sa = 32 - sa, so shamt = 32 - raw.
+            0x0 | 0x1 => {
+                let raw = ((op2 & 0x1) << 4) | t;
+                let shamt = 32u8.wrapping_sub(raw);
+                Instruction::Slli { ar: r, as_: s, shamt }
+            },
+            // SRAI: 5-bit shift amount; direct encoding (no complement).
+            // ISA RM §8: shamt = ((op2 & 1) << 4) | t.
+            0x2 | 0x3 => {
+                let shamt = ((op2 & 0x1) << 4) | t;
+                Instruction::Srai { ar: r, at: t, shamt }
+            },
+            // SRLI: 4-bit shift amount; direct from t field (0..15).
+            // ISA RM §8: shamt = t.
+            0x4 => Instruction::Srli { ar: r, at: t, shamt: t },
+            0x8 => Instruction::Src { ar: r, as_: s, at: t },
+            0x9 => Instruction::Srl { ar: r, at: t },
+            0xA => Instruction::Sll { ar: r, as_: s },
+            0xB => Instruction::Sra { ar: r, at: t },
+            _ => Instruction::Unknown(w),
+        },
+        // op1 = 0x2, 0x3 (shift immediates, extended range) — fill in later tasks.
         // op1 = 0x4..=0xF — fill in later tasks.
         _ => Instruction::Unknown(w),
     }
@@ -216,6 +240,22 @@ fn decode_st0(w: u32, r: u8, s: u8, t: u8) -> Instruction {
             _ => Instruction::Unknown(w),
         },
         0x4 => Instruction::Break { imm_s: s, imm_t: t },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// ST3 shift-setup group (`op1=0x0, op2=0x4`): SSR, SSL, SSA8L, SSA8B, SSAI.
+///
+/// `r` selects the specific instruction. SSAI has a 5-bit shift amount encoded
+/// as `{t[0], s[3:0]}` per ISA RM §8.
+fn decode_st3_shiftsetup(w: u32, r: u8, s: u8, t: u8) -> Instruction {
+    match r {
+        0x0 => Instruction::Ssr { as_: s },
+        0x1 => Instruction::Ssl { as_: s },
+        0x2 => Instruction::Ssa8l { as_: s },
+        0x3 => Instruction::Ssa8b { as_: s },
+        // SSAI: ISA RM §8: 5-bit shamt = {t[0], s[3:0]}.
+        0x4 => Instruction::Ssai { shamt: ((t & 0x1) << 4) | s },
         _ => Instruction::Unknown(w),
     }
 }

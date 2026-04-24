@@ -59,3 +59,96 @@ fn decode_addx_subx() {
     assert_eq!(decode(rrr(0xE, 0x0, 1, 2, 3)), Instruction::Subx4 { ar: 1, as_: 2, at: 3 });
     assert_eq!(decode(rrr(0xF, 0x0, 1, 2, 3)), Instruction::Subx8 { ar: 1, as_: 2, at: 3 });
 }
+
+#[test]
+fn decode_sll() {
+    // SLL ar, as_ : op2=0xA, op1=0x1, r=ar, s=as_, t=0
+    let w = rrr(0xA, 0x1, 3, 4, 0);
+    assert_eq!(decode(w), Instruction::Sll { ar: 3, as_: 4 });
+}
+
+#[test]
+fn decode_srl() {
+    // SRL ar, at : op2=0x9, op1=0x1, r=ar, s=0, t=at
+    let w = rrr(0x9, 0x1, 3, 0, 5);
+    assert_eq!(decode(w), Instruction::Srl { ar: 3, at: 5 });
+}
+
+#[test]
+fn decode_sra() {
+    // SRA ar, at : op2=0xB, op1=0x1, r=ar, s=0, t=at
+    let w = rrr(0xB, 0x1, 3, 0, 5);
+    assert_eq!(decode(w), Instruction::Sra { ar: 3, at: 5 });
+}
+
+#[test]
+fn decode_src() {
+    // SRC ar, as_, at : op2=0x8, op1=0x1
+    let w = rrr(0x8, 0x1, 1, 2, 3);
+    assert_eq!(decode(w), Instruction::Src { ar: 1, as_: 2, at: 3 });
+}
+
+#[test]
+fn decode_slli() {
+    // SLLI ar, as_, shamt : op2=0x0, op1=0x1, r=ar, s=as_, t=encoded
+    // ISA RM §8 SLLI: encodes 1_sa = 32 - sa across {op2[0], t[3:0]}.
+    // raw = (op2 & 1) << 4 | t; shamt = 32 - raw.
+    // Use raw=27 (op2=0x1 giving bit4=1, t=0xB=11) → shamt = 32 - 27 = 5.
+    let w = rrr(0x1, 0x1, 3, 4, 11);
+    match decode(w) {
+        Instruction::Slli { ar, as_, shamt } => {
+            assert_eq!(ar, 3);
+            assert_eq!(as_, 4);
+            // ISA RM: shamt = 32 - raw, raw = 27 → shamt = 5.
+            assert_eq!(shamt, 5);
+        }
+        other => panic!("expected Slli, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_srli() {
+    // SRLI ar, at, shamt : op2=0x4, op1=0x1, r=ar, s=0, t=at
+    // ISA RM §8 SRLI: shamt = t directly (4-bit, 0..15).
+    let w = rrr(0x4, 0x1, 3, 0, 7);
+    match decode(w) {
+        Instruction::Srli { ar, at, shamt } => {
+            assert_eq!(ar, 3);
+            assert_eq!(at, 7);
+            // ISA RM: shamt = t directly for SRLI.
+            assert_eq!(shamt, 7);
+        }
+        other => panic!("expected Srli, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_srai() {
+    // SRAI ar, at, shamt : op2=0x2, op1=0x1
+    // ISA RM §8 SRAI: shamt = ((op2 & 1) << 4) | t (direct, no complement).
+    let w = rrr(0x2, 0x1, 1, 0, 3);
+    match decode(w) {
+        Instruction::Srai { ar, at, shamt } => {
+            assert_eq!(ar, 1);
+            assert_eq!(at, 3);
+            // op2=0x2 → op2&1=0; raw = (0<<4)|3 = 3. shamt = 3.
+            assert_eq!(shamt, 3);
+        }
+        other => panic!("expected Srai, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_ssl_ssr_ssai() {
+    // SSR as_ : op0=0, op1=0, op2=4, r=0
+    let w = rrr(0x4, 0x0, 0, 5, 0);
+    assert_eq!(decode(w), Instruction::Ssr { as_: 5 });
+    // SSL as_ : op0=0, op1=0, op2=4, r=1
+    let w = rrr(0x4, 0x0, 1, 5, 0);
+    assert_eq!(decode(w), Instruction::Ssl { as_: 5 });
+    // SSAI shamt=9 : op0=0, op1=0, op2=4, r=4
+    // ISA RM §8 SSAI: shamt is 5-bit; encoded as {t[0], s[3:0]}.
+    // shamt=9 → low4 = 9, bit4 = 0 → s=9, t=0.
+    let w = rrr(0x4, 0x0, 4, 9, 0);
+    assert_eq!(decode(w), Instruction::Ssai { shamt: 9 });
+}
