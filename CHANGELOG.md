@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Supports nested clusters and register arrays (unrolling).
     - Includes rigorous quality gates: E2E tests, Property-Based Fuzzing, and strict documentation.
 - **Strategic Horizon**: Integrated long-term vision into `docs/plan.md`, prioritized by revenue impact (Browser Wedge, Enterprise Safety, Digital Twin).
+- **Python Bindings (`crates/python`)**: pyo3 extension module exposing `Machine` and `StopReason` to Python for AI / scripting workflows. Supports `run`, `step`, register / memory access, breakpoints, snapshot / restore. Rewritten against the current `DebugControl` trait; `cargo check --workspace` now passes.
+- **Benchmark harness (`crates/core/benches/fetch_ips.rs`)**: Criterion bench with two targets — `fetch_u16::linear_sweep` (bus read floor) and `step::uart_fixture_1k_steps` (full interpreter IPS on the UART CI fixture). Establishes a regression gate for hot-path changes.
+- **ISA Coverage Matrix (`docs/isa_coverage.md`)**: source-of-truth document for ARM Thumb/Thumb-2 and RISC-V RV32I coverage, including explicit gap list (FPU, DSP, wide multiply, divide, RV32M/A/C, RISC-V interrupts). README claims now derive from this document.
+
+### Fixed
+- **Merge conflict markers committed** in `examples/demo-blinky/.cargo/config.toml` resolved; file now contains a working `thumbv7m-none-eabi` target config.
+- **README honesty pass**: removed unverified "hundreds of thousands of IPS" claim (actual measured IPS is higher — numbers published via `cargo bench`) and the "ARM Cortex-M (M0, M3, M4)" line that overstated coverage; both now link to authoritative sources.
 
 ## [0.11.0] - 2026-02-08
 

@@ -18,6 +18,7 @@ members = [
     "examples/arm-cortex-m0",
     "examples/riscv-virt",
     "examples/demo-blinky",
+    "crates/python",
 ]
 exclude = ["crates/firmware-hal-test"]
 default-members = ["crates/cli", "crates/core", "crates/loader"]
