@@ -107,6 +107,22 @@ fn enc_ssa8b(as_: u32) -> u32 { rrr(0x4, 0x0, 0x3, as_, 0) }
 /// So s = shamt & 0xF, t = shamt >> 4 (0 or 1).
 fn enc_ssai(shamt: u32) -> u32 { rrr(0x4, 0x0, 0x4, shamt & 0xF, shamt >> 4) }
 
+// ── D3 LSAI encoding helpers (ADDI/ADDMI) ──
+
+/// Encode ADDI at, as_, imm8 (op0=0x2, r=0xC).
+/// LSAI format: (imm8<<16) | (r<<12) | (s<<8) | (t<<4) | op0.
+fn enc_addi(at: u32, as_: u32, imm8: i32) -> u32 {
+    let imm = (imm8 as u32) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0xC << 12) | (imm << 16)
+}
+
+/// Encode ADDMI at, as_, imm8 (op0=0x2, r=0xD).
+/// LSAI format: (imm8<<16) | (r<<12) | (s<<8) | (t<<4) | op0.
+fn enc_addmi(at: u32, as_: u32, imm8: i32) -> u32 {
+    let imm = (imm8 as u32) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0xD << 12) | (imm << 16)
+}
+
 // ── Bus helpers ─────────────────────────────────────────────────────────────
 
 /// Write a sequence of 3-byte wide instructions to the bus starting at `addr`.
@@ -708,4 +724,84 @@ fn test_exec_ssa8b() {
     run_until_error(&mut cpu2, &mut bus2);
     // SAR is 6-bit (0..63), so 32 is valid.
     assert_eq!(cpu2.sr.read(SAR_ID), 32, "SSA8B: SAR = 32 when as_=0");
+}
+
+// ── D3 Tests: ADDI, ADDMI with sign-extension ───────────────────────────────
+
+/// ADDI at, as_, imm8: at = as_ + sign_extend(imm8).
+/// Positive immediate: a2=100, ADDI a3, a2, 50 → a3 = 150.
+#[test]
+fn test_exec_addi_positive() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        movi(2, 100),
+        enc_addi(3, 2, 50),  // ADDI a3, a2, 50 → 100 + 50 = 150
+        st0(4, 0, 0),        // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 150, "ADDI: 100 + 50 = 150");
+}
+
+/// ADDI with negative immediate: sign-extension.
+/// a2=100, ADDI a3, a2, -50 → a3 = 50 (sign-extended -50 is 0xFFFFFFCE).
+#[test]
+fn test_exec_addi_negative() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        movi(2, 100),
+        enc_addi(3, 2, -50),  // ADDI a3, a2, -50 → 100 + (-50) = 50
+        st0(4, 0, 0),         // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 50, "ADDI: 100 + (-50) = 50");
+}
+
+/// ADDMI at, as_, imm8: at = as_ + (sign_extend(imm8) << 8).
+/// Effective add is imm8 * 256. With imm8=5: adds 1280.
+/// a2=1000, ADDMI a3, a2, 5 → a3 = 1000 + 1280 = 2280.
+#[test]
+fn test_exec_addmi_positive() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        movi(2, 1000),
+        enc_addmi(3, 2, 5),  // ADDMI a3, a2, 5 → 1000 + (5 * 256) = 2280
+        st0(4, 0, 0),        // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 2280, "ADDMI: 1000 + 1280 = 2280");
+}
+
+/// ADDMI with negative immediate: sign-extended then shifted.
+/// imm8=-1 → sign-extended to 0xFFFFFFFF, << 8 → 0xFFFFFF00, add to a2.
+/// a2=512, ADDMI a3, a2, -1 → a3 = 512 + ((-1) << 8) = 512 - 256 = 256.
+#[test]
+fn test_exec_addmi_negative() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[
+        movi(2, 512),
+        enc_addmi(3, 2, -1),  // ADDMI a3, a2, -1 → 512 + ((-1) << 8) = 512 - 256 = 256
+        st0(4, 0, 0),         // BREAK
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 256, "ADDMI: 512 + (-256) = 256");
 }

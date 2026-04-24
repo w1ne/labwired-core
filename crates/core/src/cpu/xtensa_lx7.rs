@@ -231,6 +231,21 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // ── D3: Arithmetic immediate instructions ──────────────────────────────
+            // ADDI at, as_, imm8: at = as_ + sext8(imm8). Two's complement addition.
+            Addi { at, as_, imm8 } => {
+                let v = self.regs.read_logical(as_).wrapping_add(imm8 as u32);
+                self.regs.write_logical(at, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // ADDMI at, as_, imm: at = as_ + imm, where imm = sext8(raw) << 8.
+            // Decoder pre-shifts, so imm is already the full immediate value.
+            Addmi { at, as_, imm } => {
+                let v = self.regs.read_logical(as_).wrapping_add(imm as u32);
+                self.regs.write_logical(at, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())
