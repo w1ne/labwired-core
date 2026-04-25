@@ -1,0 +1,100 @@
+# LabWired - STM32L476RG chip configuration
+#
+# Source references:
+# - RM0351 (STM32L4 Reference Manual): memory map, RCC layout, peripheral
+#   register offsets.
+# - DEV_ID 0x415, REV_ID 0x1007 verified against real silicon via SWD probe
+#   (DBGMCU_IDCODE @ 0xE0042000 = 0x10076415).
+#
+# Tier: experimental — basic UART smoke verified against NUCLEO-L476RG hardware,
+# other peripherals not yet hardware-validated.
+
+name: "stm32l476rg"
+arch: "arm"
+registers_count: 200
+flash:
+  base: 0x08000000
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "96KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l4"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x48000800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x48000C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x48001000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x48001C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      profile: "stm32v2"
+
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 37
+    config:
+      profile: "stm32v2"
+
+  - id: "scb"
+    type: "scb"
+    base_address: 0xE000ED00
+    size: "1KB"
+
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"

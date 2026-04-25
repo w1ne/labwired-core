@@ -1044,13 +1044,13 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         return Instruction::Movt { rd, imm: imm16 };
     }
 
-    // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
-    // Example seen in H563 firmware path: FA01 F202
+    // Shift by register (Thumb-2): LSL.W path (kept for the H563 LSL-only
+    // case; same bug as below was here — moved op extraction to h1[6:5]).
     if (h1 & 0xFFE0) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
         let rn = (h1 & 0xF) as u8;
         let rd = ((h2 >> 8) & 0xF) as u8;
         let rm = (h2 & 0xF) as u8;
-        let shift_type = ((h2 >> 4) & 0x3) as u8;
+        let shift_type = ((h1 >> 5) & 0x3) as u8;
         return Instruction::ShiftReg32 {
             rd,
             rn,
@@ -1157,15 +1157,19 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
-    // UXTB.W (Thumb-2): 1111 1010 0100 1111 1111 <rd> 1000 <rm> -> FA4F ...
-    // My log said FA23 F404 (LSR) and FA2E F303 (LSR).
-    // Shift by register (Thumb-2), e.g. `LSL.W Rd, Rn, Rm`.
-    // Encodings: 1111 1010 0... (FA0x to FA7x)
+    // Shift by register (Thumb-2): LSL.W / LSR.W / ASR.W / ROR.W Rd, Rn, Rm.
+    // ARM ARM encoding (T2):
+    //   1111 1010 0 <op> S nnnn  1111 dddd 0000 mmmm
+    // The shift type op lives in h1 bits [6:5], NOT h2:
+    //   op = 00 -> LSL, 01 -> LSR, 10 -> ASR, 11 -> ROR
+    // (Hardware verified against NUCLEO-L476RG: `lsr.w r2, r0, r3` =
+    // FA20 F203 was being decoded as LSL because shift_type was read from
+    // h2[5:4] = 0 instead of h1[6:5] = 01.)
     if (h1 & 0xFF80) == 0xFA00 && (h2 & 0xF0F0) == 0xF000 {
         let rn = (h1 & 0xF) as u8;
         let rd = ((h2 >> 8) & 0xF) as u8;
         let rm = (h2 & 0xF) as u8;
-        let shift_type = ((h2 >> 4) & 0x3) as u8;
+        let shift_type = ((h1 >> 5) & 0x3) as u8;
         return Instruction::ShiftReg32 {
             rd,
             rn,

@@ -14,6 +14,10 @@ pub enum RccRegisterLayout {
     Stm32F1,
     Stm32F4,
     Stm32V2,
+    /// STM32L4 family register layout. Register offsets verified against
+    /// STM32L476RG hardware (NUCLEO-L476RG, J-Link OB SWD probe).
+    /// AHB1ENR=0x48, AHB2ENR=0x4C, APB1ENR1=0x58, APB2ENR=0x60.
+    Stm32L4,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -25,8 +29,9 @@ impl FromStr for RccRegisterLayout {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
+            "stm32l4" | "l4" => Ok(Self::Stm32L4),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32l4",
                 value
             )),
         }
@@ -94,6 +99,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F1 => 0x18,
             RccRegisterLayout::Stm32F4 => 0x44, // APB2ENR on STM32F4
             RccRegisterLayout::Stm32V2 => 0xA4, // APB2ENR on STM32H5-style RCC
+            RccRegisterLayout::Stm32L4 => 0x60, // APB2ENR on STM32L4 (RM0351)
         }
     }
 
@@ -102,6 +108,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F1 => 0x1C,
             RccRegisterLayout::Stm32F4 => 0x40, // APB1ENR on STM32F4
             RccRegisterLayout::Stm32V2 => 0x9C, // APB1LENR on STM32H5-style RCC
+            RccRegisterLayout::Stm32L4 => 0x58, // APB1ENR1 on STM32L4
         }
     }
 
@@ -110,6 +117,11 @@ impl Rcc {
             RccRegisterLayout::Stm32F1 => 0x14, // AHBENR
             RccRegisterLayout::Stm32F4 => 0x30, // AHB1ENR
             RccRegisterLayout::Stm32V2 => 0x8C, // AHB2ENR
+            // STM32L4 has both AHB1ENR (0x48) and AHB2ENR (0x4C). GPIO ports
+            // live on AHB2 — that's what the smoke firmware writes — so we
+            // map the canonical "ahbenr" slot to AHB2ENR. The AHB1ENR slot
+            // is a dummy register handled separately below.
+            RccRegisterLayout::Stm32L4 => 0x4C, // AHB2ENR on STM32L4
         }
     }
 
@@ -118,6 +130,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F1 => 0x0C,
             RccRegisterLayout::Stm32F4 => 0x24,
             RccRegisterLayout::Stm32V2 => 0x84,
+            RccRegisterLayout::Stm32L4 => 0x40, // APB2RSTR on STM32L4
         }
     }
 
@@ -126,6 +139,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F1 => 0x10,
             RccRegisterLayout::Stm32F4 => 0x20,
             RccRegisterLayout::Stm32V2 => 0x7C,
+            RccRegisterLayout::Stm32L4 => 0x38, // APB1RSTR1 on STM32L4
         }
     }
 
@@ -134,6 +148,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F1 => 0x28,
             RccRegisterLayout::Stm32F4 => 0x10,
             RccRegisterLayout::Stm32V2 => 0x6C,
+            RccRegisterLayout::Stm32L4 => 0x2C, // AHB2RSTR on STM32L4
         }
     }
 

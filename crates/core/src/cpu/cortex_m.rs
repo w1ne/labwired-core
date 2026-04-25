@@ -1477,20 +1477,10 @@ impl CortexM {
                 }
 
                 Instruction::LdrLit { rt, imm } => {
-                    // ... (existing)
                     let pc_val = (self.pc & !3) + 4;
                     let addr = pc_val.wrapping_add(imm as u32);
                     if let Ok(val) = bus.read_u32(addr as u64) {
                         self.write_reg(rt, val);
-                        if val == 0x021d0000 {
-                            tracing::info!(
-                                "LDR Lit SUSPICIOUS: R{} loaded with {:#x} from {:#x} (PC={:#x})",
-                                rt,
-                                val,
-                                addr,
-                                self.pc
-                            );
-                        }
                     } else {
                         tracing::error!("Bus Read Fault (LdrLit) at {:#x}", addr);
                     }
@@ -1500,15 +1490,6 @@ impl CortexM {
                     let addr = self.sp.wrapping_add(imm as u32);
                     if let Ok(val) = bus.read_u32(addr as u64) {
                         self.write_reg(rt, val);
-                        if val == 0x021d0000 {
-                            tracing::info!(
-                                "LDR Sp SUSPICIOUS: R{} loaded with {:#x} from {:#x} (PC={:#x})",
-                                rt,
-                                val,
-                                addr,
-                                self.pc
-                            );
-                        }
                     } else {
                         tracing::error!("Bus Read Fault (LdrSp) at {:#x}", addr);
                     }
@@ -2264,5 +2245,34 @@ mod tests {
         cpu.r3 = 100;
         run_test_instr(&mut cpu, &mut bus, 0xFB01_3012, true);
         assert_eq!(cpu.r0, 94, "MLS: 100 - 2*3 = 94");
+    }
+
+    #[test]
+    fn test_thumb2_shift_register_lsr_lsl_asr() {
+        // Regression: the Thumb-2 shift-by-register encoding (FA0x..FA7x)
+        // was reading shift_type from h2[5:4] instead of h1[6:5], so
+        // LSR/ASR/ROR were silently decoded as LSL. Surfaced on
+        // NUCLEO-L476RG via __aeabi_u2h emit from `(v >> n) & 0xF` in a
+        // stock GCC hex print loop.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+
+        // LSR.W r2, r0, r3  (FA20 F203). r0 = 0x60FC303A, r3 = 28 -> r2 = 0x6.
+        cpu.r0 = 0x60FC303A;
+        cpu.r3 = 28;
+        run_test_instr(&mut cpu, &mut bus, 0xFA20_F203, true);
+        assert_eq!(cpu.r2, 0x6, "LSR.W by 28 of 0x60FC303A");
+
+        // LSL.W r2, r0, r3  (FA00 F203). r0 = 0x6, r3 = 28 -> r2 = 0x60000000.
+        cpu.r0 = 0x6;
+        cpu.r3 = 28;
+        run_test_instr(&mut cpu, &mut bus, 0xFA00_F203, true);
+        assert_eq!(cpu.r2, 0x6000_0000, "LSL.W by 28 of 0x6");
+
+        // ASR.W r2, r0, r3  (FA40 F203). r0 = 0xF0000000, r3 = 4 -> r2 = 0xFF000000.
+        cpu.r0 = 0xF000_0000;
+        cpu.r3 = 4;
+        run_test_instr(&mut cpu, &mut bus, 0xFA40_F203, true);
+        assert_eq!(cpu.r2, 0xFF00_0000, "ASR.W by 4 of 0xF0000000 sign-extends");
     }
 }
