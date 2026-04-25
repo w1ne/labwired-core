@@ -198,9 +198,23 @@ fn decode_qrst(w: u32) -> Instruction {
             //
             // SUBX4/SUBX8 use op2=0xE/0xF (not op2=4), so they are routed to the
             // 0xE/0xF match arms below and are never confused with NSA/NSAU.
+            // ROTW n: op1=0, op2=4, r=8, s=0, t=n (4-bit signed).
+            //
+            // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+            //   rotw  1 → 0x408010: op2=4, r=8, s=0, t=1 → n=+1
+            //   rotw -1 → 0x4080f0: op2=4, r=8, s=0, t=0xF → n=-1 (4-bit two's complement)
+            //   rotw  7 → 0x408070: op2=4, r=8, s=0, t=7   → n=+7
+            //   rotw -8 → 0x408080: op2=4, r=8, s=0, t=8   → n=-8 (4-bit two's complement)
+            //
+            // n is sign-extended from the 4-bit t field: values 8..=15 → -8..=-1.
             0x4 => match r {
                 0xE => Instruction::Nsa  { ar: t, as_: s },
                 0xF => Instruction::Nsau { ar: t, as_: s },
+                0x8 => {
+                    // Sign-extend 4-bit t field to i8: if bit3 set, subtract 16.
+                    let n = if t & 0x8 != 0 { (t as i8).wrapping_sub(16) } else { t as i8 };
+                    Instruction::Rotw { n }
+                }
                 _   => decode_st3_shiftsetup(w, r, s, t),
             },
             0x6 => match s {
@@ -309,6 +323,13 @@ fn decode_st0(w: u32, r: u8, s: u8, t: u8) -> Instruction {
             0xF => Instruction::Callx12 { as_: s },
             _   => Instruction::Unknown(w),
         },
+        // MOVSP at, as_: move stack pointer between adjacent windowed frames safely.
+        //
+        // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+        //   movsp a3, a4 → 0x001430: op0=0, op1=0, op2=0 (ST0 group), r=1, s=as_=4, t=at=3.
+        //
+        // Field layout (op0=0, op1=0, op2=0, r=1): s=as_ (source), t=at (destination).
+        0x1 => Instruction::Movsp { at: t, as_: s },
         0x2 => match (s, t) {
             (0, 0x0) => Instruction::Isync,
             (0, 0x1) => Instruction::Rsync,

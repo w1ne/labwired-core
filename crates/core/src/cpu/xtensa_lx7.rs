@@ -952,6 +952,66 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // ── F6: MOVSP / ROTW ─────────────────────────────────────────────
+
+            // MOVSP at, as_: move stack pointer between adjacent windowed frames.
+            //
+            // ISA RM §8 MOVSP semantics (Plan 1 safe-path-only implementation):
+            //
+            //   The instruction checks whether the *next* windowed frame (WindowBase+1)
+            //   is currently live. If WindowStart[(WB+1) & 0xF] == 0 (frame not in use),
+            //   this is the safe path: a[at] = a[as_], PC += len.
+            //
+            //   If the next frame IS in use (WS bit set), the hardware must spill/reload
+            //   registers between frames before moving the SP. In Plan 1 we do not model
+            //   the spill-to-memory ABI (that belongs in Phase G with full exception
+            //   handler emulation). Instead, we raise EXCCAUSE=5 (AllocaCause), which is
+            //   the documented exception that MOVSP triggers when it detects a live
+            //   adjacent frame (per ISA RM §5.5.4: "MOVSP Window Overflow/Underflow").
+            //
+            // TODO(plan2): implement the full spill path: when WS[(WB+1)&0xF] is set,
+            //   save a[(WB+1)*4 .. (WB+1)*4+3] to memory at [a[at]-16..a[at]-4], then
+            //   perform the move, then restore from the new SP. This matches the
+            //   __window_spill / alloca vector handler ABI used by GCC/ESP-IDF.
+            Movsp { at, as_ } => {
+                let wb = self.regs.windowbase();
+                let next_idx = wb.wrapping_add(1) & 0x0F;
+
+                if self.regs.windowstart_bit(next_idx) {
+                    // Adjacent frame is live — spill path required.
+                    // Plan 1: raise AllocaCause (EXCCAUSE=5) and let the caller handle it.
+                    // TODO(plan2): implement register spill instead.
+                    self.sr.write(EXCCAUSE, 5);
+                    return Err(SimulationError::ExceptionRaised { cause: 5, pc: self.pc });
+                }
+
+                // Safe path: adjacent frame is free, simple register move.
+                let v = self.regs.read_logical(as_);
+                self.regs.write_logical(at, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // ROTW n: rotate WindowBase by n (4-bit signed, range -8..=+7).
+            //
+            // ISA RM §8 ROTW semantics:
+            //   WindowBase = (WindowBase + n) mod 16
+            //   WindowStart is NOT modified.
+            //
+            // Privileged note: ROTW is a privileged instruction (valid only when
+            // PS.RING == 0). Plan 1 does not model PS.RING (we always run at ring 0),
+            // so the ring check is skipped.
+            //
+            // TODO(plan-priv): when PS.RING modelling is added, add a check here:
+            //   if ps.ring() != 0 { raise PrivilegedCause (EXCCAUSE=8) }
+            Rotw { n } => {
+                let wb = self.regs.windowbase();
+                // n is i8 (range -8..=+7); wrapping add modulo 16.
+                let wb_new = (wb as i32).wrapping_add(n as i32).rem_euclid(16) as u8;
+                self.regs.set_windowbase(wb_new);
+                // WindowStart is NOT modified (ISA RM §8 ROTW).
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())

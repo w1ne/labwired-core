@@ -1075,3 +1075,55 @@ fn test_decode_l32e() {
         Instruction::L32e { at: 3, as_: 4, imm: (-16i32) as u32 }
     );
 }
+
+// ── F6: MOVSP / ROTW decoder tests (HW-oracle verified) ──────────────────────
+//
+// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   movsp a3, a4 → bytes 30 14 00 → 24-bit LE word 0x001430
+//   rotw  1      → bytes 10 80 40 → 24-bit LE word 0x408010
+//   rotw -1      → bytes f0 80 40 → 24-bit LE word 0x4080f0
+//   rotw  7      → bytes 70 80 40 → 24-bit LE word 0x408070
+//   rotw -8      → bytes 80 80 40 → 24-bit LE word 0x408080
+//
+// MOVSP field layout: op0=0, op1=0, op2=0 (ST0 group), r=1, s=as_, t=at.
+// ROTW field layout:  op0=0, op1=0, op2=4, r=8, s=0, t=n (4-bit signed two's complement).
+
+/// MOVSP a3, a4 — HW-oracle exact bytes.
+/// `movsp a3, a4` → 0x001430: op0=0, op1=0, op2=0, r=1, s(as_)=4, t(at)=3.
+#[test]
+fn test_decode_movsp_hw_oracle() {
+    let w = 0x001430u32;
+    assert_eq!(decode(w), Instruction::Movsp { at: 3, as_: 4 });
+}
+
+/// ROTW 1 — HW-oracle exact bytes.
+/// `rotw 1` → 0x408010: op2=4, r=8, s=0, t=1 → n=+1.
+#[test]
+fn test_decode_rotw_pos_1() {
+    let w = 0x408010u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: 1 });
+}
+
+/// ROTW -1 — HW-oracle exact bytes.
+/// `rotw -1` → 0x4080f0: op2=4, r=8, s=0, t=0xF → n=-1 (4-bit two's complement).
+#[test]
+fn test_decode_rotw_neg_1() {
+    let w = 0x4080f0u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: -1 });
+}
+
+/// ROTW 7 — HW-oracle exact bytes.
+/// `rotw 7` → 0x408070: op2=4, r=8, s=0, t=7 → n=+7 (max positive).
+#[test]
+fn test_decode_rotw_pos_7() {
+    let w = 0x408070u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: 7 });
+}
+
+/// ROTW -8 — HW-oracle exact bytes.
+/// `rotw -8` → 0x408080: op2=4, r=8, s=0, t=8 → n=-8 (min negative in 4-bit).
+#[test]
+fn test_decode_rotw_neg_8() {
+    let w = 0x408080u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: -8 });
+}

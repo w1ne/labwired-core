@@ -3909,3 +3909,182 @@ fn test_step_does_not_misdecode_s32i_n_as_l32e_outside_excm() {
         "PC must advance to TEST_PC+4 after nop.n"
     );
 }
+
+// ── F6 Tests: MOVSP + ROTW ────────────────────────────────────────────────────
+//
+// HW-oracle encodings (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   movsp a3, a4 → 0x001430  (ST0 group: op0=0, op1=0, op2=0, r=1, s=as_=4, t=at=3)
+//   rotw  1      → 0x408010  (op0=0, op1=0, op2=4, r=8, s=0, t=1)
+//   rotw -1      → 0x4080f0  (t=0xF → 4-bit two's complement -1)
+//   rotw  7      → 0x408070  (t=7, max positive)
+//   rotw -8      → 0x408080  (t=8 → 4-bit two's complement -8)
+
+/// Encode MOVSP at, as_: ST0 group, r=1, s=as_, t=at.
+/// Layout: op0=0, op1=0, op2=0 → (r<<12)|(s<<8)|(t<<4).
+fn enc_movsp(at: u32, as_: u32) -> u32 {
+    st0(1, as_, at)
+}
+
+/// Encode ROTW n: op0=0, op1=0, op2=4, r=8, s=0, t=n_raw (4-bit two's complement of n).
+fn enc_rotw(n: i32) -> u32 {
+    let t = (n as u32) & 0xF; // mask to 4 bits (two's complement)
+    rrr(0x4, 0x0, 0x8, 0, t)
+}
+
+/// MOVSP safe path: when WS bit (WB+1) is CLEAR, perform plain register move.
+///
+/// Setup: WB=0, WS=0x1 (only bit 0 set → bit 1 is clear → safe path).
+/// Execute `movsp a3, a4`: a[at=3] = a[as_=4]; PC advances by 3.
+#[test]
+fn test_exec_movsp_safe_path() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    // Precondition: WindowBase=0, WindowStart bit 1 (WB+1=1) must be CLEAR.
+    // After reset: WB=0, WS=0x1 (bit 0 set, bit 1 clear) → safe path.
+    assert_eq!(cpu.regs.windowbase(), 0, "pre: WB=0");
+    assert!(!cpu.regs.windowstart_bit(1), "pre: WS[1] must be clear for safe path");
+
+    // Set source register a4 to a known value.
+    cpu.set_register(4, 0xDEAD_BEEF);
+    cpu.set_register(3, 0x0); // destination starts at 0
+
+    // Write HW-oracle bytes for `movsp a3, a4` → 0x001430 in LE: 0x30, 0x14, 0x00.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_movsp(3, 4)]);
+    cpu.step(&mut bus, &[]).expect("MOVSP safe path must not error");
+
+    // a[3] = a[4] = 0xDEAD_BEEF
+    assert_eq!(cpu.get_register(3), 0xDEAD_BEEF, "MOVSP: a3 must equal a4 after safe-path move");
+    // a[4] (source) unchanged
+    assert_eq!(cpu.get_register(4), 0xDEAD_BEEF, "MOVSP: a4 (source) must be unchanged");
+    // PC advanced by 3
+    assert_eq!(cpu.get_pc(), TEST_PC + 3, "MOVSP: PC must advance by 3");
+    // WindowBase and WindowStart unchanged
+    assert_eq!(cpu.regs.windowbase(), 0, "MOVSP: WindowBase must not change");
+    assert_eq!(cpu.regs.windowstart(), 0x1, "MOVSP: WindowStart must not change");
+}
+
+/// MOVSP with adjacent frame live: WS bit (WB+1) SET → raises ExceptionRaised{cause:5}.
+///
+/// Plan 1 defers the spill path; AllocaCause (EXCCAUSE=5) is raised instead.
+/// TODO(plan2): replace with full register-spill implementation.
+#[test]
+fn test_exec_movsp_overflow_raises_exception() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    // Set WB=0 and force WS bit 1 (= (WB+1) & 0xF) to be SET → live adjacent frame.
+    cpu.regs.set_windowbase(0);
+    cpu.regs.set_windowstart_bit(1, true);
+    assert!(cpu.regs.windowstart_bit(1), "pre: WS[(WB+1)&0xF] must be set");
+
+    cpu.set_register(4, 0x1234_5678);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_movsp(3, 4)]);
+
+    let err = cpu.step(&mut bus, &[]).expect_err("MOVSP with live adjacent frame must raise exception");
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 5, .. }),
+        "MOVSP overflow: expected ExceptionRaised{{cause:5}}, got {:?}", err
+    );
+}
+
+/// ROTW +1: WindowBase = (old_WB + 1) & 0xF.
+#[test]
+fn test_exec_rotw_pos() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    cpu.regs.set_windowbase(3);
+    let ws_before = cpu.regs.windowstart();
+
+    // HW-oracle: `rotw 1` → 0x408010.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(1)]);
+    cpu.step(&mut bus, &[]).expect("ROTW +1 must not error");
+
+    assert_eq!(cpu.regs.windowbase(), 4, "ROTW +1: WB must be (3+1)&0xF = 4");
+    assert_eq!(cpu.regs.windowstart(), ws_before, "ROTW +1: WindowStart must not change");
+    assert_eq!(cpu.get_pc(), TEST_PC + 3, "ROTW +1: PC must advance by 3");
+}
+
+/// ROTW -1: WindowBase = (old_WB - 1) & 0xF (wrapping).
+#[test]
+fn test_exec_rotw_neg() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    cpu.regs.set_windowbase(5);
+    let ws_before = cpu.regs.windowstart();
+
+    // HW-oracle: `rotw -1` → 0x4080f0.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(-1)]);
+    cpu.step(&mut bus, &[]).expect("ROTW -1 must not error");
+
+    assert_eq!(cpu.regs.windowbase(), 4, "ROTW -1: WB must be (5-1)&0xF = 4");
+    assert_eq!(cpu.regs.windowstart(), ws_before, "ROTW -1: WindowStart must not change");
+    assert_eq!(cpu.get_pc(), TEST_PC + 3, "ROTW -1: PC must advance by 3");
+}
+
+/// ROTW -1 wraparound: WindowBase = (0 - 1) & 0xF = 15.
+#[test]
+fn test_exec_rotw_neg_wraparound() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    cpu.regs.set_windowbase(0);
+    let ws_before = cpu.regs.windowstart();
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(-1)]);
+    cpu.step(&mut bus, &[]).expect("ROTW -1 wraparound must not error");
+
+    assert_eq!(cpu.regs.windowbase(), 15, "ROTW -1 from WB=0 must wrap to 15");
+    assert_eq!(cpu.regs.windowstart(), ws_before, "ROTW wraparound: WindowStart must not change");
+}
+
+/// ROTW +7 (max positive): WindowBase = (old_WB + 7) & 0xF.
+#[test]
+fn test_exec_rotw_max_pos() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    cpu.regs.set_windowbase(2);
+    let ws_before = cpu.regs.windowstart();
+
+    // HW-oracle: `rotw 7` → 0x408070.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(7)]);
+    cpu.step(&mut bus, &[]).expect("ROTW +7 must not error");
+
+    assert_eq!(cpu.regs.windowbase(), 9, "ROTW +7: WB must be (2+7)&0xF = 9");
+    assert_eq!(cpu.regs.windowstart(), ws_before, "ROTW max-pos: WindowStart must not change");
+}
+
+/// ROTW -8 (max negative): WindowBase = (old_WB - 8) & 0xF (wrapping).
+#[test]
+fn test_exec_rotw_max_neg() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    cpu.regs.set_windowbase(5);
+    let ws_before = cpu.regs.windowstart();
+
+    // HW-oracle: `rotw -8` → 0x408080.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(-8)]);
+    cpu.step(&mut bus, &[]).expect("ROTW -8 must not error");
+
+    assert_eq!(cpu.regs.windowbase(), 13, "ROTW -8: WB must be (5-8+16)&0xF = 13");
+    assert_eq!(cpu.regs.windowstart(), ws_before, "ROTW max-neg: WindowStart must not change");
+}
+
+/// ROTW does not modify WindowStart regardless of the rotation amount.
+#[test]
+fn test_exec_rotw_does_not_change_windowstart() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    // Set an unusual WindowStart pattern to verify it's untouched.
+    let ws_pattern: u16 = 0b0000_0000_0101_0011; // bits 0,1,4,6 set
+    cpu.regs.set_windowbase(0);
+    cpu.regs.set_windowstart(ws_pattern);
+
+    // ROTW +3: WB → 3, but WS must be unchanged.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rotw(3)]);
+    cpu.step(&mut bus, &[]).expect("ROTW +3 must not error");
+
+    assert_eq!(
+        cpu.regs.windowstart(),
+        ws_pattern,
+        "ROTW must leave WindowStart completely untouched"
+    );
+    assert_eq!(cpu.regs.windowbase(), 3, "ROTW +3: WB must be 3");
+}
