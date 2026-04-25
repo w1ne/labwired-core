@@ -153,6 +153,21 @@ pub fn decode(word: u32) -> Instruction {
         0x5 => decode_calln(w),
         0x6 => decode_si(w),
         0x7 => decode_b(w),
+        // op0=0x9 — S32E / L32E: windowed exception store/load.
+        //
+        // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+        //   s32e a3, a4, -16 → 0x30C449: bits[7:4]=4(S32E), bits[11:8]=4(as_=a4),
+        //                                bits[15:12]=12(imm4), bits[23:20]=3(at=a3)
+        //   l32e a3, a4, -16 → 0x30C409: bits[7:4]=0(L32E), same fields
+        //
+        // Field layout for op0=9:
+        //   bits[23:20] = at  (value / destination register)
+        //   bits[19:16] = 0   (constant opcode marker; always 0 in observed encodings)
+        //   bits[15:12] = imm4 (raw 4-bit, maps to byte offset via imm_byte = imm4*4 - 64)
+        //   bits[11:8]  = as_ (base register)
+        //   bits[7:4]   = subop: 0=L32E, 4=S32E
+        //   bits[3:0]   = op0 = 9
+        0x9 => decode_s32e_l32e(w),
         _ => Instruction::Unknown(w),
     }
 }
@@ -371,6 +386,33 @@ fn decode_lsai(w: u32) -> Instruction {
         0xD => Instruction::Addmi { at: t, as_: s, imm: sext8(imm8) << 8 },
         0xE => Instruction::S32c1i { at: t, as_: s, imm: imm8 << 2 },
         0xF => Instruction::S32ri  { at: t, as_: s, imm: imm8 << 2 },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// S32E / L32E decoder (op0=0x9): windowed exception store/load.
+///
+/// Field layout (HW-oracle verified):
+///   bits[23:20] = at  (register to store / load destination)
+///   bits[19:16] = 0   (opcode constant)
+///   bits[15:12] = imm4 (raw 4-bit; imm_byte = imm4 * 4 - 64, range -64..-4)
+///   bits[11:8]  = as_ (base address register)
+///   bits[7:4]   = subop: 0x4 = S32E, 0x0 = L32E
+///   bits[3:0]   = op0 = 9
+///
+/// The `imm` field in the Instruction variant stores the pre-computed signed
+/// byte offset as a u32 (two's-complement), so the executor can use
+/// `as_.wrapping_add(imm)` directly.
+fn decode_s32e_l32e(w: u32) -> Instruction {
+    let at   = ((w >> 20) & 0xF) as u8;
+    let imm4 = (w >> 12) & 0xF;
+    let as_  = ((w >> 8)  & 0xF) as u8;
+    let subop = ((w >> 4)  & 0xF) as u8;
+    // imm_byte = imm4 * 4 - 64  (range -64..-4), stored as two's-complement u32.
+    let imm = imm4.wrapping_mul(4).wrapping_sub(64);
+    match subop {
+        0x0 => Instruction::L32e { at, as_, imm },
+        0x4 => Instruction::S32e { at, as_, imm },
         _ => Instruction::Unknown(w),
     }
 }

@@ -3693,3 +3693,186 @@ fn test_exec_retw_no_underflow_when_destination_frame_set() {
     // PS.EXCM must NOT have been set by the UF path (was cleared before the test)
     assert!(!cpu.ps.excm(), "No-UF: PS.EXCM should remain clear (no UF exception)");
 }
+
+// ── F5: S32E / L32E exec tests ────────────────────────────────────────────────
+//
+// HW-oracle encoding (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   s32e a3, a4, -16 → 0x30C449  s32e a3, a4, -64 → 0x300449
+//   l32e a3, a4, -16 → 0x30C409  l32e a3, a4, -64 → 0x300409
+//
+// Encoding (op0=9):
+//   bits[23:20]=at, bits[15:12]=imm4, bits[11:8]=as_, bits[7:4]=subop(4=S32E/0=L32E)
+//   imm_byte = imm4 * 4 - 64
+//
+// These instructions are gated on PS.EXCM=1.  When PS.EXCM=0 they raise
+// IllegalInstruction (EXCCAUSE=0, ExceptionRaised{cause:0}).
+
+/// Encode S32E at, as_, imm_byte  (op0=9, subop=4).
+/// imm_byte must be in -64..-4 (multiples of 4).
+fn enc_s32e(at: u32, as_: u32, imm_byte: i32) -> u32 {
+    let imm4 = ((imm_byte + 64) / 4) as u32;
+    (at << 20) | (imm4 << 12) | (as_ << 8) | (0x4 << 4) | 0x9
+}
+
+/// Encode L32E at, as_, imm_byte  (op0=9, subop=0).
+fn enc_l32e(at: u32, as_: u32, imm_byte: i32) -> u32 {
+    let imm4 = ((imm_byte + 64) / 4) as u32;
+    (at << 20) | (imm4 << 12) | (as_ << 8) | 0x9
+}
+
+/// S32E inside exception context (PS.EXCM=1): should write to memory.
+#[test]
+fn test_exec_s32e_in_excm_writes() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    // Reset leaves PS.EXCM=1 (reset value 0x1F). Confirm and proceed.
+    assert!(cpu.ps.excm(), "pre-condition: reset should leave PS.EXCM=1");
+
+    // a4 = base address; a3 = value to store.
+    let base: u32 = 0x2000_0100;
+    cpu.set_register(4, base);
+    cpu.set_register(3, 0xDEAD_BEEF);
+
+    // S32E a3, a4, -16: EA = base - 16.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32e(3, 4, -16)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    let stored = bus.read_u32((base - 16) as u64).unwrap();
+    assert_eq!(stored, 0xDEAD_BEEF, "S32E should write at to EA=as_+imm");
+    assert_eq!(cpu.pc, TEST_PC + 3, "PC should advance by 3 after S32E");
+}
+
+/// S32E outside exception context (PS.EXCM=0): raises IllegalInstruction.
+#[test]
+fn test_exec_s32e_outside_excm_raises_illegal() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_excm(false);  // clear EXCM
+
+    cpu.set_register(4, 0x2000_0100);
+    cpu.set_register(3, 0x1234_5678);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32e(3, 4, -16)]);
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 0, .. }),
+        "S32E with PS.EXCM=0 should raise ExceptionRaised{{cause:0}}, got: {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 0, "EXCCAUSE should be 0 for IllegalInstruction");
+}
+
+/// L32E inside exception context (PS.EXCM=1): should read from memory into at.
+#[test]
+fn test_exec_l32e_in_excm_reads() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    assert!(cpu.ps.excm(), "pre-condition: reset should leave PS.EXCM=1");
+
+    let base: u32 = 0x2000_0100;
+    let ea: u64 = (base - 16) as u64;
+    bus.write_u32(ea, 0xCAFE_BABE).unwrap();
+
+    cpu.set_register(4, base);
+
+    // L32E a3, a4, -16: at=a3, as_=a4, EA = base - 16.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_l32e(3, 4, -16)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.get_register(3), 0xCAFE_BABE, "L32E should load from EA into at");
+    assert_eq!(cpu.pc, TEST_PC + 3, "PC should advance by 3 after L32E");
+}
+
+/// L32E outside exception context (PS.EXCM=0): raises IllegalInstruction.
+#[test]
+fn test_exec_l32e_outside_excm_raises_illegal() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_excm(false);
+
+    cpu.set_register(4, 0x2000_0100);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_l32e(3, 4, -16)]);
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 0, .. }),
+        "L32E with PS.EXCM=0 should raise ExceptionRaised{{cause:0}}, got: {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 0, "EXCCAUSE should be 0 for IllegalInstruction");
+}
+
+/// S32E with maximum negative offset (-64): EA = as_ - 64.
+#[test]
+fn test_exec_s32e_negative_offset() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    assert!(cpu.ps.excm(), "pre-condition: PS.EXCM=1");
+
+    let base: u32 = 0x2000_0100;
+    cpu.set_register(5, base);
+    cpu.set_register(6, 0xABCD_1234);
+
+    // S32E a6, a5, -64: EA = base - 64 = 0x2000_00C0.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32e(6, 5, -64)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    let stored = bus.read_u32((base - 64) as u64).unwrap();
+    assert_eq!(stored, 0xABCD_1234, "S32E with imm=-64 should write to as_-64");
+}
+
+/// HW-oracle byte verification: s32e a3, a4, -16 → 0x30C449.
+#[test]
+fn test_exec_s32e_hw_oracle_bytes() {
+    // Use the exact HW-oracle word; verify it decodes and executes correctly.
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    assert!(cpu.ps.excm());
+
+    let base: u32 = 0x2000_0080;
+    cpu.set_register(4, base);
+    cpu.set_register(3, 0x1111_2222);
+
+    // Write HW-oracle bytes directly: 0x30C449 in LE = 0x49, 0xC4, 0x30.
+    bus.write_u8(TEST_PC as u64,     0x49).unwrap();
+    bus.write_u8(TEST_PC as u64 + 1, 0xC4).unwrap();
+    bus.write_u8(TEST_PC as u64 + 2, 0x30).unwrap();
+    cpu.step(&mut bus, &[]).unwrap();
+
+    let stored = bus.read_u32((base - 16) as u64).unwrap();
+    assert_eq!(stored, 0x1111_2222, "HW-oracle s32e a3,a4,-16 should store a3 at a4-16");
+}
+
+/// HW-oracle byte verification: l32e a3, a4, -16 → 0x30C409.
+#[test]
+fn test_exec_l32e_hw_oracle_bytes() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    assert!(cpu.ps.excm());
+
+    let base: u32 = 0x2000_0080;
+    bus.write_u32((base - 16) as u64, 0xFEED_FACE).unwrap();
+    cpu.set_register(4, base);
+
+    // Write HW-oracle bytes: 0x30C409 in LE = 0x09, 0xC4, 0x30.
+    bus.write_u8(TEST_PC as u64,     0x09).unwrap();
+    bus.write_u8(TEST_PC as u64 + 1, 0xC4).unwrap();
+    bus.write_u8(TEST_PC as u64 + 2, 0x30).unwrap();
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.get_register(3), 0xFEED_FACE, "HW-oracle l32e a3,a4,-16 should load into a3");
+}

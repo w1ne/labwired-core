@@ -917,6 +917,41 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // ── F5: S32E / L32E — windowed exception store/load ──────────────
+            //
+            // These instructions are only valid when PS.EXCM == 1 (i.e. the CPU
+            // is executing inside an exception/interrupt vector). Outside that
+            // context they raise an IllegalInstruction exception (EXCCAUSE = 0).
+            //
+            // EA = as_ + imm  (imm is a pre-computed negative byte offset,
+            // stored as two's-complement u32 by the decoder; range -64..-4).
+            // Full vector dispatch for the exception path is deferred to Phase G;
+            // for now we follow the E2 div-by-zero pattern and return
+            // Err(ExceptionRaised { cause: 0 }).
+
+            // S32E at, as_, imm: store at to [as_ + imm], PS.EXCM-gated.
+            S32e { at, as_, imm } => {
+                if !self.ps.excm() {
+                    self.sr.write(EXCCAUSE, 0);
+                    return Err(SimulationError::ExceptionRaised { cause: 0, pc: self.pc });
+                }
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                bus.write_u32(ea, self.regs.read_logical(at))?;
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // L32E at, as_, imm: load [as_ + imm] into at, PS.EXCM-gated.
+            L32e { at, as_, imm } => {
+                if !self.ps.excm() {
+                    self.sr.write(EXCCAUSE, 0);
+                    return Err(SimulationError::ExceptionRaised { cause: 0, pc: self.pc });
+                }
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                let v = bus.read_u32(ea)?;
+                self.regs.write_logical(at, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())
@@ -959,14 +994,42 @@ impl Cpu for XtensaLx7 {
         let pc = self.pc;
         let b0 = bus.read_u8(pc as u64)?;
         let len = xtensa_length::instruction_length(b0);
-        let ins = if len == 2 {
+
+        // S32E/L32E exception: these are 24-bit wide instructions whose op0 field
+        // (bits[3:0] of the 24-bit word, i.e. byte0's low nibble) equals 0x9 — the
+        // same value used by the narrow S32I.N density instruction. They cannot be
+        // distinguished from narrow instructions by byte0 alone.
+        //
+        // Encoding invariants (HW-oracle verified):
+        //   S32E: byte0 bits[7:4] = 0x4 (subop), byte0 bits[3:0] = 0x9 (op0)
+        //   L32E: byte0 bits[7:4] = 0x0 (subop), byte0 bits[3:0] = 0x9 (op0)
+        //   byte2 bits[3:0] = 0x0 (op1 field is always 0 for both)
+        //
+        // We read all 3 bytes speculatively when byte0 matches, check byte2's
+        // low nibble, and route to the wide decoder when confirmed.
+        let is_s32e_or_l32e = if len == 2 && (b0 & 0x0F) == 0x9 {
+            // Speculatively read byte2.  Bus reads are non-destructive so this
+            // is safe even if the instruction turns out to be 2-byte narrow.
+            let b2 = bus.read_u8(pc as u64 + 2)?;
+            let subop = (b0 >> 4) & 0xF;
+            // subop=4 → S32E, subop=0 → L32E; byte2 low nibble must be 0 (op1=0).
+            (subop == 4 || subop == 0) && (b2 & 0x0F) == 0
+        } else {
+            false
+        };
+
+        let ins = if is_s32e_or_l32e {
+            let w = bus.read_u32(pc as u64)?;
+            xtensa::decode(w)
+        } else if len == 2 {
             let hw = bus.read_u16(pc as u64)?;
             xtensa_narrow::decode_narrow(hw)
         } else {
             let w = bus.read_u32(pc as u64)?;
             xtensa::decode(w)
         };
-        self.execute(ins, bus, len)
+        let effective_len = if is_s32e_or_l32e { 3 } else { len };
+        self.execute(ins, bus, effective_len)
     }
 
     fn set_pc(&mut self, val: u32) {
