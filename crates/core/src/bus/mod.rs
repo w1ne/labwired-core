@@ -427,7 +427,11 @@ impl SystemBus {
                 | "stm32f2_i2c"
                 | "stm32f4_i2c"
                 | "stm32f7_i2c"
-                | "efm32ggi2ccontroller" => Box::new(crate::peripherals::i2c::I2c::new()),
+                | "efm32ggi2ccontroller" => {
+                    let layout: crate::peripherals::i2c::I2cRegisterLayout =
+                        Self::parse_profile_or_default(p_cfg, "I2C")?;
+                    Box::new(crate::peripherals::i2c::I2c::new_with_layout(layout))
+                }
                 "spi" | "stm32spi" => Box::new(crate::peripherals::spi::Spi::new()),
                 "exti" => Box::new(crate::peripherals::exti::Exti::new()),
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),

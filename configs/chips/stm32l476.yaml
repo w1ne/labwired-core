@@ -107,6 +107,30 @@ peripherals:
     size: "1KB"
     irq: 51
 
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    config:
+      profile: "stm32l4"
+
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+    config:
+      profile: "stm32l4"
+
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+    config:
+      profile: "stm32l4"
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00

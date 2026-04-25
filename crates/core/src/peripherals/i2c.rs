@@ -5,6 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::SimResult;
+use std::str::FromStr;
 
 pub trait I2cDevice: Send {
     fn address(&self) -> u8;
@@ -14,20 +15,65 @@ pub trait I2cDevice: Send {
     fn stop(&mut self) {}
 }
 
-/// STM32F1 compatible I2C peripheral (Master mode only)
+/// I2C register layout selector. STM32F1/F2/F4 share the legacy I2C
+/// peripheral (CR1/CR2/OAR1/OAR2/DR/SR1/SR2/CCR/TRISE, all 16-bit).
+/// STM32L4/F7/H5/G0/etc share the modern peripheral (CR1/CR2/OAR1/OAR2/
+/// TIMINGR/TIMEOUTR/ISR/ICR/PECR/RXDR/TXDR, all 32-bit). Bit semantics
+/// in CR1 / CR2 differ substantially between the two — START/STOP bits
+/// live in CR1 on F1, CR2 on L4, etc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum I2cRegisterLayout {
+    #[default]
+    Stm32F1,
+    /// STM32L4 family (also F7/H5/G0). Verified against real
+    /// NUCLEO-L476RG silicon via SWD register dump.
+    Stm32L4,
+}
+
+impl FromStr for I2cRegisterLayout {
+    type Err = String;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
+            "stm32l4" | "l4" | "stm32f7" | "f7" | "stm32h5" | "h5" | "stm32g0" | "g0" => {
+                Ok(Self::Stm32L4)
+            }
+            _ => Err(format!(
+                "unsupported I2C register layout '{}'; supported: stm32f1, stm32l4",
+                value
+            )),
+        }
+    }
+}
+
+/// I2C peripheral with selectable register layout. Storage is u32 for
+/// both layouts so the L4-only TIMINGR / 32-bit CR2 fit; F1 mode just
+/// uses the lower 16 bits of each register.
 #[derive(serde::Serialize)]
 pub struct I2c {
-    cr1: u16,
-    cr2: u16,
-    oar1: u16,
-    oar2: u16,
-    dr: u16,
-    sr1: u16,
-    sr2: u16,
-    ccr: u16,
-    trise: u16,
+    layout: I2cRegisterLayout,
+    cr1: u32,
+    cr2: u32,
+    oar1: u32,
+    oar2: u32,
+    // Legacy F1-only:
+    dr: u32,
+    sr1: u32,
+    sr2: u32,
+    ccr: u32,
+    trise: u32,
+    // Modern L4-only:
+    timingr: u32,
+    timeoutr: u32,
+    isr: u32,
+    icr: u32,
+    pecr: u32,
+    rxdr: u32,
+    txdr: u32,
 
-    // Internal state
+    // Internal state (legacy state machine; L4 has its own simpler
+    // semantics driven by ISR/CR2 directly).
     state: I2cState,
     cycles_remaining: u32,
 
@@ -48,6 +94,7 @@ impl core::fmt::Debug for I2c {
 impl Default for I2c {
     fn default() -> Self {
         Self {
+            layout: I2cRegisterLayout::Stm32F1,
             cr1: 0,
             cr2: 0,
             oar1: 0,
@@ -57,6 +104,16 @@ impl Default for I2c {
             sr2: 0,
             ccr: 0,
             trise: 0,
+            timingr: 0,
+            timeoutr: 0,
+            // L4 reset value: TXE=1 (bit 0). When this struct is built
+            // with the L4 layout the reset state surfaces this; for F1
+            // mode the field is unused.
+            isr: 0x0000_0001,
+            icr: 0,
+            pecr: 0,
+            rxdr: 0,
+            txdr: 0,
             state: I2cState::Idle,
             cycles_remaining: 0,
             attached_devices: Vec::new(),
@@ -81,51 +138,74 @@ impl I2c {
         Self::default()
     }
 
+    pub fn new_with_layout(layout: I2cRegisterLayout) -> Self {
+        Self { layout, ..Self::default() }
+    }
+
     pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
         self.attached_devices.push(device);
     }
 
-    fn read_reg(&self, offset: u64) -> u16 {
-        match offset {
-            0x00 => self.cr1,
-            0x04 => self.cr2,
-            0x08 => self.oar1,
-            0x0C => self.oar2,
-            0x10 => self.dr,
-            0x14 => self.sr1,
-            0x18 => self.sr2,
-            0x1C => self.ccr,
-            0x20 => self.trise,
-            _ => 0,
+    fn read_reg(&self, offset: u64) -> u32 {
+        match self.layout {
+            I2cRegisterLayout::Stm32F1 => match offset {
+                0x00 => self.cr1,
+                0x04 => self.cr2,
+                0x08 => self.oar1,
+                0x0C => self.oar2,
+                0x10 => self.dr,
+                0x14 => self.sr1,
+                0x18 => self.sr2,
+                0x1C => self.ccr,
+                0x20 => self.trise,
+                _ => 0,
+            },
+            I2cRegisterLayout::Stm32L4 => match offset {
+                0x00 => self.cr1,
+                0x04 => self.cr2,
+                0x08 => self.oar1,
+                0x0C => self.oar2,
+                0x10 => self.timingr,
+                0x14 => self.timeoutr,
+                0x18 => self.isr,
+                0x1C => self.icr,
+                0x20 => self.pecr,
+                0x24 => self.rxdr,
+                0x28 => self.txdr,
+                _ => 0,
+            },
         }
     }
 
-    fn write_reg(&mut self, offset: u64, value: u16) {
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match self.layout {
+            I2cRegisterLayout::Stm32F1 => self.write_reg_f1(offset, value as u16),
+            I2cRegisterLayout::Stm32L4 => self.write_reg_l4(offset, value),
+        }
+    }
+
+    fn write_reg_f1(&mut self, offset: u64, value: u16) {
         match offset {
             0x00 => {
-                self.cr1 = value;
+                self.cr1 = value as u32;
                 if (value & 0x0100) != 0 {
-                    // START Generation
                     self.state = I2cState::StartPending;
-                    // Simplified timing: 10 cycles for START
                     self.cycles_remaining = 10;
                 }
                 if (value & 0x0200) != 0 {
-                    // STOP Generation
                     self.state = I2cState::StopPending;
                     self.cycles_remaining = 10;
                 }
             }
-            0x04 => self.cr2 = value,
-            0x08 => self.oar1 = value,
-            0x0C => self.oar2 = value,
+            0x04 => self.cr2 = value as u32,
+            0x08 => self.oar1 = value as u32,
+            0x0C => self.oar2 = value as u32,
             0x10 => {
-                self.dr = value & 0xFF;
+                self.dr = (value & 0xFF) as u32;
                 if self.state == I2cState::Idle {
                     if (self.sr1 & 0x01) != 0 {
-                        // SB set, this is address
                         self.state = I2cState::AddressPending;
-                        self.cycles_remaining = 20; // Address phase longer
+                        self.cycles_remaining = 20;
                         let addr = (self.dr >> 1) as u8;
                         self.is_reading = (self.dr & 1) != 0;
                         self.current_target = self
@@ -133,13 +213,10 @@ impl I2c {
                             .iter()
                             .position(|d| d.address() == addr);
                     } else {
-                        // This is data
                         self.state = I2cState::DataPending;
                         self.cycles_remaining = 20;
-                        self.sr1 &= !0x80; // Clear TXE
-                        self.sr1 &= !0x04; // Clear BTF
-
-                        // Pass written data to device immediately
+                        self.sr1 &= !0x80;
+                        self.sr1 &= !0x04;
                         if !self.is_reading {
                             if let Some(idx) = self.current_target {
                                 self.attached_devices[idx].write(self.dr as u8);
@@ -148,10 +225,59 @@ impl I2c {
                     }
                 }
             }
-            0x14 => self.sr1 = value,
-            0x18 => self.sr2 = value,
-            0x1C => self.ccr = value,
-            0x20 => self.trise = value,
+            0x14 => self.sr1 = value as u32,
+            0x18 => self.sr2 = value as u32,
+            0x1C => self.ccr = value as u32,
+            0x20 => self.trise = value as u32,
+            _ => {}
+        }
+    }
+
+    fn write_reg_l4(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr1 = value & 0x00FF_E1FF, // PE, ANFOFF, DNF, etc.
+            0x04 => {
+                self.cr2 = value;
+                // CR2.START (bit 13): hardware sets ISR.BUSY (bit 15)
+                // when a master start is requested. Real silicon also
+                // begins clocking SCL after this; we just reflect the
+                // BUSY flag for register-fidelity purposes — driving
+                // an actual transfer requires a slave device model.
+                if (value & (1 << 13)) != 0 {
+                    self.isr |= 1 << 15;
+                }
+                if (value & (1 << 14)) != 0 {
+                    // STOP — clear BUSY.
+                    self.isr &= !(1 << 15);
+                }
+            }
+            0x08 => self.oar1 = value,
+            0x0C => self.oar2 = value,
+            0x10 => self.timingr = value,
+            0x14 => self.timeoutr = value,
+            0x18 => {
+                // ISR is mostly read-only; some bits are W1C handled via ICR.
+                // Allow direct writes only to RW bits — TXE (bit 0) is RW
+                // (write 1 to flush TXDR). Conservative: allow setting/
+                // clearing the writable bits, leave the rest as-is.
+                let rw_mask: u32 = 0x0000_0001;
+                self.isr = (self.isr & !rw_mask) | (value & rw_mask);
+            }
+            0x1C => {
+                // ICR: writing 1 clears the corresponding ISR flag.
+                // Bits cleared: ADDRCF=3, NACKCF=4, STOPCF=5, BERRCF=8,
+                // ARLOCF=9, OVRCF=10, PECCF=11, TIMOUTCF=12, ALERTCF=13.
+                let clearable: u32 = 0x0000_3F38;
+                self.isr &= !(value & clearable);
+                self.icr = 0; // ICR self-clears after write.
+            }
+            0x20 => self.pecr = value,
+            0x24 => self.rxdr = value & 0xFF,
+            0x28 => {
+                self.txdr = value & 0xFF;
+                // Writing TXDR clears TXE (bit 0) and TXIS (bit 1).
+                self.isr &= !0x0000_0003;
+            }
             _ => {}
         }
     }
@@ -162,25 +288,17 @@ impl crate::Peripheral for I2c {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
-        if byte_offset < 2 {
-            Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
-        } else {
-            Ok(0) // Higher bytes of 16-bit registers at 32-bit offsets are 0
-        }
+        Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
-        // Registers are 16-bit but aligned to 32-bit boundaries
-
-        if byte_offset < 2 {
-            let mut reg_val = self.read_reg(reg_offset);
-            let mask = 0xFF << (byte_offset * 8);
-            reg_val &= !mask;
-            reg_val |= (value as u16) << (byte_offset * 8);
-            self.write_reg(reg_offset, reg_val);
-        }
+        let mut reg_val = self.read_reg(reg_offset);
+        let mask: u32 = 0xFF << (byte_offset * 8);
+        reg_val &= !mask;
+        reg_val |= (value as u32) << (byte_offset * 8);
+        self.write_reg(reg_offset, reg_val);
         Ok(())
     }
 
@@ -216,7 +334,7 @@ impl crate::Peripheral for I2c {
                         if self.is_reading {
                             self.sr1 |= 0x0040; // Set RXNE
                             if let Some(idx) = self.current_target {
-                                self.dr = self.attached_devices[idx].read() as u16;
+                                self.dr = self.attached_devices[idx].read() as u32;
                             }
                             self.state = I2cState::Idle;
                         } else {

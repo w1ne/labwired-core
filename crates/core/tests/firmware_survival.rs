@@ -185,6 +185,35 @@ SR=0002\r\n\
 DR=00\r\n\
 DONE\r\n",
     },
+    SurvivalCase {
+        // I2C1 modern (STM32L4-style) register-level fidelity. Captured
+        // from real silicon: ISR resets to 0x00000001 (TXE=1), CR2.START
+        // set on master start lights ISR.BUSY (bit 15), and TIMINGR
+        // latches 32-bit values. The sim's i2c peripheral with the
+        // stm32l4 layout reproduces all 13 lines verbatim.
+        name: "nucleo_l476rg_i2c",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-i2c.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"I2C1 RESET\r\n\
+CR1=00000000\r\n\
+CR2=00000000\r\n\
+OAR1=00000000\r\n\
+TIMINGR=00000000\r\n\
+ISR=00000001\r\n\
+I2C1 CONFIG\r\n\
+CR1=00000001\r\n\
+OAR1=00008084\r\n\
+TIMINGR=10805E89\r\n\
+ISR=00000001\r\n\
+I2C1 START PENDING\r\n\
+CR2=000120A0\r\n\
+ISR=00008001\r\n\
+DONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -440,6 +469,11 @@ fn test_nucleo_l476rg_smoke_survival() {
 #[test]
 fn test_nucleo_l476rg_spi_survival() {
     run_survival_case(&SURVIVAL_CASES[9]);
+}
+
+#[test]
+fn test_nucleo_l476rg_i2c_survival() {
+    run_survival_case(&SURVIVAL_CASES[10]);
 }
 
 #[test]
