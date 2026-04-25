@@ -22,3 +22,9 @@ name = "firmware-l476-l4periphs2"
 path = "src/l4periphs2.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-l476-cubemx-hal"
+path = "src/cubemx_hal.rs"
+test = false
+bench = false

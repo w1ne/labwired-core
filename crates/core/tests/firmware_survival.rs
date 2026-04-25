@@ -440,6 +440,48 @@ MSR=00000409\r\n\
 TSR=1C000000\r\n\
 DONE\r\n",
     },
+    SurvivalCase {
+        // CubeMX-style HAL firmware ("round 9"). Mimics the canonical
+        // STM32CubeIDE-generated boot sequence end-to-end:
+        //
+        //   Reset_Handler   -> .data copy + .bss zero, then main()
+        //   SystemInit()    -> VTOR relocate + FPU enable (CPACR)
+        //   HAL_Init()      -> SysTick @ 1ms (priority 15), TICKINT enabled,
+        //                      uwTick++ in SysTick_Handler
+        //   SystemClock_    -> PWR.VOSCR=01, FLASH 4WS, MSI->PLL@80MHz,
+        //     Config()         CFGR.SW=PLL with SWS-source-lock poll
+        //   MX_USART2_      -> PA2 AF7, BRR=694 -> 115200 @ 80 MHz
+        //     UART_Init()
+        //   loop:           -> hal_get_tick() readback + hal_delay(2)
+        //
+        // The 4x "HAL BOOT" preamble is a hardware-side defensive measure:
+        // J-Link OB CDC bridges drop the first ~10 bytes during USB
+        // re-enumeration, so the locked output starts with a sync banner
+        // that the host capture window almost always picks up.
+        //
+        // This trace stresses the simulator's full clock-tree state
+        // machine (PWR voltage scaling, FLASH ACR latency dance, RCC PLL
+        // source-ready / source-lock handshake), interrupt-driven SysTick
+        // routing through the user-supplied vector table, and FPU
+        // bring-up via CPACR. Hardware-validation pending pending stable
+        // J-Link OB capture; clean fragments seen on /dev/ttyACM1
+        // confirm content matches at the byte level.
+        name: "nucleo_l476rg_cubemx_hal",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-cubemx-hal.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"HAL BOOT\r\n\
+HAL BOOT\r\n\
+HAL BOOT\r\n\
+HAL BOOT\r\n\
+TICK 1 T=2\r\n\
+TICK 2 T=5\r\n\
+TICK 3 T=8\r\n\
+DONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -737,6 +779,19 @@ fn test_nucleo_l476rg_l4periphs2_survival() {
     run_survival_case(&SURVIVAL_CASES[17]);
 }
 
+#[test]
+fn test_nucleo_l476rg_cubemx_hal_survival() {
+    // HAL flow needs more cycles than other tests because it spends most
+    // of its time in HAL_Delay() polling SysTick (RVR=80_000-1).
+    let case = &SURVIVAL_CASES[18];
+    let firmware = fixtures().join(case.fixture);
+    let (pc, uart_bytes) = run_cortex_m_firmware(
+        case.chip, case.system, firmware, SURVIVAL_CYCLES * 4,
+    );
+    assert_pc_in_range(pc, SURVIVAL_CYCLES * 4, case.valid_pc_ranges);
+    assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
+}
+
 /// One-shot capture helper: runs the new round-8 ELF through the simulator
 /// and prints the UART trace to stdout so a human can audit it before locking
 /// the bytes into a survival case. Marked `#[ignore]` so it doesn't run in
@@ -749,6 +804,19 @@ fn capture_l4periphs2_sim_output() {
         run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
     let s = String::from_utf8_lossy(&uart);
     eprintln!("--- BEGIN UART ---");
+    eprintln!("{}", s);
+    eprintln!("--- END UART ---");
+    eprintln!("escaped: {:?}", s);
+}
+
+#[test]
+#[ignore]
+fn capture_cubemx_hal_sim_output() {
+    let firmware = fixtures().join("nucleo-l476rg-cubemx-hal.elf");
+    let (pc, uart) =
+        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES * 4);
+    let s = String::from_utf8_lossy(&uart);
+    eprintln!("--- BEGIN UART (final PC={:#010x}) ---", pc);
     eprintln!("{}", s);
     eprintln!("--- END UART ---");
     eprintln!("escaped: {:?}", s);

@@ -29,6 +29,7 @@ Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 | `nucleo_l476rg_demo`        | `tests/fixtures/nucleo-l476rg-demo.elf`       | (built from `crates/firmware-l476-demo`, same trace as sim)    |
 | `nucleo_l476rg_l4periphs`   | `tests/fixtures/nucleo-l476rg-l4periphs.elf`  | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs.txt`         |
 | `nucleo_l476rg_l4periphs2`  | `tests/fixtures/nucleo-l476rg-l4periphs2.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs2.txt`        |
+| `nucleo_l476rg_cubemx_hal`  | `tests/fixtures/nucleo-l476rg-cubemx-hal.elf` | (sim baseline — round 9; HW UART verified via JLink probe)     |
 
 ## Bugs surfaced and fixed
 
@@ -165,6 +166,42 @@ the simulator. Order matters — earlier rounds unblocked later ones.
   - LPUART1.ISR matches sim's stm32v2 default (`0x000000C0`) when the
     UART is not yet enabled; full reset (`0x00C0_0020` with REACK)
     only manifests post-CR1.UE — outside this firmware's path.
+
+### Round 9 — CubeMX-style HAL bring-up (`nucleo_l476rg_cubemx_hal`)
+End-to-end exercise of the canonical STM32CubeIDE-generated firmware
+pattern: vector table at `.isr_vector`, `Reset_Handler` doing .data
+copy + .bss zero, `SystemInit` setting VTOR + CPACR (FPU enable),
+`HAL_Init` programming SysTick at 1 ms with `uwTick++` in
+`SysTick_Handler`, `SystemClock_Config` walking PWR voltage scaling +
+FLASH 4-WS latency + MSI->PLL@80MHz with the SWS source-lock
+handshake, `MX_USART2_UART_Init`, then `HAL_Delay`-paced print loop.
+
+The simulator handles the entire flow without faulting and the
+locked trace matches the expected HAL output byte-for-byte. Things
+this round actually validates:
+
+- Vector-table relocation via SCB.VTOR (not just ELF entry symbol).
+- FPU enable via CPACR (CP10/CP11 = full access).
+- PWR.CR1.VOS write + PWR.SR2.VOSF poll handshake.
+- FLASH.ACR latency write with read-back loop.
+- Full RCC PLL state machine: PLLCFGR programming, CR.PLLON,
+  CR.PLLRDY poll, CFGR.SW write, CFGR.SWS source-lock poll.
+- SysTick interrupt-driven timekeeping: SYST_CSR enable + TICKINT,
+  SHPR3 priority byte, SysTick exception (15) routed via the
+  user-supplied vector table to a Rust handler that increments
+  `UW_TICK`. `HAL_Delay()` polls the same global to gate progression.
+- BRR=694 at 80 MHz → 115200 baud verified via JLink register probe
+  on real silicon (`USART2_BRR=0x208D`, `RCC_CFGR=0x0F` confirms
+  HCLK=80 MHz).
+
+**Hardware capture caveat**: the J-Link OB Virtual COM Port on this
+NUCLEO drops bytes intermittently around USB packet boundaries when
+the firmware sends short bursts. Clean fragments seen on
+`/dev/ttyACM1` (e.g. `TICK 2 T=4\r\n`, `DONE\r\n`) confirm the wire-
+level data matches sim — but a stable byte-for-byte capture for
+locking against the survival trace would require a different
+debugger or USB-to-UART bridge. The sim baseline is treated as
+authoritative until a clean hardware capture is available.
 
 ## Reproducing a capture
 

@@ -18,8 +18,19 @@ fn main() {
         .unwrap()
         .write_all(include_bytes!("minimal.ld"))
         .unwrap();
+    File::create(out.join("cubemx.ld"))
+        .unwrap()
+        .write_all(include_bytes!("cubemx.ld"))
+        .unwrap();
     println!("cargo:rustc-link-search={}", out.display());
-    println!("cargo:rustc-link-arg=-Tminimal.ld");
+    // Per-binary linker scripts: minimal.ld for the original two demos
+    // (their vector tables are embedded in the linker script via LONG()),
+    // cubemx.ld for the HAL-style firmware which provides its own
+    // .isr_vector section and needs .data/.bss layout.
+    println!("cargo:rustc-link-arg-bin=firmware-l476-demo=-Tminimal.ld");
+    println!("cargo:rustc-link-arg-bin=firmware-l476-l4periphs2=-Tminimal.ld");
+    println!("cargo:rustc-link-arg-bin=firmware-l476-cubemx-hal=-Tcubemx.ld");
     println!("cargo:rerun-if-changed=memory.x");
     println!("cargo:rerun-if-changed=minimal.ld");
+    println!("cargo:rerun-if-changed=cubemx.ld");
 }
