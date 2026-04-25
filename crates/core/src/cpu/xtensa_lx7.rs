@@ -533,25 +533,64 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
-            // RETW: windowed return (no underflow check — deferred to F4).
+            // RETW: windowed return with window underflow check (F4).
             //
             // ISA RM §8 RETW semantics:
             //   1. N = a0[31:30]  (1→CALL4, 2→CALL8, 3→CALL12)
-            //   2. target_pc = (a[0] & 0x3FFF_FFFF) | (PC & 0xC000_0000)
-            //   3. WindowStart[WB_current] = 0
-            //   4. WB_new = (WB_current - N) mod 16
-            //   5. PC = target_pc
+            //   2. wb_dest = (WB_current - N) mod 16
+            //   F4: If WindowStart[wb_dest] == 0 → WindowUnderflow exception:
+            //       - EPC1 = PC (the faulting RETW's PC)
+            //       - PS.EXCM = 1
+            //       - PC = VECBASE + window_vector_offset (UF4/UF8/UF12)
+            //       - WindowBase NOT rotated, WindowStart NOT modified
+            //       - Return immediately (vector handler reloads the spilled frame)
+            //   3. target_pc = (a[0] & 0x3FFF_FFFF) | (PC & 0xC000_0000)
+            //   4. WindowStart[WB_current] = 0
+            //   5. WB = wb_dest
+            //   6. PC = target_pc
             //
-            // Underflow check (WindowStart[WB_new] == 0 → raise exception)
-            // is deferred to F4.
+            // Window underflow vector offsets (Xtensa LX ISA RM §5.6):
+            //   N=1 (UF4):  VECBASE + 0x040
+            //   N=2 (UF8):  VECBASE + 0x0C0
+            //   N=3 (UF12): VECBASE + 0x140
+            //
+            // EXCCAUSE: window underflow exceptions do NOT use EXCCAUSE. They vector
+            // independently via dedicated slots (not the general exception path).
+            //
+            // N=0 note: RETW with a0[31:30]=0 would indicate a CALL0 return address
+            // (which should use RET, not RETW). The wildcard arm in the UF vector
+            // match covers N=3; N=0 is treated as N=3 by the same arm, which is
+            // benign since CALL0 toolchains never emit RETW. If strict enforcement is
+            // needed, add an explicit N=0 → illegal-instruction error here.
             Retw => {
                 let a0 = self.regs.read_logical(0);
                 let n = (a0 >> 30) as u8;               // bits[31:30] = callinc used by the call
-                let target_pc = (a0 & 0x3FFF_FFFF) | (self.pc & 0xC000_0000);
                 let wb_cur = self.regs.windowbase();
+                let wb_dest = wb_cur.wrapping_sub(n) & 0x0F;
+
+                // F4: Window underflow check — destination frame must be live.
+                if !self.regs.windowstart_bit(wb_dest) {
+                    // Window underflow vector offsets (Xtensa LX ISA RM §5.6):
+                    const UF4_VECOFS:  u32 = 0x040;
+                    const UF8_VECOFS:  u32 = 0x0C0;
+                    const UF12_VECOFS: u32 = 0x140;
+                    let vec_ofs = match n {
+                        1 => UF4_VECOFS,
+                        2 => UF8_VECOFS,
+                        _ => UF12_VECOFS,  // N=3 → UF12; N=0 also lands here (see note above)
+                    };
+                    let vecbase = self.sr.read(VECBASE);
+                    self.sr.write(EPC1, self.pc);
+                    self.ps.set_excm(true);
+                    self.pc = vecbase.wrapping_add(vec_ofs);
+                    // Do NOT rotate WindowBase, do NOT modify WindowStart.
+                    return Ok(());
+                }
+
+                // Normal RETW path (destination frame is live).
+                let target_pc = (a0 & 0x3FFF_FFFF) | (self.pc & 0xC000_0000);
                 self.regs.set_windowstart_bit(wb_cur, false);
-                let wb_new = wb_cur.wrapping_sub(n) & 0x0F;
-                self.regs.set_windowbase(wb_new);
+                self.regs.set_windowbase(wb_dest);
                 self.pc = target_pc;
             }
 

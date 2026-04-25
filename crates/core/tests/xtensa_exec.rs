@@ -3510,3 +3510,186 @@ fn test_exec_entry_no_overflow_when_target_frame_clear() {
         "No-OF: EPC1 should remain 0 (no exception)"
     );
 }
+
+// ── F4: RETW window underflow tests ─────────────────────────────────────────
+//
+// ISA RM §5.5: When RETW executes, the destination frame index is
+// wb_dest = (wb_cur - N) & 0x0F. If WindowStart[wb_dest] == 0, the
+// frame's physical registers have been spilled and must be reloaded via
+// the underflow vector.
+//
+// Window vector table (Xtensa LX ISA RM §5.6):
+//   WindowUnderflow4:  VECBASE + 0x040   (N=1)
+//   WindowUnderflow8:  VECBASE + 0x0C0   (N=2)
+//   WindowUnderflow12: VECBASE + 0x140   (N=3)
+//
+// On underflow: EPC1=PC, PS.EXCM=1, PC=vector — WB and WS NOT modified.
+// EXCCAUSE is NOT set (window vectors bypass the general exception path).
+
+const UF4_VECOFS:  u32 = 0x040;
+const UF8_VECOFS:  u32 = 0x0C0;
+const UF12_VECOFS: u32 = 0x140;
+
+/// Helper: set up a RETW frame where the destination WindowBase bit is clear,
+/// triggering underflow. WB=callinc (callee frame), WS[callinc]=1 (callee live),
+/// WS[0]=0 (destination frame NOT live → underflow), a0 encodes N=callinc.
+fn setup_retw_underflow(cpu: &mut XtensaLx7, callinc: u8) {
+    let wb_cur = callinc & 0x0F;
+    cpu.regs.set_windowbase(wb_cur);
+    // Only mark the callee frame live; destination (WB=0) is clear.
+    let mut ws: u16 = 0;
+    ws |= 1 << wb_cur;
+    cpu.regs.set_windowstart(ws);
+    // a0 for the callee frame: phys[wb_cur * 4] = (N << 30) | fake_return_addr
+    let fake_ret = 0x4000_0400u32; // something that looks like a valid PC
+    let a0_val = ((callinc as u32) << 30) | (fake_ret & 0x3FFF_FFFF);
+    cpu.regs.set_physical((wb_cur as usize) * 4, a0_val);
+}
+
+/// F4: RETW with N=1 triggers WindowUnderflow4 when destination frame is absent.
+/// Expect: PC = VECBASE + 0x040, EPC1 = RETW's PC, PS.EXCM=1,
+/// WindowBase NOT rotated (still 1), WindowStart NOT modified.
+#[test]
+fn test_exec_retw_window_underflow_uf4() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    setup_retw_underflow(&mut cpu, 1);
+    let original_pc = TEST_PC;
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    let ws_before = cpu.regs.windowstart();
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(
+        cpu.pc,
+        vecbase.wrapping_add(UF4_VECOFS),
+        "UF4: PC should jump to VECBASE + 0x040"
+    );
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        original_pc,
+        "UF4: EPC1 should hold the faulting RETW PC"
+    );
+    assert!(cpu.ps.excm(), "UF4: PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 1, "UF4: WindowBase must NOT be rotated");
+    assert_eq!(
+        cpu.regs.windowstart(),
+        ws_before,
+        "UF4: WindowStart must NOT be modified"
+    );
+}
+
+/// F4: RETW with N=2 triggers WindowUnderflow8 when destination frame is absent.
+/// Expect: PC = VECBASE + 0x0C0, EPC1 = RETW's PC, PS.EXCM=1,
+/// WindowBase NOT rotated (still 2), WindowStart NOT modified.
+#[test]
+fn test_exec_retw_window_underflow_uf8() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    setup_retw_underflow(&mut cpu, 2);
+    let original_pc = TEST_PC;
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    let ws_before = cpu.regs.windowstart();
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(
+        cpu.pc,
+        vecbase.wrapping_add(UF8_VECOFS),
+        "UF8: PC should jump to VECBASE + 0x0C0"
+    );
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        original_pc,
+        "UF8: EPC1 should hold the faulting RETW PC"
+    );
+    assert!(cpu.ps.excm(), "UF8: PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 2, "UF8: WindowBase must NOT be rotated");
+    assert_eq!(
+        cpu.regs.windowstart(),
+        ws_before,
+        "UF8: WindowStart must NOT be modified"
+    );
+}
+
+/// F4: RETW with N=3 triggers WindowUnderflow12 when destination frame is absent.
+/// Expect: PC = VECBASE + 0x140, EPC1 = RETW's PC, PS.EXCM=1,
+/// WindowBase NOT rotated (still 3), WindowStart NOT modified.
+#[test]
+fn test_exec_retw_window_underflow_uf12() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    setup_retw_underflow(&mut cpu, 3);
+    let original_pc = TEST_PC;
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    let ws_before = cpu.regs.windowstart();
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(
+        cpu.pc,
+        vecbase.wrapping_add(UF12_VECOFS),
+        "UF12: PC should jump to VECBASE + 0x140"
+    );
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        original_pc,
+        "UF12: EPC1 should hold the faulting RETW PC"
+    );
+    assert!(cpu.ps.excm(), "UF12: PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 3, "UF12: WindowBase must NOT be rotated");
+    assert_eq!(
+        cpu.regs.windowstart(),
+        ws_before,
+        "UF12: WindowStart must NOT be modified"
+    );
+}
+
+/// F4 happy path: RETW proceeds normally when destination frame IS live.
+/// Regression test: no spurious EPC1/PC-vector side effects when WS[wb_dest]=1.
+/// Uses N=1, WB=1, WS[0]=1 (destination frame live) → no underflow.
+#[test]
+fn test_exec_retw_no_underflow_when_destination_frame_set() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    // Clear EXCM so we can detect if the UF path spuriously sets it.
+    cpu.ps.set_excm(false);
+
+    // WB=1, destination is WB=0. Mark both frames live.
+    cpu.regs.set_windowbase(1);
+    cpu.regs.set_windowstart(0b0000_0000_0000_0011); // WS[0]=1, WS[1]=1
+    // a0 in callee frame (phys[4]): N=1, target = some address in same 256MB region
+    let target = 0x2000_0200u32;
+    let a0_val = (target & 0x3FFF_FFFF) | (1u32 << 30);
+    cpu.regs.set_physical(4, a0_val);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    // Normal RETW: PC = target (low30 | cur_pc high2)
+    let expected_pc = (target & 0x3FFF_FFFF) | (TEST_PC & 0xC000_0000);
+    assert_eq!(cpu.pc, expected_pc, "No-UF: PC should be set to return address");
+    // WB rotated back to 0
+    assert_eq!(cpu.regs.windowbase(), 0, "No-UF: WindowBase should rotate to 0");
+    // WS[1] cleared by normal RETW
+    assert!(!cpu.regs.windowstart_bit(1), "No-UF: WindowStart[1] should be cleared");
+    // EPC1 must NOT have been set (no exception)
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        0,
+        "No-UF: EPC1 should remain 0 (no exception)"
+    );
+    // PS.EXCM must NOT have been set by the UF path (was cleared before the test)
+    assert!(!cpu.ps.excm(), "No-UF: PS.EXCM should remain clear (no UF exception)");
+}
