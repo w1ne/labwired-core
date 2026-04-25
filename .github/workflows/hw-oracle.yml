@@ -1,0 +1,64 @@
+# LabWired Core HW Oracle CI
+# Copyright (C) 2026 Andrii Shylenko
+#
+# Runs the hw-oracle gated test bank against a real ESP32-S3-Zero board
+# attached to a self-hosted runner with the `esp32s3-zero` label.
+#
+# Triggered by:
+#   - PRs labeled `hw-test`
+#   - Pushes to `main`
+
+name: LabWired HW Oracle (ESP32-S3-Zero)
+
+on:
+  pull_request:
+    types: [labeled, synchronize, opened, reopened]
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}  # allow manual triggering
+
+concurrency:
+  group: hw-oracle-${{ github.ref }}
+  cancel-in-progress: true  # only one HW test at a time
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  hw-oracle:
+    # Skip on PR unless labeled `hw-test`. Always run on push to main.
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'hw-test')
+    runs-on: [self-hosted, esp32s3-zero]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre-flight — confirm board attached
+        run: |
+          set -e
+          if ! lsusb | grep -q '303a:1001'; then
+            echo "::error::ESP32-S3-Zero (USB 303a:1001) not detected"
+            exit 1
+          fi
+          echo "Board detected on $(ls /dev/ttyACM* 2>/dev/null | head -1 || echo '<no ttyACM>')"
+
+      - name: Sim tests (must pass first)
+        run: cargo test -p labwired-core
+        # If sim breaks, fail fast — don't waste board time.
+
+      - name: HW oracle tests (real ESP32-S3-Zero)
+        env:
+          # Allow override via repo variable if a different board variant is used
+          LABWIRED_BOARD_USB: ${{ vars.LABWIRED_BOARD_USB || '303a:1001' }}
+        run: |
+          cargo test -p labwired-hw-oracle --features hw-oracle -- --ignored --test-threads=1
+
+      - name: Post-run — report board state
+        if: always()
+        run: |
+          lsusb | grep 303a || echo "Board absent at end of run"
+          dmesg | tail -20 || true
