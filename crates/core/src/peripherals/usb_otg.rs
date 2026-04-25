@@ -45,8 +45,12 @@ impl UsbOtg {
             storage: HashMap::new(),
             // AHBIDL set: HAL polls this immediately after reset.
             grstctl: 0x8000_0000,
-            // CMOD bit 0 = device mode (peripheral).
-            gintsts: 0x0400_0001,
+            // Reset value verified against NUCLEO-L476RG silicon:
+            //   bit 5 NPTXFE  (non-periodic TX FIFO empty)
+            //   bit 25 PTXFE  (periodic TX FIFO empty in host mode)
+            //   bit 26 CIDSCHG (connector ID status change)
+            //   bit 28 DISCINT (disconnect detected — cable not plugged)
+            gintsts: 0x1400_0020,
             gintmsk: 0,
             gusbcfg: 0x0000_1440,
             gahbcfg: 0,

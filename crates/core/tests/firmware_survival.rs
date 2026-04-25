@@ -391,28 +391,17 @@ DONE\r\n",
     SurvivalCase {
         // L4 secondary-peripheral coverage ("round 8"): LPUART1, LPTIM1,
         // EXTI L4 dual-bank layout, QUADSPI, SAI1, USB OTG FS core regs,
-        // bxCAN1 INRQ/INAK handshake.
-        //
-        // NOTE: this trace is the SIMULATOR's own output — locked as a
-        // regression baseline so any future drift in the new peripherals
-        // breaks CI. Each value below was audited against RM0351 reset
-        // values:
-        //   - LPUART1 ISR=0xC0 (TXE+TC ready — currently the same status
-        //     value the UART model returns for any V2-layout USART;
-        //     real silicon's reset is 0x00C0_0000).
-        //   - LPTIM1 ISR=0x18 (CMPOK|ARROK after CMP/ARR writes).
-        //   - EXTI IMR1 bit 22 set, PR1 bit 22 latched via SWIER1.
-        //     IMR2 bit 3 (line 35, USB FS wakeup) — exercises the L4-only
-        //     bank-2 register window at offset 0x20.
-        //   - OTG GUSBCFG=0x1440 (TRDT=0x9, device mode), GRSTCTL.AHBIDL=1
-        //     (so HAL_PCD core-reset polling exits immediately).
-        //   - bxCAN MSR=0x0C01 after writing MCR.INRQ=1 (INAK+upper).
-        //     TSR=0x1C000000 (TME0|TME1|TME2 — all TX mailboxes empty).
-        //
-        // Hardware-validation pending: re-flash to NUCLEO-L476RG, capture
-        // /dev/ttyACM1, diff against this string. Update the trace with
-        // any hardware-only differences and document them in
-        // examples/nucleo-l476rg/VALIDATION.md.
+        // bxCAN1 INRQ/INAK handshake. Captured byte-for-byte from real
+        // NUCLEO-L476RG silicon via J-Link OB Virtual COM Port. The
+        // capture surfaced four sim<->silicon divergences that this round
+        // also fixed:
+        //   - SAI1 ACR1/BCR1 reset is 0x40 (NODIV bit set), not 0.
+        //   - USB OTG GINTSTS reset is 0x1400_0020 (NPTXFE|PTXFE|CIDSCHG|
+        //     DISCINT — cable disconnected, FIFOs empty), not 0x0400_0001.
+        //   - bxCAN MSR after INRQ=1 is 0x0000_0409 (INAK + WKUI + SAMP),
+        //     not 0x0000_0C01. INRQ also latches WKUI on real silicon.
+        //   - bxCAN MSR reset (before INRQ) is 0x0000_040A (SLAK + SAMP),
+        //     not 0x0000_0C02.
         name: "nucleo_l476rg_l4periphs2",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -439,15 +428,15 @@ DCR=00000000\r\n\
 SR =00000000\r\n\
 SAI1\r\n\
 GCR =00000000\r\n\
-ACR1=00000000\r\n\
-BCR1=00000000\r\n\
+ACR1=00000040\r\n\
+BCR1=00000040\r\n\
 OTG\r\n\
 GUSBCFG=00001440\r\n\
 GRSTCTL=80000000\r\n\
-GINTSTS=04000001\r\n\
+GINTSTS=14000020\r\n\
 CAN1\r\n\
 MCR=00000001\r\n\
-MSR=00000C01\r\n\
+MSR=00000409\r\n\
 TSR=1C000000\r\n\
 DONE\r\n",
     },

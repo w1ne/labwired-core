@@ -32,8 +32,14 @@ impl BxCan {
         Self {
             // INRQ deasserted, SLEEP set per reset value (RM0351 §40.7.2).
             mcr: 0x0001_0002,
-            // INAK=0, SLAK=1 (asleep) — initial state matches silicon.
-            msr: 0x0000_0C02,
+            // Reset state per RM0351 §40.8.2: SLAK=1 (asleep), SAMP=1 (last
+            // sample point read as recessive). RX bit (11) is the live state
+            // of the CAN_RX pin and reads recessive (=1) when the bus is idle
+            // — but on a NUCLEO with no CAN transceiver wired, the line
+            // floats and silicon reports RX=0. Captured value: 0x0000_040A
+            // (SLAK + SAMP) at reset; after INRQ=1 firmware sees 0x0000_0409
+            // (SLAK clears, INAK + WKUI + SAMP).
+            msr: 0x0000_040A,
             // All 3 TX mailboxes empty (TME0/1/2 = 1) -> bits 26,27,28 = 1.
             tsr: 0x1C00_0000,
             rfr0: 0,
@@ -63,10 +69,12 @@ impl BxCan {
         match offset {
             0x000 => {
                 self.mcr = value & 0x0001_FF7F;
-                // INRQ -> INAK handshake (silicon polls within ~µs)
+                // INRQ -> INAK handshake (silicon polls within ~µs).
+                // Setting INRQ also latches WKUI (bit 3) per silicon capture.
                 if (self.mcr & 1) != 0 {
                     self.msr |= 1; // INAK
-                    self.msr &= !(1 << 1); // SLAK
+                    self.msr |= 1 << 3; // WKUI
+                    self.msr &= !(1 << 1); // SLAK clears
                 } else {
                     self.msr &= !1;
                 }
