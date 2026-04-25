@@ -147,10 +147,20 @@ pub trait Bus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
-    /// Default implementation decomposes into 4 byte writes AND emits a
-    /// word-granular trigger event through `notify_word_write`. Concrete
-    /// implementations (SystemBus) may override for efficiency but must
-    /// preserve the `notify_word_write` call.
+    /// Decompose a 32-bit write into four byte writes, then call
+    /// [`Self::notify_word_write`] with the coherent 32-bit value.
+    ///
+    /// **Overlap policy for declarative peripherals**: the four byte writes
+    /// fire byte-level (`Write`) triggers inside each peripheral. The
+    /// subsequent `notify_word_write` call fires `WriteWord` triggers. Because
+    /// `GenericPeripheral::check_triggers` unconditionally skips `WriteWord`
+    /// entries in the byte path, a `WriteWord` trigger is guaranteed to fire
+    /// **exactly once** — from `notify_word_write` — even though the same
+    /// register was touched by all four byte writes beforehand.
+    ///
+    /// Concrete implementations (`SystemBus`) do **not** need to override this
+    /// method; the default is the sole implementation. Any future override must
+    /// preserve the `notify_word_write` call to maintain the contract above.
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
@@ -159,9 +169,14 @@ pub trait Bus {
         self.notify_word_write(addr, value)
     }
 
-    /// Hook called by `write_u32` after the four byte writes to allow
-    /// peripherals to observe the coherent 32-bit value. Default: no-op for
-    /// buses that don't have routable peripherals.
+    /// Called by [`Self::write_u32`] after the four byte writes to deliver the
+    /// coherent 32-bit value to the matched peripheral via
+    /// [`Peripheral::write_word_32`].
+    ///
+    /// This is the **only** path that fires `WriteWord` triggers in
+    /// `GenericPeripheral`. The byte-level `write` path explicitly skips
+    /// `WriteWord` entries so they cannot fire twice for a single 32-bit store.
+    /// Default: no-op for buses that don't route to peripherals (e.g. test stubs).
     fn notify_word_write(&mut self, _addr: u64, _value: u32) -> SimResult<()> {
         Ok(())
     }

@@ -297,16 +297,13 @@ impl SystemBus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
-    pub fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
-        self.write_u8(addr, (value & 0xFF) as u8)?;
-        self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
-        self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
-        self.write_u8(addr + 3, ((value >> 24) & 0xFF) as u8)?;
-        self.notify_word_write(addr, value)
-    }
-
     /// Append a peripheral to the bus at runtime. Useful for tests and
     /// dynamic configuration that bypasses `from_config`.
+    ///
+    /// **No overlap check is performed.** If two peripherals claim overlapping
+    /// address ranges, reads and writes are routed to the **first** matching
+    /// peripheral in registration order (i.e. the earlier-registered peripheral
+    /// wins). Callers are responsible for ensuring non-overlapping ranges.
     pub fn add_peripheral(
         &mut self,
         name: &str,
