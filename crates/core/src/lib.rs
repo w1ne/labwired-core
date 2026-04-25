@@ -72,10 +72,18 @@ pub struct DmaRequest {
 
 #[derive(Debug, Clone, Default)]
 pub struct PeripheralTickResult {
+    /// Raises the peripheral's configured NVIC IRQ position (set in
+    /// `PeripheralEntry::irq`). The bus pends it on NVIC.ISPR so the
+    /// CPU only takes it when ISER also has it enabled.
     pub irq: bool,
     pub cycles: u32,
     pub dma_requests: Option<Vec<DmaRequest>>,
+    /// Extra NVIC IRQ positions beyond the peripheral's default.
     pub explicit_irqs: Option<Vec<u32>>,
+    /// System exception number (0..15) to raise — for SysTick (15) and
+    /// other core-tied exceptions that bypass NVIC. Pushed directly to
+    /// the CPU's pending_exceptions bitmap; PRIMASK still gates it.
+    pub system_exception: Option<u32>,
     pub dma_signals: Option<Vec<u32>>,
     pub ticks_until_next: Option<u64>,
 }

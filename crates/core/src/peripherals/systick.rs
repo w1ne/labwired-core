@@ -86,10 +86,18 @@ impl crate::Peripheral for Systick {
         if self.cvr == 0 {
             self.cvr = self.rvr;
             self.csr |= 0x10000;
+            // SysTick raises system exception 15 — NOT an NVIC IRQ.
+            // The bus dispatches `system_exception` directly to the
+            // CPU's pending_exceptions bitmap, bypassing NVIC ISER/ISPR.
+            // (Routing through NVIC would interpret 15 as NVIC IRQ 15
+            // = exception 31, which doesn't have a vector in standard
+            // STM32 firmware.)
+            let fire = (self.csr & 0x2) != 0;
             crate::PeripheralTickResult {
-                irq: (self.csr & 0x2) != 0,
+                irq: false,
                 cycles: 1,
                 dma_requests: None,
+                system_exception: if fire { Some(15) } else { None },
                 ..Default::default()
             }
         } else {

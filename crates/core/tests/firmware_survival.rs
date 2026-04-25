@@ -186,6 +186,35 @@ DR=00\r\n\
 DONE\r\n",
     },
     SurvivalCase {
+        // DMA1 channel-1 mem-to-mem fidelity. Captured from real silicon:
+        // a 4-byte memory-to-memory transfer (CPAR=0x20000010,
+        // CMAR=0x20000020, CNDTR=4, CCR=0x40D3) completes with
+        // ISR=0x07 (GIF1 + TCIF1 + HTIF1), CNDTR drained to 0, and
+        // CPAR/CMAR REMAIN at their configured base addresses (real DMA
+        // uses internal next-address pointers, not the user-facing
+        // registers). The sim now reproduces all of that.
+        name: "nucleo_l476rg_dma",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-dma.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"DMA1 RESET\r\n\
+ISR=00000000\r\n\
+CCR1=00000000\r\n\
+CNDTR1=00000000\r\n\
+CPAR1=00000000\r\n\
+CMAR1=00000000\r\n\
+DMA1 CONFIG\r\n\
+ISR=00000007\r\n\
+CCR1=000040D3\r\n\
+CNDTR1=00000000\r\n\
+CPAR1=20000010\r\n\
+CMAR1=20000020\r\n\
+DONE\r\n",
+    },
+    SurvivalCase {
         // ADC1 modern (STM32L4-style) register-level fidelity. Captured
         // from real silicon: CR resets to 0x20000000 (DEEPPWD), CFGR to
         // 0x80000000 (JQDIS), and ADCAL stays set after a calibration
@@ -497,13 +526,18 @@ fn test_nucleo_l476rg_spi_survival() {
 }
 
 #[test]
-fn test_nucleo_l476rg_adc_survival() {
+fn test_nucleo_l476rg_dma_survival() {
     run_survival_case(&SURVIVAL_CASES[10]);
 }
 
 #[test]
-fn test_nucleo_l476rg_i2c_survival() {
+fn test_nucleo_l476rg_adc_survival() {
     run_survival_case(&SURVIVAL_CASES[11]);
+}
+
+#[test]
+fn test_nucleo_l476rg_i2c_survival() {
+    run_survival_case(&SURVIVAL_CASES[12]);
 }
 
 #[test]

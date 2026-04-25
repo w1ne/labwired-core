@@ -537,7 +537,10 @@ pub mod integration_tests {
             .unwrap();
         assert_eq!(systick.base, 0xE000_E010);
         assert_eq!(systick.size, 0x1000);
-        assert_eq!(systick.irq, Some(15));
+        // SysTick raises system exception 15 via PeripheralTickResult::
+        // system_exception, not via the NVIC IRQ field — its IRQ slot
+        // stays None unless a yaml explicitly sets it.
+        assert_eq!(systick.irq, None);
 
         let gpioa = bus.peripherals.iter().find(|p| p.name == "gpioa").unwrap();
         assert_eq!(gpioa.base, 0x4001_0800);

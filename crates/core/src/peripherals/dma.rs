@@ -14,6 +14,16 @@ struct DmaChannel {
     cpar: u32,
     cmar: u32,
     active: bool,
+    /// Internal pointers used during transfer. Real STM32 silicon does
+    /// NOT modify the user-facing CPAR / CMAR registers as a transfer
+    /// runs — it uses internal next-address registers and leaves the
+    /// configured base addresses readable for the firmware. Modelling
+    /// the increment as a separate field preserves that contract.
+    cpar_ptr: u32,
+    cmar_ptr: u32,
+    /// Initial CNDTR value. Used to fire HTIF when the transfer crosses
+    /// half-way (CNDTR == cndtr_initial / 2).
+    cndtr_initial: u32,
 }
 
 /// STM32F1 DMA1 Controller (7 channels)
@@ -66,7 +76,16 @@ impl Dma1 {
                             self.channels[chan_idx].ccr = value;
                             let new_en = (value & 1) != 0;
                             if !old_en && new_en {
-                                self.channels[chan_idx].active = true;
+                                let chan = &mut self.channels[chan_idx];
+                                chan.active = true;
+                                // Snapshot the configured base addresses
+                                // and the count into the internal pointers
+                                // — the user-facing cpar/cmar/cndtr stay
+                                // at the configured values, mirroring
+                                // real STM32 hardware.
+                                chan.cpar_ptr = chan.cpar;
+                                chan.cmar_ptr = chan.cmar;
+                                chan.cndtr_initial = chan.cndtr;
                             }
                         }
                         0x04 => self.channels[chan_idx].cndtr = value & 0xFFFF,
@@ -119,64 +138,71 @@ impl Peripheral for Dma1 {
 
         for (i, chan) in self.channels.iter_mut().enumerate() {
             if chan.active && chan.cndtr > 0 {
-                // Determine direction based on CCR bit 4 (DIR)
-                // 0: Read from peripheral, write to memory
-                // 1: Read from memory, write to peripheral
                 let dir_bit = (chan.ccr >> 4) & 1;
-
-                // Also support memory-to-memory (MEM2MEM = bit 14)
                 let mem2mem = (chan.ccr >> 14) & 1;
 
+                // Use internal pointers for the actual transfer; leave
+                // the user-facing CPAR / CMAR registers untouched so
+                // firmware reads them at the configured base, matching
+                // real STM32 hardware.
                 let (src, dst, direction) = if mem2mem == 1 {
-                    (chan.cpar, chan.cmar, DmaDirection::Copy)
+                    (chan.cpar_ptr, chan.cmar_ptr, DmaDirection::Copy)
                 } else if dir_bit == 1 {
-                    // Read from memory, write to peripheral
-                    (chan.cmar, chan.cpar, DmaDirection::Write)
+                    (chan.cmar_ptr, chan.cpar_ptr, DmaDirection::Write)
                 } else {
-                    // Read from peripheral, write to memory
-                    (chan.cpar, chan.cmar, DmaDirection::Read)
+                    (chan.cpar_ptr, chan.cmar_ptr, DmaDirection::Read)
                 };
 
                 dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
                     src_addr: src as u64,
                     addr: dst as u64,
-                    val: 0, // Used for Write if needed, but bus handles Copy/Read
+                    val: 0,
                     direction,
                 });
 
                 chan.cndtr -= 1;
+                // Increment internal memory/peripheral pointers if MINC/PINC
+                // is set. The CCR PSIZE/MSIZE bits select 1/2/4 byte width;
+                // we treat each tick as one element so the increment matches.
                 if (chan.ccr & (1 << 7)) != 0 {
-                    chan.cmar += if (chan.ccr & (1 << 10)) != 0 {
-                        4
-                    } else if (chan.ccr & (1 << 8)) != 0 {
-                        2
-                    } else {
-                        1
-                    };
-                } // MINC with size support
+                    chan.cmar_ptr = chan.cmar_ptr.wrapping_add(
+                        if (chan.ccr & (1 << 10)) != 0 { 4 }
+                        else if (chan.ccr & (1 << 8)) != 0 { 2 }
+                        else { 1 },
+                    );
+                }
                 if (chan.ccr & (1 << 6)) != 0 {
-                    chan.cpar += if (chan.ccr & (1 << 11)) != 0 {
-                        4
-                    } else if (chan.ccr & (1 << 8)) != 0 {
-                        2
-                    } else {
-                        1
-                    };
-                } // PINC with size support
+                    chan.cpar_ptr = chan.cpar_ptr.wrapping_add(
+                        if (chan.ccr & (1 << 11)) != 0 { 4 }
+                        else if (chan.ccr & (1 << 8)) != 0 { 2 }
+                        else { 1 },
+                    );
+                }
+
+                // HTIF: set when transfer crosses the halfway mark.
+                // Matches what real silicon does for any non-trivial CNDTR.
+                if chan.cndtr_initial >= 2
+                    && chan.cndtr <= chan.cndtr_initial / 2
+                    && (self.isr & (1 << (i * 4 + 2))) == 0
+                {
+                    self.isr |= 1 << (i * 4 + 2); // HTIF_x
+                    self.isr |= 1 << (i * 4); // GIF_x
+                    if (chan.ccr & (1 << 2)) != 0 {
+                        // HTIE
+                        irq = true;
+                    }
+                }
 
                 if chan.cndtr == 0 {
                     chan.active = false;
-                    // Set TCIF (Transfer Complete Interrupt Flag) in ISR
-                    self.isr |= 1 << (i * 4 + 1);
+                    self.isr |= 1 << (i * 4 + 1); // TCIF_x
+                    self.isr |= 1 << (i * 4); // GIF_x — global IF tracks
+                                              // logical-OR of TCIF/HTIF/TEIF.
                     if (chan.ccr & (1 << 1)) != 0 {
                         // TCIE
                         irq = true;
                     }
-
-                    // Handle Circular mode (CIRC = bit 5)
-                    // In a real implementation we'd reload CNDTR, but let's keep it simple for now
                 } else if mem2mem == 0 {
-                    // For peripheral requests, we process one unit and then wait for the next signal
                     chan.active = false;
                 }
             }
@@ -187,6 +213,7 @@ impl Peripheral for Dma1 {
             cycles: if dma_requests.is_none() { 0 } else { 1 },
             dma_requests,
             explicit_irqs: None,
+            system_exception: None,
             dma_signals: None,
             ticks_until_next: None,
         }

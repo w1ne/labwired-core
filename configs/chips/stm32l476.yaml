@@ -141,6 +141,18 @@ peripherals:
     config:
       profile: "stm32l4"
 
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    irq: 11
+
+  - id: "dma2"
+    type: "dma"
+    base_address: 0x40020400
+    size: "1KB"
+    irq: 56
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00

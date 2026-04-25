@@ -21,6 +21,39 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Pend a peripheral-raised IRQ. Behaviour depends on whether the chip
+/// has an NVIC modelled:
+///
+/// - **With NVIC** (production chip configs): `irq` is the NVIC IRQ
+///   position (0-based, as it appears in chip yaml — DMA1_CH1 = 11 on
+///   STM32L4, USART2 = 38). We pend it on ISPR and let
+///   `collect_enabled_nvic_interrupts` translate to an exception number
+///   (16 + position) when ISER also has it enabled. The previous code
+///   special-cased `irq < 16`, which silently routed DMA1_CH1 (irq=11)
+///   through the system-exception path and ended up calling SVCall
+///   on every DMA TC — invisible until firmware actually hooked the
+///   IRQ.
+///
+/// - **Without NVIC** (legacy unit-test fixtures with no NVIC entry):
+///   pass `irq` through unchanged. Single-peripheral test machines
+///   call `tick_peripherals()` and read the result directly; they treat
+///   the irq value as whatever convention the test author chose.
+fn pend_nvic(
+    nvic: &Option<Arc<crate::peripherals::nvic::NvicState>>,
+    interrupts: &mut Vec<u32>,
+    irq: u32,
+) {
+    if let Some(nvic) = nvic {
+        let idx = (irq / 32) as usize;
+        let bit = irq % 32;
+        if idx < 8 {
+            nvic.ispr[idx].fetch_or(1 << bit, std::sync::atomic::Ordering::SeqCst);
+        }
+    } else {
+        interrupts.push(irq);
+    }
+}
+
 pub struct PeripheralEntry {
     pub name: String,
     pub base: u64,
@@ -583,13 +616,10 @@ impl SystemBus {
                 0x1000 // Default 4KB page
             };
 
-            let irq = if let Some(irq) = p_cfg.irq {
-                Some(irq)
-            } else if p_cfg.id == "systick" {
-                Some(15)
-            } else {
-                None
-            };
+            // SysTick raises its IRQ via PeripheralTickResult::system_exception,
+            // not via the NVIC IRQ position field — leave its irq as None
+            // unless the yaml explicitly sets one.
+            let irq = p_cfg.irq;
 
             bus.peripherals.push(PeripheralEntry {
                 name: p_cfg.id.clone(),
@@ -762,38 +792,20 @@ impl SystemBus {
 
             if res.irq {
                 if let Some(irq) = p.irq {
-                    if irq >= 16 {
-                        if let Some(nvic) = &self.nvic {
-                            let idx = (irq / 32) as usize;
-                            let bit = irq % 32;
-                            if idx < 8 {
-                                nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
-                            }
-                        } else {
-                            interrupts.push(irq);
-                        }
-                    } else {
-                        interrupts.push(irq);
-                    }
+                    pend_nvic(&self.nvic, &mut interrupts, irq);
                 }
             }
 
             if let Some(irqs) = res.explicit_irqs {
                 for irq in irqs {
-                    if let Some(nvic) = &self.nvic {
-                        if irq >= 16 {
-                            let idx = (irq / 32) as usize;
-                            let bit = irq % 32;
-                            if idx < 8 {
-                                nvic.ispr[idx].fetch_or(1 << bit, Ordering::SeqCst);
-                            }
-                        } else {
-                            interrupts.push(irq);
-                        }
-                    } else {
-                        interrupts.push(irq);
-                    }
+                    pend_nvic(&self.nvic, &mut interrupts, irq);
                 }
+            }
+
+            // System exceptions (SysTick = 15, etc) bypass NVIC and are
+            // pushed directly so the CPU sees them on next dispatch.
+            if let Some(exc) = res.system_exception {
+                interrupts.push(exc);
             }
         }
 
