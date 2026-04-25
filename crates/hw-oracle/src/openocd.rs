@@ -193,6 +193,34 @@ impl OpenOcd {
         Ok(())
     }
 
+    // ── Halt polling ─────────────────────────────────────────────────────────
+
+    /// Poll until the target CPU is halted, up to `timeout`.
+    ///
+    /// Issues repeated `halt` commands and checks whether the target is already
+    /// stopped.  The ESP32-S3 BREAK instruction raises a debug exception that
+    /// halts the CPU; OpenOCD will reflect this in the next `halt` response.
+    ///
+    /// Returns `Ok(())` when halted, or an error if `timeout` expires.
+    pub fn wait_until_halted(&mut self, timeout: Duration) -> Result<()> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            // `halt` is a no-op if already halted; it also synchronises OpenOCD's
+            // idea of the target state.
+            let _ = self.tcl("halt");
+
+            // Read the PC; if successful the target is accessible (halted).
+            if self.read_register("pc").is_ok() {
+                return Ok(());
+            }
+
+            if Instant::now() >= deadline {
+                anyhow::bail!("wait_until_halted: timed out after {:.1}s", timeout.as_secs_f32());
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     /// Ask OpenOCD to shut down cleanly, then wait for the process to exit.

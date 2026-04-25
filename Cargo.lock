@@ -689,6 +689,7 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "goblin",
+ "labwired-core",
  "labwired-hw-oracle-macros",
  "libc",
  "serialport",

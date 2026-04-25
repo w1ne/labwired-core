@@ -7,6 +7,7 @@ description = "HW oracle harness: JTAG-driven cross-validation against physical 
 
 [dependencies]
 labwired-hw-oracle-macros = { path = "../hw-oracle-macros" }
+labwired-core = { path = "../core" }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
