@@ -16,6 +16,14 @@ use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
 use std::sync::Arc;
 
+/// Offset of _KernelExceptionVector relative to VECBASE on ESP32-S3 LX7.
+///
+/// Verified against Zephyr soc/xtensa/esp32s3/linker.ld:
+///   `. = 0x300; KEEP(*(.KernelExceptionVector.text));`
+/// and the ESP-IDF / FreeRTOS ABI which reads PS and EPC1 directly via RSR
+/// for level-1 general exceptions (no EPS1 exists in the ESP32-S3 LX7 config).
+const KERNEL_VECTOR_OFFSET: u32 = 0x300;
+
 pub struct XtensaLx7 {
     pub regs: ArFile,
     pub ps: Ps,
@@ -739,8 +747,7 @@ impl XtensaLx7 {
                 let dividend = self.regs.read_logical(as_) as i32;
                 let divisor  = self.regs.read_logical(at)  as i32;
                 if divisor == 0 {
-                    self.sr.write(EXCCAUSE, 6);
-                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                    return self.raise_general_exception(6);
                 }
                 let q = dividend.wrapping_div(divisor);
                 self.regs.write_logical(ar, q as u32);
@@ -752,8 +759,7 @@ impl XtensaLx7 {
                 let dividend = self.regs.read_logical(as_);
                 let divisor  = self.regs.read_logical(at);
                 if divisor == 0 {
-                    self.sr.write(EXCCAUSE, 6);
-                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                    return self.raise_general_exception(6);
                 }
                 let q = dividend / divisor;
                 self.regs.write_logical(ar, q);
@@ -766,8 +772,7 @@ impl XtensaLx7 {
                 let dividend = self.regs.read_logical(as_) as i32;
                 let divisor  = self.regs.read_logical(at)  as i32;
                 if divisor == 0 {
-                    self.sr.write(EXCCAUSE, 6);
-                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                    return self.raise_general_exception(6);
                 }
                 let r = dividend.wrapping_rem(divisor);
                 self.regs.write_logical(ar, r as u32);
@@ -779,8 +784,7 @@ impl XtensaLx7 {
                 let dividend = self.regs.read_logical(as_);
                 let divisor  = self.regs.read_logical(at);
                 if divisor == 0 {
-                    self.sr.write(EXCCAUSE, 6);
-                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                    return self.raise_general_exception(6);
                 }
                 let r = dividend % divisor;
                 self.regs.write_logical(ar, r);
@@ -932,8 +936,7 @@ impl XtensaLx7 {
             // S32E at, as_, imm: store at to [as_ + imm], PS.EXCM-gated.
             S32e { at, as_, imm } => {
                 if !self.ps.excm() {
-                    self.sr.write(EXCCAUSE, 0);
-                    return Err(SimulationError::ExceptionRaised { cause: 0, pc: self.pc });
+                    return self.raise_general_exception(0);
                 }
                 let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
                 bus.write_u32(ea, self.regs.read_logical(at))?;
@@ -943,8 +946,7 @@ impl XtensaLx7 {
             // L32E at, as_, imm: load [as_ + imm] into at, PS.EXCM-gated.
             L32e { at, as_, imm } => {
                 if !self.ps.excm() {
-                    self.sr.write(EXCCAUSE, 0);
-                    return Err(SimulationError::ExceptionRaised { cause: 0, pc: self.pc });
+                    return self.raise_general_exception(0);
                 }
                 let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
                 let v = bus.read_u32(ea)?;
@@ -979,10 +981,9 @@ impl XtensaLx7 {
 
                 if self.regs.windowstart_bit(next_idx) {
                     // Adjacent frame is live — spill path required.
-                    // Plan 1: raise AllocaCause (EXCCAUSE=5) and let the caller handle it.
+                    // Plan 1: raise AllocaCause (EXCCAUSE=5) via the general exception path.
                     // TODO(plan2): implement register spill instead.
-                    self.sr.write(EXCCAUSE, 5);
-                    return Err(SimulationError::ExceptionRaised { cause: 5, pc: self.pc });
+                    return self.raise_general_exception(5);
                 }
 
                 // Safe path: adjacent frame is free, simple register move.
@@ -1026,6 +1027,31 @@ impl XtensaLx7 {
         } else {
             self.pc = self.pc.wrapping_add(len);
         }
+    }
+
+    /// Raise a level-1 general exception (kernel vector).
+    ///
+    /// Implements Xtensa LX ISA RM §5.5 "General Exception" for ESP32-S3 LX7:
+    ///   1. EPC1  ← PC (pre-advance; the faulting instruction's address).
+    ///   2. EXCCAUSE ← cause.
+    ///   3. PS.EXCM  ← 1  (masks interrupts; PS.INTLEVEL is left unchanged).
+    ///   4. PC       ← VECBASE + 0x300 (_KernelExceptionVector).
+    ///
+    /// Note: ESP32-S3 LX7 does NOT implement EPS1 (the assembler rejects
+    /// `rsr.eps1`). For level-1 exceptions, the exception handler reads PS
+    /// directly via `rsr.ps` after entry. Window OF/UF exceptions do NOT use
+    /// this helper — they have dedicated vector slots and different entry rules.
+    ///
+    /// Returns `Err(ExceptionRaised { cause, pc: EPC1 })` so callers (and tests)
+    /// know a general exception was taken while the simulator state is consistent.
+    fn raise_general_exception(&mut self, cause: u8) -> SimResult<()> {
+        let faulting_pc = self.pc;
+        self.sr.write(EPC1, faulting_pc);
+        self.sr.write(EXCCAUSE, cause as u32);
+        self.ps.set_excm(true);
+        let vecbase = self.sr.read(VECBASE);
+        self.pc = vecbase.wrapping_add(KERNEL_VECTOR_OFFSET);
+        Err(SimulationError::ExceptionRaised { cause, pc: faulting_pc })
     }
 }
 

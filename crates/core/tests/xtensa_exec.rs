@@ -4088,3 +4088,149 @@ fn test_exec_rotw_does_not_change_windowstart() {
     );
     assert_eq!(cpu.regs.windowbase(), 3, "ROTW +3: WB must be 3");
 }
+
+// ── G1 Tests: General exception entry dispatch ────────────────────────────────
+//
+// Kernel vector offset for ESP32-S3 LX7: VECBASE + 0x300.
+// Source: Zephyr soc/xtensa/esp32s3/linker.ld `. = 0x300; KEEP(*(.KernelExceptionVector.text))`.
+//
+// EPS1 does NOT exist in the ESP32-S3 LX7 config (rejected by xtensa-esp32s3-elf-as).
+// PS is read by the exception handler via `rsr.ps` after entry; no EPS1 save.
+//
+// On general exception entry:
+//   EPC1    ← pre-advance PC (the faulting instruction's address)
+//   EXCCAUSE ← cause
+//   PS.EXCM ← 1
+//   PC      ← VECBASE + 0x300
+
+const KERNEL_VECTOR_OFFSET_TEST: u32 = 0x300;
+
+/// G1: QUOS div-by-zero redirects PC to kernel vector and sets EPC1/EXCCAUSE/PS.EXCM.
+#[test]
+fn test_general_exception_div_by_zero_redirects_pc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    // Clear EXCM so we can observe PS.EXCM being set by the exception.
+    cpu.ps.set_excm(false);
+    let old_ps_raw = cpu.ps.as_raw();
+
+    cpu.set_register(4, 100);
+    cpu.set_register(5, 0);  // divisor = 0
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quos(3, 4, 5)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+
+    // Error kind is still ExceptionRaised so callers can react.
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 6, pc } if pc == TEST_PC),
+        "div-by-zero: ExceptionRaised{{cause:6, pc=TEST_PC}} expected, got: {:?}", err
+    );
+
+    // EPC1 must hold the faulting PC (pre-advance).
+    assert_eq!(
+        cpu.sr.read(EPC1_ID), TEST_PC,
+        "EPC1 must be set to the faulting instruction's PC"
+    );
+    // EXCCAUSE must be 6 (IntegerDivideByZero).
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 6, "EXCCAUSE must be 6");
+    // PS.EXCM must be 1.
+    assert!(cpu.ps.excm(), "PS.EXCM must be 1 after general exception entry");
+    // PC must be at the kernel vector.
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    assert_eq!(
+        cpu.get_pc(), vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
+        "PC must be redirected to VECBASE + 0x300 (_KernelExceptionVector)"
+    );
+    // Confirm the old PS was non-EXCM (validates the pre-condition captured earlier).
+    assert_eq!(old_ps_raw & 0x10, 0, "pre: PS.EXCM should have been 0 before exception");
+}
+
+/// G1: REMU div-by-zero also redirects correctly (covers the REMU path).
+#[test]
+fn test_general_exception_remu_redirects_pc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_excm(false);
+
+    cpu.set_register(4, 99);
+    cpu.set_register(5, 0);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_remu(3, 4, 5)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 6, pc } if pc == TEST_PC),
+        "remu div-by-zero: ExceptionRaised{{cause:6}} expected, got {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EPC1_ID), TEST_PC, "EPC1 must be set to faulting PC");
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 6, "EXCCAUSE must be 6");
+    assert!(cpu.ps.excm(), "PS.EXCM must be 1");
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    assert_eq!(cpu.get_pc(), vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
+        "PC must redirect to VECBASE + 0x300");
+}
+
+/// G1: MOVSP with live adjacent frame redirects PC to kernel vector (AllocaCause=5).
+#[test]
+fn test_general_exception_movsp_alloca_redirects_pc() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    // Clear PS.EXCM so we can observe it being set.
+    cpu.ps.set_excm(false);
+
+    // Set WB=0 and mark WS bit 1 live → triggers AllocaCause.
+    cpu.regs.set_windowbase(0);
+    cpu.regs.set_windowstart_bit(1, true);
+
+    cpu.set_register(4, 0x1234_5678);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_movsp(3, 4)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 5, pc } if pc == TEST_PC),
+        "MOVSP alloca: ExceptionRaised{{cause:5, pc=TEST_PC}} expected, got: {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EPC1_ID), TEST_PC, "EPC1 must be set to faulting MOVSP PC");
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 5, "EXCCAUSE must be 5 (AllocaCause)");
+    assert!(cpu.ps.excm(), "PS.EXCM must be 1 after MOVSP alloca exception");
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    assert_eq!(cpu.get_pc(), vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
+        "PC must redirect to VECBASE + 0x300 (_KernelExceptionVector)");
+}
+
+/// G1: Exception entry captures pre-advance PC (not PC+3).
+///
+/// The faulting PC stored in EPC1 and returned in ExceptionRaised must be the
+/// address of the faulting instruction itself, not the next instruction.
+#[test]
+fn test_general_exception_does_not_advance_pc_into_epc1() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    // Place the faulting instruction at a non-trivial offset.
+    let faulting_pc: u32 = 0x2000_0010;
+    cpu.set_pc(faulting_pc);
+    cpu.ps.set_excm(false);
+    cpu.set_register(4, 50);
+    cpu.set_register(5, 0);
+    write_insns(&mut bus, faulting_pc as u64, &[enc_quos(3, 4, 5)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    // EPC1 must be the faulting instruction's address, NOT faulting_pc + 3.
+    assert_eq!(
+        cpu.sr.read(EPC1_ID), faulting_pc,
+        "EPC1 must equal the faulting instruction PC, not PC+3"
+    );
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { pc, .. } if pc == faulting_pc),
+        "ExceptionRaised.pc must be the pre-advance faulting PC"
+    );
+    // PC is at the vector, NOT at faulting_pc + 3.
+    assert_ne!(cpu.get_pc(), faulting_pc + 3, "PC must not be advanced to faulting_pc+3");
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    assert_eq!(cpu.get_pc(), vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
+        "PC must be at VECBASE + 0x300 after exception");
+}
