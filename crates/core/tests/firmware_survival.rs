@@ -186,6 +186,46 @@ DR=00\r\n\
 DONE\r\n",
     },
     SurvivalCase {
+        // STM32L4 foundational-peripheral reset-value fingerprint:
+        // PWR / FLASH / TIM2 / RNG / CRC. Captured from real silicon —
+        // every value below is what NUCLEO-L476RG hardware reports
+        // immediately after a reset. The PWR / FLASH peripherals in
+        // particular are required for HAL-generated firmware to boot
+        // (HAL_PWREx_ControlVoltageScaling and the FLASH ACR latency
+        // dance both run before SYSCLK is reconfigured).
+        name: "nucleo_l476rg_l4periphs",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-l4periphs.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"PWR\r\n\
+CR1=00000200\r\n\
+CR2=00000000\r\n\
+CR3=00008000\r\n\
+CR4=00000000\r\n\
+SR1=00000000\r\n\
+SR2=00000100\r\n\
+FLASH\r\n\
+ACR=00000600\r\n\
+SR=00000000\r\n\
+CR=C0000000\r\n\
+OPTR=FFEFF8AA\r\n\
+TIM2\r\n\
+CR1=00000000\r\n\
+ARR=FFFFFFFF\r\n\
+PSC=00000000\r\n\
+CNT=00000000\r\n\
+RNG\r\n\
+CR=00000000\r\n\
+SR=00000000\r\n\
+CRC\r\n\
+DR=FFFFFFFF\r\n\
+CR=00000000\r\n\
+DONE\r\n",
+    },
+    SurvivalCase {
         // Comprehensive end-to-end demo for NUCLEO-L476RG. Built from
         // crates/firmware-l476-demo (Rust, no_std), exercises every
         // peripheral that's been hardware-validated on real silicon —
@@ -551,23 +591,28 @@ fn test_nucleo_l476rg_spi_survival() {
 }
 
 #[test]
-fn test_nucleo_l476rg_demo_survival() {
+fn test_nucleo_l476rg_l4periphs_survival() {
     run_survival_case(&SURVIVAL_CASES[10]);
 }
 
 #[test]
-fn test_nucleo_l476rg_dma_survival() {
+fn test_nucleo_l476rg_demo_survival() {
     run_survival_case(&SURVIVAL_CASES[11]);
 }
 
 #[test]
-fn test_nucleo_l476rg_adc_survival() {
+fn test_nucleo_l476rg_dma_survival() {
     run_survival_case(&SURVIVAL_CASES[12]);
 }
 
 #[test]
-fn test_nucleo_l476rg_i2c_survival() {
+fn test_nucleo_l476rg_adc_survival() {
     run_survival_case(&SURVIVAL_CASES[13]);
+}
+
+#[test]
+fn test_nucleo_l476rg_i2c_survival() {
+    run_survival_case(&SURVIVAL_CASES[14]);
 }
 
 #[test]

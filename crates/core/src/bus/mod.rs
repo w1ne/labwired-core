@@ -104,7 +104,8 @@ impl SystemBus {
         // Keep explicit core types as-is.
         match t.as_str() {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
-            | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal" => {
+            | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
+            | "pwr" | "flash" | "rng" | "crc" | "dbgmcu" => {
                 return t;
             }
             _ => {}
@@ -453,7 +454,16 @@ impl SystemBus {
                     Box::new(crate::peripherals::dbgmcu::Dbgmcu::new(idcode))
                 }
                 "timer" | "stm32_timer" | "efm32timer" | "renesasra_agt" | "stm32l0_lptimer" => {
-                    Box::new(crate::peripherals::timer::Timer::new())
+                    // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
+                    // YAML: `config: { width: 32 }`. Defaults to 16 for
+                    // back-compat with F1-class general-purpose timers.
+                    let width: u8 = p_cfg
+                        .config
+                        .get("width")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u8)
+                        .unwrap_or(16);
+                    Box::new(crate::peripherals::timer::Timer::new_with_width(width))
                 }
                 "i2c"
                 | "stm32f1_i2c"
@@ -466,6 +476,10 @@ impl SystemBus {
                     Box::new(crate::peripherals::i2c::I2c::new_with_layout(layout))
                 }
                 "spi" | "stm32spi" => Box::new(crate::peripherals::spi::Spi::new()),
+                "pwr" => Box::new(crate::peripherals::pwr::Pwr::new()),
+                "flash" | "flash_iface" => Box::new(crate::peripherals::flash::Flash::new()),
+                "rng" => Box::new(crate::peripherals::rng::Rng::new()),
+                "crc" => Box::new(crate::peripherals::crc::Crc::new()),
                 "exti" => Box::new(crate::peripherals::exti::Exti::new()),
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),

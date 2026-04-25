@@ -6,7 +6,12 @@
 
 use crate::SimResult;
 
-/// Basic STM32 General Purpose Timer (TIM2-TIM5 compatible)
+/// Basic STM32 General Purpose Timer (TIM2-TIM5 compatible).
+///
+/// Bit-width selectable: TIM3/TIM4 are 16-bit (CNT/ARR mask 0xFFFF, ARR
+/// reset 0xFFFF). TIM2/TIM5 on STM32L4 are 32-bit (CNT/ARR full u32,
+/// ARR reset 0xFFFFFFFF). Configure via `width: 32` in the chip yaml's
+/// `config` block.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Timer {
     cr1: u32,
@@ -17,16 +22,36 @@ pub struct Timer {
     psc: u32,
     arr: u32,
 
+    /// Counter / ARR width (16 or 32). Defaults to 16 for back-compat
+    /// with existing F1-class chip configs.
+    width: u8,
+
     // Internal state
     psc_cnt: u32,
 }
 
 impl Timer {
     pub fn new() -> Self {
+        Self::new_with_width(16)
+    }
+
+    pub fn new_with_width(width: u8) -> Self {
+        let arr_reset = if width >= 32 { 0xFFFF_FFFF } else { 0xFFFF };
         Self {
-            arr: 0xFFFF, // Default reset value
-            ..Default::default()
+            cr1: 0,
+            dier: 0,
+            sr: 0,
+            egr: 0,
+            cnt: 0,
+            psc: 0,
+            arr: arr_reset,
+            width,
+            psc_cnt: 0,
         }
+    }
+
+    fn cnt_mask(&self) -> u32 {
+        if self.width >= 32 { 0xFFFF_FFFF } else { 0xFFFF }
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -57,9 +82,9 @@ impl Timer {
                     self.sr |= 1; // UIF set on update generation
                 }
             }
-            0x24 => self.cnt = value & 0xFFFF,
+            0x24 => self.cnt = value & self.cnt_mask(),
             0x28 => self.psc = value & 0xFFFF,
-            0x2C => self.arr = value & 0xFFFF,
+            0x2C => self.arr = value & self.cnt_mask(),
             _ => {}
         }
     }

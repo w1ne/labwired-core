@@ -36,6 +36,11 @@ notes, see
 | I2C1/2/3   | ✅          | `Stm32L4` modern layout                              |
 | ADC1       | ✅          | `Stm32L4` layout, DEEPPWD/ADVREGEN bring-up          |
 | DMA1/2     | ✅          | Mem-to-mem CMAR→CPAR, GIF/HTIF/TCIF                  |
+| **PWR**    | ✅          | CR1/CR2/CR3/CR4 + SR1/SR2 + SCR + PUCRx/PDCRx        |
+| **FLASH**  | ✅          | ACR latency, KEYR/OPTKEYR unlock, CR LOCK/OPTLOCK    |
+| **TIM2/3/4/5/6/7** | ✅  | TIM2/5 are 32-bit (ARR reset 0xFFFFFFFF); 3/4/6/7 16-bit |
+| **RNG**    | ✅          | xorshift32 LFSR, deterministic per-seed              |
+| **CRC**    | ✅          | CRC-32, Ethernet poly 0x04C11DB7, DR/INIT/POL        |
 | DBGMCU     | ✅          | IDCODE = 0x10076415                                  |
 | NVIC       | ✅          | ISER/ISPR routing, low IRQs route correctly         |
 

@@ -153,6 +153,71 @@ peripherals:
     size: "1KB"
     irq: 56
 
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+
+  - id: "rng"
+    type: "rng"
+    base_address: 0x50060800
+    size: "1KB"
+    irq: 80
+
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+
+  # General-purpose 32-bit timer (TIM2 — STM32L4 RM0351 §29).
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      width: 32
+
+  # 32-bit general-purpose TIM5.
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 50
+    config:
+      width: 32
+
+  # 16-bit general-purpose TIM3, TIM4.
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+
+  # 16-bit basic timers TIM6, TIM7 — used by HAL as time base.
+  - id: "tim6"
+    type: "timer"
+    base_address: 0x40001000
+    size: "1KB"
+    irq: 54
+
+  - id: "tim7"
+    type: "timer"
+    base_address: 0x40001400
+    size: "1KB"
+    irq: 55
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00

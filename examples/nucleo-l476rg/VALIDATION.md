@@ -19,14 +19,15 @@ revealed each bug, and which simulator commits closed each gap.
 Each row is a captured byte stream from `/dev/ttyACM1` at 115200 8N1.
 Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 
-| Trace                  | Fixture ELF                              | Hardware capture file                                    |
-|------------------------|------------------------------------------|----------------------------------------------------------|
-| `nucleo_l476rg_smoke`  | `tests/fixtures/nucleo-l476rg-smoke.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_smoke.txt`       |
-| `nucleo_l476rg_spi`    | `tests/fixtures/nucleo-l476rg-spi.elf`   | `tests/fixtures/hw_traces/nucleo_l476rg_spi.txt`         |
-| `nucleo_l476rg_i2c`    | `tests/fixtures/nucleo-l476rg-i2c.elf`   | `tests/fixtures/hw_traces/nucleo_l476rg_i2c.txt`         |
-| `nucleo_l476rg_adc`    | `tests/fixtures/nucleo-l476rg-adc.elf`   | `tests/fixtures/hw_traces/nucleo_l476rg_adc.txt`         |
-| `nucleo_l476rg_dma`    | `tests/fixtures/nucleo-l476rg-dma.elf`   | `tests/fixtures/hw_traces/nucleo_l476rg_dma.txt`         |
-| `nucleo_l476rg_demo`   | `tests/fixtures/nucleo-l476rg-demo.elf`  | (built from `crates/firmware-l476-demo`, same trace as sim) |
+| Trace                       | Fixture ELF                                   | Hardware capture file                                          |
+|-----------------------------|-----------------------------------------------|----------------------------------------------------------------|
+| `nucleo_l476rg_smoke`       | `tests/fixtures/nucleo-l476rg-smoke.elf`      | `tests/fixtures/hw_traces/nucleo_l476rg_smoke.txt`             |
+| `nucleo_l476rg_spi`         | `tests/fixtures/nucleo-l476rg-spi.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_spi.txt`               |
+| `nucleo_l476rg_i2c`         | `tests/fixtures/nucleo-l476rg-i2c.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_i2c.txt`               |
+| `nucleo_l476rg_adc`         | `tests/fixtures/nucleo-l476rg-adc.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_adc.txt`               |
+| `nucleo_l476rg_dma`         | `tests/fixtures/nucleo-l476rg-dma.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_dma.txt`               |
+| `nucleo_l476rg_demo`        | `tests/fixtures/nucleo-l476rg-demo.elf`       | (built from `crates/firmware-l476-demo`, same trace as sim)    |
+| `nucleo_l476rg_l4periphs`   | `tests/fixtures/nucleo-l476rg-l4periphs.elf`  | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs.txt`         |
 
 ## Bugs surfaced and fixed
 
@@ -94,6 +95,26 @@ the simulator. Order matters — earlier rounds unblocked later ones.
   STM32 silicon does CMAR → CPAR when DIR=1 + MEM2MEM=1 (RM0351
   §11.4.7). Surfaced only when a self-test verified the destination
   word post-transfer.
+
+### Round 6 — Foundational L4 peripherals (`nucleo_l476rg_l4periphs`)
+- **PWR peripheral** added. STM32L4 reset values verified against
+  silicon: CR1=0x00000200 (VOS=01, range 1), CR3=0x00008000 (EIWUL),
+  SR2=0x00000100 (REGLPF). Required for HAL-generated firmware —
+  HAL_PWREx_ControlVoltageScaling() runs before any RCC PLL config.
+- **FLASH peripheral** added. ACR/KEYR/OPTKEYR/SR/CR/OPTR with the
+  L4 reset values (ACR=0x00000600 — caches enabled by boot ROM,
+  CR=0xC0000000 LOCK+OPTLOCK, OPTR=0xFFEFF8AA factory-programmed).
+  KEYR/OPTKEYR walk the unlock state machine (write 0x45670123 then
+  0xCDEF89AB to clear LOCK in CR). Without this, HAL latency adjustment
+  before PLL switch silently no-ops and SYSCLK stays on MSI.
+- **TIM2/TIM5 32-bit width** — existing `Timer` peripheral was 16-bit
+  only. Added `width` config knob; TIM2/TIM5 on L4 are 32-bit, so ARR
+  resets to 0xFFFFFFFF and CNT/ARR reads/writes use the full u32.
+- **RNG peripheral** added with deterministic xorshift32 LFSR so
+  firmware that seeds Rust's stdlib random gets reproducible output.
+- **CRC peripheral** added. Standard STM32 CRC-32 unit: DR resets to
+  0xFFFFFFFF, default polynomial 0x04C11DB7 (Ethernet). Writes to DR
+  step the polynomial engine; CR.RESET reloads DR from INIT.
 
 ## Reproducing a capture
 
