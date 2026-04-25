@@ -2,6 +2,24 @@
 
 This guide documents the procedure for adding new board targets to LabWired. It is designed for contributors and agents to ensure consistent, high-quality board support.
 
+## Reference implementation
+
+**NUCLEO-L476RG** is the canonical end-to-end onboarded board. Read these
+together with this playbook:
+
+- [`examples/nucleo-l476rg/README.md`](../examples/nucleo-l476rg/README.md) — build / run / debug / pin map
+- [`examples/nucleo-l476rg/VALIDATION.md`](../examples/nucleo-l476rg/VALIDATION.md) — bug-discovery audit trail
+- [`docs/boards/nucleo-l476rg.md`](boards/nucleo-l476rg.md) — fidelity table
+- [`crates/firmware-l476-demo/src/main.rs`](../crates/firmware-l476-demo/src/main.rs) — comprehensive Rust firmware
+- [`configs/chips/stm32l476.yaml`](../configs/chips/stm32l476.yaml) — chip yaml with all profile selectors
+- [`configs/systems/nucleo-l476rg.yaml`](../configs/systems/nucleo-l476rg.yaml) — system manifest with board_io bindings
+- [`crates/core/tests/firmware_survival.rs`](../crates/core/tests/firmware_survival.rs) — six survival tests asserting byte-for-byte UART parity with real silicon
+
+The L476 path went through five hardware-validated rounds (UART, SPI,
+I²C, ADC, DMA) — each surfaced and fixed real divergences between sim
+and silicon. The same loop should produce a comparable level of
+confidence for any new board.
+
 ## 1. Prerequisites
 
 Before starting, acquire the following primary sources:

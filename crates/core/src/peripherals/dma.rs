@@ -78,11 +78,6 @@ impl Dma1 {
                             if !old_en && new_en {
                                 let chan = &mut self.channels[chan_idx];
                                 chan.active = true;
-                                // Snapshot the configured base addresses
-                                // and the count into the internal pointers
-                                // — the user-facing cpar/cmar/cndtr stay
-                                // at the configured values, mirroring
-                                // real STM32 hardware.
                                 chan.cpar_ptr = chan.cpar;
                                 chan.cmar_ptr = chan.cmar;
                                 chan.cndtr_initial = chan.cndtr;
@@ -146,10 +141,18 @@ impl Peripheral for Dma1 {
                 // firmware reads them at the configured base, matching
                 // real STM32 hardware.
                 let (src, dst, direction) = if mem2mem == 1 {
-                    (chan.cpar_ptr, chan.cmar_ptr, DmaDirection::Copy)
+                    // STM32 mem-to-mem mode (RM0351 §11.4.7): MEM2MEM=1
+                    // requires DIR=1, and the data flows CMAR -> CPAR.
+                    // CMAR is "memory side" (source), CPAR is "peripheral
+                    // side" (destination). Earlier code had this swapped,
+                    // which only mattered once a self-test actually
+                    // verified the destination word post-transfer.
+                    (chan.cmar_ptr, chan.cpar_ptr, DmaDirection::Copy)
                 } else if dir_bit == 1 {
+                    // Memory -> peripheral: read from CMAR, write to CPAR.
                     (chan.cmar_ptr, chan.cpar_ptr, DmaDirection::Write)
                 } else {
+                    // Peripheral -> memory: read from CPAR, write to CMAR.
                     (chan.cpar_ptr, chan.cmar_ptr, DmaDirection::Read)
                 };
 
