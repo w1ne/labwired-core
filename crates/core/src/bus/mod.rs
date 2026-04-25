@@ -436,7 +436,11 @@ impl SystemBus {
                 "exti" => Box::new(crate::peripherals::exti::Exti::new()),
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
-                "adc" => Box::new(crate::peripherals::adc::Adc::new()),
+                "adc" => {
+                    let layout: crate::peripherals::adc::AdcRegisterLayout =
+                        Self::parse_profile_or_default(p_cfg, "ADC")?;
+                    Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+                }
                 "pio" => {
                     let mut pio = crate::peripherals::pio::Pio::new();
                     if let Some(program) = p_cfg.config.get("program").and_then(|v| v.as_str()) {

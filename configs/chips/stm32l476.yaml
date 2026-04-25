@@ -131,6 +131,16 @@ peripherals:
     config:
       profile: "stm32l4"
 
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x50040000
+    # 1KB window covers ADC1 (0x000), ADC2 (0x100), ADC3 (0x200), and the
+    # common block at 0x300 — all three instances share the bus mapping.
+    size: "1KB"
+    irq: 18
+    config:
+      profile: "stm32l4"
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00

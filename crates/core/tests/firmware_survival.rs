@@ -186,6 +186,31 @@ DR=00\r\n\
 DONE\r\n",
     },
     SurvivalCase {
+        // ADC1 modern (STM32L4-style) register-level fidelity. Captured
+        // from real silicon: CR resets to 0x20000000 (DEEPPWD), CFGR to
+        // 0x80000000 (JQDIS), and ADCAL stays set after a calibration
+        // request when the ADC has no clock source configured (matches
+        // the smoke firmware which only enables AHB2.ADCEN, not CCIPR).
+        name: "nucleo_l476rg_adc",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-adc.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"ADC1 RESET\r\n\
+ISR=00000000\r\n\
+CR=20000000\r\n\
+CFGR=80000000\r\n\
+ADC1 REGEN\r\n\
+CR=10000000\r\n\
+ISR=00000000\r\n\
+ADC1 CALDONE\r\n\
+CR=90000000\r\n\
+ISR=00000000\r\n\
+DONE\r\n",
+    },
+    SurvivalCase {
         // I2C1 modern (STM32L4-style) register-level fidelity. Captured
         // from real silicon: ISR resets to 0x00000001 (TXE=1), CR2.START
         // set on master start lights ISR.BUSY (bit 15), and TIMINGR
@@ -472,8 +497,13 @@ fn test_nucleo_l476rg_spi_survival() {
 }
 
 #[test]
-fn test_nucleo_l476rg_i2c_survival() {
+fn test_nucleo_l476rg_adc_survival() {
     run_survival_case(&SURVIVAL_CASES[10]);
+}
+
+#[test]
+fn test_nucleo_l476rg_i2c_survival() {
+    run_survival_case(&SURVIVAL_CASES[11]);
 }
 
 #[test]
