@@ -16,3 +16,4 @@ serialport = { workspace = true }
 
 [features]
 default = []
+hw-oracle = []  # gates _hw and _diff runners; CI enables on self-hosted runner
