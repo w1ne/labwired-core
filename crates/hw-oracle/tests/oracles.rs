@@ -1402,3 +1402,29 @@ fn exccause_epc1_readback_oracle() -> OracleCase {
         st.assert_pc(0x4000_0000u32.wrapping_add(0x300));
     })
 }
+
+// ── 36. Fibonacci(10) — ELF fixture ──────────────────────────────────────────
+
+/// Fibonacci(10) = 55, verified via a hand-assembled ELF fixture.
+///
+/// The fixture (`fixtures/xtensa-asm/fibonacci.s`) computes fib(10) using a
+/// simple iterative loop (movi / add / addi / bnez) and terminates with
+/// `break 1, 15`.  No ENTRY/RETW is used; see the assembly source for
+/// rationale.
+///
+/// `run_sim` loads the ELF PT_LOAD segment at its virtual address (0x40370000)
+/// and sets PC to the ELF entry point.  On HW, OpenOCD's `program` command
+/// flashes the ELF and sets PC.
+///
+/// Expected: a2 = 55 (fib(10)).
+#[hw_oracle_test]
+fn fibonacci_10() -> OracleCase {
+    // Path is absolute (via CARGO_MANIFEST_DIR) so the test works regardless
+    // of which directory `cargo test` sets as CWD.
+    OracleCase::elf(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/xtensa-asm/fibonacci.elf"
+    ))
+    .expect(|st| st.assert_reg("a2", 55))
+    .tolerance(labwired_hw_oracle::Tolerance::exact())
+}

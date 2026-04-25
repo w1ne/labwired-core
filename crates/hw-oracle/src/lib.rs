@@ -574,34 +574,74 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     use labwired_core::{Cpu, SimulationError};
     use ram_peripheral::RamPeripheral;
 
-    let bytes = match &case.program {
-        Program::Asm(b) => b.clone(),
-        Program::Elf(_) => panic!("run_sim: ELF programs are not yet supported in sim mode"),
-    };
-
-    // Build a minimal bus: default SystemBus peripherals are all at STM32
-    // addresses (0x2000_0000 RAM, 0x0 flash).  We patch it by adding an oracle
-    // IRAM peripheral at IRAM_BASE.
-    //
-    // SystemBus::new() provides RAM at 0x2000_0000 and flash at 0x0.  Both are
-    // outside the Xtensa IRAM window (0x40370000), so we register a RamPeripheral
-    // at that address to hold the oracle program.
+    // Determine program bytes and entry point for sim.  For Asm programs the
+    // entry is always IRAM_BASE (bytes are loaded there verbatim).  For ELF
+    // programs we parse the PT_LOAD segments with goblin and load each segment
+    // at its virtual address; the entry point comes from the ELF header.
+    let entry_pc: u32;
     let mut bus = SystemBus::new();
 
-    // Build the peripheral with the program bytes pre-loaded.
-    let mut iram = RamPeripheral::new(ORACLE_MEM_SIZE);
-    iram.write_bytes(0, &bytes);
-    bus.add_peripheral(
-        "oracle_iram",
-        IRAM_BASE as u64,
-        ORACLE_MEM_SIZE as u64,
-        None,
-        Box::new(iram),
-    );
+    match &case.program {
+        Program::Asm(bytes) => {
+            // Build the peripheral with the program bytes pre-loaded at IRAM_BASE.
+            let mut iram = RamPeripheral::new(ORACLE_MEM_SIZE);
+            iram.write_bytes(0, bytes);
+            bus.add_peripheral(
+                "oracle_iram",
+                IRAM_BASE as u64,
+                ORACLE_MEM_SIZE as u64,
+                None,
+                Box::new(iram),
+            );
+            entry_pc = IRAM_BASE;
+        }
+        Program::Elf(path) => {
+            use goblin::elf::program_header::PT_LOAD;
+            use goblin::elf::Elf;
+
+            let elf_bytes = std::fs::read(path)
+                .unwrap_or_else(|e| panic!("run_sim: failed to read ELF {:?}: {e}", path));
+            let elf = Elf::parse(&elf_bytes)
+                .unwrap_or_else(|e| panic!("run_sim: failed to parse ELF {:?}: {e}", path));
+
+            entry_pc = elf.entry as u32;
+
+            // Register a single IRAM peripheral large enough for all segments.
+            // We assume all PT_LOAD segments fall within the oracle IRAM window.
+            let mut iram = RamPeripheral::new(ORACLE_MEM_SIZE);
+            for ph in &elf.program_headers {
+                if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
+                    continue;
+                }
+                let vaddr = ph.p_vaddr as u32;
+                let offset_in_iram = vaddr
+                    .checked_sub(IRAM_BASE)
+                    .unwrap_or_else(|| panic!(
+                        "run_sim: ELF segment VAddr 0x{vaddr:08X} is below IRAM_BASE \
+                         0x{IRAM_BASE:08X}"
+                    )) as usize;
+                let size = ph.p_filesz as usize;
+                let file_offset = ph.p_offset as usize;
+                let seg_data = &elf_bytes[file_offset..file_offset + size];
+                iram.write_bytes(offset_in_iram, seg_data);
+            }
+            bus.add_peripheral(
+                "oracle_iram",
+                IRAM_BASE as u64,
+                ORACLE_MEM_SIZE as u64,
+                None,
+                Box::new(iram),
+            );
+        }
+    }
+
+    // Build a minimal bus: default SystemBus peripherals are all at STM32
+    // addresses (0x2000_0000 RAM, 0x0 flash).  Both are outside the Xtensa
+    // IRAM window (0x40370000); oracle_iram registered above covers that range.
 
     let mut cpu = XtensaLx7::new();
     cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(IRAM_BASE);
+    cpu.set_pc(entry_pc);
 
     // Apply setup state.
     let mut init_state = OracleState::default();
