@@ -2,7 +2,7 @@
 
 Source of truth for what CPU architectures and instructions LabWired Core
 actually decodes and executes. README or marketing claims must match this
-matrix. Last sync: `merge/surgical-additions` on `main`.
+matrix. Last sync: hardware-validated against NUCLEO-L476RG (Cortex-M4F).
 
 Convention:
 - ✅ **Decoded + executed** — tested path exists.
@@ -15,12 +15,16 @@ Convention:
 
 ## ARM Cortex-M (Thumb / Thumb-2)
 
-Target subset today: **ARMv6-M core + a substantial ARMv7-M data-processing
-and bit-field subset**, including the wide multiply, bit-field, and
-conditional-execution clusters. We do **not** yet claim ARMv7E-M (Cortex-M4/M7)
-compliance: FPU (VFPv4), the DSP extension, saturating arithmetic, and most
-load-exclusive ops remain unimplemented; attempting to execute them raises
-`DecodeError`.
+Target subset today: **ARMv6-M core + a broad ARMv7-M / ARMv7E-M
+subset including VFPv4 single-precision FPU.** Validated against real
+NUCLEO-L476RG silicon for the GCC-emitted instruction stream of a
+non-trivial bare-metal firmware (RCC/GPIO/USART/SPI/I2C/ADC/DMA
+bring-up, hex32 print loop with shift-by-register, FPU multiply).
+
+Still not claimed: the DSP extension (SMLAD / SMUAD / packed SIMD),
+saturating arithmetic (QADD/QSUB/SSAT/USAT), exclusive monitors
+(LDREX/STREX/CLREX), and ARMv8-M security extensions. Attempting to
+execute them raises `DecodeError`.
 
 ### Implemented
 
@@ -36,13 +40,15 @@ load-exclusive ops remain unimplemented; attempting to execute them raises
 | Multi-reg            | `PUSH`, `POP`, `LDM`, `STM`, `LDMIA` (T2)                                    |
 | Branches             | `B`, `B<cond>`, `BL`, `BX`, `BLX (reg)`, `CBZ`, `CBNZ`, `TBB`, `TBH`         |
 | Control              | `NOP`, `CPSIE i`, `CPSID i`, `IT/ITE/ITT/…`                                  |
-| Extension            | `UXTB`                                                                       |
+| Extension            | `SXTB`, `SXTH`, `UXTB`, `UXTH`                                               |
 | Thumb-2 bitops       | `BFI`, `BFC`, `SBFX`, `UBFX`, `CLZ`, `RBIT`, `REV`, `REV16`, `REVSH`         |
-| Thumb-2 data         | `DataProc32`, `DataProcImm32`, `MOVW`, `MOVT`                                |
+| Thumb-2 data         | `DataProc32`, `DataProcImm32`, `MOVW`, `MOVT`, `ADDW` (T4), `SUBW` (T4)      |
+| Thumb-2 shift-reg    | `LSL.W`, `LSR.W`, `ASR.W`, `ROR.W` Rd, Rn, Rm                                |
 | **Barriers**         | `DMB`, `DSB`, `ISB` — decoded; no-ops on single-threaded sim                 |
 | **System regs**      | `MSR` / `MRS` for PRIMASK (SYSm=0x10); other SYSm accepted but unmodelled    |
 | **Wide multiply**    | `SMULL`, `UMULL`, `SMLAL`, `UMLAL` — 32×32 → 64-bit                          |
 | **Mul-accumulate**   | `MLA`, `MLS` — 32-bit `Rd = Ra ± (Rn*Rm)`                                    |
+| **VFPv4 (single)**   | `VLDR`, `VSTR`, `VMOV` (S↔Rt and S↔S), `VMUL`, `VADD`, `VSUB`, `VDIV` `.F32` |
 | Breakpoint           | `BKPT` (halts simulation with `SimulationError::Halt`)                       |
 
 **Interrupt model:** NVIC is implemented via the `nvic` peripheral; VTOR
@@ -56,9 +62,8 @@ opcodes bubble up as `SimulationError::DecodeError`.
 |-------------------|-----------------------------------------------------------------------------|
 | Integer divide    | `SDIV`, `UDIV`                                                              |
 | Saturating arith  | `QADD`, `QSUB`, `SSAT`, `USAT`                                              |
-| Extension         | `SXTB`, `SXTH`, `UXTH`                                                      |
 | ARMv7E-M DSP      | `SMLAD`, `SMUAD`, packed SIMD family — entire DSP extension                 |
-| FPU (VFPv4)       | `VLDR`, `VSTR`, `VMOV`, `VADD`, `VMUL`, `VSQRT`, … — entire FPU             |
+| FPU (VFPv4)       | `VSQRT`, `VABS`, `VNEG`, `VCMP`, `VCVT`, double-precision Dn/Dm — partial   |
 | Exclusives        | `LDREX`, `STREX`, `CLREX`                                                   |
 | TT / security     | `TT`, `TTA`, ARMv8-M security extensions                                    |
 

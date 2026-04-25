@@ -1364,24 +1364,33 @@ mod tests {
         };
         bus.rebuild_peripheral_ranges();
 
-        // Source byte in RAM.
-        bus.write_u8(0x2000_0010, 0x5A).unwrap();
-        // Clear destination in mapped DMA register space for the model.
-        bus.write_u8(0x2000_0020, 0x00).unwrap();
+        // Per STM32 RM mem-to-mem semantics: data flows CMAR -> CPAR
+        // (CMAR is the source, CPAR is the destination). Set up source
+        // at SRC_ADDR via CMAR; expect destination at DST_ADDR (CPAR).
+        const SRC_ADDR: u64 = 0x2000_0010;
+        const DST_ADDR: u64 = 0x2000_0020;
+        bus.write_u8(SRC_ADDR, 0x5A).unwrap();
+        bus.write_u8(DST_ADDR, 0x00).unwrap();
 
         // Program DMA1 Channel1:
-        // CPAR=src, CNDTR=1, CMAR=dst, CCR=EN|TCIE|PINC|MINC (DIR=0)
-        bus.write_u32(0x4002_0010, 0x2000_0010).unwrap(); // CPAR1
+        //   CMAR (source) = SRC_ADDR
+        //   CPAR (destination) = DST_ADDR
+        //   CNDTR = 1, CCR = EN | TCIE | PINC | MINC | DIR | MEM2MEM
+        bus.write_u32(0x4002_0014, SRC_ADDR as u32).unwrap(); // CMAR1
+        bus.write_u32(0x4002_0010, DST_ADDR as u32).unwrap(); // CPAR1
         bus.write_u32(0x4002_000C, 1).unwrap(); // CNDTR1
-        bus.write_u32(0x4002_0014, 0x2000_0020).unwrap(); // CMAR1
         bus.write_u32(
             0x4002_0008,
-            (1 << 0) | (1 << 1) | (1 << 6) | (1 << 7) | (1 << 14),
+            (1 << 0) | (1 << 1) | (1 << 4) | (1 << 6) | (1 << 7) | (1 << 14),
         )
-        .unwrap(); // CCR1 (EN | TCIE | PINC | MINC | MEM2MEM)
+        .unwrap(); // CCR1 (EN | TCIE | DIR | PINC | MINC | MEM2MEM)
 
         let (interrupts, _costs) = bus.tick_peripherals_fully();
-        assert_eq!(bus.read_u8(0x2000_0020).unwrap(), 0x5A);
-        assert!(interrupts.contains(&16));
+        assert_eq!(
+            bus.read_u8(DST_ADDR).unwrap(),
+            0x5A,
+            "DST should hold the SRC byte after mem-to-mem copy"
+        );
+        assert!(interrupts.contains(&16), "TCIE should pend NVIC IRQ 16");
     }
 }

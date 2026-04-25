@@ -1,0 +1,22 @@
+# LabWired - NUCLEO-L476RG system manifest
+#
+# Board pinout per UM1724 (STM32 Nucleo-64 user manual). LD2 (green)
+# on PA5; B1 (blue user) on PC13. USART2 PA2 (TX) / PA3 (RX) is wired
+# to the on-board ST-LINK V2-1 / J-Link OB Virtual COM Port.
+
+name: "nucleo-l476rg"
+chip: "../chips/stm32l476.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

@@ -1,0 +1,18 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+
+[package]
+name = "firmware-l476-demo"
+version.workspace = true
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-l476-demo"
+path = "src/main.rs"
+test = false
+bench = false

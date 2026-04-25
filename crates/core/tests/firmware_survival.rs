@@ -186,6 +186,31 @@ DR=00\r\n\
 DONE\r\n",
     },
     SurvivalCase {
+        // Comprehensive end-to-end demo for NUCLEO-L476RG. Built from
+        // crates/firmware-l476-demo (Rust, no_std), exercises every
+        // peripheral that's been hardware-validated on real silicon —
+        // RCC, GPIO, USART, SPI, I2C, ADC, DMA — in one cohesive
+        // bring-up sequence. The output stream below is captured
+        // byte-for-byte from real NUCLEO-L476RG silicon.
+        name: "nucleo_l476rg_demo",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-demo.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"L476-DEMO BOOT\r\n\
+DEV=10076415\r\n\
+SPI1 OK\r\n\
+I2C1 OK\r\n\
+ADC1 OK\r\n\
+DMA1 OK\r\n\
+LED ON\r\n\
+LED OFF\r\n\
+BTN=1\r\n\
+DONE\r\n",
+    },
+    SurvivalCase {
         // DMA1 channel-1 mem-to-mem fidelity. Captured from real silicon:
         // a 4-byte memory-to-memory transfer (CPAR=0x20000010,
         // CMAR=0x20000020, CNDTR=4, CCR=0x40D3) completes with
@@ -526,18 +551,23 @@ fn test_nucleo_l476rg_spi_survival() {
 }
 
 #[test]
-fn test_nucleo_l476rg_dma_survival() {
+fn test_nucleo_l476rg_demo_survival() {
     run_survival_case(&SURVIVAL_CASES[10]);
 }
 
 #[test]
-fn test_nucleo_l476rg_adc_survival() {
+fn test_nucleo_l476rg_dma_survival() {
     run_survival_case(&SURVIVAL_CASES[11]);
 }
 
 #[test]
-fn test_nucleo_l476rg_i2c_survival() {
+fn test_nucleo_l476rg_adc_survival() {
     run_survival_case(&SURVIVAL_CASES[12]);
+}
+
+#[test]
+fn test_nucleo_l476rg_i2c_survival() {
+    run_survival_case(&SURVIVAL_CASES[13]);
 }
 
 #[test]
