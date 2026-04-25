@@ -10,7 +10,10 @@
 //! Remaining instruction classes in progress.
 
 use crate::cpu::xtensa_regs::{ArFile, Ps};
-use crate::cpu::xtensa_sr::{XtensaSrFile, EXCCAUSE, EPC1, SAR, SCOMPARE1, VECBASE};
+use crate::cpu::xtensa_sr::{
+    XtensaSrFile, EXCCAUSE, EPC1, EPC2, EPC3, EPC4, EPC5, EPC6, EPC7,
+    EPS2, EPS3, EPS4, EPS5, EPS6, EPS7, SAR, SCOMPARE1, VECBASE,
+};
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
@@ -1011,6 +1014,131 @@ impl XtensaLx7 {
                 self.regs.set_windowbase(wb_new);
                 // WindowStart is NOT modified (ISA RM §8 ROTW).
                 self.pc = self.pc.wrapping_add(len);
+            }
+
+            // ── G2: Exception / interrupt return instructions ─────────────────
+
+            // RFE — Return From (level-1 general) Exception.
+            //
+            // ESP32-S3 LX7 ISA RM §4.4.2 / §8:
+            //   PS.EXCM ← 0
+            //   PS.INTLEVEL is left unchanged (not reset).
+            //   PC ← EPC[1]
+            //
+            // Note: EPS1 does NOT exist on LX7 (the assembler rejects `rsr.eps1`).
+            // Level-1 exceptions save PS in-place; the handler reads/modifies PS
+            // directly via RSR/WSR. Only EXCM is cleared by RFE — INTLEVEL is left
+            // to the handler to restore explicitly.
+            Rfe => {
+                self.ps.set_excm(false);
+                self.pc = self.sr.read(EPC1);
+            }
+
+            // RFDE — Return From Debug Exception. Handled same as RFE for Plan 1:
+            // clear PS.EXCM, jump to EPC1. Full DEPC/debug-exception semantics are
+            // deferred to a later plan.
+            Rfde => {
+                self.ps.set_excm(false);
+                self.pc = self.sr.read(EPC1);
+            }
+
+            // RFI n — Return From Interrupt at level n (n = 2..7 on LX7).
+            //
+            // ISA RM §4.4.3 / §8 RFI:
+            //   PS ← EPS[n]   (restore full PS from saved copy)
+            //   PC ← EPC[n]
+            //
+            // LX7 EPC/EPS SR IDs (hardware-verified, C2 table):
+            //   EPC2..EPC7 = SR IDs 178..183
+            //   EPS2..EPS7 = SR IDs 194..199
+            //
+            // Level 1 uses RFE (no EPS1 on LX7). Levels 2..7 use RFI. Level 0
+            // and 1 are not valid targets for RFI on LX7; we silently treat them
+            // as no-ops (stay at current PC, no state change) since privileged
+            // firmware is the only caller and should not issue invalid RFI levels.
+            Rfi { level } => {
+                let (eps_id, epc_id) = match level {
+                    2 => (EPS2, EPC2),
+                    3 => (EPS3, EPC3),
+                    4 => (EPS4, EPC4),
+                    5 => (EPS5, EPC5),
+                    6 => (EPS6, EPC6),
+                    7 => (EPS7, EPC7),
+                    _ => {
+                        // Invalid level — skip silently.
+                        self.pc = self.pc.wrapping_add(len);
+                        return Ok(());
+                    }
+                };
+                let new_ps = self.sr.read(eps_id);
+                let new_pc = self.sr.read(epc_id);
+                self.ps = Ps::from_raw(new_ps);
+                self.pc = new_pc;
+            }
+
+            // RFWO — Return From Window Overflow handler.
+            //
+            // Called at the end of the WindowOverflow vector handler after the
+            // overflowed frame's registers have been spilled to the stack.
+            //
+            // ISA RM §4.4.5 / §8 RFWO (canonical hardware semantics):
+            //   s = WindowBase  (save old WB)
+            //   WindowBase ← (WindowBase + PS.CALLINC) mod NWINDOWS
+            //   WindowStart[s] ← 0     (clear the old frame's WS bit — it's spilled)
+            //   PS.EXCM ← 0
+            //   PC ← EPC1
+            //
+            // Note on our exception-entry model: our ENTRY-overflow handler does NOT
+            // rotate WB on exception entry (WB stays at wb_old). The canonical
+            // hardware DOES rotate WB to call[j] on overflow entry, then RFWO
+            // advances to call[i]. In our model, WB = call[i]'s position already
+            // (since ENTRY fired before completing its rotation), so RFWO here
+            // performs the rotation that ENTRY would have done: WB += CALLINC.
+            //
+            // After RFWO, EPC1 points back to the ENTRY instruction which will
+            // re-execute. The re-execution succeeds because the overflow frame was
+            // spilled (PS.EXCM=0, WS bit cleared by the handler via normal stores).
+            Rfwo => {
+                let wb_old = self.regs.windowbase();
+                let callinc = self.ps.callinc();
+                let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
+                self.regs.set_windowstart_bit(wb_old, false);  // clear spilled frame
+                self.regs.set_windowbase(wb_new);
+                self.regs.set_windowstart_bit(wb_new, true);   // new frame is live
+                self.ps.set_excm(false);
+                self.pc = self.sr.read(EPC1);
+            }
+
+            // RFWU — Return From Window Underflow handler.
+            //
+            // Called at the end of the WindowUnderflow vector handler after the
+            // underflowed frame's registers have been reloaded from the stack.
+            //
+            // ISA RM §4.4.5 / §8 RFWU (canonical hardware semantics):
+            //   WindowBase ← (WindowBase - 1) mod NWINDOWS
+            //   s = WindowBase  (new WB)
+            //   WindowStart[s] ← 1     (mark the reloaded frame live)
+            //   PS.EXCM ← 0
+            //   PC ← EPC1
+            //
+            // Note on our exception-entry model: our RETW-underflow handler does NOT
+            // rotate WB on exception entry (WB stays at wb_cur = callee). The
+            // canonical hardware rotates WB to call[i] (= wb_dest) before entering
+            // the UF handler. In our model:
+            //   - For UF4: hardware would rotate by -1; RFWU -1 gives total -1.
+            //   - For UF8/12: hardware would rotate by -N; RFWU gives total -N-1.
+            // This is a known discrepancy in the Plan 1 model. UF8/12 are not
+            // exercised in Plan 1 tests; UF4 is the primary case.
+            //
+            // After RFWU, EPC1 points to the RETW instruction which will re-execute.
+            // The re-execution succeeds because WS[wb_dest] is now set.
+            Rfwu => {
+                let wb_old = self.regs.windowbase();
+                let wb_new = wb_old.wrapping_sub(1) & 0x0F;
+                self.regs.set_windowbase(wb_new);
+                self.regs.set_windowstart_bit(wb_new, true);   // reloaded frame is live
+                self.ps.set_excm(false);
+                self.pc = self.sr.read(EPC1);
             }
 
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),

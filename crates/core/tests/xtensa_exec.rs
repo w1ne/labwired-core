@@ -16,7 +16,8 @@
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
 use labwired_core::cpu::xtensa_sr::{
-    EPC1 as EPC1_ID, EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID, SCOMPARE1 as SCOMPARE1_ID,
+    EPC1 as EPC1_ID, EPC2 as EPC2_ID, EPC3 as EPC3_ID, EXCCAUSE as EXCCAUSE_ID,
+    EPS2 as EPS2_ID, EPS3 as EPS3_ID, SAR as SAR_ID, SCOMPARE1 as SCOMPARE1_ID,
     VECBASE as VECBASE_ID,
 };
 use labwired_core::{Bus, Cpu, SimulationError};
@@ -4233,4 +4234,207 @@ fn test_general_exception_does_not_advance_pc_into_epc1() {
     let vecbase = cpu.sr.read(VECBASE_ID);
     assert_eq!(cpu.get_pc(), vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
         "PC must be at VECBASE + 0x300 after exception");
+}
+
+// ── G2 Tests: Exception/Interrupt Return (RFE / RFI / RFWO / RFWU) ───────────
+//
+// HW-oracle byte encodings (xtensa-esp32s3-elf-as + objdump esp-15.2.0_20250920):
+//   rfe    → 0x003000   (bytes: 00 30 00)
+//   rfi 2  → 0x003210   (bytes: 10 32 00)
+//   rfi 3  → 0x003310   (bytes: 10 33 00)
+//   rfwo   → 0x003400   (bytes: 00 34 00)
+//   rfwu   → 0x003500   (bytes: 00 35 00)
+//
+// SR IDs verified from C2 LX7 table (xtensa_sr.rs constants):
+//   EPC1 = 177, EPC2 = 178, EPC3 = 179
+//   EPS2 = 194, EPS3 = 195
+
+/// Encode RFE (op0=0, op1=0, op2=0, r=3, s=0, t=0).
+/// HW-oracle: 0x003000.
+fn enc_rfe() -> u32 {
+    st0(3, 0, 0)
+}
+
+/// Encode RFI level (op0=0, op1=0, op2=0, r=3, s=level, t=1).
+/// HW-oracle: rfi 2 → 0x003210, rfi 3 → 0x003310.
+fn enc_rfi(level: u32) -> u32 {
+    st0(3, level, 1)
+}
+
+/// Encode RFWO (op0=0, op1=0, op2=0, r=3, s=4, t=0).
+/// HW-oracle: 0x003400.
+fn enc_rfwo() -> u32 {
+    st0(3, 4, 0)
+}
+
+/// Encode RFWU (op0=0, op1=0, op2=0, r=3, s=5, t=0).
+/// HW-oracle: 0x003500.
+fn enc_rfwu() -> u32 {
+    st0(3, 5, 0)
+}
+
+/// G2: RFE clears PS.EXCM and jumps to EPC1.
+///
+/// Pre-condition: PS.EXCM=1, EPC1=target_pc.
+/// Post-condition: PS.EXCM=0, PC=target_pc.
+/// PS.INTLEVEL is left unchanged (not reset by RFE per LX7 ISA RM §4.4.2).
+#[test]
+fn test_exec_rfe_clears_excm_and_jumps() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let target_pc: u32 = 0x2000_0100;
+    // Set up: PS.EXCM=1, PS.INTLEVEL=3 (to verify INTLEVEL is left unchanged).
+    cpu.ps.set_excm(true);
+    cpu.ps.set_intlevel(3);
+    cpu.sr.set_raw(EPC1_ID, target_pc);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfe()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert!(!cpu.ps.excm(), "RFE: PS.EXCM must be 0 after RFE");
+    assert_eq!(cpu.get_pc(), target_pc, "RFE: PC must be EPC1");
+    // INTLEVEL must be left unchanged by RFE.
+    assert_eq!(cpu.ps.intlevel(), 3, "RFE: PS.INTLEVEL must be left unchanged");
+}
+
+/// G2: RFE round-trip — set EPC1 to the "next instruction" address, run RFE,
+/// verify we land exactly at EPC1.
+#[test]
+fn test_exec_rfe_round_trip_via_epc1() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let return_addr: u32 = 0x2000_0200;
+    cpu.ps.set_excm(true);
+    cpu.sr.set_raw(EPC1_ID, return_addr);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfe()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.get_pc(), return_addr, "RFE round-trip: PC must be exactly EPC1");
+    assert!(!cpu.ps.excm(), "RFE round-trip: PS.EXCM must be 0");
+}
+
+/// G2: RFI level 2 — restores full PS from EPS2 and jumps to EPC2.
+#[test]
+fn test_exec_rfi_2() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let saved_ps: u32 = 0x0000_0008;  // INTLEVEL=8, EXCM=0
+    let saved_pc: u32 = 0x2000_0300;
+    cpu.sr.set_raw(EPS2_ID, saved_ps);
+    cpu.sr.set_raw(EPC2_ID, saved_pc);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfi(2)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.ps.as_raw(), saved_ps, "RFI 2: PS must be fully restored from EPS2");
+    assert_eq!(cpu.get_pc(), saved_pc, "RFI 2: PC must be EPC2");
+}
+
+/// G2: RFI level 3 — restores full PS from EPS3 and jumps to EPC3.
+#[test]
+fn test_exec_rfi_3() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let saved_ps: u32 = 0x0000_0010;  // EXCM=1, INTLEVEL=0
+    let saved_pc: u32 = 0x2000_0400;
+    cpu.sr.set_raw(EPS3_ID, saved_ps);
+    cpu.sr.set_raw(EPC3_ID, saved_pc);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfi(3)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.ps.as_raw(), saved_ps, "RFI 3: PS must be fully restored from EPS3");
+    assert_eq!(cpu.get_pc(), saved_pc, "RFI 3: PC must be EPC3");
+}
+
+/// G2: RFWO rotates WB forward by CALLINC, clears old WS bit, sets new WS bit,
+/// clears PS.EXCM, and jumps to EPC1.
+///
+/// Scenario: WB=0, CALLINC=1, WS[0]=1. After RFWO: WB=1, WS[0]=0, WS[1]=1,
+/// PS.EXCM=0, PC=EPC1.
+#[test]
+fn test_exec_rfwo_rotates_forward_and_clears_ws() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let target_pc: u32 = 0x2000_0010;  // simulate EPC1 = faulting ENTRY PC
+    cpu.regs.set_windowbase(0);
+    cpu.regs.set_windowstart_bit(0, true);
+    cpu.ps.set_callinc(1);
+    cpu.ps.set_excm(true);
+    cpu.sr.set_raw(EPC1_ID, target_pc);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfwo()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.regs.windowbase(), 1, "RFWO: WB must advance by CALLINC=1 to 1");
+    assert!(!cpu.regs.windowstart_bit(0), "RFWO: WS[old_WB=0] must be cleared (frame spilled)");
+    assert!(cpu.regs.windowstart_bit(1), "RFWO: WS[new_WB=1] must be set (new frame live)");
+    assert!(!cpu.ps.excm(), "RFWO: PS.EXCM must be 0");
+    assert_eq!(cpu.get_pc(), target_pc, "RFWO: PC must be EPC1");
+}
+
+/// G2: RFWO with CALLINC=2 (OF8 scenario): WB advances by 2.
+#[test]
+fn test_exec_rfwo_callinc2_advances_wb_by_2() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let target_pc: u32 = 0x2000_0020;
+    cpu.regs.set_windowbase(3);
+    cpu.regs.set_windowstart_bit(3, true);
+    cpu.ps.set_callinc(2);
+    cpu.ps.set_excm(true);
+    cpu.sr.set_raw(EPC1_ID, target_pc);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfwo()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.regs.windowbase(), 5, "RFWO: WB=3 + CALLINC=2 = 5");
+    assert!(!cpu.regs.windowstart_bit(3), "RFWO: WS[old_WB=3] cleared");
+    assert!(cpu.regs.windowstart_bit(5), "RFWO: WS[new_WB=5] set");
+    assert!(!cpu.ps.excm(), "RFWO: PS.EXCM=0");
+    assert_eq!(cpu.get_pc(), target_pc, "RFWO: PC=EPC1");
+}
+
+/// G2: RFWU decrements WB by 1, sets WS[new_WB], clears PS.EXCM, jumps to EPC1.
+///
+/// Scenario: WB=2 (underflow handler was entered with WB=2 = callee's frame).
+/// After RFWU: WB=1, WS[1]=1, PS.EXCM=0, PC=EPC1.
+#[test]
+fn test_exec_rfwu_rotates_back_and_sets_ws() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let target_pc: u32 = 0x2000_0030;  // simulate EPC1 = faulting RETW PC
+    cpu.regs.set_windowbase(2);
+    cpu.regs.set_windowstart_bit(2, true);   // callee frame is live
+    cpu.regs.set_windowstart_bit(1, false);  // caller frame was not live (triggered UF)
+    cpu.ps.set_excm(true);
+    cpu.sr.set_raw(EPC1_ID, target_pc);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfwu()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.regs.windowbase(), 1, "RFWU: WB must decrement by 1 to 1");
+    assert!(cpu.regs.windowstart_bit(1), "RFWU: WS[new_WB=1] must be set (frame reloaded)");
+    assert!(!cpu.ps.excm(), "RFWU: PS.EXCM must be 0");
+    assert_eq!(cpu.get_pc(), target_pc, "RFWU: PC must be EPC1");
+}
+
+/// G2: RFWU wraps around at WB=0 → WB=15.
+#[test]
+fn test_exec_rfwu_wraps_windowbase() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    let target_pc: u32 = 0x2000_0040;
+    cpu.regs.set_windowbase(0);
+    cpu.ps.set_excm(true);
+    cpu.sr.set_raw(EPC1_ID, target_pc);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rfwu()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.regs.windowbase(), 15, "RFWU: WB=0 wraps to WB=15");
+    assert!(cpu.regs.windowstart_bit(15), "RFWU: WS[15] set after wrap");
+    assert!(!cpu.ps.excm(), "RFWU: PS.EXCM=0 after wrap");
+    assert_eq!(cpu.get_pc(), target_pc, "RFWU: PC=EPC1 after wrap");
 }
