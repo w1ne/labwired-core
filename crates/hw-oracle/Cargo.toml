@@ -10,6 +10,7 @@ labwired-hw-oracle-macros = { path = "../hw-oracle-macros" }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+libc = { workspace = true }
 
 [features]
 default = []
