@@ -89,6 +89,39 @@ peripherals:
     config:
       profile: "stm32v2"
 
+  - id: "uart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      profile: "stm32v2"
+
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 52
+    config:
+      profile: "stm32v2"
+
+  - id: "uart5"
+    type: "uart"
+    base_address: 0x40005000
+    size: "1KB"
+    irq: 53
+    config:
+      profile: "stm32v2"
+
+  # LPUART1 — same register layout as USART (modern stm32v2).
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    irq: 70
+    config:
+      profile: "stm32v2"
+
   - id: "spi1"
     type: "spi"
     base_address: 0x40013000
@@ -238,6 +271,68 @@ peripherals:
     type: "dac"
     base_address: 0x40007400
     size: "1KB"
+
+  # EXTI — 40 lines, two-bank layout (RM0351 §13).
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      profile: "stm32l4"
+
+  # SYSCFG — system config (mostly EXTI line source selection); modeled as stub.
+  - id: "syscfg"
+    type: "stub"
+    base_address: 0x40010000
+    size: "1KB"
+
+  # Low-power timers.
+  - id: "lptim1"
+    type: "lptim"
+    base_address: 0x40007C00
+    size: "1KB"
+    irq: 65
+
+  - id: "lptim2"
+    type: "lptim"
+    base_address: 0x40009400
+    size: "1KB"
+    irq: 78
+
+  # QUADSPI — quad-SPI memory interface (RM0351 §14).
+  - id: "quadspi"
+    type: "quadspi"
+    base_address: 0xA0001000
+    size: "1KB"
+    irq: 71
+
+  # SAI1 / SAI2 — serial audio interface.
+  - id: "sai1"
+    type: "sai"
+    base_address: 0x40015400
+    size: "1KB"
+    irq: 74
+
+  - id: "sai2"
+    type: "sai"
+    base_address: 0x40015800
+    size: "1KB"
+    irq: 75
+
+  # USB OTG FS — Synopsys DWC2 controller (RM0351 §44).
+  - id: "usb_otg_fs"
+    type: "usb_otg"
+    base_address: 0x50000000
+    # Full DWC2 register window is 256KB; we model only the first 4KB.
+    size: "4KB"
+    irq: 67
+
+  # bxCAN1 — basic-extended CAN.
+  - id: "can1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    irq: 19
 
   - id: "scb"
     type: "scb"

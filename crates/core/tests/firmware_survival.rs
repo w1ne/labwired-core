@@ -388,6 +388,69 @@ CR2=000120A0\r\n\
 ISR=00008001\r\n\
 DONE\r\n",
     },
+    SurvivalCase {
+        // L4 secondary-peripheral coverage ("round 8"): LPUART1, LPTIM1,
+        // EXTI L4 dual-bank layout, QUADSPI, SAI1, USB OTG FS core regs,
+        // bxCAN1 INRQ/INAK handshake.
+        //
+        // NOTE: this trace is the SIMULATOR's own output — locked as a
+        // regression baseline so any future drift in the new peripherals
+        // breaks CI. Each value below was audited against RM0351 reset
+        // values:
+        //   - LPUART1 ISR=0xC0 (TXE+TC ready — currently the same status
+        //     value the UART model returns for any V2-layout USART;
+        //     real silicon's reset is 0x00C0_0000).
+        //   - LPTIM1 ISR=0x18 (CMPOK|ARROK after CMP/ARR writes).
+        //   - EXTI IMR1 bit 22 set, PR1 bit 22 latched via SWIER1.
+        //     IMR2 bit 3 (line 35, USB FS wakeup) — exercises the L4-only
+        //     bank-2 register window at offset 0x20.
+        //   - OTG GUSBCFG=0x1440 (TRDT=0x9, device mode), GRSTCTL.AHBIDL=1
+        //     (so HAL_PCD core-reset polling exits immediately).
+        //   - bxCAN MSR=0x0C01 after writing MCR.INRQ=1 (INAK+upper).
+        //     TSR=0x1C000000 (TME0|TME1|TME2 — all TX mailboxes empty).
+        //
+        // Hardware-validation pending: re-flash to NUCLEO-L476RG, capture
+        // /dev/ttyACM1, diff against this string. Update the trace with
+        // any hardware-only differences and document them in
+        // examples/nucleo-l476rg/VALIDATION.md.
+        name: "nucleo_l476rg_l4periphs2",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-l4periphs2.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"L4-PERIPHS2\r\n\
+LPUART1\r\n\
+CR1=00000000\r\n\
+ISR=000000C0\r\n\
+BRR=00000000\r\n\
+LPTIM1\r\n\
+ISR=00000018\r\n\
+ARR=00001000\r\n\
+CMP=00000800\r\n\
+EXTI\r\n\
+IMR1=00400000\r\n\
+PR1 =00400000\r\n\
+IMR2=00000008\r\n\
+QUADSPI\r\n\
+CR =00000000\r\n\
+DCR=00000000\r\n\
+SR =00000000\r\n\
+SAI1\r\n\
+GCR =00000000\r\n\
+ACR1=00000000\r\n\
+BCR1=00000000\r\n\
+OTG\r\n\
+GUSBCFG=00001440\r\n\
+GRSTCTL=80000000\r\n\
+GINTSTS=04000001\r\n\
+CAN1\r\n\
+MCR=00000001\r\n\
+MSR=00000C01\r\n\
+TSR=1C000000\r\n\
+DONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -678,6 +741,28 @@ fn test_nucleo_l476rg_adc_survival() {
 #[test]
 fn test_nucleo_l476rg_i2c_survival() {
     run_survival_case(&SURVIVAL_CASES[16]);
+}
+
+#[test]
+fn test_nucleo_l476rg_l4periphs2_survival() {
+    run_survival_case(&SURVIVAL_CASES[17]);
+}
+
+/// One-shot capture helper: runs the new round-8 ELF through the simulator
+/// and prints the UART trace to stdout so a human can audit it before locking
+/// the bytes into a survival case. Marked `#[ignore]` so it doesn't run in
+/// CI — invoke with `cargo test ... -- --ignored capture_l4periphs2`.
+#[test]
+#[ignore]
+fn capture_l4periphs2_sim_output() {
+    let firmware = fixtures().join("nucleo-l476rg-l4periphs2.elf");
+    let (_pc, uart) =
+        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
+    let s = String::from_utf8_lossy(&uart);
+    eprintln!("--- BEGIN UART ---");
+    eprintln!("{}", s);
+    eprintln!("--- END UART ---");
+    eprintln!("escaped: {:?}", s);
 }
 
 #[test]

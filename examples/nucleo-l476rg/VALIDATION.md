@@ -28,6 +28,7 @@ Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 | `nucleo_l476rg_dma`         | `tests/fixtures/nucleo-l476rg-dma.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_dma.txt`               |
 | `nucleo_l476rg_demo`        | `tests/fixtures/nucleo-l476rg-demo.elf`       | (built from `crates/firmware-l476-demo`, same trace as sim)    |
 | `nucleo_l476rg_l4periphs`   | `tests/fixtures/nucleo-l476rg-l4periphs.elf`  | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs.txt`         |
+| `nucleo_l476rg_l4periphs2`  | `tests/fixtures/nucleo-l476rg-l4periphs2.elf` | (sim baseline — round 8; hardware capture pending)             |
 
 ## Bugs surfaced and fixed
 
@@ -115,6 +116,49 @@ the simulator. Order matters — earlier rounds unblocked later ones.
 - **CRC peripheral** added. Standard STM32 CRC-32 unit: DR resets to
   0xFFFFFFFF, default polynomial 0x04C11DB7 (Ethernet). Writes to DR
   step the polynomial engine; CR.RESET reloads DR from INIT.
+
+### Round 7 — RCC PLL state machine + RTC/IWDG/WWDG/DAC (`nucleo_l476rg_pll`, `nucleo_l476rg_misc`)
+- **RCC L4 layout** — `RccRegisterLayout::Stm32L4` selector added.
+  CFGR moved from offset 0x04 (F1) to 0x08 (L4 has ICSCR at 0x04);
+  PLLCFGR added at 0x0C. CR reset value 0x00000063 (MSION+MSIRDY+
+  MSIRANGE=6 — boot ROM brings up the 4 MHz MSI before handing off).
+- **PLL source-ready gating** — PLLRDY now requires PLLCFGR.PLLSRC's
+  selected source to be ready, not just PLLON. HSERDY no longer
+  auto-asserts on HSEON unless HSEBYP is also set (NUCLEO can't
+  ready HSE without bypass — uses ST-LINK MCO, not a crystal).
+- **CFGR.SWS source-lock** — SWS now follows SW only when the requested
+  source is ready, matching silicon's "wait for clock to lock" handshake.
+- **RTC, IWDG, WWDG, DAC peripherals** added with audited reset values.
+
+### Round 8 — L4 secondary peripherals (sim-baseline pending hardware) (`nucleo_l476rg_l4periphs2`)
+- **EXTI L4 dual-bank layout** — `ExtiRegisterLayout::Stm32L4` added.
+  Bank 1 (lines 0..31) at 0x00..0x14, bank 2 (lines 32..39) at
+  0x20..0x34. SWIER1/PR1 latching matches F1 semantics; bank 2 covers
+  RTC alarm / USB FS wakeup / LPTIM lines.
+- **LPUART1** wired up — register layout is identical to USART (modern
+  stm32v2), so reuses the existing UART model.
+- **LPTIM1 / LPTIM2** added. ISR/ICR/IER/CFGR/CR/CMP/ARR/CNT/CFGR2/OR.
+  ARR/CMP writes set ARROK/CMPOK in ISR (firmware polls these).
+  CR.ENABLE clear resets CNT.
+- **QUADSPI** added at 0xA0001000. CR/DCR/SR/FCR/DLR/CCR/AR/ABR/DR/
+  PSMKR/PSMAR/PIR/LPTR. CCR write with non-zero FMODE asserts SR.TCF
+  immediately so survival-mode HAL polling exits.
+- **SAI1 / SAI2** added. Two sub-blocks (A/B) sharing the register
+  file: GCR + ACR1/ACR2/AFRCR/ASLOTR/AIM/ASR/ACLRFR/ADR + Bx mirror.
+- **USB OTG FS** stubbed. Synopsys DWC2 register window @ 0x50000000.
+  GUSBCFG=0x1440 (TRDT=0x9, device mode), GRSTCTL.AHBIDL=1 so the
+  HAL_PCD core-reset poll exits; sparse write-through for the long
+  tail of channel/EP regs.
+- **bxCAN1** added. MCR.INRQ -> MSR.INAK handshake, MCR.SLEEP ->
+  MSR.SLAK, TSR.TMEx mailbox-empty bits all set. HAL_CAN_Init pattern
+  works (set INRQ, poll INAK; configure BTR; clear INRQ, poll INAK
+  cleared).
+- **STATUS**: this round's trace is currently the simulator's own
+  output, not silicon. Fields that need re-validation on the bench:
+  - LPUART1.ISR currently returns 0xC0 (the V2 USART status default);
+    real silicon's reset is 0x00C0_0020 (REACK=1 in the high half).
+  - SAI / QSPI reset values — RM-derived, not hardware-confirmed.
+  - USB OTG GUSBCFG.PHYSEL handling — real silicon may force-set.
 
 ## Reproducing a capture
 

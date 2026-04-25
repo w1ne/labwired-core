@@ -16,3 +16,9 @@ name = "firmware-l476-demo"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-l476-l4periphs2"
+path = "src/l4periphs2.rs"
+test = false
+bench = false

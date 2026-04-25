@@ -105,10 +105,29 @@ impl SystemBus {
         match t.as_str() {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
             | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
-            | "pwr" | "flash" | "rng" | "crc" | "rtc" | "iwdg" | "wwdg" | "dac" | "dbgmcu" => {
+            | "pwr" | "flash" | "rng" | "crc" | "rtc" | "iwdg" | "wwdg" | "dac" | "dbgmcu"
+            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" => {
                 return t;
             }
             _ => {}
+        }
+
+        // Specific mappers first — must come before fuzzy matchers so e.g.
+        // "quadspi" doesn't get swallowed by the generic "contains(spi)" rule.
+        if t.contains("quadspi") || t == "qspi" {
+            return "quadspi".to_string();
+        }
+        if t.contains("lptim") || t == "low_power_timer" {
+            return "lptim".to_string();
+        }
+        if t == "sai" || t.starts_with("sai_") || t.contains("audio") {
+            return "sai".to_string();
+        }
+        if t.contains("otg") || t == "usb_fs" || t == "usb_otg_fs" {
+            return "usb_otg".to_string();
+        }
+        if t == "bxcan" || t == "stm32_can" {
+            return "bxcan".to_string();
         }
 
         if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
@@ -484,7 +503,16 @@ impl SystemBus {
                 "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
                 "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
                 "dac" => Box::new(crate::peripherals::dac::Dac::new()),
-                "exti" => Box::new(crate::peripherals::exti::Exti::new()),
+                "lptim" => Box::new(crate::peripherals::lptim::Lptim::new()),
+                "quadspi" => Box::new(crate::peripherals::quadspi::Quadspi::new()),
+                "sai" => Box::new(crate::peripherals::sai::Sai::new()),
+                "usb_otg" => Box::new(crate::peripherals::usb_otg::UsbOtg::new()),
+                "bxcan" => Box::new(crate::peripherals::bxcan::BxCan::new()),
+                "exti" => {
+                    let layout: crate::peripherals::exti::ExtiRegisterLayout =
+                        Self::parse_profile_or_default(p_cfg, "EXTI")?;
+                    Box::new(crate::peripherals::exti::Exti::new_with_layout(layout))
+                }
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
                 "adc" => {
