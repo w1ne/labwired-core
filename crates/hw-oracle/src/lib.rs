@@ -55,13 +55,23 @@ const BREAK_1_15: [u8; 3] = [0xF0, 0x41, 0x00];
 
 // ── OracleState ───────────────────────────────────────────────────────────────
 
-/// Snapshot of CPU register state used by setup and expect closures.
+/// Snapshot of CPU register + memory state used by setup and expect closures.
 #[derive(Debug, Clone, Default)]
 pub struct OracleState {
-    /// Register values keyed by Xtensa name: `"a0"`..`"a15"`, `"pc"`, etc.
+    /// Register values keyed by Xtensa name: `"a0"`..`"a15"`.
     pub regs: HashMap<String, u32>,
-    /// Memory snapshot (address → 32-bit word); reserved for future use.
+    /// Memory snapshot (word-aligned address → 32-bit word).
+    ///
+    /// In **setup**: populated by `write_mem` to describe initial memory state;
+    /// the runtime writes these into the bus before execution.
+    ///
+    /// In **end state**: re-read from bus for every address present in setup
+    /// (so loads can observe pre-written values) plus every address in
+    /// `OracleCase::mem_capture_addrs` (for store-only tests).
     pub mem: HashMap<u32, u32>,
+    /// Final program counter captured after `BREAK` (the address of the BREAK
+    /// instruction).  Always populated by `capture_sim_state`.
+    pub pc: u32,
 }
 
 impl OracleState {
@@ -82,6 +92,39 @@ impl OracleState {
         assert_eq!(
             actual, expected,
             "oracle: register {name}: expected 0x{expected:08X}, got 0x{actual:08X}"
+        );
+    }
+
+    /// Write a 32-bit word into the memory setup map.
+    ///
+    /// The address should be 4-byte aligned; unaligned accesses will still
+    /// work but the bus round-trip uses 32-bit reads so the lower two address
+    /// bits are effectively ignored.
+    pub fn write_mem(&mut self, addr: u32, v: u32) {
+        self.mem.insert(addr, v);
+    }
+
+    /// Read a 32-bit word from the memory snapshot, returning 0 if not present.
+    pub fn read_mem(&self, addr: u32) -> u32 {
+        self.mem.get(&addr).copied().unwrap_or(0)
+    }
+
+    /// Assert that the memory word at `addr` equals `expected`, panicking with
+    /// a descriptive message on mismatch.
+    pub fn assert_mem(&self, addr: u32, expected: u32) {
+        let actual = self.read_mem(addr);
+        assert_eq!(
+            actual, expected,
+            "oracle: mem[0x{addr:08X}]: expected 0x{expected:08X}, got 0x{actual:08X}"
+        );
+    }
+
+    /// Assert that the final PC equals `expected`.
+    pub fn assert_pc(&self, expected: u32) {
+        assert_eq!(
+            self.pc, expected,
+            "oracle: pc: expected 0x{expected:08X}, got 0x{:08X}",
+            self.pc
         );
     }
 }
@@ -145,6 +188,10 @@ pub struct OracleCase {
     pub setup: Box<dyn Fn(&mut OracleState) + Send + Sync>,
     pub expect: Box<dyn Fn(&OracleState) + Send + Sync>,
     pub tolerance: Tolerance,
+    /// Additional addresses to read from the bus into `end_state.mem` after
+    /// execution.  Used for store-only tests (S8I/S16I/S32I) where setup does
+    /// not pre-populate `mem` but the test wants to assert what was written.
+    pub mem_capture_addrs: Vec<u32>,
 }
 
 impl OracleCase {
@@ -161,6 +208,7 @@ impl OracleCase {
             setup: Box::new(|_| {}),
             expect: Box::new(|_| {}),
             tolerance: Tolerance::exact(),
+            mem_capture_addrs: Vec::new(),
         }
     }
 
@@ -186,6 +234,7 @@ impl OracleCase {
             setup: Box::new(|_| {}),
             expect: Box::new(|_| {}),
             tolerance: Tolerance::exact(),
+            mem_capture_addrs: Vec::new(),
         }
     }
 
@@ -217,6 +266,14 @@ impl OracleCase {
         F: Fn(&OracleState) + Send + Sync + 'static,
     {
         self.expect = Box::new(f);
+        self
+    }
+
+    /// Specify additional memory addresses (word-aligned) to read from the bus
+    /// into `end_state.mem` after execution.  Useful for store-only tests where
+    /// no initial value is written to `setup.mem`.
+    pub fn capture_mem(mut self, addrs: &[u32]) -> Self {
+        self.mem_capture_addrs.extend_from_slice(addrs);
         self
     }
 
@@ -369,7 +426,12 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
         if let Some(idx) = parse_ar_name(name) {
             cpu.regs.write_logical(idx, val);
         }
-        // SR / special register setup is deferred (not needed for ADD oracle).
+        // SR / special register setup is deferred (not needed for Plan-1 oracle).
+    }
+    // Write setup memory into the bus (for load tests that need pre-populated data).
+    for (&addr, &val) in &init_state.mem {
+        bus.write_u32(addr as u64, val)
+            .unwrap_or_else(|e| panic!("oracle sim: write_u32(0x{addr:08X}) failed: {e:?}"));
     }
 
     // Step until BREAK (BreakpointHit) or limit.
@@ -377,11 +439,24 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     for _ in 0..MAX_STEPS {
         match cpu.step(&mut bus, &[]) {
             Ok(()) => {}
-            Err(SimulationError::BreakpointHit(_)) => {
-                // Normal termination.
+            Err(SimulationError::BreakpointHit(break_pc)) => {
+                // Normal termination: capture end state.
                 let mut end = OracleState::default();
                 for i in 0u8..16 {
                     end.regs.insert(format!("a{}", i), cpu.regs.read_logical(i));
+                }
+                // Capture PC (address of the BREAK instruction).
+                end.pc = break_pc;
+                // Re-read every address that was set up (load/roundtrip tests)
+                // and every address explicitly requested for capture (store tests).
+                let mut addrs_to_read: Vec<u32> = init_state.mem.keys().copied().collect();
+                addrs_to_read.extend_from_slice(&case.mem_capture_addrs);
+                addrs_to_read.sort_unstable();
+                addrs_to_read.dedup();
+                for addr in addrs_to_read {
+                    let val = bus.read_u32(addr as u64)
+                        .unwrap_or_else(|e| panic!("oracle sim: read_u32(0x{addr:08X}) failed: {e:?}"));
+                    end.mem.insert(addr, val);
                 }
                 return end;
             }
@@ -444,12 +519,17 @@ fn capture_hw_state(case: &OracleCase) -> OracleState {
     oc.write_register("pc", IRAM_BASE)
         .expect("run_hw: write_register pc failed");
 
-    // Apply register setup.
+    // Apply register + memory setup.
     let mut init_state = OracleState::default();
     (case.setup)(&mut init_state);
     for (name, &val) in &init_state.regs {
         oc.write_register(name, val)
             .unwrap_or_else(|e| panic!("run_hw: write_register({name}) failed: {e}"));
+    }
+    // Write setup memory into HW IRAM via OpenOCD.
+    for (&addr, &val) in &init_state.mem {
+        oc.write_memory(addr, &[val])
+            .unwrap_or_else(|e| panic!("run_hw: write_memory(0x{addr:08X}) failed: {e}"));
     }
 
     // Resume execution; BREAK will halt the CPU.
@@ -466,6 +546,19 @@ fn capture_hw_state(case: &OracleCase) -> OracleState {
         let val = oc.read_register(&name)
             .unwrap_or_else(|e| panic!("run_hw: read_register({name}) failed: {e}"));
         end.regs.insert(name, val);
+    }
+    // Capture PC.
+    end.pc = oc.read_register("pc")
+        .unwrap_or_else(|e| panic!("run_hw: read_register(pc) failed: {e}"));
+    // Re-read memory addresses (setup + explicit capture).
+    let mut addrs_to_read: Vec<u32> = init_state.mem.keys().copied().collect();
+    addrs_to_read.extend_from_slice(&case.mem_capture_addrs);
+    addrs_to_read.sort_unstable();
+    addrs_to_read.dedup();
+    for addr in addrs_to_read {
+        let words = oc.read_memory(addr, 1)
+            .unwrap_or_else(|e| panic!("run_hw: read_memory(0x{addr:08X}) failed: {e}"));
+        end.mem.insert(addr, words[0]);
     }
 
     oc.shutdown().expect("run_hw: OpenOCD shutdown failed");
