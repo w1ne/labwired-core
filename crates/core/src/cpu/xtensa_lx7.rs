@@ -12,7 +12,7 @@
 use crate::cpu::xtensa_regs::{ArFile, Ps};
 use crate::cpu::xtensa_sr::{
     XtensaSrFile, EXCCAUSE, EPC1, EPC2, EPC3, EPC4, EPC5, EPC6, EPC7,
-    EPS2, EPS3, EPS4, EPS5, EPS6, EPS7, SAR, SCOMPARE1, VECBASE,
+    EPS2, EPS3, EPS4, EPS5, EPS6, EPS7, INTERRUPT, INTENABLE, SAR, SCOMPARE1, VECBASE,
 };
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
@@ -26,6 +26,63 @@ use std::sync::Arc;
 /// and the ESP-IDF / FreeRTOS ABI which reads PS and EPC1 directly via RSR
 /// for level-1 general exceptions (no EPS1 exists in the ESP32-S3 LX7 config).
 const KERNEL_VECTOR_OFFSET: u32 = 0x300;
+
+// ── Interrupt vector offsets (VECBASE-relative) ───────────────────────────────
+//
+// Verified against:
+//   ~/.platformio/packages/toolchain-xtensa-esp32s3/xtensa-esp32s3-elf/
+//     sys-include/xtensa/config/core-isa.h
+// Constants: XCHAL_INTLEVEL{n}_VECOFS, XCHAL_KERNEL_VECOFS, XCHAL_NMI_VECOFS.
+//
+// Level 1: uses _KernelExceptionVector (XCHAL_KERNEL_VECOFS = 0x300).
+//   Level-1 interrupts share the kernel exception vector; EXCCAUSE=4 (Level1Interrupt)
+//   distinguishes them from synchronous exceptions in the handler.
+// Level 2: XCHAL_INTLEVEL2_VECOFS = 0x180
+// Level 3: XCHAL_INTLEVEL3_VECOFS = 0x1C0
+// Level 4: XCHAL_INTLEVEL4_VECOFS = 0x200
+// Level 5: XCHAL_INTLEVEL5_VECOFS = 0x240
+// Level 6: XCHAL_INTLEVEL6_VECOFS = 0x280  (also Debug vector)
+// Level 7: XCHAL_NMI_VECOFS       = 0x2C0  (NMI)
+const IRQ_VECTOR_OFFSETS: [u32; 8] = [
+    0x000,  // level 0: unused (placeholder)
+    0x300,  // level 1: XCHAL_KERNEL_VECOFS
+    0x180,  // level 2: XCHAL_INTLEVEL2_VECOFS
+    0x1C0,  // level 3: XCHAL_INTLEVEL3_VECOFS
+    0x200,  // level 4: XCHAL_INTLEVEL4_VECOFS
+    0x240,  // level 5: XCHAL_INTLEVEL5_VECOFS
+    0x280,  // level 6: XCHAL_INTLEVEL6_VECOFS (Debug)
+    0x2C0,  // level 7: XCHAL_NMI_VECOFS
+];
+
+// ── IRQ priority table ────────────────────────────────────────────────────────
+//
+// Fixed interrupt priority levels for the 32 CPU interrupt bits on ESP32-S3 LX7.
+//
+// Verified against:
+//   ~/.platformio/packages/toolchain-xtensa-esp32s3/xtensa-esp32s3-elf/
+//     sys-include/xtensa/config/core-isa.h
+// Constants: XCHAL_INT{n}_LEVEL for n = 0..31.
+//
+// Bits 0-10: level 1; bit 11: level 3; bit 12-13: level 1; bit 14: level 7 (NMI);
+// bit 15: level 3; bit 16: level 5; bits 17-18: level 1; bits 19-21: level 2;
+// bits 22-23: level 3; bit 24: level 4; bit 25: level 4; bit 26: level 5;
+// bit 27: level 3; bit 28: level 4; bit 29: level 3; bit 30: level 4; bit 31: level 5.
+//
+// XCHAL_EXCM_LEVEL = 3: PS.EXCM masks interrupt delivery for levels 1..3.
+// Levels 4..7 are "high-priority" and are NOT blocked by EXCM.
+pub const IRQ_LEVELS: [u8; 32] = [
+    1, 1, 1, 1, 1, 1, 1, 1,  // 0-7
+    1, 1, 1, 3, 1, 1, 7, 3,  // 8-15
+    5, 1, 1, 2, 2, 2, 3, 3,  // 16-23
+    4, 4, 5, 3, 4, 3, 4, 5,  // 24-31
+];
+
+/// EXCCAUSE value for Level-1 interrupt entry (ISA RM §4.4.1.5).
+const EXCCAUSE_LEVEL1_INTERRUPT: u8 = 4;
+
+/// XCHAL_EXCM_LEVEL: PS.EXCM blocks delivery of interrupts at levels <= this.
+/// Verified from core-isa.h: XCHAL_EXCM_LEVEL = 3.
+const EXCM_LEVEL: u8 = 3;
 
 pub struct XtensaLx7 {
     pub regs: ArFile,
@@ -1157,6 +1214,85 @@ impl XtensaLx7 {
         }
     }
 
+    // ── Interrupt dispatch helpers ────────────────────────────────────────────
+
+    /// Compute the highest priority level of any pending-and-enabled interrupt.
+    ///
+    /// Returns `Some(level)` if `(INTERRUPT & INTENABLE) != 0`, else `None`.
+    /// The level is the maximum over all set bits in the masked-pending word,
+    /// using `IRQ_LEVELS` indexed by bit position.
+    fn pending_irq_level(&self) -> Option<u8> {
+        let pending = self.sr.read(INTERRUPT) & self.sr.read(INTENABLE);
+        if pending == 0 {
+            return None;
+        }
+        let max_level = (0u8..32)
+            .filter(|&bit| (pending >> bit) & 1 == 1)
+            .map(|bit| IRQ_LEVELS[bit as usize])
+            .max()?;
+        Some(max_level)
+    }
+
+    /// Dispatch an interrupt at the given priority `level`.
+    ///
+    /// Implements Xtensa LX ISA RM §4.4.1 "Interrupt Entry" for ESP32-S3 LX7:
+    ///
+    /// **Level 1** (uses kernel exception vector, shares with general exceptions):
+    ///   1. EPC1     ← PC
+    ///   2. EXCCAUSE ← 4 (Level1InterruptCause)
+    ///   3. PS.EXCM  ← 1  (PS.INTLEVEL unchanged)
+    ///   4. PC       ← VECBASE + 0x300
+    ///
+    /// **Levels 2..7** (dedicated high-priority interrupt vectors):
+    ///   1. EPC[level] ← PC
+    ///   2. EPS[level] ← PS
+    ///   3. PS.INTLEVEL ← level  (PS.EXCM cleared for level > EXCM_LEVEL, unchanged otherwise)
+    ///   4. PC         ← VECBASE + IRQ_VECTOR_OFFSETS[level]
+    ///
+    /// For levels 2..EXCM_LEVEL (2..3 on ESP32-S3), the Xtensa ISA specifies
+    /// that PS.EXCM is set to 1 on entry (medium-priority interrupt entry behaves
+    /// like exception entry). For levels > EXCM_LEVEL (4..7), PS.EXCM is cleared
+    /// (high-priority: only INTLEVEL gates further interrupts).
+    ///
+    /// Returns `Ok(())` — unlike `raise_general_exception`, interrupt dispatch
+    /// is not an error; the CPU simply redirects to the ISR vector.
+    fn dispatch_irq(&mut self, level: u8) -> SimResult<()> {
+        let entry_pc = self.pc;
+        let vecbase = self.sr.read(VECBASE);
+        let vector_offset = IRQ_VECTOR_OFFSETS[level.min(7) as usize];
+
+        if level == 1 {
+            // Level-1 interrupt: kernel vector, EXCM=1, no EPS1.
+            self.sr.write(EPC1, entry_pc);
+            self.sr.write(EXCCAUSE, EXCCAUSE_LEVEL1_INTERRUPT as u32);
+            self.ps.set_excm(true);
+            self.pc = vecbase.wrapping_add(vector_offset);
+        } else {
+            // Level 2..7: dedicated interrupt vector.
+            // Save PC and PS into EPC[level]/EPS[level].
+            let saved_ps = self.ps.as_raw();
+            let epc_sr = [0u16, EPC1, EPC2, EPC3, EPC4, EPC5, EPC6, EPC7];
+            let eps_sr = [0u16, 0u16, EPS2, EPS3, EPS4, EPS5, EPS6, EPS7];
+            let l = level as usize;
+            self.sr.write(epc_sr[l], entry_pc);
+            self.sr.write(eps_sr[l], saved_ps);
+
+            // Update PS: set INTLEVEL to the dispatched level.
+            // For medium-priority (level <= EXCM_LEVEL): also set EXCM=1.
+            // For high-priority (level > EXCM_LEVEL): clear EXCM.
+            let mut new_ps = self.ps;
+            new_ps.set_intlevel(level);
+            if level <= EXCM_LEVEL {
+                new_ps.set_excm(true);
+            } else {
+                new_ps.set_excm(false);
+            }
+            self.ps = new_ps;
+            self.pc = vecbase.wrapping_add(vector_offset);
+        }
+        Ok(())
+    }
+
     /// Raise a level-1 general exception (kernel vector).
     ///
     /// Implements Xtensa LX ISA RM §5.5 "General Exception" for ESP32-S3 LX7:
@@ -1205,6 +1341,27 @@ impl Cpu for XtensaLx7 {
         bus: &mut dyn Bus,
         _observers: &[Arc<dyn SimulationObserver>],
     ) -> SimResult<()> {
+        // ── Pre-fetch interrupt check ─────────────────────────────────────────
+        // Per Xtensa ISA RM §4.4.1: check for pending interrupts before fetching
+        // the next instruction.
+        //
+        // Dispatch conditions (all must be true):
+        //   1. PS.EXCM == 0  (if EXCM=1, even high-priority ints are blocked for
+        //                     medium levels; for high-priority levels EXCM is set
+        //                     to 0 on entry, but we still gate on it here to avoid
+        //                     re-entry from within a level-1 handler).
+        //   2. (INTERRUPT & INTENABLE) != 0
+        //   3. highest_pending_level > PS.INTLEVEL
+        //
+        // Note: INTENABLE defaults to 0 at reset, so existing tests are unaffected.
+        if !self.ps.excm() {
+            if let Some(irq_level) = self.pending_irq_level() {
+                if irq_level > self.ps.intlevel() {
+                    return self.dispatch_irq(irq_level);
+                }
+            }
+        }
+
         let pc = self.pc;
         let b0 = bus.read_u8(pc as u64)?;
         let len = xtensa_length::instruction_length(b0);
