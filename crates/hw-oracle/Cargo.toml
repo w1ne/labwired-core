@@ -11,6 +11,8 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 libc = { workspace = true }
+goblin = { workspace = true }
+serialport = { workspace = true }
 
 [features]
 default = []
