@@ -168,21 +168,26 @@ fn decode_qrst(w: u32) -> Instruction {
 
     match op1 {
         0x0 => {
-            // NSA/NSAU are encoded with r=0xE/0xF within the op1=0 group, but their ar
-            // is in the op2 field (not r). Check r first to avoid dispatching on op2 as
-            // a sub-opcode, which would misidentify these as ADD/SUB/AND/etc.
-            //
-            // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
-            //   nsa  a3, a4 → 0x30e440: op0=0, op1=0, r=0xE, op2=ar=3, s=as_=4
-            //   nsau a3, a4 → 0x30f440: op0=0, op1=0, r=0xF, op2=ar=3, s=as_=4
-            if r == 0xE { return Instruction::Nsa  { ar: op2, as_: s }; }
-            if r == 0xF { return Instruction::Nsau { ar: op2, as_: s }; }
             match op2 {
             0x0 => decode_st0(w, r, s, t),
             0x1 => Instruction::And { ar: r, as_: s, at: t },
             0x2 => Instruction::Or  { ar: r, as_: s, at: t },
             0x3 => Instruction::Xor { ar: r, as_: s, at: t },
-            0x4 => decode_st3_shiftsetup(w, r, s, t),
+            // op2=4 covers both shift-setup (r=0..4) and NSA/NSAU (r=0xE/0xF).
+            //
+            // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+            //   nsa  a3, a4 → 0x40E430: op2=4, r=0xE, s=as_=4, t=ar=3
+            //   nsau a3, a4 → 0x40F430: op2=4, r=0xF, s=as_=4, t=ar=3
+            // NSA/NSAU: op2=4 (constant sub-group selector), r=0xE/0xF (instruction
+            // discriminator), t=ar (destination register), s=as_ (source register).
+            //
+            // SUBX4/SUBX8 use op2=0xE/0xF (not op2=4), so they are routed to the
+            // 0xE/0xF match arms below and are never confused with NSA/NSAU.
+            0x4 => match r {
+                0xE => Instruction::Nsa  { ar: t, as_: s },
+                0xF => Instruction::Nsau { ar: t, as_: s },
+                _   => decode_st3_shiftsetup(w, r, s, t),
+            },
             0x6 => match s {
                 0x0 => Instruction::Neg { ar: r, at: t },
                 0x1 => Instruction::Abs { ar: r, at: t },

@@ -834,16 +834,16 @@ fn test_decode_remu() {
 
 #[test]
 fn test_decode_nsa() {
-    // HW-oracle: nsa a3, a4 → bytes [40 e4 30] → word 0x30e440
-    // Encoding: op0=0, op1=0, r=0xE, op2=3=ar, s=4=as_
-    assert_eq!(decode(0x30e440), Instruction::Nsa { ar: 3, as_: 4 });
+    // HW-oracle: nsa a3, a4 → objdump 40e430 → word 0x40E430
+    // Encoding: op0=0, op1=0, op2=4 (NSA/shift sub-group), r=0xE, t=ar=3, s=as_=4
+    assert_eq!(decode(0x40E430), Instruction::Nsa { ar: 3, as_: 4 });
 }
 
 #[test]
 fn test_decode_nsau() {
-    // HW-oracle: nsau a3, a4 → bytes [40 f4 30] → word 0x30f440
-    // Encoding: op0=0, op1=0, r=0xF, op2=3=ar, s=4=as_
-    assert_eq!(decode(0x30f440), Instruction::Nsau { ar: 3, as_: 4 });
+    // HW-oracle: nsau a3, a4 → objdump 40f430 → word 0x40F430
+    // Encoding: op0=0, op1=0, op2=4 (NSA/shift sub-group), r=0xF, t=ar=3, s=as_=4
+    assert_eq!(decode(0x40F430), Instruction::Nsau { ar: 3, as_: 4 });
 }
 
 #[test]
@@ -891,4 +891,28 @@ fn test_decode_clamps() {
     // Encoding: op0=3, t=3(CLAMPS), r=3=ar, s=4=as_, op2=0=sa-7, sa=7
     // Instruction.t stores sa=7 (saturation bit width = sa+1 = 8 bits).
     assert_eq!(decode(0x003433), Instruction::Clamps { ar: 3, as_: 4, t: 7 });
+}
+
+#[test]
+fn test_decode_subx4_ar_a14_not_nsa() {
+    // HW-oracle: subx4 a14, a4, a5 → objdump e0e450 → word 0xE0E450
+    // op2=0xE (SUBX4 sub-opcode) routes to the Subx4 arm; r=0xE is ar=14.
+    // NSA uses op2=4, so no collision is possible at op2=0xE.
+    let ins = decode(0xE0_E4_50);
+    match ins {
+        Instruction::Subx4 { ar: 14, as_: 4, at: 5 } => {}
+        other => panic!("expected SUBX4 a14, a4, a5, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_decode_subx8_ar_a15_not_nsau() {
+    // HW-oracle: subx8 a15, a4, a5 → objdump f0f450 → word 0xF0F450
+    // op2=0xF (SUBX8 sub-opcode) routes to the Subx8 arm; r=0xF is ar=15.
+    // NSAU uses op2=4, so no collision is possible at op2=0xF.
+    let ins = decode(0xF0_F4_50);
+    match ins {
+        Instruction::Subx8 { ar: 15, as_: 4, at: 5 } => {}
+        other => panic!("expected SUBX8 a15, a4, a5, got {:?}", other),
+    }
 }

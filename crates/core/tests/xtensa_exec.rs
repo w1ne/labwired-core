@@ -2560,14 +2560,16 @@ fn test_exec_remu_div_by_zero() {
 // SEXT/CLAMPS field layout (op0=3):
 //   Word = ((sa-7) << 20) | (r << 12) | (s << 8) | (subop << 4) | 3
 
-/// Encode NSA ar, as_ (op0=0, op1=0, r=0xE, op2=ar, s=as_).
+/// Encode NSA ar, as_ (op0=0, op1=0, op2=4, r=0xE, s=as_, t=ar).
+/// HW-oracle: nsa a3, a4 → objdump 40e430 → word 0x40E430.
 fn enc_nsa(ar: u32, as_: u32) -> u32 {
-    (ar << 20) | (0xEu32 << 12) | (as_ << 8)
+    (4u32 << 20) | (0xEu32 << 12) | (as_ << 8) | (ar << 4)
 }
 
-/// Encode NSAU ar, as_ (op0=0, op1=0, r=0xF, op2=ar, s=as_).
+/// Encode NSAU ar, as_ (op0=0, op1=0, op2=4, r=0xF, s=as_, t=ar).
+/// HW-oracle: nsau a3, a4 → objdump 40f430 → word 0x40F430.
 fn enc_nsau(ar: u32, as_: u32) -> u32 {
-    (ar << 20) | (0xFu32 << 12) | (as_ << 8)
+    (4u32 << 20) | (0xFu32 << 12) | (as_ << 8) | (ar << 4)
 }
 
 /// Encode MIN/MAX/MINU/MAXU (op0=3, subop in t field, r=ar, s=as_, op2=at).
