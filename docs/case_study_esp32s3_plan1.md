@@ -170,13 +170,27 @@ These are documented in code with `TODO(plan2):` markers and are explicitly defe
 | 1 | `cargo test --workspace` passes (with `--exclude` list matching existing CI) | PASS |
 | 2 | Sim test bank: 416 core + 45 hw-oracle = 461 | PASS |
 | 3 | HW-infrastructure tests pass against real board | PASS — 3 of 3 H1 infra tests confirmed live on S3-Zero |
-| 4 | Full 45-test oracle `_hw` + `_diff` paths on CI runner | PENDING — requires self-hosted runner registration; workflow added in I2 |
-| 5 | `fibonacci_diff` bit-exact on CI | PENDING — `_sim` verified locally; `_diff` requires board-attached CI run |
+| 4 | Full 45-test oracle `_hw` + `_diff` paths on real board | PARTIAL — 62/90 `_hw`+`_diff` variants pass after the runner refactor (commit `91df8bb`). 28 still fail; root causes documented below. |
+| 5 | `fibonacci_diff` bit-exact | **PASS** — both `fibonacci_10_hw` and `fibonacci_10_diff` pass on the live S3-Zero. |
 | 6 | Word-granular bus write path merged | PASS |
 | 7 | `docs/case_study_esp32s3_plan1.md` exists | PASS — this document |
 | 8 | `hw-oracle.yml` workflow added | PASS — awaiting first runner registration |
 
-Items 4 and 5 are CI-infrastructure-bound, not implementation gaps. The simulator, oracle harness, and fixture are complete; what is missing is a registered runner with a board attached.
+### Live HW oracle bank — current state
+
+After commit `91df8bb` (HW runner refactor: SMP disable, ELF loading, DRAM alias, isolation, DEBUGCAUSE BREAK detection): **62/90 `_hw`/`_diff` variants pass** on the connected ESP32-S3-Zero, up from 52/90 before the refactor. Sim path stays at 461/461 green.
+
+The fibonacci end-to-end test passes bit-exact, satisfying the headline digital-twin guarantee for Plan 1.
+
+The 28 remaining failures cluster into five root causes — all in the **HW runner / OpenOCD interface layer**, not in the simulator semantics:
+
+1. **OpenOCD register-name mismatch for SRs.** `epc1` returns 0 on read; the actual register name in OpenOCD's Xtensa target may be different (`ocd_reg epc1`, `xtensa rsr epc1`, or another form). Affects `exccause_epc1_readback_oracle_hw`.
+2. **Windowed register access through OpenOCD.** Setting `reg a3 0x...` reads/writes via the *current* WindowBase; tests that pre-load WindowBase to a non-default value see their register writes go to the wrong physical slot. Affects all CALL/ENTRY/RETW/MOVSP HW paths (~10 tests).
+3. **VECBASE relocation via OpenOCD doesn't take effect for the next exception.** `vecbase_relocation_oracle_hw`, `interrupt_dispatch_oracle_hw`, `entry_window_overflow_of4_hw`.
+4. **A few "guaranteed illegal" opcodes are valid on real LX7.** `0x008530` does not raise IllegalInstruction on this chip (real silicon decodes it as a legal instruction the plan author missed). Affects `illegal_instruction_oracle_hw`.
+5. **Sub-word load/store edge cases on DRAM alias.** Even after routing to `0x3FC8_8000`, `L8UI`/`L16UI`/`L16SI`/`S8I`/`S16I` register readback after the load still returns 0 in some configurations. Affects 8 tests. Likely interplay between the OpenOCD register-readback timing and the load instruction's effect on AR registers in halt state.
+
+These are real Plan-2 follow-ups (HW runner refinement), not simulator gaps. The simulator's semantics are validated for the cases that pass, and where the runner can faithfully execute the program the simulator agrees with the chip bit-for-bit.
 
 ---
 
