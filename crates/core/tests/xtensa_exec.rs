@@ -111,6 +111,11 @@ fn enc_ssa8b(as_: u32) -> u32 { rrr(0x4, 0x0, 0x3, as_, 0) }
 /// So s = shamt & 0xF, t = shamt >> 4 (0 or 1).
 fn enc_ssai(shamt: u32) -> u32 { rrr(0x4, 0x0, 0x4, shamt & 0xF, shamt >> 4) }
 
+/// Encode BREAK imm_s, imm_t (op0=0, op1=0, op2=0, r=4, s=imm_s, t=imm_t).
+fn enc_break(imm_s: u32, imm_t: u32) -> u32 {
+    st0(4, imm_s, imm_t)
+}
+
 // ── D4 load encoding helpers ──
 
 /// Encode L8UI at, as_, imm8 (op0=0x2, r=0x0).
@@ -4437,4 +4442,59 @@ fn test_exec_rfwu_wraps_windowbase() {
     assert!(cpu.regs.windowstart_bit(15), "RFWU: WS[15] set after wrap");
     assert!(!cpu.ps.excm(), "RFWU: PS.EXCM=0 after wrap");
     assert_eq!(cpu.get_pc(), target_pc, "RFWU: PC=EPC1 after wrap");
+}
+
+/// G4: BREAK 1,15 halts execution with BreakpointHit(pc).
+///
+/// BREAK 1,15 is a common idiomatic halt sentinel in Xtensa toolchains.
+/// HW-oracle: BREAK 1,15 → 0xf041 00 (3 bytes).
+/// The oracle test harness uses BreakpointHit(pc) to halt and collect state.
+#[test]
+fn test_exec_break_1_15_halts_with_pc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Place BREAK 1,15 at TEST_PC (offset 0).
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_break(1, 15),
+    ]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    match err {
+        SimulationError::BreakpointHit(pc) => {
+            assert_eq!(pc, TEST_PC, "BreakpointHit must carry pre-advance PC");
+        }
+        other => panic!("expected BreakpointHit, got {:?}", other),
+    }
+    // PC must not have advanced.
+    assert_eq!(cpu.get_pc(), TEST_PC, "PC must not advance on BREAK 1,15");
+}
+
+/// G4: BREAK.N 0 (narrow form) halts execution with BreakpointHit(pc).
+///
+/// BREAK.N is a 2-byte narrow instruction used as a halt sentinel.
+/// HW-oracle: BREAK.N 0 → 0xf02d (2 bytes, little-endian: 0x2df0).
+/// PC must advance by 2 for narrow, so BreakpointHit must carry pre-advance PC.
+#[test]
+fn test_exec_break_n_halts_with_pc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Place BREAK.N 0 at TEST_PC (offset 0) as a 2-byte narrow instruction.
+    // HW-oracle: 0xf02d (word-oriented), which write_narrow writes as bytes 2d f0.
+    write_narrow(&mut bus, TEST_PC as u64, 0xf02d);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    match err {
+        SimulationError::BreakpointHit(pc) => {
+            assert_eq!(pc, TEST_PC, "BreakpointHit must carry pre-advance PC");
+        }
+        other => panic!("expected BreakpointHit, got {:?}", other),
+    }
+    // PC must not have advanced (exception halts before advance).
+    assert_eq!(cpu.get_pc(), TEST_PC, "PC must not advance on BREAK.N");
 }
