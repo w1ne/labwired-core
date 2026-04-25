@@ -124,11 +124,11 @@ pub fn elf_entry_point_from_bytes(bytes: &[u8]) -> Result<u32> {
 impl OpenOcd {
     /// Spawn OpenOCD configured for the given board.
     ///
-    /// For H2 this delegates to [`OpenOcd::spawn_default`] because only the
-    /// ESP32-S3 USB-JTAG interface is supported.  Future revisions can branch
-    /// on `board.usb_id` to select different interface configs.
+    /// Uses [`OpenOcd::spawn_onlycpu`] to disable SMP on ESP32-S3: with only
+    /// cpu0 active the ROM bootloader on cpu1 cannot overwrite IRAM while the
+    /// oracle program is running.
     pub fn spawn_for(_board: &TargetBoard) -> Result<Self> {
-        Self::spawn_default()
+        Self::spawn_onlycpu()
     }
 }
 

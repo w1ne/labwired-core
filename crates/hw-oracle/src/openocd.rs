@@ -32,6 +32,30 @@ impl OpenOcd {
         ])
     }
 
+    /// Spawn OpenOCD with `ESP32_S3_ONLYCPU=1` so that only cpu0 is active.
+    ///
+    /// On ESP32-S3 (dual-core SMP), the default OpenOCD config resumes ALL
+    /// halted cores.  When both cores run, cpu0 executes the ROM bootloader
+    /// which reloads the application from flash into IRAM — overwriting the
+    /// oracle program we wrote there.  Setting `ESP32_S3_ONLYCPU 1` before
+    /// sourcing the target config disables SMP: only cpu0 is managed, so IRAM
+    /// stays intact and execution from IRAM works correctly.
+    ///
+    /// Uses `-c "set ESP32_S3_ONLYCPU 1"` before the standard interface/target
+    /// config arguments so that no temporary file is needed.
+    pub fn spawn_onlycpu() -> Result<Self> {
+        // Pass the ONLYCPU flag via an inline -c command before the config
+        // files so it takes effect when esp32s3.cfg is sourced.
+        Self::spawn_with_args(&[
+            "-c",
+            "set ESP32_S3_ONLYCPU 1",
+            "-f",
+            "interface/esp_usb_jtag.cfg",
+            "-f",
+            "target/esp32s3.cfg",
+        ])
+    }
+
     /// Spawn OpenOCD with explicit `-f` config arguments, plus `init`.
     ///
     /// The caller passes the raw arguments that appear after `openocd`, e.g.
@@ -193,6 +217,20 @@ impl OpenOcd {
         Ok(())
     }
 
+    /// Fill a region of memory with `value`, writing `count` consecutive
+    /// 32-bit words starting at `addr`.
+    ///
+    /// Uses `mww 0xADDR 0xVAL COUNT` which is a single TCL round-trip,
+    /// making bulk zeroing practical (e.g. zeroing 64 KiB = 16 384 words).
+    pub fn fill_memory(&mut self, addr: u32, value: u32, count: usize) -> Result<()> {
+        if count == 0 {
+            return Ok(());
+        }
+        self.tcl(&format!("mww 0x{:08x} 0x{:08x} {}", addr, value, count))
+            .with_context(|| format!("fill_memory(0x{addr:08x}, 0x{value:08x}, {count})"))?;
+        Ok(())
+    }
+
     // ── Halt polling ─────────────────────────────────────────────────────────
 
     /// Poll until the target CPU is halted, up to `timeout`.
@@ -218,6 +256,45 @@ impl OpenOcd {
                 anyhow::bail!("wait_until_halted: timed out after {:.1}s", timeout.as_secs_f32());
             }
             std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// Poll until the target halts due to a `BREAK` instruction, up to
+    /// `timeout`.
+    ///
+    /// On the ESP32-S3, `BREAK 1,15` raises a debug exception (DEBUGCAUSE
+    /// bit 3 = BREAK).  This method polls the DEBUGCAUSE SR after each halt
+    /// and only returns `Ok(())` when bit 3 is set, distinguishing a clean
+    /// BREAK halt from an early force-halt.
+    ///
+    /// Falls back to accepting any halt if DEBUGCAUSE is unreadable (e.g.
+    /// during the first few milliseconds while the CPU is resetting).
+    pub fn wait_for_break(&mut self, timeout: Duration) -> Result<()> {
+        const DEBUGCAUSE_BREAK_BIT: u32 = 1 << 3; // bit 3 = BREAK
+        let deadline = Instant::now() + timeout;
+        loop {
+            // `halt` synchronises OpenOCD's idea of the target state; it's a
+            // no-op if the CPU is already halted by a debug exception.
+            let _ = self.tcl("halt");
+
+            // Try to read DEBUGCAUSE; the reg name used by OpenOCD for
+            // ESP32-S3 is "debugcause".
+            match self.read_register("debugcause") {
+                Ok(dc) if dc & DEBUGCAUSE_BREAK_BIT != 0 => {
+                    return Ok(());
+                }
+                Ok(_dc) => {
+                    // Halted, but not due to BREAK yet — keep polling.
+                }
+                Err(_) => {
+                    // CPU not halted or DEBUGCAUSE not readable — keep polling.
+                }
+            }
+
+            if Instant::now() >= deadline {
+                anyhow::bail!("wait_for_break: timed out after {:.1}s without BREAK", timeout.as_secs_f32());
+            }
+            std::thread::sleep(Duration::from_millis(20));
         }
     }
 

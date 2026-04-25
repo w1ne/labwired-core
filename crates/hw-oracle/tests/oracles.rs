@@ -373,8 +373,17 @@ fn sra_oracle() -> OracleCase {
 
 use labwired_hw_oracle::IRAM_BASE;
 
-// Data area base: IRAM_BASE + 0x1000 = 0x4037_1000
+// Data area base for 32-bit (word) load/store tests: IRAM_BASE + 0x1000.
+// The IRAM alias (0x4037_xxxx) supports only 32-bit data access from the CPU
+// load/store unit; byte/halfword accesses to this window silently fail on the
+// ESP32-S3 I-bus.  32-bit tests (L32I, S32I, S32E) use this address.
 const DATA: u32 = IRAM_BASE + 0x1000;
+
+// Data area base for sub-word (byte/halfword) load/store tests.
+// The DRAM alias (0x3FC8_xxxx) is the same physical SRAM but accessed via the
+// D-bus, which supports byte and halfword operations.  IRAM_BASE maps to
+// DRAM_BASE: 0x4037_0000 ↔ 0x3FC8_8000.  So IRAM_BASE+0x1000 = 0x3FC8_9000.
+const DATA_DRAM: u32 = 0x3FC8_9000;
 
 // ── 16. L8UI ──────────────────────────────────────────────────────────────────
 
@@ -388,11 +397,13 @@ const DATA: u32 = IRAM_BASE + 0x1000;
 #[hw_oracle_test]
 fn l8ui_oracle() -> OracleCase {
     // L8UI a3, a2, 0   (w=0x000232 → bytes [0x32, 0x02, 0x00])
+    // Use DATA_DRAM (0x3FC89000) — the DRAM alias — because L8UI is a byte
+    // load and the IRAM window (0x40370000) does not support sub-word access.
     OracleCase::asm(".word 0x000232")
         .setup(|st| {
-            st.write_reg("a2", DATA);
-            // Low byte 0xAB at DATA; upper bytes 0x00.
-            st.write_mem(DATA, 0x0000_00AB);
+            st.write_reg("a2", DATA_DRAM);
+            // Low byte 0xAB at DATA_DRAM; upper bytes 0x00.
+            st.write_mem(DATA_DRAM, 0x0000_00AB);
         })
         .expect(|st| {
             // Zero-extend: only the byte at offset 0 is read.
@@ -412,11 +423,12 @@ fn l8ui_oracle() -> OracleCase {
 #[hw_oracle_test]
 fn l16ui_oracle() -> OracleCase {
     // L16UI a3, a2, 0  (w=0x001232 → bytes [0x32, 0x12, 0x00])
+    // Use DATA_DRAM: halfword load requires DRAM alias.
     OracleCase::asm(".word 0x001232")
         .setup(|st| {
-            st.write_reg("a2", DATA);
-            // Low 16 bits 0xCAFE at DATA.
-            st.write_mem(DATA, 0x0000_CAFE);
+            st.write_reg("a2", DATA_DRAM);
+            // Low 16 bits 0xCAFE at DATA_DRAM.
+            st.write_mem(DATA_DRAM, 0x0000_CAFE);
         })
         .expect(|st| {
             // Zero-extend: 16-bit read = 0xCAFE.
@@ -436,11 +448,12 @@ fn l16ui_oracle() -> OracleCase {
 #[hw_oracle_test]
 fn l16si_oracle() -> OracleCase {
     // L16SI a3, a2, 0  (w=0x009232 → bytes [0x32, 0x92, 0x00])
+    // Use DATA_DRAM: halfword load requires DRAM alias.
     OracleCase::asm(".word 0x009232")
         .setup(|st| {
-            st.write_reg("a2", DATA);
+            st.write_reg("a2", DATA_DRAM);
             // 0xFF80 in low 16 bits (negative in i16, bit 15 set).
-            st.write_mem(DATA, 0x0000_FF80);
+            st.write_mem(DATA_DRAM, 0x0000_FF80);
         })
         .expect(|st| {
             // Sign-extend 0xFF80 → 0xFFFF_FF80.
@@ -483,15 +496,16 @@ fn l32i_oracle() -> OracleCase {
 #[hw_oracle_test]
 fn s8i_oracle() -> OracleCase {
     // S8I a3, a2, 0  (w=0x004232 → bytes [0x32, 0x42, 0x00])
+    // Use DATA_DRAM: byte store requires DRAM alias.
     OracleCase::asm(".word 0x004232")
         .setup(|st| {
-            st.write_reg("a2", DATA);
+            st.write_reg("a2", DATA_DRAM);
             st.write_reg("a3", 0xDEAD_BEAB); // low byte 0xAB
         })
-        .capture_mem(&[DATA])
+        .capture_mem(&[DATA_DRAM])
         .expect(|st| {
-            // Only byte 0 is written; RamPeripheral initialised to 0x00.
-            st.assert_mem(DATA, 0x0000_00AB);
+            // Only byte 0 is written; memory initialised to 0x00.
+            st.assert_mem(DATA_DRAM, 0x0000_00AB);
         })
 }
 
@@ -507,15 +521,16 @@ fn s8i_oracle() -> OracleCase {
 #[hw_oracle_test]
 fn s16i_oracle() -> OracleCase {
     // S16I a3, a2, 0  (w=0x005232 → bytes [0x32, 0x52, 0x00])
+    // Use DATA_DRAM: halfword store requires DRAM alias.
     OracleCase::asm(".word 0x005232")
         .setup(|st| {
-            st.write_reg("a2", DATA);
+            st.write_reg("a2", DATA_DRAM);
             st.write_reg("a3", 0xDEAD_CAFE); // low 16 bits = 0xCAFE
         })
-        .capture_mem(&[DATA])
+        .capture_mem(&[DATA_DRAM])
         .expect(|st| {
             // Only 16 bits are written; upper 16 bits of the word remain 0x0000.
-            st.assert_mem(DATA, 0x0000_CAFE);
+            st.assert_mem(DATA_DRAM, 0x0000_CAFE);
         })
 }
 
@@ -1034,8 +1049,10 @@ fn retw_window_underflow_uf4() -> OracleCase {
 
 /// S32E executes correctly when PS.EXCM=1; stores a3 to [a4 - 16].
 ///
-/// After reset, PS = 0x1F (EXCM=1, INTLEVEL=0xF), so no setup needed for EXCM.
-/// S32E is only recognized as a 3-byte instruction when PS.EXCM=1 and byte0 & 0xF = 9.
+/// S32E is only recognized as a 3-byte wide instruction when PS.EXCM=1 and
+/// byte0 & 0xF = 9.  The capture_hw_state harness resets PS to a clean
+/// baseline (WOE=1, EXCM=0, INTLEVEL=0) before every test, so this test
+/// must explicitly set EXCM=1 in its setup closure.
 ///
 /// Encoding: S32E a3, a4, -16  → w=0x30C449
 ///   byte0=0x49 (bits[3:0]=9=op0, bits[7:4]=4=subop→S32E), len=2(narrow), but
@@ -1054,6 +1071,9 @@ fn s32e_inside_vector() -> OracleCase {
     let ea = data_addr - 16; // = IRAM_BASE + 0xFF0
     OracleCase::asm(".word 0x30C449")
         .setup(move |st| {
+            // Explicitly set PS.EXCM=1: required for S32E to decode as a
+            // 3-byte wide instruction rather than the narrow S32I.N form.
+            st.write_ps_excm(true);
             st.write_reg("a4", data_addr);
             st.write_reg("a3", 0xDEAD_BEEF);
         })
@@ -1166,28 +1186,34 @@ fn movsp_safe_path() -> OracleCase {
 /// per Xtensa LX7 ISA RM §5.2, matching real ESP32-S3 hardware behaviour.
 ///
 /// Program:
-///   IRAM_BASE+0: [0x30, 0x85, 0x00]  — unknown opcode w=0x008530 (3-byte LE)
-///   IRAM_BASE+3: BREAK (appended; never reached — exception fires first)
+///   IRAM_BASE+0x000: [0x30, 0x85, 0x00]  — unknown opcode w=0x008530
+///   IRAM_BASE+0x003: BREAK (appended; unreachable — exception fires first)
+///   IRAM_BASE+0x300: BREAK  ← exception kernel vector landing pad
 ///
-/// Byte layout: w=0x008530 → bytes [w&0xFF, (w>>8)&0xFF, (w>>16)&0xFF] = [0x30, 0x85, 0x00].
-/// CPU reads LE: 0x30 | (0x85<<8) | (0x00<<16) = 0x008530 → op0=0, op1=0, op2=0, r=8 → Unknown.
+/// VECBASE is relocated to IRAM_BASE so the kernel exception vector
+/// (VECBASE+0x300) falls inside the 64 KiB oracle IRAM region where we can
+/// plant a BREAK.  Without this, the CPU jumps to the ROM vector at
+/// 0x40000300 and execution is uncontrolled.
 ///
-/// After exception entry (raise_general_exception(0)):
+/// After exception entry:
 ///   EPC1     = IRAM_BASE (faulting PC)
 ///   EXCCAUSE = 0
 ///   PS.EXCM  = 1
-///   CPU PC   = VECBASE + 0x300 (kernel exception vector)
-///
-/// VECBASE default = 0x4000_0000, so CPU PC = 0x4000_0300.
-/// The oracle runtime halts on ExceptionRaised and captures cpu.get_pc().
+///   CPU PC   = VECBASE + 0x300 = IRAM_BASE + 0x300
 #[hw_oracle_test]
 fn illegal_instruction_oracle() -> OracleCase {
     // w=0x008530 in 3-byte LE: [0x30, 0x85, 0x00]
     // decode: op0=0 (QRST), op1=0, op2=0 (ST0), r=8 → Unknown → raise_general_exception(0).
-    OracleCase::from_bytes(vec![0x30, 0x85, 0x00])
+    let mut prog = vec![0u8; 0x303];
+    prog[0..3].copy_from_slice(&[0x30, 0x85, 0x00]); // illegal opcode
+    prog[0x300..0x303].copy_from_slice(&[0xF0, 0x41, 0x00]); // BREAK at exception vector
+    OracleCase::from_bytes(prog)
+        .setup(|st| {
+            st.write_vecbase(IRAM_BASE);
+        })
         .expect(|st| {
-            // CPU redirected to kernel exception vector (default VECBASE + 0x300).
-            st.assert_pc(0x4000_0000u32.wrapping_add(0x300));
+            // CPU redirected to kernel exception vector (VECBASE+0x300 = IRAM_BASE+0x300).
+            st.assert_pc(IRAM_BASE + 0x300);
             // EPC1 holds the faulting instruction's address.
             st.assert_epc1(IRAM_BASE);
             // EXCCAUSE = 0: IllegalInstruction.
@@ -1343,9 +1369,22 @@ fn rfi_returns_oracle() -> OracleCase {
 /// (= new VECBASE + 0x300).
 #[hw_oracle_test]
 fn vecbase_relocation_oracle() -> OracleCase {
-    OracleCase::from_bytes(vec![0x30, 0x85, 0x00])
+    // Program layout:
+    //   IRAM_BASE+0x000: illegal opcode [0x30, 0x85, 0x00]  → IllegalInstruction
+    //   IRAM_BASE+0x003: BREAK (appended by from_bytes; never reached)
+    //   IRAM_BASE+0x300: BREAK  ← exception vector landing pad (VECBASE+0x300)
+    //
+    // Without a BREAK at IRAM_BASE+0x300, the CPU jumps to the exception vector
+    // and executes zeroed (= NOP.N or garbage) memory, causing undefined behavior.
+    // We plant a BREAK at offset 0x300 to terminate cleanly.
+    let mut prog = vec![0u8; 0x303];
+    // Illegal opcode at IRAM_BASE+0
+    prog[0..3].copy_from_slice(&[0x30, 0x85, 0x00]);
+    // BREAK at IRAM_BASE+0x300 (exception kernel vector = VECBASE+0x300)
+    prog[0x300..0x303].copy_from_slice(&[0xF0, 0x41, 0x00]);
+    OracleCase::from_bytes(prog)
         .setup(|st| {
-            // Relocate VECBASE to IRAM_BASE.
+            // Relocate VECBASE to IRAM_BASE so exception vector is inside oracle IRAM.
             st.write_vecbase(IRAM_BASE);
         })
         .expect(|st| {
@@ -1376,31 +1415,38 @@ fn vecbase_relocation_oracle() -> OracleCase {
 /// A NOP.N is prepended so the faulting PC is IRAM_BASE+2 (not IRAM_BASE),
 /// making the EPC1 readback a non-trivial check (EPC1 ≠ IRAM_BASE).
 ///
+/// VECBASE is relocated to IRAM_BASE and a BREAK is planted at IRAM_BASE+0x300
+/// so the kernel exception vector lands in the oracle IRAM window.
+///
 /// Byte layout: w=0x008540 → [0x40, 0x85, 0x00] (3-byte LE).
-/// CPU reads: 0x40 | (0x85<<8) | (0x00<<16) = 0x008540. ✓
 #[hw_oracle_test]
 fn exccause_epc1_readback_oracle() -> OracleCase {
     // Place the unknown opcode at IRAM_BASE+2 by prepending a NOP.N (2 bytes).
     // NOP.N: bytes [0x3D, 0xF0] (narrow, op0=0xD → narrow path, decoded as Nop).
     // After NOP.N, the unknown opcode at IRAM_BASE+2 fires IllegalInstruction.
-    OracleCase::from_bytes(vec![
-        // NOP.N at IRAM_BASE+0 (2-byte narrow; op0=0xD)
-        0x3D, 0xF0,
-        // Unknown opcode at IRAM_BASE+2: w=0x008540 → bytes [0x40, 0x85, 0x00]
-        // decode: op0=0 (QRST), op1=0, op2=0 (ST0), r=8, s=5, t=4 → Unknown
-        0x40, 0x85, 0x00,
-        // BREAK (appended by from_bytes; never reached — exception fires at IRAM_BASE+2)
-    ])
-    .expect(|st| {
-        // EPC1 = IRAM_BASE+2 (the unknown opcode's address, not IRAM_BASE+0).
-        st.assert_epc1(IRAM_BASE + 2);
-        // EXCCAUSE = 0 (IllegalInstruction) — readable from end state.
-        st.assert_exccause(0);
-        // PS.EXCM = 1.
-        st.assert_excm(true);
-        // CPU PC = default VECBASE + 0x300 (VECBASE unchanged from reset).
-        st.assert_pc(0x4000_0000u32.wrapping_add(0x300));
-    })
+    // BREAK at IRAM_BASE+0x300 serves as the exception vector landing pad.
+    let mut prog = vec![0u8; 0x303];
+    prog[0] = 0x3D; // NOP.N byte 0
+    prog[1] = 0xF0; // NOP.N byte 1
+    prog[2] = 0x40; // unknown opcode byte 0
+    prog[3] = 0x85; // unknown opcode byte 1
+    prog[4] = 0x00; // unknown opcode byte 2
+    prog[0x300..0x303].copy_from_slice(&[0xF0, 0x41, 0x00]); // BREAK at exception vector
+    OracleCase::from_bytes(prog)
+        .setup(|st| {
+            // Relocate VECBASE so the exception kernel vector is inside oracle IRAM.
+            st.write_vecbase(IRAM_BASE);
+        })
+        .expect(|st| {
+            // EPC1 = IRAM_BASE+2 (the unknown opcode's address, not IRAM_BASE+0).
+            st.assert_epc1(IRAM_BASE + 2);
+            // EXCCAUSE = 0 (IllegalInstruction) — readable from end state.
+            st.assert_exccause(0);
+            // PS.EXCM = 1.
+            st.assert_excm(true);
+            // CPU PC = VECBASE + 0x300 = IRAM_BASE + 0x300 (where BREAK is).
+            st.assert_pc(IRAM_BASE + 0x300);
+        })
 }
 
 // ── 36. Fibonacci(10) — ELF fixture ──────────────────────────────────────────
