@@ -28,7 +28,7 @@ Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 | `nucleo_l476rg_dma`         | `tests/fixtures/nucleo-l476rg-dma.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_dma.txt`               |
 | `nucleo_l476rg_demo`        | `tests/fixtures/nucleo-l476rg-demo.elf`       | (built from `crates/firmware-l476-demo`, same trace as sim)    |
 | `nucleo_l476rg_l4periphs`   | `tests/fixtures/nucleo-l476rg-l4periphs.elf`  | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs.txt`         |
-| `nucleo_l476rg_l4periphs2`  | `tests/fixtures/nucleo-l476rg-l4periphs2.elf` | (sim baseline — round 8; hardware capture pending)             |
+| `nucleo_l476rg_l4periphs2`  | `tests/fixtures/nucleo-l476rg-l4periphs2.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs2.txt`        |
 
 ## Bugs surfaced and fixed
 
@@ -130,7 +130,7 @@ the simulator. Order matters — earlier rounds unblocked later ones.
   source is ready, matching silicon's "wait for clock to lock" handshake.
 - **RTC, IWDG, WWDG, DAC peripherals** added with audited reset values.
 
-### Round 8 — L4 secondary peripherals (sim-baseline pending hardware) (`nucleo_l476rg_l4periphs2`)
+### Round 8 — L4 secondary peripherals (`nucleo_l476rg_l4periphs2`)
 - **EXTI L4 dual-bank layout** — `ExtiRegisterLayout::Stm32L4` added.
   Bank 1 (lines 0..31) at 0x00..0x14, bank 2 (lines 32..39) at
   0x20..0x34. SWIER1/PR1 latching matches F1 semantics; bank 2 covers
@@ -153,12 +153,18 @@ the simulator. Order matters — earlier rounds unblocked later ones.
   MSR.SLAK, TSR.TMEx mailbox-empty bits all set. HAL_CAN_Init pattern
   works (set INRQ, poll INAK; configure BTR; clear INRQ, poll INAK
   cleared).
-- **STATUS**: this round's trace is currently the simulator's own
-  output, not silicon. Fields that need re-validation on the bench:
-  - LPUART1.ISR currently returns 0xC0 (the V2 USART status default);
-    real silicon's reset is 0x00C0_0020 (REACK=1 in the high half).
-  - SAI / QSPI reset values — RM-derived, not hardware-confirmed.
-  - USB OTG GUSBCFG.PHYSEL handling — real silicon may force-set.
+- **Hardware-validation deltas** found and patched:
+  - SAI1 ACR1/BCR1 reset is `0x40` (NODIV bit set, "no master clock
+    divider"), not 0. Sim default fixed.
+  - USB OTG GINTSTS reset is `0x1400_0020` on a NUCLEO with no cable
+    plugged: NPTXFE | PTXFE | CIDSCHG | DISCINT. Sim previously had
+    `0x0400_0001` (CMOD-style — wrong bits entirely).
+  - bxCAN MSR after writing MCR.INRQ=1 is `0x0000_0409` (INAK + WKUI
+    + SAMP) — INRQ also latches the WKUI flag, not just INAK. Reset
+    value (before INRQ) is `0x0000_040A` (SLAK + SAMP).
+  - LPUART1.ISR matches sim's stm32v2 default (`0x000000C0`) when the
+    UART is not yet enabled; full reset (`0x00C0_0020` with REACK)
+    only manifests post-CR1.UE — outside this firmware's path.
 
 ## Reproducing a capture
 

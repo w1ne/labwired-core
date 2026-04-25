@@ -12,7 +12,9 @@
 //!   BCR1    @ 0x24   BCR2 @ 0x28   BFRCR @ 0x2C   BSLOTR @ 0x30
 //!   BIM     @ 0x34   BSR  @ 0x38   BCLRFR@ 0x3C   BDR    @ 0x40
 //!
-//! Reset values per RM0351 §41.6 are all zero except SR.FLVL = 0b000 (FIFO empty).
+//! Reset values per RM0351 §41.6: ACR1/BCR1 = 0x0000_0040 (NODIV bit set —
+//! "no master clock divider" — so MCK output is gated until firmware clears it).
+//! All other registers reset to 0.
 
 use crate::SimResult;
 
@@ -37,7 +39,10 @@ pub struct Sai {
 
 impl Sai {
     pub fn new() -> Self {
-        Self::default()
+        let mut s = Self::default();
+        s.a.cr1 = 0x0000_0040;
+        s.b.cr1 = 0x0000_0040;
+        s
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
