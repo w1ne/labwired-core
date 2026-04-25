@@ -167,7 +167,17 @@ fn decode_qrst(w: u32) -> Instruction {
     let t   = ((w >> 4)  & 0xF) as u8;
 
     match op1 {
-        0x0 => match op2 {
+        0x0 => {
+            // NSA/NSAU are encoded with r=0xE/0xF within the op1=0 group, but their ar
+            // is in the op2 field (not r). Check r first to avoid dispatching on op2 as
+            // a sub-opcode, which would misidentify these as ADD/SUB/AND/etc.
+            //
+            // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+            //   nsa  a3, a4 → 0x30e440: op0=0, op1=0, r=0xE, op2=ar=3, s=as_=4
+            //   nsau a3, a4 → 0x30f440: op0=0, op1=0, r=0xF, op2=ar=3, s=as_=4
+            if r == 0xE { return Instruction::Nsa  { ar: op2, as_: s }; }
+            if r == 0xF { return Instruction::Nsau { ar: op2, as_: s }; }
+            match op2 {
             0x0 => decode_st0(w, r, s, t),
             0x1 => Instruction::And { ar: r, as_: s, at: t },
             0x2 => Instruction::Or  { ar: r, as_: s, at: t },
@@ -187,7 +197,7 @@ fn decode_qrst(w: u32) -> Instruction {
             0xE => Instruction::Subx4 { ar: r, as_: s, at: t },
             0xF => Instruction::Subx8 { ar: r, as_: s, at: t },
             _ => Instruction::Unknown(w),
-        },
+        }}
         0x1 => match op2 {
             // SLLI: 5-bit shift amount split across op2[0] (high bit) and t (low 4 bits).
             // ISA RM §8: encodes 1_sa = 32 - sa, so shamt = 32 - raw.
@@ -365,7 +375,43 @@ fn decode_lsai(w: u32) -> Instruction {
 fn sext8(v: u32) -> i32 {
     ((v ^ 0x80) as i32).wrapping_sub(0x80)
 }
-fn decode_lsci(w: u32) -> Instruction { Instruction::Unknown(w) }
+/// LSCI group (op0=0x3): MIN, MAX, MINU, MAXU, SEXT, CLAMPS.
+///
+/// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+///   min  a3,a4,a5 → 0x503443: op0=3, t=4(MIN),  r=ar=3, s=as_=4, op2=at=5
+///   max  a3,a4,a5 → 0x503453: op0=3, t=5(MAX),  r=ar=3, s=as_=4, op2=at=5
+///   minu a3,a4,a5 → 0x503463: op0=3, t=6(MINU), r=ar=3, s=as_=4, op2=at=5
+///   maxu a3,a4,a5 → 0x503473: op0=3, t=7(MAXU), r=ar=3, s=as_=4, op2=at=5
+///   sext a3,a4,7  → 0x003423: op0=3, t=2(SEXT),   r=ar=3, s=as_=4, op2=sa-7=0, sa=7
+///   clamps a3,a4,7 → 0x003433: op0=3, t=3(CLAMPS), r=ar=3, s=as_=4, op2=sa-7=0, sa=7
+///
+/// Field layout: op2=bits[23:20], op1=bits[19:16], r=bits[15:12], s=bits[11:8], t=bits[7:4].
+///   - MIN/MAX/MINU/MAXU: r=ar, s=as_, op2=at, op1=0, t=subop(4,5,6,7)
+///   - SEXT/CLAMPS:       r=ar, s=as_, op2=sa-7 (raw immediate, 0..=15), op1=0, t=subop(2,3)
+fn decode_lsci(w: u32) -> Instruction {
+    let op2 = ((w >> 20) & 0xF) as u8;
+    let r   = ((w >> 12) & 0xF) as u8;
+    let s   = ((w >> 8)  & 0xF) as u8;
+    let t   = ((w >> 4)  & 0xF) as u8;
+
+    match t {
+        // SEXT ar, as_, sa: sign-extend as_ from bit position sa (7..=22).
+        // sa = op2 + 7.  Stored in Instruction as the `t` immediate field.
+        0x2 => Instruction::Sext   { ar: r, as_: s, t: op2 + 7 },
+        // CLAMPS ar, as_, sa: saturate signed as_ into (sa+1)-bit range.
+        // sa = op2 + 7.  Stored in Instruction as the `t` immediate field.
+        0x3 => Instruction::Clamps { ar: r, as_: s, t: op2 + 7 },
+        // MIN ar, as_, at: ar = signed min(as_, at).
+        0x4 => Instruction::Min    { ar: r, as_: s, at: op2 },
+        // MAX ar, as_, at: ar = signed max(as_, at).
+        0x5 => Instruction::Max    { ar: r, as_: s, at: op2 },
+        // MINU ar, as_, at: ar = unsigned min(as_, at).
+        0x6 => Instruction::Minu   { ar: r, as_: s, at: op2 },
+        // MAXU ar, as_, at: ar = unsigned max(as_, at).
+        0x7 => Instruction::Maxu   { ar: r, as_: s, at: op2 },
+        _ => Instruction::Unknown(w),
+    }
+}
 fn decode_mac16(w: u32) -> Instruction { Instruction::Unknown(w) }
 
 /// CALLN family (op0=5): CALL0, CALL4, CALL8, CALL12.

@@ -654,6 +654,89 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // ── E3: Bit-manip instructions ────────────────────────────────────
+
+            // NSA ar, as_: Number of Sign bits minus 1.
+            // Result = clz(if as_ >= 0 then as_ else !as_) - 1.
+            // For as_>=0: counts leading 0 bits minus 1 (result range 0..=31).
+            // For as_<0:  counts leading 1 bits minus 1 (same range).
+            // NSA(0) = 31 (clz(0)=32, 32-1=31). NSA(-1) = 31 (clz(!0xFFFF)=32, -1=31).
+            Nsa { ar, as_ } => {
+                let src = self.regs.read_logical(as_);
+                let count = if (src as i32) >= 0 {
+                    src.leading_zeros()
+                } else {
+                    (!src).leading_zeros()
+                };
+                self.regs.write_logical(ar, count - 1);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // NSAU ar, as_: Number of leading zeros, Unsigned.
+            // Result = clz(as_) for unsigned as_. NSAU(0) = 32.
+            Nsau { ar, as_ } => {
+                let src = self.regs.read_logical(as_);
+                self.regs.write_logical(ar, src.leading_zeros());
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // MIN ar, as_, at: ar = signed min(as_, at).
+            Min { ar, as_, at } => {
+                let a = self.regs.read_logical(as_) as i32;
+                let b = self.regs.read_logical(at)  as i32;
+                self.regs.write_logical(ar, a.min(b) as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // MAX ar, as_, at: ar = signed max(as_, at).
+            Max { ar, as_, at } => {
+                let a = self.regs.read_logical(as_) as i32;
+                let b = self.regs.read_logical(at)  as i32;
+                self.regs.write_logical(ar, a.max(b) as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // MINU ar, as_, at: ar = unsigned min(as_, at).
+            Minu { ar, as_, at } => {
+                let a = self.regs.read_logical(as_);
+                let b = self.regs.read_logical(at);
+                self.regs.write_logical(ar, a.min(b));
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // MAXU ar, as_, at: ar = unsigned max(as_, at).
+            Maxu { ar, as_, at } => {
+                let a = self.regs.read_logical(as_);
+                let b = self.regs.read_logical(at);
+                self.regs.write_logical(ar, a.max(b));
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // SEXT ar, as_, t: sign-extend as_ from bit position t downward.
+            // Decoder stores sa (7..=22) in the `t` field of the Instruction.
+            // Bit[sa] of as_ is the sign bit; bits[sa-1:0] are preserved;
+            // bits[31:sa] are filled with the value of bit[sa].
+            // Equivalently: ((as_ as i32) << (31 - sa)) >> (31 - sa)
+            Sext { ar, as_, t: sa } => {
+                let src = self.regs.read_logical(as_);
+                let shift = 31 - sa;  // sa is 7..=22, shift is 9..=24
+                let v = ((src as i32) << shift >> shift) as u32;
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // CLAMPS ar, as_, t: saturate signed as_ into (sa+1)-bit signed range.
+            // Decoder stores sa (7..=22) in the `t` field of the Instruction.
+            // Range: [-(2^sa), 2^sa - 1].  For sa=7: [-128, 127].
+            Clamps { ar, as_, t: sa } => {
+                let src = self.regs.read_logical(as_) as i32;
+                let max_val = (1i32 << sa) - 1;
+                let min_val = -(1i32 << sa);
+                let v = src.clamp(min_val, max_val);
+                self.regs.write_logical(ar, v as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())

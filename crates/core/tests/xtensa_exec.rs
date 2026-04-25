@@ -2548,3 +2548,258 @@ fn test_exec_remu_div_by_zero() {
     );
     assert_eq!(cpu.sr.read(EXCCAUSE_ID), 6, "EXCCAUSE SR should be 6 after div-by-zero");
 }
+
+// ── E3: Bit-manip encoding helpers ────────────────────────────────────────────
+//
+// NSA/NSAU field layout (op0=0, op1=0):
+//   r=0xE(NSA)/0xF(NSAU) is constant subop; op2=ar, s=as_.
+//   Word = (ar << 20) | (0xE << 12) | (as_ << 8)  [for NSA]
+// MIN/MAX/MINU/MAXU field layout (op0=3):
+//   Byte0 = (subop << 4) | 3; s=as_; r=ar; op2=at; op1=0
+//   Word = (at << 20) | (r << 12) | (s << 8) | (subop << 4) | 3
+// SEXT/CLAMPS field layout (op0=3):
+//   Word = ((sa-7) << 20) | (r << 12) | (s << 8) | (subop << 4) | 3
+
+/// Encode NSA ar, as_ (op0=0, op1=0, r=0xE, op2=ar, s=as_).
+fn enc_nsa(ar: u32, as_: u32) -> u32 {
+    (ar << 20) | (0xEu32 << 12) | (as_ << 8)
+}
+
+/// Encode NSAU ar, as_ (op0=0, op1=0, r=0xF, op2=ar, s=as_).
+fn enc_nsau(ar: u32, as_: u32) -> u32 {
+    (ar << 20) | (0xFu32 << 12) | (as_ << 8)
+}
+
+/// Encode MIN/MAX/MINU/MAXU (op0=3, subop in t field, r=ar, s=as_, op2=at).
+fn enc_lsci_rrr(subop: u32, ar: u32, as_: u32, at: u32) -> u32 {
+    (at << 20) | (ar << 12) | (as_ << 8) | (subop << 4) | 3
+}
+
+fn enc_min(ar: u32, as_: u32, at: u32)  -> u32 { enc_lsci_rrr(4, ar, as_, at) }
+fn enc_max(ar: u32, as_: u32, at: u32)  -> u32 { enc_lsci_rrr(5, ar, as_, at) }
+fn enc_minu(ar: u32, as_: u32, at: u32) -> u32 { enc_lsci_rrr(6, ar, as_, at) }
+fn enc_maxu(ar: u32, as_: u32, at: u32) -> u32 { enc_lsci_rrr(7, ar, as_, at) }
+
+/// Encode SEXT ar, as_, sa (op0=3, t=2, r=ar, s=as_, op2=sa-7).
+/// sa must be 7..=22.
+fn enc_sext(ar: u32, as_: u32, sa: u32) -> u32 {
+    let raw_imm = sa - 7;
+    (raw_imm << 20) | (ar << 12) | (as_ << 8) | (2u32 << 4) | 3
+}
+
+/// Encode CLAMPS ar, as_, sa (op0=3, t=3, r=ar, s=as_, op2=sa-7).
+/// sa must be 7..=22.
+fn enc_clamps(ar: u32, as_: u32, sa: u32) -> u32 {
+    let raw_imm = sa - 7;
+    (raw_imm << 20) | (ar << 12) | (as_ << 8) | (3u32 << 4) | 3
+}
+
+// ── E3: Bit-manip execution tests ─────────────────────────────────────────────
+
+fn step_ok(cpu: &mut XtensaLx7, bus: &mut SystemBus) {
+    cpu.step(bus, &[]).expect("step should succeed");
+}
+
+/// NSA(0) = 31: clz(0) - 1 = 32 - 1 = 31.
+#[test]
+fn test_exec_nsa_zero() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_nsa(3, 4)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 31, "NSA(0) should be 31");
+}
+
+/// NSA(0x10) = 26: clz(16) - 1 = 27 - 1 = 26.
+#[test]
+fn test_exec_nsa_positive() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x10);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_nsa(3, 4)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 26, "NSA(0x10) should be 26");
+}
+
+/// NSA(0xFFFFFFFF = -1) = 31: clz(!0xFFFFFFFF) - 1 = clz(0) - 1 = 31.
+#[test]
+fn test_exec_nsa_negative() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xFFFFFFFF);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_nsa(3, 4)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 31, "NSA(-1) should be 31");
+}
+
+/// NSA(0x80000000 = i32::MIN) = 0: clz(!0x80000000) - 1 = clz(0x7FFFFFFF) - 1 = 1 - 1 = 0.
+#[test]
+fn test_exec_nsa_min_signed() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x80000000);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_nsa(3, 4)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0, "NSA(0x80000000) should be 0");
+}
+
+/// NSAU(0) = 32: clz(0) = 32 (Rust u32::leading_zeros).
+#[test]
+fn test_exec_nsau_zero() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_nsau(3, 4)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 32, "NSAU(0) should be 32");
+}
+
+/// NSAU(0x10) = 27: clz(16) = 27.
+#[test]
+fn test_exec_nsau_basic() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x10);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_nsau(3, 4)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 27, "NSAU(0x10) should be 27");
+}
+
+/// NSAU(0x80000000) = 0: clz(0x80000000) = 0.
+#[test]
+fn test_exec_nsau_high_bit() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x80000000);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_nsau(3, 4)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0, "NSAU(0x80000000) should be 0");
+}
+
+/// MIN(5, 7) = 5 (signed min).
+#[test]
+fn test_exec_min_basic() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 5); cpu.set_register(5, 7);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_min(3, 4, 5)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 5, "MIN(5,7) should be 5");
+}
+
+/// MIN(-1, 1) = -1 (signed min; -1 as u32 = 0xFFFFFFFF).
+#[test]
+fn test_exec_min_negative() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, (-1i32) as u32); cpu.set_register(5, 1);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_min(3, 4, 5)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), (-1i32) as u32, "MIN(-1,1) should be -1");
+}
+
+/// MAX(5, 7) = 7 (signed max).
+#[test]
+fn test_exec_max_basic() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 5); cpu.set_register(5, 7);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_max(3, 4, 5)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 7, "MAX(5,7) should be 7");
+}
+
+/// MAX(-1, 1) = 1 (signed max; -1 as signed is less than 1).
+#[test]
+fn test_exec_max_negative() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, (-1i32) as u32); cpu.set_register(5, 1);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_max(3, 4, 5)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 1, "MAX(-1,1) should be 1");
+}
+
+/// MINU(0xFFFFFFFF, 1) = 1 (0xFFFFFFFF is huge unsigned; 1 wins).
+#[test]
+fn test_exec_minu() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xFFFFFFFF); cpu.set_register(5, 1);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_minu(3, 4, 5)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 1, "MINU(0xFFFFFFFF,1) should be 1");
+}
+
+/// MAXU(0xFFFFFFFF, 1) = 0xFFFFFFFF (largest unsigned value wins).
+#[test]
+fn test_exec_maxu() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xFFFFFFFF); cpu.set_register(5, 1);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_maxu(3, 4, 5)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0xFFFFFFFF, "MAXU(0xFFFFFFFF,1) should be 0xFFFFFFFF");
+}
+
+/// SEXT(0x80, sa=7): bit 7 set → sign-extend → 0xFFFFFF80.
+/// sa=7 means sign bit at position 7; lower 7 bits (bits[6:0]=0) are preserved;
+/// bits[31:7] are filled with 1.
+#[test]
+fn test_exec_sext_t0_negative() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x80);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_sext(3, 4, 7)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0xFFFFFF80, "SEXT(0x80, sa=7) should be 0xFFFFFF80");
+}
+
+/// SEXT(0x7F, sa=7): bit 7 clear → 0x0000007F (no sign fill).
+#[test]
+fn test_exec_sext_t0_positive() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0x7F);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_sext(3, 4, 7)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0x0000007F, "SEXT(0x7F, sa=7) should be 0x0000007F");
+}
+
+/// CLAMPS(50, sa=7): 50 is in range [-128, 127] → result = 50.
+#[test]
+fn test_exec_clamps_t0_in_range() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 50);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_clamps(3, 4, 7)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 50, "CLAMPS(50, sa=7) should be 50");
+}
+
+/// CLAMPS(200, sa=7): 200 > 127 → saturate to 127.
+#[test]
+fn test_exec_clamps_t0_overflow_pos() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 200);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_clamps(3, 4, 7)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 127, "CLAMPS(200, sa=7) should saturate to 127");
+}
+
+/// CLAMPS(-200, sa=7): -200 < -128 → saturate to -128 (= 0xFFFFFF80 as u32).
+#[test]
+fn test_exec_clamps_t0_overflow_neg() {
+    let mut cpu = XtensaLx7::new(); let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap(); cpu.set_pc(TEST_PC);
+    cpu.set_register(4, (-200i32) as u32);
+    write_insns(&mut bus, TEST_PC as u64, &[enc_clamps(3, 4, 7)]);
+    step_ok(&mut cpu, &mut bus);
+    assert_eq!(
+        cpu.get_register(3),
+        (-128i32) as u32,
+        "CLAMPS(-200, sa=7) should saturate to -128"
+    );
+}

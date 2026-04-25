@@ -819,3 +819,76 @@ fn test_decode_remu() {
     // HW-oracle: remu a3, a4, a5 → bytes [e2 34 50] → word 0xE23450
     assert_eq!(decode(0xE23450), Instruction::Remu { ar: 3, as_: 4, at: 5 });
 }
+
+// ── E3: Bit-manip decoder tests ───────────────────────────────────────────────
+//
+// All byte encodings are HW-oracle verified via:
+//   xtensa-esp32s3-elf-as + xtensa-esp32s3-elf-objdump (esp-15.2.0_20250920)
+//
+// NSA/NSAU field layout (op0=0, op1=0):
+//   r=0xE(NSA)/0xF(NSAU), op2=ar, s=as_, t=don't-care
+// MIN/MAX/MINU/MAXU field layout (op0=3):
+//   t=4/5/6/7(subop), r=ar, s=as_, op2=at, op1=0
+// SEXT/CLAMPS field layout (op0=3):
+//   t=2/3(subop), r=ar, s=as_, op2=sa-7, op1=0  (sa stored as Instruction.t)
+
+#[test]
+fn test_decode_nsa() {
+    // HW-oracle: nsa a3, a4 → bytes [40 e4 30] → word 0x30e440
+    // Encoding: op0=0, op1=0, r=0xE, op2=3=ar, s=4=as_
+    assert_eq!(decode(0x30e440), Instruction::Nsa { ar: 3, as_: 4 });
+}
+
+#[test]
+fn test_decode_nsau() {
+    // HW-oracle: nsau a3, a4 → bytes [40 f4 30] → word 0x30f440
+    // Encoding: op0=0, op1=0, r=0xF, op2=3=ar, s=4=as_
+    assert_eq!(decode(0x30f440), Instruction::Nsau { ar: 3, as_: 4 });
+}
+
+#[test]
+fn test_decode_min() {
+    // HW-oracle: min a3, a4, a5 → bytes [43 34 50] → word 0x503443
+    // Encoding: op0=3, t=4(MIN), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503443), Instruction::Min { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_max() {
+    // HW-oracle: max a3, a4, a5 → bytes [53 34 50] → word 0x503453
+    // Encoding: op0=3, t=5(MAX), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503453), Instruction::Max { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_minu() {
+    // HW-oracle: minu a3, a4, a5 → bytes [63 34 50] → word 0x503463
+    // Encoding: op0=3, t=6(MINU), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503463), Instruction::Minu { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_maxu() {
+    // HW-oracle: maxu a3, a4, a5 → bytes [73 34 50] → word 0x503473
+    // Encoding: op0=3, t=7(MAXU), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503473), Instruction::Maxu { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_sext() {
+    // HW-oracle: sext a3, a4, 7 → bytes [23 34 00] → word 0x003423
+    // Encoding: op0=3, t=2(SEXT), r=3=ar, s=4=as_, op2=0=sa-7, sa=7
+    // Instruction.t stores sa=7 (the sign bit position).
+    assert_eq!(decode(0x003423), Instruction::Sext { ar: 3, as_: 4, t: 7 });
+    // sext a3, a4, 15 → bytes [23 34 80] → word 0x803423
+    // op2=8=15-7=sa-7, sa=15
+    assert_eq!(decode(0x803423), Instruction::Sext { ar: 3, as_: 4, t: 15 });
+}
+
+#[test]
+fn test_decode_clamps() {
+    // HW-oracle: clamps a3, a4, 7 → bytes [33 34 00] → word 0x003433
+    // Encoding: op0=3, t=3(CLAMPS), r=3=ar, s=4=as_, op2=0=sa-7, sa=7
+    // Instruction.t stores sa=7 (saturation bit width = sa+1 = 8 bits).
+    assert_eq!(decode(0x003433), Instruction::Clamps { ar: 3, as_: 4, t: 7 });
+}
