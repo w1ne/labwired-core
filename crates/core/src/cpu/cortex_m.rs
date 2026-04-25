@@ -1243,6 +1243,18 @@ impl CortexM {
                     let val = self.read_reg(rm);
                     self.write_reg(rd, val & 0xFF);
                 }
+                Instruction::Uxth { rd, rm } => {
+                    let val = self.read_reg(rm);
+                    self.write_reg(rd, val & 0xFFFF);
+                }
+                Instruction::Sxtb { rd, rm } => {
+                    let val = self.read_reg(rm) as u8 as i8 as i32 as u32;
+                    self.write_reg(rd, val);
+                }
+                Instruction::Sxth { rd, rm } => {
+                    let val = self.read_reg(rm) as u16 as i16 as i32 as u32;
+                    self.write_reg(rd, val);
+                }
 
                 Instruction::It { cond, mask } => {
                     self.it_state = (cond << 4) | mask;
@@ -2408,6 +2420,37 @@ mod tests {
 
         run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE20, 2, 0, 1, 0), true);
         assert_eq!(cpu.fpu_s[2], (12.0_f32).to_bits(), "VMUL: 6 * 2 = 12");
+    }
+
+    #[test]
+    fn test_thumb_sxth_sxtb_uxth_uxtb() {
+        // Family encoding: 1011 0010 op2:2 mmm:3 ddd:3.
+        //   op2 = 00 -> SXTH, 01 -> SXTB, 10 -> UXTH, 11 -> UXTB
+        // Surfaced on NUCLEO-L476RG: GCC emits UXTH (0xB280) when
+        // truncating a uint16_t expression to fit a u32 register;
+        // sim was raising "Unknown instruction" for it.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+
+        // SXTH r0, r1 = 0xB208 (Rm=1, Rd=0).
+        cpu.r1 = 0x0000_8000; // bit 15 set -> negative as i16
+        run_test_instr(&mut cpu, &mut bus, 0xB208, false);
+        assert_eq!(cpu.r0, 0xFFFF_8000, "SXTH sign-extends bit 15");
+
+        // SXTB r0, r1 = 0xB248 (Rm=1, Rd=0).
+        cpu.r1 = 0x0000_0080;
+        run_test_instr(&mut cpu, &mut bus, 0xB248, false);
+        assert_eq!(cpu.r0, 0xFFFF_FF80, "SXTB sign-extends bit 7");
+
+        // UXTH r0, r1 = 0xB288.
+        cpu.r1 = 0x1234_ABCD;
+        run_test_instr(&mut cpu, &mut bus, 0xB288, false);
+        assert_eq!(cpu.r0, 0x0000_ABCD, "UXTH zero-extends low 16");
+
+        // UXTB r0, r1 = 0xB2C8.
+        cpu.r1 = 0x1234_ABCD;
+        run_test_instr(&mut cpu, &mut bus, 0xB2C8, false);
+        assert_eq!(cpu.r0, 0x0000_00CD, "UXTB zero-extends low 8");
     }
 
     #[test]

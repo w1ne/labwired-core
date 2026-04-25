@@ -291,6 +291,12 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // UXTB Rd, Rm
+    /// SXTH Rd, Rm — sign-extend bottom 16 bits of Rm into Rd.
+    Sxth { rd: u8, rm: u8 },
+    /// SXTB Rd, Rm — sign-extend bottom 8 bits of Rm into Rd.
+    Sxtb { rd: u8, rm: u8 },
+    /// UXTH Rd, Rm — zero-extend bottom 16 bits of Rm into Rd.
+    Uxth { rd: u8, rm: u8 },
     Adr {
         rd: u8,
         imm: u16,
@@ -848,11 +854,22 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
 
     // 8.1 Misc (T1) (0xBxxx)
     if (opcode & 0xF000) == 0xB000 {
-        // UXTB (T1): 1011 0010 11 mmm ddd -> 0xB2C0 base
-        if (opcode & 0xFFC0) == 0xB2C0 {
+        // SXTH/SXTB/UXTH/UXTB (T1): 1011 0010 [op2] mmm ddd
+        //   op2 = 00 -> SXTH (0xB200..0xB23F)
+        //   op2 = 01 -> SXTB (0xB240..0xB27F)
+        //   op2 = 10 -> UXTH (0xB280..0xB2BF)
+        //   op2 = 11 -> UXTB (0xB2C0..0xB2FF)
+        // Bits[15:8] = 1011_0010 are the fixed family bits; bits[7:6]
+        // select the operation. Mask 0xFF00 fixes the family.
+        if (opcode & 0xFF00) == 0xB200 {
             let rm = ((opcode >> 3) & 0x7) as u8;
             let rd = (opcode & 0x7) as u8;
-            return Instruction::Uxtb { rd, rm };
+            return match (opcode >> 6) & 0x3 {
+                0b00 => Instruction::Sxth { rd, rm },
+                0b01 => Instruction::Sxtb { rd, rm },
+                0b10 => Instruction::Uxth { rd, rm },
+                _ => Instruction::Uxtb { rd, rm },
+            };
         }
 
         // CBZ/CBNZ (T1): 1011 op i 1 imm5 rn

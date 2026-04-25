@@ -89,6 +89,24 @@ peripherals:
     config:
       profile: "stm32v2"
 
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00

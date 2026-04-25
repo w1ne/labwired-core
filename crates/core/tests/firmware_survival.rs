@@ -156,6 +156,35 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output:
             b"L476 SMOKE\r\nDEV=10076415\r\nMUL=60FC303A\r\nFPU=40C8F5C3\r\nDONE\r\n",
     },
+    SurvivalCase {
+        // SPI1 register-level fidelity. Captured from real silicon — the
+        // sim's SPI peripheral matches CR1/CR2/SR latching, CR2 reset
+        // value (0x0700 = DS=8-bit on STM32L4), and the no-loopback
+        // transmit semantics (SR=0x0002 / DR=0x00 after TX with no
+        // slave wired).
+        name: "nucleo_l476rg_spi",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-spi.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"SPI1 RESET\r\n\
+CR1=0000\r\n\
+CR2=0700\r\n\
+SR=0002\r\n\
+SPI1 CONFIG\r\n\
+CR1=033C\r\n\
+CR2=1700\r\n\
+SR=0002\r\n\
+SPI1 ENABLED\r\n\
+CR1=037C\r\n\
+SR=0002\r\n\
+SPI1 AFTER TX\r\n\
+SR=0002\r\n\
+DR=00\r\n\
+DONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -406,6 +435,11 @@ fn test_esp32c3_demo_survival() {
 #[test]
 fn test_nucleo_l476rg_smoke_survival() {
     run_survival_case(&SURVIVAL_CASES[8]);
+}
+
+#[test]
+fn test_nucleo_l476rg_spi_survival() {
+    run_survival_case(&SURVIVAL_CASES[9]);
 }
 
 #[test]
