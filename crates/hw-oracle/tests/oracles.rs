@@ -1125,3 +1125,280 @@ fn movsp_safe_path() -> OracleCase {
             st.assert_reg("a3", 0xCAFE_BABE);
         })
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// H8 — Exception / Interrupt oracle bank (6 tests)
+//
+// Verifies:
+//   - IllegalInstruction (EXCCAUSE=0) on unknown opcode.
+//   - EPC1/EXCCAUSE readback after exception entry.
+//   - RFE: clears PS.EXCM, restores PC from EPC1.
+//   - Level-1 interrupt dispatch (INTENABLE+INTERRUPT → VECBASE+0x300).
+//   - RFI 2: restores full PS from EPS2, PC from EPC2.
+//   - VECBASE relocation: exception vector redirect to new VECBASE+0x300.
+//
+// Instruction encodings used (all verified in xtensa_exec.rs G2 tests):
+//   Unknown opcode 0x008530  (bytes [0x00, 0x85, 0x30]): r=8 in ST0 → Unknown → EXCCAUSE=0
+//   Unknown opcode 0x008540  (bytes [0x00, 0x85, 0x40]): another Unknown in ST0
+//   RFE   (0x003000, bytes [0x00, 0x30, 0x00]): r=3, s=0, t=0 → Rfe
+//   RFI 2 (0x003210, bytes [0x10, 0x32, 0x00]): r=3, s=2, t=1 → Rfi{level:2}
+//   BREAK (0x0041F0, bytes [0xF0, 0x41, 0x00]): halt sentinel
+//
+// ExceptionRaised halt semantics (hw-oracle lib.rs):
+//   When raise_general_exception() fires, end.pc = cpu.get_pc() = VECBASE+0x300
+//   (the kernel exception vector redirect). end.epc1 = faulting PC.
+//
+// Interrupt dispatch halt semantics:
+//   dispatch_irq() returns Ok(()) and redirects cpu.pc = VECBASE+0x300.
+//   The step loop then continues; a BREAK at VECBASE+0x300 (planted in the
+//   oracle IRAM program buffer) halts with end.pc = VECBASE+0x300.
+//
+// SR IDs (from xtensa_sr.rs):
+//   VECBASE = 231, EPC1 = 177, EPC2 = 178, EPS2 = 194, INTENABLE = 228.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── H8.1: Illegal instruction raises EXCCAUSE=0 ──────────────────────────────
+
+/// Execute an unknown opcode and verify IllegalInstruction exception entry.
+///
+/// The opcode `0x008530` decodes as `Unknown` in the ST0 group (r=8 is not a
+/// valid ST0 sub-opcode). Since H8, `Unknown` raises EXCCAUSE=0 (IllegalInstruction)
+/// per Xtensa LX7 ISA RM §5.2, matching real ESP32-S3 hardware behaviour.
+///
+/// Program:
+///   IRAM_BASE+0: [0x30, 0x85, 0x00]  — unknown opcode w=0x008530 (3-byte LE)
+///   IRAM_BASE+3: BREAK (appended; never reached — exception fires first)
+///
+/// Byte layout: w=0x008530 → bytes [w&0xFF, (w>>8)&0xFF, (w>>16)&0xFF] = [0x30, 0x85, 0x00].
+/// CPU reads LE: 0x30 | (0x85<<8) | (0x00<<16) = 0x008530 → op0=0, op1=0, op2=0, r=8 → Unknown.
+///
+/// After exception entry (raise_general_exception(0)):
+///   EPC1     = IRAM_BASE (faulting PC)
+///   EXCCAUSE = 0
+///   PS.EXCM  = 1
+///   CPU PC   = VECBASE + 0x300 (kernel exception vector)
+///
+/// VECBASE default = 0x4000_0000, so CPU PC = 0x4000_0300.
+/// The oracle runtime halts on ExceptionRaised and captures cpu.get_pc().
+#[hw_oracle_test]
+fn illegal_instruction_oracle() -> OracleCase {
+    // w=0x008530 in 3-byte LE: [0x30, 0x85, 0x00]
+    // decode: op0=0 (QRST), op1=0, op2=0 (ST0), r=8 → Unknown → raise_general_exception(0).
+    OracleCase::from_bytes(vec![0x30, 0x85, 0x00])
+        .expect(|st| {
+            // CPU redirected to kernel exception vector (default VECBASE + 0x300).
+            st.assert_pc(0x4000_0000u32.wrapping_add(0x300));
+            // EPC1 holds the faulting instruction's address.
+            st.assert_epc1(IRAM_BASE);
+            // EXCCAUSE = 0: IllegalInstruction.
+            st.assert_exccause(0);
+            // PS.EXCM was set by exception entry.
+            st.assert_excm(true);
+        })
+}
+
+// ── H8.2: RFE returns from exception ─────────────────────────────────────────
+
+/// RFE clears PS.EXCM and jumps to EPC1.
+///
+/// Setup a fake exception state: PS.EXCM=1, EPC1=IRAM_BASE+3 (address of
+/// the BREAK that follows the RFE instruction).  Execute RFE; the CPU returns
+/// to IRAM_BASE+3, hits BREAK, and halts.
+///
+/// Program:
+///   IRAM_BASE+0: RFE   (w=0x003000, bytes [0x00, 0x30, 0x00])
+///   IRAM_BASE+3: BREAK (halt sentinel, also the RFE return target)
+///
+/// Encoding derivation (ST0, r=3, s=0, t=0):
+///   w = (3<<12)|(0<<8)|(0<<4) = 0x3000   bytes: [0x00, 0x30, 0x00]
+///   Verified by xtensa-esp32s3-elf-as: rfe → 0x003000 (G2 test comment).
+#[hw_oracle_test]
+fn rfe_returns_oracle() -> OracleCase {
+    // RFE (0x003000) followed by BREAK (the return target).
+    OracleCase::from_bytes(vec![
+        0x00, 0x30, 0x00,   // RFE at IRAM_BASE+0
+        // BREAK at IRAM_BASE+3 (appended by from_bytes AND used as EPC1 target)
+    ])
+    .setup(|st| {
+        // Pre-load EPC1 = IRAM_BASE+3 (the BREAK instruction address).
+        st.write_epc1(IRAM_BASE + 3);
+        // Set PS.EXCM=1 so that RFE has something to clear.
+        st.write_ps_excm(true);
+    })
+    .expect(|st| {
+        // After RFE: PC = EPC1 = IRAM_BASE+3 (BREAK fires there).
+        st.assert_pc(IRAM_BASE + 3);
+        // PS.EXCM was cleared by RFE.
+        st.assert_excm(false);
+    })
+}
+
+// ── H8.3: Level-1 interrupt dispatch ─────────────────────────────────────────
+
+/// INTENABLE bit-0 + INTERRUPT bit-0 → level-1 interrupt vector dispatch.
+///
+/// Bit 0 maps to IRQ level 1 (IRQ_LEVELS[0] = 1). Level-1 interrupt dispatch:
+///   EPC1     ← pre-dispatch PC (= IRAM_BASE, where the next instruction would have run)
+///   EXCCAUSE ← 4 (Level1InterruptCause)
+///   PS.EXCM  ← 1
+///   CPU PC   ← VECBASE + 0x300 (kernel exception vector, shared with general exceptions)
+///
+/// VECBASE is relocated to IRAM_BASE so the L1 vector (IRAM_BASE + 0x300) is
+/// within the 64 KiB oracle IRAM region.  A BREAK is planted there to halt.
+///
+/// Program layout (raw bytes):
+///   IRAM_BASE+0x000: NOP.N  [0x3D, 0xF0]  — first instruction (never fetched; IRQ fires first)
+///   IRAM_BASE+0x300: BREAK  [0xF0, 0x41, 0x00]  — L1 interrupt vector landing pad
+///
+/// Dispatch is pre-fetch, so the PC captured in EPC1 = IRAM_BASE+0 (not after NOP.N).
+#[hw_oracle_test]
+fn interrupt_dispatch_oracle() -> OracleCase {
+    // Oracle IRAM program: NOP.N at 0, BREAK at 0x300.
+    let mut prog = vec![0u8; 0x300 + 3];
+    // NOP.N at IRAM_BASE+0 (2-byte narrow; will not be fetched when IRQ fires)
+    prog[0] = 0x3D;
+    prog[1] = 0xF0;
+    // BREAK at IRAM_BASE+0x300 (L1 vector = VECBASE+0x300 when VECBASE=IRAM_BASE)
+    prog[0x300..0x303].copy_from_slice(&[0xF0, 0x41, 0x00]);
+    OracleCase::from_bytes(prog)
+        .setup(|st| {
+            // Relocate VECBASE to IRAM_BASE so the L1 vector is inside oracle IRAM.
+            st.write_vecbase(IRAM_BASE);
+            // Enable bit-0 IRQ (level 1).
+            st.write_intenable(1 << 0);
+            // Inject pending bit-0 IRQ via hardware raw path.
+            st.write_interrupt(1 << 0);
+            // Clear EXCM and INTLEVEL so the IRQ can fire (reset has EXCM=1, INTLEVEL=0xF).
+            st.write_ps_excm(false);
+            st.write_intlevel(0);
+        })
+        .expect(|st| {
+            // Halted at BREAK in the L1 interrupt vector.
+            st.assert_pc(IRAM_BASE + 0x300);
+            // EPC1 = pre-dispatch PC (IRAM_BASE+0).
+            st.assert_epc1(IRAM_BASE);
+            // EXCCAUSE = 4: Level1InterruptCause.
+            st.assert_exccause(4);
+            // PS.EXCM = 1 (set by level-1 dispatch).
+            st.assert_excm(true);
+        })
+}
+
+// ── H8.4: RFI 2 returns from level-2 interrupt ───────────────────────────────
+
+/// RFI 2 restores PS from EPS2 and PC from EPC2.
+///
+/// Setup: EPC2 = IRAM_BASE+0x200 (where a BREAK is planted), EPS2 = 0x0005
+/// (INTLEVEL=5, EXCM=0).  Execute RFI 2; the CPU restores PS and jumps to
+/// IRAM_BASE+0x200, hits BREAK, and halts.
+///
+/// Program layout (raw bytes):
+///   IRAM_BASE+0x000: RFI 2  [0x10, 0x32, 0x00]  (w=0x003210)
+///   IRAM_BASE+0x200: BREAK  [0xF0, 0x41, 0x00]   — RFI return target
+///   (BREAK appended by from_bytes at IRAM_BASE+3 — never reached)
+///
+/// Encoding derivation (ST0, r=3, s=level=2, t=1):
+///   w = (3<<12)|(2<<8)|(1<<4) = 0x3210   bytes: [0x10, 0x32, 0x00]
+///   Verified by xtensa-esp32s3-elf-as: rfi 2 → 0x003210 (G2 test comment).
+///
+/// EPS2 = 0x0000_0005: bits[3:0]=INTLEVEL=5, bit[4]=EXCM=0.
+/// After RFI 2: PS.INTLEVEL=5, PS.EXCM=0.
+#[hw_oracle_test]
+fn rfi_returns_oracle() -> OracleCase {
+    let mut prog = vec![0u8; 0x200 + 3];
+    // RFI 2 at IRAM_BASE+0
+    prog[0..3].copy_from_slice(&[0x10, 0x32, 0x00]);
+    // BREAK at IRAM_BASE+0x200 (EPC2 return target)
+    prog[0x200..0x203].copy_from_slice(&[0xF0, 0x41, 0x00]);
+    OracleCase::from_bytes(prog)
+        .setup(|st| {
+            // EPC2 = IRAM_BASE+0x200 (where BREAK is).
+            st.write_epc(2, IRAM_BASE + 0x200);
+            // EPS2 = 0x0005: INTLEVEL=5, EXCM=0.
+            st.write_eps(2, 0x0000_0005);
+        })
+        .expect(|st| {
+            // After RFI 2: PC = EPC2 = IRAM_BASE+0x200 (BREAK fires there).
+            st.assert_pc(IRAM_BASE + 0x200);
+            // PS.INTLEVEL restored from EPS2.
+            st.assert_intlevel(5);
+            // PS.EXCM restored from EPS2 (bit 4 of 0x0005 = 0).
+            st.assert_excm(false);
+        })
+}
+
+// ── H8.5: VECBASE relocation — exception redirects to new vector ──────────────
+
+/// Write a new VECBASE, raise IllegalInstruction, verify redirect to new vector.
+///
+/// Default VECBASE = 0x4000_0000. This test writes VECBASE = IRAM_BASE
+/// (= 0x4037_0000) and verifies that the exception entry vector is
+/// IRAM_BASE + 0x300 (= 0x4037_0300), not the ROM default 0x4000_0300.
+///
+/// Program:
+///   IRAM_BASE+0: [0x30, 0x85, 0x00]  — unknown opcode w=0x008530 → IllegalInstruction
+///   (BREAK appended; never reached — exception fires first)
+///
+/// The oracle runtime halts on ExceptionRaised and captures cpu.get_pc()
+/// (= new VECBASE + 0x300).
+#[hw_oracle_test]
+fn vecbase_relocation_oracle() -> OracleCase {
+    OracleCase::from_bytes(vec![0x30, 0x85, 0x00])
+        .setup(|st| {
+            // Relocate VECBASE to IRAM_BASE.
+            st.write_vecbase(IRAM_BASE);
+        })
+        .expect(|st| {
+            // PC must be at new VECBASE + 0x300 (not the default 0x4000_0300).
+            st.assert_pc(IRAM_BASE + 0x300);
+            // EPC1 = faulting PC (IRAM_BASE, where the unknown opcode was).
+            st.assert_epc1(IRAM_BASE);
+            // EXCCAUSE = 0 (IllegalInstruction).
+            st.assert_exccause(0);
+            // PS.EXCM was set by exception entry.
+            st.assert_excm(true);
+        })
+}
+
+// ── H8.6: EPC1 / EXCCAUSE readback after second unknown opcode ───────────────
+
+/// Second IllegalInstruction test using a different unknown opcode byte pattern.
+///
+/// Verifies that any `Unknown` opcode raises EXCCAUSE=0 regardless of the
+/// specific bytes — not just the one opcode pattern from H8.1.
+/// Also verifies that EXCCAUSE and EPC1 are accurately readable from the
+/// end state (the "readback" part of the H8 specification).
+///
+/// The opcode `0x008540` (w=0x008540: op0=0, op1=0, op2=0, r=8, s=5, t=4 →
+/// r=8 is not a valid ST0 sub-opcode → Unknown) uses a different bit pattern
+/// from H8.1 but triggers the same IllegalInstruction path.
+///
+/// A NOP.N is prepended so the faulting PC is IRAM_BASE+2 (not IRAM_BASE),
+/// making the EPC1 readback a non-trivial check (EPC1 ≠ IRAM_BASE).
+///
+/// Byte layout: w=0x008540 → [0x40, 0x85, 0x00] (3-byte LE).
+/// CPU reads: 0x40 | (0x85<<8) | (0x00<<16) = 0x008540. ✓
+#[hw_oracle_test]
+fn exccause_epc1_readback_oracle() -> OracleCase {
+    // Place the unknown opcode at IRAM_BASE+2 by prepending a NOP.N (2 bytes).
+    // NOP.N: bytes [0x3D, 0xF0] (narrow, op0=0xD → narrow path, decoded as Nop).
+    // After NOP.N, the unknown opcode at IRAM_BASE+2 fires IllegalInstruction.
+    OracleCase::from_bytes(vec![
+        // NOP.N at IRAM_BASE+0 (2-byte narrow; op0=0xD)
+        0x3D, 0xF0,
+        // Unknown opcode at IRAM_BASE+2: w=0x008540 → bytes [0x40, 0x85, 0x00]
+        // decode: op0=0 (QRST), op1=0, op2=0 (ST0), r=8, s=5, t=4 → Unknown
+        0x40, 0x85, 0x00,
+        // BREAK (appended by from_bytes; never reached — exception fires at IRAM_BASE+2)
+    ])
+    .expect(|st| {
+        // EPC1 = IRAM_BASE+2 (the unknown opcode's address, not IRAM_BASE+0).
+        st.assert_epc1(IRAM_BASE + 2);
+        // EXCCAUSE = 0 (IllegalInstruction) — readable from end state.
+        st.assert_exccause(0);
+        // PS.EXCM = 1.
+        st.assert_excm(true);
+        // CPU PC = default VECBASE + 0x300 (VECBASE unchanged from reset).
+        st.assert_pc(0x4000_0000u32.wrapping_add(0x300));
+    })
+}

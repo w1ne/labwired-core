@@ -1198,6 +1198,15 @@ impl XtensaLx7 {
                 self.pc = self.sr.read(EPC1);
             }
 
+            // Unknown opcode: raise IllegalInstruction (EXCCAUSE=0).
+            //
+            // Xtensa LX7 ISA RM §5.2: executing an instruction not defined in the
+            // ISA raises a general exception with EXCCAUSE=0 (IllegalInstruction).
+            // This is the Plan-1 digital-twin guarantee: any byte pattern decoded
+            // as Unknown by the decode layer faithfully raises EXCCAUSE=0, matching
+            // real ESP32-S3 hardware behaviour.
+            Unknown(_) => return self.raise_general_exception(0),
+
             _ => return Err(SimulationError::NotImplemented(format!("exec: {:?}", ins))),
         }
         Ok(())

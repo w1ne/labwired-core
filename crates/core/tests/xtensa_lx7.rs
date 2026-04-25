@@ -54,10 +54,11 @@ fn reset_establishes_lx7_initial_state() {
 }
 
 #[test]
-fn step_with_wide_instruction_returns_notimplemented_without_advancing_pc() {
-    // ADD a3, a4, a5 in wide format: op0=0x0 (byte 0 = 0x00), so length = 3 bytes.
+fn step_with_unknown_wide_instruction_raises_illegal_instruction() {
+    // 0x008530: op0=0 → decode_qrst → decode_st0 with r=8 → Unknown(w).
+    // Since H8, Unknown opcodes raise IllegalInstruction (EXCCAUSE=0) instead of
+    // NotImplemented — matching real ESP32-S3 hardware behaviour.
     // Write 0x00_85_30 little-endian: bytes [0x00, 0x85, 0x30].
-    // The decoder will see op0=0x0 and try decode_qrst — resulting in some wide instruction.
     let mut cpu = XtensaLx7::new();
     let mut bus = build_bus_with_instruction_at(TEST_PC as u64, 0x00_85_30);
     cpu.reset(&mut bus).unwrap();
@@ -65,12 +66,19 @@ fn step_with_wide_instruction_returns_notimplemented_without_advancing_pc() {
 
     let err = cpu.step(&mut bus, &[]).unwrap_err();
     assert!(
-        matches!(err, SimulationError::NotImplemented(_)),
-        "exec stub should return NotImplemented for decoded wide instruction, got: {:?}",
+        matches!(err, SimulationError::ExceptionRaised { cause: 0, .. }),
+        "Unknown opcode must raise ExceptionRaised(cause=0) (IllegalInstruction), got: {:?}",
         err
     );
-    // PC must NOT advance when exec fails (our chosen policy: only advance on success).
-    assert_eq!(cpu.get_pc(), TEST_PC);
+    // PC is now at the kernel exception vector (VECBASE + 0x300).
+    // VECBASE reset value = 0x4000_0000.
+    assert_eq!(
+        cpu.get_pc(),
+        0x4000_0000u32.wrapping_add(0x300),
+        "PC must be redirected to kernel exception vector after IllegalInstruction"
+    );
+    assert_eq!(cpu.sr.read(EXCCAUSE), 0, "EXCCAUSE=0 for IllegalInstruction");
+    assert_eq!(cpu.sr.read(EPC1), TEST_PC, "EPC1 must hold the faulting PC");
 }
 
 #[test]

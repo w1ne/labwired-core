@@ -94,6 +94,14 @@ pub struct OracleState {
     /// If `Some(excm)`, override `PS.EXCM` before execution.
     pub init_ps_excm: Option<bool>,
 
+    /// If `Some(level)`, override `PS.INTLEVEL` before execution.
+    pub init_ps_intlevel: Option<u8>,
+
+    /// If `Some(mask)`, set `INTERRUPT` bits via the raw bypass path before
+    /// execution.  This is needed because direct SW writes to INTERRUPT are
+    /// ignored (hardware-latched semantics); only `set_raw` works.
+    pub init_interrupt: Option<u32>,
+
     // ── End-state captured fields ─────────────────────────────────────────────
 
     /// `WindowBase` after execution halts.
@@ -102,6 +110,8 @@ pub struct OracleState {
     pub ws: u16,
     /// `PS.EXCM` after execution halts.
     pub excm: bool,
+    /// `PS.INTLEVEL` after execution halts.
+    pub intlevel: u8,
     /// `EPC1` SR value after execution halts.
     pub epc1: u32,
     /// `EXCCAUSE` SR value after execution halts.
@@ -186,6 +196,61 @@ impl OracleState {
         self.init_ps_excm = Some(excm);
     }
 
+    /// Override `PS.INTLEVEL` before execution.
+    pub fn write_intlevel(&mut self, level: u8) {
+        self.init_ps_intlevel = Some(level);
+    }
+
+    /// Set `INTERRUPT` pending bits before execution via the raw hardware path
+    /// (bypasses the software-write guard on INTERRUPT).
+    pub fn write_interrupt(&mut self, mask: u32) {
+        self.init_interrupt = Some(mask);
+    }
+
+    /// Write `INTENABLE` SR before execution.
+    ///
+    /// Use `labwired_core::cpu::xtensa_sr::INTENABLE` for the SR ID.
+    pub fn write_intenable(&mut self, mask: u32) {
+        use labwired_core::cpu::xtensa_sr::INTENABLE;
+        self.sr.insert(INTENABLE, mask);
+    }
+
+    /// Write `VECBASE` SR before execution.
+    pub fn write_vecbase(&mut self, addr: u32) {
+        use labwired_core::cpu::xtensa_sr::VECBASE;
+        self.sr.insert(VECBASE, addr);
+    }
+
+    /// Write `EPC1` SR before execution.
+    pub fn write_epc1(&mut self, val: u32) {
+        use labwired_core::cpu::xtensa_sr::EPC1;
+        self.sr.insert(EPC1, val);
+    }
+
+    /// Write `EPC[level]` SR before execution (level 2..7).
+    ///
+    /// Panics if `level` is not in `2..=7`.
+    pub fn write_epc(&mut self, level: u8, val: u32) {
+        use labwired_core::cpu::xtensa_sr::{EPC2, EPC3, EPC4, EPC5, EPC6, EPC7};
+        let id = match level {
+            2 => EPC2, 3 => EPC3, 4 => EPC4, 5 => EPC5, 6 => EPC6, 7 => EPC7,
+            _ => panic!("write_epc: level {level} not in 2..=7"),
+        };
+        self.sr.insert(id, val);
+    }
+
+    /// Write `EPS[level]` SR before execution (level 2..7).
+    ///
+    /// Panics if `level` is not in `2..=7`.
+    pub fn write_eps(&mut self, level: u8, val: u32) {
+        use labwired_core::cpu::xtensa_sr::{EPS2, EPS3, EPS4, EPS5, EPS6, EPS7};
+        let id = match level {
+            2 => EPS2, 3 => EPS3, 4 => EPS4, 5 => EPS5, 6 => EPS6, 7 => EPS7,
+            _ => panic!("write_eps: level {level} not in 2..=7"),
+        };
+        self.sr.insert(id, val);
+    }
+
     // ── End-state assertion helpers ───────────────────────────────────────────
 
     /// Assert that `WindowBase` equals `expected` after execution.
@@ -212,6 +277,15 @@ impl OracleState {
             self.excm, expected,
             "oracle: PS.EXCM: expected {expected}, got {}",
             self.excm
+        );
+    }
+
+    /// Assert that `PS.INTLEVEL` equals `expected` after execution.
+    pub fn assert_intlevel(&self, expected: u8) {
+        assert_eq!(
+            self.intlevel, expected,
+            "oracle: PS.INTLEVEL: expected {expected}, got {}",
+            self.intlevel
         );
     }
 
@@ -552,6 +626,14 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     if let Some(excm) = init_state.init_ps_excm {
         cpu.ps.set_excm(excm);
     }
+    // Apply PS.INTLEVEL override.
+    if let Some(level) = init_state.init_ps_intlevel {
+        cpu.ps.set_intlevel(level);
+    }
+    // Inject INTERRUPT pending bits via raw bypass (hardware-latched register).
+    if let Some(mask) = init_state.init_interrupt {
+        cpu.sr.set_raw(labwired_core::cpu::xtensa_sr::INTERRUPT, mask);
+    }
     // Write setup memory into the bus (for load tests that need pre-populated data).
     for (&addr, &val) in &init_state.mem {
         bus.write_u32(addr as u64, val)
@@ -565,11 +647,12 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
             for i in 0u8..16 {
                 end.regs.insert(format!("a{}", i), cpu.regs.read_logical(i));
             }
-            end.pc     = $halt_pc;
-            end.wb     = cpu.regs.windowbase();
-            end.ws     = cpu.regs.windowstart();
-            end.excm   = cpu.ps.excm();
-            end.epc1   = cpu.sr.read(EPC1_SR);
+            end.pc       = $halt_pc;
+            end.wb       = cpu.regs.windowbase();
+            end.ws       = cpu.regs.windowstart();
+            end.excm     = cpu.ps.excm();
+            end.intlevel = cpu.ps.intlevel();
+            end.epc1     = cpu.sr.read(EPC1_SR);
             end.exccause = cpu.sr.read(EXCCAUSE_SR);
             // Re-read memory addresses.
             let mut addrs: Vec<u32> = init_state.mem.keys().copied().collect();
@@ -593,12 +676,13 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
             Err(SimulationError::BreakpointHit(break_pc)) => {
                 return make_end_state!(break_pc);
             }
-            Err(SimulationError::ExceptionRaised { cause: _, pc }) => {
-                // ExceptionRaised terminates execution for exception-path tests
-                // (e.g. S32E outside vector / MOVSP alloca-cause).
+            Err(SimulationError::ExceptionRaised { .. }) => {
+                // ExceptionRaised terminates execution for exception-path tests.
                 // cpu.sr[EXCCAUSE] and cpu.sr[EPC1] are already written by
-                // raise_general_exception, so the expect closure can check them.
-                return make_end_state!(pc);
+                // raise_general_exception. cpu.pc is the vector address
+                // (VECBASE + offset), so use cpu.get_pc() as the halt PC so that
+                // expect closures can verify the redirect address via assert_pc().
+                return make_end_state!(cpu.get_pc());
             }
             Err(e) => panic!("oracle sim error: {e:?}"),
         }
