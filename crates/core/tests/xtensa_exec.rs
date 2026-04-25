@@ -15,7 +15,10 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::cpu::xtensa_sr::{EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID, SCOMPARE1 as SCOMPARE1_ID};
+use labwired_core::cpu::xtensa_sr::{
+    EPC1 as EPC1_ID, EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID, SCOMPARE1 as SCOMPARE1_ID,
+    VECBASE as VECBASE_ID,
+};
 use labwired_core::{Bus, Cpu, SimulationError};
 
 const TEST_PC: u32 = 0x2000_0000;
@@ -3338,5 +3341,172 @@ fn test_exec_s32ri_imm_offset() {
         bus.read_u32((DATA_ADDR + 8) as u64).unwrap(),
         0xBEEF_CAFE,
         "S32RI imm=8 should store to DATA_ADDR+8"
+    );
+}
+
+// ── F3: Window Overflow exception on ENTRY ───────────────────────────────────
+//
+// Vector offsets (Xtensa LX ISA RM §5.6; confirmed by Zephyr
+// arch/xtensa/core/window_vectors.S .org directives):
+//   WindowOverflow4:   VECBASE + 0x000
+//   WindowUnderflow4:  VECBASE + 0x040
+//   WindowOverflow8:   VECBASE + 0x080
+//   WindowUnderflow8:  VECBASE + 0x0C0
+//   WindowOverflow12:  VECBASE + 0x100
+//   WindowUnderflow12: VECBASE + 0x140
+//
+// EXCCAUSE: window overflow does NOT set EXCCAUSE. Window exceptions vector
+// independently via dedicated slots (not the general exception path).
+// EXCCAUSE 5/6/7 = AllocaCause / IntegerDivideByZero / PrivilegedCause.
+//
+// Trigger condition: WindowStart[(wb_new + 1) mod 16] == 1
+//   where wb_new = (wb_old + callinc) & 0xF.
+
+const OF4_VECOFS:  u32 = 0x000;
+const OF8_VECOFS:  u32 = 0x080;
+const OF12_VECOFS: u32 = 0x100;
+
+/// Helper: set up CPU state so that ENTRY with the given CALLINC will trigger
+/// window overflow. WindowBase=0, CALLINC=callinc, wb_new = callinc & 0xF.
+/// We mark WindowStart[(wb_new + 1) mod 16] = 1 to trigger overflow.
+fn setup_entry_overflow(cpu: &mut XtensaLx7, callinc: u8) {
+    cpu.regs.set_windowbase(0);
+    cpu.ps.set_callinc(callinc);
+    // wb_new = callinc (since wb_old=0)
+    let wb_new = callinc & 0x0F;
+    let check_idx = (wb_new + 1) & 0x0F;
+    // Mark the check frame as in-use to trigger overflow
+    cpu.regs.set_windowstart_bit(check_idx, true);
+    // Also keep bit 0 set (reset state: caller frame live)
+    cpu.regs.set_windowstart_bit(0, true);
+}
+
+/// F3: ENTRY with CALLINC=1 triggers WindowOverflow4.
+/// Expect: PC = VECBASE + OF4 offset (0x000), EPC1 = original PC, PS.EXCM=1,
+/// WindowBase NOT rotated (still 0), WindowStart check bit still set.
+#[test]
+fn test_exec_entry_window_overflow_of4() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    setup_entry_overflow(&mut cpu, 1);
+    let original_pc = TEST_PC;
+    let vecbase = cpu.sr.read(VECBASE_ID);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(
+        cpu.pc,
+        vecbase.wrapping_add(OF4_VECOFS),
+        "OF4: PC should jump to VECBASE + 0x000"
+    );
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        original_pc,
+        "OF4: EPC1 should hold the faulting ENTRY PC"
+    );
+    assert!(cpu.ps.excm(), "OF4: PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 0, "OF4: WindowBase must NOT be rotated");
+    // check_idx = (1 + 1) & 0xF = 2
+    assert!(
+        cpu.regs.windowstart_bit(2),
+        "OF4: WindowStart[check_idx] must remain set (overflow did not consume it)"
+    );
+}
+
+/// F3: ENTRY with CALLINC=2 triggers WindowOverflow8.
+/// Expect: PC = VECBASE + OF8 offset (0x080), EPC1 = original PC, PS.EXCM=1,
+/// WindowBase NOT rotated (still 0).
+#[test]
+fn test_exec_entry_window_overflow_of8() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    setup_entry_overflow(&mut cpu, 2);
+    let original_pc = TEST_PC;
+    let vecbase = cpu.sr.read(VECBASE_ID);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(
+        cpu.pc,
+        vecbase.wrapping_add(OF8_VECOFS),
+        "OF8: PC should jump to VECBASE + 0x080"
+    );
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        original_pc,
+        "OF8: EPC1 should hold the faulting ENTRY PC"
+    );
+    assert!(cpu.ps.excm(), "OF8: PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 0, "OF8: WindowBase must NOT be rotated");
+}
+
+/// F3: ENTRY with CALLINC=3 triggers WindowOverflow12.
+/// Expect: PC = VECBASE + OF12 offset (0x100), EPC1 = original PC, PS.EXCM=1,
+/// WindowBase NOT rotated (still 0).
+#[test]
+fn test_exec_entry_window_overflow_of12() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    setup_entry_overflow(&mut cpu, 3);
+    let original_pc = TEST_PC;
+    let vecbase = cpu.sr.read(VECBASE_ID);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(
+        cpu.pc,
+        vecbase.wrapping_add(OF12_VECOFS),
+        "OF12: PC should jump to VECBASE + 0x100"
+    );
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        original_pc,
+        "OF12: EPC1 should hold the faulting ENTRY PC"
+    );
+    assert!(cpu.ps.excm(), "OF12: PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 0, "OF12: WindowBase must NOT be rotated");
+}
+
+/// F3 happy path: ENTRY proceeds normally when the target frame is clear.
+/// With CALLINC=1, WB=0, wb_new=1, check_idx=2: if WindowStart[2]=0, no overflow.
+/// Verify normal ENTRY semantics: WB rotates, WindowStart set, CALLINC cleared.
+#[test]
+fn test_exec_entry_no_overflow_when_target_frame_clear() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_callinc(1);
+    // Ensure check_idx=2 is clear (it should be after reset, but be explicit)
+    cpu.regs.set_windowstart_bit(2, false);
+    // Pre-load new frame's a1 (phys[5]) for ENTRY stack subtract
+    cpu.regs.set_physical(5, 0x2005_0000);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    // Normal ENTRY: WB rotated, WindowStart[1] set, CALLINC=0
+    assert_eq!(cpu.regs.windowbase(), 1, "No-OF: WindowBase should rotate to 1");
+    assert!(cpu.regs.windowstart_bit(1), "No-OF: WindowStart[1] should be set");
+    assert_eq!(cpu.ps.callinc(), 0, "No-OF: CALLINC should be cleared");
+    assert_eq!(
+        cpu.pc,
+        TEST_PC + 3,
+        "No-OF: PC should advance past ENTRY"
+    );
+    // EPC1 must NOT have been set (no exception)
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        0,
+        "No-OF: EPC1 should remain 0 (no exception)"
     );
 }

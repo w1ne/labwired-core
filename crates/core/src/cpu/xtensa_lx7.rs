@@ -10,7 +10,7 @@
 //! Remaining instruction classes in progress.
 
 use crate::cpu::xtensa_regs::{ArFile, Ps};
-use crate::cpu::xtensa_sr::{XtensaSrFile, EXCCAUSE, SAR, SCOMPARE1, VECBASE};
+use crate::cpu::xtensa_sr::{XtensaSrFile, EXCCAUSE, EPC1, SAR, SCOMPARE1, VECBASE};
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
@@ -465,10 +465,16 @@ impl XtensaLx7 {
 
             // ── F1: ENTRY / RETW — windowed call prologue / epilogue ──────────
 
-            // ENTRY as_, imm: windowed call prologue (no overflow check — deferred to F3).
+            // ENTRY as_, imm: windowed call prologue with window overflow check (F3).
             //
             // ISA RM §8 ENTRY semantics:
             //   1. WB_new = (WB_old + PS.CALLINC) mod 16
+            //   F3: If WindowStart[(WB_new + 1) mod 16] == 1 → WindowOverflow exception:
+            //       - EPC1 = PC (the faulting ENTRY's PC)
+            //       - PS.EXCM = 1
+            //       - PC = VECBASE + window_vector_offset (OF4/OF8/OF12)
+            //       - WindowBase NOT rotated, WindowStart NOT modified, CALLINC NOT cleared
+            //       - Return immediately (vector handler will deal with the overflow)
             //   2. WindowStart[WB_new] = 1
             //   3. PS.CALLINC = 0
             //   4. a[as_] -= imm * 8   (in the NEW window; as_ is the stack pointer)
@@ -479,12 +485,45 @@ impl XtensaLx7 {
             // After rotation, the callee's a0 maps to the same physical reg as the
             // caller's a[CALLINC*4], which holds the return address written by CALL*.
             //
-            // Overflow check (WindowStart[(WB_new+1) mod 16] == 1 → raise exception)
-            // is deferred to F3.
+            // Window vector table (per Xtensa LX ISA RM §5.6, confirmed by Zephyr
+            // arch/xtensa/core/window_vectors.S .org directives):
+            //   CALLINC=1 (OF4):  VECBASE + 0x000
+            //   CALLINC=2 (OF8):  VECBASE + 0x080
+            //   CALLINC=3 (OF12): VECBASE + 0x100
+            //
+            // EXCCAUSE: window overflow exceptions do NOT use EXCCAUSE. They vector
+            // independently via dedicated vector slots (not the general exception path).
+            // EXCCAUSE values 5/6/7 mean AllocaCause/IntDivByZero/PrivilegedCause.
             Entry { as_, imm } => {
                 let callinc = self.ps.callinc();
                 let wb_old = self.regs.windowbase();
                 let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
+
+                // F3: Window overflow check — check the frame AHEAD of wb_new.
+                // ISA RM: if WindowStart[(wb_new + 1) mod 16] == 1, overflow.
+                let check_idx = wb_new.wrapping_add(1) & 0x0F;
+                if self.regs.windowstart_bit(check_idx) {
+                    // Window overflow: save state, redirect to overflow vector.
+                    // Window vector offsets (Xtensa LX ISA RM §5.6):
+                    //   OF4  (CALLINC=1): VECBASE + 0x000
+                    //   OF8  (CALLINC=2): VECBASE + 0x080
+                    //   OF12 (CALLINC=3): VECBASE + 0x100
+                    const OF4_VECOFS:  u32 = 0x000;
+                    const OF8_VECOFS:  u32 = 0x080;
+                    const OF12_VECOFS: u32 = 0x100;
+                    let vec_ofs = match callinc {
+                        1 => OF4_VECOFS,
+                        2 => OF8_VECOFS,
+                        _ => OF12_VECOFS,  // callinc=3 → OF12; callinc=0 can't overflow
+                    };
+                    let vecbase = self.sr.read(VECBASE);
+                    self.sr.write(EPC1, self.pc);
+                    self.ps.set_excm(true);
+                    self.pc = vecbase.wrapping_add(vec_ofs);
+                    // Do NOT rotate WindowBase, do NOT set WindowStart, do NOT clear CALLINC.
+                    return Ok(());
+                }
+
                 self.regs.set_windowbase(wb_new);
                 self.regs.set_windowstart_bit(wb_new, true);
                 self.ps.set_callinc(0);
