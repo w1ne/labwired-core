@@ -2,20 +2,20 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! D1 + D2 execution tests:
+//! D1 + D2 + E4 execution tests:
 //!
 //! - D1: ALU reg-reg (ADD/SUB/AND/OR/XOR/NEG/ABS/ADDX*/SUBX*), MOVI, NOP/fence, BREAK.
 //! - D2: Shift instructions (SLL/SRL/SRA/SRC/SLLI/SRLI/SRAI) and SAR-setup
 //!   (SSL/SSR/SSAI/SSA8L/SSA8B).
+//! - E4: Atomic exec (S32C1I/L32AI/S32RI) with SCOMPARE1 (SR ID 12).
 //!
-//! D1 encodings verified via xtensa-esp-elf-objdump; D2 encodings cross-referenced against
-//! Xtensa LX ISA RM (assembler not available on this host — objdump verification TODO when
-//! toolchain is accessible).
+//! D1 and E4 encodings verified via xtensa-esp-elf-objdump (esp-15.2.0_20250920).
+//! D2 encodings cross-referenced against Xtensa LX ISA RM.
 //! Bus: default SystemBus::new() provides RAM at 0x2000_0000..0x2010_0000.
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::cpu::xtensa_sr::{EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID};
+use labwired_core::cpu::xtensa_sr::{EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID, SCOMPARE1 as SCOMPARE1_ID};
 use labwired_core::{Bus, Cpu, SimulationError};
 
 const TEST_PC: u32 = 0x2000_0000;
@@ -2803,5 +2803,242 @@ fn test_exec_clamps_t0_overflow_neg() {
         cpu.get_register(3),
         (-128i32) as u32,
         "CLAMPS(-200, sa=7) should saturate to -128"
+    );
+}
+
+// ── E4: Atomic instructions (S32C1I / L32AI / S32RI) ─────────────────────────
+//
+// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   s32c1i a3, a4, 0  →  word 0x00e432  (r=0xE, t=3, s=4, imm8=0)
+//   l32ai  a3, a4, 0  →  word 0x00b432  (r=0xB, t=3, s=4, imm8=0)
+//   s32ri  a3, a4, 0  →  word 0x00f432  (r=0xF, t=3, s=4, imm8=0)
+//
+// LSAI format (op0=0x2): bits[3:0]=0x2, t=bits[7:4], s=bits[11:8],
+//   r=bits[15:12], imm8=bits[23:16]; decoded imm = imm8 << 2.
+//
+// SCOMPARE1 is SR ID 12 (verified against xtensa_sr.rs constant and LX7 oracle).
+// Tests read SCOMPARE1 via cpu.sr.read(SCOMPARE1_ID) to exercise the SR dispatcher.
+
+/// Encode S32C1I at, as_, imm (op0=0x2, r=0xE, HW-oracle verified).
+/// Pass the final byte offset (multiple of 4, 0..=1020); function right-shifts by 2.
+fn enc_s32c1i(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 2) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0xE << 12) | (imm8 << 16)
+}
+
+/// Encode L32AI at, as_, imm (op0=0x2, r=0xB, HW-oracle verified).
+fn enc_l32ai(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 2) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0xB << 12) | (imm8 << 16)
+}
+
+/// Encode S32RI at, as_, imm (op0=0x2, r=0xF, HW-oracle verified).
+fn enc_s32ri(at: u32, as_: u32, byte_off: u32) -> u32 {
+    let imm8 = (byte_off >> 2) & 0xFF;
+    0x2 | (at << 4) | (as_ << 8) | (0xF << 12) | (imm8 << 16)
+}
+
+// Data address inside the RAM region (0x2000_0000..0x2010_0000).
+// Keep it well away from TEST_PC (0x2000_0000) to avoid stomping instructions.
+const DATA_ADDR: u32 = 0x2008_0000;
+
+/// S32C1I uncontended success: SCOMPARE1 == mem → swap succeeds.
+///
+/// Setup: SCOMPARE1 = 0xCAFEBABE, mem[DATA_ADDR] = 0xCAFEBABE, a3 = 0xDEADBEEF.
+/// After S32C1I a3, a4, 0 (with a4 = DATA_ADDR):
+///   mem[DATA_ADDR] == 0xDEADBEEF  (new value written)
+///   a3 == 0xCAFEBABE              (old value returned)
+#[test]
+fn test_exec_s32c1i_uncontended_success() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Prime memory with the old value.
+    bus.write_u32(DATA_ADDR as u64, 0xCAFEBABE).unwrap();
+
+    // Set SCOMPARE1 via SR dispatcher (SR ID 12).
+    cpu.sr.write(SCOMPARE1_ID, 0xCAFEBABE);
+    // Verify the write went through the dispatcher before the test.
+    assert_eq!(cpu.sr.read(SCOMPARE1_ID), 0xCAFEBABE, "SCOMPARE1 must be set before test");
+
+    // a3 = new value to store; a4 = base address.
+    cpu.set_register(3, 0xDEADBEEF);
+    cpu.set_register(4, DATA_ADDR);
+
+    // S32C1I a3, a4, 0  →  HW-oracle word 0x00e432.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32c1i(3, 4, 0)]);
+    step_ok(&mut cpu, &mut bus);
+
+    // mem must now hold the new value (compare succeeded → write happened).
+    assert_eq!(
+        bus.read_u32(DATA_ADDR as u64).unwrap(),
+        0xDEADBEEF,
+        "CAS success: mem should hold new value 0xDEADBEEF"
+    );
+    // a3 must hold the old value (always returned by S32C1I).
+    assert_eq!(
+        cpu.get_register(3),
+        0xCAFEBABE,
+        "CAS success: a3 should hold old value 0xCAFEBABE"
+    );
+}
+
+/// S32C1I uncontended failure: SCOMPARE1 != mem → no write, old value returned.
+///
+/// Setup: SCOMPARE1 = 0xCAFEBABE, mem[DATA_ADDR] = 0x12345678, a3 = 0xDEADBEEF.
+/// After S32C1I:
+///   mem[DATA_ADDR] == 0x12345678  (unchanged — compare failed)
+///   a3 == 0x12345678              (old mem value returned)
+#[test]
+fn test_exec_s32c1i_uncontended_failure() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Prime memory with a value that does NOT match SCOMPARE1.
+    bus.write_u32(DATA_ADDR as u64, 0x12345678).unwrap();
+
+    // SCOMPARE1 differs from mem value → CAS will fail.
+    cpu.sr.write(SCOMPARE1_ID, 0xCAFEBABE);
+
+    cpu.set_register(3, 0xDEADBEEF);
+    cpu.set_register(4, DATA_ADDR);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32c1i(3, 4, 0)]);
+    step_ok(&mut cpu, &mut bus);
+
+    // mem must remain unchanged (compare failed → no write).
+    assert_eq!(
+        bus.read_u32(DATA_ADDR as u64).unwrap(),
+        0x12345678,
+        "CAS failure: mem should remain unchanged 0x12345678"
+    );
+    // a3 must hold the old mem value (always returned).
+    assert_eq!(
+        cpu.get_register(3),
+        0x12345678,
+        "CAS failure: a3 should hold old mem value 0x12345678"
+    );
+}
+
+/// S32C1I reads SCOMPARE1 through the SR dispatcher.
+///
+/// This test verifies that changing SCOMPARE1 via cpu.sr.write() changes the
+/// CAS outcome — proving the exec arm uses the SR dispatcher, not a side-channel.
+/// Write 0xABCD1234 to mem and to SCOMPARE1, then S32C1I with a different at value.
+/// Outcome: CAS succeeds (mem == SCOMPARE1), mem updated, at = old.
+#[test]
+fn test_exec_s32c1i_uses_scompare1_via_sr_dispatcher() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    let sentinel = 0xABCD_1234u32;
+    bus.write_u32(DATA_ADDR as u64, sentinel).unwrap();
+    // Write SCOMPARE1 via the SR dispatcher; read it back to confirm.
+    cpu.sr.write(SCOMPARE1_ID, sentinel);
+    assert_eq!(
+        cpu.sr.read(SCOMPARE1_ID),
+        sentinel,
+        "SR dispatcher write/read round-trip must preserve SCOMPARE1 value"
+    );
+
+    cpu.set_register(3, 0x0000_CAFE); // new value to store if CAS succeeds
+    cpu.set_register(4, DATA_ADDR);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32c1i(3, 4, 0)]);
+    step_ok(&mut cpu, &mut bus);
+
+    // CAS must have succeeded: mem = new value, at = old.
+    assert_eq!(bus.read_u32(DATA_ADDR as u64).unwrap(), 0x0000_CAFE,
+        "SR-dispatcher test: CAS should succeed, mem = new value");
+    assert_eq!(cpu.get_register(3), sentinel,
+        "SR-dispatcher test: a3 should hold old value (sentinel)");
+}
+
+/// L32AI basic: load word from memory with acquire semantics (no-op barrier in Plan 1).
+///
+/// Stores 0xDEAD_C0DE into DATA_ADDR, runs L32AI a3, a4, 0, expects a3 = 0xDEAD_C0DE.
+#[test]
+fn test_exec_l32ai_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    bus.write_u32(DATA_ADDR as u64, 0xDEAD_C0DE).unwrap();
+    cpu.set_register(4, DATA_ADDR);
+
+    // L32AI a3, a4, 0  →  HW-oracle word 0x00b432.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_l32ai(3, 4, 0)]);
+    step_ok(&mut cpu, &mut bus);
+
+    assert_eq!(cpu.get_register(3), 0xDEAD_C0DE, "L32AI should load 0xDEAD_C0DE into a3");
+}
+
+/// L32AI with nonzero imm: load from DATA_ADDR + 4 using imm=4 field.
+#[test]
+fn test_exec_l32ai_imm_offset() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    bus.write_u32((DATA_ADDR + 4) as u64, 0x1234_5678).unwrap();
+    cpu.set_register(4, DATA_ADDR);
+
+    // L32AI a3, a4, 4 (imm=4, imm8=1) →  HW-oracle word 0x01b432.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_l32ai(3, 4, 4)]);
+    step_ok(&mut cpu, &mut bus);
+
+    assert_eq!(cpu.get_register(3), 0x1234_5678, "L32AI imm=4 should load from DATA_ADDR+4");
+}
+
+/// S32RI basic: store word to memory with release semantics (no-op barrier in Plan 1).
+///
+/// Sets a3 = 0xC0FFEE00, runs S32RI a3, a4, 0, verifies mem[DATA_ADDR] = 0xC0FFEE00.
+#[test]
+fn test_exec_s32ri_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    cpu.set_register(3, 0xC0FFEE00);
+    cpu.set_register(4, DATA_ADDR);
+
+    // S32RI a3, a4, 0  →  HW-oracle word 0x00f432.
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32ri(3, 4, 0)]);
+    step_ok(&mut cpu, &mut bus);
+
+    assert_eq!(
+        bus.read_u32(DATA_ADDR as u64).unwrap(),
+        0xC0FFEE00,
+        "S32RI should store 0xC0FFEE00 to DATA_ADDR"
+    );
+}
+
+/// S32RI with nonzero imm: store to DATA_ADDR + 8 using imm=8 field.
+#[test]
+fn test_exec_s32ri_imm_offset() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    cpu.set_register(3, 0xBEEF_CAFE);
+    cpu.set_register(4, DATA_ADDR);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_s32ri(3, 4, 8)]);
+    step_ok(&mut cpu, &mut bus);
+
+    assert_eq!(
+        bus.read_u32((DATA_ADDR + 8) as u64).unwrap(),
+        0xBEEF_CAFE,
+        "S32RI imm=8 should store to DATA_ADDR+8"
     );
 }

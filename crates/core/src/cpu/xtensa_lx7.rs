@@ -10,7 +10,7 @@
 //! Remaining instruction classes in progress.
 
 use crate::cpu::xtensa_regs::{ArFile, Ps};
-use crate::cpu::xtensa_sr::{XtensaSrFile, EXCCAUSE, SAR, VECBASE};
+use crate::cpu::xtensa_sr::{XtensaSrFile, EXCCAUSE, SAR, SCOMPARE1, VECBASE};
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
@@ -734,6 +734,53 @@ impl XtensaLx7 {
                 let min_val = -(1i32 << sa);
                 let v = src.clamp(min_val, max_val);
                 self.regs.write_logical(ar, v as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // ── E4: Atomic memory instructions ───────────────────────────────
+
+            // S32C1I at, as_, imm: Compare-and-swap.
+            //
+            // Semantic (ISA RM §8):
+            //   EA = as_ + imm  (decoder pre-shifts imm by 2, so EA = as_ + imm directly)
+            //   mem32 = bus.read_u32(EA)
+            //   if mem32 == SCOMPARE1: bus.write_u32(EA, at)
+            //   at = mem32  (old value always written back to at)
+            //
+            // Order: read mem first, compare, conditionally write, then update at.
+            // For Plan 1 RAM there are no bus read/write side effects, so the order
+            // only matters semantically. SCOMPARE1 is read via the SR dispatcher.
+            S32c1i { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                let mem32 = bus.read_u32(ea)?;
+                let scompare = self.sr.read(SCOMPARE1);
+                if mem32 == scompare {
+                    bus.write_u32(ea, self.regs.read_logical(at))?;
+                }
+                self.regs.write_logical(at, mem32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // L32AI at, as_, imm: Load Acquire Implicit.
+            //
+            // In Plan 1 (single-core, no SMP) this is identical to L32I.
+            // The acquire barrier is a no-op; SMP ordering is deferred to Plan 4.
+            // EA = as_ + imm  (decoder pre-shifts imm by 2).
+            L32ai { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                let val = bus.read_u32(ea)?;
+                self.regs.write_logical(at, val);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // S32RI at, as_, imm: Store Release Implicit.
+            //
+            // In Plan 1 (single-core, no SMP) this is identical to S32I.
+            // The release barrier is a no-op; SMP ordering is deferred to Plan 4.
+            // EA = as_ + imm  (decoder pre-shifts imm by 2).
+            S32ri { at, as_, imm } => {
+                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
+                bus.write_u32(ea, self.regs.read_logical(at))?;
                 self.pc = self.pc.wrapping_add(len);
             }
 

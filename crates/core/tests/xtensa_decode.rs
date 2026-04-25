@@ -916,3 +916,69 @@ fn test_decode_subx8_ar_a15_not_nsau() {
         other => panic!("expected SUBX8 a15, a4, a5, got {:?}", other),
     }
 }
+
+// ── E4: Atomic instructions — HW-oracle byte tests ──────────────────────────
+//
+// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   s32c1i a3, a4, 0  →  00 e4 32  →  word 0x00e432
+//   s32c1i a3, a4, 4  →  01 e4 32  →  word 0x01e432  (imm8=1 → imm=4)
+//   l32ai  a3, a4, 0  →  00 b4 32  →  word 0x00b432
+//   l32ai  a3, a4, 4  →  01 b4 32  →  word 0x01b432
+//   s32ri  a3, a4, 0  →  00 f4 32  →  word 0x00f432
+//   s32ri  a3, a4, 4  →  01 f4 32  →  word 0x01f432
+//
+// Field layout (LSAI, op0=0x2):
+//   op0=bits[3:0]=0x2, t=bits[7:4]=at, s=bits[11:8]=as_,
+//   r=bits[15:12] (0xE=S32c1i, 0xB=L32ai, 0xF=S32ri),
+//   imm8=bits[23:16]; decoded imm = imm8 << 2.
+
+/// S32C1I a3, a4, 0 — HW-oracle exact bytes.
+#[test]
+fn test_decode_s32c1i_hw_oracle() {
+    // `s32c1i a3, a4, 0` → objdump: 00e432 → 24-bit word 0x00e432
+    let w = 0x00e432u32;
+    assert_eq!(decode(w), Instruction::S32c1i { at: 3, as_: 4, imm: 0 });
+}
+
+/// S32C1I a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
+#[test]
+fn test_decode_s32c1i_hw_oracle_imm4() {
+    // `s32c1i a3, a4, 4` → objdump: 01e432 → 24-bit word 0x01e432
+    // imm8=1 → decoded imm = 1 << 2 = 4.
+    let w = 0x01e432u32;
+    assert_eq!(decode(w), Instruction::S32c1i { at: 3, as_: 4, imm: 4 });
+}
+
+/// L32AI a3, a4, 0 — HW-oracle exact bytes.
+#[test]
+fn test_decode_l32ai_hw_oracle() {
+    // `l32ai a3, a4, 0` → objdump: 00b432 → 24-bit word 0x00b432
+    let w = 0x00b432u32;
+    assert_eq!(decode(w), Instruction::L32ai { at: 3, as_: 4, imm: 0 });
+}
+
+/// L32AI a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
+#[test]
+fn test_decode_l32ai_hw_oracle_imm4() {
+    // `l32ai a3, a4, 4` → objdump: 01b432 → 24-bit word 0x01b432
+    // imm8=1 → decoded imm = 1 << 2 = 4.
+    let w = 0x01b432u32;
+    assert_eq!(decode(w), Instruction::L32ai { at: 3, as_: 4, imm: 4 });
+}
+
+/// S32RI a3, a4, 0 — HW-oracle exact bytes.
+#[test]
+fn test_decode_s32ri_hw_oracle() {
+    // `s32ri a3, a4, 0` → objdump: 00f432 → 24-bit word 0x00f432
+    let w = 0x00f432u32;
+    assert_eq!(decode(w), Instruction::S32ri { at: 3, as_: 4, imm: 0 });
+}
+
+/// S32RI a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
+#[test]
+fn test_decode_s32ri_hw_oracle_imm4() {
+    // `s32ri a3, a4, 4` → objdump: 01f432 → 24-bit word 0x01f432
+    // imm8=1 → decoded imm = 1 << 2 = 4.
+    let w = 0x01f432u32;
+    assert_eq!(decode(w), Instruction::S32ri { at: 3, as_: 4, imm: 4 });
+}
