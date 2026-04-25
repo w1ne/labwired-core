@@ -46,6 +46,12 @@ pub struct CortexM {
     /// of the same or lower-priority exception while one is already being serviced.
     pub active_exception: u32,
     pub decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
+    /// FPU single-precision register file (VFPv4 single — S0..S31).
+    /// Each S register is the IEEE-754 binary32 bit pattern; reads via
+    /// `f32::from_bits` and writes via `f32::to_bits`. Double-precision
+    /// (D0..D15 = pairs of S regs) is NOT modelled; firmware compiled for
+    /// `-mfpu=fpv4-sp-d16` only emits single-precision ops anyway.
+    pub fpu_s: [u32; 32],
 }
 
 impl Default for CortexM {
@@ -74,6 +80,7 @@ impl Default for CortexM {
             it_state: 0,
             active_exception: 0,
             decode_cache: Box::new([None; 4096]),
+            fpu_s: [0u32; 32],
         }
     }
 }
@@ -1510,6 +1517,19 @@ impl CortexM {
                     let res = pc_val.wrapping_add(imm as u32);
                     self.write_reg(rd, res);
                 }
+                Instruction::AddwImm { rd, rn, imm } => {
+                    // Plain 12-bit zero-extended immediate (T4). Distinct
+                    // from DataProcImm32::ADD which runs imm12 through
+                    // ThumbExpandImm.
+                    let res = self.read_reg(rn).wrapping_add(imm as u32);
+                    self.write_reg(rd, res);
+                    pc_increment = 4;
+                }
+                Instruction::SubwImm { rd, rn, imm } => {
+                    let res = self.read_reg(rn).wrapping_sub(imm as u32);
+                    self.write_reg(rd, res);
+                    pc_increment = 4;
+                }
 
                 // Memory Operations (Byte)
                 Instruction::LdrbImm { rt, rn, imm } => {
@@ -1884,6 +1904,72 @@ impl CortexM {
                     pc_increment = 4;
                 }
 
+                // -------- VFPv4 single-precision (FPU) --------
+                Instruction::Vldr { sd, rn, imm, add } => {
+                    let base = self.read_reg(rn);
+                    let base = if rn == 15 { base & !3 } else { base };
+                    let addr = if add {
+                        base.wrapping_add(imm as u32)
+                    } else {
+                        base.wrapping_sub(imm as u32)
+                    };
+                    if let Ok(val) = bus.read_u32(addr as u64) {
+                        self.fpu_s[sd as usize] = val;
+                    } else {
+                        tracing::error!("Bus Read Fault (VLDR) at {:#x}", addr);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::Vstr { sd, rn, imm, add } => {
+                    let base = self.read_reg(rn);
+                    let addr = if add {
+                        base.wrapping_add(imm as u32)
+                    } else {
+                        base.wrapping_sub(imm as u32)
+                    };
+                    let val = self.fpu_s[sd as usize];
+                    if bus.write_u32(addr as u64, val).is_err() {
+                        tracing::error!("Bus Write Fault (VSTR) at {:#x}", addr);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VmulF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    self.fpu_s[sd as usize] = (a * b).to_bits();
+                    pc_increment = 4;
+                }
+                Instruction::VaddF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    self.fpu_s[sd as usize] = (a + b).to_bits();
+                    pc_increment = 4;
+                }
+                Instruction::VsubF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    self.fpu_s[sd as usize] = (a - b).to_bits();
+                    pc_increment = 4;
+                }
+                Instruction::VdivF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    self.fpu_s[sd as usize] = (a / b).to_bits();
+                    pc_increment = 4;
+                }
+                Instruction::VmovSnRt { sn, rt } => {
+                    self.fpu_s[sn as usize] = self.read_reg(rt);
+                    pc_increment = 4;
+                }
+                Instruction::VmovRtSn { rt, sn } => {
+                    self.write_reg(rt, self.fpu_s[sn as usize]);
+                    pc_increment = 4;
+                }
+                Instruction::VmovF32Reg { sd, sm } => {
+                    self.fpu_s[sd as usize] = self.fpu_s[sm as usize];
+                    pc_increment = 4;
+                }
+
                 Instruction::Unknown(op) => {
                     tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
                     pc_increment = 2; // Skip 16-bit
@@ -2245,6 +2331,101 @@ mod tests {
         cpu.r3 = 100;
         run_test_instr(&mut cpu, &mut bus, 0xFB01_3012, true);
         assert_eq!(cpu.r0, 94, "MLS: 100 - 2*3 = 94");
+    }
+
+    #[test]
+    fn test_thumb2_vfp_smoke_3_14_times_2() {
+        // Exact reproduction of what the NUCLEO-L476RG smoke firmware does:
+        //   ldr r3, =0x4048F5C3        ; 3.14f
+        //   str r3, [sp, #12]
+        //   movw r3, #0x0000           ; 2.0f low half
+        //   movt r3, #0x4000           ; 2.0f high half
+        //   str r3, [sp, #16]
+        //   vldr s15, [sp, #12]        ; load 3.14
+        //   vldr s14, [sp, #16]        ; load 2.0
+        //   vmul.f32 s15, s15, s14
+        //   vstr s15, [sp, #20]
+        //   ldr r4, [sp, #20]          ; r4 = IEEE bits of 6.28
+        // Hardware-verified result: 3.14f * 2.0f = 6.28f = 0x40C8F5C3.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        // Set up memory so the VLDR/VSTR have somewhere to land.
+        cpu.sp = 0x2000_0100;
+        bus.write_u32(0x2000_010C, 0x4048_F5C3).unwrap(); // 3.14f
+        bus.write_u32(0x2000_0110, 0x4000_0000).unwrap(); // 2.0f
+
+        // VLDR S15, [SP, #12] = EDDD 7A03
+        run_test_instr(&mut cpu, &mut bus, 0xEDDD_7A03, true);
+        assert_eq!(cpu.fpu_s[15], 0x4048_F5C3);
+
+        // VLDR S14, [SP, #16] = ED9D 7A04
+        run_test_instr(&mut cpu, &mut bus, 0xED9D_7A04, true);
+        assert_eq!(cpu.fpu_s[14], 0x4000_0000);
+
+        // VMUL.F32 S15, S15, S14 = EE67 7A87
+        run_test_instr(&mut cpu, &mut bus, 0xEE67_7A87, true);
+        assert_eq!(
+            cpu.fpu_s[15], 0x40C8_F5C3,
+            "3.14f * 2.0f IEEE-754 bits — must match real Cortex-M4F output"
+        );
+
+        // VSTR S15, [SP, #20] = EDCD 7A05
+        run_test_instr(&mut cpu, &mut bus, 0xEDCD_7A05, true);
+        assert_eq!(bus.read_u32(0x2000_0114).unwrap(), 0x40C8_F5C3);
+    }
+
+    fn vfp_arith_encoding(h1_op: u16, sd: u8, sn: u8, sm: u8, op_b: u32) -> u32 {
+        // Build the 32-bit Thumb encoding for VMUL/VADD/VSUB/VDIV.F32.
+        // Sd:D = (Vd<<1):D, similarly for Sn and Sm. op_b selects ADD vs
+        // SUB at bit[6] of h2.
+        let vd = (sd >> 1) & 0xF;
+        let d = (sd & 1) as u32;
+        let vn = (sn >> 1) & 0xF;
+        let n = (sn & 1) as u32;
+        let vm = (sm >> 1) & 0xF;
+        let m = (sm & 1) as u32;
+        let h1 = h1_op | ((d as u16) << 6) | (vn as u16);
+        let h2 = ((vd as u16) << 12) | 0x0A00 | ((n as u16) << 7)
+            | ((op_b as u16) << 6) | ((m as u16) << 5) | (vm as u16);
+        ((h1 as u32) << 16) | (h2 as u32)
+    }
+
+    #[test]
+    fn test_thumb2_vfp_add_sub_div() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.fpu_s[0] = (6.0_f32).to_bits();
+        cpu.fpu_s[1] = (2.0_f32).to_bits();
+
+        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE30, 2, 0, 1, 0), true);
+        assert_eq!(cpu.fpu_s[2], (8.0_f32).to_bits(), "VADD: 6 + 2 = 8");
+
+        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE30, 2, 0, 1, 1), true);
+        assert_eq!(cpu.fpu_s[2], (4.0_f32).to_bits(), "VSUB: 6 - 2 = 4");
+
+        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE80, 2, 0, 1, 0), true);
+        assert_eq!(cpu.fpu_s[2], (3.0_f32).to_bits(), "VDIV: 6 / 2 = 3");
+
+        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE20, 2, 0, 1, 0), true);
+        assert_eq!(cpu.fpu_s[2], (12.0_f32).to_bits(), "VMUL: 6 * 2 = 12");
+    }
+
+    #[test]
+    fn test_thumb2_addw_subw_plain_immediate() {
+        // ADDW r3, r3, #0x789 (T4 plain immediate). Encoding F203 7389:
+        //   1111 0 010 0000 0011 | 0 111 0011 10001001
+        // imm12 = 0:111:10001001 = 0x789 zero-extended (NOT ThumbExpand).
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.r3 = 0x12344EEF;
+        run_test_instr(&mut cpu, &mut bus, 0xF203_7389, true);
+        assert_eq!(cpu.r3, 0x12345678, "ADDW r3, r3, #0x789");
+
+        // SUBW r3, r3, #0x10 (T4). Encoding pattern F2A3 0310:
+        //   1111 0 010 1010 0011 | 0 000 0011 00010000
+        cpu.r3 = 0x100;
+        run_test_instr(&mut cpu, &mut bus, 0xF2A3_0310, true);
+        assert_eq!(cpu.r3, 0xF0, "SUBW r3, r3, #0x10");
     }
 
     #[test]

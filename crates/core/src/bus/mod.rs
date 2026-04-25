@@ -388,6 +388,37 @@ impl SystemBus {
                     let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;
                     Box::new(crate::peripherals::rcc::Rcc::new_with_layout(layout))
                 }
+                "dbgmcu" => {
+                    // Pull IDCODE from YAML config (`idcode: "0x10076415"` or
+                    // `idcode: 269009941`). Default 0 — firmware probing
+                    // DBGMCU_IDCODE will then read 0; logged.
+                    let idcode: u32 = p_cfg
+                        .config
+                        .get("idcode")
+                        .and_then(|v| {
+                            if let Some(s) = v.as_str() {
+                                let s = s.trim();
+                                if let Some(rest) =
+                                    s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"))
+                                {
+                                    u32::from_str_radix(rest, 16).ok()
+                                } else {
+                                    s.parse::<u32>().ok()
+                                }
+                            } else {
+                                v.as_u64().map(|n| n as u32)
+                            }
+                        })
+                        .unwrap_or(0);
+                    if idcode == 0 {
+                        tracing::warn!(
+                            "dbgmcu peripheral '{}' has no idcode configured \
+                             — firmware probing DBGMCU_IDCODE will read 0",
+                            p_cfg.id
+                        );
+                    }
+                    Box::new(crate::peripherals::dbgmcu::Dbgmcu::new(idcode))
+                }
                 "timer" | "stm32_timer" | "efm32timer" | "renesasra_agt" | "stm32l0_lptimer" => {
                     Box::new(crate::peripherals::timer::Timer::new())
                 }

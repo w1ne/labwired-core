@@ -98,3 +98,12 @@ peripherals:
     type: "nvic"
     base_address: 0xE000E100
     size: "1KB"
+
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      # DBGMCU_IDCODE for STM32L476RG: REV_ID=0x1007 (Rev Z), DEV_ID=0x415.
+      # Verified against real hardware via SWD probe.
+      idcode: "0x10076415"

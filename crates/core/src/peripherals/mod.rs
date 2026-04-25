@@ -8,6 +8,7 @@ pub mod adc;
 pub mod afio;
 pub mod can;
 pub mod components;
+pub mod dbgmcu;
 pub mod declarative;
 pub mod dma;
 pub mod dwt;

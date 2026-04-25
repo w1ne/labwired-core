@@ -140,6 +140,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         valid_pc_ranges: &[(0x4200_0000, 0x423F_FFFF), (0x3FC8_0000, 0x3FEF_FFFF)],
         expected_uart_output: b"ESP OK\n",
     },
+    SurvivalCase {
+        // Hardware-validated against real NUCLEO-L476RG silicon: the
+        // exact byte stream below was captured from /dev/ttyACM1 with the
+        // J-Link OB Virtual COM Port at 115200 baud. The simulator must
+        // reproduce it verbatim — drift means a regression in the L4
+        // chip config, the FPU implementation, or the Thumb-2 decoder.
+        name: "nucleo_l476rg_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output:
+            b"L476 SMOKE\r\nDEV=10076415\r\nMUL=60FC303A\r\nFPU=40C8F5C3\r\nDONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -385,6 +401,11 @@ fn test_riscv_ci_fixture_survival() {
 #[test]
 fn test_esp32c3_demo_survival() {
     run_survival_case(&SURVIVAL_CASES[7]);
+}
+
+#[test]
+fn test_nucleo_l476rg_smoke_survival() {
+    run_survival_case(&SURVIVAL_CASES[8]);
 }
 
 #[test]
