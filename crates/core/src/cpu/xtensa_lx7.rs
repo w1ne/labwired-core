@@ -1000,6 +1000,14 @@ impl Cpu for XtensaLx7 {
         // same value used by the narrow S32I.N density instruction. They cannot be
         // distinguished from narrow instructions by byte0 alone.
         //
+        // CRITICAL: S32E/L32E are architecturally only valid inside exception
+        // context (PS.EXCM=1). Outside EXCM, op0=0x9 must be treated as narrow
+        // S32I.N, NOT as the start of a 3-byte wide instruction. Without this
+        // gate, s32i.n a0, a1, 0 (bytes 0x09, 0x10) followed by any QRST op
+        // (byte0 ending in 0x0, e.g. ADD, OR, MOVI, NOP) would speculatively
+        // read byte2 and falsely match the L32E pattern, corrupting the PC
+        // advance from 2 to 3.
+        //
         // Encoding invariants (HW-oracle verified):
         //   S32E: byte0 bits[7:4] = 0x4 (subop), byte0 bits[3:0] = 0x9 (op0)
         //   L32E: byte0 bits[7:4] = 0x0 (subop), byte0 bits[3:0] = 0x9 (op0)
@@ -1007,7 +1015,7 @@ impl Cpu for XtensaLx7 {
         //
         // We read all 3 bytes speculatively when byte0 matches, check byte2's
         // low nibble, and route to the wide decoder when confirmed.
-        let is_s32e_or_l32e = if len == 2 && (b0 & 0x0F) == 0x9 {
+        let is_s32e_or_l32e = if self.ps.excm() && len == 2 && (b0 & 0x0F) == 0x9 {
             // Speculatively read byte2.  Bus reads are non-destructive so this
             // is safe even if the instruction turns out to be 2-byte narrow.
             let b2 = bus.read_u8(pc as u64 + 2)?;

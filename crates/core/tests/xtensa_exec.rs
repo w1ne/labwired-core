@@ -3744,27 +3744,12 @@ fn test_exec_s32e_in_excm_writes() {
     assert_eq!(cpu.pc, TEST_PC + 3, "PC should advance by 3 after S32E");
 }
 
-/// S32E outside exception context (PS.EXCM=0): raises IllegalInstruction.
-#[test]
-fn test_exec_s32e_outside_excm_raises_illegal() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    cpu.ps.set_excm(false);  // clear EXCM
-
-    cpu.set_register(4, 0x2000_0100);
-    cpu.set_register(3, 0x1234_5678);
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_s32e(3, 4, -16)]);
-    let err = cpu.step(&mut bus, &[]).unwrap_err();
-
-    assert!(
-        matches!(err, SimulationError::ExceptionRaised { cause: 0, .. }),
-        "S32E with PS.EXCM=0 should raise ExceptionRaised{{cause:0}}, got: {:?}", err
-    );
-    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 0, "EXCCAUSE should be 0 for IllegalInstruction");
-}
+// S32E decoder EXCM gate: outside exception context (PS.EXCM=0), the S32E byte
+// sequence is NOT decoded as a wide instruction. Instead, it's decoded as a
+// narrow S32I.N (which has the same op0=0x9), so no exception is raised by the
+// executor. This test has been removed because it tested OLD behavior (executor-level
+// exception raising) that is no longer correct with the decoder-level EXCM gate.
+// The executor's defensive EXCM check remains (lines 934-935) as defense-in-depth.
 
 /// L32E inside exception context (PS.EXCM=1): should read from memory into at.
 #[test]
@@ -3789,26 +3774,12 @@ fn test_exec_l32e_in_excm_reads() {
     assert_eq!(cpu.pc, TEST_PC + 3, "PC should advance by 3 after L32E");
 }
 
-/// L32E outside exception context (PS.EXCM=0): raises IllegalInstruction.
-#[test]
-fn test_exec_l32e_outside_excm_raises_illegal() {
-    let mut cpu = XtensaLx7::new();
-    let mut bus = SystemBus::new();
-    cpu.reset(&mut bus).unwrap();
-    cpu.set_pc(TEST_PC);
-    cpu.ps.set_excm(false);
-
-    cpu.set_register(4, 0x2000_0100);
-
-    write_insns(&mut bus, TEST_PC as u64, &[enc_l32e(3, 4, -16)]);
-    let err = cpu.step(&mut bus, &[]).unwrap_err();
-
-    assert!(
-        matches!(err, SimulationError::ExceptionRaised { cause: 0, .. }),
-        "L32E with PS.EXCM=0 should raise ExceptionRaised{{cause:0}}, got: {:?}", err
-    );
-    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 0, "EXCCAUSE should be 0 for IllegalInstruction");
-}
+// L32E decoder EXCM gate: outside exception context (PS.EXCM=0), the L32E byte
+// sequence is NOT decoded as a wide instruction. Instead, it's decoded as a
+// narrow S32I.N (which has the same op0=0x9), so no exception is raised by the
+// executor. This test has been removed because it tested OLD behavior (executor-level
+// exception raising) that is no longer correct with the decoder-level EXCM gate.
+// The executor's defensive EXCM check remains (lines 944-945) as defense-in-depth.
 
 /// S32E with maximum negative offset (-64): EA = as_ - 64.
 #[test]
@@ -3875,4 +3846,66 @@ fn test_exec_l32e_hw_oracle_bytes() {
     cpu.step(&mut bus, &[]).unwrap();
 
     assert_eq!(cpu.get_register(3), 0xFEED_FACE, "HW-oracle l32e a3,a4,-16 should load into a3");
+}
+
+/// Regression test: s32i.n + QRST must NOT be mis-decoded as L32E outside EXCM.
+///
+/// Bug: In normal (PS.EXCM=0) code, `s32i.n a0, a1, 0` followed by any QRST
+/// instruction (byte0 ending in 0x0 — extremely common: ADD, OR, MOVI, NOP, etc.)
+/// would cause the decoder to speculatively read byte2, find low nibble 0, and
+/// incorrectly decode the 2-byte narrow instruction as a 3-byte L32E, advancing
+/// PC by 3 instead of 2 and corrupting the instruction stream.
+///
+/// Fix: Gate the S32E/L32E disambiguation on PS.EXCM. These instructions are
+/// only valid in exception context, so the decoder should only look for them
+/// when EXCM=1.
+///
+/// Scenario:
+///   s32i.n a0, a1, 0 = HW-oracle bytes [09, 01] (little-endian)
+///   nop.n = HW-oracle bytes [3d, f0] (little-endian)
+///
+/// At TEST_PC, without the EXCM gate, byte0=0x09 would read byte2=0x3d (low
+/// nibble 0xD), spuriously matching the L32E pattern and advancing PC by 3.
+#[test]
+fn test_step_does_not_misdecode_s32i_n_as_l32e_outside_excm() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+
+    // Precondition: PS.EXCM must be 0 in normal code. Reset leaves EXCM=1, so clear it.
+    assert!(cpu.ps.excm(), "reset leaves PS.EXCM=1, we will clear it below");
+    cpu.ps.set_excm(false);
+    assert!(!cpu.ps.excm(), "PS.EXCM should now be 0");
+
+    // Set up a1 to point to somewhere safe in RAM for the store.
+    let safe_addr: u32 = 0x2000_0080;
+    cpu.set_register(1, safe_addr);
+
+    // Write s32i.n a0, a1, 0 (2 bytes) + nop.n (2 bytes) at TEST_PC.
+    // Using a raw byte write since write_insns is designed for 3-byte wide instructions.
+    bus.write_u8(TEST_PC as u64,     0x09).unwrap(); // s32i.n byte 0
+    bus.write_u8(TEST_PC as u64 + 1, 0x01).unwrap(); // s32i.n byte 1
+    bus.write_u8(TEST_PC as u64 + 2, 0x3d).unwrap(); // nop.n byte 0
+    bus.write_u8(TEST_PC as u64 + 3, 0xf0).unwrap(); // nop.n byte 1
+
+    // Step 1: execute s32i.n a0, a1, 0 (narrow, 2 bytes).
+    // Without the EXCM gate, this would read byte2=0x3d, match the L32E pattern
+    // (low nibble 0xD → 0), and incorrectly advance PC by 3.
+    cpu.step(&mut bus, &[]).expect("first step (s32i.n) should not error");
+
+    // Verify: PC should advance by exactly 2 for the narrow store, NOT 3.
+    assert_eq!(
+        cpu.get_pc(),
+        TEST_PC + 2,
+        "PC must advance by 2 for narrow s32i.n, not 3"
+    );
+
+    // Step 2: execute nop.n (2 bytes).
+    cpu.step(&mut bus, &[])
+        .expect("second step (nop.n) should succeed");
+
+    // Verify: PC should now be at TEST_PC + 2 + 2 = TEST_PC + 4.
+    assert_eq!(
+        cpu.get_pc(),
+        TEST_PC + 4,
+        "PC must advance to TEST_PC+4 after nop.n"
+    );
 }
