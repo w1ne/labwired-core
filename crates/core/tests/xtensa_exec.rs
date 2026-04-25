@@ -1987,7 +1987,9 @@ fn test_exec_call12_sets_callinc() {
 
 /// CALL4 writes the return PC into a4 (the register that becomes a0 after ENTRY rotates).
 ///
-/// Return PC = call_site_PC + 3.
+/// Per ISA RM §8: the return address stored in a[N] encodes the call type in bits[31:30].
+/// CALL4 sets bits[31:30] = 01, so a4 = (PC+3 low30) | (1 << 30).
+/// RETW recovers N = a0[31:30] = 1 to know how many windows to rotate back.
 #[test]
 fn test_exec_call4_writes_return_pc_to_a4() {
     let mut cpu = XtensaLx7::new();
@@ -1996,17 +1998,18 @@ fn test_exec_call4_writes_return_pc_to_a4() {
     cpu.set_pc(TEST_PC);
 
     write_insns(&mut bus, TEST_PC as u64, &[
-        enc_call(1, TEST_PC, TEST_PC + 12), // CALL4 at TEST_PC; a4 ← TEST_PC+3
+        enc_call(1, TEST_PC, TEST_PC + 12), // CALL4 at TEST_PC; a4 ← encoded(TEST_PC+3)
     ]);
     write_insns(&mut bus, (TEST_PC + 12) as u64, &[
         st0(4, 1, 0xF), // BREAK at subroutine entry
     ]);
 
     run_until_error(&mut cpu, &mut bus);
+    let expected_a4 = ((TEST_PC + 3) & 0x3FFF_FFFF) | (1 << 30);
     assert_eq!(
         cpu.get_register(4),
-        TEST_PC + 3,
-        "a4 should hold return PC (call site + 3)"
+        expected_a4,
+        "a4 should hold return PC with N=1 in bits[31:30]"
     );
 }
 
@@ -2032,27 +2035,322 @@ fn test_exec_callx8_jumps_and_writes_return_pc() {
 
     run_until_error(&mut cpu, &mut bus);
     assert_eq!(cpu.get_pc(), SUBR, "PC should be at subroutine");
-    assert_eq!(cpu.get_register(8), TEST_PC + 3, "a8 should hold return PC");
+    // CALLX8 encodes N=2 in bits[31:30] of the return address (ISA RM §8)
+    let expected_a8 = ((TEST_PC + 3) & 0x3FFF_FFFF) | (2 << 30);
+    assert_eq!(cpu.get_register(8), expected_a8, "a8 should hold return PC with N=2 in bits[31:30]");
     assert_eq!(cpu.ps.callinc(), 2, "PS.CALLINC should be 2 for CALLX8");
 }
 
-/// RETW must return NotImplemented (deferred to Phase F2).
+// ── F1: ENTRY + RETW exec tests (no window OF/UF check) ─────────────────────
+//
+// HW-oracle encoding (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   entry a1, 32  → 004136 → word 0x004136  (op0=6, n=3, m=0, as_=1, imm12=4)
+//   retw (wide)   → 000090 → word 0x000090  (ST0 group, r=0, t=9)
+//
+// ENTRY semantics (F1 — no overflow check):
+//   WB_new = (WB_old + PS.CALLINC) mod 16
+//   WindowStart[WB_new] = 1
+//   PS.CALLINC = 0
+//   a[as_] (in new window) -= imm * 8
+//
+// RETW semantics (F1 — no underflow check):
+//   N = a0[31:30]
+//   target_pc = (a[0] & 0x3FFF_FFFF) | (PC & 0xC000_0000)
+//   WindowStart[WB_current] = 0
+//   WB_new = (WB_current - N) mod 16
+//   PC = target_pc
+
+/// Encode ENTRY as_, imm12 (op0=6, n=3, m=0).
+/// imm12 is the raw 12-bit field; stack decrement = imm12 * 8 bytes.
+fn enc_entry(as_: u32, imm12: u32) -> u32 {
+    // op0=6, bits[5:4]=3 (n=3), bits[7:6]=0 (m=0), as_=bits[11:8], imm12=bits[23:12]
+    0x6 | (3 << 4) | (as_ << 8) | ((imm12 & 0xFFF) << 12)
+}
+
+/// ENTRY rotates WindowBase by PS.CALLINC (=1 for CALL4).
 #[test]
-fn test_exec_retw_returns_not_implemented() {
+fn test_exec_entry_rotates_window_base_by_callinc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    // Set CALLINC=1 (as if CALL4 was just executed)
+    cpu.ps.set_callinc(1);
+    // Set a1 (stack pointer) to a known value so ENTRY doesn't crash on SP subtract
+    cpu.set_register(1, 0x2005_0000);
+
+    // ENTRY a1, 4  (imm12=4 → 32 bytes stack)  →  word 0x004136
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.regs.windowbase(), 1, "WindowBase should advance by CALLINC=1");
+}
+
+/// ENTRY with CALLINC=2 rotates WindowBase by 2.
+#[test]
+fn test_exec_entry_rotates_window_base_callinc2() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_callinc(2);
+    cpu.set_register(1, 0x2005_0000);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.regs.windowbase(), 2, "WindowBase should advance by CALLINC=2");
+}
+
+/// ENTRY sets WindowStart bit for the new WindowBase.
+#[test]
+fn test_exec_entry_sets_windowstart_bit() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_callinc(1);
+    cpu.set_register(1, 0x2005_0000);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert!(cpu.regs.windowstart_bit(1), "WindowStart bit 1 should be set after ENTRY with CALLINC=1");
+}
+
+/// ENTRY clears PS.CALLINC to 0 after rotation.
+#[test]
+fn test_exec_entry_clears_callinc() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_callinc(2);
+    cpu.set_register(1, 0x2005_0000);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.ps.callinc(), 0, "PS.CALLINC must be 0 after ENTRY");
+}
+
+/// ENTRY decrements a[as_] (in the new window) by imm * 8 bytes.
+/// Setup: CALLINC=1, WB starts at 0. After ENTRY, WB=1.
+/// In new window (WB=1), a1 is at physical[(1*4+1) mod 64]=physical[5].
+/// We pre-set physical[5] via write_logical after setting WB=1 temporarily.
+/// Simpler: set a1 BEFORE rotation; after rotation with CALLINC=1,
+/// the new frame's a1 is the old frame's a5 (physical[1*4+1=5]).
+/// Use a direct physical write to set physical[5] = SP before ENTRY.
+#[test]
+fn test_exec_entry_allocates_stack() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_callinc(1);
+
+    // In WB=0, a1 is phys[1]. After ENTRY with CALLINC=1, WB=1, new a1 is phys[5].
+    // Pre-load phys[5] = 0x2005_1000 via set_physical.
+    cpu.regs.set_physical(5, 0x2005_1000);
+
+    // ENTRY a1, 4  (imm12=4 → 32 bytes).
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    // After ENTRY: WB=1, new a1 (phys[5]) = 0x2005_1000 - 32
+    assert_eq!(
+        cpu.regs.read_logical(1),
+        0x2005_1000 - 32,
+        "ENTRY a1,4 should decrement SP by 32 bytes"
+    );
+}
+
+/// ENTRY with maximum imm (imm12=0xFFF → 0xFFF * 8 = 32760 bytes).
+#[test]
+fn test_exec_entry_imm_max() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.ps.set_callinc(1);
+
+    let initial_sp: u32 = 0x4000_0000;
+    cpu.regs.set_physical(5, initial_sp);
+
+    // ENTRY a1, 0xFFF  (imm12=0xFFF → 0xFFF * 8 = 32760 bytes).
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 0xFFF)]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    let expected = initial_sp.wrapping_sub(0xFFF * 8);
+    assert_eq!(
+        cpu.regs.read_logical(1),
+        expected,
+        "ENTRY max imm should decrement SP by 0xFFF * 8 = 32760 bytes"
+    );
+}
+
+/// Full CALL4 → ENTRY round-trip: callee can access return address via a0.
+///
+/// CALL4 sets caller's a4 = return_pc, CALLINC=1.
+/// ENTRY rotates WB by 1: callee's a0 (phys[(WB_new*4)]) = caller's a4 (phys[4]).
+/// Verify callee a0 holds the return address after ENTRY.
+#[test]
+fn test_exec_call4_entry_round_trip() {
+    const CALLEE: u32 = TEST_PC + 12;
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    // Set a1 in caller to a valid stack pointer. After CALL4+ENTRY,
+    // caller's a5 (phys[5]) becomes callee's a1. Pre-load it.
+    cpu.regs.set_physical(5, 0x2005_0000);
+
+    // CALL4 to CALLEE (CALLEE = TEST_PC + 12, must be 4-aligned)
+    write_insns(&mut bus, TEST_PC as u64, &[
+        enc_call(1, TEST_PC, CALLEE), // CALL4 CALLEE
+    ]);
+    // ENTRY a1, 4  (allocate 32-byte frame)
+    write_insns(&mut bus, CALLEE as u64, &[
+        enc_entry(1, 4),  // ENTRY a1, 32 bytes
+        st0(4, 1, 0xF),   // BREAK to halt
+    ]);
+
+    run_until_error(&mut cpu, &mut bus);
+
+    // After ENTRY: WB=1. Callee's a0 = phys[4] = caller's a4.
+    // CALL4 wrote (TEST_PC+3 low30) | (1<<30) into caller's a4 (phys[4]).
+    let expected_ret = ((TEST_PC + 3) & 0x3FFF_FFFF) | (1 << 30);
+    assert_eq!(
+        cpu.regs.read_logical(0),
+        expected_ret,
+        "callee a0 should hold encoded return address after CALL4+ENTRY"
+    );
+    assert_eq!(cpu.regs.windowbase(), 1, "WB should be 1 after CALL4+ENTRY");
+}
+
+// ── RETW exec tests ──────────────────────────────────────────────────────────
+
+/// Helper: set up a minimal windowed call frame for RETW tests.
+/// Returns the CPU with WB=1, WindowStart[0]=1, WindowStart[1]=1,
+/// a0 of the current (WB=1) frame encoding N=1 and a fake return PC.
+fn setup_retw_frame(cpu: &mut XtensaLx7, ret_pc: u32) {
+    // WB = 1 (callee frame)
+    cpu.regs.set_windowbase(1);
+    // WindowStart[0] = 1 (caller still live), WindowStart[1] = 1 (callee)
+    cpu.regs.set_windowstart(0b0000_0000_0000_0011);
+    // a0 in callee (WB=1) = phys[4] = ret_pc with N=1 encoded in bits[31:30]
+    // N=1 → bits[31:30] = 0b01
+    let a0_val = (ret_pc & 0x3FFF_FFFF) | (1 << 30);
+    cpu.regs.set_physical(4, a0_val);
+}
+
+/// RETW rotates WindowBase back by N (N=1).
+#[test]
+fn test_exec_retw_rotates_window_back() {
     let mut cpu = XtensaLx7::new();
     let mut bus = SystemBus::new();
     cpu.reset(&mut bus).unwrap();
     cpu.set_pc(TEST_PC);
 
+    setup_retw_frame(&mut cpu, TEST_PC);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert_eq!(cpu.regs.windowbase(), 0, "RETW should restore WindowBase to 0 (1 - N=1)");
+}
+
+/// RETW clears the WindowStart bit for the old WindowBase.
+#[test]
+fn test_exec_retw_clears_windowstart_bit() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    setup_retw_frame(&mut cpu, TEST_PC);
+    assert!(cpu.regs.windowstart_bit(1), "pre-condition: WS[1] should be set");
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    assert!(!cpu.regs.windowstart_bit(1), "RETW should clear WindowStart bit 1 (old WB)");
+}
+
+/// RETW sets PC = (a0 & 0x3FFF_FFFF) | (cur_pc & 0xC000_0000).
+#[test]
+fn test_exec_retw_jumps_to_a0_low30() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // Encode return address with N=1 in high 2 bits, and 0x2000_0100 as the target
+    let target = 0x2000_0100u32;
+    let a0_val = (target & 0x3FFF_FFFF) | (1u32 << 30);
+    // Set up WB=1, WS[1]=1, a0 in callee frame
+    cpu.regs.set_windowbase(1);
+    cpu.regs.set_windowstart(0b11);
+    cpu.regs.set_physical(4, a0_val);  // phys[4] = callee's a0 when WB=1
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_retw()]);
+    cpu.step(&mut bus, &[]).unwrap();
+
+    let expected_pc = (target & 0x3FFF_FFFF) | (TEST_PC & 0xC000_0000);
+    assert_eq!(
+        cpu.get_pc(),
+        expected_pc,
+        "RETW should set PC = (a0 low30) | (old_pc high2)"
+    );
+}
+
+/// Full CALL4 → ENTRY → RETW cycle: caller resumes at instruction after CALL4.
+///
+/// Layout:
+///   TEST_PC+0:  CALL4 → CALLEE    (3 bytes)
+///   TEST_PC+3:  BREAK             (3 bytes) ← where RETW should return
+///   CALLEE+0:   ENTRY a1, 4       (3 bytes)
+///   CALLEE+3:   RETW              (3 bytes)
+#[test]
+fn test_exec_call4_entry_retw_full_cycle() {
+    const CALLEE: u32 = TEST_PC + 12;  // 4-byte aligned target
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    // Pre-load callee's a1 (= caller's a5 = phys[5]) for stack allocation
+    cpu.regs.set_physical(5, 0x2005_0000);
+
+    // Caller code
     write_insns(&mut bus, TEST_PC as u64, &[
-        enc_retw(), // RETW — should error immediately
+        enc_call(1, TEST_PC, CALLEE),   // CALL4 to CALLEE (3 bytes at TEST_PC)
+        st0(4, 1, 0xF),                 // BREAK at TEST_PC+3 (return point)
+    ]);
+    // Callee code
+    write_insns(&mut bus, CALLEE as u64, &[
+        enc_entry(1, 4),    // ENTRY a1, 32 bytes
+        enc_retw(),         // RETW back to caller
     ]);
 
-    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    let err = run_until_error(&mut cpu, &mut bus);
     assert!(
-        matches!(err, SimulationError::NotImplemented(_)),
-        "RETW must return NotImplemented, got {:?}", err
+        matches!(err, SimulationError::BreakpointHit(_)),
+        "expected BreakpointHit at return, got {:?}", err
     );
+    // RETW should have jumped to the return address: TEST_PC + 3
+    // (CALL4 wrote TEST_PC+3 into caller's a4, which is callee's a0)
+    if let SimulationError::BreakpointHit(pc) = err {
+        assert_eq!(
+            pc, TEST_PC + 3,
+            "RETW should return to TEST_PC+3 (instruction after CALL4)"
+        );
+    }
+    // After RETW, WB should be back to 0
+    assert_eq!(cpu.regs.windowbase(), 0, "WB should be restored to 0 after RETW");
+    // WindowStart[1] should be cleared
+    assert!(!cpu.regs.windowstart_bit(1), "WS[1] should be cleared by RETW");
 }
 
 // ── D8: Narrow (Code Density) exec tests ────────────────────────────────────

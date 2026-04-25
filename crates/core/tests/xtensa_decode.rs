@@ -384,7 +384,8 @@ fn decode_beqi_bnei_blti_bgei() {
         Instruction::Bgei { as_: 2, imm: 256, offset: 20 });
 }
 
-// BIU group (op0=6, n=3): BLTUI/BGEUI with B4CONSTU table; m=0,1 reserved.
+// BIU group (op0=6, n=3): BLTUI/BGEUI with B4CONSTU table; m=1 reserved.
+// n=3, m=0: ENTRY (added in F1 — see F1 decoder tests below).
 
 #[test]
 fn decode_bltui_bgeui() {
@@ -394,10 +395,10 @@ fn decode_bltui_bgeui() {
     // BGEUI: n=3, m=3, r=0 → b4constu[0]=32768
     assert_eq!(decode(0x6u32 | (3u32 << 4) | (3u32 << 6) | (2u32 << 8) | (0u32 << 12) | (0x10u32 << 16)),
         Instruction::Bgeui { as_: 2, imm: 32768, offset: 20 });
-    // BIU m=0 is reserved → Unknown
-    match decode(0x6u32 | (3u32 << 4) | (0u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)) {
+    // BIU m=1 is reserved → Unknown
+    match decode(0x6u32 | (3u32 << 4) | (1u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)) {
         Instruction::Unknown(_) => (),
-        other => panic!("expected Unknown for reserved BIU m=0, got {:?}", other),
+        other => panic!("expected Unknown for reserved BIU m=1, got {:?}", other),
     }
 }
 
@@ -981,4 +982,61 @@ fn test_decode_s32ri_hw_oracle_imm4() {
     // imm8=1 → decoded imm = 1 << 2 = 4.
     let w = 0x01f432u32;
     assert_eq!(decode(w), Instruction::S32ri { at: 3, as_: 4, imm: 4 });
+}
+
+// ── F1: ENTRY + RETW decoder tests (HW-oracle verified) ──────────────────────
+//
+// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   entry a1, 32  → 004136 → 24-bit LE word 0x004136
+//   entry a1, 256 → 020136 → 24-bit LE word 0x020136
+//   entry sp, 16  → 002136 → 24-bit LE word 0x002136  (sp = a1)
+//   retw (wide)   → 000090 → 24-bit word 0x000090  (ST0 group, r=0, t=9)
+//   retw.n (narrow) → f01d → 16-bit halfword 0xf01d   (op0=D, r=F, s=1)
+//
+// ENTRY encoding (SI format, op0=6):
+//   op0=bits[3:0]=6, n=bits[5:4]=3, m=bits[7:6]=0,
+//   as_=bits[11:8], imm12=bits[23:12].
+//   Stack decrement = imm12 * 8 bytes.  Instruction::Entry { as_, imm: imm12 }.
+
+/// ENTRY a1, 32 — HW-oracle exact bytes.
+/// `entry a1, 32` → objdump: 004136 → 24-bit LE word 0x004136.
+/// imm12 = 4  (4 * 8 = 32 bytes of stack).
+#[test]
+fn test_decode_entry_a1_32() {
+    let w = 0x004136u32;
+    assert_eq!(decode(w), Instruction::Entry { as_: 1, imm: 4 });
+}
+
+/// ENTRY a1, 256 — HW-oracle exact bytes.
+/// `entry a1, 256` → objdump: 020136 → 24-bit LE word 0x020136.
+/// imm12 = 32  (32 * 8 = 256 bytes of stack).
+#[test]
+fn test_decode_entry_a1_256() {
+    let w = 0x020136u32;
+    assert_eq!(decode(w), Instruction::Entry { as_: 1, imm: 32 });
+}
+
+/// ENTRY sp (a1), 16 — HW-oracle exact bytes.
+/// `entry sp, 16` → objdump: 002136 → 24-bit LE word 0x002136.
+/// imm12 = 2  (2 * 8 = 16 bytes of stack).
+#[test]
+fn test_decode_entry_sp_16() {
+    let w = 0x002136u32;
+    assert_eq!(decode(w), Instruction::Entry { as_: 1, imm: 2 });
+}
+
+/// RETW (wide form) — ST0 group encoding.
+/// Wide RETW: op0=0, op1=0, op2=0, r=0, s=0, t=9 → 24-bit word 0x000090.
+#[test]
+fn test_decode_retw_wide() {
+    let w = 0x000090u32;
+    assert_eq!(decode(w), Instruction::Retw);
+}
+
+/// RETW.N (narrow form) — HW-oracle exact bytes.
+/// `retw.n` → halfword 0xf01d  (op0=0xD, r=0xF, s=1, t=0).
+#[test]
+fn test_decode_retw_n() {
+    let hw = 0xf01du16;
+    assert_eq!(decode_narrow(hw), Instruction::Retw);
 }

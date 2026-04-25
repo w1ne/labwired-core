@@ -399,26 +399,32 @@ impl XtensaLx7 {
                 self.pc = target;
             }
 
-            // CALL4/8/12 offset: windowed call (window rotation deferred to ENTRY in Phase F1).
-            // a[N] = pc + 3  (return PC, placed in register that becomes a0 after ENTRY rotates)
+            // CALL4/8/12 offset: windowed call.
+            // a[N] = (pc + 3 low-30) | (N << 30)
+            //   The return address encodes the call type in bits[31:30] so that
+            //   RETW can recover N = a0[31:30] after the window rotation.
+            //   ISA RM §8 CALL4: "upper two bits of the return address are set to 01".
             // PS.CALLINC = N / 4  (1, 2, or 3 for CALL4, CALL8, CALL12)
             // target = ((pc + 3) & !3) + offset  (ISA RM §4.4)
             Call4 { offset } => {
-                let ret_pc = self.pc.wrapping_add(3);
+                let raw_ret = self.pc.wrapping_add(3);
+                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (1 << 30);
                 let target = (self.pc.wrapping_add(3) & !3u32).wrapping_add(offset as u32);
                 self.regs.write_logical(4, ret_pc);
                 self.ps.set_callinc(1);
                 self.pc = target;
             }
             Call8 { offset } => {
-                let ret_pc = self.pc.wrapping_add(3);
+                let raw_ret = self.pc.wrapping_add(3);
+                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (2 << 30);
                 let target = (self.pc.wrapping_add(3) & !3u32).wrapping_add(offset as u32);
                 self.regs.write_logical(8, ret_pc);
                 self.ps.set_callinc(2);
                 self.pc = target;
             }
             Call12 { offset } => {
-                let ret_pc = self.pc.wrapping_add(3);
+                let raw_ret = self.pc.wrapping_add(3);
+                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (3 << 30);
                 let target = (self.pc.wrapping_add(3) & !3u32).wrapping_add(offset as u32);
                 self.regs.write_logical(12, ret_pc);
                 self.ps.set_callinc(3);
@@ -428,21 +434,24 @@ impl XtensaLx7 {
             // CALLX4/8/12 as_: register-indirect windowed calls.
             // Same semantics as CALL4/8/12 but target = a[as_] (before we overwrite a[N]).
             Callx4 { as_ } => {
-                let ret_pc = self.pc.wrapping_add(3);
+                let raw_ret = self.pc.wrapping_add(3);
+                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (1 << 30);
                 let target = self.regs.read_logical(as_);
                 self.regs.write_logical(4, ret_pc);
                 self.ps.set_callinc(1);
                 self.pc = target;
             }
             Callx8 { as_ } => {
-                let ret_pc = self.pc.wrapping_add(3);
+                let raw_ret = self.pc.wrapping_add(3);
+                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (2 << 30);
                 let target = self.regs.read_logical(as_);
                 self.regs.write_logical(8, ret_pc);
                 self.ps.set_callinc(2);
                 self.pc = target;
             }
             Callx12 { as_ } => {
-                let ret_pc = self.pc.wrapping_add(3);
+                let raw_ret = self.pc.wrapping_add(3);
+                let ret_pc = (raw_ret & 0x3FFF_FFFF) | (3 << 30);
                 let target = self.regs.read_logical(as_);
                 self.regs.write_logical(12, ret_pc);
                 self.ps.set_callinc(3);
@@ -454,11 +463,57 @@ impl XtensaLx7 {
                 self.pc = self.regs.read_logical(0);
             }
 
-            // RETW: windowed return — deferred to Phase F2.
+            // ── F1: ENTRY / RETW — windowed call prologue / epilogue ──────────
+
+            // ENTRY as_, imm: windowed call prologue (no overflow check — deferred to F3).
+            //
+            // ISA RM §8 ENTRY semantics:
+            //   1. WB_new = (WB_old + PS.CALLINC) mod 16
+            //   2. WindowStart[WB_new] = 1
+            //   3. PS.CALLINC = 0
+            //   4. a[as_] -= imm * 8   (in the NEW window; as_ is the stack pointer)
+            //   5. PC += len  (instruction is 3 bytes)
+            //
+            // Note: the rotation happens HERE (on ENTRY), not on CALL*. CALL* only
+            // sets PS.CALLINC and stores the return address in a[N] of the OLD frame.
+            // After rotation, the callee's a0 maps to the same physical reg as the
+            // caller's a[CALLINC*4], which holds the return address written by CALL*.
+            //
+            // Overflow check (WindowStart[(WB_new+1) mod 16] == 1 → raise exception)
+            // is deferred to F3.
+            Entry { as_, imm } => {
+                let callinc = self.ps.callinc();
+                let wb_old = self.regs.windowbase();
+                let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
+                self.regs.set_windowbase(wb_new);
+                self.regs.set_windowstart_bit(wb_new, true);
+                self.ps.set_callinc(0);
+                // a[as_] in the NEW window (post-rotation) is decremented by imm * 8.
+                let sp = self.regs.read_logical(as_);
+                self.regs.write_logical(as_, sp.wrapping_sub(imm * 8));
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // RETW: windowed return (no underflow check — deferred to F4).
+            //
+            // ISA RM §8 RETW semantics:
+            //   1. N = a0[31:30]  (1→CALL4, 2→CALL8, 3→CALL12)
+            //   2. target_pc = (a[0] & 0x3FFF_FFFF) | (PC & 0xC000_0000)
+            //   3. WindowStart[WB_current] = 0
+            //   4. WB_new = (WB_current - N) mod 16
+            //   5. PC = target_pc
+            //
+            // Underflow check (WindowStart[WB_new] == 0 → raise exception)
+            // is deferred to F4.
             Retw => {
-                return Err(SimulationError::NotImplemented(
-                    "RETW: windowed return deferred to Phase F2".to_string(),
-                ));
+                let a0 = self.regs.read_logical(0);
+                let n = (a0 >> 30) as u8;               // bits[31:30] = callinc used by the call
+                let target_pc = (a0 & 0x3FFF_FFFF) | (self.pc & 0xC000_0000);
+                let wb_cur = self.regs.windowbase();
+                self.regs.set_windowstart_bit(wb_cur, false);
+                let wb_new = wb_cur.wrapping_sub(n) & 0x0F;
+                self.regs.set_windowbase(wb_new);
+                self.pc = target_pc;
             }
 
             // BANY: taken if (as_ & at) != 0

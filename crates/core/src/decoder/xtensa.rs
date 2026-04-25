@@ -544,13 +544,39 @@ fn decode_si(w: u32) -> Instruction {
             }
         }
         3 => {
-            // BIU family (RRI8): imm8 offset; r indexes B4CONSTU; m=0,1 reserved.
-            let imm8 = ((w >> 16) & 0xFF) as u32;
-            let off = sext8(imm8) + 4;
+            // n=3, m=0: ENTRY as_, imm12
+            //
+            // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+            //   entry a1, 32  → 004136 → w=0x004136: op0=6, n=3, m=0, s=1, imm12=4
+            //   entry a1, 256 → 020136 → w=0x020136: op0=6, n=3, m=0, s=1, imm12=32
+            //   entry sp, 16  → 002136 → w=0x002136: op0=6, n=3, m=0, s=1, imm12=2
+            //
+            // Field layout: op0=bits[3:0]=6, n=bits[5:4]=3, m=bits[7:6]=0,
+            //   as_=bits[11:8], imm12=bits[23:12].
+            // Stack decrement = imm12 * 8 bytes (8-byte-aligned frames per ISA RM §4.4).
+            // Instruction::Entry stores raw imm12 (not scaled).
+            //
+            // n=3, m=1: also reserved (Unknown).
+            // n=3, m=2: BLTUI; n=3, m=3: BGEUI (BIU family, unchanged).
             match m {
-                0 | 1 => Instruction::Unknown(w), // reserved per ISA RM
-                2 => Instruction::Bltui { as_: s, imm: b4constu(r), offset: off },
-                3 => Instruction::Bgeui { as_: s, imm: b4constu(r), offset: off },
+                0 => {
+                    // ENTRY as_, imm12
+                    let imm12 = (w >> 12) & 0xFFF;
+                    Instruction::Entry { as_: s, imm: imm12 }
+                }
+                1 => Instruction::Unknown(w), // reserved per ISA RM
+                2 => {
+                    // BLTUI as_, imm, offset (BIU family)
+                    let imm8 = (w >> 16) & 0xFF;
+                    let off = sext8(imm8) + 4;
+                    Instruction::Bltui { as_: s, imm: b4constu(r), offset: off }
+                }
+                3 => {
+                    // BGEUI as_, imm, offset (BIU family)
+                    let imm8 = (w >> 16) & 0xFF;
+                    let off = sext8(imm8) + 4;
+                    Instruction::Bgeui { as_: s, imm: b4constu(r), offset: off }
+                }
                 _ => Instruction::Unknown(w),
             }
         }
