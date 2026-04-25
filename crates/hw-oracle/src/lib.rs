@@ -56,6 +56,12 @@ const BREAK_1_15: [u8; 3] = [0xF0, 0x41, 0x00];
 // ── OracleState ───────────────────────────────────────────────────────────────
 
 /// Snapshot of CPU register + memory state used by setup and expect closures.
+///
+/// **Setup fields** (`sr`, `init_windowbase`, `init_windowstart`, `init_ps_excm`) are
+/// applied to the CPU before execution starts.
+///
+/// **End-state fields** (`wb`, `ws`, `excm`, `epc1`, `exccause`) are captured
+/// after execution halts.
 #[derive(Debug, Clone, Default)]
 pub struct OracleState {
     /// Register values keyed by Xtensa name: `"a0"`..`"a15"`.
@@ -72,6 +78,34 @@ pub struct OracleState {
     /// Final program counter captured after `BREAK` (the address of the BREAK
     /// instruction).  Always populated by `capture_sim_state`.
     pub pc: u32,
+
+    // ── Setup-only fields (applied before execution) ──────────────────────────
+
+    /// Special Register (SR) values to write before execution.
+    /// Key = numeric SR ID (use `labwired_core::cpu::xtensa_sr::*` constants).
+    pub sr: HashMap<u16, u32>,
+
+    /// If `Some(wb)`, override `WindowBase` before execution.
+    pub init_windowbase: Option<u8>,
+
+    /// If `Some(ws)`, override `WindowStart` before execution.
+    pub init_windowstart: Option<u16>,
+
+    /// If `Some(excm)`, override `PS.EXCM` before execution.
+    pub init_ps_excm: Option<bool>,
+
+    // ── End-state captured fields ─────────────────────────────────────────────
+
+    /// `WindowBase` after execution halts.
+    pub wb: u8,
+    /// `WindowStart` after execution halts.
+    pub ws: u16,
+    /// `PS.EXCM` after execution halts.
+    pub excm: bool,
+    /// `EPC1` SR value after execution halts.
+    pub epc1: u32,
+    /// `EXCCAUSE` SR value after execution halts.
+    pub exccause: u32,
 }
 
 impl OracleState {
@@ -125,6 +159,77 @@ impl OracleState {
             self.pc, expected,
             "oracle: pc: expected 0x{expected:08X}, got 0x{:08X}",
             self.pc
+        );
+    }
+
+    // ── Window / PS setup helpers ─────────────────────────────────────────────
+
+    /// Write a Special Register value to be applied before execution.
+    ///
+    /// Use `labwired_core::cpu::xtensa_sr::*` constants for SR IDs.
+    pub fn write_sr(&mut self, sr_id: u16, v: u32) {
+        self.sr.insert(sr_id, v);
+    }
+
+    /// Override `WindowBase` before execution.
+    pub fn write_windowbase(&mut self, wb: u8) {
+        self.init_windowbase = Some(wb);
+    }
+
+    /// Override `WindowStart` before execution.
+    pub fn write_windowstart(&mut self, ws: u16) {
+        self.init_windowstart = Some(ws);
+    }
+
+    /// Override `PS.EXCM` before execution.
+    pub fn write_ps_excm(&mut self, excm: bool) {
+        self.init_ps_excm = Some(excm);
+    }
+
+    // ── End-state assertion helpers ───────────────────────────────────────────
+
+    /// Assert that `WindowBase` equals `expected` after execution.
+    pub fn assert_windowbase(&self, expected: u8) {
+        assert_eq!(
+            self.wb, expected,
+            "oracle: WindowBase: expected {expected}, got {}",
+            self.wb
+        );
+    }
+
+    /// Assert that `WindowStart` equals `expected` after execution.
+    pub fn assert_windowstart(&self, expected: u16) {
+        assert_eq!(
+            self.ws, expected,
+            "oracle: WindowStart: expected 0x{expected:04X}, got 0x{:04X}",
+            self.ws
+        );
+    }
+
+    /// Assert that `PS.EXCM` equals `expected` after execution.
+    pub fn assert_excm(&self, expected: bool) {
+        assert_eq!(
+            self.excm, expected,
+            "oracle: PS.EXCM: expected {expected}, got {}",
+            self.excm
+        );
+    }
+
+    /// Assert that `EPC1` equals `expected` after execution.
+    pub fn assert_epc1(&self, expected: u32) {
+        assert_eq!(
+            self.epc1, expected,
+            "oracle: EPC1: expected 0x{expected:08X}, got 0x{:08X}",
+            self.epc1
+        );
+    }
+
+    /// Assert that `EXCCAUSE` equals `expected` after execution.
+    pub fn assert_exccause(&self, expected: u32) {
+        assert_eq!(
+            self.exccause, expected,
+            "oracle: EXCCAUSE: expected {expected}, got {}",
+            self.exccause
         );
     }
 }
@@ -384,9 +489,14 @@ mod ram_peripheral {
 
 /// Execute `case.program` in the simulator, apply `case.setup`, step until
 /// BREAK, and return the end `OracleState` with all 16 AR registers captured.
+///
+/// In addition to AR registers and memory, the end state includes:
+/// `wb` (WindowBase), `ws` (WindowStart), `excm` (PS.EXCM),
+/// `epc1` (EPC1 SR), and `exccause` (EXCCAUSE SR).
 fn capture_sim_state(case: &OracleCase) -> OracleState {
     use labwired_core::bus::SystemBus;
     use labwired_core::cpu::xtensa_lx7::XtensaLx7;
+    use labwired_core::cpu::xtensa_sr::{EPC1 as EPC1_SR, EXCCAUSE as EXCCAUSE_SR};
     use labwired_core::{Cpu, SimulationError};
     use ram_peripheral::RamPeripheral;
 
@@ -426,12 +536,53 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
         if let Some(idx) = parse_ar_name(name) {
             cpu.regs.write_logical(idx, val);
         }
-        // SR / special register setup is deferred (not needed for Plan-1 oracle).
+    }
+    // Apply SR setup (e.g. VECBASE for window vector tests).
+    for (&sr_id, &val) in &init_state.sr {
+        cpu.sr.write(sr_id, val);
+    }
+    // Apply WindowBase / WindowStart overrides.
+    if let Some(wb) = init_state.init_windowbase {
+        cpu.regs.set_windowbase(wb);
+    }
+    if let Some(ws) = init_state.init_windowstart {
+        cpu.regs.set_windowstart(ws);
+    }
+    // Apply PS.EXCM override.
+    if let Some(excm) = init_state.init_ps_excm {
+        cpu.ps.set_excm(excm);
     }
     // Write setup memory into the bus (for load tests that need pre-populated data).
     for (&addr, &val) in &init_state.mem {
         bus.write_u32(addr as u64, val)
             .unwrap_or_else(|e| panic!("oracle sim: write_u32(0x{addr:08X}) failed: {e:?}"));
+    }
+
+    /// Build an `OracleState` end-state snapshot from the current CPU + bus.
+    macro_rules! make_end_state {
+        ($halt_pc:expr) => {{
+            let mut end = OracleState::default();
+            for i in 0u8..16 {
+                end.regs.insert(format!("a{}", i), cpu.regs.read_logical(i));
+            }
+            end.pc     = $halt_pc;
+            end.wb     = cpu.regs.windowbase();
+            end.ws     = cpu.regs.windowstart();
+            end.excm   = cpu.ps.excm();
+            end.epc1   = cpu.sr.read(EPC1_SR);
+            end.exccause = cpu.sr.read(EXCCAUSE_SR);
+            // Re-read memory addresses.
+            let mut addrs: Vec<u32> = init_state.mem.keys().copied().collect();
+            addrs.extend_from_slice(&case.mem_capture_addrs);
+            addrs.sort_unstable();
+            addrs.dedup();
+            for addr in addrs {
+                let val = bus.read_u32(addr as u64)
+                    .unwrap_or_else(|e| panic!("oracle sim: read_u32(0x{addr:08X}) failed: {e:?}"));
+                end.mem.insert(addr, val);
+            }
+            end
+        }};
     }
 
     // Step until BREAK (BreakpointHit) or limit.
@@ -440,25 +591,14 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
         match cpu.step(&mut bus, &[]) {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(break_pc)) => {
-                // Normal termination: capture end state.
-                let mut end = OracleState::default();
-                for i in 0u8..16 {
-                    end.regs.insert(format!("a{}", i), cpu.regs.read_logical(i));
-                }
-                // Capture PC (address of the BREAK instruction).
-                end.pc = break_pc;
-                // Re-read every address that was set up (load/roundtrip tests)
-                // and every address explicitly requested for capture (store tests).
-                let mut addrs_to_read: Vec<u32> = init_state.mem.keys().copied().collect();
-                addrs_to_read.extend_from_slice(&case.mem_capture_addrs);
-                addrs_to_read.sort_unstable();
-                addrs_to_read.dedup();
-                for addr in addrs_to_read {
-                    let val = bus.read_u32(addr as u64)
-                        .unwrap_or_else(|e| panic!("oracle sim: read_u32(0x{addr:08X}) failed: {e:?}"));
-                    end.mem.insert(addr, val);
-                }
-                return end;
+                return make_end_state!(break_pc);
+            }
+            Err(SimulationError::ExceptionRaised { cause: _, pc }) => {
+                // ExceptionRaised terminates execution for exception-path tests
+                // (e.g. S32E outside vector / MOVSP alloca-cause).
+                // cpu.sr[EXCCAUSE] and cpu.sr[EPC1] are already written by
+                // raise_general_exception, so the expect closure can check them.
+                return make_end_state!(pc);
             }
             Err(e) => panic!("oracle sim error: {e:?}"),
         }

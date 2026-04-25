@@ -806,3 +806,322 @@ fn call0_oracle() -> OracleCase {
         st.assert_pc(IRAM_BASE + 4);
     })
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// H7 — Windowing oracle bank (7 tests + 1 deferred)
+//
+// Tests the windowed register ABI: CALL4 / ENTRY / RETW (overflow and underflow),
+// S32E inside exception context, ROTW, and MOVSP safe path.
+//
+// All instruction encodings are 24-bit LE words written via parse_dot_word or
+// from_bytes. The encoding convention is: word bits[3:0] = op0, and the word
+// is stored LE (byte0 = low byte of word at the lowest address).
+//
+// Windowing instruction encodings (verified against xtensa_exec.rs unit tests):
+//   CALL4  imm18=2 (target +8 from 4-aligned base): w=0x000095 bytes=[0x95,0x00,0x00]
+//   CALL4  imm18=1 (target +4 from 4-aligned base): w=0x000055 bytes=[0x55,0x00,0x00]
+//   ENTRY a1, 32:  w=0x004136 bytes=[0x36,0x41,0x00]
+//   RETW:          w=0x000090 bytes=[0x90,0x00,0x00]
+//   S32E a3,a4,-16: w=0x30C449 bytes=[0x49,0xC4,0x30]  (PS.EXCM-gated)
+//   ROTW 1:        w=0x408010 bytes=[0x10,0x80,0x40]
+//   MOVSP a3,a4:   w=0x001430 bytes=[0x30,0x14,0x00]
+//   BREAK 1,15:    w=0x0041F0 bytes=[0xF0,0x41,0x00]
+//
+// VECBASE_SR = 231 (0xE7), EPC1_SR = 177 (0xB1).
+// For overflow/underflow tests, VECBASE is set to IRAM_BASE+0x800 so that the
+// window vectors fall within the 64 KiB oracle IRAM region.
+//   OF4 vector:  VECBASE + 0x000 = IRAM_BASE+0x800
+//   UF4 vector:  VECBASE + 0x040 = IRAM_BASE+0x840
+//
+// Deferred:
+//   H7.6 (S32E outside vector) — The simulator decodes op0=9 bytes as the
+//   narrow S32I.N instruction when PS.EXCM=0, not as S32E. Therefore no
+//   IllegalInstruction exception is raised by the simulator (this matches the
+//   documented design intent in xtensa_lx7.rs which explicitly avoids the wide
+//   decode outside EXCM). HW-side IllegalInstruction behavior is architecturally
+//   correct but not modelled in the Plan-1 sim.
+//
+// All encodings verified consistent with:
+//   crates/core/tests/xtensa_exec.rs test_exec_s32e_hw_oracle_bytes
+//   crates/core/tests/xtensa_decode.rs test_decode_s32e / test_decode_rotw / ...
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// VECBASE SR ID (labwired_core::cpu::xtensa_sr::VECBASE = 231).
+const VECBASE_SR: u16 = 231;
+
+// ── H7.1: CALL4 + ENTRY + RETW (no overflow, no underflow) ───────────────────
+
+/// CALL4 + ENTRY + RETW round-trip without window overflow or underflow.
+///
+/// Program layout:
+///   IRAM_BASE+0:  CALL4 (imm18=2, target=IRAM_BASE+8)  [0x95,0x00,0x00]
+///   IRAM_BASE+3:  BREAK                                  [0xF0,0x41,0x00] ← RETW returns here
+///   IRAM_BASE+6:  padding                               [0x00,0x00]
+///   IRAM_BASE+8:  ENTRY a1, 32                           [0x36,0x41,0x00]
+///   IRAM_BASE+11: RETW                                   [0x90,0x00,0x00]
+///   (BREAK auto-appended at IRAM_BASE+14 — unreachable)
+///
+/// CALL4 sets CALLINC=1, stores return address in logical a4 of the old frame.
+/// ENTRY rotates WB to 1, sets WS[1].
+/// RETW reads N=1 from a0[31:30], verifies WS[0]=1 (no UF), returns to IRAM_BASE+3.
+/// BREAK fires at IRAM_BASE+3. After RETW: WB=0, WS[1] cleared.
+#[hw_oracle_test]
+fn call4_entry_retw_no_overflow() -> OracleCase {
+    OracleCase::from_bytes(vec![
+        // IRAM_BASE+0: CALL4 (imm18=2, target=IRAM_BASE+8)
+        // w=0x000095: op0=5(CALLN), n=1(CALL4), imm18=2, off=8
+        // target = ((IRAM_BASE+3)&~3) + 8 = IRAM_BASE + 8
+        0x95, 0x00, 0x00,
+        // IRAM_BASE+3: BREAK — RETW returns here (CALL4 return addr = IRAM_BASE+3)
+        0xF0, 0x41, 0x00,
+        // IRAM_BASE+6: padding (unreachable)
+        0x00, 0x00,
+        // IRAM_BASE+8: ENTRY a1, 32  (w=0x004136)
+        0x36, 0x41, 0x00,
+        // IRAM_BASE+11: RETW  (w=0x000090)
+        0x90, 0x00, 0x00,
+        // (BREAK auto-appended by from_bytes at IRAM_BASE+14 — unreachable)
+    ])
+    .expect(|st| {
+        // RETW returned to IRAM_BASE+3 where BREAK is.
+        st.assert_pc(IRAM_BASE + 3);
+        // WindowBase restored to 0 after RETW.
+        st.assert_windowbase(0);
+        // WS[1] was cleared by RETW; bit 0 remains (initial reset value).
+        st.assert_windowstart(0x0001);
+    })
+}
+
+// ── H7.2: ENTRY triggers Window Overflow (OF4) ───────────────────────────────
+
+/// CALL4 → ENTRY with WS[2]=1 triggers OF4; PC redirects to VECBASE+0x000.
+///
+/// Setup: WindowStart = 0x0005 (bits 0 and 2 set).
+///   After CALL4 (CALLINC=1), ENTRY computes WB_new = 0+1 = 1.
+///   Overflow check: WS[(1+1)%16] = WS[2] = 1 → Window Overflow 4!
+///   EPC1 = ENTRY PC (IRAM_BASE+8). PS.EXCM = 1.
+///   PC = VECBASE + 0x000 = (IRAM_BASE+0x800) + 0x000 = IRAM_BASE+0x800.
+///
+/// VECBASE is set to IRAM_BASE+0x800 so the OF4 vector lands inside the
+/// 64 KiB oracle IRAM, where we place a BREAK to halt cleanly.
+///
+/// Program layout:
+///   IRAM_BASE+0:     CALL4 (imm18=2, target=IRAM_BASE+8)  [0x95,0x00,0x00]
+///   IRAM_BASE+3..7:  zeros (unreachable)
+///   IRAM_BASE+8:     ENTRY a1, 32                          [0x36,0x41,0x00]
+///   IRAM_BASE+0x800: BREAK  ← OF4 vector (VECBASE+0x000)  [0xF0,0x41,0x00]
+#[hw_oracle_test]
+fn entry_window_overflow_of4() -> OracleCase {
+    let mut prog = vec![0u8; 0x803 + 3]; // space for BREAK at 0x800 plus 3 bytes
+    // CALL4 (imm18=2, target=IRAM_BASE+8)
+    prog[0..3].copy_from_slice(&[0x95, 0x00, 0x00]);
+    // ENTRY a1, 32 at offset 8
+    prog[8..11].copy_from_slice(&[0x36, 0x41, 0x00]);
+    // BREAK at IRAM_BASE+0x800 (OF4 vector = VECBASE+0x000 when VECBASE=IRAM_BASE+0x800)
+    prog[0x800..0x803].copy_from_slice(&[0xF0, 0x41, 0x00]);
+    OracleCase::from_bytes(prog)
+        .setup(|st| {
+            // Set VECBASE to IRAM_BASE+0x800 so OF4 vector is inside oracle IRAM.
+            st.write_sr(VECBASE_SR, IRAM_BASE + 0x800);
+            // WS bits 0 and 2 set: WS[2]=1 causes overflow when WB_new=1.
+            st.write_windowstart(0x0005);
+        })
+        .expect(|st| {
+            // OF4 redirected PC to VECBASE+0x000 = IRAM_BASE+0x800 where BREAK is.
+            st.assert_pc(IRAM_BASE + 0x800);
+            // EPC1 holds the faulting ENTRY's address.
+            st.assert_epc1(IRAM_BASE + 8);
+            // PS.EXCM was set to 1 on overflow entry.
+            st.assert_excm(true);
+            // WindowBase was NOT rotated by the overflow (stays at 0).
+            st.assert_windowbase(0);
+        })
+}
+
+// ── H7.3: Nested 2-level CALL4 → ENTRY → CALL4 → ENTRY (no overflow) ────────
+
+/// Two successive CALL4→ENTRY pairs; WindowBase ends at 2, WindowStart = 0x0007.
+///
+/// Program layout:
+///   IRAM_BASE+0:  CALL4 (imm18=1, target=IRAM_BASE+4)   [0x55,0x00,0x00]
+///   IRAM_BASE+3:  padding                                [0x00]
+///   IRAM_BASE+4:  ENTRY a1, 32                           [0x36,0x41,0x00]
+///   IRAM_BASE+7:  CALL4 (imm18=1, target=IRAM_BASE+12)  [0x55,0x00,0x00]
+///   IRAM_BASE+10: padding                                [0x00,0x00]
+///   IRAM_BASE+12: ENTRY a1, 32                           [0x36,0x41,0x00]
+///   IRAM_BASE+15: BREAK  (auto-appended by from_bytes)
+///
+/// CALL4 at IRAM_BASE+7: ((IRAM_BASE+7+3)&~3) = IRAM_BASE+8; +4 → target=IRAM_BASE+12. ✓
+/// After 2 ENTRY executions: WB=2, WS=0x0007 (bits 0,1,2 all set).
+#[hw_oracle_test]
+fn nested_2level_call_no_overflow() -> OracleCase {
+    OracleCase::from_bytes(vec![
+        // IRAM_BASE+0: CALL4 (imm18=1, target=IRAM_BASE+4)
+        0x55, 0x00, 0x00,
+        // IRAM_BASE+3: padding
+        0x00,
+        // IRAM_BASE+4: ENTRY a1, 32
+        0x36, 0x41, 0x00,
+        // IRAM_BASE+7: CALL4 (imm18=1, target=IRAM_BASE+12)
+        // base = ((IRAM_BASE+10)&~3) = IRAM_BASE+8; +4 → IRAM_BASE+12 ✓
+        0x55, 0x00, 0x00,
+        // IRAM_BASE+10: padding
+        0x00, 0x00,
+        // IRAM_BASE+12: ENTRY a1, 32
+        0x36, 0x41, 0x00,
+        // IRAM_BASE+15: BREAK (auto-appended)
+    ])
+    .expect(|st| {
+        // BREAK fires at IRAM_BASE+15.
+        st.assert_pc(IRAM_BASE + 15);
+        // Two ENTRY calls advanced WB by 1 each: WB = 0 + 1 + 1 = 2.
+        st.assert_windowbase(2);
+        // WS bits 0, 1, 2 are all set (initial + 2 ENTRY calls).
+        st.assert_windowstart(0x0007);
+    })
+}
+
+// ── H7.4: RETW triggers Window Underflow (UF4) ───────────────────────────────
+
+/// RETW with WS[wb_dest]=0 triggers UF4; PC redirects to VECBASE+0x040.
+///
+/// Setup: WB=1, WindowStart=0x0002 (only bit 1 set; bit 0 clear → UF on N=1 return).
+///   a0 in the current frame (WB=1) = logical a4 in WB=0 = phys[4].
+///   Set via write_reg("a4", 0x40370003): N = a0[31:30] = 01 → N=1 (CALL4 style).
+///   wb_dest = 1 - 1 = 0. WS[0] = 0 → Window Underflow 4!
+///   EPC1 = RETW PC (IRAM_BASE+0). PS.EXCM = 1.
+///   PC = VECBASE + 0x040 = (IRAM_BASE+0x800) + 0x040 = IRAM_BASE+0x840.
+///
+/// The return address value 0x40370003 has bits[31:30]=01, giving N=1.
+/// It doesn't matter what the low 30 bits are since RETW faults before using them.
+///
+/// Program layout:
+///   IRAM_BASE+0:     RETW  ← triggers UF4             [0x90,0x00,0x00]
+///   IRAM_BASE+0x840: BREAK ← UF4 vector (VECBASE+0x040) [0xF0,0x41,0x00]
+#[hw_oracle_test]
+fn retw_window_underflow_uf4() -> OracleCase {
+    let mut prog = vec![0u8; 0x843 + 3];
+    // RETW at offset 0
+    prog[0..3].copy_from_slice(&[0x90, 0x00, 0x00]);
+    // BREAK at IRAM_BASE+0x840 (UF4 vector = VECBASE+0x040 when VECBASE=IRAM_BASE+0x800)
+    prog[0x840..0x843].copy_from_slice(&[0xF0, 0x41, 0x00]);
+    OracleCase::from_bytes(prog)
+        .setup(|st| {
+            // VECBASE → IRAM_BASE+0x800; UF4 vector = VECBASE+0x040 = IRAM_BASE+0x840.
+            st.write_sr(VECBASE_SR, IRAM_BASE + 0x800);
+            // WindowBase = 1 (callee frame).
+            st.write_windowbase(1);
+            // WindowStart = 0x0002: bit 1 set (callee), bit 0 CLEAR (caller → UF!).
+            st.write_windowstart(0x0002);
+            // a4 in WB=0 = phys[4] = logical a0 in WB=1 = callee's a0.
+            // Bits[31:30] = 01 → N=1 (CALL4-style return).
+            // 0x40370003 = IRAM_BASE + 3, bits[31:30] = 0x40000000 >> 30 = 1. ✓
+            st.write_reg("a4", 0x4037_0003);
+        })
+        .expect(|st| {
+            // UF4 redirected PC to VECBASE+0x040 = IRAM_BASE+0x840 where BREAK is.
+            st.assert_pc(IRAM_BASE + 0x840);
+            // EPC1 holds the faulting RETW's address.
+            st.assert_epc1(IRAM_BASE);
+            // PS.EXCM was set to 1 on underflow entry.
+            st.assert_excm(true);
+            // WindowBase was NOT rotated by the underflow (stays at 1).
+            st.assert_windowbase(1);
+        })
+}
+
+// ── H7.5: S32E inside exception vector (PS.EXCM=1) ───────────────────────────
+
+/// S32E executes correctly when PS.EXCM=1; stores a3 to [a4 - 16].
+///
+/// After reset, PS = 0x1F (EXCM=1, INTLEVEL=0xF), so no setup needed for EXCM.
+/// S32E is only recognized as a 3-byte instruction when PS.EXCM=1 and byte0 & 0xF = 9.
+///
+/// Encoding: S32E a3, a4, -16  → w=0x30C449
+///   byte0=0x49 (bits[3:0]=9=op0, bits[7:4]=4=subop→S32E), len=2(narrow), but
+///   step() detects EXCM=1 + op0=9 → re-reads as 3-byte wide instruction ✓
+///
+/// Program:
+///   IRAM_BASE+0: S32E a3, a4, -16  (w=0x30C449, bytes=[0x49,0xC4,0x30])
+///   IRAM_BASE+3: BREAK (auto-appended)
+///
+/// Setup: a4 = IRAM_BASE+0x1000 (DATA), a3 = 0xDEAD_BEEF.
+/// Expected: mem[IRAM_BASE+0xFF0] = 0xDEADBEEF (a4 - 16 = IRAM_BASE+0xFF0).
+#[hw_oracle_test]
+fn s32e_inside_vector() -> OracleCase {
+    // S32E a3, a4, -16: w=0x30C449 → bytes [0x49, 0xC4, 0x30]
+    let data_addr = IRAM_BASE + 0x1000;
+    let ea = data_addr - 16; // = IRAM_BASE + 0xFF0
+    OracleCase::asm(".word 0x30C449")
+        .setup(move |st| {
+            st.write_reg("a4", data_addr);
+            st.write_reg("a3", 0xDEAD_BEEF);
+        })
+        .capture_mem(&[ea])
+        .expect(move |st| {
+            st.assert_mem(ea, 0xDEAD_BEEF);
+        })
+}
+
+// ── H7.6: S32E outside exception vector — DEFERRED ───────────────────────────
+//
+// Plan: PS.EXCM=0, run S32E bytes, expect IllegalInstruction (cause=0).
+// Status: DEFERRED — the simulator's step() function intentionally treats
+// op0=9 bytes as the narrow S32I.N instruction when PS.EXCM=0. The EXCM
+// gate exists to avoid false-decoding S32I.N as S32E. Therefore, the
+// IllegalInstruction exception is NOT raised by the simulator when EXCM=0.
+// HW raises IllegalInstruction; simulator silently executes S32I.N instead.
+// A future plan should add a distinct "outside-EXCM S32E" detection path
+// that raises IllegalInstruction, or document the divergence explicitly.
+
+// ── H7.7: ROTW 1 — rotate WindowBase by +1 ───────────────────────────────────
+
+/// ROTW 1: WindowBase = (WindowBase + 1) mod 16; WindowStart unchanged.
+///
+/// Encoding: ROTW 1  → w=0x408010
+///   op0=0(QRST), op1=0, op2=4, r=8(ROTW), t=1(n=+1)
+///
+/// Program:
+///   IRAM_BASE+0: ROTW 1  (w=0x408010)
+///   IRAM_BASE+3: BREAK (auto-appended)
+///
+/// Setup: WB=0 (reset default). After ROTW 1: WB=1. WS unchanged (=0x0001).
+#[hw_oracle_test]
+fn rotw_1() -> OracleCase {
+    // ROTW 1: w=0x408010
+    OracleCase::asm(".word 0x408010")
+        .expect(|st| {
+            // WindowBase advanced by 1 from reset value of 0.
+            st.assert_windowbase(1);
+            // WindowStart is NOT modified by ROTW.
+            st.assert_windowstart(0x0001);
+        })
+}
+
+// ── H7.8: MOVSP safe path (adjacent frame NOT live) ──────────────────────────
+
+/// MOVSP at, as_: copies a4 into a3 when WS[(WB+1)%16] == 0 (safe path).
+///
+/// Encoding: MOVSP a3, a4  → w=0x001430
+///   op0=0(QRST), op1=0, op2=0 (ST0 group), r=1 (MOVSP), s=as_=4, t=at=3
+///
+/// Program:
+///   IRAM_BASE+0: MOVSP a3, a4  (w=0x001430)
+///   IRAM_BASE+3: BREAK (auto-appended)
+///
+/// Setup: WB=0, WS=0x0001 (only bit 0 set). WS[(0+1)%16] = WS[1] = 0 → safe path.
+/// a4 = 0xCAFE_BABE. After MOVSP: a3 = 0xCAFEBABE.
+///
+/// Note: the reset WS=0x0001 already satisfies the safe-path condition (WS[1]=0),
+/// so no explicit write_windowstart is needed.
+#[hw_oracle_test]
+fn movsp_safe_path() -> OracleCase {
+    // MOVSP a3, a4: w=0x001430
+    OracleCase::asm(".word 0x001430")
+        .setup(|st| {
+            st.write_reg("a4", 0xCAFE_BABE);
+        })
+        .expect(|st| {
+            st.assert_reg("a3", 0xCAFE_BABE);
+        })
+}
