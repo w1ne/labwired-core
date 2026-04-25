@@ -783,3 +783,39 @@ fn test_decode_mul16s() {
     // HW-oracle: mul16s a3, a4, a5 → bytes [50 34 d1] → word 0xd13450
     assert_eq!(decode(0xd13450), Instruction::Mul16s { ar: 3, as_: 4, at: 5 });
 }
+
+// ── E2: DIV family decoder tests (HW-oracle verified) ────────────────────────
+//
+// Source: xtensa-esp32s3-elf-as + xtensa-esp32s3-elf-objdump (esp-15.2.0_20250920)
+// Assembly: quos a3, a4, a5  etc.
+// Disassembly bytes: quos d2 34 50  quou c2 34 50  rems f2 34 50  remu e2 34 50
+// Packed as LE 24-bit words: 0xD23450  0xC23450  0xF23450  0xE23450
+// Field breakdown (op0=[3:0], t=[7:4], s=[11:8], r=[15:12], op1=[19:16], op2=[23:20]):
+//   QUOU: op0=0, op1=0x2, op2=0xC, r=3, s=4, t=5
+//   QUOS: op0=0, op1=0x2, op2=0xD, r=3, s=4, t=5
+//   REMU: op0=0, op1=0x2, op2=0xE, r=3, s=4, t=5
+//   REMS: op0=0, op1=0x2, op2=0xF, r=3, s=4, t=5
+
+#[test]
+fn test_decode_quos() {
+    // HW-oracle: quos a3, a4, a5 → bytes [d2 34 50] → word 0xD23450
+    assert_eq!(decode(0xD23450), Instruction::Quos { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_quou() {
+    // HW-oracle: quou a3, a4, a5 → bytes [c2 34 50] → word 0xC23450
+    assert_eq!(decode(0xC23450), Instruction::Quou { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_rems() {
+    // HW-oracle: rems a3, a4, a5 → bytes [f2 34 50] → word 0xF23450
+    assert_eq!(decode(0xF23450), Instruction::Rems { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_remu() {
+    // HW-oracle: remu a3, a4, a5 → bytes [e2 34 50] → word 0xE23450
+    assert_eq!(decode(0xE23450), Instruction::Remu { ar: 3, as_: 4, at: 5 });
+}

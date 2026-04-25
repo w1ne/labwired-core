@@ -10,7 +10,7 @@
 //! Remaining instruction classes in progress.
 
 use crate::cpu::xtensa_regs::{ArFile, Ps};
-use crate::cpu::xtensa_sr::{XtensaSrFile, SAR, VECBASE};
+use crate::cpu::xtensa_sr::{XtensaSrFile, EXCCAUSE, SAR, VECBASE};
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
@@ -593,6 +593,64 @@ impl XtensaLx7 {
                 let a = self.regs.read_logical(as_) as i16 as i32;
                 let b = self.regs.read_logical(at) as i16 as i32;
                 self.regs.write_logical(ar, (a * b) as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // ── DIV family ────────────────────────────────────────────────────
+            // Divide-by-zero: set EXCCAUSE=6 (IntegerDivideByZeroCause) and
+            // return Err(ExceptionRaised). Full vector dispatch deferred to Phase G.
+
+            // QUOS ar, as_, at: signed quotient as_ / at.
+            // i32::MIN / -1 wraps to i32::MIN per ISA RM §8 (saturating result).
+            Quos { ar, as_, at } => {
+                let dividend = self.regs.read_logical(as_) as i32;
+                let divisor  = self.regs.read_logical(at)  as i32;
+                if divisor == 0 {
+                    self.sr.write(EXCCAUSE, 6);
+                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                }
+                let q = dividend.wrapping_div(divisor);
+                self.regs.write_logical(ar, q as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // QUOU ar, as_, at: unsigned quotient as_ / at.
+            Quou { ar, as_, at } => {
+                let dividend = self.regs.read_logical(as_);
+                let divisor  = self.regs.read_logical(at);
+                if divisor == 0 {
+                    self.sr.write(EXCCAUSE, 6);
+                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                }
+                let q = dividend / divisor;
+                self.regs.write_logical(ar, q);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // REMS ar, as_, at: signed remainder as_ % at. Sign follows dividend (Rust `%` semantics).
+            // i32::MIN % -1 = 0 (overflow corner; wrapping_rem handles this).
+            Rems { ar, as_, at } => {
+                let dividend = self.regs.read_logical(as_) as i32;
+                let divisor  = self.regs.read_logical(at)  as i32;
+                if divisor == 0 {
+                    self.sr.write(EXCCAUSE, 6);
+                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                }
+                let r = dividend.wrapping_rem(divisor);
+                self.regs.write_logical(ar, r as u32);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // REMU ar, as_, at: unsigned remainder as_ % at.
+            Remu { ar, as_, at } => {
+                let dividend = self.regs.read_logical(as_);
+                let divisor  = self.regs.read_logical(at);
+                if divisor == 0 {
+                    self.sr.write(EXCCAUSE, 6);
+                    return Err(SimulationError::ExceptionRaised { cause: 6, pc: self.pc });
+                }
+                let r = dividend % divisor;
+                self.regs.write_logical(ar, r);
                 self.pc = self.pc.wrapping_add(len);
             }
 

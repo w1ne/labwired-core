@@ -39,6 +39,8 @@ pub enum SimulationError {
     NotImplemented(String),
     #[error("Breakpoint hit at {0:#x}")]
     BreakpointHit(u32),
+    #[error("Exception raised: cause={cause} at pc={pc:#x}")]
+    ExceptionRaised { cause: u8, pc: u32 },
 }
 
 pub type SimResult<T> = Result<T, SimulationError>;

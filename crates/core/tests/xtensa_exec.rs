@@ -15,7 +15,7 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::cpu::xtensa_sr::SAR as SAR_ID;
+use labwired_core::cpu::xtensa_sr::{EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID};
 use labwired_core::{Bus, Cpu, SimulationError};
 
 const TEST_PC: u32 = 0x2000_0000;
@@ -2326,4 +2326,225 @@ fn test_exec_mul16s_sign_extend() {
     run_until_error(&mut cpu, &mut bus);
     // (-32768) * 2 = -65536 = 0xFFFF0000 as u32
     assert_eq!(cpu.get_register(3), 0xFFFF0000, "mul16s: 0x8000 (=-32768) * 2 = 0xFFFF0000");
+}
+
+// ── E2: DIV family exec tests ─────────────────────────────────────────────────
+//
+// HW-oracle encodings (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   quos a3,a4,a5 → 0xD23450  quou a3,a4,a5 → 0xC23450
+//   rems a3,a4,a5 → 0xF23450  remu a3,a4,a5 → 0xE23450
+//
+// Field layout: op0=0, op1=0x2; op2=0xD(QUOS) 0xC(QUOU) 0xF(REMS) 0xE(REMU)
+
+fn enc_quos(ar: u32, as_: u32, at: u32) -> u32 { rrr(0xD, 0x2, ar, as_, at) }
+fn enc_quou(ar: u32, as_: u32, at: u32) -> u32 { rrr(0xC, 0x2, ar, as_, at) }
+fn enc_rems(ar: u32, as_: u32, at: u32) -> u32 { rrr(0xF, 0x2, ar, as_, at) }
+fn enc_remu(ar: u32, as_: u32, at: u32) -> u32 { rrr(0xE, 0x2, ar, as_, at) }
+
+/// QUOS basic: 100 / 7 = 14.
+#[test]
+fn test_exec_quos_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 100);
+    cpu.set_register(5, 7);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quos(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 14, "quos: 100 / 7 should be 14");
+}
+
+/// QUOS negative dividend: -100 / 7 = -14 (truncation toward zero, sign of dividend).
+#[test]
+fn test_exec_quos_negative_dividend() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, (-100i32) as u32);
+    cpu.set_register(5, 7);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quos(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3) as i32, -14, "quos: -100 / 7 should be -14");
+}
+
+/// QUOS i32::MIN / -1 = i32::MIN (wrapping/saturating per ISA RM §8 — no exception).
+#[test]
+fn test_exec_quos_min_div_neg_one() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, i32::MIN as u32);
+    cpu.set_register(5, (-1i32) as u32);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quos(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3) as i32, i32::MIN, "quos: i32::MIN / -1 should wrap to i32::MIN (no exception)");
+}
+
+/// QUOU basic: 100 / 7 = 14 (unsigned).
+#[test]
+fn test_exec_quou_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 100);
+    cpu.set_register(5, 7);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quou(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 14, "quou: 100 / 7 should be 14");
+}
+
+/// QUOU large unsigned: 0xF0000000 / 0x10000000 = 0xF.
+#[test]
+fn test_exec_quou_large_unsigned() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 0xF0000000);
+    cpu.set_register(5, 0x10000000);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quou(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 0xF, "quou: 0xF0000000 / 0x10000000 should be 0xF");
+}
+
+/// REMS basic: 100 % 7 = 2.
+#[test]
+fn test_exec_rems_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 100);
+    cpu.set_register(5, 7);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rems(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 2, "rems: 100 % 7 should be 2");
+}
+
+/// REMS negative dividend: -100 % 7 = -2 (sign of result follows dividend).
+#[test]
+fn test_exec_rems_negative_dividend() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, (-100i32) as u32);
+    cpu.set_register(5, 7);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rems(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3) as i32, -2, "rems: -100 % 7 should be -2 (sign of dividend)");
+}
+
+/// REMU basic: 100 % 7 = 2 (unsigned).
+#[test]
+fn test_exec_remu_basic() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 100);
+    cpu.set_register(5, 7);
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_remu(3, 4, 5), break_insn()]);
+
+    run_until_error(&mut cpu, &mut bus);
+    assert_eq!(cpu.get_register(3), 2, "remu: 100 % 7 should be 2");
+}
+
+/// QUOS divide by zero: sets EXCCAUSE=6 and returns ExceptionRaised{cause:6}.
+#[test]
+fn test_exec_quos_div_by_zero_raises_exception() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 100);
+    cpu.set_register(5, 0);  // divisor = 0
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quos(3, 4, 5)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 6, .. }),
+        "quos div-by-zero should return ExceptionRaised{{cause:6}}, got: {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 6, "EXCCAUSE SR should be 6 after div-by-zero");
+}
+
+/// QUOU divide by zero: sets EXCCAUSE=6 and returns ExceptionRaised{cause:6}.
+#[test]
+fn test_exec_quou_div_by_zero() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 42);
+    cpu.set_register(5, 0);  // divisor = 0
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_quou(3, 4, 5)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 6, .. }),
+        "quou div-by-zero should return ExceptionRaised{{cause:6}}, got: {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 6, "EXCCAUSE SR should be 6 after div-by-zero");
+}
+
+/// REMS divide by zero: sets EXCCAUSE=6 and returns ExceptionRaised{cause:6}.
+#[test]
+fn test_exec_rems_div_by_zero() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, (-7i32) as u32);
+    cpu.set_register(5, 0);  // divisor = 0
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_rems(3, 4, 5)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 6, .. }),
+        "rems div-by-zero should return ExceptionRaised{{cause:6}}, got: {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 6, "EXCCAUSE SR should be 6 after div-by-zero");
+}
+
+/// REMU divide by zero: sets EXCCAUSE=6 and returns ExceptionRaised{cause:6}.
+#[test]
+fn test_exec_remu_div_by_zero() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+    cpu.set_register(4, 99);
+    cpu.set_register(5, 0);  // divisor = 0
+
+    write_insns(&mut bus, TEST_PC as u64, &[enc_remu(3, 4, 5)]);
+
+    let err = cpu.step(&mut bus, &[]).unwrap_err();
+    assert!(
+        matches!(err, SimulationError::ExceptionRaised { cause: 6, .. }),
+        "remu div-by-zero should return ExceptionRaised{{cause:6}}, got: {:?}", err
+    );
+    assert_eq!(cpu.sr.read(EXCCAUSE_ID), 6, "EXCCAUSE SR should be 6 after div-by-zero");
 }

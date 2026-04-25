@@ -216,13 +216,22 @@ fn decode_qrst(w: u32) -> Instruction {
             0xD => Instruction::Mul16s { ar: r, as_: s, at: t },
             _ => Instruction::Unknown(w),
         },
-        // op1=0x2: MUL 32×32 family (MULL/MULUH/MULSH).
+        // op1=0x2: MUL/DIV 32×32 family.
         // HW-oracle (xtensa-esp32s3-elf-as + objdump, mull a3,a4,a5 → 0x503482):
         //   MULL  op1=0x2 op2=0x8  MULUH op1=0x2 op2=0xA  MULSH op1=0x2 op2=0xB
+        //   QUOU  op1=0x2 op2=0xC  QUOS  op1=0x2 op2=0xD
+        //   REMU  op1=0x2 op2=0xE  REMS  op1=0x2 op2=0xF
+        // Source: xtensa-esp32s3-elf-as + objdump (esp-15.2.0_20250920):
+        //   quos a3,a4,a5 → 0xD23450  quou a3,a4,a5 → 0xC23450
+        //   rems a3,a4,a5 → 0xF23450  remu a3,a4,a5 → 0xE23450
         0x2 => match op2 {
             0x8 => Instruction::Mull  { ar: r, as_: s, at: t },
             0xA => Instruction::Muluh { ar: r, as_: s, at: t },
             0xB => Instruction::Mulsh { ar: r, as_: s, at: t },
+            0xC => Instruction::Quou  { ar: r, as_: s, at: t },
+            0xD => Instruction::Quos  { ar: r, as_: s, at: t },
+            0xE => Instruction::Remu  { ar: r, as_: s, at: t },
+            0xF => Instruction::Rems  { ar: r, as_: s, at: t },
             _ => Instruction::Unknown(w),
         },
         // op1 = 0x3 — fill in later tasks.
