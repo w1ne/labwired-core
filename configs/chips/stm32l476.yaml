@@ -218,6 +218,27 @@ peripherals:
     size: "1KB"
     irq: 55
 
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+
+  - id: "dac"
+    type: "dac"
+    base_address: 0x40007400
+    size: "1KB"
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00

@@ -45,6 +45,7 @@ pub struct Rcc {
     layout: RccRegisterLayout,
     cr: u32,
     cfgr: u32,
+    pllcfgr: u32, // L4/F4/V2 only — PLL configuration register at 0x0C.
     ahbenr: u32,
     apb1enr: u32,
     apb2enr: u32,
@@ -66,10 +67,21 @@ impl Rcc {
     }
 
     pub fn new_with_layout(layout: RccRegisterLayout) -> Self {
+        // L4 boots with MSI on at range 6 (4 MHz). CR reset value:
+        //   bit 0  MSION       = 1
+        //   bit 1  MSIRDY      = 1
+        //   bits 7:4 MSIRANGE   = 0110 = 6 (= 4 MHz)
+        // Total = 0x0000_0063. F1/F4/V2 don't have MSI; reset CR to
+        // just HSION (their canonical post-reset state).
+        let cr_reset = match layout {
+            RccRegisterLayout::Stm32L4 => 0x0000_0063,
+            _ => Self::CR_HSION,
+        };
         let mut rcc = Self {
             layout,
-            cr: Self::CR_HSION,
+            cr: cr_reset,
             cfgr: 0,
+            pllcfgr: 0,
             ahbenr: 0,
             apb1enr: 0,
             apb2enr: 0,
@@ -82,15 +94,56 @@ impl Rcc {
     }
 
     fn update_ready_flags(&mut self) {
-        self.cr &= !(Self::CR_HSIRDY | Self::CR_HSERDY | Self::CR_PLLRDY);
+        // HSI: simple — HSION set ⇒ HSIRDY set.
         if (self.cr & Self::CR_HSION) != 0 {
             self.cr |= Self::CR_HSIRDY;
+        } else {
+            self.cr &= !Self::CR_HSIRDY;
         }
-        if (self.cr & Self::CR_HSEON) != 0 {
+
+        // HSE: real silicon needs a crystal that takes time to stabilise,
+        // OR an external clock with HSEBYP set. NUCLEO-L476RG's HSE
+        // source is the ST-LINK MCO so it requires HSEBYP=1 to ever
+        // become ready — without that bit the HSERDY flag stays 0
+        // forever, matching what hardware does. Pre-L4 layouts keep
+        // the old behaviour (auto-set on HSEON) since their existing
+        // survival tests rely on it.
+        let hsebyp = (self.cr & (1 << 18)) != 0;
+        let hserdy_satisfied = match self.layout {
+            RccRegisterLayout::Stm32L4 => {
+                (self.cr & Self::CR_HSEON) != 0 && hsebyp
+            }
+            _ => (self.cr & Self::CR_HSEON) != 0,
+        };
+        if hserdy_satisfied {
             self.cr |= Self::CR_HSERDY;
+        } else {
+            self.cr &= !Self::CR_HSERDY;
         }
-        if (self.cr & Self::CR_PLLON) != 0 {
+
+        // PLL: only locks if PLLON is set AND the configured source
+        // clock is ready. PLLCFGR.PLLSRC selects the source: 0 = no
+        // clock, 1 = MSI, 2 = HSI16, 3 = HSE.
+        let pll_source_ready = match self.layout {
+            RccRegisterLayout::Stm32L4 => {
+                let src = self.pllcfgr & 0x3;
+                let msirdy = (self.cr & 0x2) != 0;
+                let hsirdy = (self.cr & Self::CR_HSIRDY) != 0;
+                let hserdy = (self.cr & Self::CR_HSERDY) != 0;
+                match src {
+                    1 => msirdy,
+                    2 => hsirdy,
+                    3 => hserdy,
+                    _ => false,
+                }
+            }
+            // Pre-L4 layouts keep the simpler "PLLON ⇒ PLLRDY" rule.
+            _ => true,
+        };
+        if (self.cr & Self::CR_PLLON) != 0 && pll_source_ready {
             self.cr |= Self::CR_PLLRDY;
+        } else {
+            self.cr &= !Self::CR_PLLRDY;
         }
     }
 
@@ -152,12 +205,38 @@ impl Rcc {
         }
     }
 
+    fn cfgr_offset(&self) -> u64 {
+        match self.layout {
+            // F1 / F4 RCC put CFGR at 0x04 (right after CR).
+            RccRegisterLayout::Stm32F1 | RccRegisterLayout::Stm32F4 => 0x04,
+            // L4 inserts ICSCR at 0x04 and pushes CFGR to 0x08.
+            RccRegisterLayout::Stm32L4 => 0x08,
+            // H5-style RCC has CFGR1 at 0x10 (with HSICFGR / CRRCR / CSICFGR
+            // taking 0x04..0x0C), but the few flags we model here are
+            // close enough at 0x04 for non-PLL boot — keep that until a
+            // future round needs the full H5 layout.
+            RccRegisterLayout::Stm32V2 => 0x04,
+        }
+    }
+
+    fn pllcfgr_offset(&self) -> u64 {
+        match self.layout {
+            RccRegisterLayout::Stm32F4 => 0x04,
+            RccRegisterLayout::Stm32L4 => 0x0C,
+            // F1 has no PLLCFGR; V2/H5 has at 0x28+ — not modelled.
+            _ => 0xFFFF_FFFF, // unreachable address; suppresses match
+        }
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         if offset == 0x00 {
             return self.cr;
         }
-        if offset == 0x04 {
+        if offset == self.cfgr_offset() {
             return self.cfgr;
+        }
+        if offset == self.pllcfgr_offset() {
+            return self.pllcfgr;
         }
         if offset == self.ahbenr_offset() {
             return self.ahbenr;
@@ -186,11 +265,36 @@ impl Rcc {
             self.update_ready_flags();
             return;
         }
-        if offset == 0x04 {
-            self.cfgr = value;
-            // Mirror clock switch status (SWS) from software selection (SW).
-            let sw = self.cfgr & 0x3;
-            self.cfgr = (self.cfgr & !(0x3 << 2)) | (sw << 2);
+        if offset == self.cfgr_offset() {
+            // CFGR.SW (bits 1:0) requests a clock-source switch. SWS
+            // (bits 3:2) reflects the *active* source — only follows SW
+            // once the requested source is ready. Real silicon leaves
+            // SWS at the previous source until the new one is locked.
+            let prev_sws = (self.cfgr >> 2) & 0x3;
+            let sw = value & 0x3;
+            let sws = match self.layout {
+                RccRegisterLayout::Stm32L4 => {
+                    let msirdy = (self.cr & 0x2) != 0;
+                    let hsirdy = (self.cr & Self::CR_HSIRDY) != 0;
+                    let hserdy = (self.cr & Self::CR_HSERDY) != 0;
+                    let pllrdy = (self.cr & Self::CR_PLLRDY) != 0;
+                    match sw {
+                        0 if msirdy => sw,
+                        1 if hsirdy => sw,
+                        2 if hserdy => sw,
+                        3 if pllrdy => sw,
+                        _ => prev_sws, // requested source not ready, hold
+                    }
+                }
+                _ => sw, // pre-L4: optimistic — assume source ready
+            };
+            self.cfgr = (value & !(0x3 << 2)) | (sws << 2);
+            return;
+        }
+        if offset == self.pllcfgr_offset() {
+            self.pllcfgr = value;
+            // PLLCFGR.PLLSRC change can flip whether PLL can lock.
+            self.update_ready_flags();
             return;
         }
         if offset == self.ahbenr_offset() {

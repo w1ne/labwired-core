@@ -186,6 +186,61 @@ DR=00\r\n\
 DONE\r\n",
     },
     SurvivalCase {
+        // STM32L4 RCC PLL bring-up: walks the canonical HAL clock-init
+        // sequence — enable HSE, request PLL, switch SYSCLK to PLL.
+        // Surfaces the ready-flag state machine: HSEON without HSEBYP
+        // never readies (NUCLEO board has ST-LINK MCO not crystal),
+        // PLLON gated on source ready, CFGR.SWS only follows SW once
+        // the requested source is locked. CR/CFGR/PLLCFGR sequences
+        // captured byte-for-byte from real silicon.
+        name: "nucleo_l476rg_pll",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-pll.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"CLK START\r\n\
+CR=00000063\r\n\
+CFGR=00000000\r\n\
+HSEON\r\n\
+CR=00010063\r\n\
+PLLON\r\n\
+CR=01010063\r\n\
+PLLCFGR=01001403\r\n\
+SWITCHED\r\n\
+CFGR=00000003\r\n\
+DONE\r\n",
+    },
+    SurvivalCase {
+        // STM32L4 secondary peripheral fingerprint: IWDG + WWDG + DAC +
+        // RTC. Reset values verified against real silicon (without
+        // enabling WWDG clock, so the counter doesn't decrement).
+        name: "nucleo_l476rg_misc",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-misc.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"IWDG\r\n\
+KR=00000000\r\n\
+PR=00000000\r\n\
+RLR=00000FFF\r\n\
+SR=00000000\r\n\
+WWDG\r\n\
+CR=0000007F\r\n\
+CFR=0000007F\r\n\
+SR=00000000\r\n\
+DAC\r\n\
+CR=00000000\r\n\
+SR=00000000\r\n\
+RTC\r\n\
+CR=00000000\r\n\
+ISR=00000027\r\n\
+DONE\r\n",
+    },
+    SurvivalCase {
         // STM32L4 foundational-peripheral reset-value fingerprint:
         // PWR / FLASH / TIM2 / RNG / CRC. Captured from real silicon —
         // every value below is what NUCLEO-L476RG hardware reports
@@ -591,28 +646,38 @@ fn test_nucleo_l476rg_spi_survival() {
 }
 
 #[test]
-fn test_nucleo_l476rg_l4periphs_survival() {
+fn test_nucleo_l476rg_pll_survival() {
     run_survival_case(&SURVIVAL_CASES[10]);
 }
 
 #[test]
-fn test_nucleo_l476rg_demo_survival() {
+fn test_nucleo_l476rg_misc_survival() {
     run_survival_case(&SURVIVAL_CASES[11]);
 }
 
 #[test]
-fn test_nucleo_l476rg_dma_survival() {
+fn test_nucleo_l476rg_l4periphs_survival() {
     run_survival_case(&SURVIVAL_CASES[12]);
 }
 
 #[test]
-fn test_nucleo_l476rg_adc_survival() {
+fn test_nucleo_l476rg_demo_survival() {
     run_survival_case(&SURVIVAL_CASES[13]);
 }
 
 #[test]
-fn test_nucleo_l476rg_i2c_survival() {
+fn test_nucleo_l476rg_dma_survival() {
     run_survival_case(&SURVIVAL_CASES[14]);
+}
+
+#[test]
+fn test_nucleo_l476rg_adc_survival() {
+    run_survival_case(&SURVIVAL_CASES[15]);
+}
+
+#[test]
+fn test_nucleo_l476rg_i2c_survival() {
+    run_survival_case(&SURVIVAL_CASES[16]);
 }
 
 #[test]

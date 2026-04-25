@@ -105,7 +105,7 @@ impl SystemBus {
         match t.as_str() {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
             | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
-            | "pwr" | "flash" | "rng" | "crc" | "dbgmcu" => {
+            | "pwr" | "flash" | "rng" | "crc" | "rtc" | "iwdg" | "wwdg" | "dac" | "dbgmcu" => {
                 return t;
             }
             _ => {}
@@ -480,6 +480,10 @@ impl SystemBus {
                 "flash" | "flash_iface" => Box::new(crate::peripherals::flash::Flash::new()),
                 "rng" => Box::new(crate::peripherals::rng::Rng::new()),
                 "crc" => Box::new(crate::peripherals::crc::Crc::new()),
+                "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
+                "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
+                "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
+                "dac" => Box::new(crate::peripherals::dac::Dac::new()),
                 "exti" => Box::new(crate::peripherals::exti::Exti::new()),
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
