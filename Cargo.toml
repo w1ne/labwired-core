@@ -25,6 +25,7 @@ members = [
     "crates/firmware-esp32c3-demo",
     "crates/riscv-ci-fixture",
     "crates/config", "crates/dap", "crates/gdbstub",
+    "crates/labwired-flasher",
     "crates/ir",
     "crates/svd-ingestor",
     "examples/arm-cortex-m0",
