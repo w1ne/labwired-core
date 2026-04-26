@@ -251,6 +251,44 @@ peripherals:
     size: "1KB"
     irq: 55
 
+  # Advanced-control timers TIM1 / TIM8 — full register file with BDTR
+  # (break + dead-time + MOE), RCR (repetition counter), CCMR3, CCR5/6.
+  # Used for motor-control / centre-aligned PWM where dead-time matters.
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 27
+    config:
+      advanced: true
+
+  - id: "tim8"
+    type: "timer"
+    base_address: 0x40013400
+    size: "1KB"
+    irq: 46
+    config:
+      advanced: true
+
+  # General-purpose 16-bit timers TIM15 / TIM16 / TIM17.
+  - id: "tim15"
+    type: "timer"
+    base_address: 0x40014000
+    size: "1KB"
+    irq: 24
+
+  - id: "tim16"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+    irq: 25
+
+  - id: "tim17"
+    type: "timer"
+    base_address: 0x40014800
+    size: "1KB"
+    irq: 26
+
   - id: "rtc"
     type: "rtc"
     base_address: 0x40002800

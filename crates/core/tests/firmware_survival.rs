@@ -483,6 +483,42 @@ TICK 2\r\n\
 TICK 3\r\n\
 DONE\r\n",
     },
+    SurvivalCase {
+        // TIM1 advanced-control bring-up ("round 10"). Programs the
+        // canonical centre-aligned PWM init sequence on TIM1 channel 1:
+        //   PSC=79, ARR=999  -> 1 kHz @ 80 MHz
+        //   RCR=5            -> repetition counter (advanced-only)
+        //   CCR1=500         -> 50% duty cycle
+        //   CCMR1.OC1M=110   -> PWM mode 1, OC1PE=1 (preload)
+        //   CCER=CC1E|CC1NE  -> channel + complementary output
+        //   BDTR=MOE|DTG=0x40-> master output enable + dead-time
+        //
+        // Captured byte-for-byte from real NUCLEO-L476RG silicon. Round 10
+        // surfaced and fixed one sim<->silicon delta:
+        //   - CCER mask was 0x3333 (CC*E/CC*P only) — correct for general-
+        //     purpose timers but wrong for advanced. The CC*NE / CC*NP
+        //     complementary-output bits got dropped. Now `advanced=true`
+        //     selects mask 0xFFFF.
+        name: "nucleo_l476rg_tim1_advanced",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-tim1-advanced.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"TIM1-ADV\r\n\
+CR1\r\n\
+CR1 =00000001\r\n\
+PWM\r\n\
+PSC =0000004F\r\n\
+ARR =000003E7\r\n\
+RCR =00000005\r\n\
+CCR1=000001F4\r\n\
+CCMR=00000068\r\n\
+CCER=00000005\r\n\
+BDTR=00008040\r\n\
+DONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -781,6 +817,11 @@ fn test_nucleo_l476rg_l4periphs2_survival() {
 }
 
 #[test]
+fn test_nucleo_l476rg_tim1_advanced_survival() {
+    run_survival_case(&SURVIVAL_CASES[19]);
+}
+
+#[test]
 fn test_nucleo_l476rg_cubemx_hal_survival() {
     // HAL flow needs more cycles than other tests because it spends most
     // of its time in HAL_Delay() polling SysTick (RVR=80_000-1).
@@ -801,6 +842,19 @@ fn test_nucleo_l476rg_cubemx_hal_survival() {
 #[ignore]
 fn capture_l4periphs2_sim_output() {
     let firmware = fixtures().join("nucleo-l476rg-l4periphs2.elf");
+    let (_pc, uart) =
+        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
+    let s = String::from_utf8_lossy(&uart);
+    eprintln!("--- BEGIN UART ---");
+    eprintln!("{}", s);
+    eprintln!("--- END UART ---");
+    eprintln!("escaped: {:?}", s);
+}
+
+#[test]
+#[ignore]
+fn capture_tim1_advanced_sim_output() {
+    let firmware = fixtures().join("nucleo-l476rg-tim1-advanced.elf");
     let (_pc, uart) =
         run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
     let s = String::from_utf8_lossy(&uart);

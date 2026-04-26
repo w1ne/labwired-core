@@ -476,13 +476,21 @@ impl SystemBus {
                     // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
                     // YAML: `config: { width: 32 }`. Defaults to 16 for
                     // back-compat with F1-class general-purpose timers.
+                    // `advanced: true` enables RCR/BDTR/CCR5/6 (TIM1/TIM8).
                     let width: u8 = p_cfg
                         .config
                         .get("width")
                         .and_then(|v| v.as_u64())
                         .map(|n| n as u8)
                         .unwrap_or(16);
-                    Box::new(crate::peripherals::timer::Timer::new_with_width(width))
+                    let advanced = p_cfg
+                        .config
+                        .get("advanced")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    Box::new(crate::peripherals::timer::Timer::new_with_layout(
+                        width, advanced,
+                    ))
                 }
                 "i2c"
                 | "stm32f1_i2c"

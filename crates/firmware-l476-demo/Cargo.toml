@@ -28,3 +28,9 @@ name = "firmware-l476-cubemx-hal"
 path = "src/cubemx_hal.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-l476-tim1-advanced"
+path = "src/tim1_advanced.rs"
+test = false
+bench = false

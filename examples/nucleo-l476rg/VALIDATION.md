@@ -30,6 +30,7 @@ Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 | `nucleo_l476rg_l4periphs`   | `tests/fixtures/nucleo-l476rg-l4periphs.elf`  | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs.txt`         |
 | `nucleo_l476rg_l4periphs2`  | `tests/fixtures/nucleo-l476rg-l4periphs2.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs2.txt`        |
 | `nucleo_l476rg_cubemx_hal`  | `tests/fixtures/nucleo-l476rg-cubemx-hal.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_cubemx_hal.txt`        |
+| `nucleo_l476rg_tim1_advanced` | `tests/fixtures/nucleo-l476rg-tim1-advanced.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_tim1_advanced.txt`     |
 
 ## Bugs surfaced and fixed
 
@@ -205,6 +206,20 @@ reliably and produced a clean byte-for-byte match with simulator output.
 
 The locked trace is real silicon; sim and hardware now agree exactly
 on the canonical HAL flow output for this NUCLEO-L476RG.
+
+### Round 10 — TIM1 advanced-control bring-up (`nucleo_l476rg_tim1_advanced`)
+Programs TIM1 channel 1 with the canonical centre-aligned PWM init
+sequence (PSC=79, ARR=999, RCR=5, CCR1=500, CCMR1.OC1M=PWM mode 1,
+CCER=CC1E|CC1NE, BDTR=MOE|DTG=0x40), then dumps register state.
+Captured from real silicon, sim and hardware match byte-for-byte.
+
+- **CCER mask** for advanced timers needed widening: was 0x3333 (CCxE
+  + CCxP only — correct for TIM2-5 general-purpose), needed to be
+  0xFFFF on TIM1/TIM8 to include the CCxNE / CCxNP complementary-
+  output bits. Without this fix, `CCER=00000005` would have read back
+  as `00000001` because bit 2 (CC1NE) was being silently dropped.
+- **TIM1/TIM8 advanced register file** (BDTR, RCR, CCMR3, CCR5/6,
+  OR1/OR2) now flows reliably through both directions of read/write.
 
 ## Reproducing a capture
 
