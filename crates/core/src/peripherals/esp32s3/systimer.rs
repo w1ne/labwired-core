@@ -8,46 +8,53 @@
 //! independently of CPU frequency.  Plan 2 implemented the counter + the
 //! load/update handshake; Plan 3 adds 3 UNIT0 alarms with IRQ delivery.
 //!
-//! ## Register layout (ESP32-S3 TRM §16.5, partial)
+//! ## Register layout (ESP32-S3 TRM §16.5)
+//!
+//! Offsets match the TRM / esp32s3-pac so that esp-hal's Alarm API writes
+//! land in the right fields.
 //!
 //! | Offset | Name              | Behaviour |
 //! |-------:|-------------------|-----------|
 //! |  0x00  | CONF              | bit 31 clk_en (default 1), bit 30 timer_unit0_work_en, bit 29 timer_unit1_work_en |
-//! |  0x04  | UNIT0_OP          | write 1<<30 to trigger snapshot of UNIT0 into VALUE registers |
+//! |  0x04  | UNIT0_OP          | write 1<<30 to trigger snapshot of UNIT0; reads bit 29 (VALUE_VALID) set |
 //! |  0x08  | UNIT1_OP          | same for UNIT1 |
-//! |  0x18  | UNIT0_LOAD_HI     | high 32 bits of pending load |
-//! |  0x1C  | UNIT0_LOAD_LO     | low 32 bits of pending load |
-//! |  0x20  | UNIT1_LOAD_HI     | high 32 bits of pending load (UNIT1) |
-//! |  0x24  | UNIT1_LOAD_LO     | low 32 bits of pending load (UNIT1) |
+//! |  0x0C  | UNIT0_LOAD_HI     | high 32 bits of pending load |
+//! |  0x10  | UNIT0_LOAD_LO     | low 32 bits of pending load |
+//! |  0x14  | UNIT1_LOAD_HI     | high 32 bits of pending load (UNIT1) |
+//! |  0x18  | UNIT1_LOAD_LO     | low 32 bits of pending load (UNIT1) |
+//! |  0x1C  | TARGET0_HI        | high 32 bits of UNIT alarm 0 target |
+//! |  0x20  | TARGET0_LO        | low  32 bits of UNIT alarm 0 target |
+//! |  0x24  | TARGET1_HI        | high 32 bits of UNIT alarm 1 target |
+//! |  0x28  | TARGET1_LO        | low  32 bits of UNIT alarm 1 target |
+//! |  0x2C  | TARGET2_HI        | high 32 bits of UNIT alarm 2 target |
+//! |  0x30  | TARGET2_LO        | low  32 bits of UNIT alarm 2 target |
+//! |  0x34  | TARGET0_CONF      | bit 31 enable, bit 30 auto_reload, bit 29 unit-select, bits[25:0] period |
+//! |  0x38  | TARGET1_CONF      | same fields for alarm 1 |
+//! |  0x3C  | TARGET2_CONF      | same fields for alarm 2 |
 //! |  0x40  | UNIT0_VALUE_HI    | snapshot high 32 bits |
 //! |  0x44  | UNIT0_VALUE_LO    | snapshot low 32 bits |
 //! |  0x48  | UNIT1_VALUE_HI    | snapshot high 32 bits |
 //! |  0x4C  | UNIT1_VALUE_LO    | snapshot low 32 bits |
-//! |  0x60  | UNIT0_LOAD        | write 1 to commit pending load into counter |
-//! |  0x64  | UNIT1_LOAD        | same for UNIT1 |
-//! |  0x70  | ALARM0_TARGET_HI  | high 32 bits of UNIT0 alarm 0 target |
-//! |  0x74  | ALARM0_TARGET_LO  | low  32 bits of UNIT0 alarm 0 target |
-//! |  0x78  | ALARM0_CONF       | bit 31 auto_reload, bit 30 enable, bits[25:0] period |
-//! |  0x7C  | ALARM1_TARGET_HI  | UNIT0 alarm 1 target high |
-//! |  0x80  | ALARM1_TARGET_LO  | UNIT0 alarm 1 target low |
-//! |  0x84  | ALARM1_CONF       | UNIT0 alarm 1 config |
-//! |  0x88  | ALARM2_TARGET_HI  | UNIT0 alarm 2 target high |
-//! |  0x8C  | ALARM2_TARGET_LO  | UNIT0 alarm 2 target low |
-//! |  0x90  | ALARM2_CONF       | UNIT0 alarm 2 config |
-//! |  0x94  | INT_ENA           | bits 0/1/2 — enable IRQ for TARGET0/1/2 |
-//! |  0x98  | INT_RAW           | bits 0/1/2 — pending bit per alarm (RO) |
-//! |  0x9C  | INT_CLR           | write-1-to-clear pending bits |
-//! |  0xA0  | INT_ST            | INT_RAW & INT_ENA (RO) |
+//! |  0x50  | COMP0_LOAD        | write 1 to commit pending TARGET0 update (accepted, unmodelled) |
+//! |  0x54  | COMP1_LOAD        | (accepted, unmodelled — alarm targets apply on write) |
+//! |  0x58  | COMP2_LOAD        | (accepted, unmodelled) |
+//! |  0x5C  | UNIT0_LOAD        | write 1 to commit pending UNIT0 LOAD into counter |
+//! |  0x60  | UNIT1_LOAD        | same for UNIT1 |
+//! |  0x64  | INT_ENA           | bits 0/1/2 — enable IRQ for TARGET0/1/2 |
+//! |  0x68  | INT_RAW           | bits 0/1/2 — pending bit per alarm (RO) |
+//! |  0x6C  | INT_CLR           | write-1-to-clear pending bits |
+//! |  0x70  | INT_ST            | INT_RAW & INT_ENA (RO) |
 //!
-//! ## Notes on offset choice
+//! ## TARGETx_CONF semantics
 //!
-//! The TRM places the alarm-target/config registers earlier in the block
-//! (overlapping our existing UNIT0_LOAD_HI/LO etc. layout, which itself is a
-//! Plan 2 simplification). To avoid colliding with those committed offsets
-//! we relocate the alarm window to 0x70-0xA0. Plan 3's demo firmware writes
-//! these registers via thin helpers, so the absolute addresses are an
-//! internal contract between this peripheral and the demo, not a request
-//! to match TRM byte-for-byte.
+//! Per ESP32-S3 TRM §16.5:
+//! * bit 31 — alarm enable (firmware sets this to arm the alarm).
+//! * bit 30 — period mode (auto-reload).  When set with non-zero `period`,
+//!   on fire we bump `target += period` so the next compare schedules the
+//!   next event.
+//! * bit 29 — unit select (0 = UNIT0, 1 = UNIT1).  Silently accepted; we
+//!   only model UNIT0 alarms.
+//! * bits[25:0] — period in SYSTIMER ticks (16 MHz).
 //!
 //! ## Source IDs (ESP32-S3 TRM §9.4)
 //!
@@ -68,12 +75,17 @@ const SYSTIMER_CLOCK_HZ: u64 = 16_000_000;
 /// UNIT0 and UNIT1 on real silicon — Plan 3 only fires UNIT0 alarms.
 const SYSTIMER_TARGET0_SOURCE: u32 = 79;
 
-/// Mask for the 26-bit `period` field in ALARM_CONF.
+/// Mask for the 26-bit `period` field in TARGETx_CONF.
 const ALARM_PERIOD_MASK: u32 = 0x03FF_FFFF;
-const ALARM_AUTO_RELOAD_BIT: u32 = 1 << 31;
-const ALARM_ENABLE_BIT: u32 = 1 << 30;
+/// TARGETx_CONF bit 31 — alarm enable (TRM-correct).
+const ALARM_ENABLE_BIT: u32 = 1 << 31;
+/// TARGETx_CONF bit 30 — period mode / auto-reload.
+const ALARM_AUTO_RELOAD_BIT: u32 = 1 << 30;
+/// TARGETx_CONF bit 29 — unit select (0 = UNIT0, 1 = UNIT1).  Stored only
+/// for round-trip; the model fires UNIT0 alarms only.
+const ALARM_UNIT_SEL_BIT: u32 = 1 << 29;
 
-/// Compose the ALARM_CONF readback word for a single alarm slot.
+/// Compose the TARGETx_CONF readback word for a single alarm slot.
 fn alarm_conf_word(alarm: &AlarmState) -> u32 {
     let mut v = (alarm.period as u32) & ALARM_PERIOD_MASK;
     if alarm.auto_reload {
@@ -81,6 +93,9 @@ fn alarm_conf_word(alarm: &AlarmState) -> u32 {
     }
     if alarm.enabled {
         v |= ALARM_ENABLE_BIT;
+    }
+    if alarm.unit_sel {
+        v |= ALARM_UNIT_SEL_BIT;
     }
     v
 }
@@ -100,13 +115,16 @@ struct AlarmState {
     target: u64,
     /// INT_RAW pending bit. Sticky until INT_CLR clears it.
     pending: bool,
-    /// ALARM_CONF bit 30. Cleared at reset; firmware sets to arm the alarm.
+    /// TARGETx_CONF bit 31. Cleared at reset; firmware sets to arm the alarm.
     enabled: bool,
-    /// ALARM_CONF bit 31. When set with non-zero `period`, on fire we bump
+    /// TARGETx_CONF bit 30. When set with non-zero `period`, on fire we bump
     /// `target += period` so the next compare schedules the next event.
     auto_reload: bool,
-    /// ALARM_CONF bits[25:0]. Reload step in SYSTIMER ticks.
+    /// TARGETx_CONF bits[25:0]. Reload step in SYSTIMER ticks.
     period: u64,
+    /// TARGETx_CONF bit 29. Stored for round-trip readback only — the model
+    /// always evaluates against UNIT0's counter.
+    unit_sel: bool,
 }
 
 #[derive(Debug)]
@@ -162,38 +180,48 @@ impl Systimer {
             // counter has advanced past zero (meaning a snapshot can be
             // produced on demand). Simpler: always assert bit 29.
             0x04 | 0x08 => 1u32 << 29,
-            0x18 => self.unit0.load_hi,
-            0x1C => self.unit0.load_lo,
-            0x20 => self.unit1.load_hi,
-            0x24 => self.unit1.load_lo,
+
+            // ── LOAD pending registers (TRM offsets) ──
+            0x0C => self.unit0.load_hi,
+            0x10 => self.unit0.load_lo,
+            0x14 => self.unit1.load_hi,
+            0x18 => self.unit1.load_lo,
+
+            // ── TARGETx HI/LO (TRM offsets) ──
+            0x1C => (self.unit0_alarms[0].target >> 32) as u32,
+            0x20 => (self.unit0_alarms[0].target & 0xFFFF_FFFF) as u32,
+            0x24 => (self.unit0_alarms[1].target >> 32) as u32,
+            0x28 => (self.unit0_alarms[1].target & 0xFFFF_FFFF) as u32,
+            0x2C => (self.unit0_alarms[2].target >> 32) as u32,
+            0x30 => (self.unit0_alarms[2].target & 0xFFFF_FFFF) as u32,
+
+            // ── TARGETx_CONF (TRM offsets) ──
+            0x34 => alarm_conf_word(&self.unit0_alarms[0]),
+            0x38 => alarm_conf_word(&self.unit0_alarms[1]),
+            0x3C => alarm_conf_word(&self.unit0_alarms[2]),
+
+            // ── VALUE snapshot registers ──
             0x40 => (self.unit0.snapshot >> 32) as u32,
             0x44 => (self.unit0.snapshot & 0xFFFF_FFFF) as u32,
             0x48 => (self.unit1.snapshot >> 32) as u32,
             0x4C => (self.unit1.snapshot & 0xFFFF_FFFF) as u32,
 
-            // Alarm registers (Plan 3, Task 4). Layout:
-            //   0x70+12*i+0: ALARMi_TARGET_HI
-            //   0x70+12*i+4: ALARMi_TARGET_LO
-            //   0x70+12*i+8: ALARMi_CONF (bit 31 auto_reload, bit 30 enable, bits[25:0] period)
-            0x70 => (self.unit0_alarms[0].target >> 32) as u32,
-            0x74 => (self.unit0_alarms[0].target & 0xFFFF_FFFF) as u32,
-            0x78 => alarm_conf_word(&self.unit0_alarms[0]),
-            0x7C => (self.unit0_alarms[1].target >> 32) as u32,
-            0x80 => (self.unit0_alarms[1].target & 0xFFFF_FFFF) as u32,
-            0x84 => alarm_conf_word(&self.unit0_alarms[1]),
-            0x88 => (self.unit0_alarms[2].target >> 32) as u32,
-            0x8C => (self.unit0_alarms[2].target & 0xFFFF_FFFF) as u32,
-            0x90 => alarm_conf_word(&self.unit0_alarms[2]),
+            // 0x50/0x54/0x58 COMPx_LOAD are write-only commit triggers; reads
+            // return 0 on real silicon.
 
-            0x94 => self.int_ena,
-            0x98 => self.int_raw_word(),
-            0xA0 => self.int_raw_word() & self.int_ena,
+            // 0x5C/0x60 UNITx_LOAD are write-only commit triggers.
+
+            // ── Interrupt registers (TRM offsets) ──
+            0x64 => self.int_ena,
+            0x68 => self.int_raw_word(),
+            // 0x6C INT_CLR is W1C; reads as 0.
+            0x70 => self.int_raw_word() & self.int_ena,
 
             _ => 0,
         }
     }
 
-    /// INT_RAW (0x98): bits 0/1/2 = pending bit per UNIT0 alarm.
+    /// INT_RAW (0x68): bits 0/1/2 = pending bit per UNIT0 alarm.
     fn int_raw_word(&self) -> u32 {
         let mut v = 0u32;
         for (i, alarm) in self.unit0_alarms.iter().enumerate() {
@@ -217,37 +245,49 @@ impl Systimer {
                     self.unit1.snapshot = self.unit1.counter;
                 }
             }
-            0x18 => self.unit0.load_hi = value,
-            0x1C => self.unit0.load_lo = value,
-            0x20 => self.unit1.load_hi = value,
-            0x24 => self.unit1.load_lo = value,
-            0x60 => {
+
+            // ── LOAD pending registers (TRM offsets) ──
+            0x0C => self.unit0.load_hi = value,
+            0x10 => self.unit0.load_lo = value,
+            0x14 => self.unit1.load_hi = value,
+            0x18 => self.unit1.load_lo = value,
+
+            // ── TARGETx HI/LO ──
+            0x1C => set_alarm_target_hi(&mut self.unit0_alarms[0], value),
+            0x20 => set_alarm_target_lo(&mut self.unit0_alarms[0], value),
+            0x24 => set_alarm_target_hi(&mut self.unit0_alarms[1], value),
+            0x28 => set_alarm_target_lo(&mut self.unit0_alarms[1], value),
+            0x2C => set_alarm_target_hi(&mut self.unit0_alarms[2], value),
+            0x30 => set_alarm_target_lo(&mut self.unit0_alarms[2], value),
+
+            // ── TARGETx_CONF ──
+            0x34 => set_alarm_conf(&mut self.unit0_alarms[0], value),
+            0x38 => set_alarm_conf(&mut self.unit0_alarms[1], value),
+            0x3C => set_alarm_conf(&mut self.unit0_alarms[2], value),
+
+            // 0x50/0x54/0x58 COMPx_LOAD: real silicon uses these to commit a
+            // pending TARGETx update.  We apply target writes immediately, so
+            // the commit is a no-op; accept the write to keep esp-hal happy.
+            0x50 | 0x54 | 0x58 => {}
+
+            // ── UNITx_LOAD commit (TRM offsets) ──
+            0x5C => {
                 if value & 1 != 0 {
                     self.unit0.counter =
                         ((self.unit0.load_hi as u64) << 32) | (self.unit0.load_lo as u64);
                 }
             }
-            0x64 => {
+            0x60 => {
                 if value & 1 != 0 {
                     self.unit1.counter =
                         ((self.unit1.load_hi as u64) << 32) | (self.unit1.load_lo as u64);
                 }
             }
 
-            // ── Alarm registers (Plan 3, Task 4) ──
-            0x70 => set_alarm_target_hi(&mut self.unit0_alarms[0], value),
-            0x74 => set_alarm_target_lo(&mut self.unit0_alarms[0], value),
-            0x78 => set_alarm_conf(&mut self.unit0_alarms[0], value),
-            0x7C => set_alarm_target_hi(&mut self.unit0_alarms[1], value),
-            0x80 => set_alarm_target_lo(&mut self.unit0_alarms[1], value),
-            0x84 => set_alarm_conf(&mut self.unit0_alarms[1], value),
-            0x88 => set_alarm_target_hi(&mut self.unit0_alarms[2], value),
-            0x8C => set_alarm_target_lo(&mut self.unit0_alarms[2], value),
-            0x90 => set_alarm_conf(&mut self.unit0_alarms[2], value),
-
-            0x94 => self.int_ena = value & 0x7,
-            // 0x98 INT_RAW is read-only on real silicon; ignore writes.
-            0x9C => {
+            // ── Interrupt registers (TRM offsets) ──
+            0x64 => self.int_ena = value & 0x7,
+            // 0x68 INT_RAW is read-only on real silicon; ignore writes.
+            0x6C => {
                 // INT_CLR: write-1-to-clear pending bits.
                 for (i, alarm) in self.unit0_alarms.iter_mut().enumerate() {
                     if value & (1 << i) != 0 {
@@ -255,7 +295,7 @@ impl Systimer {
                     }
                 }
             }
-            // 0xA0 INT_ST is read-only.
+            // 0x70 INT_ST is read-only.
             _ => {}
         }
     }
@@ -275,6 +315,7 @@ fn set_alarm_conf(alarm: &mut AlarmState, value: u32) {
     alarm.period = (value & ALARM_PERIOD_MASK) as u64;
     alarm.auto_reload = value & ALARM_AUTO_RELOAD_BIT != 0;
     alarm.enabled = value & ALARM_ENABLE_BIT != 0;
+    alarm.unit_sel = value & ALARM_UNIT_SEL_BIT != 0;
 }
 
 impl Peripheral for Systimer {
@@ -401,12 +442,32 @@ mod tests {
     }
 
     #[test]
+    fn op_read_asserts_value_valid_bit() {
+        // esp-hal's Delay polls UNIT0_OP bit 29 (VALUE_VALID) before reading
+        // the VALUE registers.  We model snapshots as instantaneous and
+        // always assert bit 29 so the busy-wait exits.  Plan 2 hello-world
+        // depends on this.
+        let s = Systimer::new(80_000_000);
+        assert_eq!(s.read_word(0x04) & (1 << 29), 1 << 29);
+        assert_eq!(s.read_word(0x08) & (1 << 29), 1 << 29);
+    }
+
+    #[test]
     fn load_handshake_sets_counter() {
         let mut s = Systimer::new(80_000_000);
-        s.write_word(0x18, 0x0000_0001); // LOAD_HI = 1
-        s.write_word(0x1C, 0x0000_0042); // LOAD_LO = 0x42
-        s.write_word(0x60, 1); // commit
+        s.write_word(0x0C, 0x0000_0001); // UNIT0_LOAD_HI = 1
+        s.write_word(0x10, 0x0000_0042); // UNIT0_LOAD_LO = 0x42
+        s.write_word(0x5C, 1); // commit
         assert_eq!(s.unit0.counter, (1u64 << 32) | 0x42);
+    }
+
+    #[test]
+    fn unit1_load_handshake_sets_counter() {
+        let mut s = Systimer::new(80_000_000);
+        s.write_word(0x14, 0x0000_0002); // UNIT1_LOAD_HI = 2
+        s.write_word(0x18, 0x0000_00AA); // UNIT1_LOAD_LO = 0xAA
+        s.write_word(0x60, 1); // commit
+        assert_eq!(s.unit1.counter, (2u64 << 32) | 0xAA);
     }
 
     #[test]
@@ -417,7 +478,7 @@ mod tests {
         }
         assert_eq!(s.unit0.counter, 1);
         assert_eq!(s.unit1.counter, 1, "unit1 ticks alongside unit0");
-        s.write_word(0x60, 1); // commit a load to unit0 (loads were 0)
+        s.write_word(0x5C, 1); // commit a load to unit0 (loads were 0)
         assert_eq!(s.unit0.counter, 0);
         assert_eq!(s.unit1.counter, 1, "unit1 not affected by unit0 load");
     }
@@ -434,39 +495,51 @@ mod tests {
         assert_eq!(s.unit1.counter, 10, "unit1 still ticks");
     }
 
-    // ── Plan 3 Task 4: alarm tests ──
+    // ── Plan 3 Task 4: alarm tests (TRM-correct offsets) ──
 
     #[test]
     fn alarm_target_round_trip() {
         let mut s = Systimer::new(80_000_000);
-        s.write_word(0x70, 0x0000_0001); // ALARM0_TARGET_HI = 1
-        s.write_word(0x74, 0x0000_0042); // ALARM0_TARGET_LO = 0x42
+        s.write_word(0x1C, 0x0000_0001); // TARGET0_HI = 1
+        s.write_word(0x20, 0x0000_0042); // TARGET0_LO = 0x42
         assert_eq!(s.unit0_alarms[0].target, (1u64 << 32) | 0x42);
-        assert_eq!(s.read_word(0x70), 1);
-        assert_eq!(s.read_word(0x74), 0x42);
+        assert_eq!(s.read_word(0x1C), 1);
+        assert_eq!(s.read_word(0x20), 0x42);
     }
 
     #[test]
     fn alarm_conf_enable_and_period() {
         let mut s = Systimer::new(80_000_000);
-        // Period = 100, enable bit, no auto-reload.
+        // Period = 100, enable bit (bit 31), no auto-reload.
         let conf = ALARM_ENABLE_BIT | 100u32;
-        s.write_word(0x78, conf);
+        s.write_word(0x34, conf);
         assert!(s.unit0_alarms[0].enabled);
         assert!(!s.unit0_alarms[0].auto_reload);
         assert_eq!(s.unit0_alarms[0].period, 100);
         // Read-back preserves the same fields.
-        assert_eq!(s.read_word(0x78), conf);
+        assert_eq!(s.read_word(0x34), conf);
+    }
+
+    #[test]
+    fn alarm_conf_unit_sel_round_trip() {
+        // Unit-select bit (29) round-trips even though we always evaluate
+        // against UNIT0.  This keeps esp-hal's writes idempotent.
+        let mut s = Systimer::new(80_000_000);
+        let conf = ALARM_ENABLE_BIT | ALARM_UNIT_SEL_BIT | 50u32;
+        s.write_word(0x34, conf);
+        assert!(s.unit0_alarms[0].enabled);
+        assert!(s.unit0_alarms[0].unit_sel);
+        assert_eq!(s.read_word(0x34), conf);
     }
 
     #[test]
     fn alarm_fires_when_counter_reaches_target() {
         let mut s = Systimer::new(80_000_000);
-        // Set ALARM0 target = 5 SYSTIMER ticks = 25 CPU cycles at 80 MHz.
-        s.write_word(0x70, 0); // TARGET0_HI
-        s.write_word(0x74, 5); // TARGET0_LO
-        s.write_word(0x78, ALARM_ENABLE_BIT); // enable bit set, no auto-reload
-        s.write_word(0x94, 1); // INT_ENA bit 0
+        // Set TARGET0 = 5 SYSTIMER ticks = 25 CPU cycles at 80 MHz.
+        s.write_word(0x1C, 0); // TARGET0_HI
+        s.write_word(0x20, 5); // TARGET0_LO
+        s.write_word(0x34, ALARM_ENABLE_BIT); // enable bit set, no auto-reload
+        s.write_word(0x64, 1); // INT_ENA bit 0
         // Tick CPU 24 cycles — alarm should not fire yet (counter < 5).
         for _ in 0..24 {
             let r = s.tick();
@@ -477,16 +550,16 @@ mod tests {
         assert_eq!(r.explicit_irqs, vec![79], "TARGET0 source ID expected");
         assert!(s.unit0_alarms[0].pending);
         // INT_RAW reflects pending bit.
-        assert_eq!(s.read_word(0x98), 1);
+        assert_eq!(s.read_word(0x68), 1);
     }
 
     #[test]
     fn alarm_disabled_does_not_fire() {
         let mut s = Systimer::new(80_000_000);
-        s.write_word(0x70, 0);
-        s.write_word(0x74, 5);
-        // ALARM0_CONF left at 0 — alarm disabled.
-        s.write_word(0x94, 1);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 5);
+        // TARGET0_CONF left at 0 — alarm disabled.
+        s.write_word(0x64, 1);
         for _ in 0..30 {
             let r = s.tick();
             assert!(r.explicit_irqs.is_empty());
@@ -497,9 +570,9 @@ mod tests {
     #[test]
     fn int_ena_zero_suppresses_irq_but_pending_set() {
         let mut s = Systimer::new(80_000_000);
-        s.write_word(0x70, 0);
-        s.write_word(0x74, 5);
-        s.write_word(0x78, ALARM_ENABLE_BIT);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 5);
+        s.write_word(0x34, ALARM_ENABLE_BIT);
         // INT_ENA = 0 — alarm fires (pending set) but no IRQ delivered.
         for _ in 0..30 {
             let r = s.tick();
@@ -514,35 +587,35 @@ mod tests {
     #[test]
     fn int_clr_clears_pending() {
         let mut s = Systimer::new(80_000_000);
-        s.write_word(0x70, 0);
-        s.write_word(0x74, 5);
-        s.write_word(0x78, ALARM_ENABLE_BIT);
-        s.write_word(0x94, 1);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 5);
+        s.write_word(0x34, ALARM_ENABLE_BIT);
+        s.write_word(0x64, 1);
         for _ in 0..30 {
             s.tick();
         }
         assert!(s.unit0_alarms[0].pending);
         // Write 1 to INT_CLR bit 0.
-        s.write_word(0x9C, 1);
+        s.write_word(0x6C, 1);
         assert!(!s.unit0_alarms[0].pending);
-        assert_eq!(s.read_word(0x98), 0, "INT_RAW cleared");
+        assert_eq!(s.read_word(0x68), 0, "INT_RAW cleared");
     }
 
     #[test]
     fn int_st_masks_raw_with_ena() {
         let mut s = Systimer::new(80_000_000);
-        s.write_word(0x70, 0);
-        s.write_word(0x74, 5);
-        s.write_word(0x78, ALARM_ENABLE_BIT);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 5);
+        s.write_word(0x34, ALARM_ENABLE_BIT);
         // INT_ENA = 0 to start; alarm fires but INT_ST should be 0.
         for _ in 0..30 {
             s.tick();
         }
-        assert_eq!(s.read_word(0x98), 1, "INT_RAW set");
-        assert_eq!(s.read_word(0xA0), 0, "INT_ST masked by INT_ENA=0");
+        assert_eq!(s.read_word(0x68), 1, "INT_RAW set");
+        assert_eq!(s.read_word(0x70), 0, "INT_ST masked by INT_ENA=0");
         // Now set INT_ENA bit 0; INT_ST should reflect.
-        s.write_word(0x94, 1);
-        assert_eq!(s.read_word(0xA0), 1, "INT_ST = RAW & ENA");
+        s.write_word(0x64, 1);
+        assert_eq!(s.read_word(0x70), 1, "INT_ST = RAW & ENA");
     }
 
     #[test]
@@ -551,10 +624,10 @@ mod tests {
         // additional source IDs into explicit_irqs — IRQ is edge-triggered
         // on the rising counter>=target transition, latched by `pending`.
         let mut s = Systimer::new(80_000_000);
-        s.write_word(0x70, 0);
-        s.write_word(0x74, 5);
-        s.write_word(0x78, ALARM_ENABLE_BIT);
-        s.write_word(0x94, 1);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 5);
+        s.write_word(0x34, ALARM_ENABLE_BIT);
+        s.write_word(0x64, 1);
         let mut total_irqs = 0usize;
         for _ in 0..200 {
             total_irqs += s.tick().explicit_irqs.len();
@@ -567,10 +640,10 @@ mod tests {
         // Auto-reload alarm with period=10 (SYSTIMER ticks). After the first
         // fire and an INT_CLR, the alarm should re-fire 10 ticks later.
         let mut s = Systimer::new(80_000_000); // 5 CPU cycles per SYSTIMER tick.
-        s.write_word(0x70, 0);
-        s.write_word(0x74, 5); // first fire at counter=5
-        s.write_word(0x78, ALARM_AUTO_RELOAD_BIT | ALARM_ENABLE_BIT | 10);
-        s.write_word(0x94, 1);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 5); // first fire at counter=5
+        s.write_word(0x34, ALARM_AUTO_RELOAD_BIT | ALARM_ENABLE_BIT | 10);
+        s.write_word(0x64, 1);
         // 25 CPU cycles -> counter=5, first fire.
         let mut first_fire = None;
         for cycle in 0..30 {
@@ -584,7 +657,7 @@ mod tests {
         // Target should now be 5 + 10 = 15.
         assert_eq!(s.unit0_alarms[0].target, 15);
         // Clear pending so the next edge can fire.
-        s.write_word(0x9C, 1);
+        s.write_word(0x6C, 1);
         // Need counter to reach 15 — currently 5 (just), need 10 more
         // SYSTIMER ticks = 50 more CPU cycles.
         let mut second_fire = None;
@@ -597,5 +670,20 @@ mod tests {
         }
         assert_eq!(second_fire, Some(50), "second fire 50 CPU cycles later");
         assert_eq!(s.unit0_alarms[0].target, 25);
+    }
+
+    #[test]
+    fn comp_load_writes_are_no_ops() {
+        // COMPx_LOAD (0x50/0x54/0x58) commits pending TARGETx updates on real
+        // silicon.  We apply target writes immediately, so these must be
+        // accepted but produce no observable state change.
+        let mut s = Systimer::new(80_000_000);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 0x42);
+        s.write_word(0x50, 1); // COMP0_LOAD
+        s.write_word(0x54, 1);
+        s.write_word(0x58, 1);
+        assert_eq!(s.unit0_alarms[0].target, 0x42);
+        assert!(!s.unit0_alarms[0].enabled);
     }
 }
