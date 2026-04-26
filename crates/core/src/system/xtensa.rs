@@ -12,6 +12,9 @@
 use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral;
+use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
+use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
+use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
 use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
 use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
 use crate::peripherals::esp32s3::systimer::Systimer;
@@ -56,6 +59,33 @@ pub struct Esp32s3Wiring {
     pub cpu: XtensaLx7,
     pub icache_backing: Arc<Mutex<Vec<u8>>>,
     pub dcache_backing: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Esp32s3Wiring {
+    /// Install a GPIO observer on the wired bus's `gpio` peripheral.
+    ///
+    /// Walks `bus.peripherals` to find the entry named `"gpio"`, downcasts
+    /// to `Esp32s3Gpio`, and pushes the observer onto its list. Panics if
+    /// no GPIO peripheral was registered (configure_xtensa_esp32s3 always
+    /// registers one, so this only fires if the caller used a different
+    /// configure path).
+    pub fn add_gpio_observer(
+        &self,
+        bus: &mut SystemBus,
+        observer: Arc<dyn GpioObserver>,
+    ) {
+        for p in bus.peripherals.iter_mut() {
+            if p.name == "gpio" {
+                if let Some(any) = p.dev.as_any_mut() {
+                    if let Some(gpio) = any.downcast_mut::<Esp32s3Gpio>() {
+                        gpio.add_observer(observer);
+                        return;
+                    }
+                }
+            }
+        }
+        panic!("add_gpio_observer: no gpio peripheral registered on the bus");
+    }
 }
 
 /// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
@@ -176,6 +206,40 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x1000,
         None,
         Box::new(EfuseStub::new()),
+    );
+
+    // ── GPIO ──────────────────────────────────────────────────────────────
+    // Real GPIO peripheral at 0x6000_4000. Must register BEFORE the
+    // `low_mmio` catch-all (0x6000_0000..0x6000_7000) — the bus does
+    // first-match-wins iteration in read_u8/write_u8, so order matters.
+    bus.add_peripheral(
+        "gpio",
+        0x6000_4000,
+        0x800,
+        None,
+        Box::new(Esp32s3Gpio::new()),
+    );
+
+    // ── IO_MUX ───────────────────────────────────────────────────────────
+    // Real IO_MUX at 0x6000_9000. Must register BEFORE the `rtc_cntl`
+    // catch-all (0x6000_8000..0x6001_0000) which would otherwise shadow it.
+    bus.add_peripheral(
+        "io_mux",
+        0x6000_9000,
+        0x100,
+        None,
+        Box::new(Esp32s3IoMux::new()),
+    );
+
+    // ── Interrupt Matrix ─────────────────────────────────────────────────
+    // Real intmatrix at 0x600C_2000. Must register BEFORE the `system`
+    // catch-all (0x600C_0000..0x600D_0000) which would otherwise shadow it.
+    bus.add_peripheral(
+        "intmatrix",
+        0x600C_2000,
+        0x800,
+        None,
+        Box::new(Esp32s3IntMatrix::new()),
     );
 
     // UART0..2, SPI0/1, GPIO, GPIO_SD, SDIO host live in the
@@ -324,6 +388,46 @@ mod tests {
         let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
         bus.write_u8(0x4037_0010, 0xAB).unwrap();
         assert_eq!(bus.read_u8(0x4037_0010).unwrap(), 0xAB);
+    }
+
+    #[test]
+    fn configure_registers_gpio_io_mux_intmatrix() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+
+        let names: Vec<&str> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"gpio"), "gpio missing; have: {names:?}");
+        assert!(names.contains(&"io_mux"), "io_mux missing; have: {names:?}");
+        assert!(names.contains(&"intmatrix"), "intmatrix missing; have: {names:?}");
+    }
+
+    #[test]
+    fn add_gpio_observer_installs_on_gpio_peripheral() {
+        use crate::peripherals::esp32s3::gpio::GpioObserver;
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Debug, Default)]
+        struct CountObserver(Mutex<u32>);
+        impl GpioObserver for CountObserver {
+            fn on_pin_change(&self, _pin: u8, _from: bool, _to: bool, _sim_cycle: u64) {
+                *self.0.lock().unwrap() += 1;
+            }
+        }
+
+        let mut bus = SystemBus::new();
+        let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+
+        let obs = Arc::new(CountObserver::default());
+        wiring.add_gpio_observer(&mut bus, obs.clone());
+
+        // Trigger a GPIO transition by writing OUT_W1TS bit 5 via the bus.
+        // GPIO base 0x6000_4000, OUT_W1TS at offset 0x08.
+        bus.write_u8(0x6000_4008, 0x20).unwrap();  // bit 5 = 0x20
+        bus.write_u8(0x6000_4009, 0).unwrap();
+        bus.write_u8(0x6000_400A, 0).unwrap();
+        bus.write_u8(0x6000_400B, 0).unwrap();
+
+        assert!(*obs.0.lock().unwrap() >= 1, "observer should have fired");
     }
 
     #[test]
