@@ -332,6 +332,9 @@ impl SystemBus {
         &self,
         pc: u32,
     ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        // O(n) scan; fine while BREAK 1,14 dispatches are rare. If profiling
+        // shows hotness, switch to a HashMap<u32, RomThunkFn> cache on
+        // SystemBus populated by add_peripheral when it sees a RomThunkBank.
         for p in &self.peripherals {
             let base = p.base as u32;
             let end = base.wrapping_add(p.size as u32);

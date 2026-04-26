@@ -29,7 +29,8 @@ use crate::{Bus, Peripheral, SimResult, SimulationError};
 use std::collections::HashMap;
 
 /// A ROM thunk function: invoked when the CPU executes the registered
-/// `BREAK 1, 14` at a known address.  Must set `cpu.pc = a0` to return.
+/// `BREAK 1, 14` at a known address.  Must set `cpu.pc = a0` to return —
+/// use `RomThunkBank::return_with(cpu, retval)` for the standard case.
 pub type RomThunkFn = fn(&mut XtensaLx7, &mut dyn Bus) -> SimResult<()>;
 
 /// `BREAK 1, 14` encoded as 3 LE bytes.
@@ -66,7 +67,14 @@ impl RomThunkBank {
     /// The bank pre-fills 3 bytes at `pc` with `ROM_THUNK_BREAK_BYTES` so
     /// that an instruction fetch from `pc` returns `BREAK 1, 14`.
     pub fn register(&mut self, pc: u32, thunk: RomThunkFn) {
-        let off = (pc - self.base) as usize;
+        let off = pc
+            .checked_sub(self.base)
+            .unwrap_or_else(|| {
+                panic!(
+                    "RomThunkBank::register: pc 0x{pc:08x} below bank base 0x{:08x}",
+                    self.base
+                )
+            }) as usize;
         assert!(
             off + 3 <= self.backing.len(),
             "RomThunkBank::register: pc 0x{pc:08x} outside bank [0x{:08x}, 0x{:08x})",
@@ -74,19 +82,17 @@ impl RomThunkBank {
             self.base as u64 + self.backing.len() as u64,
         );
         self.backing[off..off + 3].copy_from_slice(&ROM_THUNK_BREAK_BYTES);
-        self.thunks.insert(pc, thunk);
+        let prev = self.thunks.insert(pc, thunk);
+        debug_assert!(
+            prev.is_none(),
+            "RomThunkBank::register: duplicate thunk at 0x{pc:08x}"
+        );
     }
 
     /// Look up a thunk by absolute PC.  Returns `None` if no thunk is
     /// registered (the BREAK exec arm raises `NotImplemented` in that case).
     pub fn get(&self, pc: u32) -> Option<RomThunkFn> {
         self.thunks.get(&pc).copied()
-    }
-
-    /// Helper: read the 32-bit value in argument register `aN` of the
-    /// current window.
-    pub fn read_arg(cpu: &XtensaLx7, idx: u8) -> u32 {
-        cpu.regs.read_logical(idx)
     }
 
     /// Helper: write the 32-bit return value into a2 and set PC = a0
@@ -180,7 +186,17 @@ pub fn ets_printf(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let fmt_addr = cpu.regs.read_logical(2);
     let mut fmt = String::new();
     for i in 0..256u32 {
-        let b = bus.read_u8(fmt_addr.wrapping_add(i) as u64)?;
+        let b = match bus.read_u8(fmt_addr.wrapping_add(i) as u64) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(
+                    target: "esp32s3::rom::ets_printf",
+                    "fault reading fmt at 0x{:08x}: {}",
+                    fmt_addr.wrapping_add(i), e
+                );
+                0
+            }
+        };
         if b == 0 {
             break;
         }
@@ -207,7 +223,17 @@ pub fn ets_printf(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
                 let addr = args[argi.min(4)];
                 argi += 1;
                 for i in 0..256u32 {
-                    let b = bus.read_u8(addr.wrapping_add(i) as u64).unwrap_or(0);
+                    let b = match bus.read_u8(addr.wrapping_add(i) as u64) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "esp32s3::rom::ets_printf",
+                                "fault reading %s arg at 0x{:08x}: {}",
+                                addr.wrapping_add(i), e
+                            );
+                            0
+                        }
+                    };
                     if b == 0 {
                         break;
                     }
