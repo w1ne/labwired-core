@@ -6,7 +6,7 @@ This example demonstrates STM32H563 capabilities in two environments:
 
 The goal is simple: run the same demo story in both places and prove deterministic, repeatable behavior.
 
-For a presentation-ready narrative, see `../../../docs/NUCLEO_H563ZI_DEMO.md`.
+For the hardware-vs-simulation parity pipeline that backs this demo, see [`../../docs/golden_reference.md`](../../docs/golden_reference.md).
 
 ## What This Demo Proves
 
@@ -18,7 +18,7 @@ For a presentation-ready narrative, see `../../../docs/NUCLEO_H563ZI_DEMO.md`.
 6. **Golden Reference**: Standardized determinism proof between hardware and simulation.
 ## Quick Start
 
-Run from `core/`.
+Run from the repo root.
 
 ### VS Code (out-of-box demo run)
 
@@ -99,4 +99,4 @@ Repository hygiene note:
 
 - Chip config: `../../configs/chips/stm32h563.yaml`
 - System config: `../../configs/systems/nucleo-h563zi-demo.yaml`
-- Marketing/demo narrative: `../../../docs/NUCLEO_H563ZI_DEMO.md`
+- Hardware-vs-simulation parity pipeline: [`../../docs/golden_reference.md`](../../docs/golden_reference.md)

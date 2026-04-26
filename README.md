@@ -1,10 +1,23 @@
 # LabWired Core
 
-Deterministic firmware simulation engine for ARM Cortex-M and RISC-V targets.
+Deterministic firmware simulator for ARM Cortex-M and RISC-V — with hardware-validated parity.
 
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://labwired.com/docs/)
 
-## What This Repo Owns
+## Why this exists
+
+Most firmware simulators let you boot a binary and stop there. LabWired goes further:
+
+- **Hardware-validated parity.** A real NUCLEO-H563ZI board is captured step-by-step via OpenOCD+GDB and diffed against the simulator running the same ELF. The committed report — [`determinism_report_h563.json`](examples/nucleo-h563zi/golden-reference/determinism_report_h563.json) — records `status: PASS` over 50 compared steps. The full pipeline is documented in [`docs/golden_reference.md`](docs/golden_reference.md).
+- **Deterministic by construction.** Same firmware → same trace, byte-for-byte, across runs and machines. Trace SHA-256 hashes are CI-gated.
+- **Production-grade debug.** GDB Remote Serial Protocol stub *and* a native VS Code Debug Adapter Protocol server — breakpoints, register inspect, expression evaluation, all without hardware.
+- **Configurable fidelity.** Cycle-accurate when correctness matters; high-MIPS host execution when iteration speed matters. See [`docs/architecture.md`](docs/architecture.md) for the perf gates.
+
+## Featured demo: NUCLEO-H563ZI
+
+Same firmware ELF runs on a real STM32H563ZI Nucleo and on the simulator. UART output matches. Instruction PCs match. The proof is committed alongside the firmware that produced it: [`examples/nucleo-h563zi/`](examples/nucleo-h563zi/).
+
+## What this repo owns
 
 - Simulation engine correctness and determinism.
 - Chip/system model execution (`configs/chips`, `configs/systems`).
@@ -83,12 +96,11 @@ cargo build --release -p labwired-cli
 - [Release Strategy](./docs/release_strategy.md)
 - [Agents Manual](./docs/agents.md)
 
-## Highlights
+## Other demos
 
-- [Demos & Examples](../DEMOS.md)
-- [Blinky + I2C Sensor Demo](examples/demo-blinky/README.md)
-- [NUCLEO-H563ZI Showcase](examples/nucleo-h563zi/README.md)
-- [STM32 Case Study](docs/case_study_stm32.md)
+- [Blinky + I2C Sensor Demo](examples/demo-blinky/README.md) — STM32F103 + virtual TMP102 over I2C.
+- [STM32 Case Study](docs/case_study_stm32.md) — debugging firmware without hardware, end-to-end.
+- [Demo Index](docs/demos.md) — full list of bundled examples.
 
 ## License
 
