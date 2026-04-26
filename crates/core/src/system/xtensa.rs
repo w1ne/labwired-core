@@ -145,25 +145,27 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     Esp32s3Wiring { cpu, flash_backing }
 }
 
-/// Register the empty default thunk set.  Real addresses are filled in by
-/// Task 11 once we disassemble the firmware.  For now the bank exists but
-/// holds no thunks — the implementer adds entries as they're discovered.
-fn register_default_thunks(_bank: &mut RomThunkBank) {
-    // Intentionally empty in the initial implementation.
-    //
-    // Task 11 populates this with calls like:
-    //
-    //     bank.register(0x40000xxx, rom_thunks::ets_printf);
-    //     bank.register(0x40000xxx, rom_thunks::cache_suspend_dcache);
-    //     ... etc.
-    //
-    // The addresses come from disassembling the built firmware:
-    //
-    //   xtensa-esp32s3-elf-objdump -d examples/esp32s3-hello-world/target/.../hello-world \
-    //       | grep -E '0x40[0-9a-f]+'
-    //
-    // and cross-referencing with ESP-IDF rom/esp32s3.rom.ld.
-    let _ = rom_thunks::ets_printf;
+/// Register the default thunk set for esp-hal hello-world boot.
+///
+/// Addresses are taken from `esp-rom-sys-0.1.4/ld/esp32s3/rom/esp32s3.rom.ld`
+/// (PROVIDE statements) and verified against the disassembled firmware.
+fn register_default_thunks(bank: &mut RomThunkBank) {
+    // Cache maintenance — esp-hal pre_init disables instruction cache before
+    // touching XIP-mapped flash and re-enables it after.
+    bank.register(0x4000_18b4, rom_thunks::cache_suspend_dcache);
+    bank.register(0x4000_18c0, rom_thunks::cache_resume_dcache);
+    // rom_config_instruction_cache_mode(cache_size, ways, line_size) — esp-hal
+    // calls this in pre_init to set up the I-cache to the bootloader's chosen
+    // geometry. NOP is fine because we don't model the cache.
+    bank.register(0x4000_1a1c, rom_thunks::rom_config_instruction_cache_mode);
+    // ets_printf — esp-hal panic / boot diagnostics call this.
+    bank.register(0x4000_05d0, rom_thunks::ets_printf);
+    // ets_set_appcpu_boot_addr — single-core build skips this, but multicore
+    // hal calls it to point cpu1 at park-loop. NOP is safe.
+    bank.register(0x4000_0720, rom_thunks::ets_set_appcpu_boot_addr);
+    // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
+    // but the symbol may be linked in.
+    bank.register(0x4000_0a2c, rom_thunks::esp_rom_spiflash_unlock);
 }
 
 // ── RamPeripheral helper (private) ───────────────────────────────────────
