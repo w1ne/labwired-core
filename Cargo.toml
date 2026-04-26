@@ -73,7 +73,7 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
-lto = false
+lto = "thin"
 debug = true
 
 # Per-package release overrides for embedded firmware crates and CI fixtures.
