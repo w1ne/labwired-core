@@ -56,6 +56,7 @@ plugins:
 nav:
   - Home: index.md
   - Architecture Overview: architecture.md
+  - Hardware-Sim Parity: golden_reference.md
   - Hardware Matrix: SUPPORTED_DEVICES.md
   - AI Agent Manual: agents.md
 
