@@ -21,3 +21,9 @@ labwired-config = { path = "../config" }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 goblin = { workspace = true }
+
+[features]
+default = []
+# Build + run end-to-end tests against examples/esp32s3-hello-world.
+# Requires the ESP Rust toolchain (cargo +esp).
+esp32s3-fixtures = []
