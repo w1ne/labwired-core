@@ -321,6 +321,33 @@ impl SystemBus {
         });
     }
 
+    /// Look up a registered ROM thunk by absolute PC.
+    ///
+    /// Iterates the registered peripherals; if any is a `RomThunkBank` whose
+    /// address range contains `pc`, asks it for a thunk at `pc`.  Returns
+    /// `None` if no bank covers the PC or no thunk is registered.
+    ///
+    /// Used by the CPU's `BREAK 1, 14` dispatch in `xtensa_lx7.rs`.
+    pub fn get_rom_thunk(
+        &self,
+        pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        for p in &self.peripherals {
+            let base = p.base as u32;
+            let end = base.wrapping_add(p.size as u32);
+            if pc >= base && pc < end {
+                if let Some(any) = p.dev.as_any() {
+                    if let Some(bank) = any
+                        .downcast_ref::<crate::peripherals::esp32s3::rom_thunks::RomThunkBank>()
+                    {
+                        return bank.get(pc);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
@@ -584,6 +611,13 @@ impl crate::Bus for SystemBus {
             }
         }
         Ok(())
+    }
+
+    fn get_rom_thunk(
+        &self,
+        pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        SystemBus::get_rom_thunk(self, pc)
     }
 }
 

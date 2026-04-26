@@ -182,7 +182,19 @@ impl XtensaLx7 {
                 self.regs.write_logical(at, imm as u32);
                 self.pc = self.pc.wrapping_add(len);
             }
-            Break { .. } => {
+            Break { imm_s, imm_t } => {
+                use crate::peripherals::esp32s3::rom_thunks::{
+                    ROM_THUNK_IMM_S, ROM_THUNK_IMM_T,
+                };
+                if imm_s == ROM_THUNK_IMM_S && imm_t == ROM_THUNK_IMM_T {
+                    let pc = self.pc;
+                    if let Some(thunk) = bus.get_rom_thunk(pc) {
+                        return thunk(self, bus);
+                    }
+                    return Err(SimulationError::NotImplemented(format!(
+                        "ROM thunk at 0x{pc:08x} not registered (BREAK 1,14 with no thunk)"
+                    )));
+                }
                 return Err(SimulationError::BreakpointHit(self.pc));
             }
             Nop | Memw | Extw | Isync | Rsync | Esync | Dsync => {

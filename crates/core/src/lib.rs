@@ -187,6 +187,16 @@ pub trait Bus {
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
     }
+
+    /// Look up a registered ROM thunk at the given PC.  Default returns None
+    /// (test stubs and non-ESP buses don't have thunks).  `SystemBus`
+    /// overrides to search registered `RomThunkBank` peripherals.
+    fn get_rom_thunk(
+        &self,
+        _pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        None
+    }
 }
 
 use std::collections::HashSet;
