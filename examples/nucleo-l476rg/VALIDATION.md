@@ -31,6 +31,7 @@ Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 | `nucleo_l476rg_l4periphs2`  | `tests/fixtures/nucleo-l476rg-l4periphs2.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs2.txt`        |
 | `nucleo_l476rg_cubemx_hal`  | `tests/fixtures/nucleo-l476rg-cubemx-hal.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_cubemx_hal.txt`        |
 | `nucleo_l476rg_tim1_advanced` | `tests/fixtures/nucleo-l476rg-tim1-advanced.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_tim1_advanced.txt`     |
+| `nucleo_l476rg_r11`         | `tests/fixtures/nucleo-l476rg-r11.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_r11.txt`               |
 
 ## Bugs surfaced and fixed
 
@@ -220,6 +221,27 @@ Captured from real silicon, sim and hardware match byte-for-byte.
   as `00000001` because bit 2 (CC1NE) was being silently dropped.
 - **TIM1/TIM8 advanced register file** (BDTR, RCR, CCMR3, CCR5/6,
   OR1/OR2) now flows reliably through both directions of read/write.
+
+### Round 11 — DMA_CSELR + SDMMC + EXTI bank-2 (`nucleo_l476rg_r11`)
+Exercises three peripherals added together because they're all
+register-state-only (no firmware behavioural divergence):
+
+- **DMA1.CSELR** (offset 0xA8) — L4 channel-selection register,
+  4 bits per channel × 7 channels for peripheral request routing.
+  Wrote/read-back `0x05000004` (ch1=req4, ch7=req5).
+- **SDMMC1** — register-state dump after a CMD-with-CPSMEN write,
+  followed by ICR clearing. Hardware-validation surfaced two
+  divergences on the no-card path:
+  * RSPCMD must NOT be mirrored from CMDINDEX. It only updates on
+    a real card response. Sim used to mirror; now stays 0 unless
+    a response would actually arrive.
+  * STA flag selection depends on CLKCR.CLKEN. With no SDMMC clock
+    running (the default state on a NUCLEO without SD wiring),
+    silicon asserts CTIMEOUT (bit 11), not CMDSENT (bit 7). Sim
+    now picks the right flag based on CLKEN.
+- **EXTI bank-2** — IMR2 / SWIER2 / PR2 latching path verified
+  end-to-end. Bank-2 lines now also synthesize the right NVIC IRQ
+  on tick (line 35→IRQ 70, 36→31, 37→33, 38→72, 39→37).
 
 ## Reproducing a capture
 

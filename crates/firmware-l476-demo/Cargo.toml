@@ -34,3 +34,9 @@ name = "firmware-l476-tim1-advanced"
 path = "src/tim1_advanced.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-l476-r11"
+path = "src/dma_sdmmc_exti.rs"
+test = false
+bench = false

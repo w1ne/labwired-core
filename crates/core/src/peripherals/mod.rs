@@ -31,6 +31,7 @@ pub mod rcc;
 pub mod rng;
 pub mod rtc;
 pub mod sai;
+pub mod sdmmc;
 pub mod scb;
 pub mod spi;
 pub mod stub;
