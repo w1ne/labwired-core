@@ -379,6 +379,27 @@ peripherals:
     size: "1KB"
     irq: 49
 
+  # COMP — analog comparators (COMP1 + COMP2 sharing one window).
+  - id: "comp"
+    type: "comp"
+    base_address: 0x40010200
+    size: "1KB"
+    irq: 64
+
+  # TSC — touch sensing controller (RM0351 §21).
+  - id: "tsc"
+    type: "tsc"
+    base_address: 0x40024000
+    size: "1KB"
+    irq: 77
+
+  # FMC — flexible memory controller (RM0351 §13).
+  - id: "fmc"
+    type: "fmc"
+    base_address: 0xA0000000
+    size: "1KB"
+    irq: 48
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00
