@@ -173,6 +173,33 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(Systimer::new(opts.cpu_clock_hz)),
     );
 
+    // ── GPIO / IO_MUX / Interrupt Matrix (Plan 3) ────────────────────────
+    // These three specific peripherals MUST register BEFORE the catch-all
+    // stubs below. SystemBus does first-match-wins iteration in
+    // read_u8/write_u8, so a catch-all covering 0x600C_0000..0x600D_0000
+    // (system) registered first would shadow intmatrix at 0x600C_2000.
+    bus.add_peripheral(
+        "gpio",
+        0x6000_4000,
+        0x800,
+        None,
+        Box::new(Esp32s3Gpio::new()),
+    );
+    bus.add_peripheral(
+        "io_mux",
+        0x6000_9000,
+        0x100,
+        None,
+        Box::new(Esp32s3IoMux::new()),
+    );
+    bus.add_peripheral(
+        "intmatrix",
+        0x600C_2000,
+        0x800,
+        None,
+        Box::new(Esp32s3IntMatrix::new()),
+    );
+
     // ── SYSTEM / RTC_CNTL / EFUSE stubs ──────────────────────────────────
     // SYSTEM peripheral on ESP32-S3 is followed by INTERRUPT_CORE0/1 at
     // 0x600C_2000 / 0x600C_2800 (CPU intr-from-CPU mapping) and the AES /
@@ -180,7 +207,8 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // init pokes the interrupt-mapping registers and a few accelerator
     // resets. Cover [0x600C_0000, 0x600D_0000) with one round-tripping
     // stub — SystemStub::new() (read-as-zero on unwritten) so that the
-    // interrupt mapping reads back exactly what was written.
+    // interrupt mapping reads back exactly what was written. The intmatrix
+    // peripheral registered above takes precedence at 0x600C_2000..0x600C_2800.
     bus.add_peripheral(
         "system",
         0x600C_0000,
@@ -193,6 +221,8 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // mux, sensor ADC, PMS). Cover [0x6000_8000, 0x6001_0000) with a single
     // round-tripping stub — 32 KiB of tracked-word storage matches the
     // SystemStub semantics and is enough for any benign register hammer.
+    // The io_mux peripheral registered above takes precedence at
+    // 0x6000_9000..0x6000_9100.
     bus.add_peripheral(
         "rtc_cntl",
         0x6000_8000,
@@ -206,40 +236,6 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x1000,
         None,
         Box::new(EfuseStub::new()),
-    );
-
-    // ── GPIO ──────────────────────────────────────────────────────────────
-    // Real GPIO peripheral at 0x6000_4000. Must register BEFORE the
-    // `low_mmio` catch-all (0x6000_0000..0x6000_7000) — the bus does
-    // first-match-wins iteration in read_u8/write_u8, so order matters.
-    bus.add_peripheral(
-        "gpio",
-        0x6000_4000,
-        0x800,
-        None,
-        Box::new(Esp32s3Gpio::new()),
-    );
-
-    // ── IO_MUX ───────────────────────────────────────────────────────────
-    // Real IO_MUX at 0x6000_9000. Must register BEFORE the `rtc_cntl`
-    // catch-all (0x6000_8000..0x6001_0000) which would otherwise shadow it.
-    bus.add_peripheral(
-        "io_mux",
-        0x6000_9000,
-        0x100,
-        None,
-        Box::new(Esp32s3IoMux::new()),
-    );
-
-    // ── Interrupt Matrix ─────────────────────────────────────────────────
-    // Real intmatrix at 0x600C_2000. Must register BEFORE the `system`
-    // catch-all (0x600C_0000..0x600D_0000) which would otherwise shadow it.
-    bus.add_peripheral(
-        "intmatrix",
-        0x600C_2000,
-        0x800,
-        None,
-        Box::new(Esp32s3IntMatrix::new()),
     );
 
     // UART0..2, SPI0/1, GPIO, GPIO_SD, SDIO host live in the
