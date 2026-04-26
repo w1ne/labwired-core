@@ -23,7 +23,7 @@ members = [
     "crates/hw-oracle",
     "crates/hw-oracle-macros",
 ]
-exclude = ["crates/firmware-hal-test"]
+exclude = ["crates/firmware-hal-test", "examples/esp32s3-hello-world"]
 default-members = ["crates/cli", "crates/core", "crates/loader"]
 
 [workspace.package]
