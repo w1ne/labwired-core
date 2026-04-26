@@ -19,11 +19,41 @@ use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::Elf;
 
 /// Per-call options for `fast_boot`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BootOpts {
     /// Used as the SP if the ELF lacks a recognized stack-top symbol
     /// (`_stack_start_cpu0` or `_stack_top`).
     pub stack_top_fallback: u32,
+    /// Shared flash backing buffer.  When set, segments whose virtual
+    /// address falls inside the XIP windows (0x4200_0000..0x4400_0000 or
+    /// 0x3C00_0000..0x3E00_0000) are written here instead of through
+    /// the bus (since FlashXipPeripheral::write raises MemoryViolation).
+    pub flash_backing: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+}
+
+impl Default for BootOpts {
+    fn default() -> Self {
+        Self {
+            stack_top_fallback: 0x3FCD_FFF0,
+            flash_backing: None,
+        }
+    }
+}
+
+/// If `vaddr` lies in either flash-XIP window, return the byte offset into
+/// the flash backing buffer (assuming identity mapping, which `configure_*`
+/// sets up by default).  Else None.
+fn xip_offset(vaddr: u32) -> Option<usize> {
+    const ICACHE_BASE: u32 = 0x4200_0000;
+    const DCACHE_BASE: u32 = 0x3C00_0000;
+    const WINDOW_SIZE: u32 = 0x0200_0000;
+    if vaddr >= ICACHE_BASE && vaddr < ICACHE_BASE + WINDOW_SIZE {
+        return Some((vaddr - ICACHE_BASE) as usize);
+    }
+    if vaddr >= DCACHE_BASE && vaddr < DCACHE_BASE + WINDOW_SIZE {
+        return Some((vaddr - DCACHE_BASE) as usize);
+    }
+    None
 }
 
 /// Result of a successful boot.
@@ -68,6 +98,19 @@ pub fn fast_boot(
                 elf_bytes.len()
             ))
         })?;
+        if let Some(target_phys_off) = xip_offset(vaddr) {
+            if let Some(backing) = &opts.flash_backing {
+                let mut buf = backing.lock().unwrap();
+                let backing_end = target_phys_off + size;
+                if backing_end > buf.len() {
+                    return Err(BootError::SegmentOutsideMap { addr: vaddr, size });
+                }
+                buf[target_phys_off..backing_end].copy_from_slice(bytes);
+                segments_loaded += 1;
+                continue; // Skip the per-byte bus write loop below.
+            }
+            return Err(BootError::SegmentOutsideMap { addr: vaddr, size });
+        }
         for (i, &b) in bytes.iter().enumerate() {
             let addr = vaddr.wrapping_add(i as u32) as u64;
             bus.write_u8(addr, b)
@@ -200,6 +243,7 @@ mod tests {
             &mut cpu,
             &BootOpts {
                 stack_top_fallback: 0x3FCD_FFF0,
+                flash_backing: None,
             },
         )
         .expect("fast_boot");
@@ -233,6 +277,7 @@ mod tests {
             &mut cpu,
             &BootOpts {
                 stack_top_fallback: 0x3FCD_FFF0,
+                flash_backing: None,
             },
         );
 
@@ -243,5 +288,55 @@ mod tests {
             }
             other => panic!("expected SegmentOutsideMap, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn fast_boot_loads_xip_segment_into_backing() {
+        // Build an ELF with one PT_LOAD at 0x4200_1000 (XIP window).
+        let mut elf = vec![0u8; 64 + 56 + 8];
+        elf[0..4].copy_from_slice(b"\x7FELF");
+        elf[4] = 2;
+        elf[5] = 1;
+        elf[6] = 1;
+        elf[16] = 2; // ET_EXEC
+        elf[18] = 94; // EM_XTENSA
+        elf[20] = 1;
+        elf[24..28].copy_from_slice(&0x4200_1000u32.to_le_bytes());
+        elf[32] = 64;
+        elf[52..54].copy_from_slice(&64u16.to_le_bytes());
+        elf[54..56].copy_from_slice(&56u16.to_le_bytes());
+        elf[56..58].copy_from_slice(&1u16.to_le_bytes());
+
+        let ph = 64;
+        elf[ph..ph + 4].copy_from_slice(&1u32.to_le_bytes()); // PT_LOAD
+        elf[ph + 4..ph + 8].copy_from_slice(&5u32.to_le_bytes());
+        elf[ph + 8..ph + 16].copy_from_slice(&120u64.to_le_bytes()); // p_offset
+        elf[ph + 16..ph + 24].copy_from_slice(&0x4200_1000u64.to_le_bytes());
+        elf[ph + 24..ph + 32].copy_from_slice(&0x4200_1000u64.to_le_bytes());
+        elf[ph + 32..ph + 40].copy_from_slice(&8u64.to_le_bytes());
+        elf[ph + 40..ph + 48].copy_from_slice(&8u64.to_le_bytes());
+
+        elf[120..128].copy_from_slice(b"FLASHHHH");
+
+        let mut bus = SystemBus::new();
+        let backing = std::sync::Arc::new(std::sync::Mutex::new(vec![0u8; 4 * 1024 * 1024]));
+        let mut cpu = XtensaLx7::new();
+        cpu.reset(&mut bus).unwrap();
+
+        let summary = fast_boot(
+            &elf,
+            &mut bus,
+            &mut cpu,
+            &BootOpts {
+                stack_top_fallback: 0x3FCD_FFF0,
+                flash_backing: Some(backing.clone()),
+            },
+        )
+        .expect("fast_boot");
+
+        assert_eq!(summary.entry, 0x4200_1000);
+        assert_eq!(summary.segments_loaded, 1);
+        let buf = backing.lock().unwrap();
+        assert_eq!(&buf[0x1000..0x1008], b"FLASHHHH");
     }
 }
