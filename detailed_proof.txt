@@ -1,5 +1,0 @@
-error: unexpected argument '--verbose' found
-
-Usage: labwired asset verify --ir <IR>
-
-For more information, try '--help'.
