@@ -182,6 +182,25 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // rtc_get_reset_reason(cpu_idx) — esp-hal queries this during init to
     // distinguish power-on from soft reset; we always report POWERON_RESET.
     bank.register(0x4000_057c, rom_thunks::rtc_get_reset_reason);
+    // rom_config_data_cache_mode — analogous to instruction cache config; NOP.
+    bank.register(0x4000_1a28, rom_thunks::nop_return_zero);
+    // ets_update_cpu_frequency(freq_mhz) — informs the ROM of the new clock
+    // so subsequent ets_delay_us calls calibrate correctly. We don't model
+    // ROM timing, so accepting and discarding the value is fine.
+    bank.register(0x4000_1a4c, rom_thunks::nop_return_zero);
+    // ets_delay_us(us) — busy-wait the requested microseconds. The simulator
+    // doesn't model wall-clock so we return immediately; real silicon would
+    // spin. Side-effect-free callers (boot timing) accept this.
+    bank.register(0x4000_0600, rom_thunks::nop_return_zero);
+    // esp_rom_regi2c_read / rom_i2c_writeReg — analog regulator I²C bus;
+    // ESP-IDF init touches this to tweak BBPLL. NOP-return-0 is acceptable
+    // here because we don't model the analog domain.
+    bank.register(0x4000_5d48, rom_thunks::nop_return_zero);
+    bank.register(0x4000_5d60, rom_thunks::nop_return_zero);
+    // memcpy and __udivdi3 do real work — emulate them so the firmware
+    // doesn't get garbage from the boot-init copy paths.
+    bank.register(0x4000_11f4, rom_thunks::rom_memcpy);
+    bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
 }
 
 // ── RamPeripheral helper (private) ───────────────────────────────────────

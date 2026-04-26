@@ -204,6 +204,51 @@ pub fn ets_set_appcpu_boot_addr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimR
     Ok(())
 }
 
+/// Generic NOP thunk that returns 0. Useful for ROM functions whose
+/// behaviour we don't model but whose return value the caller needs to
+/// pass through (e.g. cache config, frequency update, busy-wait).
+pub fn nop_return_zero(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `memcpy(dst, src, n) -> dst` — byte-wise copy via the bus.
+///
+/// Args (Xtensa C ABI, post-ENTRY view from caller's frame so we read
+/// a[CALLINC*4 + 2..=4]):
+///   a2 = dst pointer  /  a3 = src pointer  /  a4 = byte count
+pub fn rom_memcpy(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let dst = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let count = cpu.regs.read_logical(n + 4);
+    for i in 0..count {
+        let b = bus.read_u8(src.wrapping_add(i) as u64)?;
+        bus.write_u8(dst.wrapping_add(i) as u64, b)?;
+    }
+    RomThunkBank::return_with(cpu, dst);
+    Ok(())
+}
+
+/// `__udivdi3(num: u64, den: u64) -> u64` — 64-bit unsigned divide.
+///
+/// Args (Xtensa C ABI for 64-bit values: a2:a3 = num low:high, a4:a5 = den
+/// low:high). Result returned in a2:a3 (low:high).
+pub fn rom_udivdi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let num_lo = cpu.regs.read_logical(n + 2) as u64;
+    let num_hi = cpu.regs.read_logical(n + 3) as u64;
+    let den_lo = cpu.regs.read_logical(n + 4) as u64;
+    let den_hi = cpu.regs.read_logical(n + 5) as u64;
+    let num = (num_hi << 32) | num_lo;
+    let den = (den_hi << 32) | den_lo;
+    let q: u64 = if den == 0 { u64::MAX } else { num / den };
+    // Write low half to a[n+2] (the C-ABI primary return) and high half to a[n+3].
+    cpu.regs.write_logical(n + 3, (q >> 32) as u32);
+    RomThunkBank::return_with(cpu, q as u32);
+    Ok(())
+}
+
 /// `rtc_get_reset_reason(cpu_idx: u32) -> u32` — returns 1 (POWERON_RESET).
 ///
 /// ESP32-S3 enum values per ESP-IDF rtc_cntl.h:
