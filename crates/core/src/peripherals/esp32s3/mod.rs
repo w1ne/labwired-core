@@ -6,6 +6,7 @@
 
 pub mod flash_xip;
 pub mod gpio;
+pub mod io_mux;
 pub mod rom_thunks;
 pub mod system_stub;
 pub mod systimer;
