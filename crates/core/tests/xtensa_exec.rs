@@ -2144,13 +2144,15 @@ fn test_exec_entry_clears_callinc() {
     assert_eq!(cpu.ps.callinc(), 0, "PS.CALLINC must be 0 after ENTRY");
 }
 
-/// ENTRY decrements a[as_] (in the new window) by imm * 8 bytes.
-/// Setup: CALLINC=1, WB starts at 0. After ENTRY, WB=1.
-/// In new window (WB=1), a1 is at physical[(1*4+1) mod 64]=physical[5].
-/// We pre-set physical[5] via write_logical after setting WB=1 temporarily.
-/// Simpler: set a1 BEFORE rotation; after rotation with CALLINC=1,
-/// the new frame's a1 is the old frame's a5 (physical[1*4+1=5]).
-/// Use a direct physical write to set physical[5] = SP before ENTRY.
+/// ENTRY computes `AR[WB_new*4 + as] = AR[WB_old*4 + as] - imm*8`
+/// (Xtensa ISA RM §8.1.5). It reads the SP from the CALLER's frame and
+/// writes the decremented value into the CALLEE's frame — the value flows
+/// across the window boundary as one unit, so the callee inherits the
+/// caller's SP minus its own frame size.
+///
+/// Setup: CALLINC=1, WB starts at 0. The caller (WB=0) loads its a1
+/// (= phys[1]) with the stack-top pointer. After ENTRY, WB=1 and the
+/// callee's a1 (= phys[5]) holds caller_sp - imm*8.
 #[test]
 fn test_exec_entry_allocates_stack() {
     let mut cpu = XtensaLx7::new();
@@ -2159,19 +2161,18 @@ fn test_exec_entry_allocates_stack() {
     cpu.set_pc(TEST_PC);
     cpu.ps.set_callinc(1);
 
-    // In WB=0, a1 is phys[1]. After ENTRY with CALLINC=1, WB=1, new a1 is phys[5].
-    // Pre-load phys[5] = 0x2005_1000 via set_physical.
-    cpu.regs.set_physical(5, 0x2005_1000);
+    // Caller's a1 (phys[1] in WB=0) holds the SP that ENTRY reads.
+    cpu.regs.write_logical(1, 0x2005_1000);
 
     // ENTRY a1, 4  (imm12=4 → 32 bytes).
     write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 4)]);
     cpu.step(&mut bus, &[]).unwrap();
 
-    // After ENTRY: WB=1, new a1 (phys[5]) = 0x2005_1000 - 32
+    // After ENTRY: WB=1, new a1 (phys[5]) = caller's a1 - 32.
     assert_eq!(
         cpu.regs.read_logical(1),
         0x2005_1000 - 32,
-        "ENTRY a1,4 should decrement SP by 32 bytes"
+        "ENTRY a1,4 should write caller_sp - 32 into callee's a1"
     );
 }
 
@@ -2185,7 +2186,8 @@ fn test_exec_entry_imm_max() {
     cpu.ps.set_callinc(1);
 
     let initial_sp: u32 = 0x4000_0000;
-    cpu.regs.set_physical(5, initial_sp);
+    // Caller's a1 (phys[1] in WB=0) holds the SP.
+    cpu.regs.write_logical(1, initial_sp);
 
     // ENTRY a1, 0xFFF  (imm12=0xFFF → 0xFFF * 8 = 32760 bytes).
     write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 0xFFF)]);
@@ -2195,7 +2197,7 @@ fn test_exec_entry_imm_max() {
     assert_eq!(
         cpu.regs.read_logical(1),
         expected,
-        "ENTRY max imm should decrement SP by 0xFFF * 8 = 32760 bytes"
+        "ENTRY max imm should write caller_sp - 32760 into callee's a1"
     );
 }
 
