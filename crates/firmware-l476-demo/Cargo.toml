@@ -40,3 +40,9 @@ name = "firmware-l476-r11"
 path = "src/dma_sdmmc_exti.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-l476-r12"
+path = "src/r12.rs"
+test = false
+bench = false

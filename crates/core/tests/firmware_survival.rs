@@ -554,6 +554,41 @@ IMR2  =00000008\r\n\
 PR2   =00000008\r\n\
 DONE\r\n",
     },
+    SurvivalCase {
+        // Round 12: COMP1/COMP2 + TSC + FMC register-state.
+        //
+        // Captured byte-for-byte from real NUCLEO-L476RG silicon.
+        // Round 12 surfaced and fixed three sim<->silicon deltas:
+        //   - COMP CSR.VALUE bit (30) reflects comparator output. With
+        //     EN=1 on a NUCLEO with floating analog inputs, silicon
+        //     settles to VALUE=1. Sim now mirrors EN -> VALUE.
+        //   - TSC.ISR after START asserts BOTH EOAF + MCEF on this
+        //     board (no real touch sensor wired -> max-counter-error).
+        //     Sim previously only set EOAF.
+        //   - TSC.IOGCSR.GxS bits stay CLEAR when MCEF fires (group
+        //     didn't complete normally). Sim previously mirrored GxE.
+        name: "nucleo_l476rg_r12",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-r12.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"R12\r\n\
+COMP\r\n\
+CSR1=40400031\r\n\
+CSR2=00000000\r\n\
+TSC\r\n\
+CR  =00000001\r\n\
+ISR =00000003\r\n\
+GCSR=00000005\r\n\
+FMC\r\n\
+BCR1=000030DB\r\n\
+BTR1=0FFFFFFF\r\n\
+PCR =00000018\r\n\
+SR  =00000040\r\n\
+DONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -862,6 +897,11 @@ fn test_nucleo_l476rg_r11_survival() {
 }
 
 #[test]
+fn test_nucleo_l476rg_r12_survival() {
+    run_survival_case(&SURVIVAL_CASES[21]);
+}
+
+#[test]
 fn test_nucleo_l476rg_cubemx_hal_survival() {
     // HAL flow needs more cycles than other tests because it spends most
     // of its time in HAL_Delay() polling SysTick (RVR=80_000-1).
@@ -882,6 +922,19 @@ fn test_nucleo_l476rg_cubemx_hal_survival() {
 #[ignore]
 fn capture_l4periphs2_sim_output() {
     let firmware = fixtures().join("nucleo-l476rg-l4periphs2.elf");
+    let (_pc, uart) =
+        run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
+    let s = String::from_utf8_lossy(&uart);
+    eprintln!("--- BEGIN UART ---");
+    eprintln!("{}", s);
+    eprintln!("--- END UART ---");
+    eprintln!("escaped: {:?}", s);
+}
+
+#[test]
+#[ignore]
+fn capture_r12_sim_output() {
+    let firmware = fixtures().join("nucleo-l476rg-r12.elf");
     let (_pc, uart) =
         run_cortex_m_firmware("stm32l476", "nucleo-l476rg", firmware, SURVIVAL_CYCLES);
     let s = String::from_utf8_lossy(&uart);

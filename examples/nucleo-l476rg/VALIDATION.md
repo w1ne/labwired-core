@@ -32,6 +32,7 @@ Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 | `nucleo_l476rg_cubemx_hal`  | `tests/fixtures/nucleo-l476rg-cubemx-hal.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_cubemx_hal.txt`        |
 | `nucleo_l476rg_tim1_advanced` | `tests/fixtures/nucleo-l476rg-tim1-advanced.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_tim1_advanced.txt`     |
 | `nucleo_l476rg_r11`         | `tests/fixtures/nucleo-l476rg-r11.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_r11.txt`               |
+| `nucleo_l476rg_r12`         | `tests/fixtures/nucleo-l476rg-r12.elf`        | `tests/fixtures/hw_traces/nucleo_l476rg_r12.txt`               |
 
 ## Bugs surfaced and fixed
 
@@ -242,6 +243,27 @@ register-state-only (no firmware behavioural divergence):
 - **EXTI bank-2** — IMR2 / SWIER2 / PR2 latching path verified
   end-to-end. Bank-2 lines now also synthesize the right NVIC IRQ
   on tick (line 35→IRQ 70, 36→31, 37→33, 38→72, 39→37).
+
+### Round 12 — COMP + TSC + FMC (`nucleo_l476rg_r12`)
+Three small register-state-only peripherals in one batch:
+
+- **COMP1/COMP2** — analog comparators sharing one peripheral window
+  at 0x40010200. CSR1/CSR2 with EN/INMSEL/INPSEL/POLARITY/HYST/LOCK.
+- **TSC** — touch sensing controller (RM0351 §21). CR/IER/ICR/ISR/
+  IOHCR/IOASCR/IOSCR/IOCCR/IOGCSR + 8 per-group acquisition counters.
+- **FMC** — flexible memory controller (RM0351 §13). BCR1-4, BTR1-4,
+  BWTR1-4, PCR, SR, PMEM, PATT, ECCR. BCR1 reset 0x000030DB.
+
+Hardware-validation surfaced three deltas:
+  - **COMP CSR.VALUE** (bit 30) — silicon settles to VALUE=1 once EN
+    is asserted on a NUCLEO with floating analog inputs. Sim now
+    mirrors EN -> VALUE so byte traces match.
+  - **TSC.ISR after START** asserts BOTH EOAF (bit 0) and MCEF
+    (max-counter-error, bit 1) on a board with no touch sensors.
+    Sim previously only set EOAF.
+  - **TSC.IOGCSR.GxS** bits stay CLEAR when MCEF fires (the group
+    didn't complete normally). Sim previously mirrored GxE -> GxS
+    unconditionally.
 
 ## Reproducing a capture
 

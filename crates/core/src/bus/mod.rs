@@ -106,7 +106,8 @@ impl SystemBus {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
             | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
             | "pwr" | "flash" | "rng" | "crc" | "rtc" | "iwdg" | "wwdg" | "dac" | "dbgmcu"
-            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc" => {
+            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc"
+            | "comp" | "tsc" | "fmc" => {
                 return t;
             }
             _ => {}
@@ -131,6 +132,15 @@ impl SystemBus {
         }
         if t == "sdmmc" || t == "sdio" || t.starts_with("sdmmc_") {
             return "sdmmc".to_string();
+        }
+        if t == "comp" || t == "comparator" || t.starts_with("comp_") {
+            return "comp".to_string();
+        }
+        if t == "tsc" || t == "touchsense" {
+            return "tsc".to_string();
+        }
+        if t == "fmc" || t == "fsmc" || t == "memorycontroller" {
+            return "fmc".to_string();
         }
 
         if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
@@ -520,6 +530,9 @@ impl SystemBus {
                 "usb_otg" => Box::new(crate::peripherals::usb_otg::UsbOtg::new()),
                 "bxcan" => Box::new(crate::peripherals::bxcan::BxCan::new()),
                 "sdmmc" => Box::new(crate::peripherals::sdmmc::Sdmmc::new()),
+                "comp" => Box::new(crate::peripherals::comp::Comp::new()),
+                "tsc" => Box::new(crate::peripherals::tsc::Tsc::new()),
+                "fmc" => Box::new(crate::peripherals::fmc::Fmc::new()),
                 "exti" => {
                     let layout: crate::peripherals::exti::ExtiRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "EXTI")?;
