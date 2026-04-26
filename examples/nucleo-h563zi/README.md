@@ -22,7 +22,7 @@ Run from `core/`.
 
 ### VS Code (out-of-box demo run)
 
-1. Open `core/examples/nucleo-h563zi` as the workspace folder.
+1. Open `examples/nucleo-h563zi` as the workspace folder.
 2. Run `LabWired: Run in LabWired` (or click `Run in LabWired` in the status bar).
 
 The example root `Makefile` builds `firmware-h563-io-demo` and writes `target/firmware`,

@@ -23,12 +23,12 @@ Pass criteria:
 
 ## B) VS Code One-Click Run
 
-1. Open `core/examples/nucleo-h563zi` in VS Code.
+1. Open `examples/nucleo-h563zi` in VS Code.
 2. Run `LabWired: Run in LabWired`.
 
 Pass criteria:
 1. build succeeds from example-root `Makefile`
-2. `target/firmware` is created under `core/examples/nucleo-h563zi`
+2. `target/firmware` is created under `examples/nucleo-h563zi`
 3. simulator starts with the built ELF
 4. `LabWired` output panel contains emulator UART lines like `H563-IO`
 

@@ -77,23 +77,23 @@ Apply this checklist whenever the task is adding/simulating a new MCU/board targ
 
 ### Procedure (Phase Gates)
 
-1. `P0 - Source grounding`: Read `core/docs/board_onboarding_playbook.md` and collect authoritative vendor docs.
+1. `P0 - Source grounding`: Read `docs/board_onboarding_playbook.md` and collect authoritative vendor docs.
 2. `P1 - Engine fit`: Map requirements to supported peripherals (`rcc + gpio + uart + systick` by default).
 3. `P2 - Implementation`: Add chip descriptor, system manifest, and smoke firmware.
-4. `P3 - Example docs package`: Add `core/examples/<board>/` with README, VALIDATION, etc.
+4. `P3 - Example docs package`: Add `examples/<board>/` with README, VALIDATION, etc.
 5. `P4 - Validation`: Run test/build/run commands and confirm deterministic UART output.
 6. `P5 - Report`: Provide files changed, commands run, runtime evidence, and source links.
 
 ### Required Deliverables
 
-1. `core/configs/chips/<chip>.yaml`
-2. `core/configs/systems/<board>.yaml`
+1. `configs/chips/<chip>.yaml`
+2. `configs/systems/<board>.yaml`
 3. smoke firmware crate (new or adapted)
-4. `core/examples/<board>/system.yaml`
-5. `core/examples/<board>/README.md`
-6. `core/examples/<board>/REQUIRED_DOCS.md`
-7. `core/examples/<board>/EXTERNAL_COMPONENTS.md`
-8. `core/examples/<board>/VALIDATION.md`
+4. `examples/<board>/system.yaml`
+5. `examples/<board>/README.md`
+6. `examples/<board>/REQUIRED_DOCS.md`
+7. `examples/<board>/EXTERNAL_COMPONENTS.md`
+8. `examples/<board>/VALIDATION.md`
 
 ### Completion Criteria
 

@@ -42,8 +42,7 @@ cargo build --release -p labwired-cli
 
 ### Required merge gate
 
-- Root `.github/workflows/core-ci.yml`: fast integration smoke for this monorepo.
-- `core/.github/workflows/core-ci.yml`: full core validation gate.
+- `.github/workflows/core-ci.yml`: fmt, clippy, build, and integration tests on every PR to `main`.
 
 ### Quality signals
 

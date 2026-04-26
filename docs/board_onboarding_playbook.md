@@ -42,7 +42,7 @@ Verify that LabWired supports the critical peripherals required for a minimal "s
 
 ## 3. Implementation Steps
 
-### Step 1: Chip Descriptor (`core/configs/chips/`)
+### Step 1: Chip Descriptor (`configs/chips/`)
 
 Create a YAML file defining the MCU's memory map and internal peripherals.
 
@@ -68,7 +68,7 @@ peripherals:
 ```
 *Source of Truth: MCU Reference Manual (Memory Map section).*
 
-### Step 2: System Manifest (`core/configs/systems/`)
+### Step 2: System Manifest (`configs/systems/`)
 
 Create a YAML file instantiating the chip and defining board-level connections.
 
@@ -112,7 +112,7 @@ labwired --firmware target/thumbv7m-none-eabi/release/smoke-firmware \
 
 ## 5. Documentation
 
-Create a folder in `core/examples/<board>/` containing:
+Create a folder in `examples/<board>/` containing:
 1.  `README.md`: Board specific instructions.
 2.  `system.yaml`: A local copy of the system manifest for easy reproduction.
 3.  `smoke.rs` (or reference): The source code used for validation.

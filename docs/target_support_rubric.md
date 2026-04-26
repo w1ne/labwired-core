@@ -18,7 +18,7 @@ A target is "supported" for public communication only at `L1` or above.
 
 ## Mandatory Evidence for L1+
 
-1. Runnable example script under `core/examples/`.
+1. Runnable example script under `examples/`.
 2. Deterministic CI artifact bundle with:
    - execution result JSON,
    - UART output log (if UART is used),

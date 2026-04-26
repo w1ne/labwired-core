@@ -20,9 +20,9 @@ High-fidelity machine models showcasing peripheral accuracy and hardware parity.
 
 | Demo | Description | Path |
 | :--- | :--- | :--- |
-| **NUCLEO-H563ZI** | Our flagship demo: Absolute parity between simulation and the real physical board. | [`core/examples/nucleo-h563zi/`](./core/examples/nucleo-h563zi/README.md) |
-| **Demo Blinky** | The classic "Hello World" of embedded systems, running on a modeled Cortex-M3. | [`core/examples/demo-blinky/`](./core/examples/demo-blinky/) |
-| **RISC-V Virt** | Showcasing multi-architecture support via the `riscv-virt` machine. | [`core/examples/riscv-virt/`](./core/examples/riscv-virt/) |
+| **NUCLEO-H563ZI** | Our flagship demo: Absolute parity between simulation and the real physical board. | [`examples/nucleo-h563zi/`](../examples/nucleo-h563zi/README.md) |
+| **Demo Blinky** | The classic "Hello World" of embedded systems, running on a modeled Cortex-M3. | [`examples/demo-blinky/`](../examples/demo-blinky/) |
+| **RISC-V Virt** | Showcasing multi-architecture support via the `riscv-virt` machine. | [`examples/riscv-virt/`](../examples/riscv-virt/) |
 
 ---
 
@@ -31,8 +31,8 @@ Headless, deterministic execution for scaled regression testing.
 
 | Demo | Description | Path |
 | :--- | :--- | :--- |
-| **UART Smoke Test** | Simple deterministic test runner (`labwired test`) example. | [`core/examples/ci/uart-ok.yaml`](./core/examples/ci/uart-ok.yaml) |
-| **Workflow Templates** | Ready-to-use GitHub Actions and GitLab CI files. | [`core/examples/workflows/`](./core/examples/workflows/) |
+| **UART Smoke Test** | Simple deterministic test runner (`labwired test`) example. | [`examples/ci/uart-ok.yaml`](../examples/ci/uart-ok.yaml) |
+| **Workflow Templates** | Ready-to-use GitHub Actions and GitLab CI files. | [`examples/workflows/`](../examples/workflows/) |
 
 ---
 

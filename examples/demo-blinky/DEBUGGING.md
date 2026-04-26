@@ -74,7 +74,7 @@ with auto probe detection (`stlink` preferred, then `jlink`).
   - `target/stm32f1x.cfg`
 - If your board/debug probe differs, adjust `configFiles` in `.vscode/launch.json`.
 - If port `3333` is busy, change both:
-  - `core/examples/demo-blinky/scripts/start_labwired_gdb.sh`
+  - `examples/demo-blinky/scripts/start_labwired_gdb.sh`
   - `Cortex-Debug: LabWired (GDB :3333)` `gdbTarget`
 
 ## Troubleshooting
