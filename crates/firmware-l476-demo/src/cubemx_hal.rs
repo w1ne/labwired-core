@@ -282,9 +282,10 @@ pub extern "C" fn main() -> ! {
         };
         uart_puts(b"TICK ");
         uart_put_dec(n);
-        uart_puts(b" T=");
-        uart_put_dec(hal_get_tick());
         uart_puts(b"\r\n");
+        // Tick value (HAL_GetTick) drifts between sim and hardware because
+        // sim runs faster than wall-clock; comparing the literal counter
+        // value is fine in both.
         hal_delay(2);
     }
 

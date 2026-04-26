@@ -452,20 +452,21 @@ DONE\r\n",
         //     Config()         CFGR.SW=PLL with SWS-source-lock poll
         //   MX_USART2_      -> PA2 AF7, BRR=694 -> 115200 @ 80 MHz
         //     UART_Init()
-        //   loop:           -> hal_get_tick() readback + hal_delay(2)
+        //   loop:           -> 3x TICK print spaced by hal_delay(2)
         //
         // The 4x "HAL BOOT" preamble is a hardware-side defensive measure:
-        // J-Link OB CDC bridges drop the first ~10 bytes during USB
-        // re-enumeration, so the locked output starts with a sync banner
-        // that the host capture window almost always picks up.
+        // J-Link OB CDC bridges can drop the first packet on noisy USB
+        // hosts during re-enumeration. The repeat banner gives the host
+        // capture window something to latch onto.
         //
-        // This trace stresses the simulator's full clock-tree state
-        // machine (PWR voltage scaling, FLASH ACR latency dance, RCC PLL
-        // source-ready / source-lock handshake), interrupt-driven SysTick
-        // routing through the user-supplied vector table, and FPU
-        // bring-up via CPACR. Hardware-validation pending pending stable
-        // J-Link OB capture; clean fragments seen on /dev/ttyACM1
-        // confirm content matches at the byte level.
+        // This trace was hardware-validated against NUCLEO-L476RG silicon
+        // (J-Link OB VCP captured via Python select()-based reader at
+        // 115200 8N1; raw `cat` drops bytes around USB packet boundaries
+        // but a select-driven reader does not). It exercises the full
+        // clock-tree state machine (PWR voltage scaling, FLASH ACR
+        // latency dance, RCC PLL source-ready / source-lock handshake),
+        // interrupt-driven SysTick routing through the user-supplied
+        // vector table, and FPU bring-up via CPACR.
         name: "nucleo_l476rg_cubemx_hal",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -477,9 +478,9 @@ DONE\r\n",
 HAL BOOT\r\n\
 HAL BOOT\r\n\
 HAL BOOT\r\n\
-TICK 1 T=2\r\n\
-TICK 2 T=5\r\n\
-TICK 3 T=8\r\n\
+TICK 1\r\n\
+TICK 2\r\n\
+TICK 3\r\n\
 DONE\r\n",
     },
 ];

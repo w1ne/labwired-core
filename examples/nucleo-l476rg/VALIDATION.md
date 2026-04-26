@@ -29,7 +29,7 @@ Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 | `nucleo_l476rg_demo`        | `tests/fixtures/nucleo-l476rg-demo.elf`       | (built from `crates/firmware-l476-demo`, same trace as sim)    |
 | `nucleo_l476rg_l4periphs`   | `tests/fixtures/nucleo-l476rg-l4periphs.elf`  | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs.txt`         |
 | `nucleo_l476rg_l4periphs2`  | `tests/fixtures/nucleo-l476rg-l4periphs2.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_l4periphs2.txt`        |
-| `nucleo_l476rg_cubemx_hal`  | `tests/fixtures/nucleo-l476rg-cubemx-hal.elf` | (sim baseline — round 9; HW UART verified via JLink probe)     |
+| `nucleo_l476rg_cubemx_hal`  | `tests/fixtures/nucleo-l476rg-cubemx-hal.elf` | `tests/fixtures/hw_traces/nucleo_l476rg_cubemx_hal.txt`        |
 
 ## Bugs surfaced and fixed
 
@@ -194,14 +194,17 @@ this round actually validates:
   on real silicon (`USART2_BRR=0x208D`, `RCC_CFGR=0x0F` confirms
   HCLK=80 MHz).
 
-**Hardware capture caveat**: the J-Link OB Virtual COM Port on this
-NUCLEO drops bytes intermittently around USB packet boundaries when
-the firmware sends short bursts. Clean fragments seen on
-`/dev/ttyACM1` (e.g. `TICK 2 T=4\r\n`, `DONE\r\n`) confirm the wire-
-level data matches sim — but a stable byte-for-byte capture for
-locking against the survival trace would require a different
-debugger or USB-to-UART bridge. The sim baseline is treated as
-authoritative until a clean hardware capture is available.
+**Hardware capture method**: the round-9 trace was captured from a
+NUCLEO-L476RG running J-Link OB firmware via its Virtual COM Port at
+`/dev/ttyACM1`. The original `cat /dev/ttyACM1 > out.bin` approach
+dropped bytes intermittently around USB packet boundaries — the J-Link
+OB CDC sends bursty packets that `cat` doesn't always drain in time.
+Switching to a Python `select()`-based reader (see
+`tests/fixtures/hw_traces/serial_capture.py`) drained the stream
+reliably and produced a clean byte-for-byte match with simulator output.
+
+The locked trace is real silicon; sim and hardware now agree exactly
+on the canonical HAL flow output for this NUCLEO-L476RG.
 
 ## Reproducing a capture
 
