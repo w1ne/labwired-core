@@ -21,7 +21,8 @@ use goblin::elf::Elf;
 /// Per-call options for `fast_boot`.
 #[derive(Debug, Clone)]
 pub struct BootOpts {
-    /// Used as the SP if the ELF lacks a `_stack_start_cpu0` symbol.
+    /// Used as the SP if the ELF lacks a recognized stack-top symbol
+    /// (`_stack_start_cpu0` or `_stack_top`).
     pub stack_top_fallback: u32,
 }
 
@@ -48,19 +49,41 @@ pub fn fast_boot(
 
     let mut segments_loaded = 0;
     for ph in &elf.program_headers {
+        // Skip BSS-only segments (p_filesz == 0); they're zero-init from
+        // the bus's RAM regions. Only load segments with file content.
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
             continue;
         }
         let vaddr = ph.p_vaddr as u32;
         let file_off = ph.p_offset as usize;
         let size = ph.p_filesz as usize;
-        let bytes = &elf_bytes[file_off..file_off + size];
+        let end = file_off.checked_add(size).ok_or_else(|| {
+            BootError::ElfParse(format!(
+                "segment p_offset 0x{file_off:x} + p_filesz 0x{size:x} overflows usize"
+            ))
+        })?;
+        let bytes = elf_bytes.get(file_off..end).ok_or_else(|| {
+            BootError::ElfParse(format!(
+                "segment beyond file: offset 0x{file_off:x} size 0x{size:x} file_len 0x{:x}",
+                elf_bytes.len()
+            ))
+        })?;
         for (i, &b) in bytes.iter().enumerate() {
             let addr = vaddr.wrapping_add(i as u32) as u64;
             bus.write_u8(addr, b)
-                .map_err(|_| BootError::SegmentOutsideMap { addr: vaddr, size })?;
+                .map_err(|_| BootError::SegmentOutsideMap {
+                    addr: addr as u32,
+                    size: size - i,
+                })?;
         }
         segments_loaded += 1;
+    }
+
+    if segments_loaded == 0 {
+        tracing::warn!(
+            "fast_boot: ELF has no loadable segments — entry 0x{:08x} will likely fault",
+            elf.entry
+        );
     }
 
     // Look up `_stack_start_cpu0`; fall back to opts.stack_top_fallback.
@@ -186,6 +209,7 @@ mod tests {
         assert_eq!(summary.segments_loaded, 1);
 
         assert_eq!(cpu.get_pc(), 0x4037_0000);
+        assert_eq!(cpu.get_register(1), 0x3FCD_FFF0, "a1 (SP) should hold the stack top");
         assert_eq!(bus.read_u8(0x4037_0000).unwrap(), 0xAA);
         assert_eq!(bus.read_u8(0x4037_0003).unwrap(), 0xDD);
     }

@@ -22,6 +22,7 @@ pub enum BootError {
     #[error("flash-XIP page table overflow: tried to map {requested} pages (max 64)")]
     TooManyXipPages { requested: usize },
     #[error("no stack top: ELF symbol _stack_start_cpu0 not found and no fallback supplied")]
+    // Reserved: emitted by future fast_boot variants where stack_top_fallback is optional.
     NoStackTop,
     #[error("simulator error during boot: {0}")]
     Sim(#[from] crate::SimulationError),
