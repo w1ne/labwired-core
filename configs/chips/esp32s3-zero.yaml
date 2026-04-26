@@ -1,0 +1,56 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# ESP32-S3-Zero (FH4R2 variant) chip descriptor for Plan 2.
+#
+# This YAML is documentation of the memory map; the simulator's
+# crate::system::xtensa::configure_xtensa_esp32s3 function is the
+# authoritative wiring code. The YAML is loaded by the CLI to validate
+# that --chip references a known chip.
+
+name: "esp32s3-zero"
+arch: "xtensa-lx7"
+flash:
+  base: 0x42000000
+  size: "4MiB"
+ram:
+  base: 0x3FC88000
+  size: "480KiB"
+peripherals:
+  - id: "iram"
+    type: "ram"
+    base_address: 0x40370000
+    size: "512KiB"
+  - id: "rom_thunks"
+    type: "rom_thunk_bank"
+    base_address: 0x40000000
+    size: "384KiB"
+  - id: "flash_icache"
+    type: "flash_xip"
+    base_address: 0x42000000
+    size: "4MiB"
+  - id: "flash_dcache"
+    type: "flash_xip"
+    base_address: 0x3C000000
+    size: "4MiB"
+  - id: "usb_serial_jtag"
+    type: "usb_serial_jtag"
+    base_address: 0x60038000
+    size: "4KiB"
+  - id: "systimer"
+    type: "systimer"
+    base_address: 0x60023000
+    size: "4KiB"
+  - id: "system"
+    type: "system_stub"
+    base_address: 0x600C0000
+    size: "4KiB"
+  - id: "rtc_cntl"
+    type: "rtc_cntl_stub"
+    base_address: 0x60008000
+    size: "4KiB"
+  - id: "efuse"
+    type: "efuse_stub"
+    base_address: 0x60007000
+    size: "4KiB"

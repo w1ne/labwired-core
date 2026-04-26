@@ -1,0 +1,244 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
+//! Xtensa LX7 / ESP32-S3 system glue.
+//!
+//! `configure_xtensa_esp32s3` registers all peripherals defined for the
+//! ESP32-S3-Zero and returns a fresh `XtensaLx7` CPU.  After calling this,
+//! the caller invokes `boot::esp32s3::fast_boot` to load an ELF and
+//! synthesise CPU state, then enters the simulation loop.
+
+use crate::bus::SystemBus;
+use crate::cpu::xtensa_lx7::XtensaLx7;
+use crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral;
+use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
+use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
+use crate::peripherals::esp32s3::systimer::Systimer;
+use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+use crate::Cpu;
+use std::sync::{Arc, Mutex};
+
+#[derive(Debug, Clone)]
+pub struct Esp32s3Opts {
+    pub iram_size: u32,
+    pub dram_size: u32,
+    pub flash_size: u32,
+    pub cpu_clock_hz: u32,
+}
+
+impl Default for Esp32s3Opts {
+    fn default() -> Self {
+        Self {
+            iram_size: 512 * 1024,
+            dram_size: 480 * 1024,
+            flash_size: 4 * 1024 * 1024,
+            cpu_clock_hz: 80_000_000,
+        }
+    }
+}
+
+/// Result of `configure_xtensa_esp32s3` — exposes the shared flash backing
+/// so the boot path can write to it (Task 8).
+pub struct Esp32s3Wiring {
+    pub cpu: XtensaLx7,
+    pub flash_backing: Arc<Mutex<Vec<u8>>>,
+}
+
+/// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
+/// shared flash backing buffer.
+pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3Wiring {
+    // ── IRAM (instruction fetch view) ─────────────────────────────────────
+    bus.add_peripheral(
+        "iram",
+        0x4037_0000,
+        opts.iram_size as u64,
+        None,
+        Box::new(RamPeripheral::new(opts.iram_size as usize)),
+    );
+
+    // ── DRAM (data view of the same physical SRAM0) ───────────────────────
+    bus.add_peripheral(
+        "dram",
+        0x3FC8_8000,
+        opts.dram_size as u64,
+        None,
+        Box::new(RamPeripheral::new(opts.dram_size as usize)),
+    );
+
+    // ── Flash-XIP backing, shared between I-cache and D-cache aliases ─────
+    let flash_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
+    let mut icache = FlashXipPeripheral::new_shared(flash_backing.clone(), 0x4200_0000);
+    let mut dcache = FlashXipPeripheral::new_shared(flash_backing.clone(), 0x3C00_0000);
+    icache.map_identity();
+    dcache.map_identity();
+    bus.add_peripheral(
+        "flash_icache",
+        0x4200_0000,
+        opts.flash_size as u64,
+        None,
+        Box::new(icache),
+    );
+    bus.add_peripheral(
+        "flash_dcache",
+        0x3C00_0000,
+        opts.flash_size as u64,
+        None,
+        Box::new(dcache),
+    );
+
+    // ── ROM thunk bank ────────────────────────────────────────────────────
+    let mut rom_bank = RomThunkBank::new(0x4000_0000, 0x6_0000);
+    register_default_thunks(&mut rom_bank);
+    bus.add_peripheral(
+        "rom_thunks",
+        0x4000_0000,
+        0x6_0000,
+        None,
+        Box::new(rom_bank),
+    );
+
+    // ── USB_SERIAL_JTAG ───────────────────────────────────────────────────
+    bus.add_peripheral(
+        "usb_serial_jtag",
+        0x6003_8000,
+        0x1000,
+        None,
+        Box::new(UsbSerialJtag::new()),
+    );
+
+    // ── SYSTIMER ──────────────────────────────────────────────────────────
+    bus.add_peripheral(
+        "systimer",
+        0x6002_3000,
+        0x1000,
+        None,
+        Box::new(Systimer::new(opts.cpu_clock_hz)),
+    );
+
+    // ── SYSTEM / RTC_CNTL / EFUSE stubs ──────────────────────────────────
+    bus.add_peripheral(
+        "system",
+        0x600C_0000,
+        0x1000,
+        None,
+        Box::new(SystemStub::new()),
+    );
+    bus.add_peripheral(
+        "rtc_cntl",
+        0x6000_8000,
+        0x1000,
+        None,
+        Box::new(RtcCntlStub::new()),
+    );
+    bus.add_peripheral(
+        "efuse",
+        0x6000_7000,
+        0x1000,
+        None,
+        Box::new(EfuseStub::new()),
+    );
+
+    let mut cpu = XtensaLx7::new();
+    cpu.reset(bus).expect("xtensa reset");
+
+    Esp32s3Wiring { cpu, flash_backing }
+}
+
+/// Register the empty default thunk set.  Real addresses are filled in by
+/// Task 11 once we disassemble the firmware.  For now the bank exists but
+/// holds no thunks — the implementer adds entries as they're discovered.
+fn register_default_thunks(_bank: &mut RomThunkBank) {
+    // Intentionally empty in the initial implementation.
+    //
+    // Task 11 populates this with calls like:
+    //
+    //     bank.register(0x40000xxx, rom_thunks::ets_printf);
+    //     bank.register(0x40000xxx, rom_thunks::cache_suspend_dcache);
+    //     ... etc.
+    //
+    // The addresses come from disassembling the built firmware:
+    //
+    //   xtensa-esp32s3-elf-objdump -d examples/esp32s3-hello-world/target/.../hello-world \
+    //       | grep -E '0x40[0-9a-f]+'
+    //
+    // and cross-referencing with ESP-IDF rom/esp32s3.rom.ld.
+    let _ = rom_thunks::ets_printf;
+}
+
+// ── RamPeripheral helper (private) ───────────────────────────────────────
+
+/// Flat-array `Peripheral` used for IRAM + DRAM mappings.
+struct RamPeripheral {
+    data: std::cell::RefCell<Vec<u8>>,
+}
+
+impl RamPeripheral {
+    fn new(size: usize) -> Self {
+        Self {
+            data: std::cell::RefCell::new(vec![0u8; size]),
+        }
+    }
+}
+
+impl std::fmt::Debug for RamPeripheral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RamPeripheral({}B)", self.data.borrow().len())
+    }
+}
+
+impl crate::Peripheral for RamPeripheral {
+    fn read(&self, offset: u64) -> crate::SimResult<u8> {
+        Ok(*self.data.borrow().get(offset as usize).unwrap_or(&0))
+    }
+    fn write(&mut self, offset: u64, value: u8) -> crate::SimResult<()> {
+        let mut d = self.data.borrow_mut();
+        if let Some(slot) = d.get_mut(offset as usize) {
+            *slot = value;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Bus;
+
+    #[test]
+    fn configure_registers_all_peripherals() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        // Confirm core regions are reachable.
+        assert!(bus.read_u8(0x4037_0000).is_ok(), "IRAM");
+        assert!(bus.read_u8(0x3FC8_8000).is_ok(), "DRAM");
+        assert!(bus.read_u8(0x4200_0000).is_ok(), "flash I-cache");
+        assert!(bus.read_u8(0x3C00_0000).is_ok(), "flash D-cache");
+        assert!(bus.read_u8(0x6003_8000).is_ok(), "USB_SERIAL_JTAG");
+        assert!(bus.read_u8(0x6002_3000).is_ok(), "SYSTIMER");
+        assert!(bus.read_u8(0x600C_0000).is_ok(), "SYSTEM");
+        assert!(bus.read_u8(0x6000_8000).is_ok(), "RTC_CNTL");
+        assert!(bus.read_u8(0x6000_7000).is_ok(), "EFUSE");
+    }
+
+    #[test]
+    fn iram_writeable_and_readable() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        bus.write_u8(0x4037_0010, 0xAB).unwrap();
+        assert_eq!(bus.read_u8(0x4037_0010).unwrap(), 0xAB);
+    }
+
+    #[test]
+    fn flash_xip_aliases_share_backing() {
+        let mut bus = SystemBus::new();
+        let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        // Write directly into the flash backing (mimics fast-boot doing so).
+        wiring.flash_backing.lock().unwrap()[0] = 0xCA;
+        wiring.flash_backing.lock().unwrap()[1] = 0xFE;
+        // Both aliases must reflect it.
+        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA);
+        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xCA);
+        assert_eq!(bus.read_u8(0x4200_0001).unwrap(), 0xFE);
+    }
+}
