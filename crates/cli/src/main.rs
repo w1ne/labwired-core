@@ -17,6 +17,8 @@ use tracing::{error, info};
 
 use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
 
+mod gpio_observer;
+
 const EXIT_PASS: u8 = 0;
 const EXIT_ASSERT_FAIL: u8 = 1;
 const EXIT_CONFIG_ERROR: u8 = 2;
@@ -113,6 +115,11 @@ pub struct RunArgs {
     /// Maximum number of simulator steps before exit (default: unlimited).
     #[arg(long)]
     pub max_steps: Option<u64>,
+
+    /// Optional path to write a JSON-line GPIO transition trace.
+    /// Each line is `{"sim_cycle":N, "pin":P, "from":B, "to":B}`.
+    #[arg(long)]
+    pub gpio_trace: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -527,6 +534,27 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     let mut bus = SystemBus::new();
     let opts = Esp32s3Opts::default();
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+
+    // Install default tracing GPIO observer.
+    wiring.add_gpio_observer(
+        &mut bus,
+        std::sync::Arc::new(crate::gpio_observer::TracingGpioObserver::new()),
+    );
+
+    // Optional JSON-line GPIO trace.
+    if let Some(path) = &args.gpio_trace {
+        match crate::gpio_observer::JsonGpioObserver::new(path) {
+            Ok(obs) => {
+                wiring.add_gpio_observer(&mut bus, std::sync::Arc::new(obs));
+                eprintln!("labwired-cli run: gpio trace → {:?}", path);
+            }
+            Err(e) => {
+                eprintln!("error: cannot open gpio-trace file {:?}: {e}", path);
+                return ExitCode::from(2);
+            }
+        }
+    }
+
     let mut cpu = wiring.cpu;
 
     // Fast-boot.
