@@ -5,4 +5,5 @@
 //! ESP32-S3 peripheral implementations (Plan 2+).
 
 pub mod rom_thunks;
+pub mod systimer;
 pub mod usb_serial_jtag;
