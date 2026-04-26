@@ -84,12 +84,35 @@ enum Commands {
 
     /// Machine control operations (load, etc.)
     Machine(MachineArgs),
+
+    /// Run a firmware ELF in the simulator using a chip descriptor.
+    ///
+    /// Loads the chip's peripheral wiring, fast-boots the firmware, and
+    /// runs the simulation loop.  Output written to USB_SERIAL_JTAG (for
+    /// Xtensa chips) or UART (for ARM chips) appears on stdout in real
+    /// time.
+    Run(RunArgs),
 }
 
 #[derive(Parser, Debug)]
 pub struct MachineArgs {
     #[command(subcommand)]
     pub command: MachineCommands,
+}
+
+#[derive(Parser, Debug)]
+pub struct RunArgs {
+    /// Path to the chip descriptor YAML.
+    #[arg(long)]
+    pub chip: PathBuf,
+
+    /// Path to the firmware ELF.
+    #[arg(long)]
+    pub firmware: PathBuf,
+
+    /// Maximum number of simulator steps before exit (default: unlimited).
+    #[arg(long)]
+    pub max_steps: Option<u64>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -368,6 +391,7 @@ fn main() -> ExitCode {
     match cli.command {
         Some(Commands::Test(args)) => run_test(args),
         Some(Commands::Machine(args)) => run_machine(args),
+        Some(Commands::Run(args)) => run_firmware(args),
         None => run_interactive(cli),
     }
 }
@@ -464,6 +488,101 @@ fn run_machine(args: MachineArgs) -> ExitCode {
     match args.command {
         MachineCommands::Load(load_args) => run_machine_load(load_args),
     }
+}
+
+fn run_firmware(args: RunArgs) -> ExitCode {
+    use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
+    use labwired_core::bus::SystemBus;
+    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+    use labwired_core::Cpu;
+    use labwired_core::SimulationError;
+
+    // Read the chip YAML to validate the chip name.
+    let chip_yaml = match std::fs::read_to_string(&args.chip) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: cannot read chip YAML at {:?}: {e}", args.chip);
+            return ExitCode::from(2);
+        }
+    };
+    if !chip_yaml.contains("xtensa-lx7") {
+        eprintln!(
+            "error: chip {:?} does not look like an Xtensa LX7 chip; \
+             only ESP32-S3 is supported by `labwired run` in Plan 2",
+            args.chip,
+        );
+        return ExitCode::from(2);
+    }
+
+    // Read the firmware ELF.
+    let elf_bytes = match std::fs::read(&args.firmware) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: cannot read firmware ELF at {:?}: {e}", args.firmware);
+            return ExitCode::from(2);
+        }
+    };
+
+    // Wire the bus + CPU.
+    let mut bus = SystemBus::new();
+    let opts = Esp32s3Opts::default();
+    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    let mut cpu = wiring.cpu;
+
+    // Fast-boot.
+    let boot = match fast_boot(
+        &elf_bytes,
+        &mut bus,
+        &mut cpu,
+        &BootOpts {
+            stack_top_fallback: 0x3FCD_FFF0,
+            flash_backing: Some(wiring.flash_backing),
+        },
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: fast_boot failed: {e}");
+            return ExitCode::from(3);
+        }
+    };
+    eprintln!(
+        "labwired-cli run: entry=0x{:08x} stack=0x{:08x} segments={}",
+        boot.entry, boot.stack, boot.segments_loaded,
+    );
+
+    // Run the step loop.
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
+    let mut steps = 0u64;
+    while steps < limit {
+        match cpu.step(&mut bus, &observers) {
+            Ok(()) => {}
+            Err(SimulationError::BreakpointHit(pc)) => {
+                eprintln!("labwired-cli run: BREAK at 0x{pc:08x}");
+                return ExitCode::from(0);
+            }
+            Err(SimulationError::ExceptionRaised { cause, pc }) => {
+                eprintln!(
+                    "labwired-cli run: ExceptionRaised cause={cause} at 0x{pc:08x}"
+                );
+                return ExitCode::from(3);
+            }
+            Err(e) => {
+                eprintln!(
+                    "labwired-cli run: simulator error at pc=0x{:08x}: {e}",
+                    cpu.get_pc(),
+                );
+                return ExitCode::from(3);
+            }
+        }
+        bus.tick_peripherals_with_costs();
+        steps += 1;
+    }
+    eprintln!(
+        "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}",
+        cpu.get_pc(),
+    );
+    ExitCode::from(0)
 }
 
 fn run_machine_load(args: LoadArgs) -> ExitCode {
