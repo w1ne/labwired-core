@@ -27,6 +27,11 @@ pub struct SystemBus {
     pub ram: LinearMemory,
     pub peripherals: Vec<PeripheralEntry>,
     pub nvic: Option<Arc<NvicState>>,
+    /// Bitmask of pending cpu0 IRQ slots (32 bits, one per ESP32-S3 cpu IRQ
+    /// slot). Aggregated by `tick_peripherals_with_costs` from peripheral
+    /// `explicit_irqs` source IDs routed through a registered intmatrix.
+    /// Cleared per slot via `clear_cpu_irq_pending`.
+    pub pending_cpu_irqs: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +160,7 @@ impl SystemBus {
                 },
             ],
             nvic: None,
+            pending_cpu_irqs: 0,
         }
     }
 
@@ -182,6 +188,7 @@ impl SystemBus {
             ram: LinearMemory::new(ram_size as usize, chip.ram.base),
             peripherals: Vec::new(),
             nvic: None,
+            pending_cpu_irqs: 0,
         };
 
         for p_cfg in &chip.peripherals {
@@ -388,6 +395,10 @@ impl SystemBus {
         let mut interrupts = Vec::new();
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
+        // Plan 3: collect ESP32-S3 explicit_irq source IDs during pass 1, then
+        // route them through the intmatrix in pass 2 (route_irq_source_to_cpu_irq
+        // takes &self, conflicting with the iter_mut borrow during pass 1).
+        let mut explicit_source_ids: Vec<u32> = Vec::new();
 
         // 1. Collect IRQs and DMA requests from peripherals and pend them in NVIC
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
@@ -424,6 +435,10 @@ impl SystemBus {
                 }
             }
 
+            // Plan 3: stash source IDs for pass-2 intmatrix routing (can't
+            // call self.route_irq_source_to_cpu_irq inside iter_mut).
+            explicit_source_ids.extend(res.explicit_irqs.iter().copied());
+
             for irq in res.explicit_irqs {
                 if let Some(nvic) = &self.nvic {
                     if irq >= 16 {
@@ -438,6 +453,19 @@ impl SystemBus {
                 } else {
                     interrupts.push(irq);
                 }
+            }
+        }
+
+        // Plan 3: route ESP32-S3 source IDs through the intmatrix.
+        // For buses without an intmatrix peripheral, route_irq_source_to_cpu_irq
+        // returns None and this loop is a no-op. ARM/NVIC's legacy explicit_irqs
+        // path above is preserved (ARM peripherals don't register an intmatrix,
+        // so their source IDs route to None here; ESP32-S3 buses have nvic=None,
+        // so the legacy NVIC path treats source IDs as core exceptions only —
+        // typically they're > 16 in practice but harmless either way).
+        for source_id in explicit_source_ids {
+            if let Some(slot) = self.route_irq_source_to_cpu_irq(source_id) {
+                self.pending_cpu_irqs |= 1u32 << slot;
             }
         }
 
@@ -648,6 +676,14 @@ impl crate::Bus for SystemBus {
     ) -> Option<u8> {
         SystemBus::route_irq_source_to_cpu_irq(self, source_id)
     }
+
+    fn pending_cpu_irqs(&self) -> u32 {
+        self.pending_cpu_irqs
+    }
+
+    fn clear_cpu_irq_pending(&mut self, slot: u8) {
+        self.pending_cpu_irqs &= !(1u32 << slot);
+    }
 }
 
 #[cfg(test)]
@@ -687,5 +723,55 @@ mod tests {
         bus.write_u32(0x40001004, 0x12345678).unwrap();
         let count_val = bus.read_u32(0x40001004).unwrap();
         assert_eq!(count_val, 0x12345678);
+    }
+}
+
+#[cfg(test)]
+mod plan3_tests {
+    use super::*;
+    use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
+    use crate::peripherals::esp32s3::systimer::Systimer;
+
+    #[test]
+    fn pending_cpu_irqs_aggregates_from_systimer_alarm_via_intmatrix() {
+        let mut bus = SystemBus::new();
+        // Register intmatrix and bind SYSTIMER_TARGET0 (source 79) to CPU IRQ 15.
+        let mut matrix = Esp32s3IntMatrix::new();
+        // Source 79 at offset 79*4 = 316 = 0x13C, write IRQ 15.
+        matrix.write(79 * 4, 15).unwrap();
+        bus.add_peripheral("intmatrix", 0x600C_2000, 0x800, None, Box::new(matrix));
+
+        // Register SYSTIMER and configure ALARM0: target=5, enabled, INT_ENA bit 0.
+        let mut systimer = Systimer::new(80_000_000);
+        // Set TARGET0_LO at 0x20, TARGET0_HI at 0x1C (TRM offsets).
+        systimer.write(0x20, 5).unwrap();
+        systimer.write(0x21, 0).unwrap();
+        systimer.write(0x22, 0).unwrap();
+        systimer.write(0x23, 0).unwrap();
+        systimer.write(0x1C, 0).unwrap();
+        systimer.write(0x1D, 0).unwrap();
+        systimer.write(0x1E, 0).unwrap();
+        systimer.write(0x1F, 0).unwrap();
+        // TARGET0_CONF at 0x34: bit 31 = enable, bit 30 = auto-reload (off).
+        systimer.write(0x34, 0).unwrap();
+        systimer.write(0x35, 0).unwrap();
+        systimer.write(0x36, 0).unwrap();
+        systimer.write(0x37, 0x80).unwrap();
+        // INT_ENA at 0x64: bit 0 set.
+        systimer.write(0x64, 1).unwrap();
+        bus.add_peripheral("systimer", 0x6002_3000, 0x100, None, Box::new(systimer));
+
+        // Tick enough times for alarm to fire (5 SYSTIMER ticks = 25 CPU cycles at 80MHz).
+        for _ in 0..30 {
+            bus.tick_peripherals_with_costs();
+        }
+
+        // pending_cpu_irqs should have bit 15 set.
+        assert!(bus.pending_cpu_irqs & (1 << 15) != 0,
+            "expected CPU IRQ slot 15 pending; got 0x{:08x}", bus.pending_cpu_irqs);
+
+        // Clearing the slot via the trait method removes the bit.
+        Bus::clear_cpu_irq_pending(&mut bus, 15);
+        assert_eq!(bus.pending_cpu_irqs & (1 << 15), 0);
     }
 }

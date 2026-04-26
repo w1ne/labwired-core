@@ -27,6 +27,7 @@ fn minimal_bus() -> SystemBus {
         ram: LinearMemory::new(0, 0x0),
         peripherals: Vec::new(),
         nvic: None,
+        pending_cpu_irqs: 0,
     }
 }
 

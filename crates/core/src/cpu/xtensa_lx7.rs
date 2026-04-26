@@ -1355,8 +1355,12 @@ impl XtensaLx7 {
     /// Returns `Some(level)` if `(INTERRUPT & INTENABLE) != 0`, else `None`.
     /// The level is the maximum over all set bits in the masked-pending word,
     /// using `IRQ_LEVELS` indexed by bit position.
-    fn pending_irq_level(&self) -> Option<u8> {
-        let pending = self.sr.read(INTERRUPT) & self.sr.read(INTENABLE);
+    fn pending_irq_level(&self, bus: &dyn Bus) -> Option<u8> {
+        // Plan 3: aggregate pending IRQs from two sources:
+        //   1. SR-file INTERRUPT register (firmware can software-trigger via WSR).
+        //   2. Bus's pending_cpu_irqs (peripheral source IDs routed through
+        //      the ESP32-S3 intmatrix in tick_peripherals_with_costs).
+        let pending = (self.sr.read(INTERRUPT) | bus.pending_cpu_irqs()) & self.sr.read(INTENABLE);
         if pending == 0 {
             return None;
         }
@@ -1390,7 +1394,7 @@ impl XtensaLx7 {
     ///
     /// Returns `Ok(())` — unlike `raise_general_exception`, interrupt dispatch
     /// is not an error; the CPU simply redirects to the ISR vector.
-    fn dispatch_irq(&mut self, level: u8) -> SimResult<()> {
+    fn dispatch_irq(&mut self, level: u8, bus: &mut dyn Bus) -> SimResult<()> {
         let entry_pc = self.pc;
         let vecbase = self.sr.read(VECBASE);
         let vector_offset = IRQ_VECTOR_OFFSETS[level.min(7) as usize];
@@ -1424,6 +1428,17 @@ impl XtensaLx7 {
             self.ps = new_ps;
             self.pc = vecbase.wrapping_add(vector_offset);
         }
+
+        // Plan 3: clear the bus-side pending bits at this level so we don't
+        // re-fire next tick. The firmware ISR is responsible for clearing
+        // the underlying source-side pending bit (INT_CLR on the peripheral)
+        // before the source re-asserts.
+        for slot in 0..32u8 {
+            if IRQ_LEVELS[slot as usize] == level {
+                bus.clear_cpu_irq_pending(slot);
+            }
+        }
+
         Ok(())
     }
 
@@ -1489,9 +1504,9 @@ impl Cpu for XtensaLx7 {
         //
         // Note: INTENABLE defaults to 0 at reset, so existing tests are unaffected.
         if !self.ps.excm() {
-            if let Some(irq_level) = self.pending_irq_level() {
+            if let Some(irq_level) = self.pending_irq_level(bus) {
                 if irq_level > self.ps.intlevel() {
-                    return self.dispatch_irq(irq_level);
+                    return self.dispatch_irq(irq_level, bus);
                 }
             }
         }

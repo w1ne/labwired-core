@@ -208,6 +208,20 @@ pub trait Bus {
     ) -> Option<u8> {
         None
     }
+
+    /// Bitmask of pending cpu0 IRQ slots aggregated by the bus from peripheral
+    /// tick results routed through the ESP32-S3 interrupt matrix. Default
+    /// returns 0; non-ESP32-S3 buses don't model this.
+    fn pending_cpu_irqs(&self) -> u32 {
+        0
+    }
+
+    /// Clear the pending bit for cpu IRQ slot `slot`. Called by the CPU's
+    /// dispatch_irq after it dispatches the level for that slot, so the slot
+    /// doesn't re-fire on the next tick (firmware-side INT_CLR will clear
+    /// the source-side pending bit; the bus aggregation needs to forget it
+    /// too).
+    fn clear_cpu_irq_pending(&mut self, _slot: u8) {}
 }
 
 use std::collections::HashSet;
