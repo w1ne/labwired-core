@@ -7,38 +7,45 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/core",
-    "crates/loader",
     "crates/cli",
+    "crates/codegen",
+    "crates/config",
+    "crates/core",
+    "crates/dap",
     "crates/firmware",
-    "crates/firmware-f401-demo",
-    "crates/firmware-l476-demo",
     "crates/firmware-ci-fixture",
-    "crates/firmware-h563-demo",
-    "crates/firmware-h563-io-demo",
-    "crates/firmware-h563-fullchip-demo",
-    "crates/firmware-hil-showcase",
     "crates/firmware-comparative-benchmark",
-    "crates/firmware-rp2040-pio-onboarding",
-    "crates/firmware-rp2040-demo",
-    "crates/firmware-nrf52840-demo",
     "crates/firmware-esp32c3-demo",
-    "crates/riscv-ci-fixture",
-    "crates/config", "crates/dap", "crates/gdbstub",
+    "crates/firmware-f401-demo",
+    "crates/firmware-h563-demo",
+    "crates/firmware-h563-fullchip-demo",
+    "crates/firmware-h563-io-demo",
+    "crates/firmware-hil-showcase",
+    "crates/firmware-l476-demo",
+    "crates/firmware-nrf52840-demo",
+    "crates/firmware-rp2040-demo",
+    "crates/firmware-rp2040-pio-onboarding",
+    "crates/gdbstub",
     "crates/ir",
+    "crates/loader",
+    "crates/python",
+    "crates/riscv-ci-fixture",
     "crates/svd-ingestor",
+    "crates/wasm",
     "examples/arm-cortex-m0",
+    "examples/demo-blinky",
     "examples/riscv-virt",
-    "examples/demo-blinky", "crates/codegen",
-    "crates/python", "crates/wasm",
 ]
+# firmware-hal-test is a standalone reference example pinned to stm32f1xx-hal.
+# It carries its own [profile.release] (opt-level = "z", lto = true) that is
+# incompatible with the workspace profile, so it must build out-of-workspace.
 exclude = ["crates/firmware-hal-test"]
-default-members = ["crates/cli", "crates/core", "crates/loader"]
+default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader"]
 
 [workspace.package]
 version = "0.13.0"
 edition = "2021"
-authors = ["LabWired Team"]
+authors = ["Andrii Shylenko"]
 license = "MIT"
 
 [workspace.dependencies]
@@ -67,63 +74,57 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 lto = false
+debug = true
 
+# Per-package release overrides for embedded firmware crates and CI fixtures.
+# These build for thumbv*/riscv32 targets and want size-optimized binaries
+# (opt-level = "s") with single-codegen-unit for cleaner inlining. Cargo does
+# not support globs or inheritance in profile sections, so each crate gets
+# its own block. Keep alphabetical.
 [profile.release.package.firmware-ci-fixture]
 codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-f401-demo]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-l476-demo]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-h563-demo]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-h563-io-demo]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-h563-fullchip-demo]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.riscv-ci-fixture]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-hil-showcase]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-rp2040-pio-onboarding]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-rp2040-demo]
-codegen-units = 1
-debug = true
-opt-level = "s"
-
-[profile.release.package.firmware-nrf52840-demo]
-codegen-units = 1
-debug = true
 opt-level = "s"
 
 [profile.release.package.firmware-esp32c3-demo]
 codegen-units = 1
-debug = true
+opt-level = "s"
+
+[profile.release.package.firmware-f401-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-h563-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-h563-fullchip-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-h563-io-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-hil-showcase]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-l476-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nrf52840-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2040-pio-onboarding]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.riscv-ci-fixture]
+codegen-units = 1
 opt-level = "s"
