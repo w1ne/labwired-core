@@ -372,6 +372,13 @@ peripherals:
     size: "1KB"
     irq: 19
 
+  # SDMMC1 — SD/MMC card host (RM0351 §38).
+  - id: "sdmmc1"
+    type: "sdmmc"
+    base_address: 0x40012800
+    size: "1KB"
+    irq: 49
+
   - id: "scb"
     type: "scb"
     base_address: 0xE000ED00

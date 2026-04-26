@@ -200,8 +200,24 @@ impl Peripheral for Exti {
             if (active1 & 0x0000_FC00) != 0 {
                 irqs.push(40); // EXTI15_10
             }
-            // L4 bank-2 lines route to specific NVIC IRQs (RTC alarm, COMP, etc)
-            // — vector mapping deferred until specific firmware needs it.
+            // L4 bank-2 line -> NVIC IRQ map per RM0351 §13.3.
+            // Most bank-2 lines are wakeup events that re-trigger their
+            // peripheral's existing NVIC IRQ when the chip exits Stop mode.
+            // Mapping covers the common firmware paths; lines without an
+            // entry here are tracked at the register level but don't
+            // synthesize an IRQ until a specific firmware needs the route.
+            if matches!(self.layout, ExtiRegisterLayout::Stm32L4) {
+                let line35 = (active2 >> (35 - 32)) & 1 != 0; // LPUART1 wakeup
+                let line36 = (active2 >> (36 - 32)) & 1 != 0; // I2C1 wakeup
+                let line37 = (active2 >> (37 - 32)) & 1 != 0; // I2C2 wakeup
+                let line38 = (active2 >> (38 - 32)) & 1 != 0; // I2C3 wakeup
+                let line39 = (active2 >> (39 - 32)) & 1 != 0; // USART1 wakeup
+                if line35 { irqs.push(70); }
+                if line36 { irqs.push(31); }
+                if line37 { irqs.push(33); }
+                if line38 { irqs.push(72); }
+                if line39 { irqs.push(37); }
+            }
             explicit_irqs = Some(irqs);
         }
 
@@ -222,3 +238,47 @@ impl Peripheral for Exti {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Exti, ExtiRegisterLayout};
+    use crate::Peripheral;
+
+    fn poke(exti: &mut Exti, off: u64, val: u32) {
+        for i in 0..4 {
+            exti.write(off + i, ((val >> (i * 8)) & 0xFF) as u8).unwrap();
+        }
+    }
+
+    #[test]
+    fn l4_bank2_line35_routes_to_lpuart1_irq() {
+        let mut e = Exti::new_with_layout(ExtiRegisterLayout::Stm32L4);
+        // Arm IMR2 line 3 (= EXTI line 35), then trigger via SWIER2.
+        poke(&mut e, 0x20, 1 << 3);
+        poke(&mut e, 0x30, 1 << 3);
+        let r = e.tick();
+        let irqs = r.explicit_irqs.expect("expected IRQ list");
+        assert!(irqs.contains(&70), "LPUART1 IRQ 70 should fire, got {irqs:?}");
+    }
+
+    #[test]
+    fn l4_bank2_line38_routes_to_i2c3_irq() {
+        let mut e = Exti::new_with_layout(ExtiRegisterLayout::Stm32L4);
+        poke(&mut e, 0x20, 1 << 6);
+        poke(&mut e, 0x30, 1 << 6);
+        let r = e.tick();
+        let irqs = r.explicit_irqs.expect("expected IRQ list");
+        assert!(irqs.contains(&72), "I2C3 IRQ 72 should fire, got {irqs:?}");
+    }
+
+    #[test]
+    fn f1_layout_does_not_synth_bank2_irqs() {
+        let mut e = Exti::new_with_layout(ExtiRegisterLayout::Stm32F1);
+        poke(&mut e, 0x20, 1 << 3); // bank 2 doesn't even exist on F1
+        poke(&mut e, 0x30, 1 << 3);
+        let r = e.tick();
+        // No bank-2 -> no IRQ
+        assert!(r.explicit_irqs.is_none() || r.explicit_irqs.unwrap().is_empty());
+    }
+}
+

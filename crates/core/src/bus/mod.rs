@@ -106,7 +106,7 @@ impl SystemBus {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
             | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
             | "pwr" | "flash" | "rng" | "crc" | "rtc" | "iwdg" | "wwdg" | "dac" | "dbgmcu"
-            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" => {
+            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc" => {
                 return t;
             }
             _ => {}
@@ -128,6 +128,9 @@ impl SystemBus {
         }
         if t == "bxcan" || t == "stm32_can" {
             return "bxcan".to_string();
+        }
+        if t == "sdmmc" || t == "sdio" || t.starts_with("sdmmc_") {
+            return "sdmmc".to_string();
         }
 
         if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
@@ -516,6 +519,7 @@ impl SystemBus {
                 "sai" => Box::new(crate::peripherals::sai::Sai::new()),
                 "usb_otg" => Box::new(crate::peripherals::usb_otg::UsbOtg::new()),
                 "bxcan" => Box::new(crate::peripherals::bxcan::BxCan::new()),
+                "sdmmc" => Box::new(crate::peripherals::sdmmc::Sdmmc::new()),
                 "exti" => {
                     let layout: crate::peripherals::exti::ExtiRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "EXTI")?;

@@ -26,11 +26,23 @@ struct DmaChannel {
     cndtr_initial: u32,
 }
 
-/// STM32F1 DMA1 Controller (7 channels)
+/// STM32 DMA1 controller — 7 channels, F1/F4/L4 compatible.
+///
+/// L4 adds the CSELR register at offset 0xA8: a 32-bit field with 4 bits
+/// per channel selecting which peripheral's request line drives the DMA
+/// channel (RM0351 §11.6.7). Older F1/F4 chips ignore writes to that
+/// offset; sim accepts the write and reads back unchanged on both.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Dma1 {
     isr: u32,
     ifcr: u32,
+    /// L4 channel-selection register. Each nibble (4 bits) selects which
+    /// peripheral request line drives the corresponding channel:
+    ///   bits 3:0   - C1S  (channel 1)
+    ///   bits 7:4   - C2S
+    ///   ...
+    ///   bits 27:24 - C7S
+    cselr: u32,
     channels: [DmaChannel; 7],
 }
 
@@ -42,6 +54,7 @@ impl Dma1 {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.isr,
+            0xA8 => self.cselr, // L4 channel-selection register
             _ => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
                 let reg_off = (offset - 0x08) % 20;
@@ -65,6 +78,10 @@ impl Dma1 {
             0x04 => {
                 // IFCR: Write 1 to clear corresponding ISR bits
                 self.isr &= !value;
+            }
+            0xA8 => {
+                // CSELR: only the low 28 bits are valid (4 bits × 7 channels).
+                self.cselr = value & 0x0FFF_FFFF;
             }
             _ => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
@@ -237,6 +254,16 @@ impl Peripheral for Dma1 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_cselr_round_trips_l4_channel_selection() {
+        let mut dma = Dma1::new();
+        // Map ch1 -> request 4, ch7 -> request 5 (typical USART2_TX / SPI1_RX patterns).
+        dma.write_reg(0xA8, (4 << 0) | (5 << 24));
+        let v = dma.read_reg(0xA8);
+        assert_eq!(v & 0xF, 4);
+        assert_eq!((v >> 24) & 0xF, 5);
+    }
 
     #[test]
     fn test_dma_channel_completes_and_sets_irq_on_tcie() {
