@@ -4,6 +4,7 @@
 
 //! ESP32-S3 peripheral implementations (Plan 2+).
 
+pub mod flash_xip;
 pub mod rom_thunks;
 pub mod system_stub;
 pub mod systimer;
