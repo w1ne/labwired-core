@@ -12,7 +12,8 @@
 use crate::cpu::xtensa_regs::{ArFile, Ps};
 use crate::cpu::xtensa_sr::{
     XtensaSrFile, EXCCAUSE, EPC1, EPC2, EPC3, EPC4, EPC5, EPC6, EPC7,
-    EPS2, EPS3, EPS4, EPS5, EPS6, EPS7, INTERRUPT, INTENABLE, SAR, SCOMPARE1, VECBASE,
+    EPS2, EPS3, EPS4, EPS5, EPS6, EPS7, INTERRUPT, INTENABLE, PS as PS_SR, SAR, SCOMPARE1,
+    VECBASE, WINDOWBASE, WINDOWSTART,
 };
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
@@ -88,6 +89,9 @@ pub struct XtensaLx7 {
     pub regs: ArFile,
     pub ps: Ps,
     pub sr: XtensaSrFile,
+    /// User-Register file (URs accessed via RUR/WUR). 256 entries; the
+    /// commonly-used IDs are THREADPTR (231), FCR (232), FSR (233).
+    pub ur: [u32; 256],
     pub pc: u32,
 }
 
@@ -99,7 +103,29 @@ impl XtensaLx7 {
             // Confirmed via OpenOCD `reset halt` on real S3-Zero: ps = 0x0000001f.
             ps: Ps::from_raw(0x1F),
             sr: XtensaSrFile::new(),
+            ur: [0u32; 256],
             pc: 0x4000_0400,
+        }
+    }
+
+    /// Read an SR by ID, with special routing for PS / WINDOWBASE / WINDOWSTART
+    /// (which live outside `XtensaSrFile`).
+    fn read_sr(&self, sr_id: u16) -> u32 {
+        match sr_id {
+            x if x == PS_SR        => self.ps.as_raw(),
+            x if x == WINDOWBASE   => self.regs.windowbase() as u32,
+            x if x == WINDOWSTART  => self.regs.windowstart() as u32,
+            _ => self.sr.read(sr_id),
+        }
+    }
+
+    /// Write an SR by ID, with special routing for PS / WINDOWBASE / WINDOWSTART.
+    fn write_sr(&mut self, sr_id: u16, val: u32) {
+        match sr_id {
+            x if x == PS_SR        => { self.ps = Ps::from_raw(val); }
+            x if x == WINDOWBASE   => { self.regs.set_windowbase(val as u8); }
+            x if x == WINDOWSTART  => { self.regs.set_windowstart(val as u16); }
+            _ => self.sr.write(sr_id, val),
         }
     }
 
@@ -1208,6 +1234,52 @@ impl XtensaLx7 {
                 self.regs.set_windowstart_bit(wb_new, true);   // reloaded frame is live
                 self.ps.set_excm(false);
                 self.pc = self.sr.read(EPC1);
+            }
+
+            // ── G3: Special-Register / User-Register access ──────────────────
+            //
+            // RSR at, sr / WSR at, sr / XSR at, sr — atomic read/write/swap of
+            // an SR. The SR file holds most SRs; PS, WINDOWBASE, WINDOWSTART
+            // live elsewhere on the CPU and route through `read_sr`/`write_sr`.
+            //
+            // Per ISA RM §5.5, RSR/WSR for unimplemented SRs raise an
+            // IllegalInstructionCause exception. We follow Plan 1 policy of
+            // permissive-zero for unknown SRs (read returns 0; write is a NOP)
+            // because most ESP-IDF / esp-hal startup code reads/writes SRs that
+            // we model only as storage (no behavioural side-effects). Genuine
+            // privilege checks (PS.RING) are not enforced here because all
+            // firmware we simulate runs in ring 0.
+            Rsr { at, sr } => {
+                let v = self.read_sr(sr);
+                self.regs.write_logical(at, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Wsr { at, sr } => {
+                let v = self.regs.read_logical(at);
+                self.write_sr(sr, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Xsr { at, sr } => {
+                let new_v = self.regs.read_logical(at);
+                let old_v = self.read_sr(sr);
+                self.write_sr(sr, new_v);
+                self.regs.write_logical(at, old_v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // RUR ar, ur / WUR at, ur — User-Register read/write. URs are a
+            // separate 8-bit-ID space from SRs; we model them as a simple
+            // [u32; 256] storage array. The commonly-used URs are THREADPTR
+            // (231), FCR (232), FSR (233). Floating-point semantics of FCR/FSR
+            // are not modeled; they roundtrip as plain storage.
+            Rur { ar, ur } => {
+                let v = self.ur[(ur as usize) & 0xFF];
+                self.regs.write_logical(ar, v);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Wur { at, ur } => {
+                let v = self.regs.read_logical(at);
+                self.ur[(ur as usize) & 0xFF] = v;
+                self.pc = self.pc.wrapping_add(len);
             }
 
             // Unknown opcode: raise IllegalInstruction (EXCCAUSE=0).

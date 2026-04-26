@@ -19,9 +19,14 @@
 // Verified against `xtensa-esp-elf-as` emitted `rsr.<name>` instruction bytes.
 // The middle byte of the 0x20XX03 encoding IS the SR ID.
 
+pub const LBEG:         u16 = 0;    // 0x00 (loop begin)
+pub const LEND:         u16 = 1;    // 0x01 (loop end)
+pub const LCOUNT:       u16 = 2;    // 0x02 (loop count)
 pub const SAR:          u16 = 3;    // 0x03
+pub const BR:           u16 = 4;    // 0x04 (branch register)
 pub const LITBASE:      u16 = 5;    // 0x05
 pub const SCOMPARE1:    u16 = 12;   // 0x0C
+pub const IBREAKENABLE: u16 = 96;   // 0x60
 pub const ACCLO:        u16 = 16;   // 0x10 MAC16 accumulator — stub
 pub const ACCHI:        u16 = 17;
 pub const M0:           u16 = 32;   // 0x20 MAC16 — stub

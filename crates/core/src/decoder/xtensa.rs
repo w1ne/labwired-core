@@ -278,7 +278,32 @@ fn decode_qrst(w: u32) -> Instruction {
             0xF => Instruction::Rems  { ar: r, as_: s, at: t },
             _ => Instruction::Unknown(w),
         },
-        // op1 = 0x3 — fill in later tasks.
+        // op1 = 0x3: SR/UR access group (RSR/WSR/XSR/RUR/WUR).
+        //
+        // HW-oracle (xtensa-esp-elf-as + objdump, esp-15.2.0_20250920):
+        //   rsr.sar a3      → 0x030330: op0=0,op1=3,op2=0; sr=bits[15:8]=0x03; at=t=3
+        //   wsr.sar a3      → 0x130330: op0=0,op1=3,op2=1; sr=bits[15:8]=0x03; at=t=3
+        //   xsr.sar a3      → 0x610330: op0=0,op1=3,op2=6; sr=bits[15:8]=0x03; at=t=3
+        //   rur.threadptr a3→ 0xe33e70: op0=0,op1=3,op2=0xe; ar=r=3; ur=(s<<4)|t=0xe7=231
+        //   wur.threadptr a3→ 0xf3e730: op0=0,op1=3,op2=0xf; at=t=3; ur=bits[15:8]=0xe7=231
+        //
+        // For RSR/WSR/XSR: SR ID is bits[15:8] = (r << 4) | s; at = t (bits[7:4]).
+        // For RUR:         ar = r (bits[15:12]); UR ID = (s << 4) | t.
+        // For WUR:         at = t (bits[7:4]); UR ID = bits[15:8] = (r << 4) | s.
+        0x3 => {
+            let sr = ((r as u16) << 4) | (s as u16);
+            match op2 {
+                0x0 => Instruction::Rsr { at: t, sr },
+                0x1 => Instruction::Wsr { at: t, sr },
+                0x6 => Instruction::Xsr { at: t, sr },
+                0xE => {
+                    let ur = ((s as u16) << 4) | (t as u16);
+                    Instruction::Rur { ar: r, ur }
+                }
+                0xF => Instruction::Wur { at: t, ur: sr },
+                _   => Instruction::Unknown(w),
+            }
+        }
         // op1 = 0x4..=0xF — fill in later tasks.
         _ => Instruction::Unknown(w),
     }
