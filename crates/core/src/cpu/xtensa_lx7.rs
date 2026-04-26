@@ -488,10 +488,16 @@ impl XtensaLx7 {
 
             // CALL0 offset: save return address in a0, jump to target.
             // a0 = pc + 3  (return address: byte after this 3-byte instruction)
-            // target = ((pc + 3) & !3) + offset  (ISA RM §4.4; decoder: offset = sext18 * 4)
+            // target = ((pc + 4) & !3) + offset  (ISA RM §4.4; decoder: offset = sext18 * 4)
+            //
+            // HW-oracle (xtensa-esp-elf-as + objdump):
+            //   PC=0, `call0 0x4` → bytes 0x000005 (imm18=0); HW jumps to 0x4.
+            //   Formula must give: ((0+4)&!3) + 0 = 4. ✓
+            //   Earlier (PC+3)&!3 was used and gave 0+0 = 0 — silently off by 4
+            //   for every 4-aligned PC, which broke real ESP32-S3 firmware.
             Call0 { offset } => {
                 let ret_pc = self.pc.wrapping_add(3);
-                let target = (self.pc.wrapping_add(3) & !3u32).wrapping_add(offset as u32);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
                 self.regs.write_logical(0, ret_pc);
                 self.pc = target;
             }
@@ -511,11 +517,13 @@ impl XtensaLx7 {
             //   RETW can recover N = a0[31:30] after the window rotation.
             //   ISA RM §8 CALL4: "upper two bits of the return address are set to 01".
             // PS.CALLINC = N / 4  (1, 2, or 3 for CALL4, CALL8, CALL12)
-            // target = ((pc + 3) & !3) + offset  (ISA RM §4.4)
+            // target = ((pc + 4) & !3) + offset  (ISA RM §4.4)
+            //
+            // See `Call0` above for the HW-oracle proof of the (pc+4) base.
             Call4 { offset } => {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (1 << 30);
-                let target = (self.pc.wrapping_add(3) & !3u32).wrapping_add(offset as u32);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
                 self.regs.write_logical(4, ret_pc);
                 self.ps.set_callinc(1);
                 self.pc = target;
@@ -523,7 +531,7 @@ impl XtensaLx7 {
             Call8 { offset } => {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (2 << 30);
-                let target = (self.pc.wrapping_add(3) & !3u32).wrapping_add(offset as u32);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
                 self.regs.write_logical(8, ret_pc);
                 self.ps.set_callinc(2);
                 self.pc = target;
@@ -531,7 +539,7 @@ impl XtensaLx7 {
             Call12 { offset } => {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (3 << 30);
-                let target = (self.pc.wrapping_add(3) & !3u32).wrapping_add(offset as u32);
+                let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
                 self.regs.write_logical(12, ret_pc);
                 self.ps.set_callinc(3);
                 self.pc = target;

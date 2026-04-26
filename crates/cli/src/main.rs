@@ -554,7 +554,14 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     let limit = args.max_steps.unwrap_or(u64::MAX);
     let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     let mut steps = 0u64;
+    // Ring buffer of recent PCs for post-mortem on exceptions.
+    const RING_LEN: usize = 64;
+    let mut pc_ring: [u32; RING_LEN] = [0; RING_LEN];
+    let mut ring_head: usize = 0;
     while steps < limit {
+        let pc_before = cpu.get_pc();
+        pc_ring[ring_head] = pc_before;
+        ring_head = (ring_head + 1) % RING_LEN;
         match cpu.step(&mut bus, &observers) {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(pc)) => {
@@ -565,6 +572,13 @@ fn run_firmware(args: RunArgs) -> ExitCode {
                 eprintln!(
                     "labwired-cli run: ExceptionRaised cause={cause} at 0x{pc:08x}"
                 );
+                eprintln!("labwired-cli run: recent PCs (oldest first):");
+                for i in 0..RING_LEN {
+                    let idx = (ring_head + i) % RING_LEN;
+                    if pc_ring[idx] != 0 {
+                        eprintln!("  [{:2}] 0x{:08x}", i, pc_ring[idx]);
+                    }
+                }
                 return ExitCode::from(3);
             }
             Err(e) => {
@@ -572,6 +586,13 @@ fn run_firmware(args: RunArgs) -> ExitCode {
                     "labwired-cli run: simulator error at pc=0x{:08x}: {e}",
                     cpu.get_pc(),
                 );
+                eprintln!("labwired-cli run: recent PCs (oldest first):");
+                for i in 0..RING_LEN {
+                    let idx = (ring_head + i) % RING_LEN;
+                    if pc_ring[idx] != 0 {
+                        eprintln!("  [{:2}] 0x{:08x}", i, pc_ring[idx]);
+                    }
+                }
                 return ExitCode::from(3);
             }
         }

@@ -215,12 +215,13 @@ fn enc_jx(as_: u32) -> u32 {
 
 /// Encode CALL0/4/8/12 (op0=0x5, n=0/1/2/3).
 ///
-/// Computes imm18 from the ISA RM §4.4 formula:
-///   base = (pc + 3) & !3
+/// Computes imm18 from the ISA RM §4.4 formula (HW-oracle verified against
+/// xtensa-esp-elf-as: `call0 0x4` from PC=0 encodes as imm18=0):
+///   base = (pc + 4) & !3
 ///   offset_bytes = target - base  (must be a multiple of 4)
 ///   imm18 = offset_bytes / 4
 fn enc_call(n: u32, pc: u32, target: u32) -> u32 {
-    let base = (pc.wrapping_add(3)) & !3u32;
+    let base = (pc.wrapping_add(4)) & !3u32;
     let offset_bytes = target.wrapping_sub(base) as i32;
     let imm18 = ((offset_bytes / 4) as u32) & 0x3_FFFF;
     0x5 | (n << 4) | (imm18 << 6)

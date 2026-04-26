@@ -808,9 +808,10 @@ fn j_oracle() -> OracleCase {
 fn call0_oracle() -> OracleCase {
     OracleCase::from_bytes(vec![
         // CALL0 target=IRAM_BASE+4, a0=IRAM_BASE+3
-        // w=0x000045: op0=5, n=0 (CALL0), imm18=1, offset=1*4=4
-        // target = (IRAM_BASE+3)&~3 + 4 = IRAM_BASE + 4 ✓
-        0x45, 0x00, 0x00,
+        // HW formula (xtensa-esp-elf-as verified): target = ((PC+4)&~3) + offset
+        // With PC=IRAM_BASE (4-aligned) and target=IRAM_BASE+4 → offset = 0 → imm18 = 0
+        // w=0x000005: op0=5, n=0 (CALL0), imm18=0
+        0x05, 0x00, 0x00,
         // padding byte at offset 3 (unreachable)
         0x00,
         // BREAK 1,15 at offset 4 (CALL0 jumps here; from_bytes also appends BREAK)
@@ -869,7 +870,7 @@ const VECBASE_SR: u16 = 231;
 /// CALL4 + ENTRY + RETW round-trip without window overflow or underflow.
 ///
 /// Program layout:
-///   IRAM_BASE+0:  CALL4 (imm18=2, target=IRAM_BASE+8)  [0x95,0x00,0x00]
+///   IRAM_BASE+0:  CALL4 (imm18=1, target=IRAM_BASE+8)  [0x55,0x00,0x00]
 ///   IRAM_BASE+3:  BREAK                                  [0xF0,0x41,0x00] ← RETW returns here
 ///   IRAM_BASE+6:  padding                               [0x00,0x00]
 ///   IRAM_BASE+8:  ENTRY a1, 32                           [0x36,0x41,0x00]
@@ -883,10 +884,10 @@ const VECBASE_SR: u16 = 231;
 #[hw_oracle_test]
 fn call4_entry_retw_no_overflow() -> OracleCase {
     OracleCase::from_bytes(vec![
-        // IRAM_BASE+0: CALL4 (imm18=2, target=IRAM_BASE+8)
-        // w=0x000095: op0=5(CALLN), n=1(CALL4), imm18=2, off=8
-        // target = ((IRAM_BASE+3)&~3) + 8 = IRAM_BASE + 8
-        0x95, 0x00, 0x00,
+        // IRAM_BASE+0: CALL4 (imm18=1, target=IRAM_BASE+8)
+        // HW formula: target = ((PC+4)&~3) + offset = (IRAM_BASE+4) + imm18*4
+        // For target=IRAM_BASE+8 → imm18=1 → w=0x000055
+        0x55, 0x00, 0x00,
         // IRAM_BASE+3: BREAK — RETW returns here (CALL4 return addr = IRAM_BASE+3)
         0xF0, 0x41, 0x00,
         // IRAM_BASE+6: padding (unreachable)
@@ -921,15 +922,15 @@ fn call4_entry_retw_no_overflow() -> OracleCase {
 /// 64 KiB oracle IRAM, where we place a BREAK to halt cleanly.
 ///
 /// Program layout:
-///   IRAM_BASE+0:     CALL4 (imm18=2, target=IRAM_BASE+8)  [0x95,0x00,0x00]
+///   IRAM_BASE+0:     CALL4 (imm18=1, target=IRAM_BASE+8)  [0x55,0x00,0x00]
 ///   IRAM_BASE+3..7:  zeros (unreachable)
 ///   IRAM_BASE+8:     ENTRY a1, 32                          [0x36,0x41,0x00]
 ///   IRAM_BASE+0x800: BREAK  ← OF4 vector (VECBASE+0x000)  [0xF0,0x41,0x00]
 #[hw_oracle_test]
 fn entry_window_overflow_of4() -> OracleCase {
     let mut prog = vec![0u8; 0x803 + 3]; // space for BREAK at 0x800 plus 3 bytes
-    // CALL4 (imm18=2, target=IRAM_BASE+8)
-    prog[0..3].copy_from_slice(&[0x95, 0x00, 0x00]);
+    // CALL4 (imm18=1, target=IRAM_BASE+8) — HW formula: ((PC+4)&~3) + imm18*4
+    prog[0..3].copy_from_slice(&[0x55, 0x00, 0x00]);
     // ENTRY a1, 32 at offset 8
     prog[8..11].copy_from_slice(&[0x36, 0x41, 0x00]);
     // BREAK at IRAM_BASE+0x800 (OF4 vector = VECBASE+0x000 when VECBASE=IRAM_BASE+0x800)
@@ -957,8 +958,8 @@ fn entry_window_overflow_of4() -> OracleCase {
 
 /// Two successive CALL4→ENTRY pairs; WindowBase ends at 2, WindowStart = 0x0007.
 ///
-/// Program layout:
-///   IRAM_BASE+0:  CALL4 (imm18=1, target=IRAM_BASE+4)   [0x55,0x00,0x00]
+/// Program layout (HW formula: target = ((PC+4)&~3) + imm18*4):
+///   IRAM_BASE+0:  CALL4 (imm18=0, target=IRAM_BASE+4)   [0x15,0x00,0x00]
 ///   IRAM_BASE+3:  padding                                [0x00]
 ///   IRAM_BASE+4:  ENTRY a1, 32                           [0x36,0x41,0x00]
 ///   IRAM_BASE+7:  CALL4 (imm18=1, target=IRAM_BASE+12)  [0x55,0x00,0x00]
@@ -966,19 +967,20 @@ fn entry_window_overflow_of4() -> OracleCase {
 ///   IRAM_BASE+12: ENTRY a1, 32                           [0x36,0x41,0x00]
 ///   IRAM_BASE+15: BREAK  (auto-appended by from_bytes)
 ///
-/// CALL4 at IRAM_BASE+7: ((IRAM_BASE+7+3)&~3) = IRAM_BASE+8; +4 → target=IRAM_BASE+12. ✓
+/// CALL4 at IRAM_BASE+0: base = (IRAM_BASE+4)&~3 = IRAM_BASE+4; +0 → IRAM_BASE+4. ✓
+/// CALL4 at IRAM_BASE+7: base = (IRAM_BASE+11)&~3 = IRAM_BASE+8; +4 → IRAM_BASE+12. ✓
 /// After 2 ENTRY executions: WB=2, WS=0x0007 (bits 0,1,2 all set).
 #[hw_oracle_test]
 fn nested_2level_call_no_overflow() -> OracleCase {
     OracleCase::from_bytes(vec![
-        // IRAM_BASE+0: CALL4 (imm18=1, target=IRAM_BASE+4)
-        0x55, 0x00, 0x00,
+        // IRAM_BASE+0: CALL4 (imm18=0, target=IRAM_BASE+4)
+        0x15, 0x00, 0x00,
         // IRAM_BASE+3: padding
         0x00,
         // IRAM_BASE+4: ENTRY a1, 32
         0x36, 0x41, 0x00,
         // IRAM_BASE+7: CALL4 (imm18=1, target=IRAM_BASE+12)
-        // base = ((IRAM_BASE+10)&~3) = IRAM_BASE+8; +4 → IRAM_BASE+12 ✓
+        // base = ((IRAM_BASE+11)&~3) = IRAM_BASE+8; +4 → IRAM_BASE+12 ✓
         0x55, 0x00, 0x00,
         // IRAM_BASE+10: padding
         0x00, 0x00,
