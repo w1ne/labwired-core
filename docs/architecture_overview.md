@@ -1,4 +1,6 @@
-# LabWired Architecture Guide
+# LabWired Architecture Overview
+
+A high-level tour of the simulator's subsystems and how they fit together. For engine internals (CPU trait, decoder, performance gates, debug protocols), see [architecture.md](architecture.md).
 
 **LabWired** is a modular, high-fidelity embedded systems simulator written in Rust. It isolates hardware description (Asset Foundry) from execution logic (Core Engine), linked by a Strict Intermediate Representation (IR).
 
@@ -55,7 +57,7 @@ To satisfy Rust's borrow checker and ensure determinism:
 2.  **Resolution Phase**: The Bus processes these requests, modifying memory or triggering CPU exceptions.
 
 ## 3. Peripheral Modeling
-We prioritize **Tier 1 Devices** for deep support (see `../../docs/SUPPORTED_DEVICES.md`):
+We prioritize **Tier 1 Devices** for deep support:
 *   **STM32F4** (Cortex-M4)
 *   **RP2040** (Dual Cortex-M0+)
 *   **nRF52** (Cortex-M4F)
@@ -69,8 +71,8 @@ Peripherals are implemented as Rust structs that mimic hardware logic (registers
     *   Provides specialized telemetry events (PC, Cycles, Power) to the IDE.
 
 ## Directory Structure
-*   `core/crates/ir`: Strict IR definitions and SVD transformation logic.
-*   `core/crates/core`: CPU, Bus, and Device traits.
-*   `core/crates/cli`: Command-line driver.
-*   `core/crates/loader`: ELF parsing.
-*   `core/crates/config`: Configuration file parsing (system manifest).
+*   `crates/ir`: Strict IR definitions and SVD transformation logic.
+*   `crates/core`: CPU, Bus, and Device traits.
+*   `crates/cli`: Command-line driver.
+*   `crates/loader`: ELF parsing.
+*   `crates/config`: Configuration file parsing (system manifest).

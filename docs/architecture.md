@@ -1,5 +1,7 @@
 # Architecture Internals
 
+A reference for the engine's runtime internals. For the high-level subsystem tour (Asset Foundry, IR, Core Engine), see [architecture_overview.md](architecture_overview.md).
+
 LabWired is a modular execution engine designed to decouple the CPU core from the memory and peripheral bus. This design enables the simulation of multi-architecture systems within a unified peripheral environment.
 
 ## 1. Core Execution Engine (`labwired-core`)
