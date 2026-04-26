@@ -20,3 +20,4 @@ bitflags = { workspace = true }
 labwired-config = { path = "../config" }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
+goblin = { workspace = true }
