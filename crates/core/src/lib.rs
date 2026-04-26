@@ -197,6 +197,17 @@ pub trait Bus {
     ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
         None
     }
+
+    /// Look up the cpu0 IRQ slot bound to a peripheral source ID by the
+    /// ESP32-S3 interrupt matrix. Default returns None — non-ESP32-S3
+    /// buses don't have an intmatrix.  `SystemBus` overrides to consult
+    /// a registered `Esp32s3IntMatrix` peripheral.
+    fn route_irq_source_to_cpu_irq(
+        &self,
+        _source_id: u32,
+    ) -> Option<u8> {
+        None
+    }
 }
 
 use std::collections::HashSet;

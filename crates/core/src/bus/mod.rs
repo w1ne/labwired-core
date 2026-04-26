@@ -351,6 +351,25 @@ impl SystemBus {
         None
     }
 
+    /// Look up the cpu0 IRQ slot the registered intmatrix has bound to
+    /// peripheral source `source_id`. Returns None if no intmatrix is
+    /// registered or no binding exists for the source.
+    pub fn route_irq_source_to_cpu_irq(
+        &self,
+        source_id: u32,
+    ) -> Option<u8> {
+        for p in &self.peripherals {
+            if let Some(any) = p.dev.as_any() {
+                if let Some(matrix) = any
+                    .downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+                {
+                    return matrix.route(source_id);
+                }
+            }
+        }
+        None
+    }
+
     pub fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
@@ -621,6 +640,13 @@ impl crate::Bus for SystemBus {
         pc: u32,
     ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
         SystemBus::get_rom_thunk(self, pc)
+    }
+
+    fn route_irq_source_to_cpu_irq(
+        &self,
+        source_id: u32,
+    ) -> Option<u8> {
+        SystemBus::route_irq_source_to_cpu_irq(self, source_id)
     }
 }
 
