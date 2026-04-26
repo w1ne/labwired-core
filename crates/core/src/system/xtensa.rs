@@ -156,10 +156,15 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(SystemStub::new()),
     );
+    // RTC_CNTL through APB_CTRL/SYSCON are a contiguous block of register
+    // banks ESP-HAL pokes during init (clock muxing, voltage rails, GPIO
+    // mux, sensor ADC, PMS). Cover [0x6000_8000, 0x6001_0000) with a single
+    // round-tripping stub — 32 KiB of tracked-word storage matches the
+    // SystemStub semantics and is enough for any benign register hammer.
     bus.add_peripheral(
         "rtc_cntl",
         0x6000_8000,
-        0x1000,
+        0x8000,
         None,
         Box::new(RtcCntlStub::new()),
     );

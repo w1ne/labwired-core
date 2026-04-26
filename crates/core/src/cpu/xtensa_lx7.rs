@@ -1298,6 +1298,31 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // EXTUI ar, at, shift, bits: ar = (at >> shift) & ((1<<bits)-1).
+            // bits ∈ 1..=16, shift ∈ 0..=31. The mask wraps cleanly because
+            // `1u32 << 16` is well-defined; for bits=16 we use 0xFFFF.
+            Extui { ar, at, shift, bits } => {
+                let v = self.regs.read_logical(at);
+                let mask: u32 = if bits >= 32 { u32::MAX } else { (1u32 << bits) - 1 };
+                let extracted = (v >> shift) & mask;
+                self.regs.write_logical(ar, extracted);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
+            // RSIL at, level: atomic { at = PS; PS.INTLEVEL = level; }.
+            //
+            // Used by esp-hal critical sections to mask interrupts up to a
+            // given priority, returning the previous PS so a later WSR.PS
+            // can restore it. Per ISA RM the only PS bits modified are
+            // INTLEVEL[3:0]; EXCM/UM/CALLINC/etc. are preserved.
+            Rsil { at, level } => {
+                let prev_ps = self.ps.as_raw();
+                self.regs.write_logical(at, prev_ps);
+                let new_ps = (prev_ps & !0xF) | (level as u32 & 0xF);
+                self.ps = Ps::from_raw(new_ps);
+                self.pc = self.pc.wrapping_add(len);
+            }
+
             // Unknown opcode: raise IllegalInstruction (EXCCAUSE=0).
             //
             // Xtensa LX7 ISA RM §5.2: executing an instruction not defined in the

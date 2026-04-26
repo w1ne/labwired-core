@@ -135,6 +135,10 @@ pub enum Instruction {
     Syscall,
     Ill,
     Memw, Extw, Isync, Rsync, Esync, Dsync,
+    /// RSIL at, level: read PS into at, then set PS.INTLEVEL = level.
+    Rsil { at: u8, level: u8 },
+    /// EXTUI ar, at, shift, bits: ar = (at >> shift) & ((1 << bits) - 1).
+    Extui { ar: u8, at: u8, shift: u8, bits: u8 },
     Unknown(u32),
 }
 
@@ -313,7 +317,25 @@ fn decode_qrst(w: u32) -> Instruction {
                 _   => Instruction::Unknown(w),
             }
         }
-        // op1 = 0x4..=0xF — fill in later tasks.
+        // op1 = 0x4 / 0x5: EXTUI ar, at, shift, bits.
+        //
+        // EXTUI extracts `bits` consecutive bits from `at` starting at bit
+        // `shift`, zero-extending into `ar`. The 5-bit shift is split:
+        //   shift[3:0] = s field
+        //   shift[4]   = op1 LSB (so op1 ∈ {4, 5} both select EXTUI)
+        // The 4-bit bits-1 (range 1..=16) lives in op2.
+        //
+        // HW-oracle (xtensa-esp32s3-elf-as):
+        //   extui a5, a8, 21, 11 → 0xa55580: op0=0, op1=5, op2=0xa, r=5, s=5, t=8
+        //                          → shift=(1<<4)|5=21, bits=op2+1=11. ✓
+        //   extui a3, a4, 0, 1   → 0x043040: op1=4, op2=0 → shift=0, bits=1. ✓
+        //   extui a3, a4, 31, 1  → 0x053f40: op1=5, s=0xf, op2=0 → shift=31, bits=1. ✓
+        0x4 | 0x5 => {
+            let shift = ((op1 & 0x1) << 4) | s;
+            let bits  = op2 + 1;
+            Instruction::Extui { ar: r, at: t, shift, bits }
+        }
+        // op1 = 0x6..=0xF — fill in later tasks.
         _ => Instruction::Unknown(w),
     }
 }
@@ -387,6 +409,12 @@ fn decode_st0(w: u32, r: u8, s: u8, t: u8) -> Instruction {
             (0, 0) => Instruction::Syscall,
             _      => Instruction::Unknown(w),
         },
+        // RSIL at, level: read PS into at, set PS.INTLEVEL = level.
+        // ST0 group: op0=0, op1=0, op2=0, r=6.
+        // s = level (4-bit immediate, typically 0..7), t = at.
+        // HW-oracle (xtensa-esp32s3-elf-as):
+        //   rsil a8, 5 → 0x006580: r=6, s=5 (level), t=8 (at).
+        0x6 => Instruction::Rsil { at: t, level: s },
         _ => Instruction::Unknown(w),
     }
 }

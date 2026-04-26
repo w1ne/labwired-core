@@ -51,21 +51,42 @@ impl Peripheral for SystemStub {
     }
 }
 
-/// RTC_CNTL peripheral stub.  Read-as-zero, write-accept.
-#[derive(Debug, Default)]
-pub struct RtcCntlStub;
+/// RTC / PMU / IO_MUX / RTC_IO / APB_CTRL peripheral stub. Round-trips
+/// every written word so that read-modify-write sequences observe the
+/// values esp-hal just wrote (e.g. clock-mux selectors, voltage rails,
+/// GPIO mux). Unwritten offsets read as zero, except for status bits
+/// that boot code busy-waits for (e.g. PLL_LOCK) which are seeded.
+#[derive(Debug)]
+pub struct RtcCntlStub {
+    words: HashMap<u64, u32>,
+}
 
 impl RtcCntlStub {
     pub fn new() -> Self {
-        Self
+        let mut words = HashMap::new();
+        // 0x6040 = SYSCON_DATE / RTC PLL status (within the 0x6000_8000-base
+        // window, this is absolute 0x6000_e040). esp-hal's
+        // request_pll_clk()/ensure_voltage_raised() polls bit 24 = PLL_LOCK
+        // until it goes high; on real silicon the BBPLL asserts within a few
+        // microseconds of being requested. We seed it as locked.
+        words.insert(0x6040, 0x0100_0000);
+        Self { words }
     }
 }
 
 impl Peripheral for RtcCntlStub {
-    fn read(&self, _offset: u64) -> SimResult<u8> {
-        Ok(0)
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let word_off = offset & !3;
+        let byte_off = (offset & 3) * 8;
+        let word = self.words.get(&word_off).copied().unwrap_or(0);
+        Ok(((word >> byte_off) & 0xFF) as u8)
     }
-    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let word_off = offset & !3;
+        let byte_off = (offset & 3) * 8;
+        let entry = self.words.entry(word_off).or_insert(0);
+        *entry &= !(0xFFu32 << byte_off);
+        *entry |= (value as u32) << byte_off;
         Ok(())
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -133,11 +154,20 @@ mod tests {
     }
 
     #[test]
-    fn rtc_cntl_stub_read_as_zero() {
+    fn rtc_cntl_stub_unwritten_reads_zero() {
         let s = RtcCntlStub::new();
         for off in 0..16u64 {
             assert_eq!(s.read(off).unwrap(), 0);
         }
+    }
+
+    #[test]
+    fn rtc_cntl_stub_round_trips_writes() {
+        let mut s = RtcCntlStub::new();
+        s.write(0x40, 0x12).unwrap();
+        s.write(0x41, 0x34).unwrap();
+        assert_eq!(s.read(0x40).unwrap(), 0x12);
+        assert_eq!(s.read(0x41).unwrap(), 0x34);
     }
 
     #[test]
