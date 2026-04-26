@@ -587,6 +587,15 @@ fn run_firmware(args: RunArgs) -> ExitCode {
                     "labwired-cli run: simulator error at pc=0x{:08x}: {e}",
                     cpu.get_pc(),
                 );
+                eprintln!("labwired-cli run: a0..a15 at fault:");
+                for r in 0..16u8 {
+                    eprintln!("  a{:<2} = 0x{:08x}", r, cpu.regs.read_logical(r));
+                }
+                eprintln!(
+                    "  WB=0x{:x} WS=0x{:04x}",
+                    cpu.regs.windowbase(),
+                    cpu.regs.windowstart(),
+                );
                 eprintln!("labwired-cli run: recent PCs (oldest first):");
                 for i in 0..RING_LEN {
                     let idx = (ring_head + i) % RING_LEN;

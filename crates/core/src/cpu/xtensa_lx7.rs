@@ -638,12 +638,20 @@ impl XtensaLx7 {
                     return Ok(());
                 }
 
+                // Per Xtensa ISA RM §8.1.5 ENTRY:
+                //   AR[WB_new*4 + as] = AR[WB_old*4 + as] - imm*8
+                // i.e. read the SP from the CALLER's frame, subtract the
+                // requested frame size, and write it into the CALLEE's frame
+                // — a single value flowing across the window boundary. We
+                // were reading post-rotation, which gave the callee an
+                // uninitialized AR slot (typically 0) instead of caller's SP,
+                // so chained CALL4 calls underflowed SP into 0xffffffXX and
+                // every subsequent stack write trapped MemoryViolation.
+                let caller_sp = self.regs.read_logical(as_);
                 self.regs.set_windowbase(wb_new);
                 self.regs.set_windowstart_bit(wb_new, true);
                 self.ps.set_callinc(0);
-                // a[as_] in the NEW window (post-rotation) is decremented by imm * 8.
-                let sp = self.regs.read_logical(as_);
-                self.regs.write_logical(as_, sp.wrapping_sub(imm * 8));
+                self.regs.write_logical(as_, caller_sp.wrapping_sub(imm * 8));
                 self.pc = self.pc.wrapping_add(len);
             }
 

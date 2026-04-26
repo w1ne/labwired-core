@@ -258,6 +258,15 @@ fn decode_qrst(w: u32) -> Instruction {
             //   MUL16U op1=0x1 op2=0xC  MUL16S op1=0x1 op2=0xD
             0xC => Instruction::Mul16u { ar: r, as_: s, at: t },
             0xD => Instruction::Mul16s { ar: r, as_: s, at: t },
+            // XSR — atomic SR swap. Despite RSR/WSR living in op1=3, XSR is
+            // op1=1, op2=6. HW-oracle:
+            //   xsr.sar      a3 → 0x610330: op0=0,op1=1,op2=6,r=0,s=3,t=3
+            //   xsr.intenable a13→ 0x61e4d0: op0=0,op1=1,op2=6,r=0xE,s=4,t=0xD; sr=0xE4
+            // SR ID is bits[15:8] = (r<<4)|s; at = t.
+            0x6 => {
+                let sr = ((r as u16) << 4) | (s as u16);
+                Instruction::Xsr { at: t, sr }
+            }
             _ => Instruction::Unknown(w),
         },
         // op1=0x2: MUL/DIV 32×32 family.
@@ -278,24 +287,24 @@ fn decode_qrst(w: u32) -> Instruction {
             0xF => Instruction::Rems  { ar: r, as_: s, at: t },
             _ => Instruction::Unknown(w),
         },
-        // op1 = 0x3: SR/UR access group (RSR/WSR/XSR/RUR/WUR).
+        // op1 = 0x3: RSR / WSR / RUR / WUR.
         //
         // HW-oracle (xtensa-esp-elf-as + objdump, esp-15.2.0_20250920):
         //   rsr.sar a3      → 0x030330: op0=0,op1=3,op2=0; sr=bits[15:8]=0x03; at=t=3
         //   wsr.sar a3      → 0x130330: op0=0,op1=3,op2=1; sr=bits[15:8]=0x03; at=t=3
-        //   xsr.sar a3      → 0x610330: op0=0,op1=3,op2=6; sr=bits[15:8]=0x03; at=t=3
         //   rur.threadptr a3→ 0xe33e70: op0=0,op1=3,op2=0xe; ar=r=3; ur=(s<<4)|t=0xe7=231
         //   wur.threadptr a3→ 0xf3e730: op0=0,op1=3,op2=0xf; at=t=3; ur=bits[15:8]=0xe7=231
         //
-        // For RSR/WSR/XSR: SR ID is bits[15:8] = (r << 4) | s; at = t (bits[7:4]).
-        // For RUR:         ar = r (bits[15:12]); UR ID = (s << 4) | t.
-        // For WUR:         at = t (bits[7:4]); UR ID = bits[15:8] = (r << 4) | s.
+        // For RSR/WSR: SR ID is bits[15:8] = (r << 4) | s; at = t (bits[7:4]).
+        // For RUR:     ar = r (bits[15:12]); UR ID = (s << 4) | t.
+        // For WUR:     at = t (bits[7:4]); UR ID = bits[15:8] = (r << 4) | s.
+        //
+        // XSR is NOT in op1=3: see op1=1 below.
         0x3 => {
             let sr = ((r as u16) << 4) | (s as u16);
             match op2 {
                 0x0 => Instruction::Rsr { at: t, sr },
                 0x1 => Instruction::Wsr { at: t, sr },
-                0x6 => Instruction::Xsr { at: t, sr },
                 0xE => {
                     let ur = ((s as u16) << 4) | (t as u16);
                     Instruction::Rur { ar: r, ur }
