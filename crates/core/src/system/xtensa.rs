@@ -48,6 +48,19 @@ pub struct Esp32s3Wiring {
 /// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
 /// shared flash backing buffer.
 pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3Wiring {
+    // SystemBus::new() seeds the bus with STM32 default peripherals
+    // (tim2 at 0x4000_0000, tim3 at 0x4000_0400, …). On ESP32-S3 the
+    // 0x4000_0000–0x4006_0000 window is the BROM, and on STM32 it's the
+    // peripheral aliased region — completely different memory maps. Drop
+    // the seeded peripherals before installing the ESP32-S3 bank, otherwise
+    // a tim3 read at 0x4000_057c shadows our `rtc_get_reset_reason` thunk
+    // and the BREAK 1,14 dispatch never fires.
+    bus.peripherals.clear();
+    // The seeded `flash` and `ram` LinearMemory slabs use STM32 base
+    // addresses (0x0 and 0x2000_0000) so they don't overlap, but they're
+    // dead weight on Xtensa — leave them allocated; the bus accessors check
+    // `addr >= base_addr` first and fall through to peripherals on miss.
+
     // ── IRAM (instruction fetch view) ─────────────────────────────────────
     bus.add_peripheral(
         "iram",
@@ -166,6 +179,9 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
     // but the symbol may be linked in.
     bank.register(0x4000_0a2c, rom_thunks::esp_rom_spiflash_unlock);
+    // rtc_get_reset_reason(cpu_idx) — esp-hal queries this during init to
+    // distinguish power-on from soft reset; we always report POWERON_RESET.
+    bank.register(0x4000_057c, rom_thunks::rtc_get_reset_reason);
 }
 
 // ── RamPeripheral helper (private) ───────────────────────────────────────

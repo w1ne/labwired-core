@@ -95,11 +95,37 @@ impl RomThunkBank {
         self.thunks.get(&pc).copied()
     }
 
-    /// Helper: write the 32-bit return value into a2 and set PC = a0
-    /// (the saved return address per Xtensa CALL convention).
+    /// Return from a ROM thunk by jumping to the saved PC and writing the
+    /// 32-bit `value` into the C-ABI return register (a2 of the callee).
+    ///
+    /// This handles BOTH the CALL0 (no window) and CALL4/8/12 (windowed)
+    /// conventions. For CALL0, the return PC is plain a0 of the caller.
+    /// For CALL{4,8,12}, the return PC is in a[CALLINC*4] of the caller
+    /// with bits[31:30] = CALLINC encoded — the CALLEE's RETW would normally
+    /// rotate WB by -CALLINC and mask the encoded bits. ROM thunks don't
+    /// execute ENTRY/RETW; we model the equivalent here:
+    ///
+    /// * CALLINC = 0 (CALL0): pc = a0; a2 = value (unrotated).
+    /// * CALLINC = N (CALL{4,8,12}): pc = a[N*4] & 0x3FFF_FFFF;
+    ///   value goes into a[N*4 + 2] (the post-rotation a2).
+    ///   PS.CALLINC stays where the caller put it — the caller's RFE/RFI
+    ///   path doesn't depend on it, and the next CALL clears it.
     pub fn return_with(cpu: &mut XtensaLx7, value: u32) {
-        cpu.regs.write_logical(2, value);
-        cpu.pc = cpu.regs.read_logical(0);
+        let callinc = cpu.ps.callinc();
+        if callinc == 0 {
+            // CALL0: return PC in a0, return value in a2 (no rotation).
+            cpu.regs.write_logical(2, value);
+            cpu.pc = cpu.regs.read_logical(0);
+        } else {
+            // CALL{4,8,12}: return PC encoded in a[N*4]; return value in a[N*4 + 2].
+            // Reconstruct full PC the way RETW does: low 30 from saved a[N*4],
+            // high 2 from the thunk's own PC (which is on the same 1 GiB segment
+            // as the caller, since CALLn can't cross 1 GiB regions).
+            let n = callinc * 4;
+            let raw = cpu.regs.read_logical(n);
+            cpu.regs.write_logical(n + 2, value);
+            cpu.pc = (raw & 0x3FFF_FFFF) | (cpu.pc & 0xC000_0000);
+        }
     }
 }
 
@@ -175,6 +201,18 @@ pub fn rom_config_instruction_cache_mode(
 /// (cpu1 is not modelled in Plan 2).
 pub fn ets_set_appcpu_boot_addr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `rtc_get_reset_reason(cpu_idx: u32) -> u32` — returns 1 (POWERON_RESET).
+///
+/// ESP32-S3 enum values per ESP-IDF rtc_cntl.h:
+///   1  POWERON_RESET — chip just powered on (the value we report).
+///   3  SW_RESET, 12  SW_CPU_RESET, etc.
+/// esp-hal's reset cause code branches on this — POWERON_RESET is the
+/// most "first boot" / least surprising value.
+pub fn rtc_get_reset_reason(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 1);
     Ok(())
 }
 
