@@ -24,34 +24,44 @@ pub struct BootOpts {
     /// Used as the SP if the ELF lacks a recognized stack-top symbol
     /// (`_stack_start_cpu0` or `_stack_top`).
     pub stack_top_fallback: u32,
-    /// Shared flash backing buffer.  When set, segments whose virtual
-    /// address falls inside the XIP windows (0x4200_0000..0x4400_0000 or
-    /// 0x3C00_0000..0x3E00_0000) are written here instead of through
-    /// the bus (since FlashXipPeripheral::write raises MemoryViolation).
-    pub flash_backing: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+    /// I-cache (0x4200_0000) flash backing buffer.  When set, segments whose
+    /// virtual address falls in [0x4200_0000, 0x4400_0000) are written here
+    /// instead of through the bus (since FlashXipPeripheral::write raises
+    /// MemoryViolation).
+    pub icache_backing: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+    /// D-cache (0x3C00_0000) flash backing buffer; same role as
+    /// `icache_backing` but for the read-only data window.
+    pub dcache_backing: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
 }
 
 impl Default for BootOpts {
     fn default() -> Self {
         Self {
             stack_top_fallback: 0x3FCD_FFF0,
-            flash_backing: None,
+            icache_backing: None,
+            dcache_backing: None,
         }
     }
 }
 
-/// If `vaddr` lies in either flash-XIP window, return the byte offset into
-/// the flash backing buffer (assuming identity mapping, which `configure_*`
-/// sets up by default).  Else None.
-fn xip_offset(vaddr: u32) -> Option<usize> {
+/// Classification of a flash-XIP virtual address.
+enum XipWindow {
+    Icache(usize),
+    Dcache(usize),
+}
+
+/// If `vaddr` lies in either flash-XIP window, return which window plus the
+/// byte offset into the corresponding backing (assuming identity mapping,
+/// which `configure_xtensa_esp32s3` sets up). Else None.
+fn classify_xip(vaddr: u32) -> Option<XipWindow> {
     const ICACHE_BASE: u32 = 0x4200_0000;
     const DCACHE_BASE: u32 = 0x3C00_0000;
     const WINDOW_SIZE: u32 = 0x0200_0000;
     if vaddr >= ICACHE_BASE && vaddr < ICACHE_BASE + WINDOW_SIZE {
-        return Some((vaddr - ICACHE_BASE) as usize);
+        return Some(XipWindow::Icache((vaddr - ICACHE_BASE) as usize));
     }
     if vaddr >= DCACHE_BASE && vaddr < DCACHE_BASE + WINDOW_SIZE {
-        return Some((vaddr - DCACHE_BASE) as usize);
+        return Some(XipWindow::Dcache((vaddr - DCACHE_BASE) as usize));
     }
     None
 }
@@ -98,8 +108,12 @@ pub fn fast_boot(
                 elf_bytes.len()
             ))
         })?;
-        if let Some(target_phys_off) = xip_offset(vaddr) {
-            if let Some(backing) = &opts.flash_backing {
+        if let Some(window) = classify_xip(vaddr) {
+            let (backing_opt, target_phys_off) = match window {
+                XipWindow::Icache(off) => (&opts.icache_backing, off),
+                XipWindow::Dcache(off) => (&opts.dcache_backing, off),
+            };
+            if let Some(backing) = backing_opt {
                 let mut buf = backing.lock().unwrap();
                 let backing_end = target_phys_off + size;
                 if backing_end > buf.len() {
@@ -243,7 +257,8 @@ mod tests {
             &mut cpu,
             &BootOpts {
                 stack_top_fallback: 0x3FCD_FFF0,
-                flash_backing: None,
+                icache_backing: None,
+                dcache_backing: None,
             },
         )
         .expect("fast_boot");
@@ -277,7 +292,8 @@ mod tests {
             &mut cpu,
             &BootOpts {
                 stack_top_fallback: 0x3FCD_FFF0,
-                flash_backing: None,
+                icache_backing: None,
+                dcache_backing: None,
             },
         );
 
@@ -329,7 +345,8 @@ mod tests {
             &mut cpu,
             &BootOpts {
                 stack_top_fallback: 0x3FCD_FFF0,
-                flash_backing: Some(backing.clone()),
+                icache_backing: Some(backing.clone()),
+                dcache_backing: None,
             },
         )
         .expect("fast_boot");

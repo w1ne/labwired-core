@@ -38,11 +38,24 @@ impl Default for Esp32s3Opts {
     }
 }
 
-/// Result of `configure_xtensa_esp32s3` — exposes the shared flash backing
-/// so the boot path can write to it (Task 8).
+/// Result of `configure_xtensa_esp32s3` — exposes the flash backings so the
+/// boot path can write to them (Task 8).
+///
+/// On real ESP32-S3 silicon, the I-cache (0x4200_0000) and D-cache
+/// (0x3C00_0000) windows alias the same physical SPI flash, but each window
+/// has its own MMU page table. The bootloader programs them so the same
+/// physical page can appear at different virtual offsets in each window.
+///
+/// In our fast-boot model, the firmware ELF carries `.rodata` at vaddr
+/// 0x3c000020 and `.text` at vaddr 0x42000020 — both with vaddr-offset 0x20
+/// in their respective windows. If we shared a single backing buffer, the
+/// later-loaded segment would overwrite the earlier one. So each window
+/// gets its own backing buffer; fast_boot picks the correct one based on
+/// which window the segment's vaddr falls into.
 pub struct Esp32s3Wiring {
     pub cpu: XtensaLx7,
-    pub flash_backing: Arc<Mutex<Vec<u8>>>,
+    pub icache_backing: Arc<Mutex<Vec<u8>>>,
+    pub dcache_backing: Arc<Mutex<Vec<u8>>>,
 }
 
 /// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
@@ -79,10 +92,11 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(RamPeripheral::new(opts.dram_size as usize)),
     );
 
-    // ── Flash-XIP backing, shared between I-cache and D-cache aliases ─────
-    let flash_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
-    let mut icache = FlashXipPeripheral::new_shared(flash_backing.clone(), 0x4200_0000);
-    let mut dcache = FlashXipPeripheral::new_shared(flash_backing.clone(), 0x3C00_0000);
+    // ── Flash-XIP backings — one per window (see Esp32s3Wiring docs) ──────
+    let icache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
+    let dcache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
+    let mut icache = FlashXipPeripheral::new_shared(icache_backing.clone(), 0x4200_0000);
+    let mut dcache = FlashXipPeripheral::new_shared(dcache_backing.clone(), 0x3C00_0000);
     icache.map_identity();
     dcache.map_identity();
     bus.add_peripheral(
@@ -130,10 +144,15 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     );
 
     // ── SYSTEM / RTC_CNTL / EFUSE stubs ──────────────────────────────────
+    // SYSTEM peripheral on ESP32-S3 is followed by INTERRUPT_CORE0/1 at
+    // 0x600C_2000 / 0x600C_2800 (CPU intr-from-CPU mapping). esp-hal's init
+    // pokes those registers to clear pending CPU-to-CPU interrupts. Cover
+    // [0x600C_0000, 0x600C_4000) with the same stub since both blocks need
+    // word-write-accept / read-back semantics.
     bus.add_peripheral(
         "system",
         0x600C_0000,
-        0x1000,
+        0x4000,
         None,
         Box::new(SystemStub::new()),
     );
@@ -155,7 +174,11 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     let mut cpu = XtensaLx7::new();
     cpu.reset(bus).expect("xtensa reset");
 
-    Esp32s3Wiring { cpu, flash_backing }
+    Esp32s3Wiring {
+        cpu,
+        icache_backing,
+        dcache_backing,
+    }
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.
@@ -267,15 +290,16 @@ mod tests {
     }
 
     #[test]
-    fn flash_xip_aliases_share_backing() {
+    fn flash_xip_windows_have_independent_backings() {
+        // Real silicon shares the SPI flash between both windows but each has
+        // its own MMU page table; for fast-boot we model this as two distinct
+        // backing buffers so that ELFs with .rodata at 0x3c000020 and .text at
+        // 0x42000020 don't collide on the same physical offset.
         let mut bus = SystemBus::new();
         let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
-        // Write directly into the flash backing (mimics fast-boot doing so).
-        wiring.flash_backing.lock().unwrap()[0] = 0xCA;
-        wiring.flash_backing.lock().unwrap()[1] = 0xFE;
-        // Both aliases must reflect it.
-        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA);
-        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xCA);
-        assert_eq!(bus.read_u8(0x4200_0001).unwrap(), 0xFE);
+        wiring.icache_backing.lock().unwrap()[0] = 0xCA;
+        wiring.dcache_backing.lock().unwrap()[0] = 0xFE;
+        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache alias");
+        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xFE, "D-cache alias");
     }
 }

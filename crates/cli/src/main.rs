@@ -536,7 +536,8 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         &mut cpu,
         &BootOpts {
             stack_top_fallback: 0x3FCD_FFF0,
-            flash_backing: Some(wiring.flash_backing),
+            icache_backing: Some(wiring.icache_backing),
+            dcache_backing: Some(wiring.dcache_backing),
         },
     ) {
         Ok(b) => b,
