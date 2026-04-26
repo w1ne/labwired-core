@@ -179,7 +179,7 @@ impl crate::Peripheral for GpioPort {
         let byte_offset = (offset % 4) as u32;
 
         if reg_offset == 0x0C {
-            println!("GPIO ODR Write: byte {} = {:#x}", byte_offset, value);
+            tracing::trace!("GPIO ODR Write: byte {} = {:#x}", byte_offset, value);
         }
 
         let mut reg_val = self.read_reg(reg_offset);

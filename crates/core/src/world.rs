@@ -84,7 +84,7 @@ impl World {
         }
         for interconnect in &mut self.interconnects {
             if let Err(e) = interconnect.tick() {
-                eprintln!("Interconnect error: {:?}", e);
+                tracing::warn!("interconnect error: {:?}", e);
             }
         }
         results
