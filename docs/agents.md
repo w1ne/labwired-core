@@ -11,7 +11,8 @@ This is the operating manual for AI coding agents working inside the `core` repo
 
 Start your learning and reference with these key files:
 - [README.md](../README.md) - The main entrypoint.
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Core engine internals and architecture.
+- [architecture.md](./architecture.md) - Engine internals (CPU trait, decoder, performance gates, debug protocols).
+- [architecture_overview.md](./architecture_overview.md) - High-level subsystem tour (Asset Foundry, IR, Core Engine).
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - General connection and contributing guidelines.
 - [CONTRIBUTING_PERIPHERALS.md](./CONTRIBUTING_PERIPHERALS.md) - How to implement and integrate new peripheral models.
 - [board_onboarding_playbook.md](./board_onboarding_playbook.md) - Complete playbook for onboarding new boards and MSUs.
