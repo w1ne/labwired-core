@@ -787,6 +787,8 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                     }
                     labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                     labwired_core::SimulationError::NotImplemented(_) => StopReason::ConfigError,
+                    labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                    labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Halt,
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1253,6 +1255,10 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 labwired_core::SimulationError::MemoryViolation(_) => StopReason::MemoryViolation,
                 labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
                 labwired_core::SimulationError::NotImplemented(_) => StopReason::ConfigError,
+                // Plan 1 added these variants but the labwired test runner
+                // does not expect them; treat as a controlled Halt.
+                labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Halt,
             };
             error!("Simulation error at step {}: {}", step, e);
             break;
