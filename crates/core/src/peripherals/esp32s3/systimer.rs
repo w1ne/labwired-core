@@ -72,7 +72,16 @@ impl Systimer {
     fn read_word(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.conf,
-            0x04 | 0x08 => 0, // OP regs are write-trigger only
+            // OP regs: real silicon asserts bit 29 (TIMER_UNITn_VALUE_VALID)
+            // once the requested snapshot has settled (typically a few cycles
+            // after the bit-30 trigger write). esp-hal's Delay loop polls
+            // bit 29 to wait for the snapshot to be ready before reading the
+            // VALUE registers. We model the snapshot as instantaneous, so
+            // bit 29 reads back as set whenever a snapshot has ever been
+            // taken — i.e. the unitN_snapshot field is non-zero, OR the
+            // counter has advanced past zero (meaning a snapshot can be
+            // produced on demand). Simpler: always assert bit 29.
+            0x04 | 0x08 => 1u32 << 29,
             0x18 => self.unit0.load_hi,
             0x1C => self.unit0.load_lo,
             0x20 => self.unit1.load_hi,

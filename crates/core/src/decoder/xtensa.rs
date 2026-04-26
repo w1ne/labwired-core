@@ -309,6 +309,16 @@ fn decode_qrst(w: u32) -> Instruction {
             match op2 {
                 0x0 => Instruction::Rsr { at: t, sr },
                 0x1 => Instruction::Wsr { at: t, sr },
+                // MIN/MAX/MINU/MAXU live in op1=3, op2=4..=7 — three-operand
+                // RRR encoding, not the SR-access slot. HW-oracle:
+                //   min  a3, a4, a5 → 0x433450: op2=4
+                //   max  a3, a4, a5 → 0x533450: op2=5
+                //   minu a3, a4, a5 → 0x633450: op2=6
+                //   maxu a3, a4, a5 → 0x733450: op2=7
+                0x4 => Instruction::Min  { ar: r, as_: s, at: t },
+                0x5 => Instruction::Max  { ar: r, as_: s, at: t },
+                0x6 => Instruction::Minu { ar: r, as_: s, at: t },
+                0x7 => Instruction::Maxu { ar: r, as_: s, at: t },
                 0xE => {
                     let ur = ((s as u16) << 4) | (t as u16);
                     Instruction::Rur { ar: r, ur }

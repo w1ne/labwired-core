@@ -145,14 +145,16 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
 
     // ── SYSTEM / RTC_CNTL / EFUSE stubs ──────────────────────────────────
     // SYSTEM peripheral on ESP32-S3 is followed by INTERRUPT_CORE0/1 at
-    // 0x600C_2000 / 0x600C_2800 (CPU intr-from-CPU mapping). esp-hal's init
-    // pokes those registers to clear pending CPU-to-CPU interrupts. Cover
-    // [0x600C_0000, 0x600C_4000) with the same stub since both blocks need
-    // word-write-accept / read-back semantics.
+    // 0x600C_2000 / 0x600C_2800 (CPU intr-from-CPU mapping) and the AES /
+    // SHA / RSA accelerator block around 0x600C_4000-0x600C_FFFF. esp-hal's
+    // init pokes the interrupt-mapping registers and a few accelerator
+    // resets. Cover [0x600C_0000, 0x600D_0000) with one round-tripping
+    // stub — SystemStub::new() (read-as-zero on unwritten) so that the
+    // interrupt mapping reads back exactly what was written.
     bus.add_peripheral(
         "system",
         0x600C_0000,
-        0x4000,
+        0x1_0000,
         None,
         Box::new(SystemStub::new()),
     );
@@ -174,6 +176,36 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x1000,
         None,
         Box::new(EfuseStub::new()),
+    );
+
+    // UART0..2, SPI0/1, GPIO, GPIO_SD, SDIO host live in the
+    // [0x6000_0000, 0x6000_7000) window. esp-hal touches GPIO config and
+    // (later) UART for the panic path; we provide a round-tripping stub so
+    // those reads/writes settle. Read-as-zero on unwritten matches the
+    // power-on register values for these blocks (no busy-waits live here).
+    bus.add_peripheral(
+        "low_mmio",
+        0x6000_0000,
+        0x7000,
+        None,
+        Box::new(SystemStub::new()),
+    );
+
+    // Catch-all for the rest of the high-MMIO range that esp-hal pokes
+    // during init (LEDC, RMT, GPIO matrix, GDMA, LCD_CAM, EXTMEM cache
+    // config, RTC calibration timer, …). Real silicon has dozens of
+    // distinct peripherals in this window with bit-precise behaviour;
+    // for hello-world we only need round-trip register storage and an
+    // "everything's ready" default for status polls. Use the unwritten-
+    // ones variant so that calibration-RDY / FIFO-empty / link-up bits
+    // trip on the first iteration. The block covers
+    // [0x6001_0000, 0x6004_0000) — 192 KiB.
+    bus.add_peripheral(
+        "mmio_rest",
+        0x6001_0000,
+        0x3_0000,
+        None,
+        Box::new(SystemStub::with_unwritten_ones()),
     );
 
     let mut cpu = XtensaLx7::new();

@@ -17,15 +17,37 @@ use crate::{Peripheral, SimResult};
 use std::collections::HashMap;
 
 /// SYSTEM peripheral stub.  Tracks every written word so reads return what
-/// the firmware wrote (so its boot config-back-check passes).
-#[derive(Debug, Default)]
+/// the firmware wrote (so its boot config-back-check passes). Optionally
+/// reads as all-ones for unwritten offsets so that boot-time status-bit
+/// polls (PLL lock, calibration RDY, etc.) trip on the first iteration —
+/// this is on by default for the catch-all `mmio_rest` block where we
+/// don't model individual peripherals.
+#[derive(Debug)]
 pub struct SystemStub {
     words: HashMap<u64, u32>,
+    unwritten_read: u32,
 }
 
 impl SystemStub {
+    /// Default constructor: unwritten offsets read as 0. Use this for the
+    /// real SYSTEM register block, where boot code expects RAW power-on
+    /// values for fields it hasn't yet programmed.
     pub fn new() -> Self {
-        Self::default()
+        Self { words: HashMap::new(), unwritten_read: 0 }
+    }
+
+    /// Variant that reads unwritten offsets as 0xFFFF_FFFF. Suited for the
+    /// catch-all mmio_rest stub: real silicon would have READY bits set in
+    /// most status registers after the BROM init, and esp-hal's
+    /// busy-waits exit on the first poll if the bit reads high.
+    pub fn with_unwritten_ones() -> Self {
+        Self { words: HashMap::new(), unwritten_read: u32::MAX }
+    }
+}
+
+impl Default for SystemStub {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -33,14 +55,16 @@ impl Peripheral for SystemStub {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
-        let word = self.words.get(&word_off).copied().unwrap_or(0);
+        let word = self.words.get(&word_off).copied().unwrap_or(self.unwritten_read);
         Ok(((word >> byte_off) & 0xFF) as u8)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
-        let entry = self.words.entry(word_off).or_insert(0);
+        // Prime the entry with the unwritten-read value so that partial
+        // writes leave the unwritten bytes consistent with read-as-X.
+        let entry = self.words.entry(word_off).or_insert(self.unwritten_read);
         *entry &= !(0xFFu32 << byte_off);
         *entry |= (value as u32) << byte_off;
         Ok(())
