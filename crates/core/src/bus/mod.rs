@@ -343,6 +343,80 @@ impl SystemBus {
         bus
     }
 
+    /// Construct an empty bus with no flash, RAM, or peripherals.
+    ///
+    /// Useful for tests that want to register peripherals manually without
+    /// inheriting the STM32 defaults from `new()`. The flash and ram backings
+    /// are zero-sized so they never satisfy a read.
+    pub fn empty() -> Self {
+        let mut bus = Self {
+            flash: LinearMemory::new(0, 0),
+            ram: LinearMemory::new(0, 0),
+            peripherals: Vec::new(),
+            nvic: None,
+            observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
+            bit_band_enabled: false,
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
+    }
+
+    /// Append a peripheral to the bus at runtime. Useful for tests and
+    /// dynamic configuration that bypasses `from_config`.
+    ///
+    /// **No overlap check is performed.** If two peripherals claim overlapping
+    /// address ranges, reads and writes are routed to the **first** matching
+    /// peripheral in registration order (i.e. the earlier-registered peripheral
+    /// wins). Callers are responsible for ensuring non-overlapping ranges.
+    pub fn add_peripheral(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
+        dev: Box<dyn Peripheral>,
+    ) {
+        self.peripherals.push(PeripheralEntry {
+            name: name.to_string(),
+            base,
+            size,
+            irq,
+            dev,
+            ticks_remaining: 0,
+        });
+        self.rebuild_peripheral_ranges();
+    }
+
+    /// Look up a registered ROM thunk by absolute PC.
+    ///
+    /// Iterates the registered peripherals; if any is a `RomThunkBank` whose
+    /// address range contains `pc`, asks it for a thunk at `pc`.  Returns
+    /// `None` if no bank covers the PC or no thunk is registered.
+    ///
+    /// Used by the CPU's `BREAK 1, 14` dispatch in `xtensa_lx7.rs`.
+    pub fn get_rom_thunk(
+        &self,
+        pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        for p in &self.peripherals {
+            let base = p.base as u32;
+            let end = base.wrapping_add(p.size as u32);
+            if pc >= base && pc < end {
+                if let Some(any) = p.dev.as_any() {
+                    if let Some(bank) = any
+                        .downcast_ref::<crate::peripherals::esp32s3::rom_thunks::RomThunkBank>()
+                    {
+                        return bank.get(pc);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
