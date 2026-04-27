@@ -669,10 +669,10 @@ mod tests {
         s.write_word(0x64, 1); // INT_ENA bit 0
         for _ in 0..24 {
             let r = s.tick();
-            assert!(r.explicit_irqs.is_empty(), "no fire before counter reaches target");
+            assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()), "no fire before counter reaches target");
         }
         let r = s.tick();
-        assert_eq!(r.explicit_irqs, vec![57], "TARGET0 source ID at counter==target");
+        assert_eq!(r.explicit_irqs.as_deref(), Some(&[57][..]), "TARGET0 source ID at counter==target");
         assert!(s.unit0_alarms[0].pending);
         assert_eq!(s.read_word(0x68), 1, "INT_RAW reflects pending");
     }
@@ -686,7 +686,7 @@ mod tests {
         s.write_word(0x64, 1);
         for _ in 0..30 {
             let r = s.tick();
-            assert!(r.explicit_irqs.is_empty());
+            assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()));
         }
         assert!(!s.unit0_alarms[0].pending);
     }
@@ -700,7 +700,7 @@ mod tests {
         // INT_ENA = 0 — alarm fires (pending set) but no IRQ delivered.
         for _ in 0..30 {
             let r = s.tick();
-            assert!(r.explicit_irqs.is_empty(), "no IRQ when INT_ENA=0");
+            assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()), "no IRQ when INT_ENA=0");
         }
         assert!(
             s.unit0_alarms[0].pending,
@@ -784,13 +784,13 @@ mod tests {
         assert!(s.unit0_alarms[0].pending);
         // Subsequent ticks should keep emitting the source ID.
         let r = s.tick();
-        assert_eq!(r.explicit_irqs, vec![57], "level-sensitive re-emit");
+        assert_eq!(r.explicit_irqs.as_deref(), Some(&[57][..]), "level-sensitive re-emit");
         let r = s.tick();
-        assert_eq!(r.explicit_irqs, vec![57]);
+        assert_eq!(r.explicit_irqs.as_deref(), Some(&[57][..]));
         // INT_CLR de-asserts the level → no more emits.
         s.write_word(0x6C, 1);
         let r = s.tick();
-        assert!(r.explicit_irqs.is_empty(), "after INT_CLR, no more IRQs");
+        assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()), "after INT_CLR, no more IRQs");
     }
 
     #[test]
@@ -805,7 +805,7 @@ mod tests {
         let mut first_fire = None;
         for cycle in 0..100 {
             let r = s.tick();
-            if !r.explicit_irqs.is_empty() {
+            if !r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()) {
                 first_fire = Some(cycle + 1);
                 break;
             }
@@ -817,7 +817,7 @@ mod tests {
         let mut second_fire = None;
         for cycle in 0..100 {
             let r = s.tick();
-            if !r.explicit_irqs.is_empty() {
+            if !r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()) {
                 second_fire = Some(cycle + 1);
                 break;
             }
@@ -837,7 +837,11 @@ mod tests {
         assert_eq!(s.unit0_alarms[0].target, 0x42);
         // No CONF enable → no fire.
         for _ in 0..1000 {
-            assert!(s.tick().explicit_irqs.is_empty());
+            assert!(s
+                .tick()
+                .explicit_irqs
+                .as_ref()
+                .map_or(true, |v| v.is_empty()));
         }
     }
 }

@@ -419,7 +419,8 @@ mod tests {
         cpu.set_pc(0x4037_0000);
 
         // Step once: should fetch BREAK 1,14, dispatch to bump_a2, return.
-        cpu.step(&mut bus, &[]).expect("step dispatches thunk");
+        cpu.step(&mut bus, &[], &crate::SimulationConfig::default())
+            .expect("step dispatches thunk");
 
         assert_eq!(cpu.regs.read_logical(2), 42);
         assert_eq!(cpu.get_pc(), 0x4037_0080);
@@ -460,7 +461,7 @@ mod tests {
         cpu.reset(&mut bus).unwrap();
         cpu.set_pc(0x4037_0000);
 
-        let res = cpu.step(&mut bus, &[]);
+        let res = cpu.step(&mut bus, &[], &crate::SimulationConfig::default());
         match res {
             Err(SimulationError::NotImplemented(msg)) => {
                 assert!(msg.contains("ROM thunk"), "unexpected message: {msg}");
