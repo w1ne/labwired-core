@@ -51,13 +51,10 @@ const ISR_BYTES: &[u8] = &[
 /// `j 0` — jump-to-self spin loop, 3 bytes.
 const SPIN_BYTES: &[u8] = &[0x06, 0xff, 0xff];
 
-// PHASE C: this integration test covers the SYSTIMER -> bus aggregation ->
-// intmatrix routing -> CPU dispatch chain. The bus aggregation half lives in
-// SystemBus::tick_peripherals_with_costs and a `pending_cpu_irqs` field that
-// Plan 3 added but Phase C does not yet port. Re-enable in Phase D once the
-// bus-side IRQ aggregation lands.
+// Plan 3 IRQ delivery chain test: SYSTIMER -> bus aggregation ->
+// intmatrix routing -> CPU dispatch -> kernel vector -> ISR -> GPIO observer.
+// Requires the SystemBus `pending_cpu_irqs` aggregation that Phase D added.
 #[test]
-#[ignore = "Phase D follow-up: needs SystemBus pending_cpu_irqs aggregation"]
 fn intmatrix_alarm_full_irq_chain() {
     const IRAM_BASE: u32 = 0x4037_0000;
     const ISR_OFFSET: u32 = 0x1000;
