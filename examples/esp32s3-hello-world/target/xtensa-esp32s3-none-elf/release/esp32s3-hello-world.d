@@ -1,1 +1,0 @@
-/home/andrii/Projects/labwired-core-plan1/examples/esp32s3-hello-world/target/xtensa-esp32s3-none-elf/release/esp32s3-hello-world: /home/andrii/Projects/labwired-core-plan1/examples/esp32s3-hello-world/build.rs /home/andrii/Projects/labwired-core-plan1/examples/esp32s3-hello-world/src/main.rs

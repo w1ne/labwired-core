@@ -1,1 +1,0 @@
-pub(crate) const FILTER_MAX: log_04::LevelFilter = log_04::LevelFilter::Off; pub(crate) fn is_enabled(_level: log_04::Level, _target: &str) -> bool { true }

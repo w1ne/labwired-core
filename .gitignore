@@ -1,5 +1,8 @@
 # Build output
 /target/
+target/
+examples/*/target/
+fixtures/
 /*.rlib
 
 # Local release/test run outputs
