@@ -490,7 +490,11 @@ impl Peripheral for Systimer {
         }
 
         PeripheralTickResult {
-            explicit_irqs,
+            explicit_irqs: if explicit_irqs.is_empty() {
+                None
+            } else {
+                Some(explicit_irqs)
+            },
             ..PeripheralTickResult::default()
         }
     }
