@@ -838,7 +838,7 @@ fn call0_oracle() -> OracleCase {
 //   CALL4  imm18=1 (target +4 from 4-aligned base): w=0x000055 bytes=[0x55,0x00,0x00]
 //   ENTRY a1, 32:  w=0x004136 bytes=[0x36,0x41,0x00]
 //   RETW:          w=0x000090 bytes=[0x90,0x00,0x00]
-//   S32E a3,a4,-16: w=0x30C449 bytes=[0x49,0xC4,0x30]  (PS.EXCM-gated)
+//   S32E a3,a4,-16: w=0x49C430 bytes=[0x30,0xC4,0x49]  (PS.EXCM-gated, op0=0/op1=9/op2=4)
 //   ROTW 1:        w=0x408010 bytes=[0x10,0x80,0x40]
 //   MOVSP a3,a4:   w=0x001430 bytes=[0x30,0x14,0x00]
 //   BREAK 1,15:    w=0x0041F0 bytes=[0xF0,0x41,0x00]
@@ -1051,27 +1051,28 @@ fn retw_window_underflow_uf4() -> OracleCase {
 
 /// S32E executes correctly when PS.EXCM=1; stores a3 to [a4 - 16].
 ///
-/// S32E is only recognized as a 3-byte wide instruction when PS.EXCM=1 and
-/// byte0 & 0xF = 9.  The capture_hw_state harness resets PS to a clean
-/// baseline (WOE=1, EXCM=0, INTLEVEL=0) before every test, so this test
-/// must explicitly set EXCM=1 in its setup closure.
+/// S32E is only recognized when PS.EXCM=1 (the simulator's 3-byte wide
+/// decoder rejects S32E unless EXCM is set). The capture_hw_state harness
+/// resets PS to a clean baseline (WOE=1, EXCM=0, INTLEVEL=0) before every
+/// test, so this test must explicitly set EXCM=1 in its setup closure.
 ///
-/// Encoding: S32E a3, a4, -16  → w=0x30C449
-///   byte0=0x49 (bits[3:0]=9=op0, bits[7:4]=4=subop→S32E), len=2(narrow), but
-///   step() detects EXCM=1 + op0=9 → re-reads as 3-byte wide instruction ✓
+/// Encoding: S32E a3, a4, -16  → bytes [0x30, 0xC4, 0x49] → LE u32 0x49C430
+///   op0=0 (QRST), op1=9 (LSC4 sub-group), op2=4 (S32E vs L32E),
+///   at=3, as_=4, imm4=12 → imm_byte = 12*4 - 64 = -16. Verified via
+///   xtensa-esp32s3-elf-as + objdump (esp-15.2.0_20250920).
 ///
 /// Program:
-///   IRAM_BASE+0: S32E a3, a4, -16  (w=0x30C449, bytes=[0x49,0xC4,0x30])
+///   IRAM_BASE+0: S32E a3, a4, -16  (LE u32 0x49C430, bytes=[0x30,0xC4,0x49])
 ///   IRAM_BASE+3: BREAK (auto-appended)
 ///
 /// Setup: a4 = IRAM_BASE+0x1000 (DATA), a3 = 0xDEAD_BEEF.
 /// Expected: mem[IRAM_BASE+0xFF0] = 0xDEADBEEF (a4 - 16 = IRAM_BASE+0xFF0).
 #[hw_oracle_test]
 fn s32e_inside_vector() -> OracleCase {
-    // S32E a3, a4, -16: w=0x30C449 → bytes [0x49, 0xC4, 0x30]
+    // S32E a3, a4, -16: LE u32 0x49C430 → bytes [0x30, 0xC4, 0x49]
     let data_addr = IRAM_BASE + 0x1000;
     let ea = data_addr - 16; // = IRAM_BASE + 0xFF0
-    OracleCase::asm(".word 0x30C449")
+    OracleCase::asm(".word 0x49C430")
         .setup(move |st| {
             // Explicitly set PS.EXCM=1: required for S32E to decode as a
             // 3-byte wide instruction rather than the narrow S32I.N form.
@@ -1088,13 +1089,12 @@ fn s32e_inside_vector() -> OracleCase {
 // ── H7.6: S32E outside exception vector — DEFERRED ───────────────────────────
 //
 // Plan: PS.EXCM=0, run S32E bytes, expect IllegalInstruction (cause=0).
-// Status: DEFERRED — the simulator's step() function intentionally treats
-// op0=9 bytes as the narrow S32I.N instruction when PS.EXCM=0. The EXCM
-// gate exists to avoid false-decoding S32I.N as S32E. Therefore, the
-// IllegalInstruction exception is NOT raised by the simulator when EXCM=0.
-// HW raises IllegalInstruction; simulator silently executes S32I.N instead.
-// A future plan should add a distinct "outside-EXCM S32E" detection path
-// that raises IllegalInstruction, or document the divergence explicitly.
+// Status: DEFERRED — the simulator's QRST/op1=9 decoder gates S32E/L32E
+// behind PS.EXCM=1; with EXCM=0 the bytes are decoded as Unknown rather
+// than raising IllegalInstruction. HW raises IllegalInstruction outside
+// EXCM contexts. A future plan should add explicit IllegalInstruction
+// signalling when S32E/L32E bytes are seen with EXCM=0, or document the
+// divergence explicitly.
 
 // ── H7.7: ROTW 1 — rotate WindowBase by +1 ───────────────────────────────────
 
