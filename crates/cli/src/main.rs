@@ -1504,7 +1504,7 @@ fn run_interactive_xtensa(
     info!(
         "Initial PC: {:#x}, SP: {:#x}",
         machine.cpu.pc,
-        machine.cpu.a[1] // SP is a1 in Xtensa
+        machine.cpu.regs.read_logical(1) // SP is a1 in Xtensa
     );
 
     if cli.gdb.is_some() {

@@ -5,11 +5,13 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::bus::SystemBus;
-use crate::cpu::Xtensa;
+use crate::cpu::xtensa_lx7::XtensaLx7;
+use crate::Cpu;
 
-pub fn configure_xtensa(_bus: &mut SystemBus) -> Xtensa {
-    // For now, no specific peripherals (interrupt controller, etc.) are mandated
-    // for the basic Xtensa simulation loop. Future iterations will add the
-    // ESP32-S3 interrupt matrix here.
-    Xtensa::new()
+/// Stub. Phase D will replace with the full configure_xtensa_esp32s3
+/// (registering all peripherals, returning Esp32s3Wiring).
+pub fn configure_xtensa(bus: &mut SystemBus) -> XtensaLx7 {
+    let mut cpu = XtensaLx7::new();
+    cpu.reset(bus).expect("xtensa reset");
+    cpu
 }
