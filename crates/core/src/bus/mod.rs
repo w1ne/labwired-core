@@ -74,6 +74,11 @@ pub struct SystemBus {
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
     pub bit_band_enabled: bool,
+    /// Plan 3: bitmask of pending cpu0 IRQ slots (32 bits, one per ESP32-S3
+    /// cpu IRQ slot). Aggregated by `tick_peripherals_with_costs` from
+    /// peripheral `explicit_irqs` source IDs routed through the registered
+    /// intmatrix peripheral. Cleared per slot via `clear_cpu_irq_pending`.
+    pub pending_cpu_irqs: u32,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
 }
@@ -336,6 +341,7 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
+            pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -357,6 +363,7 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: false,
+            pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -417,6 +424,22 @@ impl SystemBus {
         None
     }
 
+    /// Plan 3: look up the cpu0 IRQ slot the registered intmatrix has bound
+    /// to peripheral source `source_id`. Returns None if no intmatrix is
+    /// registered or no binding exists for the source.
+    pub fn route_irq_source_to_cpu_irq(&self, source_id: u32) -> Option<u8> {
+        for p in &self.peripherals {
+            if let Some(any) = p.dev.as_any() {
+                if let Some(matrix) = any.downcast_ref::<
+                    crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix,
+                >() {
+                    return matrix.route(source_id);
+                }
+            }
+        }
+        None
+    }
+
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
@@ -460,6 +483,7 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: matches!(chip.arch, labwired_config::Arch::Arm),
+            pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -900,11 +924,16 @@ impl SystemBus {
         Vec<PeripheralTickCost>,
         Vec<DmaRequest>,
         Vec<(String, u32)>,
+        Vec<u32>,
     ) {
         let mut interrupts = Vec::new();
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
         let mut dma_signals_out = Vec::new();
+        // Plan 3: collect ESP32-S3 explicit_irq source IDs during pass 1 so
+        // they can be routed through the intmatrix in a follow-up pass that
+        // requires `&self` (incompatible with the iter_mut borrow here).
+        let mut explicit_source_ids: Vec<u32> = Vec::new();
 
         let tick_interval = self.config.peripheral_tick_interval as u64;
 
@@ -942,9 +971,11 @@ impl SystemBus {
             }
 
             if let Some(irqs) = res.explicit_irqs {
-                for irq in irqs {
-                    pend_nvic(&self.nvic, &mut interrupts, irq);
+                for irq in &irqs {
+                    pend_nvic(&self.nvic, &mut interrupts, *irq);
                 }
+                // Plan 3: stash source IDs for pass-2 intmatrix routing.
+                explicit_source_ids.extend(irqs.into_iter());
             }
 
             // System exceptions (SysTick = 15, etc) bypass NVIC and are
@@ -954,7 +985,49 @@ impl SystemBus {
             }
         }
 
-        (interrupts, costs, dma_requests, dma_signals_out)
+        (
+            interrupts,
+            costs,
+            dma_requests,
+            dma_signals_out,
+            explicit_source_ids,
+        )
+    }
+
+    /// Plan 3: route a batch of ESP32-S3 explicit_irq source IDs through the
+    /// registered intmatrix peripheral. Updates `self.pending_cpu_irqs` and
+    /// pushes the per-source assertion bitmap into the intmatrix's
+    /// PRO_INTR_STATUS_REG_n mirror via `set_pending_sources`. No-op for buses
+    /// without an intmatrix peripheral.
+    fn aggregate_esp32s3_explicit_irqs(&mut self, source_ids: &[u32]) {
+        if source_ids.is_empty() {
+            return;
+        }
+        let mut intr_status = [0u32; 4];
+        for &source_id in source_ids {
+            if let Some(slot) = self.route_irq_source_to_cpu_irq(source_id) {
+                self.pending_cpu_irqs |= 1u32 << slot;
+            }
+            // Mirror into PRO_INTR_STATUS_REG_n bitmap so esp-hal's
+            // __level_*_interrupt can discover which source asserted.
+            let reg = (source_id / 32) as usize;
+            let bit = source_id & 31;
+            if reg < intr_status.len() {
+                intr_status[reg] |= 1u32 << bit;
+            }
+        }
+        // Push the live source-assertion bitmap into the intmatrix peripheral.
+        // No-op for buses without an intmatrix registered.
+        for p in self.peripherals.iter_mut() {
+            if let Some(any) = p.dev.as_any_mut() {
+                if let Some(matrix) = any.downcast_mut::<
+                    crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix,
+                >() {
+                    matrix.set_pending_sources(intr_status);
+                    break;
+                }
+            }
+        }
     }
 
     fn collect_enabled_nvic_interrupts(&self, interrupts: &mut Vec<u32>) {
@@ -977,14 +1050,21 @@ impl SystemBus {
     pub fn tick_peripherals_with_costs(
         &mut self,
     ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
-        let (mut interrupts, costs, dma_requests, _dma_signals) = self.tick_peripherals_phase1();
+        let (mut interrupts, costs, dma_requests, _dma_signals, explicit_source_ids) =
+            self.tick_peripherals_phase1();
+        // Plan 3: route ESP32-S3 source IDs through the intmatrix and update
+        // the pending cpu IRQ bitmap + intmatrix INTR_STATUS mirror.
+        self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
         self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs, dma_requests)
     }
 
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
-        let (mut interrupts, costs, pending_dma, dma_signals) = self.tick_peripherals_phase1();
+        let (mut interrupts, costs, pending_dma, dma_signals, explicit_source_ids) =
+            self.tick_peripherals_phase1();
+        // Plan 3: route ESP32-S3 source IDs through the intmatrix.
+        self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
 
         // Phase 1.5: Route DMA signals
         for (source_name, request_id) in dma_signals {
@@ -1305,6 +1385,18 @@ impl crate::Bus for SystemBus {
     ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
         SystemBus::get_rom_thunk(self, pc)
     }
+
+    fn route_irq_source_to_cpu_irq(&self, source_id: u32) -> Option<u8> {
+        SystemBus::route_irq_source_to_cpu_irq(self, source_id)
+    }
+
+    fn pending_cpu_irqs(&self) -> u32 {
+        self.pending_cpu_irqs
+    }
+
+    fn clear_cpu_irq_pending(&mut self, slot: u8) {
+        self.pending_cpu_irqs &= !(1u32 << slot);
+    }
 }
 
 #[cfg(test)]
@@ -1422,6 +1514,7 @@ mod tests {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
+            pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -1465,6 +1558,7 @@ mod tests {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
+            pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -1511,6 +1605,7 @@ mod tests {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
+            pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
