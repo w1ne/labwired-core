@@ -122,7 +122,7 @@ impl LabwiredAdapter {
         match arch {
             labwired_core::Arch::Arm => Ok(labwired_core::Arch::Arm),
             labwired_core::Arch::RiscV => Ok(labwired_core::Arch::RiscV),
-            labwired_core::Arch::Xtensa => Ok(labwired_core::Arch::Xtensa),
+            labwired_core::Arch::XtensaLx7 => Ok(labwired_core::Arch::XtensaLx7),
             other => Err(anyhow!(
                 "Unsupported or unknown firmware architecture: {:?}",
                 other
@@ -245,7 +245,7 @@ impl LabwiredAdapter {
                     .map_err(|e| anyhow!("Failed to load firmware: {:?}", e))?;
                 *self.machine.lock().unwrap() = Some(Box::new(machine));
             }
-            labwired_core::Arch::Xtensa => {
+            labwired_core::Arch::XtensaLx7 => {
                 let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
                 bus.attach_uart_tx_sink(self.uart_sink.clone(), false);
                 bus.observers.push(self.mem_tracker.clone());

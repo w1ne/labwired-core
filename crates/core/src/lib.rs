@@ -35,7 +35,7 @@ mod tests;
 pub enum Arch {
     Arm,
     RiscV,
-    Xtensa,
+    XtensaLx7,
     Unknown,
 }
 
@@ -49,6 +49,12 @@ pub enum SimulationError {
     Halt,
     #[error("Snapshot schema mismatch: expected v{expected}, got v{got}")]
     SnapshotSchemaMismatch { expected: u32, got: u32 },
+    #[error("not implemented: {0}")]
+    NotImplemented(String),
+    #[error("Breakpoint hit at {0:#x}")]
+    BreakpointHit(u32),
+    #[error("Exception raised: cause={cause} at pc={pc:#x}")]
+    ExceptionRaised { cause: u8, pc: u32 },
     #[error("Simulation error: {0}")]
     Other(String),
 }
@@ -178,6 +184,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
         self.write(offset + 3, ((value >> 24) & 0xFF) as u8)?;
         Ok(())
     }
+    /// Plan 2: word-granular write path. The bus calls this after performing
+    /// the four byte writes, giving peripherals a single coherent 32-bit
+    /// view of the write. Default: no-op. Peripherals with 32-bit word
+    /// triggers (e.g. declarative configs with WriteWord triggers) override.
+    fn write_word_32(&mut self, _offset: u64, _value: u32) -> SimResult<()> {
+        Ok(())
+    }
     /// Side-effect-free value probe used for debug/observer bookkeeping.
     /// Implementations should return `None` when such probing is not supported.
     fn peek(&self, _offset: u64) -> Option<u8> {
@@ -219,6 +232,32 @@ pub trait Bus {
     /// For NVIC exceptions (number >= 16), this clears the ISPR bit to prevent
     /// immediate re-entry of the same exception.
     fn clear_nvic_pending(&mut self, _exception_num: u32) {}
+
+    /// Plan 3: route a peripheral source ID to a cpu0 IRQ slot via a
+    /// registered ESP32-S3 interrupt matrix peripheral. Default returns
+    /// None for buses that don't model this.
+    fn route_irq_source_to_cpu_irq(&self, _source_id: u32) -> Option<u8> {
+        None
+    }
+
+    /// Plan 3: bitmask of pending cpu0 IRQ slots aggregated by the bus
+    /// from peripheral tick results routed through the intmatrix. Default
+    /// returns 0; non-ESP32-S3 buses don't model this.
+    fn pending_cpu_irqs(&self) -> u32 {
+        0
+    }
+
+    /// Plan 3: clear the pending bit for cpu IRQ slot `slot`.
+    fn clear_cpu_irq_pending(&mut self, _slot: u8) {}
+
+    /// Plan 2: deliver a coherent 32-bit value to peripherals after the
+    /// four byte writes that compose a write_u32 have been dispatched.
+    /// Default: no-op for buses that don't route to peripherals.
+    fn notify_word_write(&mut self, _addr: u64, _value: u32) -> SimResult<()> {
+        Ok(())
+    }
+
+    // TODO(Phase B): get_rom_thunk added once the rom_thunks module exists.
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;

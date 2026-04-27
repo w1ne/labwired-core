@@ -1115,7 +1115,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
         let prog_arch = match program.arch {
             labwired_core::Arch::Arm => labwired_config::Arch::Arm,
             labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
-            labwired_core::Arch::Xtensa => labwired_config::Arch::Xtensa,
+            labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -1211,7 +1211,7 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
     let arch = match program.arch {
         labwired_core::Arch::Arm => labwired_config::Arch::Arm,
         labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
-        labwired_core::Arch::Xtensa => labwired_config::Arch::Xtensa,
+        labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
         _ => {
             error!("Unknown architecture in firmware");
             return ExitCode::from(EXIT_CONFIG_ERROR);
@@ -1587,6 +1587,9 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                         StopReason::Exception
                     }
                     labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                    labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
+                    labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                    labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Exception,
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1924,7 +1927,7 @@ fn run_test(args: TestArgs) -> ExitCode {
             let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
             setup_and_run!(cpu)
         }
-        labwired_core::Arch::Xtensa => {
+        labwired_core::Arch::XtensaLx7 => {
             let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
             setup_and_run!(cpu)
         }
@@ -2122,6 +2125,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                             StopReason::Exception
                         }
                         labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                        labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
+                        labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                        labwired_core::SimulationError::ExceptionRaised { .. } => {
+                            StopReason::Exception
+                        }
                     };
                     if stop_reason != StopReason::Halt {
                         error!("Simulation error at step {}: {}", step, e);
@@ -2143,6 +2151,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         StopReason::Exception
                     }
                     labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                    labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
+                    labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                    labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Exception,
                 };
                 if stop_reason != StopReason::Halt {
                     error!("Simulation error at step {}: {}", step, e);
