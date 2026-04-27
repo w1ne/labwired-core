@@ -88,6 +88,13 @@ impl Esp32s3Wiring {
     }
 }
 
+/// Phase B compatibility shim. Delegates to `configure_xtensa_esp32s3`
+/// with default options and discards the wiring (icache/dcache backings)
+/// that callers from Phase B's CLI/Python paths don't yet consume.
+pub fn configure_xtensa(bus: &mut SystemBus) -> XtensaLx7 {
+    configure_xtensa_esp32s3(bus, &Esp32s3Opts::default()).cpu
+}
+
 /// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
 /// shared flash backing buffer.
 pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3Wiring {

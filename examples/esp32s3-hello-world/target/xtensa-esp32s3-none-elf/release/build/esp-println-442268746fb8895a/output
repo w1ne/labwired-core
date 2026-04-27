@@ -1,0 +1,3 @@
+cargo:warning=The `colors` feature is only effective when using the `log-04` feature
+cargo:rerun-if-env-changed=ESP_LOG
+cargo:rustc-check-cfg=cfg(host_is_windows)

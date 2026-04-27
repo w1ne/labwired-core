@@ -1,0 +1,25 @@
+error[E0463]: can't find crate for `std`
+  |
+  = note: the `xtensa-esp32s3-none-elf` target may not be installed
+  = help: consider building the standard library from source with `cargo build -Zbuild-std`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0463`.
+error[E0463]: can't find crate for `core`
+  |
+  = note: the `xtensa-esp32s3-none-elf` target may not be installed
+  = help: consider building the standard library from source with `cargo build -Zbuild-std`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0463`.
+warning: autocfg could not probe for `std`
+error[E0463]: can't find crate for `std`
+  |
+  = note: the `xtensa-esp32s3-none-elf` target may not be installed
+  = help: consider building the standard library from source with `cargo build -Zbuild-std`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0463`.

@@ -258,7 +258,16 @@ pub trait Bus {
         Ok(())
     }
 
-    // TODO(Phase B): get_rom_thunk added once the rom_thunks module exists.
+    /// Plan 3: look up a registered ROM thunk by absolute PC. Used by the
+    /// Xtensa LX7 `BREAK 1, 14` dispatch to redirect calls into the simulated
+    /// ESP32-S3 mask ROM. Default returns None for buses that don't model
+    /// ROM thunks.
+    fn get_rom_thunk(
+        &self,
+        _pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        None
+    }
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         let b0 = self.read_u8(addr)? as u16;

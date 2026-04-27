@@ -1,0 +1,14 @@
+cargo:rerun-if-changed=./esp_config.yml
+cargo:rerun-if-changed=build.rs
+cargo:rustc-env=ESP_BACKTRACE_CONFIG_BACKTRACE_FRAMES=10
+cargo:rerun-if-env-changed=ESP_BACKTRACE_CONFIG_BACKTRACE_FRAMES
+cargo:rustc-check-cfg=cfg(backtrace_frames)
+cargo:rustc-env=ESP_BACKTRACE_CONFIG_STACK_DUMP_MAX_SIZE=8K
+cargo:rerun-if-env-changed=ESP_BACKTRACE_CONFIG_STACK_DUMP_MAX_SIZE
+cargo:rustc-check-cfg=cfg(stack_dump_max_size)
+cargo:rustc-check-cfg=cfg(stack_dump_max_size_4k)
+cargo:rustc-check-cfg=cfg(stack_dump_max_size_8k)
+cargo:rustc-check-cfg=cfg(stack_dump_max_size_16k)
+cargo:rustc-check-cfg=cfg(stack_dump_max_size_32k)
+cargo:rustc-cfg=stack_dump_max_size_8k
+cargo::rustc-check-cfg=cfg(stack_dump)

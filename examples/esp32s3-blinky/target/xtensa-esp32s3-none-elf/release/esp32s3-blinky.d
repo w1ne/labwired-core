@@ -1,0 +1,1 @@
+/home/andrii/Projects/labwired-core-plan1/examples/esp32s3-blinky/target/xtensa-esp32s3-none-elf/release/esp32s3-blinky: /home/andrii/Projects/labwired-core-plan1/examples/esp32s3-blinky/build.rs /home/andrii/Projects/labwired-core-plan1/examples/esp32s3-blinky/src/main.rs

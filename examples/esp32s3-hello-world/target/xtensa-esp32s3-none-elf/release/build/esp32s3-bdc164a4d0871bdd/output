@@ -1,0 +1,3 @@
+cargo:rustc-link-search=/home/andrii/Projects/labwired-core-plan1/examples/esp32s3-hello-world/target/xtensa-esp32s3-none-elf/release/build/esp32s3-bdc164a4d0871bdd/out
+cargo:rerun-if-changed=device.x
+cargo:rerun-if-changed=build.rs

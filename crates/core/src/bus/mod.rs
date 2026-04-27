@@ -1298,6 +1298,13 @@ impl crate::Bus for SystemBus {
             }
         }
     }
+
+    fn get_rom_thunk(
+        &self,
+        pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        SystemBus::get_rom_thunk(self, pc)
+    }
 }
 
 #[cfg(test)]
