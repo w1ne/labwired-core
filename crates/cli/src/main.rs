@@ -501,7 +501,6 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
     use labwired_core::bus::SystemBus;
     use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
-    use labwired_core::Bus;
     use labwired_core::Cpu;
     use labwired_core::SimulationError;
 
@@ -645,63 +644,6 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         }
         bus.tick_peripherals_with_costs();
         steps += 1;
-
-        // ── Plan 3 Task 10 diagnostic snapshot ──
-        // Dumped at a few step thresholds so we can see what esp-hal has
-        // configured vs. what the simulator is observing. Behind a no-arg
-        // env-gate so it stays out of the production hot path.
-        if std::env::var("LABWIRED_DIAG_PLAN3").is_ok()
-            && [
-                100_000u64, 1_000_000, 10_000_000, 100_000_000, 200_000_000,
-            ]
-            .contains(&steps)
-        {
-            use labwired_core::cpu::xtensa_sr::{INTENABLE, INTERRUPT, VECBASE};
-            let intena = cpu.sr.read(INTENABLE);
-            let interrupt = cpu.sr.read(INTERRUPT);
-            let vecbase = cpu.sr.read(VECBASE);
-            let ps = cpu.ps.as_raw();
-            eprintln!(
-                "[DIAG @ step {steps}] PC=0x{:08x} INTENABLE=0x{:08x} INTERRUPT=0x{:08x} \
-                 PS=0x{:08x} VECBASE=0x{:08x} pending_cpu_irqs=0x{:08x}",
-                cpu.get_pc(),
-                intena,
-                interrupt,
-                ps,
-                vecbase,
-                bus.pending_cpu_irqs,
-            );
-            let conf_reg = bus.read_u32(0x6002_3000).unwrap_or(0);
-            let int_raw = bus.read_u32(0x6002_3068).unwrap_or(0);
-            let int_ena_st = bus.read_u32(0x6002_3064).unwrap_or(0);
-            let target0_conf = bus.read_u32(0x6002_3034).unwrap_or(0);
-            let target0_hi = bus.read_u32(0x6002_301C).unwrap_or(0);
-            let target0_lo = bus.read_u32(0x6002_3020).unwrap_or(0);
-            let int_st = bus.read_u32(0x6002_3070).unwrap_or(0);
-            // UNIT0 snapshot (force snapshot first).
-            let _ = bus.write_u32(0x6002_3004, 1u32 << 30);
-            let unit0_lo = bus.read_u32(0x6002_3044).unwrap_or(0);
-            let unit0_hi = bus.read_u32(0x6002_3040).unwrap_or(0);
-            eprintln!(
-                "[DIAG] SYSTIMER: CONF=0x{:08x} INT_RAW=0x{:x} INT_ENA=0x{:x} INT_ST=0x{:x} \
-                 TARGET0_CONF=0x{:08x} TARGET0={:#x}_{:08x} UNIT0={:#x}_{:08x}",
-                conf_reg, int_raw, int_ena_st, int_st, target0_conf,
-                target0_hi, target0_lo, unit0_hi, unit0_lo,
-            );
-            let route57 = bus.route_irq_source_to_cpu_irq(57);
-            let route79 = bus.route_irq_source_to_cpu_irq(79);
-            eprintln!("[DIAG] intmatrix route(57=SYSTIMER_TARGET0)={route57:?} route(79=FROM_CPU_INTR0)={route79:?}");
-            // __INTERRUPTS at 0x4037937C; SYSTIMER_TARGET0 entry at +57*4 = +0xE4.
-            let isr_addr = bus.read_u32(0x4037_937C + 57 * 4).unwrap_or(0);
-            eprintln!("[DIAG] __INTERRUPTS[57] _handler addr = 0x{:08x}", isr_addr);
-            // Read GPIO OUT register (bit 2 = pin 2).
-            let gpio_out = bus.read_u32(0x6000_4004).unwrap_or(0);
-            let gpio_enable = bus.read_u32(0x6000_4020).unwrap_or(0);
-            eprintln!(
-                "[DIAG] GPIO: OUT=0x{:08x} ENABLE=0x{:08x}",
-                gpio_out, gpio_enable
-            );
-        }
     }
     eprintln!(
         "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}",
