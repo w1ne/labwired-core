@@ -19,6 +19,7 @@ pub struct MachineSnapshot {
 pub enum CpuSnapshot {
     Arm(ArmCpuSnapshot),
     RiscV(RiscVCpuSnapshot),
+    XtensaLx7(XtensaLx7CpuSnapshot),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -28,6 +29,21 @@ pub struct ArmCpuSnapshot {
     pub primask: bool,
     pub pending_exceptions: u32,
     pub vtor: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct XtensaLx7CpuSnapshot {
+    /// Logical AR registers a0..a15 in the current window.
+    pub registers: Vec<u32>,
+    pub pc: u32,
+    /// Raw PS register value.
+    pub ps: u32,
+    /// WindowBase (from ArFile).
+    pub window_base: u8,
+    /// WindowStart (from ArFile).
+    pub window_start: u16,
+    /// VECBASE SR value.
+    pub vecbase: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

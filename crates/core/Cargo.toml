@@ -10,6 +10,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "Core execution engine for LabWired simulation platform."
 
 [dependencies]
 thiserror = { workspace = true }
@@ -21,3 +22,11 @@ anyhow = { workspace = true }
 serde_json = { workspace = true }
 labwired-ir = { path = "../ir" }
 serde_yaml.workspace = true
+goblin = { workspace = true }
+
+[features]
+default = []
+# Build + run end-to-end tests against examples/esp32s3-hello-world
+# and examples/esp32s3-blinky. Requires the ESP Rust toolchain
+# (cargo +esp).
+esp32s3-fixtures = []

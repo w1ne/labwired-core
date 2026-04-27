@@ -1,6 +1,15 @@
 # Build output
 /target/
+**/target/
 /*.rlib
+**/*.rs.bk
+.idea
+.vscode
+.DS_Store
+*.disasm
+*.bin
+/out/
+/out_check*
 
 # Local release/test run outputs
 /final-release-verification/

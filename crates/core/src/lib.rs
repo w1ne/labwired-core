@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+pub mod boot;
 pub mod bus;
 pub mod cpu;
 pub mod decoder;
@@ -25,6 +26,7 @@ mod tests;
 pub enum Arch {
     Arm,
     RiscV,
+    XtensaLx7,
     Unknown,
 }
 
@@ -34,6 +36,12 @@ pub enum SimulationError {
     MemoryViolation(u64),
     #[error("Instruction decoding error at {0:#x}")]
     DecodeError(u64),
+    #[error("not implemented: {0}")]
+    NotImplemented(String),
+    #[error("Breakpoint hit at {0:#x}")]
+    BreakpointHit(u32),
+    #[error("Exception raised: cause={cause} at pc={pc:#x}")]
+    ExceptionRaised { cause: u8, pc: u32 },
 }
 
 pub type SimResult<T> = Result<T, SimulationError>;
@@ -99,6 +107,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn peek(&self, _offset: u64) -> Option<u8> {
         None
     }
+
+    /// Word-granular write path. The bus calls this after performing the four
+    /// byte writes, giving peripherals a single coherent 32-bit view of the
+    /// write. Default: no-op. Peripherals with 32-bit word triggers override.
+    fn write_word_32(&mut self, _offset: u64, _value: u32) -> SimResult<()> {
+        Ok(())
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }
@@ -138,11 +154,37 @@ pub trait Bus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
+    /// Decompose a 32-bit write into four byte writes, then call
+    /// [`Self::notify_word_write`] with the coherent 32-bit value.
+    ///
+    /// **Overlap policy for declarative peripherals**: the four byte writes
+    /// fire byte-level (`Write`) triggers inside each peripheral. The
+    /// subsequent `notify_word_write` call fires `WriteWord` triggers. Because
+    /// `GenericPeripheral::check_triggers` unconditionally skips `WriteWord`
+    /// entries in the byte path, a `WriteWord` trigger is guaranteed to fire
+    /// **exactly once** — from `notify_word_write` — even though the same
+    /// register was touched by all four byte writes beforehand.
+    ///
+    /// Concrete implementations (`SystemBus`) do **not** need to override this
+    /// method; the default is the sole implementation. Any future override must
+    /// preserve the `notify_word_write` call to maintain the contract above.
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
         self.write_u8(addr + 3, ((value >> 24) & 0xFF) as u8)?;
+        self.notify_word_write(addr, value)
+    }
+
+    /// Called by [`Self::write_u32`] after the four byte writes to deliver the
+    /// coherent 32-bit value to the matched peripheral via
+    /// [`Peripheral::write_word_32`].
+    ///
+    /// This is the **only** path that fires `WriteWord` triggers in
+    /// `GenericPeripheral`. The byte-level `write` path explicitly skips
+    /// `WriteWord` entries so they cannot fire twice for a single 32-bit store.
+    /// Default: no-op for buses that don't route to peripherals (e.g. test stubs).
+    fn notify_word_write(&mut self, _addr: u64, _value: u32) -> SimResult<()> {
         Ok(())
     }
 
@@ -151,6 +193,41 @@ pub trait Bus {
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
     }
+
+    /// Look up a registered ROM thunk at the given PC.  Default returns None
+    /// (test stubs and non-ESP buses don't have thunks).  `SystemBus`
+    /// overrides to search registered `RomThunkBank` peripherals.
+    fn get_rom_thunk(
+        &self,
+        _pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        None
+    }
+
+    /// Look up the cpu0 IRQ slot bound to a peripheral source ID by the
+    /// ESP32-S3 interrupt matrix. Default returns None — non-ESP32-S3
+    /// buses don't have an intmatrix.  `SystemBus` overrides to consult
+    /// a registered `Esp32s3IntMatrix` peripheral.
+    fn route_irq_source_to_cpu_irq(
+        &self,
+        _source_id: u32,
+    ) -> Option<u8> {
+        None
+    }
+
+    /// Bitmask of pending cpu0 IRQ slots aggregated by the bus from peripheral
+    /// tick results routed through the ESP32-S3 interrupt matrix. Default
+    /// returns 0; non-ESP32-S3 buses don't model this.
+    fn pending_cpu_irqs(&self) -> u32 {
+        0
+    }
+
+    /// Clear the pending bit for cpu IRQ slot `slot`. Called by the CPU's
+    /// dispatch_irq after it dispatches the level for that slot, so the slot
+    /// doesn't re-fire on the next tick (firmware-side INT_CLR will clear
+    /// the source-side pending bit; the bus aggregation needs to forget it
+    /// too).
+    fn clear_cpu_irq_pending(&mut self, _slot: u8) {}
 }
 
 use std::collections::HashSet;

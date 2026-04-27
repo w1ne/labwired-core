@@ -1,4 +1,5 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 #[test]

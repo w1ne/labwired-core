@@ -1,0 +1,1151 @@
+use labwired_core::decoder::xtensa::{decode, Instruction};
+use labwired_core::decoder::xtensa_narrow::decode_narrow;
+
+#[test]
+fn unknown_words_decode_as_unknown() {
+    let ins = decode(0xFFFF_FFFF);
+    assert!(matches!(ins, Instruction::Unknown(0x00FF_FFFF)));
+}
+
+#[test]
+fn entry_point_ignores_high_byte_for_wide_ops() {
+    let bits = 0xAA_12_34_56u32; // top byte must be ignored for 24-bit decode
+    let ins = decode(bits);
+    // Only low 24 bits may influence the decoded variant.
+    let truncated = decode(bits & 0x00FF_FFFF);
+    assert_eq!(ins, truncated);
+}
+
+fn rrr(op2: u32, op1: u32, r: u32, s: u32, t: u32) -> u32 {
+    (op2 << 20) | (op1 << 16) | (r << 12) | (s << 8) | (t << 4) | 0x0
+}
+
+#[test]
+fn decode_add() {
+    // ADD ar, as_, at  →  op2=0x8, op1=0x0
+    let w = rrr(0x8, 0x0, 3, 4, 5);
+    assert_eq!(decode(w), Instruction::Add { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn decode_sub() {
+    // SUB ar, as_, at  →  op2=0xC, op1=0x0
+    let w = rrr(0xC, 0x0, 1, 2, 3);
+    assert_eq!(decode(w), Instruction::Sub { ar: 1, as_: 2, at: 3 });
+}
+
+#[test]
+fn decode_and_or_xor() {
+    assert_eq!(decode(rrr(0x1, 0x0, 7, 8, 9)), Instruction::And { ar: 7, as_: 8, at: 9 });
+    assert_eq!(decode(rrr(0x2, 0x0, 1, 1, 1)), Instruction::Or { ar: 1, as_: 1, at: 1 });
+    assert_eq!(decode(rrr(0x3, 0x0, 1, 2, 3)), Instruction::Xor { ar: 1, as_: 2, at: 3 });
+}
+
+#[test]
+fn decode_neg_abs() {
+    // NEG ar, at — op2=0x6, op1=0x0, s == 0, t = at, r = ar
+    assert_eq!(decode(rrr(0x6, 0x0, 5, 0, 4)), Instruction::Neg { ar: 5, at: 4 });
+    // ABS — op2=0x6, op1=0x0, s == 1
+    assert_eq!(decode(rrr(0x6, 0x0, 5, 1, 4)), Instruction::Abs { ar: 5, at: 4 });
+}
+
+#[test]
+fn decode_addx_subx() {
+    // ADDX2: op2=0x9, op1=0x0;  ADDX4: op2=0xA;  ADDX8: op2=0xB
+    assert_eq!(decode(rrr(0x9, 0x0, 1, 2, 3)), Instruction::Addx2 { ar: 1, as_: 2, at: 3 });
+    assert_eq!(decode(rrr(0xA, 0x0, 1, 2, 3)), Instruction::Addx4 { ar: 1, as_: 2, at: 3 });
+    assert_eq!(decode(rrr(0xB, 0x0, 1, 2, 3)), Instruction::Addx8 { ar: 1, as_: 2, at: 3 });
+    // SUBX2: op2=0xD; SUBX4: 0xE; SUBX8: 0xF
+    assert_eq!(decode(rrr(0xD, 0x0, 1, 2, 3)), Instruction::Subx2 { ar: 1, as_: 2, at: 3 });
+    assert_eq!(decode(rrr(0xE, 0x0, 1, 2, 3)), Instruction::Subx4 { ar: 1, as_: 2, at: 3 });
+    assert_eq!(decode(rrr(0xF, 0x0, 1, 2, 3)), Instruction::Subx8 { ar: 1, as_: 2, at: 3 });
+}
+
+#[test]
+fn decode_sll() {
+    // SLL ar, as_ : op2=0xA, op1=0x1, r=ar, s=as_, t=0
+    let w = rrr(0xA, 0x1, 3, 4, 0);
+    assert_eq!(decode(w), Instruction::Sll { ar: 3, as_: 4 });
+}
+
+#[test]
+fn decode_srl() {
+    // SRL ar, at : op2=0x9, op1=0x1, r=ar, s=0, t=at
+    let w = rrr(0x9, 0x1, 3, 0, 5);
+    assert_eq!(decode(w), Instruction::Srl { ar: 3, at: 5 });
+}
+
+#[test]
+fn decode_sra() {
+    // SRA ar, at : op2=0xB, op1=0x1, r=ar, s=0, t=at
+    let w = rrr(0xB, 0x1, 3, 0, 5);
+    assert_eq!(decode(w), Instruction::Sra { ar: 3, at: 5 });
+}
+
+#[test]
+fn decode_src() {
+    // SRC ar, as_, at : op2=0x8, op1=0x1
+    let w = rrr(0x8, 0x1, 1, 2, 3);
+    assert_eq!(decode(w), Instruction::Src { ar: 1, as_: 2, at: 3 });
+}
+
+#[test]
+fn decode_slli() {
+    // SLLI ar, as_, shamt : op2=0x0, op1=0x1, r=ar, s=as_, t=encoded
+    // ISA RM §8 SLLI: encodes 1_sa = 32 - sa across {op2[0], t[3:0]}.
+    // raw = (op2 & 1) << 4 | t; shamt = 32 - raw.
+    // Use raw=27 (op2=0x1 giving bit4=1, t=0xB=11) → shamt = 32 - 27 = 5.
+    let w = rrr(0x1, 0x1, 3, 4, 11);
+    match decode(w) {
+        Instruction::Slli { ar, as_, shamt } => {
+            assert_eq!(ar, 3);
+            assert_eq!(as_, 4);
+            // ISA RM: shamt = 32 - raw, raw = 27 → shamt = 5.
+            assert_eq!(shamt, 5);
+        }
+        other => panic!("expected Slli, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_srli() {
+    // SRLI ar, at, shamt: op0=0, op1=1, op2=4, r=ar, s=shamt, t=at.
+    // HW-oracle (xtensa-esp32s3-elf-as):
+    //   srli a3, a4, 5 → 0x413540 (ar=3, at=4, shamt=5)
+    let w = rrr(0x4, 0x1, /*ar=*/3, /*s=shamt=*/5, /*t=at=*/4);
+    match decode(w) {
+        Instruction::Srli { ar, at, shamt } => {
+            assert_eq!(ar, 3);
+            assert_eq!(at, 4);
+            assert_eq!(shamt, 5,
+                "shamt comes from `s` field per HW assembler; an earlier draft \
+                 read shamt from `t` and mis-decoded esp-hal's PRID-shift logic");
+        }
+        other => panic!("expected Srli, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_srai() {
+    // SRAI ar, at, shamt : op2=0x2, op1=0x1
+    // ISA RM §8 SRAI: shamt = ((op2 & 1) << 4) | t (direct, no complement).
+    let w = rrr(0x2, 0x1, 1, 0, 3);
+    match decode(w) {
+        Instruction::Srai { ar, at, shamt } => {
+            assert_eq!(ar, 1);
+            assert_eq!(at, 3);
+            // op2=0x2 → op2&1=0; raw = (0<<4)|3 = 3. shamt = 3.
+            assert_eq!(shamt, 3);
+        }
+        other => panic!("expected Srai, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_ssl_ssr_ssai() {
+    // SSR as_ : op0=0, op1=0, op2=4, r=0
+    let w = rrr(0x4, 0x0, 0, 5, 0);
+    assert_eq!(decode(w), Instruction::Ssr { as_: 5 });
+    // SSL as_ : op0=0, op1=0, op2=4, r=1
+    let w = rrr(0x4, 0x0, 1, 5, 0);
+    assert_eq!(decode(w), Instruction::Ssl { as_: 5 });
+    // SSAI shamt=9 : op0=0, op1=0, op2=4, r=4
+    // ISA RM §8 SSAI: shamt is 5-bit; encoded as {t[0], s[3:0]}.
+    // shamt=9 → low4 = 9, bit4 = 0 → s=9, t=0.
+    let w = rrr(0x4, 0x0, 4, 9, 0);
+    assert_eq!(decode(w), Instruction::Ssai { shamt: 9 });
+}
+
+#[test]
+fn decode_l32r() {
+    // at=3, imm16 = 0xFFFE => signed -2 => offset in bytes = -2*4 = -8
+    // Word encoding: op0=0x1 at bits[3:0], at=3 at bits[7:4], imm16=0xFFFE at bits[23:8]
+    let w = 0x0001u32 | (3u32 << 4) | (0xFFFEu32 << 8);
+    match decode(w) {
+        Instruction::L32r { at, pc_rel_byte_offset } => {
+            assert_eq!(at, 3);
+            assert_eq!(pc_rel_byte_offset, -8);
+        }
+        other => panic!("expected L32R, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_l32r_positive_imm() {
+    // at=5, imm16 = 0x0001 => signed +1 => offset = +4 bytes
+    let w = 0x0001u32 | (5u32 << 4) | (0x0001u32 << 8);
+    match decode(w) {
+        Instruction::L32r { at, pc_rel_byte_offset } => {
+            assert_eq!(at, 5);
+            assert_eq!(pc_rel_byte_offset, 4);
+        }
+        other => panic!("expected L32R, got {:?}", other),
+    }
+}
+
+#[test]
+fn decode_l32r_large_negative() {
+    // at=1, imm16 = 0x8000 (most negative 16-bit signed) => -32768 word-offset
+    // byte-offset = -32768 * 4 = -131072
+    let w = 0x0001u32 | (1u32 << 4) | (0x8000u32 << 8);
+    match decode(w) {
+        Instruction::L32r { at, pc_rel_byte_offset } => {
+            assert_eq!(at, 1);
+            assert_eq!(pc_rel_byte_offset, -131072);
+        }
+        other => panic!("expected L32R, got {:?}", other),
+    }
+}
+
+fn rri8(r: u32, s: u32, t: u32, imm8: u32) -> u32 {
+    0x2 | (t << 4) | (s << 8) | (r << 12) | ((imm8 & 0xFF) << 16)
+}
+
+#[test]
+fn decode_l8ui() {
+    let w = rri8(0x0, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L8ui { at: 5, as_: 4, imm: 0x10 });
+}
+
+#[test]
+fn decode_l16ui() {
+    let w = rri8(0x1, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L16ui { at: 5, as_: 4, imm: 0x20 }); // 0x10 << 1
+}
+
+#[test]
+fn decode_l32i() {
+    let w = rri8(0x2, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L32i { at: 5, as_: 4, imm: 0x40 }); // 0x10 << 2
+}
+
+#[test]
+fn decode_s8i_s16i_s32i() {
+    assert_eq!(decode(rri8(0x4, 4, 5, 0x10)), Instruction::S8i  { at: 5, as_: 4, imm: 0x10 });
+    assert_eq!(decode(rri8(0x5, 4, 5, 0x10)), Instruction::S16i { at: 5, as_: 4, imm: 0x20 });
+    assert_eq!(decode(rri8(0x6, 4, 5, 0x10)), Instruction::S32i { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_l16si() {
+    let w = rri8(0x9, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L16si { at: 5, as_: 4, imm: 0x20 });
+}
+
+#[test]
+fn decode_l32ai() {
+    let w = rri8(0xB, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::L32ai { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_addi_positive() {
+    let w = rri8(0xC, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::Addi { at: 5, as_: 4, imm8: 0x10 });
+}
+
+#[test]
+fn decode_addi_negative() {
+    // imm8 = 0xFF => sext => -1
+    let w = rri8(0xC, 4, 5, 0xFF);
+    assert_eq!(decode(w), Instruction::Addi { at: 5, as_: 4, imm8: -1 });
+}
+
+#[test]
+fn decode_addmi() {
+    // ADDMI: imm is sext8 << 8
+    let w = rri8(0xD, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::Addmi { at: 5, as_: 4, imm: 0x1000 }); // 0x10 << 8
+    // negative case: imm8 = 0xFF => sext=-1 => imm = -256
+    let w = rri8(0xD, 4, 5, 0xFF);
+    assert_eq!(decode(w), Instruction::Addmi { at: 5, as_: 4, imm: -256 });
+}
+
+#[test]
+fn decode_s32c1i() {
+    let w = rri8(0xE, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::S32c1i { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_s32ri() {
+    let w = rri8(0xF, 4, 5, 0x10);
+    assert_eq!(decode(w), Instruction::S32ri { at: 5, as_: 4, imm: 0x40 });
+}
+
+#[test]
+fn decode_lsai_unknown_subop() {
+    // r=0x3 is unassigned in LSAI — should be Unknown
+    let w = rri8(0x3, 4, 5, 0x10);
+    match decode(w) {
+        Instruction::Unknown(_) => (),
+        other => panic!("expected Unknown, got {:?}", other),
+    }
+}
+
+// ── Branch family (Task B7) ──────────────────────────────────────────────────
+
+// BR format (op0=0x7): BEQ/BNE/BLT/BGE/BLTU/BGEU/BANY/BALL/BNONE/BNALL/BBC/BBS/BBCI/BBSI
+//
+// Xtensa BR format (ISA RM §3.2, RRI8):
+//   bits[3:0]  = op0 = 0x7
+//   bits[7:4]  = t   (second register / at, or low 4 bits of bit-index for BBCI/BBSI)
+//   bits[11:8] = s   (first register / as_)
+//   bits[15:12]= r   (sub-op selector; high bit of bit-index for BBCI/BBSI)
+//   bits[23:16]= imm8 (8-bit signed branch byte offset, PC-relative to PC+4)
+//
+// Dispatch is on r (bits[15:12]).
+// For BBCI/BBSI the 5-bit bit-index = ((r & 1) << 4) | (t & 0xF).
+
+/// Pack an RRI8-format instruction.
+/// op0 at bits[3:0], t at bits[7:4], s at bits[11:8], r at bits[15:12], imm8 at bits[23:16].
+fn rri8_pack(op0: u32, t: u32, s: u32, r: u32, imm8: u32) -> u32 {
+    (op0 & 0xF) | ((t & 0xF) << 4) | ((s & 0xF) << 8) | ((r & 0xF) << 12) | ((imm8 & 0xFF) << 16)
+}
+
+/// Pack a BRI12-format instruction. op0=6, n at bits[5:4], m at bits[7:6], s at bits[11:8], imm12 at bits[23:12].
+fn bri12_pack(m: u32, n: u32, s: u32, imm12: u32) -> u32 {
+    0x6 | ((n & 0x3) << 4) | ((m & 0x3) << 6) | ((s & 0xF) << 8) | ((imm12 & 0xFFF) << 12)
+}
+
+/// Pack J (CALL format with op0=6, n=0): imm18 at bits[23:6].
+fn j_pack(imm18: u32) -> u32 {
+    0x6 | ((imm18 & 0x3_FFFF) << 6)
+}
+
+#[test]
+fn decode_beq() {
+    // BEQ as_=2, at=3, imm8=0x10 → decoded offset = sext8(0x10)+4 = 16+4 = 20
+    let w = rri8_pack(0x7, 3, 2, 0x1, 0x10);
+    assert_eq!(decode(w), Instruction::Beq { as_: 2, at: 3, offset: 20 });
+}
+
+#[test]
+fn decode_bne_bge_blt_bltu_bgeu() {
+    // BNE r=0x9, imm8=0x05 → sext8(5)+4 = 9
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x9, 0x05)), Instruction::Bne   { as_: 2, at: 3, offset: 9 });
+    // BGE r=0xA
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xA, 0x05)), Instruction::Bge   { as_: 2, at: 3, offset: 9 });
+    // BLT r=0x2
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x2, 0x05)), Instruction::Blt   { as_: 2, at: 3, offset: 9 });
+    // BLTU r=0x3
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x3, 0x05)), Instruction::Bltu  { as_: 2, at: 3, offset: 9 });
+    // BGEU r=0xB
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xB, 0x05)), Instruction::Bgeu  { as_: 2, at: 3, offset: 9 });
+}
+
+#[test]
+fn decode_bany_ball_bnone_bnall() {
+    // BANY r=0x8, imm8=0x04 → offset = 4+4 = 8
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x8, 0x04)), Instruction::Bany  { as_: 2, at: 3, offset: 8 });
+    // BALL r=0x4
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x4, 0x04)), Instruction::Ball  { as_: 2, at: 3, offset: 8 });
+    // BNONE r=0x0
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x0, 0x04)), Instruction::Bnone { as_: 2, at: 3, offset: 8 });
+    // BNALL r=0xC
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xC, 0x04)), Instruction::Bnall { as_: 2, at: 3, offset: 8 });
+}
+
+#[test]
+fn decode_bbc_bbs_bbci_bbsi() {
+    // BBC r=0x5, BBS r=0xD — use t=3 as at, imm8=0x04 → offset=8
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x5, 0x04)), Instruction::Bbc { as_: 2, at: 3, offset: 8 });
+    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xD, 0x04)), Instruction::Bbs { as_: 2, at: 3, offset: 8 });
+    // BBCI r=0x6 (high bit of bit-index=0), t=7 → bit = ((0&1)<<4)|7 = 7
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0x6, 0x04)), Instruction::Bbci { as_: 2, bit: 7,  offset: 8 });
+    // BBCI r=0x7 (high bit=1), t=7 → bit = ((1&1)<<4)|7 = 7|16 = 23
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0x7, 0x04)), Instruction::Bbci { as_: 2, bit: 23, offset: 8 });
+    // BBSI r=0xE (high bit=0), t=7 → bit=7
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0xE, 0x04)), Instruction::Bbsi { as_: 2, bit: 7,  offset: 8 });
+    // BBSI r=0xF (high bit=1), t=7 → bit=23
+    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0xF, 0x04)), Instruction::Bbsi { as_: 2, bit: 23, offset: 8 });
+}
+
+// BZ family (op0=6, n=1): BEQZ/BNEZ/BLTZ/BGEZ, m selects sub-op.
+
+#[test]
+fn decode_beqz_bnez_bltz_bgez() {
+    // imm12=0x010 → sext12(0x010)=16 → offset = 16+4 = 20
+    assert_eq!(decode(bri12_pack(0, 1, 2, 0x010)), Instruction::Beqz { as_: 2, offset: 20 });
+    assert_eq!(decode(bri12_pack(1, 1, 2, 0x010)), Instruction::Bnez { as_: 2, offset: 20 });
+    assert_eq!(decode(bri12_pack(2, 1, 2, 0x010)), Instruction::Bltz { as_: 2, offset: 20 });
+    assert_eq!(decode(bri12_pack(3, 1, 2, 0x010)), Instruction::Bgez { as_: 2, offset: 20 });
+    // Negative imm12: 0xFFE = -2 → offset = -2+4 = 2
+    assert_eq!(decode(bri12_pack(0, 1, 2, 0xFFE)), Instruction::Beqz { as_: 2, offset: 2 });
+}
+
+// BI group (op0=6, n=2): BEQI/BNEI/BLTI/BGEI with B4CONST table, m selects sub-op.
+
+#[test]
+fn decode_beqi_bnei_blti_bgei() {
+    // BEQI: n=2, m=0, s=2, r=5 → b4const[5]=5, imm8=0x10 → offset=20
+    assert_eq!(decode(0x6u32 | (2u32 << 4) | (0u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
+        Instruction::Beqi { as_: 2, imm: 5, offset: 20 });
+    // BGEI: n=2, m=3, r=15 → b4const[15]=256
+    assert_eq!(decode(0x6u32 | (2u32 << 4) | (3u32 << 6) | (2u32 << 8) | (15u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bgei { as_: 2, imm: 256, offset: 20 });
+}
+
+// BIU group (op0=6, n=3): BLTUI/BGEUI with B4CONSTU table; m=1 reserved.
+// n=3, m=0: ENTRY (added in F1 — see F1 decoder tests below).
+
+#[test]
+fn decode_bltui_bgeui() {
+    // BLTUI: n=3, m=2, s=2, r=5 → b4constu[5]=5, imm8=0x10 → offset=20
+    assert_eq!(decode(0x6u32 | (3u32 << 4) | (2u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bltui { as_: 2, imm: 5, offset: 20 });
+    // BGEUI: n=3, m=3, r=0 → b4constu[0]=32768
+    assert_eq!(decode(0x6u32 | (3u32 << 4) | (3u32 << 6) | (2u32 << 8) | (0u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bgeui { as_: 2, imm: 32768, offset: 20 });
+    // BIU m=1 is reserved → Unknown
+    match decode(0x6u32 | (3u32 << 4) | (1u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)) {
+        Instruction::Unknown(_) => (),
+        other => panic!("expected Unknown for reserved BIU m=1, got {:?}", other),
+    }
+}
+
+// J instruction (op0=0x6, n=0)
+
+#[test]
+fn decode_j() {
+    // imm18=0 → offset = 0+4 = 4
+    assert_eq!(decode(j_pack(0)), Instruction::J { offset: 4 });
+    // imm18=0x10 → offset = 16+4 = 20
+    assert_eq!(decode(j_pack(0x10)), Instruction::J { offset: 20 });
+    // imm18=0x3_FFFE (sign-extended = -2) → offset = -2+4 = 2
+    assert_eq!(decode(j_pack(0x3_FFFE)), Instruction::J { offset: 2 });
+}
+
+// ── Task B8: CALL / CALLX / RET / RETW / JX / RFE+family / SYSCALL ──────────
+//
+// CALLN format (op0=5): bits[5:4]=n, bits[23:6]=imm18 (signed word offset from PC+4).
+// ST0 format (op0=0, op1=0, op2=0): dispatches on r field:
+//   r=0, t=8      → RET      (s ignored)
+//   r=0, t=9      → RETW     (s ignored)
+//   r=0, s=<as>, t=0xA → JX
+//   r=0, s=<as>, t=0xC..F → CALLX0/4/8/12
+//   r=2, s=0, t=0..3,0xC,0xD,0xF → ISYNC/RSYNC/ESYNC/DSYNC/MEMW/EXTW/NOP
+//   r=3, s=0,t=0 → RFE; s=2,t=0 → RFDE; s=4,t=0 → RFWO; s=5,t=0 → RFWU
+//   r=3, s=<level>,t=1 → RFI
+//   r=4, s=<imm_s>,t=<imm_t> → BREAK
+//   r=5, s=0,t=0 → SYSCALL
+//
+// All encoding values HW-oracle verified against xtensa-esp-elf-objdump.
+
+/// Pack a CALLN instruction: op0=5, n at bits[5:4], imm18 at bits[23:6].
+fn calln_pack(n: u32, imm18: u32) -> u32 {
+    0x5 | ((n & 0x3) << 4) | ((imm18 & 0x3_FFFF) << 6)
+}
+
+/// Pack a ST0 instruction (op0=0, op1=0, op2=0): r at bits[15:12], s at bits[11:8], t at bits[7:4].
+fn st0_pack(r: u32, s: u32, t: u32) -> u32 {
+    (r << 12) | (s << 8) | (t << 4) | 0x0
+}
+
+#[test]
+fn decode_call0_4_8_12() {
+    // CALL0 imm18=0 → offset = 0 * 4 = 0 bytes
+    // HW: "call0 0x4" when PC=0 (target = PC+4+0 = 4); offset stored = 0
+    assert_eq!(decode(calln_pack(0, 0)), Instruction::Call0 { offset: 0 });
+
+    // CALL4 imm18=1 → offset = 1 * 4 = 4 bytes
+    // HW: "call4 0x8" when PC=0 (target = PC+4+4 = 8)
+    assert_eq!(decode(calln_pack(1, 1)), Instruction::Call4 { offset: 4 });
+
+    // CALL8 imm18=0x10 → offset = 0x10 * 4 = 0x40 = 64 bytes
+    // HW: "call8 0x44" when PC=0 (target = PC+4+64 = 68 = 0x44)
+    assert_eq!(decode(calln_pack(2, 0x10)), Instruction::Call8 { offset: 0x40 });
+
+    // CALL12 imm18=0x3FFFF (all ones = signed -1) → offset = -1 * 4 = -4 bytes
+    // HW: "call12 0x0" when PC=0 (target = PC+4-4 = 0)
+    assert_eq!(decode(calln_pack(3, 0x3FFFF)), Instruction::Call12 { offset: -4 });
+}
+
+#[test]
+fn decode_callx0_4_8_12() {
+    // CALLX0 as_=5: r=0, s=5, t=0xC
+    // HW: 0x0C0500 → "callx0 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xC)), Instruction::Callx0 { as_: 5 });
+    // CALLX4 as_=5: r=0, s=5, t=0xD
+    // HW: 0x0D0500 → "callx4 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xD)), Instruction::Callx4 { as_: 5 });
+    // CALLX8 as_=5: r=0, s=5, t=0xE
+    // HW: 0x0E0500 → "callx8 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xE)), Instruction::Callx8 { as_: 5 });
+    // CALLX12 as_=5: r=0, s=5, t=0xF
+    // HW: 0x0F0500 → "callx12 a5"
+    assert_eq!(decode(st0_pack(0, 5, 0xF)), Instruction::Callx12 { as_: 5 });
+}
+
+#[test]
+fn decode_ret_retw() {
+    // RET: r=0, s=0, t=8
+    // HW: 0x000080 → "ret"
+    assert_eq!(decode(st0_pack(0, 0, 8)), Instruction::Ret);
+    // RETW: r=0, s=0, t=9
+    // HW: 0x000090 → "retw"
+    assert_eq!(decode(st0_pack(0, 0, 9)), Instruction::Retw);
+    // RET with non-zero s (s field ignored per ISA RM): r=0, s=3, t=8
+    // HW: confirmed "ret" regardless of s
+    assert_eq!(decode(st0_pack(0, 3, 8)), Instruction::Ret);
+    // RETW with non-zero s: r=0, s=3, t=9
+    assert_eq!(decode(st0_pack(0, 3, 9)), Instruction::Retw);
+}
+
+#[test]
+fn decode_jx() {
+    // JX as_=4: r=0, s=4, t=0xA
+    // HW: 0x0A0400 → "jx a4"
+    assert_eq!(decode(st0_pack(0, 4, 0xA)), Instruction::Jx { as_: 4 });
+    // JX as_=1: r=0, s=1, t=0xA
+    // HW: 0x0A0100 → "jx a1"
+    assert_eq!(decode(st0_pack(0, 1, 0xA)), Instruction::Jx { as_: 1 });
+}
+
+#[test]
+fn decode_isync_rsync_esync_dsync() {
+    // ISYNC: r=2, s=0, t=0
+    // HW: 0x002000 → "isync"
+    assert_eq!(decode(st0_pack(2, 0, 0)), Instruction::Isync);
+    // RSYNC: r=2, s=0, t=1
+    // HW: 0x002010 → "rsync"
+    assert_eq!(decode(st0_pack(2, 0, 1)), Instruction::Rsync);
+    // ESYNC: r=2, s=0, t=2
+    // HW: 0x002020 → "esync"
+    assert_eq!(decode(st0_pack(2, 0, 2)), Instruction::Esync);
+    // DSYNC: r=2, s=0, t=3
+    // HW: 0x002030 → "dsync"
+    assert_eq!(decode(st0_pack(2, 0, 3)), Instruction::Dsync);
+    // MEMW: r=2, s=0, t=0xC
+    // HW: 0x0020C0 → "memw"
+    assert_eq!(decode(st0_pack(2, 0, 0xC)), Instruction::Memw);
+    // EXTW: r=2, s=0, t=0xD
+    // HW: 0x0020D0 → "extw"
+    assert_eq!(decode(st0_pack(2, 0, 0xD)), Instruction::Extw);
+    // NOP: r=2, s=0, t=0xF
+    // HW: 0x0020F0 → "nop"
+    assert_eq!(decode(st0_pack(2, 0, 0xF)), Instruction::Nop);
+}
+
+#[test]
+fn decode_rfe_rfde_rfwo_rfwu() {
+    // RFE: r=3, s=0, t=0
+    // HW: 0x003000 → "rfe"
+    assert_eq!(decode(st0_pack(3, 0, 0)), Instruction::Rfe);
+    // RFDE: r=3, s=2, t=0
+    // HW: 0x003200 → "rfde"
+    assert_eq!(decode(st0_pack(3, 2, 0)), Instruction::Rfde);
+    // RFWO: r=3, s=4, t=0
+    // HW: 0x003400 → "rfwo"
+    assert_eq!(decode(st0_pack(3, 4, 0)), Instruction::Rfwo);
+    // RFWU: r=3, s=5, t=0
+    // HW: 0x003500 → "rfwu"
+    assert_eq!(decode(st0_pack(3, 5, 0)), Instruction::Rfwu);
+}
+
+#[test]
+fn decode_rfi_level() {
+    // RFI takes interrupt level in s field; t=1.
+    // RFI level=0: r=3, s=0, t=1
+    // HW: 0x003010 → "rfi 0"
+    assert_eq!(decode(st0_pack(3, 0, 1)), Instruction::Rfi { level: 0 });
+    // RFI level=2: r=3, s=2, t=1
+    // HW: 0x003210 → "rfi 2"
+    assert_eq!(decode(st0_pack(3, 2, 1)), Instruction::Rfi { level: 2 });
+    // RFI level=7: r=3, s=7, t=1
+    // HW: 0x003710 → "rfi 7"
+    assert_eq!(decode(st0_pack(3, 7, 1)), Instruction::Rfi { level: 7 });
+    // RFI level=15: r=3, s=15, t=1
+    // HW: 0x003F10 → "rfi 15"
+    assert_eq!(decode(st0_pack(3, 15, 1)), Instruction::Rfi { level: 15 });
+}
+
+#[test]
+fn decode_syscall() {
+    // SYSCALL: r=5, s=0, t=0
+    // HW: 0x005000 → "syscall"
+    assert_eq!(decode(st0_pack(5, 0, 0)), Instruction::Syscall);
+}
+
+#[test]
+fn decode_break_st0() {
+    // BREAK imm_s=0, imm_t=0: r=4, s=0, t=0
+    // HW: 0x004000 → "break 0, 0"
+    assert_eq!(decode(st0_pack(4, 0, 0)), Instruction::Break { imm_s: 0, imm_t: 0 });
+    // BREAK imm_s=3, imm_t=5: r=4, s=3, t=5
+    // HW: 0x004350 → "break 3, 5"
+    assert_eq!(decode(st0_pack(4, 3, 5)), Instruction::Break { imm_s: 3, imm_t: 5 });
+}
+
+// ── Task D8: Narrow (Code Density) decoder tests ──────────────────────────────
+//
+// All byte values are HW-oracle verified via xtensa-esp32s3-elf-as + objdump.
+// Field layout: bits[3:0]=op0, bits[7:4]=s, bits[11:8]=t, bits[15:12]=r.
+// Note: for each instruction, which role s/t/r plays differs — see comments.
+
+#[test]
+fn test_decode_narrow_l32i_n() {
+    // l32i.n a3, a4, 4  →  0x1438
+    // at=s=3, as_=t=4, imm=r<<2=1<<2=4
+    // HW-oracle: addr 0x0e: 38 14
+    assert_eq!(decode_narrow(0x1438), Instruction::L32i { at: 3, as_: 4, imm: 4 });
+    // l32i.n a3, a4, 0  →  imm=0: r=0
+    assert_eq!(decode_narrow(0x0438), Instruction::L32i { at: 3, as_: 4, imm: 0 });
+    // l32i.n a3, a4, 60  →  imm=60: r=15
+    assert_eq!(decode_narrow(0xF438), Instruction::L32i { at: 3, as_: 4, imm: 60 });
+}
+
+#[test]
+fn test_decode_narrow_s32i_n() {
+    // s32i.n a3, a4, 8  →  0x2439
+    // at=s=3, as_=t=4, imm=r<<2=2<<2=8
+    // HW-oracle: addr 0x10: 39 24
+    assert_eq!(decode_narrow(0x2439), Instruction::S32i { at: 3, as_: 4, imm: 8 });
+    // s32i.n a3, a4, 0  →  imm=0: r=0
+    assert_eq!(decode_narrow(0x0439), Instruction::S32i { at: 3, as_: 4, imm: 0 });
+    // s32i.n a3, a4, 60  →  imm=60: r=15
+    assert_eq!(decode_narrow(0xF439), Instruction::S32i { at: 3, as_: 4, imm: 60 });
+}
+
+#[test]
+fn test_decode_narrow_add_n() {
+    // add.n a3, a4, a5  →  0x345a
+    // ar=r=3, as_=t=4, at=s=5
+    // HW-oracle: addr 0x00: 5a 34
+    assert_eq!(decode_narrow(0x345a), Instruction::Add { ar: 3, as_: 4, at: 5 });
+    // add.n a1, a2, a3  →  r=1, t=2, s=3  →  hw = (1<<12)|(2<<8)|(3<<4)|0xA = 0x123a
+    assert_eq!(decode_narrow(0x123a), Instruction::Add { ar: 1, as_: 2, at: 3 });
+}
+
+#[test]
+fn test_decode_narrow_addi_n() {
+    // addi.n a3, a4, 5  →  0x345b
+    // at=r=3, as_=t=4, imm=sext4_nonzero(s=5)=5
+    // HW-oracle: addr 0x02: 5b 34
+    assert_eq!(decode_narrow(0x345b), Instruction::Addi { at: 3, as_: 4, imm8: 5 });
+    // addi.n a3, a4, -1  →  0x340b: s=0 encodes imm=-1
+    // HW-oracle: addr 0x04: 0b 34
+    assert_eq!(decode_narrow(0x340b), Instruction::Addi { at: 3, as_: 4, imm8: -1 });
+    // addi.n a3, a4, 15  →  maximum positive imm (s=0xF)
+    assert_eq!(decode_narrow(0x34fb), Instruction::Addi { at: 3, as_: 4, imm8: 15 });
+    // addi.n a3, a4, 1  →  minimum positive imm (s=1)
+    assert_eq!(decode_narrow(0x341b), Instruction::Addi { at: 3, as_: 4, imm8: 1 });
+}
+
+#[test]
+fn test_decode_narrow_mov_n() {
+    // mov.n a3, a4  →  0x043d
+    // MOV.N = OR ar=s=3, as_=t=4, at=t=4  (OR with same src twice)
+    // HW-oracle: addr 0x06: 3d 04
+    assert_eq!(decode_narrow(0x043d), Instruction::Or { ar: 3, as_: 4, at: 4 });
+    // mov.n a0, a1  →  r=0, t=1, s=0  →  hw = (0<<12)|(1<<8)|(0<<4)|0xD = 0x010d
+    assert_eq!(decode_narrow(0x010d), Instruction::Or { ar: 0, as_: 1, at: 1 });
+}
+
+#[test]
+fn test_decode_narrow_movi_n_positive() {
+    // movi.n a3, 5  →  0x530c: t=3=at, s=0, r=5; raw7=(0<<4)|5=5; imm=5
+    // HW-oracle: addr 0x08: 0c 53
+    assert_eq!(decode_narrow(0x530c), Instruction::Movi { at: 3, imm: 5 });
+    // movi.n a3, 0  →  0x030c: s=0, r=0; raw7=0; imm=0
+    assert_eq!(decode_narrow(0x030c), Instruction::Movi { at: 3, imm: 0 });
+    // movi.n a3, 63  →  0xf33c: s=3, r=15; raw7=(3<<4)|15=63; imm=63
+    assert_eq!(decode_narrow(0xf33c), Instruction::Movi { at: 3, imm: 63 });
+    // movi.n a3, 95  →  0xf35c: s=5, r=15; raw7=(5<<4)|15=95; imm=95 (POSITIVE despite bit6=1)
+    // HW-oracle: addr 0x0c: 5c f3
+    assert_eq!(decode_narrow(0xf35c), Instruction::Movi { at: 3, imm: 95 });
+    // movi.n a3, 64  →  0x034c: s=4, r=0; raw7=64; imm=64 (not -64!)
+    assert_eq!(decode_narrow(0x034c), Instruction::Movi { at: 3, imm: 64 });
+}
+
+#[test]
+fn test_decode_narrow_movi_n_negative() {
+    // movi.n a3, -32  →  0x036c: s=6, r=0; raw7=(6<<4)|0=96; 96>=96 → imm=96-128=-32
+    // HW-oracle: addr 0x0a: 6c 03
+    assert_eq!(decode_narrow(0x036c), Instruction::Movi { at: 3, imm: -32 });
+    // movi.n a3, -1  →  0xf37c: s=7, r=15; raw7=(7<<4)|15=127; 127>=96 → imm=127-128=-1
+    assert_eq!(decode_narrow(0xf37c), Instruction::Movi { at: 3, imm: -1 });
+    // movi.n a3, -16  →  0x037c: s=7, r=0; raw7=112; 112>=96 → imm=112-128=-16
+    assert_eq!(decode_narrow(0x037c), Instruction::Movi { at: 3, imm: -16 });
+    // boundary: raw7=95 → positive (95 < 96)
+    assert_eq!(decode_narrow(0xf35c), Instruction::Movi { at: 3, imm: 95 });
+    // boundary: raw7=96 → negative
+    assert_eq!(decode_narrow(0x036c), Instruction::Movi { at: 3, imm: -32 });
+}
+
+#[test]
+fn test_decode_narrow_beqz_n() {
+    // HW-oracle bytes from xtensa-esp32s3-elf-as (correct formula: ((b4<<4)|r)+4).
+    // beqz.n a3, +4  →  hw=0x038c [bytes 8c 03]: r=0, b4=0 → offset=4
+    assert_eq!(decode_narrow(0x038c), Instruction::Beqz { as_: 3, offset: 4 });
+    // beqz.n a2, +4  →  hw=0x028c [bytes 8c 02]: r=0, b4=0, as_=2 → offset=4
+    assert_eq!(decode_narrow(0x028c), Instruction::Beqz { as_: 2, offset: 4 });
+    // beqz.n a3, +6  →  hw=0x238c [bytes 8c 23]: r=2, b4=0 → offset=6
+    assert_eq!(decode_narrow(0x238c), Instruction::Beqz { as_: 3, offset: 6 });
+    // beqz.n a3, +18 →  hw=0xe38c [bytes 8c e3]: r=14, b4=0 → offset=18
+    assert_eq!(decode_narrow(0xe38c), Instruction::Beqz { as_: 3, offset: 18 });
+    // beqz.n a3, +19 →  hw=0xf38c [bytes 8c f3]: r=15, b4=0 → offset=19 (b4=0 boundary)
+    assert_eq!(decode_narrow(0xf38c), Instruction::Beqz { as_: 3, offset: 19 });
+    // beqz.n a3, +21 →  hw=0x139c [bytes 9c 13]: r=1,  b4=1 → offset=21 (b4=1 minimum)
+    assert_eq!(decode_narrow(0x139c), Instruction::Beqz { as_: 3, offset: 21 });
+    // beqz.n a3, +35 →  hw=0xf39c [bytes 9c f3]: r=15, b4=1 → offset=35 (maximum)
+    assert_eq!(decode_narrow(0xf39c), Instruction::Beqz { as_: 3, offset: 35 });
+}
+
+#[test]
+fn test_decode_narrow_bnez_n() {
+    // HW-oracle bytes from xtensa-esp32s3-elf-as (same formula as BEQZ.N; s[2]=1 distinguishes BNEZ.N).
+    // bnez.n a3, +4  →  hw=0x03cc [bytes cc 03]: r=0, b4=0 → offset=4
+    assert_eq!(decode_narrow(0x03cc), Instruction::Bnez { as_: 3, offset: 4 });
+    // bnez.n a4, +4  →  hw=0x04cc [bytes cc 04]: r=0, b4=0, as_=4 → offset=4
+    assert_eq!(decode_narrow(0x04cc), Instruction::Bnez { as_: 4, offset: 4 });
+    // bnez.n a3, +6  →  hw=0x23cc [bytes cc 23]: r=2, b4=0 → offset=6
+    assert_eq!(decode_narrow(0x23cc), Instruction::Bnez { as_: 3, offset: 6 });
+    // bnez.n a3, +18 →  hw=0xe3cc [bytes cc e3]: r=14, b4=0 → offset=18
+    assert_eq!(decode_narrow(0xe3cc), Instruction::Bnez { as_: 3, offset: 18 });
+    // bnez.n a3, +35 →  hw=0xf3dc [bytes dc f3]: r=15, b4=1 → offset=35 (maximum)
+    // HW-oracle: xtensa-esp32s3-elf-as assembles bnez.n a3, +35 → 0xf3dc
+    assert_eq!(decode_narrow(0xf3dc), Instruction::Bnez { as_: 3, offset: 35 });
+}
+
+#[test]
+fn test_decode_narrow_ret_n() {
+    // ret.n  →  0xf00d: r=0xF, s=0, t=0
+    // HW-oracle: addr 0x14: 0d f0
+    assert_eq!(decode_narrow(0xf00d), Instruction::Ret);
+}
+
+#[test]
+fn test_decode_narrow_retw_n() {
+    // retw.n  →  0xf01d: r=0xF, s=1, t=0
+    // HW-oracle: addr 0x16: 1d f0
+    assert_eq!(decode_narrow(0xf01d), Instruction::Retw);
+}
+
+#[test]
+fn test_decode_narrow_break_n() {
+    // break.n 0  →  0xf02d: r=0xF, s=2, t=0  → Break{imm_s=0,imm_t=0}
+    // HW-oracle: addr 0x18: 2d f0
+    assert_eq!(decode_narrow(0xf02d), Instruction::Break { imm_s: 0, imm_t: 0 });
+}
+
+#[test]
+fn test_decode_narrow_nop_n() {
+    // nop.n  →  0xf03d: r=0xF, s=3, t=0
+    // HW-oracle: addr 0x12: 3d f0
+    assert_eq!(decode_narrow(0xf03d), Instruction::Nop);
+}
+
+#[test]
+fn test_decode_narrow_ill_n() {
+    // ill.n  →  0xf06d: r=0xF, s=6, t=0
+    // HW-oracle: addr 0x1a: 6d f0
+    assert_eq!(decode_narrow(0xf06d), Instruction::Ill);
+}
+
+// ── E1: MUL family decoder tests (HW-oracle verified) ────────────────────────
+//
+// Source: xtensa-esp32s3-elf-as + xtensa-esp32s3-elf-objdump (esp-15.2.0_20250920)
+// Assembly: mull a3, a4, a5  etc.
+// Full hex dump from --full-contents: 50 34 82  50 34 a2  50 34 b2  50 34 c1  50 34 d1
+// Packed as LE 24-bit words: 0x823450  0xa23450  0xb23450  0xc13450  0xd13450
+// Field breakdown (op0=[3:0], t=[7:4], s=[11:8], r=[15:12], op1=[19:16], op2=[23:20]):
+//   MULL:   op0=0, op1=0x2, op2=0x8, r=3, s=4, t=5
+//   MULUH:  op0=0, op1=0x2, op2=0xA, r=3, s=4, t=5
+//   MULSH:  op0=0, op1=0x2, op2=0xB, r=3, s=4, t=5
+//   MUL16U: op0=0x1 (note: low nibble=1!), op1=0x1, op2=0xC, r=3, s=4, t=5
+//   MUL16S: op0=0x1, op1=0x1, op2=0xD, r=3, s=4, t=5
+
+#[test]
+fn test_decode_mull() {
+    // HW-oracle: mull a3, a4, a5 → bytes [50 34 82] → word 0x823450
+    assert_eq!(decode(0x823450), Instruction::Mull { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_muluh() {
+    // HW-oracle: muluh a3, a4, a5 → bytes [50 34 a2] → word 0xa23450
+    assert_eq!(decode(0xa23450), Instruction::Muluh { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_mulsh() {
+    // HW-oracle: mulsh a3, a4, a5 → bytes [50 34 b2] → word 0xb23450
+    assert_eq!(decode(0xb23450), Instruction::Mulsh { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_mul16u() {
+    // HW-oracle: mul16u a3, a4, a5 → bytes [50 34 c1] → word 0xc13450
+    // op0=0x0 (QRST group), op1=0x1, op2=0xC — all MUL family lives in QRST.
+    assert_eq!(decode(0xc13450), Instruction::Mul16u { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_mul16s() {
+    // HW-oracle: mul16s a3, a4, a5 → bytes [50 34 d1] → word 0xd13450
+    assert_eq!(decode(0xd13450), Instruction::Mul16s { ar: 3, as_: 4, at: 5 });
+}
+
+// ── E2: DIV family decoder tests (HW-oracle verified) ────────────────────────
+//
+// Source: xtensa-esp32s3-elf-as + xtensa-esp32s3-elf-objdump (esp-15.2.0_20250920)
+// Assembly: quos a3, a4, a5  etc.
+// Disassembly bytes: quos d2 34 50  quou c2 34 50  rems f2 34 50  remu e2 34 50
+// Packed as LE 24-bit words: 0xD23450  0xC23450  0xF23450  0xE23450
+// Field breakdown (op0=[3:0], t=[7:4], s=[11:8], r=[15:12], op1=[19:16], op2=[23:20]):
+//   QUOU: op0=0, op1=0x2, op2=0xC, r=3, s=4, t=5
+//   QUOS: op0=0, op1=0x2, op2=0xD, r=3, s=4, t=5
+//   REMU: op0=0, op1=0x2, op2=0xE, r=3, s=4, t=5
+//   REMS: op0=0, op1=0x2, op2=0xF, r=3, s=4, t=5
+
+#[test]
+fn test_decode_quos() {
+    // HW-oracle: quos a3, a4, a5 → bytes [d2 34 50] → word 0xD23450
+    assert_eq!(decode(0xD23450), Instruction::Quos { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_quou() {
+    // HW-oracle: quou a3, a4, a5 → bytes [c2 34 50] → word 0xC23450
+    assert_eq!(decode(0xC23450), Instruction::Quou { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_rems() {
+    // HW-oracle: rems a3, a4, a5 → bytes [f2 34 50] → word 0xF23450
+    assert_eq!(decode(0xF23450), Instruction::Rems { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_remu() {
+    // HW-oracle: remu a3, a4, a5 → bytes [e2 34 50] → word 0xE23450
+    assert_eq!(decode(0xE23450), Instruction::Remu { ar: 3, as_: 4, at: 5 });
+}
+
+// ── E3: Bit-manip decoder tests ───────────────────────────────────────────────
+//
+// All byte encodings are HW-oracle verified via:
+//   xtensa-esp32s3-elf-as + xtensa-esp32s3-elf-objdump (esp-15.2.0_20250920)
+//
+// NSA/NSAU field layout (op0=0, op1=0):
+//   r=0xE(NSA)/0xF(NSAU), op2=ar, s=as_, t=don't-care
+// MIN/MAX/MINU/MAXU field layout (op0=3):
+//   t=4/5/6/7(subop), r=ar, s=as_, op2=at, op1=0
+// SEXT/CLAMPS field layout (op0=3):
+//   t=2/3(subop), r=ar, s=as_, op2=sa-7, op1=0  (sa stored as Instruction.t)
+
+#[test]
+fn test_decode_nsa() {
+    // HW-oracle: nsa a3, a4 → objdump 40e430 → word 0x40E430
+    // Encoding: op0=0, op1=0, op2=4 (NSA/shift sub-group), r=0xE, t=ar=3, s=as_=4
+    assert_eq!(decode(0x40E430), Instruction::Nsa { ar: 3, as_: 4 });
+}
+
+#[test]
+fn test_decode_nsau() {
+    // HW-oracle: nsau a3, a4 → objdump 40f430 → word 0x40F430
+    // Encoding: op0=0, op1=0, op2=4 (NSA/shift sub-group), r=0xF, t=ar=3, s=as_=4
+    assert_eq!(decode(0x40F430), Instruction::Nsau { ar: 3, as_: 4 });
+}
+
+#[test]
+fn test_decode_min() {
+    // HW-oracle: min a3, a4, a5 → bytes [43 34 50] → word 0x503443
+    // Encoding: op0=3, t=4(MIN), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503443), Instruction::Min { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_max() {
+    // HW-oracle: max a3, a4, a5 → bytes [53 34 50] → word 0x503453
+    // Encoding: op0=3, t=5(MAX), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503453), Instruction::Max { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_minu() {
+    // HW-oracle: minu a3, a4, a5 → bytes [63 34 50] → word 0x503463
+    // Encoding: op0=3, t=6(MINU), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503463), Instruction::Minu { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_maxu() {
+    // HW-oracle: maxu a3, a4, a5 → bytes [73 34 50] → word 0x503473
+    // Encoding: op0=3, t=7(MAXU), r=3=ar, s=4=as_, op2=5=at
+    assert_eq!(decode(0x503473), Instruction::Maxu { ar: 3, as_: 4, at: 5 });
+}
+
+#[test]
+fn test_decode_sext() {
+    // HW-oracle: sext a3, a4, 7 → bytes [23 34 00] → word 0x003423
+    // Encoding: op0=3, t=2(SEXT), r=3=ar, s=4=as_, op2=0=sa-7, sa=7
+    // Instruction.t stores sa=7 (the sign bit position).
+    assert_eq!(decode(0x003423), Instruction::Sext { ar: 3, as_: 4, t: 7 });
+    // sext a3, a4, 15 → bytes [23 34 80] → word 0x803423
+    // op2=8=15-7=sa-7, sa=15
+    assert_eq!(decode(0x803423), Instruction::Sext { ar: 3, as_: 4, t: 15 });
+}
+
+#[test]
+fn test_decode_clamps() {
+    // HW-oracle: clamps a3, a4, 7 → bytes [33 34 00] → word 0x003433
+    // Encoding: op0=3, t=3(CLAMPS), r=3=ar, s=4=as_, op2=0=sa-7, sa=7
+    // Instruction.t stores sa=7 (saturation bit width = sa+1 = 8 bits).
+    assert_eq!(decode(0x003433), Instruction::Clamps { ar: 3, as_: 4, t: 7 });
+}
+
+#[test]
+fn test_decode_subx4_ar_a14_not_nsa() {
+    // HW-oracle: subx4 a14, a4, a5 → objdump e0e450 → word 0xE0E450
+    // op2=0xE (SUBX4 sub-opcode) routes to the Subx4 arm; r=0xE is ar=14.
+    // NSA uses op2=4, so no collision is possible at op2=0xE.
+    let ins = decode(0xE0_E4_50);
+    match ins {
+        Instruction::Subx4 { ar: 14, as_: 4, at: 5 } => {}
+        other => panic!("expected SUBX4 a14, a4, a5, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_decode_subx8_ar_a15_not_nsau() {
+    // HW-oracle: subx8 a15, a4, a5 → objdump f0f450 → word 0xF0F450
+    // op2=0xF (SUBX8 sub-opcode) routes to the Subx8 arm; r=0xF is ar=15.
+    // NSAU uses op2=4, so no collision is possible at op2=0xF.
+    let ins = decode(0xF0_F4_50);
+    match ins {
+        Instruction::Subx8 { ar: 15, as_: 4, at: 5 } => {}
+        other => panic!("expected SUBX8 a15, a4, a5, got {:?}", other),
+    }
+}
+
+// ── E4: Atomic instructions — HW-oracle byte tests ──────────────────────────
+//
+// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   s32c1i a3, a4, 0  →  00 e4 32  →  word 0x00e432
+//   s32c1i a3, a4, 4  →  01 e4 32  →  word 0x01e432  (imm8=1 → imm=4)
+//   l32ai  a3, a4, 0  →  00 b4 32  →  word 0x00b432
+//   l32ai  a3, a4, 4  →  01 b4 32  →  word 0x01b432
+//   s32ri  a3, a4, 0  →  00 f4 32  →  word 0x00f432
+//   s32ri  a3, a4, 4  →  01 f4 32  →  word 0x01f432
+//
+// Field layout (LSAI, op0=0x2):
+//   op0=bits[3:0]=0x2, t=bits[7:4]=at, s=bits[11:8]=as_,
+//   r=bits[15:12] (0xE=S32c1i, 0xB=L32ai, 0xF=S32ri),
+//   imm8=bits[23:16]; decoded imm = imm8 << 2.
+
+/// S32C1I a3, a4, 0 — HW-oracle exact bytes.
+#[test]
+fn test_decode_s32c1i_hw_oracle() {
+    // `s32c1i a3, a4, 0` → objdump: 00e432 → 24-bit word 0x00e432
+    let w = 0x00e432u32;
+    assert_eq!(decode(w), Instruction::S32c1i { at: 3, as_: 4, imm: 0 });
+}
+
+/// S32C1I a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
+#[test]
+fn test_decode_s32c1i_hw_oracle_imm4() {
+    // `s32c1i a3, a4, 4` → objdump: 01e432 → 24-bit word 0x01e432
+    // imm8=1 → decoded imm = 1 << 2 = 4.
+    let w = 0x01e432u32;
+    assert_eq!(decode(w), Instruction::S32c1i { at: 3, as_: 4, imm: 4 });
+}
+
+/// L32AI a3, a4, 0 — HW-oracle exact bytes.
+#[test]
+fn test_decode_l32ai_hw_oracle() {
+    // `l32ai a3, a4, 0` → objdump: 00b432 → 24-bit word 0x00b432
+    let w = 0x00b432u32;
+    assert_eq!(decode(w), Instruction::L32ai { at: 3, as_: 4, imm: 0 });
+}
+
+/// L32AI a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
+#[test]
+fn test_decode_l32ai_hw_oracle_imm4() {
+    // `l32ai a3, a4, 4` → objdump: 01b432 → 24-bit word 0x01b432
+    // imm8=1 → decoded imm = 1 << 2 = 4.
+    let w = 0x01b432u32;
+    assert_eq!(decode(w), Instruction::L32ai { at: 3, as_: 4, imm: 4 });
+}
+
+/// S32RI a3, a4, 0 — HW-oracle exact bytes.
+#[test]
+fn test_decode_s32ri_hw_oracle() {
+    // `s32ri a3, a4, 0` → objdump: 00f432 → 24-bit word 0x00f432
+    let w = 0x00f432u32;
+    assert_eq!(decode(w), Instruction::S32ri { at: 3, as_: 4, imm: 0 });
+}
+
+/// S32RI a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
+#[test]
+fn test_decode_s32ri_hw_oracle_imm4() {
+    // `s32ri a3, a4, 4` → objdump: 01f432 → 24-bit word 0x01f432
+    // imm8=1 → decoded imm = 1 << 2 = 4.
+    let w = 0x01f432u32;
+    assert_eq!(decode(w), Instruction::S32ri { at: 3, as_: 4, imm: 4 });
+}
+
+// ── F1: ENTRY + RETW decoder tests (HW-oracle verified) ──────────────────────
+//
+// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   entry a1, 32  → 004136 → 24-bit LE word 0x004136
+//   entry a1, 256 → 020136 → 24-bit LE word 0x020136
+//   entry sp, 16  → 002136 → 24-bit LE word 0x002136  (sp = a1)
+//   retw (wide)   → 000090 → 24-bit word 0x000090  (ST0 group, r=0, t=9)
+//   retw.n (narrow) → f01d → 16-bit halfword 0xf01d   (op0=D, r=F, s=1)
+//
+// ENTRY encoding (SI format, op0=6):
+//   op0=bits[3:0]=6, n=bits[5:4]=3, m=bits[7:6]=0,
+//   as_=bits[11:8], imm12=bits[23:12].
+//   Stack decrement = imm12 * 8 bytes.  Instruction::Entry { as_, imm: imm12 }.
+
+/// ENTRY a1, 32 — HW-oracle exact bytes.
+/// `entry a1, 32` → objdump: 004136 → 24-bit LE word 0x004136.
+/// imm12 = 4  (4 * 8 = 32 bytes of stack).
+#[test]
+fn test_decode_entry_a1_32() {
+    let w = 0x004136u32;
+    assert_eq!(decode(w), Instruction::Entry { as_: 1, imm: 4 });
+}
+
+/// ENTRY a1, 256 — HW-oracle exact bytes.
+/// `entry a1, 256` → objdump: 020136 → 24-bit LE word 0x020136.
+/// imm12 = 32  (32 * 8 = 256 bytes of stack).
+#[test]
+fn test_decode_entry_a1_256() {
+    let w = 0x020136u32;
+    assert_eq!(decode(w), Instruction::Entry { as_: 1, imm: 32 });
+}
+
+/// ENTRY sp (a1), 16 — HW-oracle exact bytes.
+/// `entry sp, 16` → objdump: 002136 → 24-bit LE word 0x002136.
+/// imm12 = 2  (2 * 8 = 16 bytes of stack).
+#[test]
+fn test_decode_entry_sp_16() {
+    let w = 0x002136u32;
+    assert_eq!(decode(w), Instruction::Entry { as_: 1, imm: 2 });
+}
+
+/// RETW (wide form) — ST0 group encoding.
+/// Wide RETW: op0=0, op1=0, op2=0, r=0, s=0, t=9 → 24-bit word 0x000090.
+#[test]
+fn test_decode_retw_wide() {
+    let w = 0x000090u32;
+    assert_eq!(decode(w), Instruction::Retw);
+}
+
+/// RETW.N (narrow form) — HW-oracle exact bytes.
+/// `retw.n` → halfword 0xf01d  (op0=0xD, r=0xF, s=1, t=0).
+#[test]
+fn test_decode_retw_n() {
+    let hw = 0xf01du16;
+    assert_eq!(decode_narrow(hw), Instruction::Retw);
+}
+
+// ── F5: S32E / L32E decoder tests (HW-oracle verified, Plan 3 Task 10 fix) ───
+//
+// HW-oracle (xtensa-esp32s3-elf-as + xtensa-esp32s3-elf-objdump,
+// esp-15.2.0_20250920):
+//   s32e a3, a4, -16 → memory bytes 30 C4 49 → LE u32 0x49C430
+//                      objdump display "49c430" (bytes in reverse mem order)
+//   s32e a0, a1, -12 → memory bytes 00 D1 49 → LE u32 0x49D100
+//   l32e a3, a4, -16 → memory bytes 30 C4 09 → LE u32 0x09C430
+//
+// Field layout (op0=0, op1=9 → LSC4 group):
+//   bits[3:0]   = op0 = 0
+//   bits[7:4]   = at
+//   bits[11:8]  = as_
+//   bits[15:12] = imm4 (imm_byte = imm4*4 - 64, range -64..-4)
+//   bits[19:16] = op1 = 9
+//   bits[23:20] = op2 (4 = S32E, 0 = L32E)
+//   The `imm` field stores the byte offset as two's-complement u32.
+//
+// (An earlier draft used op0=9 with field positions swapped — that decoded
+// hand-crafted test inputs but rejected real-firmware S32E. See Plan 3
+// case study notes alongside docs/case_study_esp32s3_plan2.md.)
+
+/// S32E a3, a4, -16 — real assembler bytes.
+#[test]
+fn test_decode_s32e() {
+    let w = 0x49C430u32;
+    assert_eq!(
+        decode(w),
+        Instruction::S32e { at: 3, as_: 4, imm: (-16i32) as u32 }
+    );
+}
+
+/// L32E a3, a4, -16 — real assembler bytes.
+#[test]
+fn test_decode_l32e() {
+    let w = 0x09C430u32;
+    assert_eq!(
+        decode(w),
+        Instruction::L32e { at: 3, as_: 4, imm: (-16i32) as u32 }
+    );
+}
+
+/// S32E a0, a1, -12 — the exact word emitted by esp-hal's
+/// __default_naked_exception spill at PC 0x40379049 in the blinky firmware.
+/// This is the test that would have caught the op0-routing bug if we had
+/// run the firmware end-to-end during Plan 3 Task 5.
+#[test]
+fn test_decode_s32e_a0_a1_negative_12_real_firmware() {
+    let w = 0x49D100u32;
+    assert_eq!(
+        decode(w),
+        Instruction::S32e { at: 0, as_: 1, imm: (-12i32) as u32 }
+    );
+}
+
+// ── F6: MOVSP / ROTW decoder tests (HW-oracle verified) ──────────────────────
+//
+// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+//   movsp a3, a4 → bytes 30 14 00 → 24-bit LE word 0x001430
+//   rotw  1      → bytes 10 80 40 → 24-bit LE word 0x408010
+//   rotw -1      → bytes f0 80 40 → 24-bit LE word 0x4080f0
+//   rotw  7      → bytes 70 80 40 → 24-bit LE word 0x408070
+//   rotw -8      → bytes 80 80 40 → 24-bit LE word 0x408080
+//
+// MOVSP field layout: op0=0, op1=0, op2=0 (ST0 group), r=1, s=as_, t=at.
+// ROTW field layout:  op0=0, op1=0, op2=4, r=8, s=0, t=n (4-bit signed two's complement).
+
+/// MOVSP a3, a4 — HW-oracle exact bytes.
+/// `movsp a3, a4` → 0x001430: op0=0, op1=0, op2=0, r=1, s(as_)=4, t(at)=3.
+#[test]
+fn test_decode_movsp_hw_oracle() {
+    let w = 0x001430u32;
+    assert_eq!(decode(w), Instruction::Movsp { at: 3, as_: 4 });
+}
+
+/// ROTW 1 — HW-oracle exact bytes.
+/// `rotw 1` → 0x408010: op2=4, r=8, s=0, t=1 → n=+1.
+#[test]
+fn test_decode_rotw_pos_1() {
+    let w = 0x408010u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: 1 });
+}
+
+/// ROTW -1 — HW-oracle exact bytes.
+/// `rotw -1` → 0x4080f0: op2=4, r=8, s=0, t=0xF → n=-1 (4-bit two's complement).
+#[test]
+fn test_decode_rotw_neg_1() {
+    let w = 0x4080f0u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: -1 });
+}
+
+/// ROTW 7 — HW-oracle exact bytes.
+/// `rotw 7` → 0x408070: op2=4, r=8, s=0, t=7 → n=+7 (max positive).
+#[test]
+fn test_decode_rotw_pos_7() {
+    let w = 0x408070u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: 7 });
+}
+
+/// ROTW -8 — HW-oracle exact bytes.
+/// `rotw -8` → 0x408080: op2=4, r=8, s=0, t=8 → n=-8 (min negative in 4-bit).
+#[test]
+fn test_decode_rotw_neg_8() {
+    let w = 0x408080u32;
+    assert_eq!(decode(w), Instruction::Rotw { n: -8 });
+}

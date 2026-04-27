@@ -6,6 +6,9 @@
 
 pub mod arm;
 pub mod riscv;
+pub mod xtensa;
+pub mod xtensa_narrow;
+pub mod xtensa_length;
 
 pub use arm::decode_thumb_16;
 pub use arm::Instruction as ArmInstruction;

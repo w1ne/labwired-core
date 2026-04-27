@@ -1,0 +1,20 @@
+[package]
+name = "labwired-hw-oracle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "HW oracle harness: JTAG-driven cross-validation against physical boards."
+
+[dependencies]
+labwired-hw-oracle-macros = { path = "../hw-oracle-macros" }
+labwired-core = { path = "../core" }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+libc = { workspace = true }
+goblin = { workspace = true }
+serialport = { workspace = true }
+
+[features]
+default = []
+hw-oracle = []  # gates _hw and _diff runners; CI enables on self-hosted runner

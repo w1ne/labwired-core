@@ -36,6 +36,11 @@ pub struct SystemBus {
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
+    /// Bitmask of pending cpu0 IRQ slots (32 bits, one per ESP32-S3 cpu IRQ
+    /// slot). Aggregated by `tick_peripherals_with_costs` from peripheral
+    /// `explicit_irqs` source IDs routed through a registered intmatrix.
+    /// Cleared per slot via `clear_cpu_irq_pending`.
+    pub pending_cpu_irqs: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -177,6 +182,25 @@ impl SystemBus {
         idx
     }
 
+    /// Construct a SystemBus with empty flash, ram, and peripheral list.
+    /// Used by integration tests that need a clean bus without the STM32
+    /// default peripheral seed (which would conflict with their own
+    /// peripheral registrations).
+    pub fn empty() -> Self {
+        let mut bus = Self {
+            flash: LinearMemory::new(0, 0x0),
+            ram: LinearMemory::new(0, 0x0),
+            peripherals: Vec::new(),
+            nvic: None,
+            observers: Vec::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+            pending_cpu_irqs: 0,
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
+    }
+
     pub fn new() -> Self {
         // Default initialization for tests
         let mut bus = Self {
@@ -293,6 +317,7 @@ impl SystemBus {
             observers: Vec::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            pending_cpu_irqs: 0,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -325,6 +350,7 @@ impl SystemBus {
             observers: Vec::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            pending_cpu_irqs: 0,
         };
 
         for p_cfg in &chip.peripherals {
@@ -529,12 +555,77 @@ impl SystemBus {
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
-    pub fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
-        self.write_u8(addr, (value & 0xFF) as u8)?;
-        self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
-        self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
-        self.write_u8(addr + 3, ((value >> 24) & 0xFF) as u8)?;
-        Ok(())
+    /// Append a peripheral to the bus at runtime. Useful for tests and
+    /// dynamic configuration that bypasses `from_config`.
+    ///
+    /// **No overlap check is performed.** If two peripherals claim overlapping
+    /// address ranges, reads and writes are routed to the **first** matching
+    /// peripheral in registration order (i.e. the earlier-registered peripheral
+    /// wins). Callers are responsible for ensuring non-overlapping ranges.
+    pub fn add_peripheral(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
+        dev: Box<dyn Peripheral>,
+    ) {
+        self.peripherals.push(PeripheralEntry {
+            name: name.to_string(),
+            base,
+            size,
+            irq,
+            dev,
+        });
+    }
+
+    /// Look up a registered ROM thunk by absolute PC.
+    ///
+    /// Iterates the registered peripherals; if any is a `RomThunkBank` whose
+    /// address range contains `pc`, asks it for a thunk at `pc`.  Returns
+    /// `None` if no bank covers the PC or no thunk is registered.
+    ///
+    /// Used by the CPU's `BREAK 1, 14` dispatch in `xtensa_lx7.rs`.
+    pub fn get_rom_thunk(
+        &self,
+        pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        // O(n) scan; fine while BREAK 1,14 dispatches are rare. If profiling
+        // shows hotness, switch to a HashMap<u32, RomThunkFn> cache on
+        // SystemBus populated by add_peripheral when it sees a RomThunkBank.
+        for p in &self.peripherals {
+            let base = p.base as u32;
+            let end = base.wrapping_add(p.size as u32);
+            if pc >= base && pc < end {
+                if let Some(any) = p.dev.as_any() {
+                    if let Some(bank) = any
+                        .downcast_ref::<crate::peripherals::esp32s3::rom_thunks::RomThunkBank>()
+                    {
+                        return bank.get(pc);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Look up the cpu0 IRQ slot the registered intmatrix has bound to
+    /// peripheral source `source_id`. Returns None if no intmatrix is
+    /// registered or no binding exists for the source.
+    pub fn route_irq_source_to_cpu_irq(
+        &self,
+        source_id: u32,
+    ) -> Option<u8> {
+        for p in &self.peripherals {
+            if let Some(any) = p.dev.as_any() {
+                if let Some(matrix) = any
+                    .downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+                {
+                    return matrix.route(source_id);
+                }
+            }
+        }
+        None
     }
 
     pub fn read_u16(&self, addr: u64) -> SimResult<u16> {
@@ -553,6 +644,10 @@ impl SystemBus {
         let mut interrupts = Vec::new();
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
+        // Plan 3: collect ESP32-S3 explicit_irq source IDs during pass 1, then
+        // route them through the intmatrix in pass 2 (route_irq_source_to_cpu_irq
+        // takes &self, conflicting with the iter_mut borrow during pass 1).
+        let mut explicit_source_ids: Vec<u32> = Vec::new();
 
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
             let res = p.dev.tick();
@@ -585,6 +680,10 @@ impl SystemBus {
                 }
             }
 
+            // Plan 3: stash source IDs for pass-2 intmatrix routing (can't
+            // call self.route_irq_source_to_cpu_irq inside iter_mut).
+            explicit_source_ids.extend(res.explicit_irqs.iter().copied());
+
             for irq in res.explicit_irqs {
                 if let Some(nvic) = &self.nvic {
                     if irq >= 16 {
@@ -598,6 +697,37 @@ impl SystemBus {
                     }
                 } else {
                     interrupts.push(irq);
+                }
+            }
+        }
+
+        // Plan 3: route ESP32-S3 source IDs through the intmatrix.
+        // For buses without an intmatrix peripheral, route_irq_source_to_cpu_irq
+        // returns None and this loop is a no-op. ARM/NVIC's legacy explicit_irqs
+        // path above is preserved.
+        let mut intr_status = [0u32; 4];
+        for &source_id in &explicit_source_ids {
+            if let Some(slot) = self.route_irq_source_to_cpu_irq(source_id) {
+                self.pending_cpu_irqs |= 1u32 << slot;
+            }
+            // Mirror into PRO_INTR_STATUS_REG_n bitmap so that esp-hal's
+            // __level_1_interrupt can discover which source asserted by
+            // reading 0x600C_218C..0x600C_219C.
+            let reg = (source_id / 32) as usize;
+            let bit = source_id & 31;
+            if reg < intr_status.len() {
+                intr_status[reg] |= 1u32 << bit;
+            }
+        }
+        // Push the live source-assertion bitmap into the intmatrix peripheral.
+        // No-op for buses without an intmatrix registered.
+        for p in self.peripherals.iter_mut() {
+            if let Some(any) = p.dev.as_any_mut() {
+                if let Some(matrix) = any
+                    .downcast_mut::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+                {
+                    matrix.set_pending_sources(intr_status);
+                    break;
                 }
             }
         }
@@ -752,6 +882,17 @@ impl crate::Bus for SystemBus {
         interrupts
     }
 
+    fn notify_word_write(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        for entry in &mut self.peripherals {
+            if addr >= entry.base && addr < entry.base + entry.size {
+                let offset = addr - entry.base;
+                entry.dev.write_word_32(offset, value)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
     fn execute_dma(&mut self, requests: &[DmaRequest]) -> SimResult<()> {
         for req in requests {
             match req.direction {
@@ -767,6 +908,28 @@ impl crate::Bus for SystemBus {
             }
         }
         Ok(())
+    }
+
+    fn get_rom_thunk(
+        &self,
+        pc: u32,
+    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        SystemBus::get_rom_thunk(self, pc)
+    }
+
+    fn route_irq_source_to_cpu_irq(
+        &self,
+        source_id: u32,
+    ) -> Option<u8> {
+        SystemBus::route_irq_source_to_cpu_irq(self, source_id)
+    }
+
+    fn pending_cpu_irqs(&self) -> u32 {
+        self.pending_cpu_irqs
+    }
+
+    fn clear_cpu_irq_pending(&mut self, slot: u8) {
+        self.pending_cpu_irqs &= !(1u32 << slot);
     }
 }
 
@@ -884,6 +1047,7 @@ mod tests {
             observers: Vec::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            pending_cpu_irqs: 0,
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -923,6 +1087,7 @@ mod tests {
             observers: Vec::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            pending_cpu_irqs: 0,
         };
 
         bus.rebuild_peripheral_ranges();
@@ -931,5 +1096,61 @@ mod tests {
 
         assert_eq!(low_idx, Some(1));
         assert_eq!(high_idx, Some(0));
+    }
+}
+
+#[cfg(test)]
+mod plan3_tests {
+    use super::*;
+    use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
+    use crate::peripherals::esp32s3::systimer::Systimer;
+
+    #[test]
+    fn pending_cpu_irqs_aggregates_from_systimer_alarm_via_intmatrix() {
+        let mut bus = SystemBus::new();
+        // Register intmatrix and bind SYSTIMER_TARGET0 (source 57) to CPU IRQ 15.
+        let mut matrix = Esp32s3IntMatrix::new();
+        // Source 57 at offset 57*4 = 0xE4, write IRQ 15.
+        matrix.write(57 * 4, 15).unwrap();
+        bus.add_peripheral("intmatrix", 0x600C_2000, 0x800, None, Box::new(matrix));
+
+        // Register SYSTIMER and arm ALARM0 — TRM-correct sequence:
+        //   pending TARGET0 = 5, COMP0_LOAD commit, CONF.target0_work_en, INT_ENA bit 0.
+        let mut systimer = Systimer::new(80_000_000);
+        // Pending TARGET0_LO at 0x20 = 5; TARGET0_HI at 0x1C = 0.
+        systimer.write(0x20, 5).unwrap();
+        systimer.write(0x21, 0).unwrap();
+        systimer.write(0x22, 0).unwrap();
+        systimer.write(0x23, 0).unwrap();
+        systimer.write(0x1C, 0).unwrap();
+        systimer.write(0x1D, 0).unwrap();
+        systimer.write(0x1E, 0).unwrap();
+        systimer.write(0x1F, 0).unwrap();
+        // TARGET0_CONF at 0x34: target mode (no period_mode), unit_sel=0.
+        systimer.write(0x34, 0).unwrap();
+        systimer.write(0x35, 0).unwrap();
+        systimer.write(0x36, 0).unwrap();
+        systimer.write(0x37, 0).unwrap();
+        // COMP0_LOAD at 0x50 bit 0 = commit pending target.
+        systimer.write(0x50, 1).unwrap();
+        // SYSTIMER_CONF at 0x00: keep clk_en + unit work-en defaults (0xE000_0000),
+        // additionally set target0_work_en (bit 24) → byte 3 |= 0x01.
+        systimer.write(0x03, 0xE1).unwrap();
+        // INT_ENA at 0x64: bit 0 set.
+        systimer.write(0x64, 1).unwrap();
+        bus.add_peripheral("systimer", 0x6002_3000, 0x100, None, Box::new(systimer));
+
+        // Tick enough times for alarm to fire (5 SYSTIMER ticks = 25 CPU cycles at 80MHz).
+        for _ in 0..30 {
+            bus.tick_peripherals_with_costs();
+        }
+
+        // pending_cpu_irqs should have bit 15 set.
+        assert!(bus.pending_cpu_irqs & (1 << 15) != 0,
+            "expected CPU IRQ slot 15 pending; got 0x{:08x}", bus.pending_cpu_irqs);
+
+        // Clearing the slot via the trait method removes the bit.
+        Bus::clear_cpu_irq_pending(&mut bus, 15);
+        assert_eq!(bus.pending_cpu_irqs & (1 << 15), 0);
     }
 }

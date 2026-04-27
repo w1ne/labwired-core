@@ -66,6 +66,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
             let mut machine = Machine::new(cpu, bus);
             validate_registers(&mut machine, &chip)?;
         }
+        Arch::XtensaLx7 => {
+            // ESP32-S3 systems are wired by configure_xtensa_esp32s3 (which
+            // returns Esp32s3Wiring rather than the cpu directly); this
+            // generic compliance test takes the simple path of skipping
+            // until we have a chip YAML aligned with the Xtensa wiring.
+            println!("Skipping XtensaLx7 register compliance for {:?}", path);
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }

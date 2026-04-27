@@ -9,6 +9,7 @@ pub mod afio;
 pub mod declarative;
 pub mod dma;
 pub mod dwt;
+pub mod esp32s3;
 pub mod exti;
 pub mod gpio;
 pub mod i2c;
