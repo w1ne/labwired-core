@@ -110,6 +110,13 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // addresses (0x0 and 0x2000_0000) so they don't overlap, but they're
     // dead weight on Xtensa — leave them allocated; the bus accessors check
     // `addr >= base_addr` first and fall through to peripherals on miss.
+    //
+    // Disable Cortex-M bit-band aliasing — its 0x4200_0000–0x4400_0000 range
+    // collides with the ESP32-S3 flash-XIP I-cache window. With bit-band
+    // enabled, instruction fetches from 0x4200_xxxx get translated as
+    // single-bit reads of a synthetic peripheral byte instead of going
+    // through our FlashXipPeripheral. ESP32-S3 has no bit-band hardware.
+    bus.bit_band_enabled = false;
 
     // ── IRAM (instruction fetch view) ─────────────────────────────────────
     bus.add_peripheral(
