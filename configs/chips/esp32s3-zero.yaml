@@ -54,3 +54,7 @@ peripherals:
     type: "efuse_stub"
     base_address: 0x60007000
     size: "4KiB"
+  - id: "i2c0"
+    type: "i2c"
+    base_address: 0x60013000
+    size: "4KiB"

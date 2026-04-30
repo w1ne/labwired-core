@@ -13,11 +13,13 @@ use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral;
 use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
+use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_INTR_SOURCE_ID, I2C0_SIZE};
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
 use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
 use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
 use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
 use crate::peripherals::esp32s3::systimer::Systimer;
+use crate::peripherals::esp32s3::tmp102::Tmp102;
 use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use crate::Cpu;
 use std::sync::{Arc, Mutex};
@@ -210,6 +212,21 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(Esp32s3IntMatrix::new()),
     );
 
+    // ── I²C0 + attached TMP102 (Plan 4) ──────────────────────────────────
+    let mut i2c0 = Esp32s3I2c::new();
+    i2c0.attach_slave(Box::new(Tmp102::new()));
+    bus.add_peripheral(
+        "i2c0",
+        I2C0_BASE as u64,
+        I2C0_SIZE,
+        None,
+        Box::new(i2c0),
+    );
+    // Bind the I²C0 source ID through the intmatrix helper so esp-hal's
+    // poll-then-read driver path doesn't depend on routing existing yet —
+    // routing is firmware-controlled, this just leaves the source visible.
+    let _ = I2C0_INTR_SOURCE_ID;
+
     // ── SYSTEM / RTC_CNTL / EFUSE stubs ──────────────────────────────────
     // SYSTEM peripheral on ESP32-S3 is followed by INTERRUPT_CORE0/1 at
     // 0x600C_2000 / 0x600C_2800 (CPU intr-from-CPU mapping) and the AES /
@@ -371,6 +388,7 @@ impl crate::Peripheral for RamPeripheral {
 mod tests {
     use super::*;
     use crate::Bus;
+    use crate::Peripheral;
 
     #[test]
     fn configure_registers_all_peripherals() {
@@ -437,6 +455,43 @@ mod tests {
         bus.write_u8(0x6000_400B, 0).unwrap();
 
         assert!(*obs.0.lock().unwrap() >= 1, "observer should have fired");
+    }
+
+    #[test]
+    fn configure_registers_i2c0_with_tmp102_attached() {
+        let mut bus = SystemBus::new();
+        let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+
+        // I2C0 should be present at 0x6001_3000.
+        let names: Vec<_> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
+        assert!(
+            names.contains(&"i2c0"),
+            "i2c0 missing; have: {names:?}"
+        );
+
+        // The attached TMP102 should respond at address 0x48 by setting
+        // INT_NACK to 0 after a one-byte write probe.
+        let i2c_idx = bus.peripherals.iter().position(|p| p.name == "i2c0").unwrap();
+        let i2c_any = bus.peripherals[i2c_idx]
+            .dev
+            .as_any_mut()
+            .expect("i2c0 should expose as_any_mut");
+        let i2c = i2c_any
+            .downcast_mut::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>()
+            .expect("downcast to Esp32s3I2c");
+
+        // Build a probe: RSTART; WRITE 1 (addr+W=0x90); STOP.
+        i2c.write_u32(0x58, ((0u32) << 11) | 0).unwrap(); // RSTART
+        i2c.write_u32(0x5C, ((1u32) << 11) | 1).unwrap(); // WRITE 1
+        i2c.write_u32(0x60, ((3u32) << 11) | 0).unwrap(); // STOP
+        i2c.write_u32(0x18, 0x90).unwrap();                // addr+W
+        i2c.write_u32(0x04, 1 << 5).unwrap();              // TRANS_START
+        let int_raw = i2c.read_u32(0x20).unwrap();
+        assert_eq!(
+            int_raw & (1 << 11),
+            0,
+            "TMP102 attached at 0x48 must ACK; got INT_RAW=0x{int_raw:08x}"
+        );
     }
 
     #[test]
