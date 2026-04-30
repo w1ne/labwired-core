@@ -212,9 +212,11 @@ impl Peripheral for Esp32s3I2c {
 }
 
 impl Esp32s3I2c {
-    /// Walk CMD0..CMD15 from the start, executing each command in order.
-    /// Stops at the first STOP or END terminator. WRITE / READ are
-    /// implemented in tasks 5/6.
+    /// Walk CMD0..CMD15 from the start, executing each command. A "WRITE"
+    /// whose first byte follows an RSTART is interpreted as `(addr<<1)|R/W`
+    /// and selects the active slave by address bits [7:1]. Subsequent
+    /// WRITE bytes are delivered via `I2cDevice::write`. READ pulls bytes
+    /// from the active slave via `I2cDevice::read` and pushes to the RX FIFO.
     fn run_command_list(&mut self) {
         const OP_RSTART: u32 = 0;
         const OP_WRITE: u32 = 1;
@@ -222,27 +224,70 @@ impl Esp32s3I2c {
         const OP_STOP: u32 = 3;
         const OP_END: u32 = 4;
 
-        let mut completed = false;
+        // Index into self.slaves of the currently-selected device, or
+        // None if no address has been latched yet (or just after RSTART).
+        let mut active: Option<usize> = None;
+        let mut expects_addr = true;
+
         for &word in &self.cmds {
             let opcode = (word >> 11) & 0x7;
+            let byte_num = (word & 0xFF) as usize;
             match opcode {
-                OP_RSTART => { /* slave start handled in task 6 */ }
-                OP_WRITE => { /* filled in task 6 */ }
-                OP_READ => { /* filled in task 6 */ }
-                OP_STOP | OP_END => {
-                    completed = true;
+                OP_RSTART => {
+                    if let Some(idx) = active {
+                        self.slaves[idx].start();
+                    }
+                    expects_addr = true;
+                    active = None;
+                }
+                OP_WRITE => {
+                    for i in 0..byte_num {
+                        let b = self.tx_fifo.pop_front().unwrap_or(0);
+                        if expects_addr && i == 0 {
+                            // First byte of a WRITE following RSTART is addr+R/W.
+                            let addr = b >> 1;
+                            active = self
+                                .slaves
+                                .iter()
+                                .position(|s| s.address() == addr);
+                            if active.is_none() {
+                                self.int_raw |= INT_NACK;
+                            }
+                            expects_addr = false;
+                            // Don't deliver the addr byte to the slave's write().
+                            continue;
+                        }
+                        if let Some(idx) = active {
+                            self.slaves[idx].write(b);
+                        }
+                    }
+                }
+                OP_READ => {
+                    for _ in 0..byte_num {
+                        let b = if let Some(idx) = active {
+                            self.slaves[idx].read()
+                        } else {
+                            0
+                        };
+                        let mut rx = self.rx_fifo.borrow_mut();
+                        if rx.len() < FIFO_CAPACITY {
+                            rx.push_back(b);
+                        }
+                    }
+                }
+                OP_STOP => {
+                    if let Some(idx) = active {
+                        self.slaves[idx].stop();
+                    }
                     break;
                 }
-                _ => {
-                    // Reserved/unknown opcode — terminate.
-                    completed = true;
-                    break;
-                }
+                OP_END => break,
+                _ => break, // reserved opcode — terminate
             }
         }
-        let _ = completed; // suppresses unused-variable warning until task 6
+
         self.int_raw |= INT_TRANS_COMPLETE;
-        if self.int_ena & INT_TRANS_COMPLETE != 0 {
+        if self.int_ena & (INT_TRANS_COMPLETE | INT_NACK) != 0 {
             self.irq_pending = true;
         }
     }
@@ -372,5 +417,77 @@ mod tests {
         let second = p.read_u32(REG_FIFO_DATA).unwrap();
         assert_eq!(first, 0xAA);
         assert_eq!(second, 0xBB);
+    }
+
+    use crate::peripherals::esp32s3::tmp102::Tmp102;
+
+    #[test]
+    fn write_read_drives_attached_tmp102() {
+        let mut p = Esp32s3I2c::new();
+        p.attach_slave(Box::new(Tmp102::new()));
+
+        // Build the canonical TMP102 read sequence:
+        //   RSTART; WRITE 2 (addr+W, pointer=0); RSTART;
+        //   WRITE 1 (addr+R); READ 2; STOP.
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 12, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 16, cmd(CMD_READ, 2)).unwrap();
+        p.write_u32(REG_CMD0 + 20, cmd(CMD_STOP, 0)).unwrap();
+
+        // Push TX bytes: addr+W, pointer 0, addr+R.
+        p.write_u32(REG_FIFO_DATA, 0x90).unwrap(); // 0x48 << 1 | W
+        p.write_u32(REG_FIFO_DATA, 0x00).unwrap(); // pointer
+        p.write_u32(REG_FIFO_DATA, 0x91).unwrap(); // 0x48 << 1 | R
+
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+
+        // Two bytes of temperature should now be in RX FIFO: 0x19, 0x00.
+        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0x19);
+        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0x00);
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE
+        );
+    }
+
+    #[test]
+    fn write_with_unmatched_address_sets_nack_int() {
+        let mut p = Esp32s3I2c::new();
+        // No slaves attached.
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_FIFO_DATA, 0xA0).unwrap(); // some addr+W, no slave
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
+            INT_NACK,
+            "INT_NACK should fire when no slave matches"
+        );
+    }
+
+    #[test]
+    fn write_then_read_pointer_round_trip() {
+        // Set pointer to CONFIG (0x01) via WRITE, then READ should return
+        // CONFIG canned value 0x60A0 high byte then low byte.
+        let mut p = Esp32s3I2c::new();
+        p.attach_slave(Box::new(Tmp102::new()));
+
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 12, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 16, cmd(CMD_READ, 2)).unwrap();
+        p.write_u32(REG_CMD0 + 20, cmd(CMD_STOP, 0)).unwrap();
+
+        p.write_u32(REG_FIFO_DATA, 0x90).unwrap(); // addr+W
+        p.write_u32(REG_FIFO_DATA, 0x01).unwrap(); // pointer = CONFIG
+        p.write_u32(REG_FIFO_DATA, 0x91).unwrap(); // addr+R
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+
+        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0x60);
+        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0xA0);
     }
 }
