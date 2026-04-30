@@ -48,8 +48,9 @@ members = [
 # entirely outside the standard workspace toolchain.
 exclude = [
     "crates/firmware-hal-test",
-    "examples/esp32s3-hello-world",
     "examples/esp32s3-blinky",
+    "examples/esp32s3-hello-world",
+    "examples/esp32s3-i2c-tmp102",
 ]
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader"]
 
