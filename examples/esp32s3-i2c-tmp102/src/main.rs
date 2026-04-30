@@ -44,6 +44,11 @@ fn main() -> ! {
 
     let mut led = Output::new(p.GPIO2, Level::Low, OutputConfig::default());
 
+    // GPIO8 = SDA, GPIO9 = SCL. ESP32-S3 has no fixed-function I²C pins —
+    // any GPIO routes through the GPIO matrix. On real hardware, install
+    // external 4.7 kΩ pull-ups to 3V3: TMP102 breakouts typically don't
+    // include them, and esp-hal's default config does not enable internal
+    // pull-ups. The simulator's I²C model is forgiving of missing pulls.
     let mut i2c = I2c::new(p.I2C0, I2cConfig::default())
         .unwrap()
         .with_sda(p.GPIO8)
@@ -67,14 +72,19 @@ fn main() -> ! {
         });
         if tick {
             let mut buf = [0u8; 2];
-            if i2c.write_read(TMP102_ADDR, &[0x00], &mut buf).is_ok() {
-                let raw = ((buf[0] as i16) << 8) | (buf[1] as i16);
-                let temp_c = (raw >> 4) as f32 * 0.0625;
-                println!("T = {:.2} °C", temp_c);
-                if temp_c > THRESHOLD_C {
-                    led.set_high();
-                } else {
-                    led.set_low();
+            match i2c.write_read(TMP102_ADDR, &[0x00], &mut buf) {
+                Ok(()) => {
+                    let raw = ((buf[0] as i16) << 8) | (buf[1] as i16);
+                    let temp_c = (raw >> 4) as f32 * 0.0625;
+                    println!("T = {:.2} °C", temp_c);
+                    if temp_c > THRESHOLD_C {
+                        led.set_high();
+                    } else {
+                        led.set_low();
+                    }
+                }
+                Err(e) => {
+                    println!("I2C error: {:?}", e);
                 }
             }
         }
