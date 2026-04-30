@@ -121,7 +121,8 @@ mod tests {
         let val = 0xABCD_1234u32;
         let off = 2 * 4u64;
         for byte in 0..4u64 {
-            m.write(off + byte, ((val >> (byte * 8)) & 0xFF) as u8).unwrap();
+            m.write(off + byte, ((val >> (byte * 8)) & 0xFF) as u8)
+                .unwrap();
         }
         assert_eq!(m.pin_func(2), val);
     }

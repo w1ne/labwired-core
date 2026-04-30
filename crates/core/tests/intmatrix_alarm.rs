@@ -42,10 +42,10 @@ impl GpioObserver for RecordingObserver {
 ///   a6 = 0x0000_0004  bit 2 mask
 ///   a7 = 0x0000_0001  alarm 0 clear bit
 const ISR_BYTES: &[u8] = &[
-    0x69, 0x03,             // s32i.n  a6, a3, 0
-    0x69, 0x04,             // s32i.n  a6, a4, 0
-    0x79, 0x05,             // s32i.n  a7, a5, 0
-    0x00, 0x30, 0x00,       // rfe
+    0x69, 0x03, // s32i.n  a6, a3, 0
+    0x69, 0x04, // s32i.n  a6, a4, 0
+    0x79, 0x05, // s32i.n  a7, a5, 0
+    0x00, 0x30, 0x00, // rfe
 ];
 
 /// `j 0` — jump-to-self spin loop, 3 bytes.
@@ -100,21 +100,23 @@ fn intmatrix_alarm_full_irq_chain() {
 
     // Configure intmatrix: source 79 (SYSTIMER_TARGET0) → CPU IRQ slot 15.
     let intmatrix_off = INTMATRIX_BASE + SYSTIMER_TARGET0_SOURCE * 4;
-    bus.write_u32(intmatrix_off as u64, CPU_IRQ_SLOT as u32).unwrap();
+    bus.write_u32(intmatrix_off as u64, CPU_IRQ_SLOT as u32)
+        .unwrap();
 
     // Configure SYSTIMER ALARM0 — TRM-correct sequence (TARGET_CONF has no
     // enable bit; enable lives in SYSTIMER_CONF.target0_work_en at bit 24,
     // commit handshake via COMP0_LOAD bit 0):
     //   target = 20 SYSTIMER ticks (~100 CPU cycles at 80MHz CPU / 16MHz SYSTIMER)
-    bus.write_u32((SYSTIMER_BASE + 0x1C) as u64, 0).unwrap();   // pending TARGET0_HI
-    bus.write_u32((SYSTIMER_BASE + 0x20) as u64, 20).unwrap();  // pending TARGET0_LO
-    bus.write_u32((SYSTIMER_BASE + 0x34) as u64, 0).unwrap();   // TARGET0_CONF: target mode, UNIT0
-    bus.write_u32((SYSTIMER_BASE + 0x50) as u64, 1).unwrap();   // COMP0_LOAD: commit
-    // SYSTIMER_CONF: keep clk_en + unit0/1 work-en defaults (bits 31/30/29),
-    // additionally set target0_work_en (bit 24).
+    bus.write_u32((SYSTIMER_BASE + 0x1C) as u64, 0).unwrap(); // pending TARGET0_HI
+    bus.write_u32((SYSTIMER_BASE + 0x20) as u64, 20).unwrap(); // pending TARGET0_LO
+    bus.write_u32((SYSTIMER_BASE + 0x34) as u64, 0).unwrap(); // TARGET0_CONF: target mode, UNIT0
+    bus.write_u32((SYSTIMER_BASE + 0x50) as u64, 1).unwrap(); // COMP0_LOAD: commit
+                                                              // SYSTIMER_CONF: keep clk_en + unit0/1 work-en defaults (bits 31/30/29),
+                                                              // additionally set target0_work_en (bit 24).
     let conf = bus.read_u32(SYSTIMER_BASE as u64).unwrap();
-    bus.write_u32(SYSTIMER_BASE as u64, conf | (1u32 << 24)).unwrap();
-    bus.write_u32((SYSTIMER_BASE + 0x64) as u64, 1).unwrap();   // INT_ENA bit 0
+    bus.write_u32(SYSTIMER_BASE as u64, conf | (1u32 << 24))
+        .unwrap();
+    bus.write_u32((SYSTIMER_BASE + 0x64) as u64, 1).unwrap(); // INT_ENA bit 0
 
     // Configure CPU INTENABLE for the bound slot.
     cpu.sr.write(INTENABLE, 1u32 << CPU_IRQ_SLOT);
@@ -128,7 +130,11 @@ fn intmatrix_alarm_full_irq_chain() {
     let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     const MAX_STEPS: u64 = 100_000;
     for _step in 0..MAX_STEPS {
-        if let Err(e) = cpu.step(&mut bus, &observers, &labwired_core::SimulationConfig::default()) {
+        if let Err(e) = cpu.step(
+            &mut bus,
+            &observers,
+            &labwired_core::SimulationConfig::default(),
+        ) {
             let events = obs.events.lock().unwrap();
             panic!(
                 "CPU step failed at pc=0x{:08x}: {e}; events: {events:?}",

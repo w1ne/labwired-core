@@ -11,9 +11,8 @@
 
 use crate::cpu::xtensa_regs::{ArFile, Ps};
 use crate::cpu::xtensa_sr::{
-    XtensaSrFile, EXCCAUSE, EPC1, EPC2, EPC3, EPC4, EPC5, EPC6, EPC7,
-    EPS2, EPS3, EPS4, EPS5, EPS6, EPS7, INTERRUPT, INTENABLE, PS as PS_SR, SAR, SCOMPARE1,
-    VECBASE, WINDOWBASE, WINDOWSTART,
+    XtensaSrFile, EPC1, EPC2, EPC3, EPC4, EPC5, EPC6, EPC7, EPS2, EPS3, EPS4, EPS5, EPS6, EPS7,
+    EXCCAUSE, INTENABLE, INTERRUPT, PS as PS_SR, SAR, SCOMPARE1, VECBASE, WINDOWBASE, WINDOWSTART,
 };
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
@@ -45,14 +44,14 @@ const KERNEL_VECTOR_OFFSET: u32 = 0x300;
 // Level 6: XCHAL_INTLEVEL6_VECOFS = 0x280  (also Debug vector)
 // Level 7: XCHAL_NMI_VECOFS       = 0x2C0  (NMI)
 const IRQ_VECTOR_OFFSETS: [u32; 8] = [
-    0x000,  // level 0: unused (placeholder)
-    0x300,  // level 1: XCHAL_KERNEL_VECOFS
-    0x180,  // level 2: XCHAL_INTLEVEL2_VECOFS
-    0x1C0,  // level 3: XCHAL_INTLEVEL3_VECOFS
-    0x200,  // level 4: XCHAL_INTLEVEL4_VECOFS
-    0x240,  // level 5: XCHAL_INTLEVEL5_VECOFS
-    0x280,  // level 6: XCHAL_INTLEVEL6_VECOFS (Debug)
-    0x2C0,  // level 7: XCHAL_NMI_VECOFS
+    0x000, // level 0: unused (placeholder)
+    0x300, // level 1: XCHAL_KERNEL_VECOFS
+    0x180, // level 2: XCHAL_INTLEVEL2_VECOFS
+    0x1C0, // level 3: XCHAL_INTLEVEL3_VECOFS
+    0x200, // level 4: XCHAL_INTLEVEL4_VECOFS
+    0x240, // level 5: XCHAL_INTLEVEL5_VECOFS
+    0x280, // level 6: XCHAL_INTLEVEL6_VECOFS (Debug)
+    0x2C0, // level 7: XCHAL_NMI_VECOFS
 ];
 
 // ── IRQ priority table ────────────────────────────────────────────────────────
@@ -72,10 +71,10 @@ const IRQ_VECTOR_OFFSETS: [u32; 8] = [
 // XCHAL_EXCM_LEVEL = 3: PS.EXCM masks interrupt delivery for levels 1..3.
 // Levels 4..7 are "high-priority" and are NOT blocked by EXCM.
 pub const IRQ_LEVELS: [u8; 32] = [
-    1, 1, 1, 1, 1, 1, 1, 1,  // 0-7
-    1, 1, 1, 3, 1, 1, 7, 3,  // 8-15
-    5, 1, 1, 2, 2, 2, 3, 3,  // 16-23
-    4, 4, 5, 3, 4, 3, 4, 5,  // 24-31
+    1, 1, 1, 1, 1, 1, 1, 1, // 0-7
+    1, 1, 1, 3, 1, 1, 7, 3, // 8-15
+    5, 1, 1, 2, 2, 2, 3, 3, // 16-23
+    4, 4, 5, 3, 4, 3, 4, 5, // 24-31
 ];
 
 /// EXCCAUSE value for Level-1 interrupt entry (ISA RM §4.4.1.5).
@@ -112,9 +111,9 @@ impl XtensaLx7 {
     /// (which live outside `XtensaSrFile`).
     fn read_sr(&self, sr_id: u16) -> u32 {
         match sr_id {
-            x if x == PS_SR        => self.ps.as_raw(),
-            x if x == WINDOWBASE   => self.regs.windowbase() as u32,
-            x if x == WINDOWSTART  => self.regs.windowstart() as u32,
+            x if x == PS_SR => self.ps.as_raw(),
+            x if x == WINDOWBASE => self.regs.windowbase() as u32,
+            x if x == WINDOWSTART => self.regs.windowstart() as u32,
             _ => self.sr.read(sr_id),
         }
     }
@@ -122,28 +121,35 @@ impl XtensaLx7 {
     /// Write an SR by ID, with special routing for PS / WINDOWBASE / WINDOWSTART.
     fn write_sr(&mut self, sr_id: u16, val: u32) {
         match sr_id {
-            x if x == PS_SR        => { self.ps = Ps::from_raw(val); }
-            x if x == WINDOWBASE   => { self.regs.set_windowbase(val as u8); }
-            x if x == WINDOWSTART  => { self.regs.set_windowstart(val as u16); }
+            x if x == PS_SR => {
+                self.ps = Ps::from_raw(val);
+            }
+            x if x == WINDOWBASE => {
+                self.regs.set_windowbase(val as u8);
+            }
+            x if x == WINDOWSTART => {
+                self.regs.set_windowstart(val as u16);
+            }
             _ => self.sr.write(sr_id, val),
         }
     }
 
-    fn execute(
-        &mut self,
-        ins: xtensa::Instruction,
-        bus: &mut dyn Bus,
-        len: u32,
-    ) -> SimResult<()> {
+    fn execute(&mut self, ins: xtensa::Instruction, bus: &mut dyn Bus, len: u32) -> SimResult<()> {
         use xtensa::Instruction::*;
         match ins {
             Add { ar, as_, at } => {
-                let v = self.regs.read_logical(as_).wrapping_add(self.regs.read_logical(at));
+                let v = self
+                    .regs
+                    .read_logical(as_)
+                    .wrapping_add(self.regs.read_logical(at));
                 self.regs.write_logical(ar, v);
                 self.pc = self.pc.wrapping_add(len);
             }
             Sub { ar, as_, at } => {
-                let v = self.regs.read_logical(as_).wrapping_sub(self.regs.read_logical(at));
+                let v = self
+                    .regs
+                    .read_logical(as_)
+                    .wrapping_sub(self.regs.read_logical(at));
                 self.regs.write_logical(ar, v);
                 self.pc = self.pc.wrapping_add(len);
             }
@@ -209,9 +215,7 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
             Break { imm_s, imm_t } => {
-                use crate::peripherals::esp32s3::rom_thunks::{
-                    ROM_THUNK_IMM_S, ROM_THUNK_IMM_T,
-                };
+                use crate::peripherals::esp32s3::rom_thunks::{ROM_THUNK_IMM_S, ROM_THUNK_IMM_T};
                 if imm_s == ROM_THUNK_IMM_S && imm_t == ROM_THUNK_IMM_T {
                     let pc = self.pc;
                     if let Some(thunk) = bus.get_rom_thunk(pc) {
@@ -293,7 +297,11 @@ impl XtensaLx7 {
                 let sar = self.sr.read(SAR);
                 let src = self.regs.read_logical(at) as i32;
                 let v = if sar >= 32 {
-                    if src < 0 { u32::MAX } else { 0 }
+                    if src < 0 {
+                        u32::MAX
+                    } else {
+                        0
+                    }
                 } else {
                     (src >> sar) as u32
                 };
@@ -401,7 +409,10 @@ impl XtensaLx7 {
             // produce pc_rel_byte_offset (always negative in real code; literal pool
             // precedes the instruction). The resulting EA is always 4-byte aligned
             // (both the aligned base and the offset are multiples of 4).
-            L32r { at, pc_rel_byte_offset } => {
+            L32r {
+                at,
+                pc_rel_byte_offset,
+            } => {
                 let base = (self.pc.wrapping_add(3)) & !3u32;
                 let ea = base.wrapping_add(pc_rel_byte_offset as u32) as u64;
                 let val = bus.read_u32(ea)?;
@@ -453,12 +464,14 @@ impl XtensaLx7 {
             }
             // BLT: taken if (as_ as i32) < (at as i32)
             Blt { as_, at, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) < (self.regs.read_logical(at) as i32);
+                let cond =
+                    (self.regs.read_logical(as_) as i32) < (self.regs.read_logical(at) as i32);
                 self.branch(offset, len, cond);
             }
             // BGE: taken if (as_ as i32) >= (at as i32)
             Bge { as_, at, offset } => {
-                let cond = (self.regs.read_logical(as_) as i32) >= (self.regs.read_logical(at) as i32);
+                let cond =
+                    (self.regs.read_logical(as_) as i32) >= (self.regs.read_logical(at) as i32);
                 self.branch(offset, len, cond);
             }
             // BLTU: taken if as_ < at (unsigned)
@@ -622,13 +635,13 @@ impl XtensaLx7 {
                     //   OF4  (CALLINC=1): VECBASE + 0x000
                     //   OF8  (CALLINC=2): VECBASE + 0x080
                     //   OF12 (CALLINC=3): VECBASE + 0x100
-                    const OF4_VECOFS:  u32 = 0x000;
-                    const OF8_VECOFS:  u32 = 0x080;
+                    const OF4_VECOFS: u32 = 0x000;
+                    const OF8_VECOFS: u32 = 0x080;
                     const OF12_VECOFS: u32 = 0x100;
                     let vec_ofs = match callinc {
                         1 => OF4_VECOFS,
                         2 => OF8_VECOFS,
-                        _ => OF12_VECOFS,  // callinc=3 → OF12; callinc=0 can't overflow
+                        _ => OF12_VECOFS, // callinc=3 → OF12; callinc=0 can't overflow
                     };
                     let vecbase = self.sr.read(VECBASE);
                     self.sr.write(EPC1, self.pc);
@@ -651,7 +664,8 @@ impl XtensaLx7 {
                 self.regs.set_windowbase(wb_new);
                 self.regs.set_windowstart_bit(wb_new, true);
                 self.ps.set_callinc(0);
-                self.regs.write_logical(as_, caller_sp.wrapping_sub(imm * 8));
+                self.regs
+                    .write_logical(as_, caller_sp.wrapping_sub(imm * 8));
                 self.pc = self.pc.wrapping_add(len);
             }
 
@@ -686,20 +700,20 @@ impl XtensaLx7 {
             // needed, add an explicit N=0 → illegal-instruction error here.
             Retw => {
                 let a0 = self.regs.read_logical(0);
-                let n = (a0 >> 30) as u8;               // bits[31:30] = callinc used by the call
+                let n = (a0 >> 30) as u8; // bits[31:30] = callinc used by the call
                 let wb_cur = self.regs.windowbase();
                 let wb_dest = wb_cur.wrapping_sub(n) & 0x0F;
 
                 // F4: Window underflow check — destination frame must be live.
                 if !self.regs.windowstart_bit(wb_dest) {
                     // Window underflow vector offsets (Xtensa LX ISA RM §5.6):
-                    const UF4_VECOFS:  u32 = 0x040;
-                    const UF8_VECOFS:  u32 = 0x0C0;
+                    const UF4_VECOFS: u32 = 0x040;
+                    const UF8_VECOFS: u32 = 0x0C0;
                     const UF12_VECOFS: u32 = 0x140;
                     let vec_ofs = match n {
                         1 => UF4_VECOFS,
                         2 => UF8_VECOFS,
-                        _ => UF12_VECOFS,  // N=3 → UF12; N=0 also lands here (see note above)
+                        _ => UF12_VECOFS, // N=3 → UF12; N=0 also lands here (see note above)
                     };
                     let vecbase = self.sr.read(VECBASE);
                     self.sr.write(EPC1, self.pc);
@@ -816,7 +830,10 @@ impl XtensaLx7 {
             // ── MUL family ────────────────────────────────────────────────────────
             // MULL: low 32 bits of unsigned 32×32 product (same bits as signed).
             Mull { ar, as_, at } => {
-                let v = self.regs.read_logical(as_).wrapping_mul(self.regs.read_logical(at));
+                let v = self
+                    .regs
+                    .read_logical(as_)
+                    .wrapping_mul(self.regs.read_logical(at));
                 self.regs.write_logical(ar, v);
                 self.pc = self.pc.wrapping_add(len);
             }
@@ -859,7 +876,7 @@ impl XtensaLx7 {
             // i32::MIN / -1 wraps to i32::MIN per ISA RM §8 (saturating result).
             Quos { ar, as_, at } => {
                 let dividend = self.regs.read_logical(as_) as i32;
-                let divisor  = self.regs.read_logical(at)  as i32;
+                let divisor = self.regs.read_logical(at) as i32;
                 if divisor == 0 {
                     return self.raise_general_exception(6);
                 }
@@ -871,7 +888,7 @@ impl XtensaLx7 {
             // QUOU ar, as_, at: unsigned quotient as_ / at.
             Quou { ar, as_, at } => {
                 let dividend = self.regs.read_logical(as_);
-                let divisor  = self.regs.read_logical(at);
+                let divisor = self.regs.read_logical(at);
                 if divisor == 0 {
                     return self.raise_general_exception(6);
                 }
@@ -884,7 +901,7 @@ impl XtensaLx7 {
             // i32::MIN % -1 = 0 (overflow corner; wrapping_rem handles this).
             Rems { ar, as_, at } => {
                 let dividend = self.regs.read_logical(as_) as i32;
-                let divisor  = self.regs.read_logical(at)  as i32;
+                let divisor = self.regs.read_logical(at) as i32;
                 if divisor == 0 {
                     return self.raise_general_exception(6);
                 }
@@ -896,7 +913,7 @@ impl XtensaLx7 {
             // REMU ar, as_, at: unsigned remainder as_ % at.
             Remu { ar, as_, at } => {
                 let dividend = self.regs.read_logical(as_);
-                let divisor  = self.regs.read_logical(at);
+                let divisor = self.regs.read_logical(at);
                 if divisor == 0 {
                     return self.raise_general_exception(6);
                 }
@@ -934,7 +951,7 @@ impl XtensaLx7 {
             // MIN ar, as_, at: ar = signed min(as_, at).
             Min { ar, as_, at } => {
                 let a = self.regs.read_logical(as_) as i32;
-                let b = self.regs.read_logical(at)  as i32;
+                let b = self.regs.read_logical(at) as i32;
                 self.regs.write_logical(ar, a.min(b) as u32);
                 self.pc = self.pc.wrapping_add(len);
             }
@@ -942,7 +959,7 @@ impl XtensaLx7 {
             // MAX ar, as_, at: ar = signed max(as_, at).
             Max { ar, as_, at } => {
                 let a = self.regs.read_logical(as_) as i32;
-                let b = self.regs.read_logical(at)  as i32;
+                let b = self.regs.read_logical(at) as i32;
                 self.regs.write_logical(ar, a.max(b) as u32);
                 self.pc = self.pc.wrapping_add(len);
             }
@@ -970,7 +987,7 @@ impl XtensaLx7 {
             // Equivalently: ((as_ as i32) << (31 - sa)) >> (31 - sa)
             Sext { ar, as_, t: sa } => {
                 let src = self.regs.read_logical(as_);
-                let shift = 31 - sa;  // sa is 7..=22, shift is 9..=24
+                let shift = 31 - sa; // sa is 7..=22, shift is 9..=24
                 let v = ((src as i32) << shift >> shift) as u32;
                 self.regs.write_logical(ar, v);
                 self.pc = self.pc.wrapping_add(len);
@@ -1213,9 +1230,9 @@ impl XtensaLx7 {
                 let wb_old = self.regs.windowbase();
                 let callinc = self.ps.callinc();
                 let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
-                self.regs.set_windowstart_bit(wb_old, false);  // clear spilled frame
+                self.regs.set_windowstart_bit(wb_old, false); // clear spilled frame
                 self.regs.set_windowbase(wb_new);
-                self.regs.set_windowstart_bit(wb_new, true);   // new frame is live
+                self.regs.set_windowstart_bit(wb_new, true); // new frame is live
                 self.ps.set_excm(false);
                 self.pc = self.sr.read(EPC1);
             }
@@ -1247,7 +1264,7 @@ impl XtensaLx7 {
                 let wb_old = self.regs.windowbase();
                 let wb_new = wb_old.wrapping_sub(1) & 0x0F;
                 self.regs.set_windowbase(wb_new);
-                self.regs.set_windowstart_bit(wb_new, true);   // reloaded frame is live
+                self.regs.set_windowstart_bit(wb_new, true); // reloaded frame is live
                 self.ps.set_excm(false);
                 self.pc = self.sr.read(EPC1);
             }
@@ -1313,9 +1330,18 @@ impl XtensaLx7 {
             // EXTUI ar, at, shift, bits: ar = (at >> shift) & ((1<<bits)-1).
             // bits ∈ 1..=16, shift ∈ 0..=31. The mask wraps cleanly because
             // `1u32 << 16` is well-defined; for bits=16 we use 0xFFFF.
-            Extui { ar, at, shift, bits } => {
+            Extui {
+                ar,
+                at,
+                shift,
+                bits,
+            } => {
                 let v = self.regs.read_logical(at);
-                let mask: u32 = if bits >= 32 { u32::MAX } else { (1u32 << bits) - 1 };
+                let mask: u32 = if bits >= 32 {
+                    u32::MAX
+                } else {
+                    (1u32 << bits) - 1
+                };
                 let extracted = (v >> shift) & mask;
                 self.regs.write_logical(ar, extracted);
                 self.pc = self.pc.wrapping_add(len);
@@ -1476,7 +1502,10 @@ impl XtensaLx7 {
         self.ps.set_excm(true);
         let vecbase = self.sr.read(VECBASE);
         self.pc = vecbase.wrapping_add(KERNEL_VECTOR_OFFSET);
-        Err(SimulationError::ExceptionRaised { cause, pc: faulting_pc })
+        Err(SimulationError::ExceptionRaised {
+            cause,
+            pc: faulting_pc,
+        })
     }
 }
 

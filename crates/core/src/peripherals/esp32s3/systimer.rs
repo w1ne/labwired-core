@@ -429,7 +429,9 @@ impl Peripheral for Systimer {
     /// At 80 MHz CPU clock, 5 CPU cycles == 1 SYSTIMER tick.
     fn tick(&mut self) -> PeripheralTickResult {
         self.cpu_cycle_accum += 1;
-        let cpu_per_systimer = (self.cpu_clock_hz as u64).saturating_div(SYSTIMER_CLOCK_HZ).max(1);
+        let cpu_per_systimer = (self.cpu_clock_hz as u64)
+            .saturating_div(SYSTIMER_CLOCK_HZ)
+            .max(1);
         if self.cpu_cycle_accum >= cpu_per_systimer {
             let ticks = self.cpu_cycle_accum / cpu_per_systimer;
             self.cpu_cycle_accum %= cpu_per_systimer;
@@ -464,7 +466,11 @@ impl Peripheral for Systimer {
             if !alarm.enabled {
                 continue;
             }
-            let counter = if alarm.unit_sel { unit1_counter } else { unit0_counter };
+            let counter = if alarm.unit_sel {
+                unit1_counter
+            } else {
+                unit0_counter
+            };
             // Detect rising edge: counter >= target with edge_latched still
             // clear. On edge, latch + set sticky pending (visible via
             // INT_RAW). For period-mode, bump target by period and re-arm
@@ -619,7 +625,7 @@ mod tests {
         let mut s = Systimer::new(80_000_000);
         s.write_word(0x1C, 0x0000_0001); // TARGET0_HI = 1 (pending)
         s.write_word(0x20, 0x0000_0042); // TARGET0_LO = 0x42 (pending)
-        // Live target unchanged before commit.
+                                         // Live target unchanged before commit.
         assert_eq!(s.unit0_alarms[0].target, 0);
         assert_eq!(s.unit0_alarms[0].pending_target, (1u64 << 32) | 0x42);
         // COMP0_LOAD commits.
@@ -669,10 +675,17 @@ mod tests {
         s.write_word(0x64, 1); // INT_ENA bit 0
         for _ in 0..24 {
             let r = s.tick();
-            assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()), "no fire before counter reaches target");
+            assert!(
+                r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()),
+                "no fire before counter reaches target"
+            );
         }
         let r = s.tick();
-        assert_eq!(r.explicit_irqs.as_deref(), Some(&[57][..]), "TARGET0 source ID at counter==target");
+        assert_eq!(
+            r.explicit_irqs.as_deref(),
+            Some(&[57][..]),
+            "TARGET0 source ID at counter==target"
+        );
         assert!(s.unit0_alarms[0].pending);
         assert_eq!(s.read_word(0x68), 1, "INT_RAW reflects pending");
     }
@@ -682,7 +695,7 @@ mod tests {
         let mut s = Systimer::new(80_000_000);
         s.write_word(0x34, 5); // period=5, no period_mode, no enable
         s.write_word(0x50, 1); // commit
-        // CONF.target0_work_en still 0 — alarm disabled.
+                               // CONF.target0_work_en still 0 — alarm disabled.
         s.write_word(0x64, 1);
         for _ in 0..30 {
             let r = s.tick();
@@ -700,7 +713,10 @@ mod tests {
         // INT_ENA = 0 — alarm fires (pending set) but no IRQ delivered.
         for _ in 0..30 {
             let r = s.tick();
-            assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()), "no IRQ when INT_ENA=0");
+            assert!(
+                r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()),
+                "no IRQ when INT_ENA=0"
+            );
         }
         assert!(
             s.unit0_alarms[0].pending,
@@ -784,13 +800,20 @@ mod tests {
         assert!(s.unit0_alarms[0].pending);
         // Subsequent ticks should keep emitting the source ID.
         let r = s.tick();
-        assert_eq!(r.explicit_irqs.as_deref(), Some(&[57][..]), "level-sensitive re-emit");
+        assert_eq!(
+            r.explicit_irqs.as_deref(),
+            Some(&[57][..]),
+            "level-sensitive re-emit"
+        );
         let r = s.tick();
         assert_eq!(r.explicit_irqs.as_deref(), Some(&[57][..]));
         // INT_CLR de-asserts the level → no more emits.
         s.write_word(0x6C, 1);
         let r = s.tick();
-        assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()), "after INT_CLR, no more IRQs");
+        assert!(
+            r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()),
+            "after INT_CLR, no more IRQs"
+        );
     }
 
     #[test]
@@ -810,7 +833,11 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(first_fire, Some(50), "first fire at counter==10 → 50 CPU cycles");
+        assert_eq!(
+            first_fire,
+            Some(50),
+            "first fire at counter==10 → 50 CPU cycles"
+        );
         // Target should have been bumped by period: 10 + 10 = 20.
         assert_eq!(s.unit0_alarms[0].target, 20);
         s.write_word(0x6C, 1); // clear pending

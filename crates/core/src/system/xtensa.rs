@@ -69,11 +69,7 @@ impl Esp32s3Wiring {
     /// no GPIO peripheral was registered (configure_xtensa_esp32s3 always
     /// registers one, so this only fires if the caller used a different
     /// configure path).
-    pub fn add_gpio_observer(
-        &self,
-        bus: &mut SystemBus,
-        observer: Arc<dyn GpioObserver>,
-    ) {
+    pub fn add_gpio_observer(&self, bus: &mut SystemBus, observer: Arc<dyn GpioObserver>) {
         for p in bus.peripherals.iter_mut() {
             if p.name == "gpio" {
                 if let Some(any) = p.dev.as_any_mut() {
@@ -408,7 +404,10 @@ mod tests {
         let names: Vec<&str> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"gpio"), "gpio missing; have: {names:?}");
         assert!(names.contains(&"io_mux"), "io_mux missing; have: {names:?}");
-        assert!(names.contains(&"intmatrix"), "intmatrix missing; have: {names:?}");
+        assert!(
+            names.contains(&"intmatrix"),
+            "intmatrix missing; have: {names:?}"
+        );
     }
 
     #[test]
@@ -432,7 +431,7 @@ mod tests {
 
         // Trigger a GPIO transition by writing OUT_W1TS bit 5 via the bus.
         // GPIO base 0x6000_4000, OUT_W1TS at offset 0x08.
-        bus.write_u8(0x6000_4008, 0x20).unwrap();  // bit 5 = 0x20
+        bus.write_u8(0x6000_4008, 0x20).unwrap(); // bit 5 = 0x20
         bus.write_u8(0x6000_4009, 0).unwrap();
         bus.write_u8(0x6000_400A, 0).unwrap();
         bus.write_u8(0x6000_400B, 0).unwrap();

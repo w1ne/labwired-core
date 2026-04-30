@@ -47,17 +47,29 @@ pub union Vector {
 #[link_section = ".isr_vector"]
 #[no_mangle]
 pub static VECTORS: [Vector; 16 + 82] = {
-    let mut v = [Vector { handler: default_handler }; 16 + 82];
-    v[0]  = Vector { reserved: 0x2001_8000 }; // Initial SP
-    v[1]  = Vector { handler: reset_handler };
-    v[15] = Vector { handler: systick_handler };
+    let mut v = [Vector {
+        handler: default_handler,
+    }; 16 + 82];
+    v[0] = Vector {
+        reserved: 0x2001_8000,
+    }; // Initial SP
+    v[1] = Vector {
+        handler: reset_handler,
+    };
+    v[15] = Vector {
+        handler: systick_handler,
+    };
     v
 };
 
 // `Vector` needs Copy so the array initialiser works; both arms are POD.
 impl Clone for Vector {
     fn clone(&self) -> Self {
-        unsafe { Vector { reserved: self.reserved } }
+        unsafe {
+            Vector {
+                reserved: self.reserved,
+            }
+        }
     }
 }
 impl Copy for Vector {}
@@ -72,36 +84,36 @@ static mut COUNTER: u32 = 0;
 
 // ---------- Register helpers ---------------------------------------------
 
-const RCC_BASE:        u32 = 0x4002_1000;
-const RCC_CR:          *mut u32 = RCC_BASE as *mut u32;
-const RCC_CFGR:        *mut u32 = (RCC_BASE + 0x08) as *mut u32;
-const RCC_PLLCFGR:     *mut u32 = (RCC_BASE + 0x0C) as *mut u32;
-const RCC_AHB2ENR:     *mut u32 = (RCC_BASE + 0x4C) as *mut u32;
-const RCC_APB1ENR1:    *mut u32 = (RCC_BASE + 0x58) as *mut u32;
+const RCC_BASE: u32 = 0x4002_1000;
+const RCC_CR: *mut u32 = RCC_BASE as *mut u32;
+const RCC_CFGR: *mut u32 = (RCC_BASE + 0x08) as *mut u32;
+const RCC_PLLCFGR: *mut u32 = (RCC_BASE + 0x0C) as *mut u32;
+const RCC_AHB2ENR: *mut u32 = (RCC_BASE + 0x4C) as *mut u32;
+const RCC_APB1ENR1: *mut u32 = (RCC_BASE + 0x58) as *mut u32;
 
-const PWR_BASE:        u32 = 0x4000_7000;
-const PWR_CR1:         *mut u32 = PWR_BASE as *mut u32;
-const PWR_SR2:         *const u32 = (PWR_BASE + 0x14) as *const u32;
+const PWR_BASE: u32 = 0x4000_7000;
+const PWR_CR1: *mut u32 = PWR_BASE as *mut u32;
+const PWR_SR2: *const u32 = (PWR_BASE + 0x14) as *const u32;
 
-const FLASH_BASE:      u32 = 0x4002_2000;
-const FLASH_ACR:       *mut u32 = FLASH_BASE as *mut u32;
+const FLASH_BASE: u32 = 0x4002_2000;
+const FLASH_ACR: *mut u32 = FLASH_BASE as *mut u32;
 
-const GPIOA_MODER:     *mut u32 = 0x4800_0000 as *mut u32;
-const GPIOA_AFRL:      *mut u32 = 0x4800_0020 as *mut u32;
+const GPIOA_MODER: *mut u32 = 0x4800_0000 as *mut u32;
+const GPIOA_AFRL: *mut u32 = 0x4800_0020 as *mut u32;
 
-const USART2_BASE:     u32 = 0x4000_4400;
-const USART2_CR1:      *mut u32 = USART2_BASE as *mut u32;
-const USART2_BRR:      *mut u32 = (USART2_BASE + 0x0C) as *mut u32;
-const USART2_ISR:      *const u32 = (USART2_BASE + 0x1C) as *const u32;
-const USART2_TDR:      *mut u32 = (USART2_BASE + 0x28) as *mut u32;
+const USART2_BASE: u32 = 0x4000_4400;
+const USART2_CR1: *mut u32 = USART2_BASE as *mut u32;
+const USART2_BRR: *mut u32 = (USART2_BASE + 0x0C) as *mut u32;
+const USART2_ISR: *const u32 = (USART2_BASE + 0x1C) as *const u32;
+const USART2_TDR: *mut u32 = (USART2_BASE + 0x28) as *mut u32;
 
-const SCB_VTOR:        *mut u32 = 0xE000_ED08 as *mut u32;
-const SCB_CPACR:       *mut u32 = 0xE000_ED88 as *mut u32;
-const SCB_SHPR3:       *mut u32 = 0xE000_ED20 as *mut u32;
+const SCB_VTOR: *mut u32 = 0xE000_ED08 as *mut u32;
+const SCB_CPACR: *mut u32 = 0xE000_ED88 as *mut u32;
+const SCB_SHPR3: *mut u32 = 0xE000_ED20 as *mut u32;
 
-const SYST_CSR:        *mut u32 = 0xE000_E010 as *mut u32;
-const SYST_RVR:        *mut u32 = 0xE000_E014 as *mut u32;
-const SYST_CVR:        *mut u32 = 0xE000_E018 as *mut u32;
+const SYST_CSR: *mut u32 = 0xE000_E010 as *mut u32;
+const SYST_RVR: *mut u32 = 0xE000_E014 as *mut u32;
+const SYST_CVR: *mut u32 = 0xE000_E018 as *mut u32;
 
 #[inline(always)]
 fn rmw(p: *mut u32, clear: u32, set: u32) {
@@ -113,7 +125,9 @@ fn rmw(p: *mut u32, clear: u32, set: u32) {
 
 #[inline(always)]
 fn set(p: *mut u32, mask: u32) {
-    unsafe { write_volatile(p, read_volatile(p) | mask); }
+    unsafe {
+        write_volatile(p, read_volatile(p) | mask);
+    }
 }
 
 // ---------- HAL_Init / SysTick -------------------------------------------
@@ -178,10 +192,7 @@ fn system_clock_config() {
     // Configure PLL: source = MSI (bits[1:0] = 1), PLLM = 1 (bits[6:4] = 0),
     // PLLN = 40 (bits[14:8] = 40), PLLR = 2 (bits[26:25] = 0), PLLREN bit 24.
     unsafe {
-        write_volatile(
-            RCC_PLLCFGR,
-            (1 << 0) | (40 << 8) | (1 << 24),
-        );
+        write_volatile(RCC_PLLCFGR, (1 << 0) | (40 << 8) | (1 << 24));
     }
 
     // Enable PLL.
@@ -291,9 +302,7 @@ pub extern "C" fn main() -> ! {
 
     uart_puts(b"DONE\r\n");
 
-    unsafe {
-        while (read_volatile(USART2_ISR) & TC) == 0 {}
-    }
+    unsafe { while (read_volatile(USART2_ISR) & TC) == 0 {} }
     loop {
         unsafe { core::arch::asm!("wfi") }
     }

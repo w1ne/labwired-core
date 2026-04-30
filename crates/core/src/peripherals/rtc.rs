@@ -101,7 +101,11 @@ impl Rtc {
     }
 }
 
-impl Default for Rtc { fn default() -> Self { Self::new() } }
+impl Default for Rtc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl crate::Peripheral for Rtc {
     fn read(&self, offset: u64) -> SimResult<u8> {

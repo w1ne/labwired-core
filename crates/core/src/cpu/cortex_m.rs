@@ -247,7 +247,10 @@ impl CortexM {
 
         tracing::debug!(
             "EXC_RETURN: frame={:#010x} restored LR={:#010x} PC={:#010x} active_exc={}",
-            frame_ptr, self.lr, self.pc, self.active_exception
+            frame_ptr,
+            self.lr,
+            self.pc,
+            self.active_exception
         );
         Ok(())
     }
@@ -402,8 +405,8 @@ impl Cpu for CortexM {
                 // priority are handled inside step_internal without breaking the batch.
                 if self.pending_exceptions != 0 && !self.primask {
                     let highest = 63 - self.pending_exceptions.leading_zeros();
-                    let can_take = self.active_exception == 0
-                        || (highest as u32) < self.active_exception;
+                    let can_take =
+                        self.active_exception == 0 || (highest as u32) < self.active_exception;
                     if can_take {
                         break;
                     }
@@ -420,8 +423,8 @@ impl Cpu for CortexM {
             while executed < max_count {
                 if self.pending_exceptions != 0 && !self.primask {
                     let highest = 63 - self.pending_exceptions.leading_zeros();
-                    let can_take = self.active_exception == 0
-                        || (highest as u32) < self.active_exception;
+                    let can_take =
+                        self.active_exception == 0 || (highest as u32) < self.active_exception;
                     if can_take {
                         break;
                     }
@@ -456,8 +459,8 @@ impl CortexM {
             // Only take the exception if it has strictly higher priority (lower number)
             // than the currently active exception. This prevents re-entry of the same
             // or lower-priority exception while one is already being serviced (ARM IABR behavior).
-            let can_take = self.active_exception == 0
-                || (exception_num as u32) < self.active_exception;
+            let can_take =
+                self.active_exception == 0 || (exception_num as u32) < self.active_exception;
 
             if can_take {
                 self.pending_exceptions &= !(1u64 << exception_num);
@@ -947,7 +950,11 @@ impl CortexM {
                                 let imm12 = (h2 & 0xFFF) as u32;
                                 let u = (h1 >> 7) & 1;
                                 let base = (self.pc.wrapping_add(4)) & !3;
-                                addr = if u != 0 { base.wrapping_add(imm12) } else { base.wrapping_sub(imm12) };
+                                addr = if u != 0 {
+                                    base.wrapping_add(imm12)
+                                } else {
+                                    base.wrapping_sub(imm12)
+                                };
                             } else {
                                 let p = (h2 >> 10) & 1;
                                 let u = (h2 >> 9) & 1;
@@ -1736,7 +1743,11 @@ impl CortexM {
                 }
                 // STMDB Rn(!), {reg_list} — 32-bit store multiple, decrement before.
                 // Lowest-numbered register stored at lowest address.
-                Instruction::StmdbW { rn, reg_list, writeback } => {
+                Instruction::StmdbW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
                     let count = reg_list.count_ones();
                     let mut addr = self.read_reg(rn).wrapping_sub(count * 4);
                     let start = addr;
@@ -1756,7 +1767,11 @@ impl CortexM {
                 }
                 // LDMIA.W Rn(!), {reg_list} — 32-bit load multiple, increment after.
                 // Lowest-numbered register loaded from lowest address.
-                Instruction::LdmiaW { rn, reg_list, writeback } => {
+                Instruction::LdmiaW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
                     let mut addr = self.read_reg(rn);
                     // Load R0-R14 (skip PC; handle separately to commit SP first)
                     for i in 0u8..=14 {
@@ -1870,7 +1885,12 @@ impl CortexM {
                     }
                     pc_increment = 4;
                 }
-                Instruction::Smull { rd_lo, rd_hi, rn, rm } => {
+                Instruction::Smull {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                } => {
                     let lhs = self.read_reg(rn) as i32 as i64;
                     let rhs = self.read_reg(rm) as i32 as i64;
                     let prod = lhs.wrapping_mul(rhs) as u64;
@@ -1878,13 +1898,23 @@ impl CortexM {
                     self.write_reg(rd_hi, (prod >> 32) as u32);
                     pc_increment = 4;
                 }
-                Instruction::Umull { rd_lo, rd_hi, rn, rm } => {
+                Instruction::Umull {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                } => {
                     let prod = (self.read_reg(rn) as u64).wrapping_mul(self.read_reg(rm) as u64);
                     self.write_reg(rd_lo, prod as u32);
                     self.write_reg(rd_hi, (prod >> 32) as u32);
                     pc_increment = 4;
                 }
-                Instruction::Smlal { rd_lo, rd_hi, rn, rm } => {
+                Instruction::Smlal {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                } => {
                     let acc = ((self.read_reg(rd_hi) as u64) << 32) | (self.read_reg(rd_lo) as u64);
                     let lhs = self.read_reg(rn) as i32 as i64;
                     let rhs = self.read_reg(rm) as i32 as i64;
@@ -1893,7 +1923,12 @@ impl CortexM {
                     self.write_reg(rd_hi, (new >> 32) as u32);
                     pc_increment = 4;
                 }
-                Instruction::Umlal { rd_lo, rd_hi, rn, rm } => {
+                Instruction::Umlal {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                } => {
                     let acc = ((self.read_reg(rd_hi) as u64) << 32) | (self.read_reg(rd_lo) as u64);
                     let prod = (self.read_reg(rn) as u64).wrapping_mul(self.read_reg(rm) as u64);
                     let new = acc.wrapping_add(prod);
@@ -2397,8 +2432,12 @@ mod tests {
         let vm = (sm >> 1) & 0xF;
         let m = (sm & 1) as u32;
         let h1 = h1_op | ((d as u16) << 6) | (vn as u16);
-        let h2 = ((vd as u16) << 12) | 0x0A00 | ((n as u16) << 7)
-            | ((op_b as u16) << 6) | ((m as u16) << 5) | (vm as u16);
+        let h2 = ((vd as u16) << 12)
+            | 0x0A00
+            | ((n as u16) << 7)
+            | ((op_b as u16) << 6)
+            | ((m as u16) << 5)
+            | (vm as u16);
         ((h1 as u32) << 16) | (h2 as u32)
     }
 
@@ -2409,16 +2448,36 @@ mod tests {
         cpu.fpu_s[0] = (6.0_f32).to_bits();
         cpu.fpu_s[1] = (2.0_f32).to_bits();
 
-        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE30, 2, 0, 1, 0), true);
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_arith_encoding(0xEE30, 2, 0, 1, 0),
+            true,
+        );
         assert_eq!(cpu.fpu_s[2], (8.0_f32).to_bits(), "VADD: 6 + 2 = 8");
 
-        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE30, 2, 0, 1, 1), true);
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_arith_encoding(0xEE30, 2, 0, 1, 1),
+            true,
+        );
         assert_eq!(cpu.fpu_s[2], (4.0_f32).to_bits(), "VSUB: 6 - 2 = 4");
 
-        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE80, 2, 0, 1, 0), true);
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_arith_encoding(0xEE80, 2, 0, 1, 0),
+            true,
+        );
         assert_eq!(cpu.fpu_s[2], (3.0_f32).to_bits(), "VDIV: 6 / 2 = 3");
 
-        run_test_instr(&mut cpu, &mut bus, vfp_arith_encoding(0xEE20, 2, 0, 1, 0), true);
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_arith_encoding(0xEE20, 2, 0, 1, 0),
+            true,
+        );
         assert_eq!(cpu.fpu_s[2], (12.0_f32).to_bits(), "VMUL: 6 * 2 = 12");
     }
 

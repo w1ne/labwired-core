@@ -65,7 +65,9 @@ fn delay(loops: u32) {
 
 #[inline(always)]
 fn rmw(p: *mut u32, set: u32) {
-    unsafe { write_volatile(p, read_volatile(p) | set); }
+    unsafe {
+        write_volatile(p, read_volatile(p) | set);
+    }
 }
 
 #[inline(always)]
@@ -161,9 +163,7 @@ fn main() -> ! {
 
     uart_puts(b"DONE\r\n");
 
-    unsafe {
-        while (read_volatile(USART2_ISR) & TC) == 0 {}
-    }
+    unsafe { while (read_volatile(USART2_ISR) & TC) == 0 {} }
     loop {
         unsafe { core::arch::asm!("wfi") }
     }

@@ -79,7 +79,7 @@ impl Spi {
                 if (self.cr1 & (1 << 6)) != 0 {
                     // SPE set: start a transfer
                     self.sr &= !0x0002; // Clear TXE
-                    self.sr |= 0x0080;  // Set BSY
+                    self.sr |= 0x0080; // Set BSY
                     self.transfer_in_progress = true;
                     let br = (self.cr1 >> 3) & 0x7;
                     let divider = 1 << (br + 1);
@@ -120,18 +120,18 @@ impl crate::Peripheral for Spi {
             if self.transfer_cycles_remaining == 0 {
                 self.transfer_in_progress = false;
                 self.sr &= !0x0080; // Clear BSY
-                self.sr |= 0x0002;  // Set TXE
-                // Do NOT auto-set RXNE or auto-fill DR: real STM32 silicon
-                // with no slave wired (or no MISO pin AF'd) doesn't drive
-                // anything onto MISO, so the SPI engine completes its
-                // shift but the firmware never sees RXNE. Matching that
-                // behaviour means a "transmit-only" smoke test reads
-                // SR=0x0002 and DR=0x0000 after writing DR — which is
-                // exactly what NUCLEO-L476RG hardware does.
-                //
-                // A future integration test that pairs SPI1 with a slave
-                // peripheral model can drive RXNE / DR explicitly via the
-                // bus when it has data to deliver.
+                self.sr |= 0x0002; // Set TXE
+                                   // Do NOT auto-set RXNE or auto-fill DR: real STM32 silicon
+                                   // with no slave wired (or no MISO pin AF'd) doesn't drive
+                                   // anything onto MISO, so the SPI engine completes its
+                                   // shift but the firmware never sees RXNE. Matching that
+                                   // behaviour means a "transmit-only" smoke test reads
+                                   // SR=0x0002 and DR=0x0000 after writing DR — which is
+                                   // exactly what NUCLEO-L476RG hardware does.
+                                   //
+                                   // A future integration test that pairs SPI1 with a slave
+                                   // peripheral model can drive RXNE / DR explicitly via the
+                                   // bus when it has data to deliver.
                 if (self.cr2 & (1 << 7)) != 0 {
                     // TXEIE
                     irq = true;

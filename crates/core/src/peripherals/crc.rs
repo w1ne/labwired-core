@@ -52,7 +52,11 @@ impl Crc {
         let mut crc = self.dr;
         let bits = poly_size;
         let high_bit: u32 = 1u32 << (bits - 1);
-        let poly_mask: u32 = if bits == 32 { 0xFFFF_FFFF } else { (1u32 << bits) - 1 };
+        let poly_mask: u32 = if bits == 32 {
+            0xFFFF_FFFF
+        } else {
+            (1u32 << bits) - 1
+        };
 
         // Feed value MSB-first, 32 bits at a time.
         crc ^= value;
@@ -67,7 +71,11 @@ impl Crc {
     }
 }
 
-impl Default for Crc { fn default() -> Self { Self::new() } }
+impl Default for Crc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl crate::Peripheral for Crc {
     fn read(&self, offset: u64) -> SimResult<u8> {

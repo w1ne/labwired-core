@@ -67,14 +67,12 @@ impl RomThunkBank {
     /// The bank pre-fills 3 bytes at `pc` with `ROM_THUNK_BREAK_BYTES` so
     /// that an instruction fetch from `pc` returns `BREAK 1, 14`.
     pub fn register(&mut self, pc: u32, thunk: RomThunkFn) {
-        let off = pc
-            .checked_sub(self.base)
-            .unwrap_or_else(|| {
-                panic!(
-                    "RomThunkBank::register: pc 0x{pc:08x} below bank base 0x{:08x}",
-                    self.base
-                )
-            }) as usize;
+        let off = pc.checked_sub(self.base).unwrap_or_else(|| {
+            panic!(
+                "RomThunkBank::register: pc 0x{pc:08x} below bank base 0x{:08x}",
+                self.base
+            )
+        }) as usize;
         assert!(
             off + 3 <= self.backing.len(),
             "RomThunkBank::register: pc 0x{pc:08x} outside bank [0x{:08x}, 0x{:08x})",
@@ -189,10 +187,7 @@ pub fn esp_rom_spiflash_unlock(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimRe
 }
 
 /// `rom_config_instruction_cache_mode(...)` — NOP, returns 0.
-pub fn rom_config_instruction_cache_mode(
-    cpu: &mut XtensaLx7,
-    _bus: &mut dyn Bus,
-) -> SimResult<()> {
+pub fn rom_config_instruction_cache_mode(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
@@ -415,7 +410,7 @@ mod tests {
         let mut cpu = XtensaLx7::new();
         cpu.reset(&mut bus).unwrap();
         cpu.regs.write_logical(0, 0x4037_0080); // a0 = return address
-        cpu.regs.write_logical(2, 41);          // a2 = 41
+        cpu.regs.write_logical(2, 41); // a2 = 41
         cpu.set_pc(0x4037_0000);
 
         // Step once: should fetch BREAK 1,14, dispatch to bump_a2, return.

@@ -24,41 +24,124 @@ fn rrr(op2: u32, op1: u32, r: u32, s: u32, t: u32) -> u32 {
 fn decode_add() {
     // ADD ar, as_, at  →  op2=0x8, op1=0x0
     let w = rrr(0x8, 0x0, 3, 4, 5);
-    assert_eq!(decode(w), Instruction::Add { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(w),
+        Instruction::Add {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn decode_sub() {
     // SUB ar, as_, at  →  op2=0xC, op1=0x0
     let w = rrr(0xC, 0x0, 1, 2, 3);
-    assert_eq!(decode(w), Instruction::Sub { ar: 1, as_: 2, at: 3 });
+    assert_eq!(
+        decode(w),
+        Instruction::Sub {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
 }
 
 #[test]
 fn decode_and_or_xor() {
-    assert_eq!(decode(rrr(0x1, 0x0, 7, 8, 9)), Instruction::And { ar: 7, as_: 8, at: 9 });
-    assert_eq!(decode(rrr(0x2, 0x0, 1, 1, 1)), Instruction::Or { ar: 1, as_: 1, at: 1 });
-    assert_eq!(decode(rrr(0x3, 0x0, 1, 2, 3)), Instruction::Xor { ar: 1, as_: 2, at: 3 });
+    assert_eq!(
+        decode(rrr(0x1, 0x0, 7, 8, 9)),
+        Instruction::And {
+            ar: 7,
+            as_: 8,
+            at: 9
+        }
+    );
+    assert_eq!(
+        decode(rrr(0x2, 0x0, 1, 1, 1)),
+        Instruction::Or {
+            ar: 1,
+            as_: 1,
+            at: 1
+        }
+    );
+    assert_eq!(
+        decode(rrr(0x3, 0x0, 1, 2, 3)),
+        Instruction::Xor {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
 }
 
 #[test]
 fn decode_neg_abs() {
     // NEG ar, at — op2=0x6, op1=0x0, s == 0, t = at, r = ar
-    assert_eq!(decode(rrr(0x6, 0x0, 5, 0, 4)), Instruction::Neg { ar: 5, at: 4 });
+    assert_eq!(
+        decode(rrr(0x6, 0x0, 5, 0, 4)),
+        Instruction::Neg { ar: 5, at: 4 }
+    );
     // ABS — op2=0x6, op1=0x0, s == 1
-    assert_eq!(decode(rrr(0x6, 0x0, 5, 1, 4)), Instruction::Abs { ar: 5, at: 4 });
+    assert_eq!(
+        decode(rrr(0x6, 0x0, 5, 1, 4)),
+        Instruction::Abs { ar: 5, at: 4 }
+    );
 }
 
 #[test]
 fn decode_addx_subx() {
     // ADDX2: op2=0x9, op1=0x0;  ADDX4: op2=0xA;  ADDX8: op2=0xB
-    assert_eq!(decode(rrr(0x9, 0x0, 1, 2, 3)), Instruction::Addx2 { ar: 1, as_: 2, at: 3 });
-    assert_eq!(decode(rrr(0xA, 0x0, 1, 2, 3)), Instruction::Addx4 { ar: 1, as_: 2, at: 3 });
-    assert_eq!(decode(rrr(0xB, 0x0, 1, 2, 3)), Instruction::Addx8 { ar: 1, as_: 2, at: 3 });
+    assert_eq!(
+        decode(rrr(0x9, 0x0, 1, 2, 3)),
+        Instruction::Addx2 {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
+    assert_eq!(
+        decode(rrr(0xA, 0x0, 1, 2, 3)),
+        Instruction::Addx4 {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
+    assert_eq!(
+        decode(rrr(0xB, 0x0, 1, 2, 3)),
+        Instruction::Addx8 {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
     // SUBX2: op2=0xD; SUBX4: 0xE; SUBX8: 0xF
-    assert_eq!(decode(rrr(0xD, 0x0, 1, 2, 3)), Instruction::Subx2 { ar: 1, as_: 2, at: 3 });
-    assert_eq!(decode(rrr(0xE, 0x0, 1, 2, 3)), Instruction::Subx4 { ar: 1, as_: 2, at: 3 });
-    assert_eq!(decode(rrr(0xF, 0x0, 1, 2, 3)), Instruction::Subx8 { ar: 1, as_: 2, at: 3 });
+    assert_eq!(
+        decode(rrr(0xD, 0x0, 1, 2, 3)),
+        Instruction::Subx2 {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
+    assert_eq!(
+        decode(rrr(0xE, 0x0, 1, 2, 3)),
+        Instruction::Subx4 {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
+    assert_eq!(
+        decode(rrr(0xF, 0x0, 1, 2, 3)),
+        Instruction::Subx8 {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
 }
 
 #[test]
@@ -86,7 +169,14 @@ fn decode_sra() {
 fn decode_src() {
     // SRC ar, as_, at : op2=0x8, op1=0x1
     let w = rrr(0x8, 0x1, 1, 2, 3);
-    assert_eq!(decode(w), Instruction::Src { ar: 1, as_: 2, at: 3 });
+    assert_eq!(
+        decode(w),
+        Instruction::Src {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
 }
 
 #[test]
@@ -112,14 +202,18 @@ fn decode_srli() {
     // SRLI ar, at, shamt: op0=0, op1=1, op2=4, r=ar, s=shamt, t=at.
     // HW-oracle (xtensa-esp32s3-elf-as):
     //   srli a3, a4, 5 → 0x413540 (ar=3, at=4, shamt=5)
-    let w = rrr(0x4, 0x1, /*ar=*/3, /*s=shamt=*/5, /*t=at=*/4);
+    let w = rrr(
+        0x4, 0x1, /*ar=*/ 3, /*s=shamt=*/ 5, /*t=at=*/ 4,
+    );
     match decode(w) {
         Instruction::Srli { ar, at, shamt } => {
             assert_eq!(ar, 3);
             assert_eq!(at, 4);
-            assert_eq!(shamt, 5,
+            assert_eq!(
+                shamt, 5,
                 "shamt comes from `s` field per HW assembler; an earlier draft \
-                 read shamt from `t` and mis-decoded esp-hal's PRID-shift logic");
+                 read shamt from `t` and mis-decoded esp-hal's PRID-shift logic"
+            );
         }
         other => panic!("expected Srli, got {:?}", other),
     }
@@ -162,7 +256,10 @@ fn decode_l32r() {
     // Word encoding: op0=0x1 at bits[3:0], at=3 at bits[7:4], imm16=0xFFFE at bits[23:8]
     let w = 0x0001u32 | (3u32 << 4) | (0xFFFEu32 << 8);
     match decode(w) {
-        Instruction::L32r { at, pc_rel_byte_offset } => {
+        Instruction::L32r {
+            at,
+            pc_rel_byte_offset,
+        } => {
             assert_eq!(at, 3);
             assert_eq!(pc_rel_byte_offset, -8);
         }
@@ -175,7 +272,10 @@ fn decode_l32r_positive_imm() {
     // at=5, imm16 = 0x0001 => signed +1 => offset = +4 bytes
     let w = 0x0001u32 | (5u32 << 4) | (0x0001u32 << 8);
     match decode(w) {
-        Instruction::L32r { at, pc_rel_byte_offset } => {
+        Instruction::L32r {
+            at,
+            pc_rel_byte_offset,
+        } => {
             assert_eq!(at, 5);
             assert_eq!(pc_rel_byte_offset, 4);
         }
@@ -189,7 +289,10 @@ fn decode_l32r_large_negative() {
     // byte-offset = -32768 * 4 = -131072
     let w = 0x0001u32 | (1u32 << 4) | (0x8000u32 << 8);
     match decode(w) {
-        Instruction::L32r { at, pc_rel_byte_offset } => {
+        Instruction::L32r {
+            at,
+            pc_rel_byte_offset,
+        } => {
             assert_eq!(at, 1);
             assert_eq!(pc_rel_byte_offset, -131072);
         }
@@ -204,73 +307,171 @@ fn rri8(r: u32, s: u32, t: u32, imm8: u32) -> u32 {
 #[test]
 fn decode_l8ui() {
     let w = rri8(0x0, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::L8ui { at: 5, as_: 4, imm: 0x10 });
+    assert_eq!(
+        decode(w),
+        Instruction::L8ui {
+            at: 5,
+            as_: 4,
+            imm: 0x10
+        }
+    );
 }
 
 #[test]
 fn decode_l16ui() {
     let w = rri8(0x1, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::L16ui { at: 5, as_: 4, imm: 0x20 }); // 0x10 << 1
+    assert_eq!(
+        decode(w),
+        Instruction::L16ui {
+            at: 5,
+            as_: 4,
+            imm: 0x20
+        }
+    ); // 0x10 << 1
 }
 
 #[test]
 fn decode_l32i() {
     let w = rri8(0x2, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::L32i { at: 5, as_: 4, imm: 0x40 }); // 0x10 << 2
+    assert_eq!(
+        decode(w),
+        Instruction::L32i {
+            at: 5,
+            as_: 4,
+            imm: 0x40
+        }
+    ); // 0x10 << 2
 }
 
 #[test]
 fn decode_s8i_s16i_s32i() {
-    assert_eq!(decode(rri8(0x4, 4, 5, 0x10)), Instruction::S8i  { at: 5, as_: 4, imm: 0x10 });
-    assert_eq!(decode(rri8(0x5, 4, 5, 0x10)), Instruction::S16i { at: 5, as_: 4, imm: 0x20 });
-    assert_eq!(decode(rri8(0x6, 4, 5, 0x10)), Instruction::S32i { at: 5, as_: 4, imm: 0x40 });
+    assert_eq!(
+        decode(rri8(0x4, 4, 5, 0x10)),
+        Instruction::S8i {
+            at: 5,
+            as_: 4,
+            imm: 0x10
+        }
+    );
+    assert_eq!(
+        decode(rri8(0x5, 4, 5, 0x10)),
+        Instruction::S16i {
+            at: 5,
+            as_: 4,
+            imm: 0x20
+        }
+    );
+    assert_eq!(
+        decode(rri8(0x6, 4, 5, 0x10)),
+        Instruction::S32i {
+            at: 5,
+            as_: 4,
+            imm: 0x40
+        }
+    );
 }
 
 #[test]
 fn decode_l16si() {
     let w = rri8(0x9, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::L16si { at: 5, as_: 4, imm: 0x20 });
+    assert_eq!(
+        decode(w),
+        Instruction::L16si {
+            at: 5,
+            as_: 4,
+            imm: 0x20
+        }
+    );
 }
 
 #[test]
 fn decode_l32ai() {
     let w = rri8(0xB, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::L32ai { at: 5, as_: 4, imm: 0x40 });
+    assert_eq!(
+        decode(w),
+        Instruction::L32ai {
+            at: 5,
+            as_: 4,
+            imm: 0x40
+        }
+    );
 }
 
 #[test]
 fn decode_addi_positive() {
     let w = rri8(0xC, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::Addi { at: 5, as_: 4, imm8: 0x10 });
+    assert_eq!(
+        decode(w),
+        Instruction::Addi {
+            at: 5,
+            as_: 4,
+            imm8: 0x10
+        }
+    );
 }
 
 #[test]
 fn decode_addi_negative() {
     // imm8 = 0xFF => sext => -1
     let w = rri8(0xC, 4, 5, 0xFF);
-    assert_eq!(decode(w), Instruction::Addi { at: 5, as_: 4, imm8: -1 });
+    assert_eq!(
+        decode(w),
+        Instruction::Addi {
+            at: 5,
+            as_: 4,
+            imm8: -1
+        }
+    );
 }
 
 #[test]
 fn decode_addmi() {
     // ADDMI: imm is sext8 << 8
     let w = rri8(0xD, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::Addmi { at: 5, as_: 4, imm: 0x1000 }); // 0x10 << 8
-    // negative case: imm8 = 0xFF => sext=-1 => imm = -256
+    assert_eq!(
+        decode(w),
+        Instruction::Addmi {
+            at: 5,
+            as_: 4,
+            imm: 0x1000
+        }
+    ); // 0x10 << 8
+       // negative case: imm8 = 0xFF => sext=-1 => imm = -256
     let w = rri8(0xD, 4, 5, 0xFF);
-    assert_eq!(decode(w), Instruction::Addmi { at: 5, as_: 4, imm: -256 });
+    assert_eq!(
+        decode(w),
+        Instruction::Addmi {
+            at: 5,
+            as_: 4,
+            imm: -256
+        }
+    );
 }
 
 #[test]
 fn decode_s32c1i() {
     let w = rri8(0xE, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::S32c1i { at: 5, as_: 4, imm: 0x40 });
+    assert_eq!(
+        decode(w),
+        Instruction::S32c1i {
+            at: 5,
+            as_: 4,
+            imm: 0x40
+        }
+    );
 }
 
 #[test]
 fn decode_s32ri() {
     let w = rri8(0xF, 4, 5, 0x10);
-    assert_eq!(decode(w), Instruction::S32ri { at: 5, as_: 4, imm: 0x40 });
+    assert_eq!(
+        decode(w),
+        Instruction::S32ri {
+            at: 5,
+            as_: 4,
+            imm: 0x40
+        }
+    );
 }
 
 #[test]
@@ -317,48 +518,160 @@ fn j_pack(imm18: u32) -> u32 {
 fn decode_beq() {
     // BEQ as_=2, at=3, imm8=0x10 → decoded offset = sext8(0x10)+4 = 16+4 = 20
     let w = rri8_pack(0x7, 3, 2, 0x1, 0x10);
-    assert_eq!(decode(w), Instruction::Beq { as_: 2, at: 3, offset: 20 });
+    assert_eq!(
+        decode(w),
+        Instruction::Beq {
+            as_: 2,
+            at: 3,
+            offset: 20
+        }
+    );
 }
 
 #[test]
 fn decode_bne_bge_blt_bltu_bgeu() {
     // BNE r=0x9, imm8=0x05 → sext8(5)+4 = 9
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x9, 0x05)), Instruction::Bne   { as_: 2, at: 3, offset: 9 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0x9, 0x05)),
+        Instruction::Bne {
+            as_: 2,
+            at: 3,
+            offset: 9
+        }
+    );
     // BGE r=0xA
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xA, 0x05)), Instruction::Bge   { as_: 2, at: 3, offset: 9 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0xA, 0x05)),
+        Instruction::Bge {
+            as_: 2,
+            at: 3,
+            offset: 9
+        }
+    );
     // BLT r=0x2
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x2, 0x05)), Instruction::Blt   { as_: 2, at: 3, offset: 9 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0x2, 0x05)),
+        Instruction::Blt {
+            as_: 2,
+            at: 3,
+            offset: 9
+        }
+    );
     // BLTU r=0x3
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x3, 0x05)), Instruction::Bltu  { as_: 2, at: 3, offset: 9 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0x3, 0x05)),
+        Instruction::Bltu {
+            as_: 2,
+            at: 3,
+            offset: 9
+        }
+    );
     // BGEU r=0xB
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xB, 0x05)), Instruction::Bgeu  { as_: 2, at: 3, offset: 9 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0xB, 0x05)),
+        Instruction::Bgeu {
+            as_: 2,
+            at: 3,
+            offset: 9
+        }
+    );
 }
 
 #[test]
 fn decode_bany_ball_bnone_bnall() {
     // BANY r=0x8, imm8=0x04 → offset = 4+4 = 8
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x8, 0x04)), Instruction::Bany  { as_: 2, at: 3, offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0x8, 0x04)),
+        Instruction::Bany {
+            as_: 2,
+            at: 3,
+            offset: 8
+        }
+    );
     // BALL r=0x4
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x4, 0x04)), Instruction::Ball  { as_: 2, at: 3, offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0x4, 0x04)),
+        Instruction::Ball {
+            as_: 2,
+            at: 3,
+            offset: 8
+        }
+    );
     // BNONE r=0x0
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x0, 0x04)), Instruction::Bnone { as_: 2, at: 3, offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0x0, 0x04)),
+        Instruction::Bnone {
+            as_: 2,
+            at: 3,
+            offset: 8
+        }
+    );
     // BNALL r=0xC
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xC, 0x04)), Instruction::Bnall { as_: 2, at: 3, offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0xC, 0x04)),
+        Instruction::Bnall {
+            as_: 2,
+            at: 3,
+            offset: 8
+        }
+    );
 }
 
 #[test]
 fn decode_bbc_bbs_bbci_bbsi() {
     // BBC r=0x5, BBS r=0xD — use t=3 as at, imm8=0x04 → offset=8
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0x5, 0x04)), Instruction::Bbc { as_: 2, at: 3, offset: 8 });
-    assert_eq!(decode(rri8_pack(0x7, 3, 2, 0xD, 0x04)), Instruction::Bbs { as_: 2, at: 3, offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0x5, 0x04)),
+        Instruction::Bbc {
+            as_: 2,
+            at: 3,
+            offset: 8
+        }
+    );
+    assert_eq!(
+        decode(rri8_pack(0x7, 3, 2, 0xD, 0x04)),
+        Instruction::Bbs {
+            as_: 2,
+            at: 3,
+            offset: 8
+        }
+    );
     // BBCI r=0x6 (high bit of bit-index=0), t=7 → bit = ((0&1)<<4)|7 = 7
-    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0x6, 0x04)), Instruction::Bbci { as_: 2, bit: 7,  offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 7, 2, 0x6, 0x04)),
+        Instruction::Bbci {
+            as_: 2,
+            bit: 7,
+            offset: 8
+        }
+    );
     // BBCI r=0x7 (high bit=1), t=7 → bit = ((1&1)<<4)|7 = 7|16 = 23
-    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0x7, 0x04)), Instruction::Bbci { as_: 2, bit: 23, offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 7, 2, 0x7, 0x04)),
+        Instruction::Bbci {
+            as_: 2,
+            bit: 23,
+            offset: 8
+        }
+    );
     // BBSI r=0xE (high bit=0), t=7 → bit=7
-    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0xE, 0x04)), Instruction::Bbsi { as_: 2, bit: 7,  offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 7, 2, 0xE, 0x04)),
+        Instruction::Bbsi {
+            as_: 2,
+            bit: 7,
+            offset: 8
+        }
+    );
     // BBSI r=0xF (high bit=1), t=7 → bit=23
-    assert_eq!(decode(rri8_pack(0x7, 7, 2, 0xF, 0x04)), Instruction::Bbsi { as_: 2, bit: 23, offset: 8 });
+    assert_eq!(
+        decode(rri8_pack(0x7, 7, 2, 0xF, 0x04)),
+        Instruction::Bbsi {
+            as_: 2,
+            bit: 23,
+            offset: 8
+        }
+    );
 }
 
 // BZ family (op0=6, n=1): BEQZ/BNEZ/BLTZ/BGEZ, m selects sub-op.
@@ -366,12 +679,27 @@ fn decode_bbc_bbs_bbci_bbsi() {
 #[test]
 fn decode_beqz_bnez_bltz_bgez() {
     // imm12=0x010 → sext12(0x010)=16 → offset = 16+4 = 20
-    assert_eq!(decode(bri12_pack(0, 1, 2, 0x010)), Instruction::Beqz { as_: 2, offset: 20 });
-    assert_eq!(decode(bri12_pack(1, 1, 2, 0x010)), Instruction::Bnez { as_: 2, offset: 20 });
-    assert_eq!(decode(bri12_pack(2, 1, 2, 0x010)), Instruction::Bltz { as_: 2, offset: 20 });
-    assert_eq!(decode(bri12_pack(3, 1, 2, 0x010)), Instruction::Bgez { as_: 2, offset: 20 });
+    assert_eq!(
+        decode(bri12_pack(0, 1, 2, 0x010)),
+        Instruction::Beqz { as_: 2, offset: 20 }
+    );
+    assert_eq!(
+        decode(bri12_pack(1, 1, 2, 0x010)),
+        Instruction::Bnez { as_: 2, offset: 20 }
+    );
+    assert_eq!(
+        decode(bri12_pack(2, 1, 2, 0x010)),
+        Instruction::Bltz { as_: 2, offset: 20 }
+    );
+    assert_eq!(
+        decode(bri12_pack(3, 1, 2, 0x010)),
+        Instruction::Bgez { as_: 2, offset: 20 }
+    );
     // Negative imm12: 0xFFE = -2 → offset = -2+4 = 2
-    assert_eq!(decode(bri12_pack(0, 1, 2, 0xFFE)), Instruction::Beqz { as_: 2, offset: 2 });
+    assert_eq!(
+        decode(bri12_pack(0, 1, 2, 0xFFE)),
+        Instruction::Beqz { as_: 2, offset: 2 }
+    );
 }
 
 // BI group (op0=6, n=2): BEQI/BNEI/BLTI/BGEI with B4CONST table, m selects sub-op.
@@ -379,11 +707,23 @@ fn decode_beqz_bnez_bltz_bgez() {
 #[test]
 fn decode_beqi_bnei_blti_bgei() {
     // BEQI: n=2, m=0, s=2, r=5 → b4const[5]=5, imm8=0x10 → offset=20
-    assert_eq!(decode(0x6u32 | (2u32 << 4) | (0u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
-        Instruction::Beqi { as_: 2, imm: 5, offset: 20 });
+    assert_eq!(
+        decode(0x6u32 | (2u32 << 4) | (0u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
+        Instruction::Beqi {
+            as_: 2,
+            imm: 5,
+            offset: 20
+        }
+    );
     // BGEI: n=2, m=3, r=15 → b4const[15]=256
-    assert_eq!(decode(0x6u32 | (2u32 << 4) | (3u32 << 6) | (2u32 << 8) | (15u32 << 12) | (0x10u32 << 16)),
-        Instruction::Bgei { as_: 2, imm: 256, offset: 20 });
+    assert_eq!(
+        decode(0x6u32 | (2u32 << 4) | (3u32 << 6) | (2u32 << 8) | (15u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bgei {
+            as_: 2,
+            imm: 256,
+            offset: 20
+        }
+    );
 }
 
 // BIU group (op0=6, n=3): BLTUI/BGEUI with B4CONSTU table; m=1 reserved.
@@ -392,13 +732,26 @@ fn decode_beqi_bnei_blti_bgei() {
 #[test]
 fn decode_bltui_bgeui() {
     // BLTUI: n=3, m=2, s=2, r=5 → b4constu[5]=5, imm8=0x10 → offset=20
-    assert_eq!(decode(0x6u32 | (3u32 << 4) | (2u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
-        Instruction::Bltui { as_: 2, imm: 5, offset: 20 });
+    assert_eq!(
+        decode(0x6u32 | (3u32 << 4) | (2u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bltui {
+            as_: 2,
+            imm: 5,
+            offset: 20
+        }
+    );
     // BGEUI: n=3, m=3, r=0 → b4constu[0]=32768
-    assert_eq!(decode(0x6u32 | (3u32 << 4) | (3u32 << 6) | (2u32 << 8) | (0u32 << 12) | (0x10u32 << 16)),
-        Instruction::Bgeui { as_: 2, imm: 32768, offset: 20 });
+    assert_eq!(
+        decode(0x6u32 | (3u32 << 4) | (3u32 << 6) | (2u32 << 8) | (0u32 << 12) | (0x10u32 << 16)),
+        Instruction::Bgeui {
+            as_: 2,
+            imm: 32768,
+            offset: 20
+        }
+    );
     // BIU m=1 is reserved → Unknown
-    match decode(0x6u32 | (3u32 << 4) | (1u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)) {
+    match decode(0x6u32 | (3u32 << 4) | (1u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16))
+    {
         Instruction::Unknown(_) => (),
         other => panic!("expected Unknown for reserved BIU m=1, got {:?}", other),
     }
@@ -454,11 +807,17 @@ fn decode_call0_4_8_12() {
 
     // CALL8 imm18=0x10 → offset = 0x10 * 4 = 0x40 = 64 bytes
     // HW: "call8 0x44" when PC=0 (target = PC+4+64 = 68 = 0x44)
-    assert_eq!(decode(calln_pack(2, 0x10)), Instruction::Call8 { offset: 0x40 });
+    assert_eq!(
+        decode(calln_pack(2, 0x10)),
+        Instruction::Call8 { offset: 0x40 }
+    );
 
     // CALL12 imm18=0x3FFFF (all ones = signed -1) → offset = -1 * 4 = -4 bytes
     // HW: "call12 0x0" when PC=0 (target = PC+4-4 = 0)
-    assert_eq!(decode(calln_pack(3, 0x3FFFF)), Instruction::Call12 { offset: -4 });
+    assert_eq!(
+        decode(calln_pack(3, 0x3FFFF)),
+        Instruction::Call12 { offset: -4 }
+    );
 }
 
 #[test]
@@ -571,10 +930,16 @@ fn decode_syscall() {
 fn decode_break_st0() {
     // BREAK imm_s=0, imm_t=0: r=4, s=0, t=0
     // HW: 0x004000 → "break 0, 0"
-    assert_eq!(decode(st0_pack(4, 0, 0)), Instruction::Break { imm_s: 0, imm_t: 0 });
+    assert_eq!(
+        decode(st0_pack(4, 0, 0)),
+        Instruction::Break { imm_s: 0, imm_t: 0 }
+    );
     // BREAK imm_s=3, imm_t=5: r=4, s=3, t=5
     // HW: 0x004350 → "break 3, 5"
-    assert_eq!(decode(st0_pack(4, 3, 5)), Instruction::Break { imm_s: 3, imm_t: 5 });
+    assert_eq!(
+        decode(st0_pack(4, 3, 5)),
+        Instruction::Break { imm_s: 3, imm_t: 5 }
+    );
 }
 
 // ── Task D8: Narrow (Code Density) decoder tests ──────────────────────────────
@@ -588,11 +953,32 @@ fn test_decode_narrow_l32i_n() {
     // l32i.n a3, a4, 4  →  0x1438
     // at=s=3, as_=t=4, imm=r<<2=1<<2=4
     // HW-oracle: addr 0x0e: 38 14
-    assert_eq!(decode_narrow(0x1438), Instruction::L32i { at: 3, as_: 4, imm: 4 });
+    assert_eq!(
+        decode_narrow(0x1438),
+        Instruction::L32i {
+            at: 3,
+            as_: 4,
+            imm: 4
+        }
+    );
     // l32i.n a3, a4, 0  →  imm=0: r=0
-    assert_eq!(decode_narrow(0x0438), Instruction::L32i { at: 3, as_: 4, imm: 0 });
+    assert_eq!(
+        decode_narrow(0x0438),
+        Instruction::L32i {
+            at: 3,
+            as_: 4,
+            imm: 0
+        }
+    );
     // l32i.n a3, a4, 60  →  imm=60: r=15
-    assert_eq!(decode_narrow(0xF438), Instruction::L32i { at: 3, as_: 4, imm: 60 });
+    assert_eq!(
+        decode_narrow(0xF438),
+        Instruction::L32i {
+            at: 3,
+            as_: 4,
+            imm: 60
+        }
+    );
 }
 
 #[test]
@@ -600,11 +986,32 @@ fn test_decode_narrow_s32i_n() {
     // s32i.n a3, a4, 8  →  0x2439
     // at=s=3, as_=t=4, imm=r<<2=2<<2=8
     // HW-oracle: addr 0x10: 39 24
-    assert_eq!(decode_narrow(0x2439), Instruction::S32i { at: 3, as_: 4, imm: 8 });
+    assert_eq!(
+        decode_narrow(0x2439),
+        Instruction::S32i {
+            at: 3,
+            as_: 4,
+            imm: 8
+        }
+    );
     // s32i.n a3, a4, 0  →  imm=0: r=0
-    assert_eq!(decode_narrow(0x0439), Instruction::S32i { at: 3, as_: 4, imm: 0 });
+    assert_eq!(
+        decode_narrow(0x0439),
+        Instruction::S32i {
+            at: 3,
+            as_: 4,
+            imm: 0
+        }
+    );
     // s32i.n a3, a4, 60  →  imm=60: r=15
-    assert_eq!(decode_narrow(0xF439), Instruction::S32i { at: 3, as_: 4, imm: 60 });
+    assert_eq!(
+        decode_narrow(0xF439),
+        Instruction::S32i {
+            at: 3,
+            as_: 4,
+            imm: 60
+        }
+    );
 }
 
 #[test]
@@ -612,9 +1019,23 @@ fn test_decode_narrow_add_n() {
     // add.n a3, a4, a5  →  0x345a
     // ar=r=3, as_=t=4, at=s=5
     // HW-oracle: addr 0x00: 5a 34
-    assert_eq!(decode_narrow(0x345a), Instruction::Add { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode_narrow(0x345a),
+        Instruction::Add {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
     // add.n a1, a2, a3  →  r=1, t=2, s=3  →  hw = (1<<12)|(2<<8)|(3<<4)|0xA = 0x123a
-    assert_eq!(decode_narrow(0x123a), Instruction::Add { ar: 1, as_: 2, at: 3 });
+    assert_eq!(
+        decode_narrow(0x123a),
+        Instruction::Add {
+            ar: 1,
+            as_: 2,
+            at: 3
+        }
+    );
 }
 
 #[test]
@@ -622,14 +1043,42 @@ fn test_decode_narrow_addi_n() {
     // addi.n a3, a4, 5  →  0x345b
     // at=r=3, as_=t=4, imm=sext4_nonzero(s=5)=5
     // HW-oracle: addr 0x02: 5b 34
-    assert_eq!(decode_narrow(0x345b), Instruction::Addi { at: 3, as_: 4, imm8: 5 });
+    assert_eq!(
+        decode_narrow(0x345b),
+        Instruction::Addi {
+            at: 3,
+            as_: 4,
+            imm8: 5
+        }
+    );
     // addi.n a3, a4, -1  →  0x340b: s=0 encodes imm=-1
     // HW-oracle: addr 0x04: 0b 34
-    assert_eq!(decode_narrow(0x340b), Instruction::Addi { at: 3, as_: 4, imm8: -1 });
+    assert_eq!(
+        decode_narrow(0x340b),
+        Instruction::Addi {
+            at: 3,
+            as_: 4,
+            imm8: -1
+        }
+    );
     // addi.n a3, a4, 15  →  maximum positive imm (s=0xF)
-    assert_eq!(decode_narrow(0x34fb), Instruction::Addi { at: 3, as_: 4, imm8: 15 });
+    assert_eq!(
+        decode_narrow(0x34fb),
+        Instruction::Addi {
+            at: 3,
+            as_: 4,
+            imm8: 15
+        }
+    );
     // addi.n a3, a4, 1  →  minimum positive imm (s=1)
-    assert_eq!(decode_narrow(0x341b), Instruction::Addi { at: 3, as_: 4, imm8: 1 });
+    assert_eq!(
+        decode_narrow(0x341b),
+        Instruction::Addi {
+            at: 3,
+            as_: 4,
+            imm8: 1
+        }
+    );
 }
 
 #[test]
@@ -637,9 +1086,23 @@ fn test_decode_narrow_mov_n() {
     // mov.n a3, a4  →  0x043d
     // MOV.N = OR ar=s=3, as_=t=4, at=t=4  (OR with same src twice)
     // HW-oracle: addr 0x06: 3d 04
-    assert_eq!(decode_narrow(0x043d), Instruction::Or { ar: 3, as_: 4, at: 4 });
+    assert_eq!(
+        decode_narrow(0x043d),
+        Instruction::Or {
+            ar: 3,
+            as_: 4,
+            at: 4
+        }
+    );
     // mov.n a0, a1  →  r=0, t=1, s=0  →  hw = (0<<12)|(1<<8)|(0<<4)|0xD = 0x010d
-    assert_eq!(decode_narrow(0x010d), Instruction::Or { ar: 0, as_: 1, at: 1 });
+    assert_eq!(
+        decode_narrow(0x010d),
+        Instruction::Or {
+            ar: 0,
+            as_: 1,
+            at: 1
+        }
+    );
 }
 
 #[test]
@@ -677,35 +1140,71 @@ fn test_decode_narrow_movi_n_negative() {
 fn test_decode_narrow_beqz_n() {
     // HW-oracle bytes from xtensa-esp32s3-elf-as (correct formula: ((b4<<4)|r)+4).
     // beqz.n a3, +4  →  hw=0x038c [bytes 8c 03]: r=0, b4=0 → offset=4
-    assert_eq!(decode_narrow(0x038c), Instruction::Beqz { as_: 3, offset: 4 });
+    assert_eq!(
+        decode_narrow(0x038c),
+        Instruction::Beqz { as_: 3, offset: 4 }
+    );
     // beqz.n a2, +4  →  hw=0x028c [bytes 8c 02]: r=0, b4=0, as_=2 → offset=4
-    assert_eq!(decode_narrow(0x028c), Instruction::Beqz { as_: 2, offset: 4 });
+    assert_eq!(
+        decode_narrow(0x028c),
+        Instruction::Beqz { as_: 2, offset: 4 }
+    );
     // beqz.n a3, +6  →  hw=0x238c [bytes 8c 23]: r=2, b4=0 → offset=6
-    assert_eq!(decode_narrow(0x238c), Instruction::Beqz { as_: 3, offset: 6 });
+    assert_eq!(
+        decode_narrow(0x238c),
+        Instruction::Beqz { as_: 3, offset: 6 }
+    );
     // beqz.n a3, +18 →  hw=0xe38c [bytes 8c e3]: r=14, b4=0 → offset=18
-    assert_eq!(decode_narrow(0xe38c), Instruction::Beqz { as_: 3, offset: 18 });
+    assert_eq!(
+        decode_narrow(0xe38c),
+        Instruction::Beqz { as_: 3, offset: 18 }
+    );
     // beqz.n a3, +19 →  hw=0xf38c [bytes 8c f3]: r=15, b4=0 → offset=19 (b4=0 boundary)
-    assert_eq!(decode_narrow(0xf38c), Instruction::Beqz { as_: 3, offset: 19 });
+    assert_eq!(
+        decode_narrow(0xf38c),
+        Instruction::Beqz { as_: 3, offset: 19 }
+    );
     // beqz.n a3, +21 →  hw=0x139c [bytes 9c 13]: r=1,  b4=1 → offset=21 (b4=1 minimum)
-    assert_eq!(decode_narrow(0x139c), Instruction::Beqz { as_: 3, offset: 21 });
+    assert_eq!(
+        decode_narrow(0x139c),
+        Instruction::Beqz { as_: 3, offset: 21 }
+    );
     // beqz.n a3, +35 →  hw=0xf39c [bytes 9c f3]: r=15, b4=1 → offset=35 (maximum)
-    assert_eq!(decode_narrow(0xf39c), Instruction::Beqz { as_: 3, offset: 35 });
+    assert_eq!(
+        decode_narrow(0xf39c),
+        Instruction::Beqz { as_: 3, offset: 35 }
+    );
 }
 
 #[test]
 fn test_decode_narrow_bnez_n() {
     // HW-oracle bytes from xtensa-esp32s3-elf-as (same formula as BEQZ.N; s[2]=1 distinguishes BNEZ.N).
     // bnez.n a3, +4  →  hw=0x03cc [bytes cc 03]: r=0, b4=0 → offset=4
-    assert_eq!(decode_narrow(0x03cc), Instruction::Bnez { as_: 3, offset: 4 });
+    assert_eq!(
+        decode_narrow(0x03cc),
+        Instruction::Bnez { as_: 3, offset: 4 }
+    );
     // bnez.n a4, +4  →  hw=0x04cc [bytes cc 04]: r=0, b4=0, as_=4 → offset=4
-    assert_eq!(decode_narrow(0x04cc), Instruction::Bnez { as_: 4, offset: 4 });
+    assert_eq!(
+        decode_narrow(0x04cc),
+        Instruction::Bnez { as_: 4, offset: 4 }
+    );
     // bnez.n a3, +6  →  hw=0x23cc [bytes cc 23]: r=2, b4=0 → offset=6
-    assert_eq!(decode_narrow(0x23cc), Instruction::Bnez { as_: 3, offset: 6 });
+    assert_eq!(
+        decode_narrow(0x23cc),
+        Instruction::Bnez { as_: 3, offset: 6 }
+    );
     // bnez.n a3, +18 →  hw=0xe3cc [bytes cc e3]: r=14, b4=0 → offset=18
-    assert_eq!(decode_narrow(0xe3cc), Instruction::Bnez { as_: 3, offset: 18 });
+    assert_eq!(
+        decode_narrow(0xe3cc),
+        Instruction::Bnez { as_: 3, offset: 18 }
+    );
     // bnez.n a3, +35 →  hw=0xf3dc [bytes dc f3]: r=15, b4=1 → offset=35 (maximum)
     // HW-oracle: xtensa-esp32s3-elf-as assembles bnez.n a3, +35 → 0xf3dc
-    assert_eq!(decode_narrow(0xf3dc), Instruction::Bnez { as_: 3, offset: 35 });
+    assert_eq!(
+        decode_narrow(0xf3dc),
+        Instruction::Bnez { as_: 3, offset: 35 }
+    );
 }
 
 #[test]
@@ -726,7 +1225,10 @@ fn test_decode_narrow_retw_n() {
 fn test_decode_narrow_break_n() {
     // break.n 0  →  0xf02d: r=0xF, s=2, t=0  → Break{imm_s=0,imm_t=0}
     // HW-oracle: addr 0x18: 2d f0
-    assert_eq!(decode_narrow(0xf02d), Instruction::Break { imm_s: 0, imm_t: 0 });
+    assert_eq!(
+        decode_narrow(0xf02d),
+        Instruction::Break { imm_s: 0, imm_t: 0 }
+    );
 }
 
 #[test]
@@ -759,32 +1261,67 @@ fn test_decode_narrow_ill_n() {
 #[test]
 fn test_decode_mull() {
     // HW-oracle: mull a3, a4, a5 → bytes [50 34 82] → word 0x823450
-    assert_eq!(decode(0x823450), Instruction::Mull { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0x823450),
+        Instruction::Mull {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_muluh() {
     // HW-oracle: muluh a3, a4, a5 → bytes [50 34 a2] → word 0xa23450
-    assert_eq!(decode(0xa23450), Instruction::Muluh { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xa23450),
+        Instruction::Muluh {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_mulsh() {
     // HW-oracle: mulsh a3, a4, a5 → bytes [50 34 b2] → word 0xb23450
-    assert_eq!(decode(0xb23450), Instruction::Mulsh { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xb23450),
+        Instruction::Mulsh {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_mul16u() {
     // HW-oracle: mul16u a3, a4, a5 → bytes [50 34 c1] → word 0xc13450
     // op0=0x0 (QRST group), op1=0x1, op2=0xC — all MUL family lives in QRST.
-    assert_eq!(decode(0xc13450), Instruction::Mul16u { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xc13450),
+        Instruction::Mul16u {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_mul16s() {
     // HW-oracle: mul16s a3, a4, a5 → bytes [50 34 d1] → word 0xd13450
-    assert_eq!(decode(0xd13450), Instruction::Mul16s { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xd13450),
+        Instruction::Mul16s {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 // ── E2: DIV family decoder tests (HW-oracle verified) ────────────────────────
@@ -802,25 +1339,53 @@ fn test_decode_mul16s() {
 #[test]
 fn test_decode_quos() {
     // HW-oracle: quos a3, a4, a5 → bytes [d2 34 50] → word 0xD23450
-    assert_eq!(decode(0xD23450), Instruction::Quos { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xD23450),
+        Instruction::Quos {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_quou() {
     // HW-oracle: quou a3, a4, a5 → bytes [c2 34 50] → word 0xC23450
-    assert_eq!(decode(0xC23450), Instruction::Quou { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xC23450),
+        Instruction::Quou {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_rems() {
     // HW-oracle: rems a3, a4, a5 → bytes [f2 34 50] → word 0xF23450
-    assert_eq!(decode(0xF23450), Instruction::Rems { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xF23450),
+        Instruction::Rems {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_remu() {
     // HW-oracle: remu a3, a4, a5 → bytes [e2 34 50] → word 0xE23450
-    assert_eq!(decode(0xE23450), Instruction::Remu { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0xE23450),
+        Instruction::Remu {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 // ── E3: Bit-manip decoder tests ───────────────────────────────────────────────
@@ -853,28 +1418,56 @@ fn test_decode_nsau() {
 fn test_decode_min() {
     // HW-oracle: min a3, a4, a5 → bytes [43 34 50] → word 0x503443
     // Encoding: op0=3, t=4(MIN), r=3=ar, s=4=as_, op2=5=at
-    assert_eq!(decode(0x503443), Instruction::Min { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0x503443),
+        Instruction::Min {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_max() {
     // HW-oracle: max a3, a4, a5 → bytes [53 34 50] → word 0x503453
     // Encoding: op0=3, t=5(MAX), r=3=ar, s=4=as_, op2=5=at
-    assert_eq!(decode(0x503453), Instruction::Max { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0x503453),
+        Instruction::Max {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_minu() {
     // HW-oracle: minu a3, a4, a5 → bytes [63 34 50] → word 0x503463
     // Encoding: op0=3, t=6(MINU), r=3=ar, s=4=as_, op2=5=at
-    assert_eq!(decode(0x503463), Instruction::Minu { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0x503463),
+        Instruction::Minu {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
 fn test_decode_maxu() {
     // HW-oracle: maxu a3, a4, a5 → bytes [73 34 50] → word 0x503473
     // Encoding: op0=3, t=7(MAXU), r=3=ar, s=4=as_, op2=5=at
-    assert_eq!(decode(0x503473), Instruction::Maxu { ar: 3, as_: 4, at: 5 });
+    assert_eq!(
+        decode(0x503473),
+        Instruction::Maxu {
+            ar: 3,
+            as_: 4,
+            at: 5
+        }
+    );
 }
 
 #[test]
@@ -882,10 +1475,24 @@ fn test_decode_sext() {
     // HW-oracle: sext a3, a4, 7 → bytes [23 34 00] → word 0x003423
     // Encoding: op0=3, t=2(SEXT), r=3=ar, s=4=as_, op2=0=sa-7, sa=7
     // Instruction.t stores sa=7 (the sign bit position).
-    assert_eq!(decode(0x003423), Instruction::Sext { ar: 3, as_: 4, t: 7 });
+    assert_eq!(
+        decode(0x003423),
+        Instruction::Sext {
+            ar: 3,
+            as_: 4,
+            t: 7
+        }
+    );
     // sext a3, a4, 15 → bytes [23 34 80] → word 0x803423
     // op2=8=15-7=sa-7, sa=15
-    assert_eq!(decode(0x803423), Instruction::Sext { ar: 3, as_: 4, t: 15 });
+    assert_eq!(
+        decode(0x803423),
+        Instruction::Sext {
+            ar: 3,
+            as_: 4,
+            t: 15
+        }
+    );
 }
 
 #[test]
@@ -893,7 +1500,14 @@ fn test_decode_clamps() {
     // HW-oracle: clamps a3, a4, 7 → bytes [33 34 00] → word 0x003433
     // Encoding: op0=3, t=3(CLAMPS), r=3=ar, s=4=as_, op2=0=sa-7, sa=7
     // Instruction.t stores sa=7 (saturation bit width = sa+1 = 8 bits).
-    assert_eq!(decode(0x003433), Instruction::Clamps { ar: 3, as_: 4, t: 7 });
+    assert_eq!(
+        decode(0x003433),
+        Instruction::Clamps {
+            ar: 3,
+            as_: 4,
+            t: 7
+        }
+    );
 }
 
 #[test]
@@ -903,7 +1517,11 @@ fn test_decode_subx4_ar_a14_not_nsa() {
     // NSA uses op2=4, so no collision is possible at op2=0xE.
     let ins = decode(0xE0_E4_50);
     match ins {
-        Instruction::Subx4 { ar: 14, as_: 4, at: 5 } => {}
+        Instruction::Subx4 {
+            ar: 14,
+            as_: 4,
+            at: 5,
+        } => {}
         other => panic!("expected SUBX4 a14, a4, a5, got {:?}", other),
     }
 }
@@ -915,7 +1533,11 @@ fn test_decode_subx8_ar_a15_not_nsau() {
     // NSAU uses op2=4, so no collision is possible at op2=0xF.
     let ins = decode(0xF0_F4_50);
     match ins {
-        Instruction::Subx8 { ar: 15, as_: 4, at: 5 } => {}
+        Instruction::Subx8 {
+            ar: 15,
+            as_: 4,
+            at: 5,
+        } => {}
         other => panic!("expected SUBX8 a15, a4, a5, got {:?}", other),
     }
 }
@@ -940,7 +1562,14 @@ fn test_decode_subx8_ar_a15_not_nsau() {
 fn test_decode_s32c1i_hw_oracle() {
     // `s32c1i a3, a4, 0` → objdump: 00e432 → 24-bit word 0x00e432
     let w = 0x00e432u32;
-    assert_eq!(decode(w), Instruction::S32c1i { at: 3, as_: 4, imm: 0 });
+    assert_eq!(
+        decode(w),
+        Instruction::S32c1i {
+            at: 3,
+            as_: 4,
+            imm: 0
+        }
+    );
 }
 
 /// S32C1I a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
@@ -949,7 +1578,14 @@ fn test_decode_s32c1i_hw_oracle_imm4() {
     // `s32c1i a3, a4, 4` → objdump: 01e432 → 24-bit word 0x01e432
     // imm8=1 → decoded imm = 1 << 2 = 4.
     let w = 0x01e432u32;
-    assert_eq!(decode(w), Instruction::S32c1i { at: 3, as_: 4, imm: 4 });
+    assert_eq!(
+        decode(w),
+        Instruction::S32c1i {
+            at: 3,
+            as_: 4,
+            imm: 4
+        }
+    );
 }
 
 /// L32AI a3, a4, 0 — HW-oracle exact bytes.
@@ -957,7 +1593,14 @@ fn test_decode_s32c1i_hw_oracle_imm4() {
 fn test_decode_l32ai_hw_oracle() {
     // `l32ai a3, a4, 0` → objdump: 00b432 → 24-bit word 0x00b432
     let w = 0x00b432u32;
-    assert_eq!(decode(w), Instruction::L32ai { at: 3, as_: 4, imm: 0 });
+    assert_eq!(
+        decode(w),
+        Instruction::L32ai {
+            at: 3,
+            as_: 4,
+            imm: 0
+        }
+    );
 }
 
 /// L32AI a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
@@ -966,7 +1609,14 @@ fn test_decode_l32ai_hw_oracle_imm4() {
     // `l32ai a3, a4, 4` → objdump: 01b432 → 24-bit word 0x01b432
     // imm8=1 → decoded imm = 1 << 2 = 4.
     let w = 0x01b432u32;
-    assert_eq!(decode(w), Instruction::L32ai { at: 3, as_: 4, imm: 4 });
+    assert_eq!(
+        decode(w),
+        Instruction::L32ai {
+            at: 3,
+            as_: 4,
+            imm: 4
+        }
+    );
 }
 
 /// S32RI a3, a4, 0 — HW-oracle exact bytes.
@@ -974,7 +1624,14 @@ fn test_decode_l32ai_hw_oracle_imm4() {
 fn test_decode_s32ri_hw_oracle() {
     // `s32ri a3, a4, 0` → objdump: 00f432 → 24-bit word 0x00f432
     let w = 0x00f432u32;
-    assert_eq!(decode(w), Instruction::S32ri { at: 3, as_: 4, imm: 0 });
+    assert_eq!(
+        decode(w),
+        Instruction::S32ri {
+            at: 3,
+            as_: 4,
+            imm: 0
+        }
+    );
 }
 
 /// S32RI a3, a4, 4 — HW-oracle exact bytes, nonzero imm.
@@ -983,7 +1640,14 @@ fn test_decode_s32ri_hw_oracle_imm4() {
     // `s32ri a3, a4, 4` → objdump: 01f432 → 24-bit word 0x01f432
     // imm8=1 → decoded imm = 1 << 2 = 4.
     let w = 0x01f432u32;
-    assert_eq!(decode(w), Instruction::S32ri { at: 3, as_: 4, imm: 4 });
+    assert_eq!(
+        decode(w),
+        Instruction::S32ri {
+            at: 3,
+            as_: 4,
+            imm: 4
+        }
+    );
 }
 
 // ── F1: ENTRY + RETW decoder tests (HW-oracle verified) ──────────────────────
@@ -1071,7 +1735,11 @@ fn test_decode_s32e() {
     let w = 0x49C430u32;
     assert_eq!(
         decode(w),
-        Instruction::S32e { at: 3, as_: 4, imm: (-16i32) as u32 }
+        Instruction::S32e {
+            at: 3,
+            as_: 4,
+            imm: (-16i32) as u32
+        }
     );
 }
 
@@ -1081,7 +1749,11 @@ fn test_decode_l32e() {
     let w = 0x09C430u32;
     assert_eq!(
         decode(w),
-        Instruction::L32e { at: 3, as_: 4, imm: (-16i32) as u32 }
+        Instruction::L32e {
+            at: 3,
+            as_: 4,
+            imm: (-16i32) as u32
+        }
     );
 }
 
@@ -1094,7 +1766,11 @@ fn test_decode_s32e_a0_a1_negative_12_real_firmware() {
     let w = 0x49D100u32;
     assert_eq!(
         decode(w),
-        Instruction::S32e { at: 0, as_: 1, imm: (-12i32) as u32 }
+        Instruction::S32e {
+            at: 0,
+            as_: 1,
+            imm: (-12i32) as u32
+        }
     );
 }
 

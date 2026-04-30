@@ -139,7 +139,10 @@ impl I2c {
     }
 
     pub fn new_with_layout(layout: I2cRegisterLayout) -> Self {
-        Self { layout, ..Self::default() }
+        Self {
+            layout,
+            ..Self::default()
+        }
     }
 
     pub fn attach(&mut self, device: Box<dyn I2cDevice>) {

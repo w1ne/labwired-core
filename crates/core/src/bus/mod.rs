@@ -111,8 +111,8 @@ impl SystemBus {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
             | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
             | "pwr" | "flash" | "rng" | "crc" | "rtc" | "iwdg" | "wwdg" | "dac" | "dbgmcu"
-            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc"
-            | "comp" | "tsc" | "fmc" => {
+            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc" | "comp" | "tsc"
+            | "fmc" => {
                 return t;
             }
             _ => {}
@@ -413,8 +413,8 @@ impl SystemBus {
             let end = base.wrapping_add(p.size as u32);
             if pc >= base && pc < end {
                 if let Some(any) = p.dev.as_any() {
-                    if let Some(bank) = any
-                        .downcast_ref::<crate::peripherals::esp32s3::rom_thunks::RomThunkBank>()
+                    if let Some(bank) =
+                        any.downcast_ref::<crate::peripherals::esp32s3::rom_thunks::RomThunkBank>()
                     {
                         return bank.get(pc);
                     }
@@ -430,9 +430,9 @@ impl SystemBus {
     pub fn route_irq_source_to_cpu_irq(&self, source_id: u32) -> Option<u8> {
         for p in &self.peripherals {
             if let Some(any) = p.dev.as_any() {
-                if let Some(matrix) = any.downcast_ref::<
-                    crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix,
-                >() {
+                if let Some(matrix) =
+                    any.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+                {
                     return matrix.route(source_id);
                 }
             }
@@ -1020,9 +1020,9 @@ impl SystemBus {
         // No-op for buses without an intmatrix registered.
         for p in self.peripherals.iter_mut() {
             if let Some(any) = p.dev.as_any_mut() {
-                if let Some(matrix) = any.downcast_mut::<
-                    crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix,
-                >() {
+                if let Some(matrix) =
+                    any.downcast_mut::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+                {
                     matrix.set_pending_sources(intr_status);
                     break;
                 }

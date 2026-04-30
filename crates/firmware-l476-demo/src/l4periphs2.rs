@@ -24,34 +24,34 @@ use panic_halt as _;
 
 // ---------- Reset/clock plumbing (USART2 + peripheral clocks) -------------
 
-const RCC_BASE:        u32 = 0x4002_1000;
-const RCC_AHB2ENR:     *mut u32 = (RCC_BASE + 0x4C) as *mut u32;
-const RCC_AHB3ENR:     *mut u32 = (RCC_BASE + 0x50) as *mut u32;
-const RCC_APB1ENR1:    *mut u32 = (RCC_BASE + 0x58) as *mut u32;
-const RCC_APB1ENR2:    *mut u32 = (RCC_BASE + 0x5C) as *mut u32;
-const RCC_APB2ENR:     *mut u32 = (RCC_BASE + 0x60) as *mut u32;
+const RCC_BASE: u32 = 0x4002_1000;
+const RCC_AHB2ENR: *mut u32 = (RCC_BASE + 0x4C) as *mut u32;
+const RCC_AHB3ENR: *mut u32 = (RCC_BASE + 0x50) as *mut u32;
+const RCC_APB1ENR1: *mut u32 = (RCC_BASE + 0x58) as *mut u32;
+const RCC_APB1ENR2: *mut u32 = (RCC_BASE + 0x5C) as *mut u32;
+const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x60) as *mut u32;
 
-const GPIOA_MODER:     *mut u32 = 0x4800_0000 as *mut u32;
-const GPIOA_AFRL:      *mut u32 = 0x4800_0020 as *mut u32;
+const GPIOA_MODER: *mut u32 = 0x4800_0000 as *mut u32;
+const GPIOA_AFRL: *mut u32 = 0x4800_0020 as *mut u32;
 
-const USART2_BASE:     u32 = 0x4000_4400;
-const USART2_CR1:      *mut u32 = USART2_BASE as *mut u32;
-const USART2_BRR:      *mut u32 = (USART2_BASE + 0x0C) as *mut u32;
-const USART2_ISR:      *const u32 = (USART2_BASE + 0x1C) as *const u32;
-const USART2_TDR:      *mut u32 = (USART2_BASE + 0x28) as *mut u32;
+const USART2_BASE: u32 = 0x4000_4400;
+const USART2_CR1: *mut u32 = USART2_BASE as *mut u32;
+const USART2_BRR: *mut u32 = (USART2_BASE + 0x0C) as *mut u32;
+const USART2_ISR: *const u32 = (USART2_BASE + 0x1C) as *const u32;
+const USART2_TDR: *mut u32 = (USART2_BASE + 0x28) as *mut u32;
 
 // ---------- New peripheral bases (RM0351) ---------------------------------
 
-const LPUART1_BASE:    u32 = 0x4000_8000;
-const LPTIM1_BASE:     u32 = 0x4000_7C00;
-const EXTI_BASE:       u32 = 0x4001_0400;
-const QUADSPI_BASE:    u32 = 0xA000_1000;
-const SAI1_BASE:       u32 = 0x4001_5400;
-const OTG_BASE:        u32 = 0x5000_0000;
-const CAN1_BASE:       u32 = 0x4000_6400;
+const LPUART1_BASE: u32 = 0x4000_8000;
+const LPTIM1_BASE: u32 = 0x4000_7C00;
+const EXTI_BASE: u32 = 0x4001_0400;
+const QUADSPI_BASE: u32 = 0xA000_1000;
+const SAI1_BASE: u32 = 0x4001_5400;
+const OTG_BASE: u32 = 0x5000_0000;
+const CAN1_BASE: u32 = 0x4000_6400;
 
 const TXE: u32 = 1 << 7;
-const TC:  u32 = 1 << 6;
+const TC: u32 = 1 << 6;
 
 #[inline(always)]
 fn delay(loops: u32) {
@@ -62,7 +62,9 @@ fn delay(loops: u32) {
 
 #[inline(always)]
 fn rmw32(ptr: *mut u32, set: u32) {
-    unsafe { write_volatile(ptr, read_volatile(ptr) | set); }
+    unsafe {
+        write_volatile(ptr, read_volatile(ptr) | set);
+    }
 }
 
 #[inline(always)]
@@ -101,10 +103,10 @@ fn dump(label: &[u8], addr: u32) {
 }
 
 fn usart2_init() {
-    rmw32(RCC_AHB2ENR, 1 << 0);   // GPIOAEN
+    rmw32(RCC_AHB2ENR, 1 << 0); // GPIOAEN
     rmw32(RCC_APB1ENR1, 1 << 17); // USART2EN
     rmw32_mask(GPIOA_MODER, 0x3 << 4, 0x2 << 4);
-    rmw32_mask(GPIOA_AFRL,  0xF << 8, 0x7 << 8);
+    rmw32_mask(GPIOA_AFRL, 0xF << 8, 0x7 << 8);
     unsafe {
         write_volatile(USART2_BRR, 35);
         write_volatile(USART2_CR1, (1 << 0) | (1 << 3));
@@ -209,9 +211,7 @@ fn main() -> ! {
 
     uart_puts(b"DONE\r\n");
 
-    unsafe {
-        while (read_volatile(USART2_ISR) & TC) == 0 {}
-    }
+    unsafe { while (read_volatile(USART2_ISR) & TC) == 0 {} }
     loop {
         unsafe { core::arch::asm!("wfi") }
     }

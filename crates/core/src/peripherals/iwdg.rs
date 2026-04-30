@@ -28,7 +28,13 @@ pub struct Iwdg {
 
 impl Iwdg {
     pub fn new() -> Self {
-        Self { kr: 0, pr: 0, rlr: 0x0000_0FFF, sr: 0, winr: 0x0000_0FFF }
+        Self {
+            kr: 0,
+            pr: 0,
+            rlr: 0x0000_0FFF,
+            sr: 0,
+            winr: 0x0000_0FFF,
+        }
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -56,7 +62,11 @@ impl Iwdg {
     }
 }
 
-impl Default for Iwdg { fn default() -> Self { Self::new() } }
+impl Default for Iwdg {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl crate::Peripheral for Iwdg {
     fn read(&self, offset: u64) -> SimResult<u8> {

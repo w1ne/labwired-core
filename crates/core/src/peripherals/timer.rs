@@ -107,7 +107,11 @@ impl Timer {
     }
 
     fn cnt_mask(&self) -> u32 {
-        if self.width >= 32 { 0xFFFF_FFFF } else { 0xFFFF }
+        if self.width >= 32 {
+            0xFFFF_FFFF
+        } else {
+            0xFFFF
+        }
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -160,11 +164,21 @@ impl Timer {
                     self.sr |= 1; // UIF
                 }
                 if self.advanced {
-                    if (self.egr & 0x02) != 0 { self.sr |= 1 << 1; } // CC1IF
-                    if (self.egr & 0x04) != 0 { self.sr |= 1 << 2; }
-                    if (self.egr & 0x08) != 0 { self.sr |= 1 << 3; }
-                    if (self.egr & 0x10) != 0 { self.sr |= 1 << 4; }
-                    if (self.egr & 0x80) != 0 { self.sr |= 1 << 7; } // BIF (break)
+                    if (self.egr & 0x02) != 0 {
+                        self.sr |= 1 << 1;
+                    } // CC1IF
+                    if (self.egr & 0x04) != 0 {
+                        self.sr |= 1 << 2;
+                    }
+                    if (self.egr & 0x08) != 0 {
+                        self.sr |= 1 << 3;
+                    }
+                    if (self.egr & 0x10) != 0 {
+                        self.sr |= 1 << 4;
+                    }
+                    if (self.egr & 0x80) != 0 {
+                        self.sr |= 1 << 7;
+                    } // BIF (break)
                 }
             }
             0x18 => self.ccmr1 = value,

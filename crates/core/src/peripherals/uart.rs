@@ -123,8 +123,8 @@ impl Uart {
     /// Bitmask of the TXEIE bit within CR1 for interrupt-driven TX detection.
     fn txeie_mask(&self) -> u32 {
         match self.layout {
-            UartRegisterLayout::Stm32F1 => 1 << 7,  // TXEIE = bit 7 in STM32F1 CR1
-            UartRegisterLayout::Stm32V2 => 1 << 3,  // TXEIE/TXFNFIE = bit 3 in STM32V2 CR1
+            UartRegisterLayout::Stm32F1 => 1 << 7, // TXEIE = bit 7 in STM32F1 CR1
+            UartRegisterLayout::Stm32V2 => 1 << 3, // TXEIE/TXFNFIE = bit 3 in STM32V2 CR1
             UartRegisterLayout::Nrf52 => 0,
         }
     }

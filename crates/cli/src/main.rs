@@ -651,7 +651,10 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     let elf_bytes = match std::fs::read(&args.firmware) {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("error: cannot read firmware ELF at {:?}: {e}", args.firmware);
+            eprintln!(
+                "error: cannot read firmware ELF at {:?}: {e}",
+                args.firmware
+            );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
@@ -725,9 +728,7 @@ fn run_firmware(args: RunArgs) -> ExitCode {
                 return ExitCode::from(EXIT_PASS);
             }
             Err(SimulationError::ExceptionRaised { cause, pc }) => {
-                eprintln!(
-                    "labwired-cli run: ExceptionRaised cause={cause} at 0x{pc:08x}"
-                );
+                eprintln!("labwired-cli run: ExceptionRaised cause={cause} at 0x{pc:08x}");
                 eprintln!(
                     "labwired-cli run: PS=0x{:08x} (excm={} intlevel={}) WB={} WS=0x{:04x}",
                     cpu.ps.as_raw(),

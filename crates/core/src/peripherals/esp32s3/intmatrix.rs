@@ -252,9 +252,12 @@ mod tests {
         let mut m = Esp32s3IntMatrix::new();
         m.write(20, 12).unwrap();
         for i in 0x18Cu64..0x19C {
-            assert_eq!(m.read(i).unwrap(), 0,
+            assert_eq!(
+                m.read(i).unwrap(),
+                0,
                 "INTR_STATUS at offset {:#x} must be 0 before set_pending_sources",
-                i);
+                i
+            );
         }
     }
 }

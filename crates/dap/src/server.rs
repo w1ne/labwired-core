@@ -431,36 +431,43 @@ impl DapServer {
                                     "allThreadsStopped": true
                                 })));
                             } else {
-                            match reason {
-                                labwired_core::StopReason::Breakpoint(addr) => {
-                                    // Evaluate conditional breakpoint
-                                    let should_stop = adapter_clone.evaluate_breakpoint_condition(addr);
-                                    if should_stop {
+                                match reason {
+                                    labwired_core::StopReason::Breakpoint(addr) => {
+                                        // Evaluate conditional breakpoint
+                                        let should_stop =
+                                            adapter_clone.evaluate_breakpoint_condition(addr);
+                                        if should_stop {
+                                            {
+                                                let mut r = running_clone.lock().unwrap();
+                                                *r = false;
+                                            }
+                                            let _ = sender_clone.send_event(
+                                                "stopped",
+                                                Some(json!({
+                                                    "reason": "breakpoint",
+                                                    "threadId": 1,
+                                                    "allThreadsStopped": true
+                                                })),
+                                            );
+                                        }
+                                        // If condition is false, continue running (don't stop)
+                                    }
+                                    labwired_core::StopReason::ManualStop => {
                                         {
                                             let mut r = running_clone.lock().unwrap();
                                             *r = false;
                                         }
-                                        let _ = sender_clone.send_event("stopped", Some(json!({
-                                            "reason": "breakpoint",
-                                            "threadId": 1,
-                                            "allThreadsStopped": true
-                                        })));
+                                        let _ = sender_clone.send_event(
+                                            "stopped",
+                                            Some(json!({
+                                                "reason": "pause",
+                                                "threadId": 1,
+                                                "allThreadsStopped": true
+                                            })),
+                                        );
                                     }
-                                    // If condition is false, continue running (don't stop)
+                                    _ => {} // Continue running
                                 }
-                                labwired_core::StopReason::ManualStop => {
-                                    {
-                                        let mut r = running_clone.lock().unwrap();
-                                        *r = false;
-                                    }
-                                    let _ = sender_clone.send_event("stopped", Some(json!({
-                                        "reason": "pause",
-                                        "threadId": 1,
-                                        "allThreadsStopped": true
-                                    })));
-                                }
-                                _ => {} // Continue running
-                            }
                             }
                         }
                         Err(e) => {
@@ -1036,7 +1043,10 @@ impl DapServer {
                             for (i, name) in names.iter().enumerate() {
                                 if name.eq_ignore_ascii_case(reg_part) {
                                     let reg_val = self.adapter.get_register(i as u8).unwrap_or(0);
-                                    if let Some(off) = parse_address(offset).map(|v| v as u32).or_else(|| offset.parse::<u32>().ok()) {
+                                    if let Some(off) = parse_address(offset)
+                                        .map(|v| v as u32)
+                                        .or_else(|| offset.parse::<u32>().ok())
+                                    {
                                         let val = match op {
                                             '+' => reg_val.wrapping_add(off),
                                             '-' => reg_val.wrapping_sub(off),
@@ -1142,11 +1152,17 @@ impl DapServer {
                         // Detect 32-bit Thumb-2: first halfword starts with 0b11101/0b11110/0b11111
                         let is_32bit = (h1 >> 11) >= 0b11101;
 
-                        let (instr, instr_bytes, byte_len) = if is_32bit && offset + 4 <= data.len() {
+                        let (instr, instr_bytes, byte_len) = if is_32bit && offset + 4 <= data.len()
+                        {
                             let h2 = (data[offset + 2] as u16) | ((data[offset + 3] as u16) << 8);
                             let decoded = labwired_core::decoder::decode_thumb_32(h1, h2);
-                            let bytes = format!("{:02x}{:02x}{:02x}{:02x}",
-                                data[offset + 1], data[offset], data[offset + 3], data[offset + 2]);
+                            let bytes = format!(
+                                "{:02x}{:02x}{:02x}{:02x}",
+                                data[offset + 1],
+                                data[offset],
+                                data[offset + 3],
+                                data[offset + 2]
+                            );
                             (decoded, bytes, 4usize)
                         } else {
                             let decoded = labwired_core::decoder::decode_thumb_16(h1);

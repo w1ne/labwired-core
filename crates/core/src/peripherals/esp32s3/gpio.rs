@@ -92,8 +92,8 @@ impl Esp32s3Gpio {
     fn read_word(&self, word_off: u64) -> u32 {
         match word_off {
             0x04 => self.out,
-            0x08 => self.out,            // OUT_W1TS read returns OUT value
-            0x0C => self.out,            // OUT_W1TC read returns OUT value
+            0x08 => self.out, // OUT_W1TS read returns OUT value
+            0x0C => self.out, // OUT_W1TC read returns OUT value
             0x20 => self.enable,
             0x24 => self.enable,
             0x28 => self.enable,
@@ -234,8 +234,10 @@ mod tests {
 
         assert_eq!(g.out & 0x04, 0x04, "OUT bit 2 must be set");
         let events = obs.events.lock().unwrap();
-        assert!(events.iter().any(|&(p, f, t, _)| p == 2 && !f && t),
-                "expected pin 2 0->1 transition; events: {events:?}");
+        assert!(
+            events.iter().any(|&(p, f, t, _)| p == 2 && !f && t),
+            "expected pin 2 0->1 transition; events: {events:?}"
+        );
     }
 
     #[test]
@@ -254,8 +256,10 @@ mod tests {
 
         assert_eq!(g.out & 0x04, 0, "OUT bit 2 must be cleared");
         let events = obs.events.lock().unwrap();
-        assert!(events.iter().any(|&(p, f, t, _)| p == 2 && f && !t),
-                "expected pin 2 1->0 transition; events: {events:?}");
+        assert!(
+            events.iter().any(|&(p, f, t, _)| p == 2 && f && !t),
+            "expected pin 2 1->0 transition; events: {events:?}"
+        );
     }
 
     #[test]
@@ -267,11 +271,13 @@ mod tests {
         // Direct word-write to OUT setting bits 0, 5, 7 simultaneously.
         let val = (1u32 << 0) | (1u32 << 5) | (1u32 << 7);
         for byte in 0..4u64 {
-            g.write(0x04 + byte, ((val >> (byte * 8)) & 0xFF) as u8).unwrap();
+            g.write(0x04 + byte, ((val >> (byte * 8)) & 0xFF) as u8)
+                .unwrap();
         }
 
         let events = obs.events.lock().unwrap();
-        let pins_set: Vec<u8> = events.iter()
+        let pins_set: Vec<u8> = events
+            .iter()
             .filter(|&&(_, f, t, _)| !f && t)
             .map(|&(p, _, _, _)| p)
             .collect();
@@ -293,8 +299,10 @@ mod tests {
         g.write(0x0A, 0x00).unwrap();
         g.write(0x0B, 0x00).unwrap();
 
-        assert!(obs.events.lock().unwrap().is_empty(),
-                "no observer event for unchanged bits");
+        assert!(
+            obs.events.lock().unwrap().is_empty(),
+            "no observer event for unchanged bits"
+        );
     }
 
     #[test]
@@ -326,7 +334,8 @@ mod tests {
         let off = 0x74 + 5 * 4;
         let val = (3u32 << 7) | (1u32 << 13);
         for byte in 0..4u64 {
-            g.write(off + byte, ((val >> (byte * 8)) & 0xFF) as u8).unwrap();
+            g.write(off + byte, ((val >> (byte * 8)) & 0xFF) as u8)
+                .unwrap();
         }
         // Read back.
         let mut read = 0u32;
@@ -354,7 +363,10 @@ mod tests {
         g.write(0x07, 0x00).unwrap();
 
         let events = obs.events.lock().unwrap();
-        let evt = events.iter().find(|&&(p, _, _, _)| p == 0).expect("pin 0 evt");
+        let evt = events
+            .iter()
+            .find(|&&(p, _, _, _)| p == 0)
+            .expect("pin 0 evt");
         assert_eq!(evt.3, 5, "cycle stamp must be 5 after 5 ticks");
     }
 

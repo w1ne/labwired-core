@@ -292,11 +292,20 @@ pub enum Instruction {
         rm: u8,
     }, // UXTB Rd, Rm
     /// SXTH Rd, Rm — sign-extend bottom 16 bits of Rm into Rd.
-    Sxth { rd: u8, rm: u8 },
+    Sxth {
+        rd: u8,
+        rm: u8,
+    },
     /// SXTB Rd, Rm — sign-extend bottom 8 bits of Rm into Rd.
-    Sxtb { rd: u8, rm: u8 },
+    Sxtb {
+        rd: u8,
+        rm: u8,
+    },
     /// UXTH Rd, Rm — zero-extend bottom 16 bits of Rm into Rd.
-    Uxth { rd: u8, rm: u8 },
+    Uxth {
+        rd: u8,
+        rm: u8,
+    },
     Adr {
         rd: u8,
         imm: u16,
@@ -457,7 +466,6 @@ pub enum Instruction {
 
     // --- Thumb-2 additions (ARMv7-M data-processing bits that common
     //     firmware compilers emit, but which were missing from main).
-
     /// DMB / DSB / ISB — all modelled as architectural no-ops on our
     /// single-threaded simulator. Decoding them separately (vs raising
     /// DecodeError) is important because startup code and HAL inline-asm
@@ -531,7 +539,6 @@ pub enum Instruction {
     // Only single-precision (size = 1010) is modelled; double-precision
     // encodings fall through to Unknown32. firmware compiled for
     // `-mfpu=fpv4-sp-d16` (typical Cortex-M4F target) only emits single.
-
     /// VLDR.F32 Sd, [Rn, #±imm8*4] (T1).
     Vldr {
         sd: u8,
@@ -547,19 +554,44 @@ pub enum Instruction {
         add: bool,
     },
     /// VMUL.F32 Sd, Sn, Sm.
-    VmulF32 { sd: u8, sn: u8, sm: u8 },
+    VmulF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
     /// VADD.F32 Sd, Sn, Sm.
-    VaddF32 { sd: u8, sn: u8, sm: u8 },
+    VaddF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
     /// VSUB.F32 Sd, Sn, Sm.
-    VsubF32 { sd: u8, sn: u8, sm: u8 },
+    VsubF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
     /// VDIV.F32 Sd, Sn, Sm.
-    VdivF32 { sd: u8, sn: u8, sm: u8 },
+    VdivF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
     /// VMOV Sn, Rt — single-precision FPU register from GP register.
-    VmovSnRt { sn: u8, rt: u8 },
+    VmovSnRt {
+        sn: u8,
+        rt: u8,
+    },
     /// VMOV Rt, Sn — GP register from single-precision FPU register.
-    VmovRtSn { rt: u8, sn: u8 },
+    VmovRtSn {
+        rt: u8,
+        sn: u8,
+    },
     /// VMOV.F32 Sd, Sm — register-to-register float move.
-    VmovF32Reg { sd: u8, sm: u8 },
+    VmovF32Reg {
+        sd: u8,
+        sm: u8,
+    },
 
     Unknown(u16),
     Unknown32(u16, u16),
@@ -992,10 +1024,38 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let rd_hi = ((h2 >> 8) & 0xF) as u8;
         let rm = (h2 & 0xF) as u8;
         match op {
-            0x8 => return Instruction::Smull { rd_lo, rd_hi, rn, rm },
-            0xA => return Instruction::Umull { rd_lo, rd_hi, rn, rm },
-            0xC => return Instruction::Smlal { rd_lo, rd_hi, rn, rm },
-            0xE => return Instruction::Umlal { rd_lo, rd_hi, rn, rm },
+            0x8 => {
+                return Instruction::Smull {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                }
+            }
+            0xA => {
+                return Instruction::Umull {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                }
+            }
+            0xC => {
+                return Instruction::Smlal {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                }
+            }
+            0xE => {
+                return Instruction::Umlal {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                }
+            }
             _ => {}
         }
     }
@@ -1427,9 +1487,17 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             let writeback = (h1 & 0x20) != 0;
             let reg_list = h2;
             if is_load {
-                return Instruction::LdmiaW { rn, reg_list, writeback };
+                return Instruction::LdmiaW {
+                    rn,
+                    reg_list,
+                    writeback,
+                };
             } else {
-                return Instruction::StmdbW { rn, reg_list, writeback };
+                return Instruction::StmdbW {
+                    rn,
+                    reg_list,
+                    writeback,
+                };
             }
         } else if is_load {
             return Instruction::Ldrd { rt, rt2, rn, imm8 };

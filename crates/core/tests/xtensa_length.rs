@@ -25,7 +25,8 @@ fn every_possible_byte0_classifies_coherently() {
         assert_eq!(
             instruction_length(b0),
             expected,
-            "classification mismatch for byte0 = 0x{:02X}", b0
+            "classification mismatch for byte0 = 0x{:02X}",
+            b0
         );
     }
 }
@@ -59,8 +60,18 @@ fn high_nibble_of_byte0_is_ignored() {
     // no other bits should affect the classification).
     for high in 0u8..=0xF {
         let b0 = (high << 4) | 0x8; // always narrow op0
-        assert_eq!(instruction_length(b0), 2, "narrow should ignore high nibble, b0=0x{:02X}", b0);
+        assert_eq!(
+            instruction_length(b0),
+            2,
+            "narrow should ignore high nibble, b0=0x{:02X}",
+            b0
+        );
         let b0 = (high << 4) | 0x2; // always wide op0
-        assert_eq!(instruction_length(b0), 3, "wide should ignore high nibble, b0=0x{:02X}", b0);
+        assert_eq!(
+            instruction_length(b0),
+            3,
+            "wide should ignore high nibble, b0=0x{:02X}",
+            b0
+        );
     }
 }

@@ -16,9 +16,9 @@
 //! test, which does not attempt to fetch from the bus.
 
 use labwired_core::bus::SystemBus;
-use labwired_core::cpu::xtensa_lx7::{IRQ_LEVELS, XtensaLx7};
+use labwired_core::cpu::xtensa_lx7::{XtensaLx7, IRQ_LEVELS};
 use labwired_core::cpu::xtensa_sr::{
-    EXCCAUSE, EPC1, EPC2, EPC3, INTENABLE, INTERRUPT, INTCLEAR, EPS2, EPS3, VECBASE,
+    EPC1, EPC2, EPC3, EPS2, EPS3, EXCCAUSE, INTCLEAR, INTENABLE, INTERRUPT, VECBASE,
 };
 use labwired_core::{Bus, Cpu, SimulationError};
 
@@ -37,9 +37,16 @@ fn reset_establishes_lx7_initial_state() {
         "reset PC must be 0x40000400 (ROM reset vector)"
     );
     // HW-verified via OpenOCD on real S3-Zero: ps = 0x1f → INTLEVEL=0xF, EXCM=1.
-    assert_eq!(cpu.ps.intlevel(), 0xF, "PS.INTLEVEL=0xF at reset (all interrupts masked)");
+    assert_eq!(
+        cpu.ps.intlevel(),
+        0xF,
+        "PS.INTLEVEL=0xF at reset (all interrupts masked)"
+    );
     assert!(cpu.ps.excm(), "PS.EXCM=1 at reset (exception mode active)");
-    assert!(!cpu.ps.woe(), "PS.WOE=0 at reset (window overflow disabled)");
+    assert!(
+        !cpu.ps.woe(),
+        "PS.WOE=0 at reset (window overflow disabled)"
+    );
     assert_eq!(cpu.regs.windowbase(), 0, "WindowBase=0 at reset");
     assert_eq!(
         cpu.regs.windowstart(),
@@ -64,7 +71,9 @@ fn step_with_unknown_wide_instruction_raises_illegal_instruction() {
     cpu.reset(&mut bus).unwrap();
     cpu.set_pc(TEST_PC);
 
-    let err = cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap_err();
+    let err = cpu
+        .step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap_err();
     assert!(
         matches!(err, SimulationError::ExceptionRaised { cause: 0, .. }),
         "Unknown opcode must raise ExceptionRaised(cause=0) (IllegalInstruction), got: {:?}",
@@ -77,7 +86,11 @@ fn step_with_unknown_wide_instruction_raises_illegal_instruction() {
         0x4000_0000u32.wrapping_add(0x300),
         "PC must be redirected to kernel exception vector after IllegalInstruction"
     );
-    assert_eq!(cpu.sr.read(EXCCAUSE), 0, "EXCCAUSE=0 for IllegalInstruction");
+    assert_eq!(
+        cpu.sr.read(EXCCAUSE),
+        0,
+        "EXCCAUSE=0 for IllegalInstruction"
+    );
     assert_eq!(cpu.sr.read(EPC1), TEST_PC, "EPC1 must hold the faulting PC");
 }
 
@@ -93,17 +106,18 @@ fn step_dispatches_narrow_via_length_predecoder() {
     cpu.reset(&mut bus).unwrap();
     cpu.set_pc(TEST_PC);
     // Write NOP.N (0xf03d) at TEST_PC then a BREAK-style unknown instruction to halt.
-    bus.write_u8(TEST_PC as u64,     0x3d).unwrap();  // byte0: op0=0xD
-    bus.write_u8(TEST_PC as u64 + 1, 0xf0).unwrap();  // byte1: r=0xF, t=0 → NOP.N
-    // After NOP.N (2 bytes), put an unimplemented wide instruction to halt the loop.
-    // BREAK instruction at TEST_PC+2 (wide, op0=0x0, r=4 → Break{0,0})
+    bus.write_u8(TEST_PC as u64, 0x3d).unwrap(); // byte0: op0=0xD
+    bus.write_u8(TEST_PC as u64 + 1, 0xf0).unwrap(); // byte1: r=0xF, t=0 → NOP.N
+                                                     // After NOP.N (2 bytes), put an unimplemented wide instruction to halt the loop.
+                                                     // BREAK instruction at TEST_PC+2 (wide, op0=0x0, r=4 → Break{0,0})
     bus.write_u8(TEST_PC as u64 + 2, 0x00).unwrap();
     bus.write_u8(TEST_PC as u64 + 3, 0x40).unwrap();
     bus.write_u8(TEST_PC as u64 + 4, 0x00).unwrap();
 
     // NOP.N executes fine; then BREAK triggers BreakpointHit at TEST_PC+2.
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap(); // NOP.N should succeed
-    // PC must have advanced by 2 (narrow instruction).
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap(); // NOP.N should succeed
+                   // PC must have advanced by 2 (narrow instruction).
     assert_eq!(
         cpu.get_pc(),
         TEST_PC + 2,
@@ -176,7 +190,7 @@ fn cpu_ready_for_irq() -> (XtensaLx7, SystemBus) {
     // Place PC in RAM so step() can fetch (though for IRQ tests, fetch is never reached).
     cpu.set_pc(TEST_PC);
     // Write a NOP.N at TEST_PC so if step() accidentally fetches, it doesn't fault.
-    bus.write_u8(TEST_PC as u64,     0x3d).unwrap();
+    bus.write_u8(TEST_PC as u64, 0x3d).unwrap();
     bus.write_u8(TEST_PC as u64 + 1, 0xf0).unwrap();
     (cpu, bus)
 }
@@ -192,7 +206,8 @@ fn test_irq_level_1_fires_on_step() {
     cpu.sr.write(INTENABLE, 1 << 0);
 
     // step() should dispatch the interrupt (returns Ok — dispatch is not an error).
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap();
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap();
 
     // PC must jump to level-1 vector (VECBASE + 0x300 = kernel exception vector).
     assert_eq!(
@@ -220,7 +235,8 @@ fn test_irq_level_2_fires() {
     cpu.sr.set_raw(INTERRUPT, 1 << 19);
     cpu.sr.write(INTENABLE, 1 << 19);
 
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap();
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap();
 
     // PC must jump to level-2 vector (VECBASE + 0x180).
     assert_eq!(
@@ -233,9 +249,16 @@ fn test_irq_level_2_fires() {
     // EPS2 = old PS.
     assert_eq!(cpu.sr.read(EPS2), old_ps, "EPS2 must hold pre-dispatch PS");
     // PS.INTLEVEL = 2.
-    assert_eq!(cpu.ps.intlevel(), 2, "PS.INTLEVEL=2 after level-2 interrupt entry");
+    assert_eq!(
+        cpu.ps.intlevel(),
+        2,
+        "PS.INTLEVEL=2 after level-2 interrupt entry"
+    );
     // PS.EXCM = 1 (level 2 <= XCHAL_EXCM_LEVEL=3, so medium-priority).
-    assert!(cpu.ps.excm(), "PS.EXCM=1 for medium-priority level-2 interrupt");
+    assert!(
+        cpu.ps.excm(),
+        "PS.EXCM=1 for medium-priority level-2 interrupt"
+    );
 }
 
 #[test]
@@ -245,11 +268,12 @@ fn test_irq_blocked_by_intlevel() {
     cpu.ps.set_intlevel(3);
     let old_pc = cpu.get_pc();
 
-    cpu.sr.set_raw(INTERRUPT, 1 << 19);  // level-2 IRQ
+    cpu.sr.set_raw(INTERRUPT, 1 << 19); // level-2 IRQ
     cpu.sr.write(INTENABLE, 1 << 19);
 
     // step() must fetch and execute the NOP.N normally (no dispatch).
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap();
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap();
 
     // PC advanced by 2 (NOP.N = 2 bytes): IRQ was blocked.
     assert_eq!(
@@ -258,28 +282,37 @@ fn test_irq_blocked_by_intlevel() {
         "IRQ blocked by INTLEVEL: PC must advance normally"
     );
     // EPC2 must not have been written.
-    assert_eq!(cpu.sr.read(EPC2), 0, "EPC2 must be zero (no dispatch occurred)");
+    assert_eq!(
+        cpu.sr.read(EPC2),
+        0,
+        "EPC2 must be zero (no dispatch occurred)"
+    );
 }
 
 #[test]
 fn test_irq_blocked_by_excm() {
     // With PS.EXCM=1, interrupt dispatch must be gated.
     let (mut cpu, mut bus) = cpu_ready_for_irq();
-    cpu.ps.set_excm(true);   // re-enable EXCM
+    cpu.ps.set_excm(true); // re-enable EXCM
     let old_pc = cpu.get_pc();
 
-    cpu.sr.set_raw(INTERRUPT, 1 << 0);  // level-1 IRQ
+    cpu.sr.set_raw(INTERRUPT, 1 << 0); // level-1 IRQ
     cpu.sr.write(INTENABLE, 1 << 0);
 
     // step() must not dispatch; it fetches and executes NOP.N.
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap();
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap();
 
     assert_eq!(
         cpu.get_pc(),
         old_pc.wrapping_add(2),
         "IRQ blocked by EXCM=1: PC must advance normally"
     );
-    assert_eq!(cpu.sr.read(EPC1), 0, "EPC1 must be zero (no dispatch occurred)");
+    assert_eq!(
+        cpu.sr.read(EPC1),
+        0,
+        "EPC1 must be zero (no dispatch occurred)"
+    );
 }
 
 #[test]
@@ -288,17 +321,22 @@ fn test_irq_blocked_when_disabled_in_intenable() {
     let (mut cpu, mut bus) = cpu_ready_for_irq();
     let old_pc = cpu.get_pc();
 
-    cpu.sr.set_raw(INTERRUPT, 1 << 0);  // level-1 IRQ pending
-    cpu.sr.write(INTENABLE, 0);          // but not enabled
+    cpu.sr.set_raw(INTERRUPT, 1 << 0); // level-1 IRQ pending
+    cpu.sr.write(INTENABLE, 0); // but not enabled
 
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap();
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap();
 
     assert_eq!(
         cpu.get_pc(),
         old_pc.wrapping_add(2),
         "IRQ blocked by INTENABLE=0: PC must advance normally"
     );
-    assert_eq!(cpu.sr.read(EPC1), 0, "EPC1 must be zero (no dispatch occurred)");
+    assert_eq!(
+        cpu.sr.read(EPC1),
+        0,
+        "EPC1 must be zero (no dispatch occurred)"
+    );
 }
 
 #[test]
@@ -314,7 +352,8 @@ fn test_irq_higher_level_preempts_lower() {
     cpu.sr.set_raw(INTERRUPT, (1 << 19) | (1 << 22));
     cpu.sr.write(INTENABLE, (1 << 19) | (1 << 22));
 
-    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default()).unwrap();
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap();
 
     // Level-3 wins: vector at VECBASE + 0x1C0.
     assert_eq!(
@@ -324,7 +363,11 @@ fn test_irq_higher_level_preempts_lower() {
     );
     assert_eq!(cpu.sr.read(EPC3), old_pc, "EPC3 holds pre-dispatch PC");
     assert_eq!(cpu.sr.read(EPS3), old_ps, "EPS3 holds pre-dispatch PS");
-    assert_eq!(cpu.ps.intlevel(), 3, "PS.INTLEVEL=3 after level-3 interrupt");
+    assert_eq!(
+        cpu.ps.intlevel(),
+        3,
+        "PS.INTLEVEL=3 after level-3 interrupt"
+    );
 }
 
 #[test]
@@ -353,7 +396,11 @@ fn test_intclear_clears_interrupt_bit() {
 
     // Clear bit 7 too.
     cpu.sr.write(INTCLEAR, 1 << 7);
-    assert_eq!(cpu.sr.read(INTERRUPT), 0, "INTERRUPT must be clear after both bits cleared");
+    assert_eq!(
+        cpu.sr.read(INTERRUPT),
+        0,
+        "INTERRUPT must be clear after both bits cleared"
+    );
 
     // Unused variable suppression
     let _ = &mut bus;

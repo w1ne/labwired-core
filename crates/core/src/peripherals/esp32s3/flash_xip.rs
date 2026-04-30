@@ -50,7 +50,10 @@ impl FlashXipPeripheral {
     /// Map virtual page `virt` (0..=63) to physical page `phys` in the
     /// backing buffer.
     pub fn map_page(&mut self, virt: u8, phys: u16) {
-        assert!((virt as usize) < PAGE_TABLE_ENTRIES, "virt page out of range");
+        assert!(
+            (virt as usize) < PAGE_TABLE_ENTRIES,
+            "virt page out of range"
+        );
         self.page_table[virt as usize] = Some(phys);
     }
 
@@ -91,9 +94,7 @@ impl Peripheral for FlashXipPeripheral {
     }
 
     fn write(&mut self, offset: u64, _value: u8) -> SimResult<()> {
-        Err(SimulationError::MemoryViolation(
-            self.base as u64 + offset,
-        ))
+        Err(SimulationError::MemoryViolation(self.base as u64 + offset))
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

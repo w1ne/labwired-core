@@ -795,7 +795,10 @@ impl LabwiredAdapter {
 
     /// Store a condition expression for a breakpoint at the given address.
     pub fn set_breakpoint_condition(&self, addr: u32, condition: String) {
-        self.conditional_breakpoints.lock().unwrap().insert(addr, condition);
+        self.conditional_breakpoints
+            .lock()
+            .unwrap()
+            .insert(addr, condition);
     }
 
     /// Check if a breakpoint at the given address has a condition, and evaluate it.

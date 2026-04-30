@@ -289,7 +289,11 @@ mod tests {
         assert_eq!(summary.segments_loaded, 1);
 
         assert_eq!(cpu.get_pc(), 0x4037_0000);
-        assert_eq!(cpu.get_register(1), 0x3FCD_FFF0, "a1 (SP) should hold the stack top");
+        assert_eq!(
+            cpu.get_register(1),
+            0x3FCD_FFF0,
+            "a1 (SP) should hold the stack top"
+        );
         assert_eq!(bus.read_u8(0x4037_0000).unwrap(), 0xAA);
         assert_eq!(bus.read_u8(0x4037_0003).unwrap(), 0xDD);
     }

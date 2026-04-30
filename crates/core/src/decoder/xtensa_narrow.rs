@@ -52,32 +52,48 @@ use super::xtensa::Instruction;
 pub fn decode_narrow(halfword: u16) -> Instruction {
     let hw = halfword;
     let op0 = (hw & 0x0F) as u8;
-    let s   = ((hw >> 4) & 0xF) as u8;   // bits[7:4]
-    let t   = ((hw >> 8) & 0xF) as u8;   // bits[11:8]
-    let r   = ((hw >> 12) & 0xF) as u8;  // bits[15:12]
+    let s = ((hw >> 4) & 0xF) as u8; // bits[7:4]
+    let t = ((hw >> 8) & 0xF) as u8; // bits[11:8]
+    let r = ((hw >> 12) & 0xF) as u8; // bits[15:12]
 
     match op0 {
         // L32I.N  at, as_, imm:  at = mem32[as_ + r*4]
         // HW: at=s(bits[7:4]), as_=t(bits[11:8]), imm=r<<2(bits[15:12]*4)
         // Verified: l32i.n a3,a4,4 → 0x1438 → s=3=at, t=4=as_, r=1→imm=4
-        0x8 => Instruction::L32i { at: s, as_: t, imm: (r as u32) << 2 },
+        0x8 => Instruction::L32i {
+            at: s,
+            as_: t,
+            imm: (r as u32) << 2,
+        },
 
         // S32I.N  at, as_, imm:  mem32[as_ + r*4] = at
         // HW: at=s(bits[7:4]), as_=t(bits[11:8]), imm=r<<2(bits[15:12]*4)
         // Verified: s32i.n a3,a4,8 → 0x2439 → s=3=at, t=4=as_, r=2→imm=8
-        0x9 => Instruction::S32i { at: s, as_: t, imm: (r as u32) << 2 },
+        0x9 => Instruction::S32i {
+            at: s,
+            as_: t,
+            imm: (r as u32) << 2,
+        },
 
         // ADD.N  ar, as_, at:  ar = as_ + at
         // HW: ar=r(bits[15:12]), as_=t(bits[11:8]), at=s(bits[7:4])
         // Verified: add.n a3,a4,a5 → 0x345a → r=3=ar, t=4=as_, s=5=at
-        0xA => Instruction::Add { ar: r, as_: t, at: s },
+        0xA => Instruction::Add {
+            ar: r,
+            as_: t,
+            at: s,
+        },
 
         // ADDI.N  at, as_, imm4:  at = as_ + sign_extend4_nonzero(s)
         // HW: at=r(bits[15:12]), as_=t(bits[11:8]), imm=sext4_nonzero(s=bits[7:4])
         // Encoding: s=0 → imm=-1; s=1..15 → imm=s (positive 1..15)
         // Verified: addi.n a3,a4,5 → 0x345b → r=3=at, t=4=as_, s=5→imm=5
         //           addi.n a3,a4,-1 → 0x340b → r=3=at, t=4=as_, s=0→imm=-1
-        0xB => Instruction::Addi { at: r, as_: t, imm8: sext4_nonzero(s) },
+        0xB => Instruction::Addi {
+            at: r,
+            as_: t,
+            imm8: sext4_nonzero(s),
+        },
 
         // op0=0xC: MOVI.N / BEQZ.N / BNEZ.N
         // Dispatch on bits[7] and bits[6] (via s bit3 and bit2):
@@ -126,7 +142,10 @@ fn decode_narrow_c(hw: u16, r: u8, s: u8, t: u8) -> Instruction {
         //   beqz.n a3,+35 → 0xf39c: r=15, b4=1 → ((1<<4)|15)+4 = 35
         let b4 = ((hw >> 4) & 1) as u32;
         let offset = ((b4 << 4) | r as u32) + 4;
-        Instruction::Beqz { as_: t, offset: offset as i32 }
+        Instruction::Beqz {
+            as_: t,
+            offset: offset as i32,
+        }
     } else {
         // BNEZ.N  as_, offset
         // Same offset formula as BEQZ.N; BNEZ.N has s[2]=1 (s & 0x4 != 0).
@@ -135,7 +154,10 @@ fn decode_narrow_c(hw: u16, r: u8, s: u8, t: u8) -> Instruction {
         //   bnez.n a3,+35 → 0xf3dc: r=15, b4=1 → ((1<<4)|15)+4 = 35
         let b4 = ((hw >> 4) & 1) as u32;
         let offset = ((b4 << 4) | r as u32) + 4;
-        Instruction::Bnez { as_: t, offset: offset as i32 }
+        Instruction::Bnez {
+            as_: t,
+            offset: offset as i32,
+        }
     }
 }
 
@@ -150,7 +172,11 @@ fn decode_narrow_d(hw: u16, r: u8, s: u8, t: u8) -> Instruction {
         // MOV.N is a pseudo-instruction: OR ar, as_, as_ (both sources the same register).
         // HW: ar=s(bits[7:4])=dest, as_=t(bits[11:8])=src
         // Verified: mov.n a3,a4 → 0x043d → r=0, t=4=as_, s=3=ar(dest) → Or{ar=3,as_=4,at=4}
-        0x0 => Instruction::Or { ar: s, as_: t, at: t },
+        0x0 => Instruction::Or {
+            ar: s,
+            as_: t,
+            at: t,
+        },
 
         // r=0xF: zero/minimal operand misc group. Dispatch by s (bits[7:4]).
         // t (bits[11:8]) = 0 for all of these.
@@ -181,7 +207,11 @@ fn decode_narrow_d(hw: u16, r: u8, s: u8, t: u8) -> Instruction {
 /// Verified: addi.n a3,a4,-1 → s=0 → -1; addi.n a3,a4,5 → s=5 → 5
 #[inline]
 fn sext4_nonzero(s: u8) -> i32 {
-    if s == 0 { -1 } else { s as i32 }
+    if s == 0 {
+        -1
+    } else {
+        s as i32
+    }
 }
 
 /// MOVI.N non-standard sign extension.

@@ -152,9 +152,7 @@ impl Exti {
                 self.swier2 = value & m2;
                 self.pr2 |= diff;
             }
-            0x34 if matches!(self.layout, ExtiRegisterLayout::Stm32L4) => {
-                self.pr2 &= !(value & m2)
-            }
+            0x34 if matches!(self.layout, ExtiRegisterLayout::Stm32L4) => self.pr2 &= !(value & m2),
             _ => {}
         }
     }
@@ -212,11 +210,21 @@ impl Peripheral for Exti {
                 let line37 = (active2 >> (37 - 32)) & 1 != 0; // I2C2 wakeup
                 let line38 = (active2 >> (38 - 32)) & 1 != 0; // I2C3 wakeup
                 let line39 = (active2 >> (39 - 32)) & 1 != 0; // USART1 wakeup
-                if line35 { irqs.push(70); }
-                if line36 { irqs.push(31); }
-                if line37 { irqs.push(33); }
-                if line38 { irqs.push(72); }
-                if line39 { irqs.push(37); }
+                if line35 {
+                    irqs.push(70);
+                }
+                if line36 {
+                    irqs.push(31);
+                }
+                if line37 {
+                    irqs.push(33);
+                }
+                if line38 {
+                    irqs.push(72);
+                }
+                if line39 {
+                    irqs.push(37);
+                }
             }
             explicit_irqs = Some(irqs);
         }
@@ -246,7 +254,8 @@ mod tests {
 
     fn poke(exti: &mut Exti, off: u64, val: u32) {
         for i in 0..4 {
-            exti.write(off + i, ((val >> (i * 8)) & 0xFF) as u8).unwrap();
+            exti.write(off + i, ((val >> (i * 8)) & 0xFF) as u8)
+                .unwrap();
         }
     }
 
@@ -258,7 +267,10 @@ mod tests {
         poke(&mut e, 0x30, 1 << 3);
         let r = e.tick();
         let irqs = r.explicit_irqs.expect("expected IRQ list");
-        assert!(irqs.contains(&70), "LPUART1 IRQ 70 should fire, got {irqs:?}");
+        assert!(
+            irqs.contains(&70),
+            "LPUART1 IRQ 70 should fire, got {irqs:?}"
+        );
     }
 
     #[test]
@@ -281,4 +293,3 @@ mod tests {
         assert!(r.explicit_irqs.is_none() || r.explicit_irqs.unwrap().is_empty());
     }
 }
-

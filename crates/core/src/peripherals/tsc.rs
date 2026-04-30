@@ -92,8 +92,8 @@ impl Tsc {
                     // didn't complete normally — they would only be set
                     // on a successful sensor read.
                     self.isr |= 0x03; // EOAF + MCEF
-                    // START is one-shot: silicon clears it when the
-                    // acquisition state machine returns to idle.
+                                      // START is one-shot: silicon clears it when the
+                                      // acquisition state machine returns to idle.
                     self.cr &= !2;
                 }
             }
@@ -163,7 +163,7 @@ mod tests {
         let isr = read32(&t, 0x0C);
         assert_ne!(isr & 1, 0); // EOAF
         assert_ne!(isr & 2, 0); // MCEF — counter errored (no real sensor)
-        // START is one-shot, should self-clear
+                                // START is one-shot, should self-clear
         let cr = read32(&t, 0x00);
         assert_eq!(cr & 2, 0);
     }

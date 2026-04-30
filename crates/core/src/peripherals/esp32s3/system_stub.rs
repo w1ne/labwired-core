@@ -33,7 +33,10 @@ impl SystemStub {
     /// real SYSTEM register block, where boot code expects RAW power-on
     /// values for fields it hasn't yet programmed.
     pub fn new() -> Self {
-        Self { words: HashMap::new(), unwritten_read: 0 }
+        Self {
+            words: HashMap::new(),
+            unwritten_read: 0,
+        }
     }
 
     /// Variant that reads unwritten offsets as 0xFFFF_FFFF. Suited for the
@@ -41,7 +44,10 @@ impl SystemStub {
     /// most status registers after the BROM init, and esp-hal's
     /// busy-waits exit on the first poll if the bit reads high.
     pub fn with_unwritten_ones() -> Self {
-        Self { words: HashMap::new(), unwritten_read: u32::MAX }
+        Self {
+            words: HashMap::new(),
+            unwritten_read: u32::MAX,
+        }
     }
 }
 
@@ -55,7 +61,11 @@ impl Peripheral for SystemStub {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
-        let word = self.words.get(&word_off).copied().unwrap_or(self.unwritten_read);
+        let word = self
+            .words
+            .get(&word_off)
+            .copied()
+            .unwrap_or(self.unwritten_read);
         Ok(((word >> byte_off) & 0xFF) as u8)
     }
 

@@ -19,66 +19,66 @@
 // Verified against `xtensa-esp-elf-as` emitted `rsr.<name>` instruction bytes.
 // The middle byte of the 0x20XX03 encoding IS the SR ID.
 
-pub const LBEG:         u16 = 0;    // 0x00 (loop begin)
-pub const LEND:         u16 = 1;    // 0x01 (loop end)
-pub const LCOUNT:       u16 = 2;    // 0x02 (loop count)
-pub const SAR:          u16 = 3;    // 0x03
-pub const BR:           u16 = 4;    // 0x04 (branch register)
-pub const LITBASE:      u16 = 5;    // 0x05
-pub const SCOMPARE1:    u16 = 12;   // 0x0C
-pub const IBREAKENABLE: u16 = 96;   // 0x60
-pub const ACCLO:        u16 = 16;   // 0x10 MAC16 accumulator — stub
-pub const ACCHI:        u16 = 17;
-pub const M0:           u16 = 32;   // 0x20 MAC16 — stub
-pub const M1:           u16 = 33;
-pub const M2:           u16 = 34;
-pub const M3:           u16 = 35;
-pub const WINDOWBASE:   u16 = 72;   // 0x48
-pub const WINDOWSTART:  u16 = 73;   // 0x49
-pub const PTEVADDR:     u16 = 83;   // 0x53 (not MVP-critical, placeholder)
-pub const IBREAKA0:     u16 = 128;  // 0x80
-pub const IBREAKA1:     u16 = 129;
-pub const DBREAKA0:     u16 = 144;  // 0x90
-pub const DBREAKA1:     u16 = 145;
-pub const DBREAKC0:     u16 = 160;  // 0xA0
-pub const DBREAKC1:     u16 = 161;
-pub const EPC1:         u16 = 177;  // 0xB1
-pub const EPC2:         u16 = 178;  // 0xB2
-pub const EPC3:         u16 = 179;
-pub const EPC4:         u16 = 180;
-pub const EPC5:         u16 = 181;
-pub const EPC6:         u16 = 182;
-pub const EPC7:         u16 = 183;
-pub const DEPC:         u16 = 192;  // 0xC0
-pub const EPS2:         u16 = 194;  // 0xC2
-pub const EPS3:         u16 = 195;
-pub const EPS4:         u16 = 196;
-pub const EPS5:         u16 = 197;
-pub const EPS6:         u16 = 198;
-pub const EPS7:         u16 = 199;
-pub const EXCSAVE1:     u16 = 209;  // 0xD1
-pub const EXCSAVE2:     u16 = 210;
-pub const EXCSAVE3:     u16 = 211;
-pub const EXCSAVE4:     u16 = 212;
-pub const EXCSAVE5:     u16 = 213;
-pub const EXCSAVE6:     u16 = 214;
-pub const EXCSAVE7:     u16 = 215;
-pub const CPENABLE:     u16 = 224;  // 0xE0
-pub const INTERRUPT:    u16 = 226;  // 0xE2 (read-only from SW)
-pub const INTCLEAR:     u16 = 227;  // 0xE3 (write-clears INTERRUPT bits)
-pub const INTENABLE:    u16 = 228;  // 0xE4
-pub const PS:           u16 = 230;  // 0xE6
-pub const VECBASE:      u16 = 231;  // 0xE7
-pub const EXCCAUSE:     u16 = 232;  // 0xE8
-pub const DEBUGCAUSE:   u16 = 233;  // 0xE9
-pub const CCOUNT:       u16 = 234;  // 0xEA (SW-writable, engine also updates)
-pub const PRID:         u16 = 235;  // 0xEB (read-only)
-pub const ICOUNT:       u16 = 236;  // 0xEC
-pub const ICOUNTLEVEL:  u16 = 237;  // 0xED
-pub const EXCVADDR:     u16 = 238;  // 0xEE
-pub const CCOMPARE0:    u16 = 240;  // 0xF0
-pub const CCOMPARE1:    u16 = 241;
-pub const CCOMPARE2:    u16 = 242;
+pub const LBEG: u16 = 0; // 0x00 (loop begin)
+pub const LEND: u16 = 1; // 0x01 (loop end)
+pub const LCOUNT: u16 = 2; // 0x02 (loop count)
+pub const SAR: u16 = 3; // 0x03
+pub const BR: u16 = 4; // 0x04 (branch register)
+pub const LITBASE: u16 = 5; // 0x05
+pub const SCOMPARE1: u16 = 12; // 0x0C
+pub const IBREAKENABLE: u16 = 96; // 0x60
+pub const ACCLO: u16 = 16; // 0x10 MAC16 accumulator — stub
+pub const ACCHI: u16 = 17;
+pub const M0: u16 = 32; // 0x20 MAC16 — stub
+pub const M1: u16 = 33;
+pub const M2: u16 = 34;
+pub const M3: u16 = 35;
+pub const WINDOWBASE: u16 = 72; // 0x48
+pub const WINDOWSTART: u16 = 73; // 0x49
+pub const PTEVADDR: u16 = 83; // 0x53 (not MVP-critical, placeholder)
+pub const IBREAKA0: u16 = 128; // 0x80
+pub const IBREAKA1: u16 = 129;
+pub const DBREAKA0: u16 = 144; // 0x90
+pub const DBREAKA1: u16 = 145;
+pub const DBREAKC0: u16 = 160; // 0xA0
+pub const DBREAKC1: u16 = 161;
+pub const EPC1: u16 = 177; // 0xB1
+pub const EPC2: u16 = 178; // 0xB2
+pub const EPC3: u16 = 179;
+pub const EPC4: u16 = 180;
+pub const EPC5: u16 = 181;
+pub const EPC6: u16 = 182;
+pub const EPC7: u16 = 183;
+pub const DEPC: u16 = 192; // 0xC0
+pub const EPS2: u16 = 194; // 0xC2
+pub const EPS3: u16 = 195;
+pub const EPS4: u16 = 196;
+pub const EPS5: u16 = 197;
+pub const EPS6: u16 = 198;
+pub const EPS7: u16 = 199;
+pub const EXCSAVE1: u16 = 209; // 0xD1
+pub const EXCSAVE2: u16 = 210;
+pub const EXCSAVE3: u16 = 211;
+pub const EXCSAVE4: u16 = 212;
+pub const EXCSAVE5: u16 = 213;
+pub const EXCSAVE6: u16 = 214;
+pub const EXCSAVE7: u16 = 215;
+pub const CPENABLE: u16 = 224; // 0xE0
+pub const INTERRUPT: u16 = 226; // 0xE2 (read-only from SW)
+pub const INTCLEAR: u16 = 227; // 0xE3 (write-clears INTERRUPT bits)
+pub const INTENABLE: u16 = 228; // 0xE4
+pub const PS: u16 = 230; // 0xE6
+pub const VECBASE: u16 = 231; // 0xE7
+pub const EXCCAUSE: u16 = 232; // 0xE8
+pub const DEBUGCAUSE: u16 = 233; // 0xE9
+pub const CCOUNT: u16 = 234; // 0xEA (SW-writable, engine also updates)
+pub const PRID: u16 = 235; // 0xEB (read-only)
+pub const ICOUNT: u16 = 236; // 0xEC
+pub const ICOUNTLEVEL: u16 = 237; // 0xED
+pub const EXCVADDR: u16 = 238; // 0xEE
+pub const CCOMPARE0: u16 = 240; // 0xF0
+pub const CCOMPARE1: u16 = 241;
+pub const CCOMPARE2: u16 = 242;
 
 // ── Reset values ─────────────────────────────────────────────────────────────
 
@@ -90,12 +90,12 @@ pub const VECBASE_RESET_VALUE: u32 = 0x4000_0000;
 
 // ── Core index aliases used in match arms ────────────────────────────────────
 
-const IDX_SAR:       usize = SAR       as usize;
+const IDX_SAR: usize = SAR as usize;
 const IDX_INTERRUPT: usize = INTERRUPT as usize;
-const IDX_INTCLEAR:  usize = INTCLEAR  as usize;
-const IDX_VECBASE:   usize = VECBASE   as usize;
-const IDX_PRID:      usize = PRID      as usize;
-const IDX_CCOUNT:    usize = CCOUNT    as usize;
+const IDX_INTCLEAR: usize = INTCLEAR as usize;
+const IDX_VECBASE: usize = VECBASE as usize;
+const IDX_PRID: usize = PRID as usize;
+const IDX_CCOUNT: usize = CCOUNT as usize;
 
 // ── XtensaSrFile ─────────────────────────────────────────────────────────────
 
@@ -117,7 +117,9 @@ impl Default for XtensaSrFile {
 impl XtensaSrFile {
     /// Create a new SR file with ESP32-S3 reset values applied.
     pub fn new() -> Self {
-        let mut s = Self { storage: [0u32; 256] };
+        let mut s = Self {
+            storage: [0u32; 256],
+        };
         s.storage[IDX_VECBASE] = VECBASE_RESET_VALUE;
         s.storage[IDX_PRID] = PRID_RESET_VALUE;
         s
