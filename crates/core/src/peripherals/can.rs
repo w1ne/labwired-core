@@ -42,13 +42,7 @@ impl Peripheral for CanController {
         let val = match reg_offset {
             0x00 => self.tx_id,
             0x04 => self.tx_data,
-            0x08 => {
-                if self.rx_pending {
-                    1
-                } else {
-                    0
-                }
-            }
+            0x08 if self.rx_pending => 1,
             0x0C => self.rx_id,
             0x10 => self.rx_data,
             _ => 0,

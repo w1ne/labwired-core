@@ -71,12 +71,12 @@ impl Spi {
                 // SR is mostly read-only; allow clearing OVR if modelled.
                 self.sr = value & 0xFFBF;
             }
-            0x0C => {
+            0x0C
                 // DR write goes to the TX path only. The TX byte ends up
                 // in the shifter (transfer_buffer); `self.dr` (RX) is
                 // untouched, so a subsequent DR read returns whatever
                 // came in on MISO — 0 with no slave wired.
-                if (self.cr1 & (1 << 6)) != 0 {
+                if (self.cr1 & (1 << 6)) != 0 => {
                     // SPE set: start a transfer
                     self.sr &= !0x0002; // Clear TXE
                     self.sr |= 0x0080; // Set BSY
@@ -86,7 +86,6 @@ impl Spi {
                     self.transfer_cycles_remaining = 8 * divider;
                     self.transfer_buffer = (value & 0xFF) as u8;
                 }
-            }
             _ => {}
         }
     }

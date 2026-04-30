@@ -35,8 +35,11 @@ const USART2_TDR: *mut u32 = (USART2_BASE + 0x28) as *mut u32;
 
 const TIM1_BASE: u32 = 0x4001_2C00;
 const TIM1_CR1: *mut u32 = TIM1_BASE as *mut u32;
+#[allow(dead_code)] // documented in module header — kept for register-map completeness
 const TIM1_CR2: *mut u32 = (TIM1_BASE + 0x04) as *mut u32;
+#[allow(dead_code)]
 const TIM1_DIER: *mut u32 = (TIM1_BASE + 0x0C) as *mut u32;
+#[allow(dead_code)]
 const TIM1_SR: *mut u32 = (TIM1_BASE + 0x10) as *mut u32;
 const TIM1_EGR: *mut u32 = (TIM1_BASE + 0x14) as *mut u32;
 const TIM1_CCMR1: *mut u32 = (TIM1_BASE + 0x18) as *mut u32;

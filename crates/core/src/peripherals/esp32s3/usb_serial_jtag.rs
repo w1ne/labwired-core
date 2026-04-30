@@ -76,22 +76,19 @@ impl Peripheral for UsbSerialJtag {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        match offset {
-            // EP1: only the low byte of the LE word is the data byte.
-            // The other 3 bytes of a 32-bit write are control bits we ignore.
-            0x00 => {
-                if let Some(sink) = &self.sink {
-                    if let Ok(mut g) = sink.lock() {
-                        g.push(value);
-                    }
-                }
-                if self.echo_stdout {
-                    let _ = io::stdout().write_all(&[value]);
-                    let _ = io::stdout().flush();
+        // EP1 (offset 0x00): only the low byte of the LE word is the data
+        // byte; other 3 bytes of a 32-bit write are control bits we ignore.
+        // INT_* writes (any other offset) are accepted silently.
+        if offset == 0x00 {
+            if let Some(sink) = &self.sink {
+                if let Ok(mut g) = sink.lock() {
+                    g.push(value);
                 }
             }
-            // INT_* writes accepted silently.
-            _ => {}
+            if self.echo_stdout {
+                let _ = io::stdout().write_all(&[value]);
+                let _ = io::stdout().flush();
+            }
         }
         Ok(())
     }
@@ -109,7 +106,6 @@ impl Peripheral for UsbSerialJtag {
 mod tests {
     use super::*;
     use crate::bus::SystemBus;
-    use crate::Bus;
 
     #[test]
     fn ep1_conf_reads_constant() {

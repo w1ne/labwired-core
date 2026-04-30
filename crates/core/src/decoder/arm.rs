@@ -1102,7 +1102,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let d = (h1 >> 6) & 1;
         let rn = (h1 & 0xF) as u8;
         let vd = ((h2 >> 12) & 0xF) as u8;
-        let imm8 = (h2 & 0xFF) as u16;
+        let imm8 = h2 & 0xFF;
         let sd = (vd << 1) | (d as u8);
         let imm = imm8 << 2;
         let add = u != 0;
@@ -1114,7 +1114,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let d = (h1 >> 6) & 1;
         let rn = (h1 & 0xF) as u8;
         let vd = ((h2 >> 12) & 0xF) as u8;
-        let imm8 = (h2 & 0xFF) as u16;
+        let imm8 = h2 & 0xFF;
         let sd = (vd << 1) | (d as u8);
         let imm = imm8 << 2;
         let add = u != 0;
@@ -1348,7 +1348,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let imm3 = (h2 >> 12) & 7;
         let rd = ((h2 >> 8) & 0xF) as u8;
         let imm8 = h2 & 0xFF;
-        let imm12 = ((i as u16) << 11) | ((imm3 as u16) << 8) | imm8;
+        let imm12 = (i << 11) | (imm3 << 8) | imm8;
         if rn == 15 {
             return Instruction::Adr { rd, imm: imm12 };
         } else {
@@ -1364,7 +1364,7 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let imm3 = (h2 >> 12) & 7;
         let rd = ((h2 >> 8) & 0xF) as u8;
         let imm8 = h2 & 0xFF;
-        let imm12 = ((i as u16) << 11) | ((imm3 as u16) << 8) | imm8;
+        let imm12 = (i << 11) | (imm3 << 8) | imm8;
         if rn == 15 {
             // ADR.W with negative offset — encoded as PC - imm. The
             // existing Instruction::Adr models PC + imm, so we encode the

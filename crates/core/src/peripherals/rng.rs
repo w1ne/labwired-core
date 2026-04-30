@@ -24,6 +24,9 @@ pub struct Rng {
     lfsr: u32,
 }
 
+#[allow(dead_code)] // next_word/read_reg/write_reg are reserved for an
+                    // interior-mutability rewrite of read_u32. See module
+                    // docs above for the current pragmatic compromise.
 impl Rng {
     pub fn new() -> Self {
         Self {
@@ -47,16 +50,12 @@ impl Rng {
         match offset {
             0x00 => self.cr,
             0x04 => self.sr,
-            0x08 => {
-                if (self.cr & 0x4) != 0 {
-                    // RNGEN set — deliver a word and clear DRDY (bit 0)
-                    // to mimic the FIFO drain behaviour of real silicon.
-                    let v = self.next_word();
-                    self.sr &= !1;
-                    v
-                } else {
-                    0
-                }
+            0x08 if (self.cr & 0x4) != 0 => {
+                // RNGEN set — deliver a word and clear DRDY (bit 0)
+                // to mimic the FIFO drain behaviour of real silicon.
+                let v = self.next_word();
+                self.sr &= !1;
+                v
             }
             _ => 0,
         }

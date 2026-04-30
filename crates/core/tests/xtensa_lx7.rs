@@ -7,6 +7,7 @@
 //! Bus construction note: the default SystemBus::new() provides:
 //!   - flash at 0x0000_0000..0x0010_0000 (1 MB)
 //!   - ram   at 0x2000_0000..0x2010_0000 (1 MB)
+//!
 //! Neither covers 0x4000_0400 (the ESP32-S3 ROM reset vector).
 //!
 //! Chosen approach: use RAM at 0x2000_0000 for instruction placement in tests

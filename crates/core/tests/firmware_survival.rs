@@ -618,7 +618,7 @@ fn system_config(name: &str) -> PathBuf {
 }
 
 fn load_system(chip_name: &str, system_name: &str) -> (ChipDescriptor, SystemManifest) {
-    let chip = ChipDescriptor::from_file(&chip_config(chip_name))
+    let chip = ChipDescriptor::from_file(chip_config(chip_name))
         .unwrap_or_else(|e| panic!("Failed to load chip {chip_name}: {e}"));
 
     let sys_path = system_config(system_name);

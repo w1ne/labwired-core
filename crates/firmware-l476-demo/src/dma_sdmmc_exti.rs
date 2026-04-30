@@ -128,7 +128,7 @@ fn main() -> ! {
     delay(50);
     unsafe {
         // Map ch1 -> request 4, ch7 -> request 5.
-        write_volatile(DMA1_CSELR, (4 << 0) | (5 << 24));
+        write_volatile(DMA1_CSELR, 4 | (5 << 24));
     }
     uart_puts(b"DMA\r\n");
     dump(b"CSELR", DMA1_CSELR);

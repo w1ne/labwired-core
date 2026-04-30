@@ -65,11 +65,7 @@ pub static VECTORS: [Vector; 16 + 82] = {
 // `Vector` needs Copy so the array initialiser works; both arms are POD.
 impl Clone for Vector {
     fn clone(&self) -> Self {
-        unsafe {
-            Vector {
-                reserved: self.reserved,
-            }
-        }
+        *self
     }
 }
 impl Copy for Vector {}
@@ -169,6 +165,11 @@ fn hal_delay(ms: u32) {
     }
 }
 
+/// SysTick interrupt handler — invoked by the CPU on each SysTick exception.
+///
+/// # Safety
+/// Called from interrupt context; only mutates the static `UW_TICK` counter
+/// via volatile read/write.
 #[no_mangle]
 pub unsafe extern "C" fn systick_handler() {
     unsafe {
@@ -318,6 +319,12 @@ extern "C" {
     static _ebss: u32;
 }
 
+/// Reset handler — entry point invoked by the CPU after reset.
+///
+/// # Safety
+/// Must be the very first user code to run after reset. Copies `.data` from
+/// flash to RAM and zeros `.bss` using the linker-script-provided symbols
+/// `_etext`/`_sdata`/`_edata`/`_sbss`/`_ebss` before calling `main()`.
 #[no_mangle]
 pub unsafe extern "C" fn reset_handler() {
     // Copy .data from flash to RAM.
@@ -339,6 +346,11 @@ pub unsafe extern "C" fn reset_handler() {
     main();
 }
 
+/// Default exception/interrupt handler — spins forever.
+///
+/// # Safety
+/// Called from interrupt context for any exception that has no specific
+/// handler installed. Never returns.
 #[no_mangle]
 pub unsafe extern "C" fn default_handler() {
     loop {}

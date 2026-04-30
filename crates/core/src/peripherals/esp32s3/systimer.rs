@@ -298,15 +298,11 @@ impl Systimer {
                 self.conf = value;
                 self.sync_alarm_enables_from_conf();
             }
-            0x04 => {
-                if value & (1 << 30) != 0 {
-                    self.unit0.snapshot = self.unit0.counter;
-                }
+            0x04 if value & (1 << 30) != 0 => {
+                self.unit0.snapshot = self.unit0.counter;
             }
-            0x08 => {
-                if value & (1 << 30) != 0 {
-                    self.unit1.snapshot = self.unit1.counter;
-                }
+            0x08 if value & (1 << 30) != 0 => {
+                self.unit1.snapshot = self.unit1.counter;
             }
 
             // ── LOAD pending registers (TRM offsets) ──
@@ -330,34 +326,24 @@ impl Systimer {
             0x3C => set_alarm_conf(&mut self.unit0_alarms[2], value),
 
             // ── COMPx_LOAD: commit pending writes into live alarm ──
-            0x50 => {
-                if value & 1 != 0 {
-                    self.commit_alarm(0);
-                }
+            0x50 if value & 1 != 0 => {
+                self.commit_alarm(0);
             }
-            0x54 => {
-                if value & 1 != 0 {
-                    self.commit_alarm(1);
-                }
+            0x54 if value & 1 != 0 => {
+                self.commit_alarm(1);
             }
-            0x58 => {
-                if value & 1 != 0 {
-                    self.commit_alarm(2);
-                }
+            0x58 if value & 1 != 0 => {
+                self.commit_alarm(2);
             }
 
             // ── UNITx_LOAD commit (TRM offsets) ──
-            0x5C => {
-                if value & 1 != 0 {
-                    self.unit0.counter =
-                        ((self.unit0.load_hi as u64) << 32) | (self.unit0.load_lo as u64);
-                }
+            0x5C if value & 1 != 0 => {
+                self.unit0.counter =
+                    ((self.unit0.load_hi as u64) << 32) | (self.unit0.load_lo as u64);
             }
-            0x60 => {
-                if value & 1 != 0 {
-                    self.unit1.counter =
-                        ((self.unit1.load_hi as u64) << 32) | (self.unit1.load_lo as u64);
-                }
+            0x60 if value & 1 != 0 => {
+                self.unit1.counter =
+                    ((self.unit1.load_hi as u64) << 32) | (self.unit1.load_lo as u64);
             }
 
             // ── Interrupt registers (TRM offsets) ──
@@ -676,7 +662,7 @@ mod tests {
         for _ in 0..24 {
             let r = s.tick();
             assert!(
-                r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()),
+                r.explicit_irqs.as_ref().is_none_or(|v| v.is_empty()),
                 "no fire before counter reaches target"
             );
         }
@@ -699,7 +685,7 @@ mod tests {
         s.write_word(0x64, 1);
         for _ in 0..30 {
             let r = s.tick();
-            assert!(r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()));
+            assert!(r.explicit_irqs.as_ref().is_none_or(|v| v.is_empty()));
         }
         assert!(!s.unit0_alarms[0].pending);
     }
@@ -714,7 +700,7 @@ mod tests {
         for _ in 0..30 {
             let r = s.tick();
             assert!(
-                r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()),
+                r.explicit_irqs.as_ref().is_none_or(|v| v.is_empty()),
                 "no IRQ when INT_ENA=0"
             );
         }
@@ -811,7 +797,7 @@ mod tests {
         s.write_word(0x6C, 1);
         let r = s.tick();
         assert!(
-            r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()),
+            r.explicit_irqs.as_ref().is_none_or(|v| v.is_empty()),
             "after INT_CLR, no more IRQs"
         );
     }
@@ -828,7 +814,7 @@ mod tests {
         let mut first_fire = None;
         for cycle in 0..100 {
             let r = s.tick();
-            if !r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()) {
+            if !r.explicit_irqs.as_ref().is_none_or(|v| v.is_empty()) {
                 first_fire = Some(cycle + 1);
                 break;
             }
@@ -844,7 +830,7 @@ mod tests {
         let mut second_fire = None;
         for cycle in 0..100 {
             let r = s.tick();
-            if !r.explicit_irqs.as_ref().map_or(true, |v| v.is_empty()) {
+            if !r.explicit_irqs.as_ref().is_none_or(|v| v.is_empty()) {
                 second_fire = Some(cycle + 1);
                 break;
             }
@@ -864,11 +850,7 @@ mod tests {
         assert_eq!(s.unit0_alarms[0].target, 0x42);
         // No CONF enable → no fire.
         for _ in 0..1000 {
-            assert!(s
-                .tick()
-                .explicit_irqs
-                .as_ref()
-                .map_or(true, |v| v.is_empty()));
+            assert!(s.tick().explicit_irqs.as_ref().is_none_or(|v| v.is_empty()));
         }
     }
 }

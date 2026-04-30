@@ -152,7 +152,7 @@ fn main() -> ! {
 
     // ---- EXTI: program line 22 (RTC alarm), trigger via SWIER ----------
     unsafe {
-        write_volatile((EXTI_BASE + 0x00) as *mut u32, 1 << 22); // IMR1
+        write_volatile(EXTI_BASE as *mut u32, 1 << 22); // IMR1
         write_volatile((EXTI_BASE + 0x10) as *mut u32, 1 << 22); // SWIER1
     }
     delay(50);

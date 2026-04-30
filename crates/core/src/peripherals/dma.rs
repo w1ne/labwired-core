@@ -263,7 +263,7 @@ mod tests {
     fn test_cselr_round_trips_l4_channel_selection() {
         let mut dma = Dma1::new();
         // Map ch1 -> request 4, ch7 -> request 5 (typical USART2_TX / SPI1_RX patterns).
-        dma.write_reg(0xA8, (4 << 0) | (5 << 24));
+        dma.write_reg(0xA8, 4 | (5 << 24));
         let v = dma.read_reg(0xA8);
         assert_eq!(v & 0xF, 4);
         assert_eq!((v >> 24) & 0xF, 5);

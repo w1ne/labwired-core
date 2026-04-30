@@ -57,10 +57,10 @@ fn classify_xip(vaddr: u32) -> Option<XipWindow> {
     const ICACHE_BASE: u32 = 0x4200_0000;
     const DCACHE_BASE: u32 = 0x3C00_0000;
     const WINDOW_SIZE: u32 = 0x0200_0000;
-    if vaddr >= ICACHE_BASE && vaddr < ICACHE_BASE + WINDOW_SIZE {
+    if (ICACHE_BASE..ICACHE_BASE + WINDOW_SIZE).contains(&vaddr) {
         return Some(XipWindow::Icache((vaddr - ICACHE_BASE) as usize));
     }
-    if vaddr >= DCACHE_BASE && vaddr < DCACHE_BASE + WINDOW_SIZE {
+    if (DCACHE_BASE..DCACHE_BASE + WINDOW_SIZE).contains(&vaddr) {
         return Some(XipWindow::Dcache((vaddr - DCACHE_BASE) as usize));
     }
     None

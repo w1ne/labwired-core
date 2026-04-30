@@ -975,7 +975,7 @@ impl SystemBus {
                     pend_nvic(&self.nvic, &mut interrupts, *irq);
                 }
                 // Plan 3: stash source IDs for pass-2 intmatrix routing.
-                explicit_source_ids.extend(irqs.into_iter());
+                explicit_source_ids.extend(irqs);
             }
 
             // System exceptions (SysTick = 15, etc) bypass NVIC and are
@@ -1128,9 +1128,9 @@ impl SystemBus {
     ///
     /// Each alias *word* (4 bytes, naturally aligned) represents one physical bit.
     fn bit_band_translate(addr: u64) -> Option<(u64, u8)> {
-        let (phys_base, alias_base) = if addr >= 0x42000000 && addr < 0x44000000 {
+        let (phys_base, alias_base) = if (0x42000000..0x44000000).contains(&addr) {
             (0x40000000u64, 0x42000000u64)
-        } else if addr >= 0x22000000 && addr < 0x24000000 {
+        } else if (0x22000000..0x24000000).contains(&addr) {
             (0x20000000u64, 0x22000000u64)
         } else {
             return None;
