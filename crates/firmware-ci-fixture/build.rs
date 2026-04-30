@@ -21,6 +21,10 @@ fn main() {
         .unwrap()
         .write_all(include_bytes!("minimal.ld"))
         .unwrap();
+    // Workspace .cargo/config.toml passes `-Tlink.x` for thumbv6m so cortex-m-rt
+    // builds work; this fixture doesn't use cortex-m-rt, so emit an empty
+    // `link.x` to satisfy that flag (real layout comes from minimal.ld below).
+    File::create(out.join("link.x")).unwrap();
     println!("cargo:rustc-link-search={}", out.display());
     println!("cargo:rustc-link-arg=-Tminimal.ld");
 
