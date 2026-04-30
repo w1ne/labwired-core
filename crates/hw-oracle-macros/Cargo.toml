@@ -1,0 +1,22 @@
+[package]
+name = "labwired-hw-oracle-macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Proc-macros for labwired-core HW oracle tests."
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
+
+[dev-dependencies]
+trybuild = "1"
+labwired-hw-oracle = { path = "../hw-oracle" }
+
+[features]
+default = []
+hw-oracle = []  # gates _hw and _diff tests; CI enables on self-hosted runner

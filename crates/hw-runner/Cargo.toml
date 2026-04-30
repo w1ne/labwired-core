@@ -1,0 +1,10 @@
+[package]
+name = "labwired-hw-runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Host-side HW runner for labwired-core (stub in Plan 1)."
+
+[[bin]]
+name = "labwired-hw-runner"
+path = "src/main.rs"

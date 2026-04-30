@@ -26,6 +26,10 @@ members = [
     "crates/firmware-rp2040-demo",
     "crates/firmware-rp2040-pio-onboarding",
     "crates/gdbstub",
+    "crates/hw-oracle",
+    "crates/hw-oracle-macros",
+    "crates/hw-runner",
+    "crates/hw-trace",
     "crates/ir",
     "crates/loader",
     "crates/python",
@@ -62,6 +66,8 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 clap = { version = "4.4", features = ["derive"] }
 goblin = "0.7"
+libc = "0.2"
+serialport = "4.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 bitflags = "2.4"

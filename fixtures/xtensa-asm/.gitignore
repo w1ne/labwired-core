@@ -1,0 +1,6 @@
+# Override: commit pre-built fixture binaries so CI can run oracle tests
+# without requiring the ESP toolchain.
+!*.bin
+!*.elf
+# Intermediate object files are not needed
+*.o
