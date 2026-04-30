@@ -6,6 +6,7 @@
 
 pub mod flash_xip;
 pub mod gpio;
+pub mod i2c;
 pub mod intmatrix;
 pub mod io_mux;
 pub mod rom_thunks;
