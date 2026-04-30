@@ -5,8 +5,8 @@
 // See the LICENSE file in the project root for full license information.
 
 use labwired_core::bus::SystemBus;
-use labwired_core::{DebugControl, Machine};
-use labwired_gdbstub::{GdbServer, LabwiredTarget};
+use labwired_core::Machine;
+use labwired_gdbstub::GdbServer;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::thread;
@@ -134,7 +134,7 @@ fn test_gdb_rsp_basic_commands() {
     send_packet(&mut stream, "p0f");
     let resp = read_packet(&mut stream);
     assert!(!resp.contains("E"), "Failed to read PC. Got: {}", resp);
-    let pc_after_step = resp
+    let _pc_after_step = resp
         .trim_start_matches('+')
         .trim_start_matches('$')
         .split('#')

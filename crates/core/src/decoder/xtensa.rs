@@ -882,7 +882,7 @@ fn decode_qrst(w: u32) -> Instruction {
         // assembler emits op0=0, so the QRST routing is canonical.
         0x9 => {
             // imm_byte = imm4 * 4 - 64  (range -64..-4), stored as two's-complement u32.
-            let imm4 = ((w >> 12) & 0xF) as u32;
+            let imm4 = (w >> 12) & 0xF;
             let imm = imm4.wrapping_mul(4).wrapping_sub(64);
             let at = t; // bits[7:4]
             let as_ = s; // bits[11:8]
@@ -1006,7 +1006,7 @@ fn decode_l32r(w: u32) -> Instruction {
     }
 }
 fn decode_lsai(w: u32) -> Instruction {
-    let imm8 = ((w >> 16) & 0xFF) as u32;
+    let imm8 = (w >> 16) & 0xFF;
     let r = ((w >> 12) & 0xF) as u8;
     let s = ((w >> 8) & 0xF) as u8;
     let t = ((w >> 4) & 0xF) as u8;
@@ -1207,7 +1207,7 @@ fn decode_calln(w: u32) -> Instruction {
 /// Dispatch is on r (bits[15:12]), NOT on the high nibble of imm8.
 /// For BBCI/BBSI the 5-bit bit-index is: ((r & 0x1) << 4) | (t & 0xF).
 fn decode_b(w: u32) -> Instruction {
-    let imm8 = ((w >> 16) & 0xFF) as u32;
+    let imm8 = (w >> 16) & 0xFF;
     let r = ((w >> 12) & 0xF) as u8;
     let s = ((w >> 8) & 0xF) as u8;
     let t = ((w >> 4) & 0xF) as u8;
@@ -1344,7 +1344,7 @@ fn decode_si(w: u32) -> Instruction {
         }
         2 => {
             // BI family (RRI8): imm8 at bits[23:16] is the offset; r indexes B4CONST.
-            let imm8 = ((w >> 16) & 0xFF) as u32;
+            let imm8 = (w >> 16) & 0xFF;
             let off = sext8(imm8) + 4;
             match m {
                 0 => Instruction::Beqi {

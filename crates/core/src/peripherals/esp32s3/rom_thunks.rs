@@ -237,7 +237,7 @@ pub fn rom_udivdi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     let den_hi = cpu.regs.read_logical(n + 5) as u64;
     let num = (num_hi << 32) | num_lo;
     let den = (den_hi << 32) | den_lo;
-    let q: u64 = if den == 0 { u64::MAX } else { num / den };
+    let q: u64 = num.checked_div(den).unwrap_or(u64::MAX);
     // Write low half to a[n+2] (the C-ABI primary return) and high half to a[n+3].
     cpu.regs.write_logical(n + 3, (q >> 32) as u32);
     RomThunkBank::return_with(cpu, q as u32);

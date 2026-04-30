@@ -71,12 +71,12 @@ impl Spi {
                 // SR is mostly read-only; allow clearing OVR if modelled.
                 self.sr = value & 0xFFBF;
             }
-            0x0C => {
+            0x0C
                 // DR write goes to the TX path only. The TX byte ends up
                 // in the shifter (transfer_buffer); `self.dr` (RX) is
                 // untouched, so a subsequent DR read returns whatever
                 // came in on MISO — 0 with no slave wired.
-                if (self.cr1 & (1 << 6)) != 0 {
+                if (self.cr1 & (1 << 6)) != 0 => {
                     // SPE set: start a transfer
                     self.sr &= !0x0002; // Clear TXE
                     self.sr |= 0x0080; // Set BSY
@@ -86,7 +86,6 @@ impl Spi {
                     self.transfer_cycles_remaining = 8 * divider;
                     self.transfer_buffer = (value & 0xFF) as u8;
                 }
-            }
             _ => {}
         }
     }
@@ -96,7 +95,11 @@ impl crate::Peripheral for Spi {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
-        let reg_val = self.read_reg(reg_offset);
+        // Widen to u32 before the shift: SPI registers are u16 but byte
+        // accesses at offsets 2 and 3 read the upper byte of the next
+        // halfword. The CI release profile has overflow checks on, so
+        // `(u16 >> 16)` would panic; the `as u32` widen avoids that.
+        let reg_val = self.read_reg(reg_offset) as u32;
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
@@ -104,12 +107,13 @@ impl crate::Peripheral for Spi {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
-        let mut reg_val = self.read_reg(reg_offset);
-        let mask = 0xFF << (byte_offset * 8);
+        // Same widen-then-shift dance as read() to avoid u16 shift overflow.
+        let mut reg_val = self.read_reg(reg_offset) as u32;
+        let mask: u32 = 0xFF << (byte_offset * 8);
         reg_val &= !mask;
-        reg_val |= (value as u16) << (byte_offset * 8);
+        reg_val |= (value as u32) << (byte_offset * 8);
 
-        self.write_reg(reg_offset, reg_val);
+        self.write_reg(reg_offset, reg_val as u16);
         Ok(())
     }
 

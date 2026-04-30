@@ -4,14 +4,14 @@
 
 //! Three small register stubs needed for esp-hal `init()` to complete:
 //!
-//! * `SystemStub`  — SYSTEM peripheral at 0x600C_0000.
-//!                  SYSCLK_CONF.SOC_CLK_SEL is round-tripped (esp-hal reads it
-//!                  back to know the active clock source).  Other registers
-//!                  are write-accept / read-as-zero.
-//! * `RtcCntlStub` — RTC_CNTL at 0x6000_8000.  Fully cosmetic for hello-world:
-//!                  read-as-zero, write-accept.
-//! * `EfuseStub`   — EFUSE at 0x6000_7000.  Returns canned MAC + chip-rev for
-//!                  the few fields esp-hal reads at boot.
+//! * `SystemStub` — SYSTEM peripheral at 0x600C_0000.
+//!   SYSCLK_CONF.SOC_CLK_SEL is round-tripped (esp-hal reads it
+//!   back to know the active clock source). Other registers
+//!   are write-accept / read-as-zero.
+//! * `RtcCntlStub` — RTC_CNTL at 0x6000_8000. Fully cosmetic for hello-world:
+//!   read-as-zero, write-accept.
+//! * `EfuseStub` — EFUSE at 0x6000_7000. Returns canned MAC + chip-rev for
+//!   the few fields esp-hal reads at boot.
 
 use crate::{Peripheral, SimResult};
 use std::collections::HashMap;
@@ -93,6 +93,12 @@ impl Peripheral for SystemStub {
 #[derive(Debug)]
 pub struct RtcCntlStub {
     words: HashMap<u64, u32>,
+}
+
+impl Default for RtcCntlStub {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RtcCntlStub {

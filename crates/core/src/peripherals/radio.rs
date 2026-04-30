@@ -51,13 +51,7 @@ impl Peripheral for RadioController {
             0x00 => self.tx_channel as u32,
             0x04 => self.tx_power as u32,
             0x08 => 0, // TX Trigger is WO
-            0x0C => {
-                if self.rx_pending {
-                    1
-                } else {
-                    0
-                }
-            }
+            0x0C if self.rx_pending => 1,
             0x10 => self.reg_rx_channel as u32,
             0x14 => self.reg_rx_data,
             _ => 0,
@@ -72,16 +66,8 @@ impl Peripheral for RadioController {
         // let val_shifted = (value as u32) << shift;
 
         match reg_offset {
-            0x00 => {
-                if shift == 0 {
-                    self.tx_channel = value
-                }
-            }
-            0x04 => {
-                if shift == 0 {
-                    self.tx_power = value
-                }
-            }
+            0x00 if shift == 0 => self.tx_channel = value,
+            0x04 if shift == 0 => self.tx_power = value,
             0x08 => {
                 if value == 1 {
                     // Trigger TX

@@ -24,7 +24,7 @@ fn logical_index_15_is_valid() {
     let mut f = ArFile::new();
     f.set_windowbase(5);
     f.write_logical(15, 0xAAAA);
-    assert_eq!(f.physical((5 * 4 + 15) % 64), 0xAAAA);
+    assert_eq!(f.physical(5 * 4 + 15), 0xAAAA);
 }
 
 #[test]

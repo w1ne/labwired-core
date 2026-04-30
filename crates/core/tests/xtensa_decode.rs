@@ -17,7 +17,7 @@ fn entry_point_ignores_high_byte_for_wide_ops() {
 }
 
 fn rrr(op2: u32, op1: u32, r: u32, s: u32, t: u32) -> u32 {
-    (op2 << 20) | (op1 << 16) | (r << 12) | (s << 8) | (t << 4) | 0x0
+    (op2 << 20) | (op1 << 16) | (r << 12) | (s << 8) | (t << 4)
 }
 
 #[test]
@@ -708,7 +708,7 @@ fn decode_beqz_bnez_bltz_bgez() {
 fn decode_beqi_bnei_blti_bgei() {
     // BEQI: n=2, m=0, s=2, r=5 → b4const[5]=5, imm8=0x10 → offset=20
     assert_eq!(
-        decode(0x6u32 | (2u32 << 4) | (0u32 << 6) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
+        decode((0x6u32 | (2u32 << 4)) | (2u32 << 8) | (5u32 << 12) | (0x10u32 << 16)),
         Instruction::Beqi {
             as_: 2,
             imm: 5,
@@ -742,7 +742,7 @@ fn decode_bltui_bgeui() {
     );
     // BGEUI: n=3, m=3, r=0 → b4constu[0]=32768
     assert_eq!(
-        decode(0x6u32 | (3u32 << 4) | (3u32 << 6) | (2u32 << 8) | (0u32 << 12) | (0x10u32 << 16)),
+        decode((0x6u32 | (3u32 << 4) | (3u32 << 6) | (2u32 << 8)) | (0x10u32 << 16)),
         Instruction::Bgeui {
             as_: 2,
             imm: 32768,
@@ -792,7 +792,7 @@ fn calln_pack(n: u32, imm18: u32) -> u32 {
 
 /// Pack a ST0 instruction (op0=0, op1=0, op2=0): r at bits[15:12], s at bits[11:8], t at bits[7:4].
 fn st0_pack(r: u32, s: u32, t: u32) -> u32 {
-    (r << 12) | (s << 8) | (t << 4) | 0x0
+    (r << 12) | (s << 8) | (t << 4)
 }
 
 #[test]

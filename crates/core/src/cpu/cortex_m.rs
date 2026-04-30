@@ -405,8 +405,7 @@ impl Cpu for CortexM {
                 // priority are handled inside step_internal without breaking the batch.
                 if self.pending_exceptions != 0 && !self.primask {
                     let highest = 63 - self.pending_exceptions.leading_zeros();
-                    let can_take =
-                        self.active_exception == 0 || (highest as u32) < self.active_exception;
+                    let can_take = self.active_exception == 0 || highest < self.active_exception;
                     if can_take {
                         break;
                     }
@@ -423,8 +422,7 @@ impl Cpu for CortexM {
             while executed < max_count {
                 if self.pending_exceptions != 0 && !self.primask {
                     let highest = 63 - self.pending_exceptions.leading_zeros();
-                    let can_take =
-                        self.active_exception == 0 || (highest as u32) < self.active_exception;
+                    let can_take = self.active_exception == 0 || highest < self.active_exception;
                     if can_take {
                         break;
                     }
@@ -459,15 +457,14 @@ impl CortexM {
             // Only take the exception if it has strictly higher priority (lower number)
             // than the currently active exception. This prevents re-entry of the same
             // or lower-priority exception while one is already being serviced (ARM IABR behavior).
-            let can_take =
-                self.active_exception == 0 || (exception_num as u32) < self.active_exception;
+            let can_take = self.active_exception == 0 || exception_num < self.active_exception;
 
             if can_take {
                 self.pending_exceptions &= !(1u64 << exception_num);
 
                 // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
                 // On real ARM hardware this happens automatically when the exception is taken.
-                bus.clear_nvic_pending(exception_num as u32);
+                bus.clear_nvic_pending(exception_num);
 
                 // Perform Stacking
                 let sp = self.sp;
@@ -476,11 +473,11 @@ impl CortexM {
                 // Save the previous active_exception in xPSR IPSR bits [8:0] so that
                 // exception_return can restore the correct nesting level.
                 let save_xpsr =
-                    self.xpsr_with_itstate((self.xpsr & !0x1FF) | (self.active_exception as u32));
+                    self.xpsr_with_itstate((self.xpsr & !0x1FF) | self.active_exception);
 
                 // Update active exception before stacking so nested exceptions see
                 // the correct level.
-                self.active_exception = exception_num as u32;
+                self.active_exception = exception_num;
 
                 // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
                 let stacked_lr = self.lr;
@@ -667,7 +664,7 @@ impl CortexM {
                 Instruction::Udiv { rd, rn, rm } => {
                     let n = self.read_reg(rn);
                     let m = self.read_reg(rm);
-                    let result = if m == 0 { 0 } else { n / m };
+                    let result = n.checked_div(m).unwrap_or(0);
                     self.write_reg(rd, result);
                     pc_increment = 4;
                 }
@@ -701,11 +698,7 @@ impl CortexM {
                                 ((op2 as i32) >> (imm5 as u32)) as u32
                             }
                         } // ASR
-                        3 => {
-                            if imm5 != 0 {
-                                op2 = op2.rotate_right(imm5 as u32)
-                            }
-                        } // ROR
+                        3 if imm5 != 0 => op2 = op2.rotate_right(imm5 as u32), // ROR
                         _ => {}
                     }
                     let op1 = self.read_reg(rn);

@@ -112,6 +112,7 @@ struct SourceArg {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // condition / hit_condition deserialized for completeness; not yet consumed.
 struct BreakpointArg {
     line: Option<i64>,
     condition: Option<String>,
@@ -129,6 +130,7 @@ struct SetBreakpointsArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // variables_reference deserialized for protocol compliance; not yet consumed.
 struct DataBreakpointInfoArgs {
     name: String,
     #[serde(rename = "variablesReference")]
@@ -145,6 +147,7 @@ struct SetDataBreakpointsArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // access_type deserialized for protocol compliance; not yet consumed.
 struct DataBreakpointEntry {
     data_id: String,
     #[serde(default)]
@@ -644,7 +647,7 @@ impl DapServer {
                     if let Some(source_map) = launch.source_map {
                         let mut pairs: Vec<(String, String)> = source_map.into_iter().collect();
                         // Longest path prefix first for deterministic remapping.
-                        pairs.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+                        pairs.sort_by_key(|p| std::cmp::Reverse(p.0.len()));
                         *mappings = pairs;
                     }
                 }
@@ -760,8 +763,8 @@ impl DapServer {
                 };
 
                 // Parse address from the name (e.g., "0x20000000" or a symbol name)
-                let addr = parse_address(&args.name)
-                    .or_else(|| self.adapter.resolve_symbol(&args.name).map(|a| a as u64));
+                let addr =
+                    parse_address(&args.name).or_else(|| self.adapter.resolve_symbol(&args.name));
 
                 if let Some(addr) = addr {
                     sender.send_response(
@@ -1532,7 +1535,7 @@ mod tests {
     use anyhow::Result;
     use labwired_core::DebugControl;
     use serde_json::json;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_handle_initialize() -> Result<()> {

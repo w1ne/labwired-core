@@ -430,11 +430,7 @@ impl Cpu for RiscV {
             Instruction::Divu { rd, rs1, rs2 } => {
                 let dividend = self.read_reg(rs1);
                 let divisor = self.read_reg(rs2);
-                let res = if divisor == 0 {
-                    u32::MAX
-                } else {
-                    dividend / divisor
-                };
+                let res = dividend.checked_div(divisor).unwrap_or(u32::MAX);
                 self.write_reg(rd, res);
             }
             Instruction::Rem { rd, rs1, rs2 } => {
