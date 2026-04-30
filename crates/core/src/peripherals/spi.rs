@@ -95,7 +95,11 @@ impl crate::Peripheral for Spi {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
-        let reg_val = self.read_reg(reg_offset);
+        // Widen to u32 before the shift: SPI registers are u16 but byte
+        // accesses at offsets 2 and 3 read the upper byte of the next
+        // halfword. The CI release profile has overflow checks on, so
+        // `(u16 >> 16)` would panic; the `as u32` widen avoids that.
+        let reg_val = self.read_reg(reg_offset) as u32;
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
@@ -103,12 +107,13 @@ impl crate::Peripheral for Spi {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
-        let mut reg_val = self.read_reg(reg_offset);
-        let mask = 0xFF << (byte_offset * 8);
+        // Same widen-then-shift dance as read() to avoid u16 shift overflow.
+        let mut reg_val = self.read_reg(reg_offset) as u32;
+        let mask: u32 = 0xFF << (byte_offset * 8);
         reg_val &= !mask;
-        reg_val |= (value as u16) << (byte_offset * 8);
+        reg_val |= (value as u32) << (byte_offset * 8);
 
-        self.write_reg(reg_offset, reg_val);
+        self.write_reg(reg_offset, reg_val as u16);
         Ok(())
     }
 
