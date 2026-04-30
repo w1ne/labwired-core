@@ -24,7 +24,7 @@
 //! All other offsets accept writes silently and read 0.
 
 use crate::peripherals::i2c::I2cDevice;
-use crate::{Peripheral, PeripheralTickResult, SimResult, SimulationError};
+use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 pub const I2C0_BASE: u32 = 0x6001_3000;
 pub const I2C0_SIZE: u64 = 0x1000;
@@ -209,22 +209,58 @@ impl Peripheral for Esp32s3I2c {
 }
 
 impl Esp32s3I2c {
-    /// Walk CMD0..CMD15 from the start, executing each command. Stub for
-    /// task 3 — writes set TRANS_COMPLETE only, no slave interaction yet.
+    /// Walk CMD0..CMD15 from the start, executing each command in order.
+    /// Stops at the first STOP or END terminator. WRITE / READ are
+    /// implemented in tasks 5/6.
     fn run_command_list(&mut self) {
-        // Filled in by Tasks 5 and 6.
+        const OP_RSTART: u32 = 0;
+        const OP_WRITE: u32 = 1;
+        const OP_READ: u32 = 2;
+        const OP_STOP: u32 = 3;
+        const OP_END: u32 = 4;
+
+        let mut completed = false;
+        for &word in &self.cmds {
+            let opcode = (word >> 11) & 0x7;
+            match opcode {
+                OP_RSTART => { /* slave start handled in task 6 */ }
+                OP_WRITE => { /* filled in task 6 */ }
+                OP_READ => { /* filled in task 6 */ }
+                OP_STOP | OP_END => {
+                    completed = true;
+                    break;
+                }
+                _ => {
+                    // Reserved/unknown opcode — terminate.
+                    completed = true;
+                    break;
+                }
+            }
+        }
+        let _ = completed; // suppresses unused-variable warning until task 6
         self.int_raw |= INT_TRANS_COMPLETE;
         if self.int_ena & INT_TRANS_COMPLETE != 0 {
             self.irq_pending = true;
         }
-        // Suppress unused-variable warnings until task 5 fills in the body.
-        let _ = SimulationError::NotImplemented(String::new()); // satisfies import use
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const REG_CMD1_OFFSET: u64 = REG_CMD0 + 4;
+
+    /// Encode a 14-bit command word: opcode | byte_num.
+    fn cmd(opcode: u8, byte_num: u8) -> u32 {
+        ((opcode as u32 & 0x7) << 11) | (byte_num as u32)
+    }
+
+    const CMD_RSTART: u8 = 0;
+    const CMD_WRITE: u8 = 1;
+    const CMD_READ: u8 = 2;
+    const CMD_STOP: u8 = 3;
+    const CMD_END: u8 = 4;
 
     #[test]
     fn ctr_round_trip() {
@@ -290,5 +326,36 @@ mod tests {
         p.int_raw = INT_TRANS_COMPLETE | INT_NACK;
         p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
         assert_eq!(p.read_u32(REG_INT_ST).unwrap(), INT_TRANS_COMPLETE);
+    }
+
+    #[test]
+    fn empty_command_list_with_end_completes() {
+        let mut p = Esp32s3I2c::new();
+        p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE
+        );
+    }
+
+    #[test]
+    fn rstart_then_stop_completes() {
+        let mut p = Esp32s3I2c::new();
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD1_OFFSET, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE
+        );
+    }
+
+    #[test]
+    fn trans_start_auto_clears() {
+        let mut p = Esp32s3I2c::new();
+        p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(p.read_u32(REG_CTR).unwrap() & CTR_TRANS_START_BIT, 0);
     }
 }
