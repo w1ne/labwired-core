@@ -19,6 +19,10 @@
 
 pub use labwired_hw_oracle_macros::hw_oracle_test;
 
+// `flash` depends on the optional `serialport` crate via TargetBoard::detect.
+// Gate the whole module behind the same feature so plain (sim-only) builds
+// don't pull libudev-sys on Linux.
+#[cfg(feature = "hw-oracle")]
 pub mod flash;
 pub mod openocd;
 
