@@ -23,6 +23,8 @@
 //!
 //! All other offsets accept writes silently and read 0.
 
+use std::cell::RefCell;
+
 use crate::peripherals::i2c::I2cDevice;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
@@ -60,7 +62,7 @@ pub struct Esp32s3I2c {
     fifo_conf: u32,
     cmds: [u32; NUM_CMDS],
     tx_fifo: std::collections::VecDeque<u8>,
-    rx_fifo: std::collections::VecDeque<u8>,
+    rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
     /// Set when a command-list run sets TRANS_COMPLETE & INT_ENA has it.
     /// Drained by `tick()` into the interrupt-matrix source aggregation.
@@ -77,7 +79,7 @@ impl Esp32s3I2c {
             fifo_conf: 0,
             cmds: [0; NUM_CMDS],
             tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
-            rx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
+            rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
             irq_pending: false,
         }
@@ -91,7 +93,8 @@ impl Esp32s3I2c {
 
     fn fifo_status(&self) -> u32 {
         // Bits [4:0] = TX FIFO level, bits [12:8] = RX FIFO level.
-        ((self.tx_fifo.len() as u32) & 0x1F) | (((self.rx_fifo.len() as u32) & 0x1F) << 8)
+        let rx_len = self.rx_fifo.borrow().len();
+        ((self.tx_fifo.len() as u32) & 0x1F) | (((rx_len as u32) & 0x1F) << 8)
     }
 }
 
@@ -125,7 +128,7 @@ impl Peripheral for Esp32s3I2c {
         let v = match offset {
             REG_CTR => self.ctr,
             REG_SLAVE_ADDR => self.slave_addr,
-            REG_FIFO_DATA => 0, // see below — RX pop is handled in write_u32 path
+            REG_FIFO_DATA => self.rx_fifo.borrow_mut().pop_front().unwrap_or(0) as u32,
             REG_FIFO_CONF => self.fifo_conf,
             REG_INT_RAW => self.int_raw,
             REG_INT_CLR => 0,
@@ -167,7 +170,7 @@ impl Peripheral for Esp32s3I2c {
                 self.fifo_conf = value;
                 // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
                 if value & (1 << 12) != 0 {
-                    self.rx_fifo.clear();
+                    self.rx_fifo.borrow_mut().clear();
                 }
                 if value & (1 << 13) != 0 {
                     self.tx_fifo.clear();
@@ -357,5 +360,17 @@ mod tests {
         p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
         assert_eq!(p.read_u32(REG_CTR).unwrap() & CTR_TRANS_START_BIT, 0);
+    }
+
+    #[test]
+    fn rx_fifo_pops_in_fifo_order_via_fifo_data_reads() {
+        let mut p = Esp32s3I2c::new();
+        // Pre-load the RX FIFO directly to test the read path in isolation.
+        p.rx_fifo.borrow_mut().push_back(0xAA);
+        p.rx_fifo.borrow_mut().push_back(0xBB);
+        let first = p.read_u32(REG_FIFO_DATA).unwrap();
+        let second = p.read_u32(REG_FIFO_DATA).unwrap();
+        assert_eq!(first, 0xAA);
+        assert_eq!(second, 0xBB);
     }
 }
