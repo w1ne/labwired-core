@@ -29,7 +29,12 @@ pub struct Dbgmcu {
 
 impl Dbgmcu {
     pub fn new(idcode: u32) -> Self {
-        Self { idcode, cr: 0, apb1_fz: 0, apb2_fz: 0 }
+        Self {
+            idcode,
+            cr: 0,
+            apb1_fz: 0,
+            apb2_fz: 0,
+        }
     }
 
     fn read_reg(&self, offset: u64) -> u32 {

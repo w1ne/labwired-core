@@ -158,7 +158,10 @@ impl WasmSimulator {
 
     /// Read the output state of a board_io binding using peripheral snapshot.
     fn read_board_io_state(&self, machine: &Machine<CortexM>, binding: &BoardIoBinding) -> bool {
-        let idx = match machine.bus.find_peripheral_index_by_name(&binding.peripheral) {
+        let idx = match machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+        {
             Some(i) => i,
             None => return false,
         };
@@ -386,18 +389,12 @@ impl WasmSimulator {
 
     /// Inject an ADC value into a named ADC peripheral's data register.
     #[wasm_bindgen]
-    pub fn set_adc_value(
-        &mut self,
-        peripheral_name: &str,
-        value: u16,
-    ) -> Result<(), JsValue> {
+    pub fn set_adc_value(&mut self, peripheral_name: &str, value: u16) -> Result<(), JsValue> {
         let machine = self.machine.as_mut().unwrap();
         let idx = machine
             .bus
             .find_peripheral_index_by_name(peripheral_name)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("ADC '{}' not found", peripheral_name))
-            })?;
+            .ok_or_else(|| JsValue::from_str(&format!("ADC '{}' not found", peripheral_name)))?;
         let any = machine.bus.peripherals[idx]
             .dev
             .as_any_mut()
@@ -419,8 +416,9 @@ impl WasmSimulator {
         for binding in &self.board_io {
             match binding.kind {
                 BoardIoKind::AdcInput => {
-                    if let Some(idx) =
-                        machine.bus.find_peripheral_index_by_name(&binding.peripheral)
+                    if let Some(idx) = machine
+                        .bus
+                        .find_peripheral_index_by_name(&binding.peripheral)
                     {
                         let snap = machine.bus.peripherals[idx].dev.snapshot();
                         let dr = snap["dr"].as_u64().unwrap_or(0);

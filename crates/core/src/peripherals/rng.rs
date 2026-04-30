@@ -81,7 +81,11 @@ impl Rng {
     }
 }
 
-impl Default for Rng { fn default() -> Self { Self::new() } }
+impl Default for Rng {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl crate::Peripheral for Rng {
     fn read(&self, _offset: u64) -> SimResult<u8> {

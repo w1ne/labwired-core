@@ -71,11 +71,11 @@ impl UsbOtg {
             0x010 => self.grstctl,
             0x014 => self.gintsts,
             0x018 => self.gintmsk,
-            0x01C => 0, // GRXSTSR (queue empty)
-            0x020 => 0, // GRXSTSP
-            0x024 => 0, // GRXFSIZ
-            0x028 => 0, // HNPTXFSIZ / DIEPTXF0
-            0x02C => 0, // HNPTXSTS
+            0x01C => 0,           // GRXSTSR (queue empty)
+            0x020 => 0,           // GRXSTSP
+            0x024 => 0,           // GRXFSIZ
+            0x028 => 0,           // HNPTXFSIZ / DIEPTXF0
+            0x02C => 0,           // HNPTXSTS
             0x040 => 0x4F54_2000, // GCCFG (default reset includes power-down state)
             0x044 => 0x0000_1200, // CID
             0x800 => self.dcfg,

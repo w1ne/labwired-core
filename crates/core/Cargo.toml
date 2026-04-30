@@ -19,11 +19,19 @@ bitflags = { workspace = true }
 labwired-config = { path = "../config" }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
+goblin = { workspace = true }
 labwired-ir = { path = "../ir" }
 serde_yaml.workspace = true
 memmap2.workspace = true
 pio.workspace = true
 pio-parser.workspace = true
+
+[features]
+default = []
+# Enable end-to-end tests that build and run the examples/esp32s3-* firmware
+# crates. Requires the +esp toolchain. Off by default so the standard
+# workspace `cargo test` does not need the ESP toolchain installed.
+esp32s3-fixtures = []
 
 [dev-dependencies]
 labwired-loader = { path = "../loader" }

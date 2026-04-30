@@ -13,12 +13,12 @@
 //! Each test also asserts that the firmware emits the expected UART bytes,
 //! proving the CPU executed real application logic, not just spun in reset loops.
 
+use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::riscv::RiscV;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::trace::TraceObserver;
 use labwired_core::{Cpu, Machine};
-use labwired_config::{ChipDescriptor, SystemManifest};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -594,8 +594,10 @@ DONE\r\n",
 fn workspace_root() -> PathBuf {
     // crates/core → crates → workspace root (core/)
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap()
-        .parent().unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
         .to_path_buf()
 }
 
@@ -604,11 +606,15 @@ fn fixtures() -> PathBuf {
 }
 
 fn chip_config(name: &str) -> PathBuf {
-    workspace_root().join("configs/chips").join(format!("{name}.yaml"))
+    workspace_root()
+        .join("configs/chips")
+        .join(format!("{name}.yaml"))
 }
 
 fn system_config(name: &str) -> PathBuf {
-    workspace_root().join("configs/systems").join(format!("{name}.yaml"))
+    workspace_root()
+        .join("configs/systems")
+        .join(format!("{name}.yaml"))
 }
 
 fn load_system(chip_name: &str, system_name: &str) -> (ChipDescriptor, SystemManifest) {
@@ -619,15 +625,22 @@ fn load_system(chip_name: &str, system_name: &str) -> (ChipDescriptor, SystemMan
     let mut manifest = SystemManifest::from_file(&sys_path)
         .unwrap_or_else(|e| panic!("Failed to load system {system_name}: {e}"));
 
-    manifest.chip = sys_path.parent().unwrap().join(&manifest.chip)
-        .to_str().unwrap().to_string();
+    manifest.chip = sys_path
+        .parent()
+        .unwrap()
+        .join(&manifest.chip)
+        .to_str()
+        .unwrap()
+        .to_string();
 
     (chip, manifest)
 }
 
 fn assert_pc_in_range(pc: u32, cycles: u32, ranges: &[(u32, u32)]) {
     assert!(
-        ranges.iter().any(|(start, end)| (*start..=*end).contains(&pc)),
+        ranges
+            .iter()
+            .any(|(start, end)| (*start..=*end).contains(&pc)),
         "PC={:#010x} after {} cycles — jumped to unmapped region",
         pc,
         cycles
@@ -680,8 +693,8 @@ fn run_cortex_m_firmware(
     );
 
     let (chip, manifest) = load_system(chip_name, system_name);
-    let mut bus = SystemBus::from_config(&chip, &manifest)
-        .expect("Failed to build SystemBus from config");
+    let mut bus =
+        SystemBus::from_config(&chip, &manifest).expect("Failed to build SystemBus from config");
     let uart_sink = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(uart_sink.clone(), false);
 
@@ -692,7 +705,8 @@ fn run_cortex_m_firmware(
 
     let image = labwired_loader::load_elf(&firmware_path)
         .unwrap_or_else(|e| panic!("Failed to load ELF {:?}: {e}", firmware_path));
-    machine.load_firmware(&image)
+    machine
+        .load_firmware(&image)
         .expect("Failed to load firmware into machine");
 
     let mut last_state: std::collections::VecDeque<(u32, u32, u32)> =
@@ -719,9 +733,12 @@ fn run_cortex_m_firmware(
                     "  trace pc={:#010x} opcode={:#010x} lr={} sp={} next_pc={}",
                     t.pc,
                     t.instruction,
-                    lr.map(|v| format!("{v:#010x}")).unwrap_or_else(|| "-".to_string()),
-                    sp.map(|v| format!("{v:#010x}")).unwrap_or_else(|| "-".to_string()),
-                    pc.map(|v| format!("{v:#010x}")).unwrap_or_else(|| "-".to_string()),
+                    lr.map(|v| format!("{v:#010x}"))
+                        .unwrap_or_else(|| "-".to_string()),
+                    sp.map(|v| format!("{v:#010x}"))
+                        .unwrap_or_else(|| "-".to_string()),
+                    pc.map(|v| format!("{v:#010x}"))
+                        .unwrap_or_else(|| "-".to_string()),
                 );
             }
             panic!(
@@ -749,8 +766,8 @@ fn run_riscv_firmware(
     );
 
     let (chip, manifest) = load_system(chip_name, system_name);
-    let mut bus = SystemBus::from_config(&chip, &manifest)
-        .expect("Failed to build SystemBus from config");
+    let mut bus =
+        SystemBus::from_config(&chip, &manifest).expect("Failed to build SystemBus from config");
     let uart_sink = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(uart_sink.clone(), false);
     let mut machine = Machine::new(RiscV::new(), bus);
@@ -759,7 +776,8 @@ fn run_riscv_firmware(
 
     let image = labwired_loader::load_elf(&firmware_path)
         .unwrap_or_else(|e| panic!("Failed to load ELF {:?}: {e}", firmware_path));
-    machine.load_firmware(&image)
+    machine
+        .load_firmware(&image)
         .expect("Failed to load firmware into machine");
 
     let mut last_pcs: std::collections::VecDeque<(u32, u32)> = std::collections::VecDeque::new();
@@ -782,7 +800,8 @@ fn run_riscv_firmware(
                     "  trace pc={:#010x} opcode={:#010x} next_pc={}",
                     t.pc,
                     t.instruction,
-                    pc.map(|v| format!("{v:#010x}")).unwrap_or_else(|| "-".to_string()),
+                    pc.map(|v| format!("{v:#010x}"))
+                        .unwrap_or_else(|| "-".to_string()),
                 );
             }
             panic!(
@@ -907,9 +926,8 @@ fn test_nucleo_l476rg_cubemx_hal_survival() {
     // of its time in HAL_Delay() polling SysTick (RVR=80_000-1).
     let case = &SURVIVAL_CASES[18];
     let firmware = fixtures().join(case.fixture);
-    let (pc, uart_bytes) = run_cortex_m_firmware(
-        case.chip, case.system, firmware, SURVIVAL_CYCLES * 4,
-    );
+    let (pc, uart_bytes) =
+        run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES * 4);
     assert_pc_in_range(pc, SURVIVAL_CYCLES * 4, case.valid_pc_ranges);
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
 }

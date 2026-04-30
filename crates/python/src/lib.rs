@@ -124,7 +124,7 @@ impl Machine {
                 m.load_firmware(&program).map_err(PySimulationError)?;
                 Box::new(m)
             }
-            Arch::Xtensa => {
+            Arch::XtensaLx7 => {
                 let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
                 let mut m = labwired_core::Machine::new(cpu, bus);
                 m.load_firmware(&program).map_err(PySimulationError)?;

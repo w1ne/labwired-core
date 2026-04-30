@@ -185,18 +185,22 @@ impl Peripheral for Dma1 {
                 // is set. The CCR PSIZE/MSIZE bits select 1/2/4 byte width;
                 // we treat each tick as one element so the increment matches.
                 if (chan.ccr & (1 << 7)) != 0 {
-                    chan.cmar_ptr = chan.cmar_ptr.wrapping_add(
-                        if (chan.ccr & (1 << 10)) != 0 { 4 }
-                        else if (chan.ccr & (1 << 8)) != 0 { 2 }
-                        else { 1 },
-                    );
+                    chan.cmar_ptr = chan.cmar_ptr.wrapping_add(if (chan.ccr & (1 << 10)) != 0 {
+                        4
+                    } else if (chan.ccr & (1 << 8)) != 0 {
+                        2
+                    } else {
+                        1
+                    });
                 }
                 if (chan.ccr & (1 << 6)) != 0 {
-                    chan.cpar_ptr = chan.cpar_ptr.wrapping_add(
-                        if (chan.ccr & (1 << 11)) != 0 { 4 }
-                        else if (chan.ccr & (1 << 8)) != 0 { 2 }
-                        else { 1 },
-                    );
+                    chan.cpar_ptr = chan.cpar_ptr.wrapping_add(if (chan.ccr & (1 << 11)) != 0 {
+                        4
+                    } else if (chan.ccr & (1 << 8)) != 0 {
+                        2
+                    } else {
+                        1
+                    });
                 }
 
                 // HTIF: set when transfer crosses the halfway mark.

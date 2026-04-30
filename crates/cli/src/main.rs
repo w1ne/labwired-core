@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
 mod asset_validation;
+mod gpio_observer;
 mod size_limited_writer;
 mod vcd_trace;
 
@@ -99,6 +100,34 @@ enum Commands {
 
     /// Utilities for Asset Foundry
     Asset(AssetArgs),
+
+    /// Run a firmware ELF in the simulator using a chip descriptor.
+    ///
+    /// Loads the chip's peripheral wiring, fast-boots the firmware, and
+    /// runs the simulation loop.  Output written to USB_SERIAL_JTAG (for
+    /// Xtensa chips) or UART (for ARM chips) appears on stdout in real
+    /// time.
+    Run(RunArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct RunArgs {
+    /// Path to the chip descriptor YAML.
+    #[arg(long)]
+    pub chip: PathBuf,
+
+    /// Path to the firmware ELF.
+    #[arg(long)]
+    pub firmware: PathBuf,
+
+    /// Maximum number of simulator steps before exit (default: unlimited).
+    #[arg(long)]
+    pub max_steps: Option<u64>,
+
+    /// Optional path to write a JSON-line GPIO transition trace.
+    /// Each line is `{"sim_cycle":N, "pin":P, "from":B, "to":B}`.
+    #[arg(long)]
+    pub gpio_trace: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug)]
@@ -590,8 +619,165 @@ fn main() -> ExitCode {
         Some(Commands::Test(args)) => run_test(args),
         Some(Commands::Machine(args)) => run_machine(args),
         Some(Commands::Asset(args)) => run_asset(args),
+        Some(Commands::Run(args)) => run_firmware(args),
         None => run_interactive(cli),
     }
+}
+
+fn run_firmware(args: RunArgs) -> ExitCode {
+    use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
+    use labwired_core::bus::SystemBus;
+    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+    use labwired_core::SimulationError;
+
+    // Read the chip YAML to validate the chip family.
+    let chip_yaml = match std::fs::read_to_string(&args.chip) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: cannot read chip YAML at {:?}: {e}", args.chip);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    if !chip_yaml.contains("xtensa-lx7") {
+        eprintln!(
+            "error: chip {:?} does not look like an Xtensa LX7 chip; \
+             only ESP32-S3 is supported by `labwired run`",
+            args.chip,
+        );
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    // Read the firmware ELF.
+    let elf_bytes = match std::fs::read(&args.firmware) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "error: cannot read firmware ELF at {:?}: {e}",
+                args.firmware
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    // Wire the bus + CPU.
+    let mut bus = SystemBus::new();
+    let opts = Esp32s3Opts::default();
+    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+
+    // Install default tracing GPIO observer.
+    wiring.add_gpio_observer(
+        &mut bus,
+        std::sync::Arc::new(crate::gpio_observer::TracingGpioObserver::new()),
+    );
+
+    // Optional JSON-line GPIO trace.
+    if let Some(path) = &args.gpio_trace {
+        match crate::gpio_observer::JsonGpioObserver::new(path) {
+            Ok(obs) => {
+                wiring.add_gpio_observer(&mut bus, std::sync::Arc::new(obs));
+                eprintln!("labwired-cli run: gpio trace -> {:?}", path);
+            }
+            Err(e) => {
+                eprintln!("error: cannot open gpio-trace file {:?}: {e}", path);
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        }
+    }
+
+    let mut cpu = wiring.cpu;
+
+    // Fast-boot.
+    let boot = match fast_boot(
+        &elf_bytes,
+        &mut bus,
+        &mut cpu,
+        &BootOpts {
+            stack_top_fallback: 0x3FCD_FFF0,
+            icache_backing: Some(wiring.icache_backing),
+            dcache_backing: Some(wiring.dcache_backing),
+        },
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: fast_boot failed: {e}");
+            return ExitCode::from(EXIT_RUNTIME_ERROR);
+        }
+    };
+    eprintln!(
+        "labwired-cli run: entry=0x{:08x} stack=0x{:08x} segments={}",
+        boot.entry, boot.stack, boot.segments_loaded,
+    );
+
+    // Run the step loop.
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
+    let config = labwired_core::SimulationConfig::default();
+    let mut steps = 0u64;
+    // Ring buffer of recent PCs for post-mortem on exceptions.
+    const RING_LEN: usize = 64;
+    let mut pc_ring: [u32; RING_LEN] = [0; RING_LEN];
+    let mut ring_head: usize = 0;
+    while steps < limit {
+        let pc_before = cpu.get_pc();
+        pc_ring[ring_head] = pc_before;
+        ring_head = (ring_head + 1) % RING_LEN;
+        match cpu.step(&mut bus, &observers, &config) {
+            Ok(()) => {}
+            Err(SimulationError::BreakpointHit(pc)) => {
+                eprintln!("labwired-cli run: BREAK at 0x{pc:08x}");
+                return ExitCode::from(EXIT_PASS);
+            }
+            Err(SimulationError::ExceptionRaised { cause, pc }) => {
+                eprintln!("labwired-cli run: ExceptionRaised cause={cause} at 0x{pc:08x}");
+                eprintln!(
+                    "labwired-cli run: PS=0x{:08x} (excm={} intlevel={}) WB={} WS=0x{:04x}",
+                    cpu.ps.as_raw(),
+                    cpu.ps.excm(),
+                    cpu.ps.intlevel(),
+                    cpu.regs.windowbase(),
+                    cpu.regs.windowstart(),
+                );
+                eprintln!("labwired-cli run: recent PCs (oldest first):");
+                for i in 0..RING_LEN {
+                    let idx = (ring_head + i) % RING_LEN;
+                    if pc_ring[idx] != 0 {
+                        eprintln!("  [{:2}] 0x{:08x}", i, pc_ring[idx]);
+                    }
+                }
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+            Err(e) => {
+                eprintln!(
+                    "labwired-cli run: simulator error at pc=0x{:08x}: {e}",
+                    cpu.get_pc(),
+                );
+                eprintln!("labwired-cli run: a0..a15 at fault:");
+                for r in 0..16u8 {
+                    eprintln!("  a{:<2} = 0x{:08x}", r, cpu.regs.read_logical(r));
+                }
+                eprintln!(
+                    "  WB=0x{:x} WS=0x{:04x}",
+                    cpu.regs.windowbase(),
+                    cpu.regs.windowstart(),
+                );
+                eprintln!("labwired-cli run: recent PCs (oldest first):");
+                for i in 0..RING_LEN {
+                    let idx = (ring_head + i) % RING_LEN;
+                    if pc_ring[idx] != 0 {
+                        eprintln!("  [{:2}] 0x{:08x}", i, pc_ring[idx]);
+                    }
+                }
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+        bus.tick_peripherals_with_costs();
+        steps += 1;
+    }
+    eprintln!(
+        "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}",
+        cpu.get_pc(),
+    );
+    ExitCode::from(EXIT_PASS)
 }
 
 fn run_asset(args: AssetArgs) -> ExitCode {
@@ -1115,7 +1301,7 @@ fn run_interactive(cli: Cli) -> ExitCode {
         let prog_arch = match program.arch {
             labwired_core::Arch::Arm => labwired_config::Arch::Arm,
             labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
-            labwired_core::Arch::Xtensa => labwired_config::Arch::Xtensa,
+            labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
             _ => labwired_config::Arch::Unknown,
         };
 
@@ -1211,7 +1397,7 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
     let arch = match program.arch {
         labwired_core::Arch::Arm => labwired_config::Arch::Arm,
         labwired_core::Arch::RiscV => labwired_config::Arch::RiscV,
-        labwired_core::Arch::Xtensa => labwired_config::Arch::Xtensa,
+        labwired_core::Arch::XtensaLx7 => labwired_config::Arch::Xtensa,
         _ => {
             error!("Unknown architecture in firmware");
             return ExitCode::from(EXIT_CONFIG_ERROR);
@@ -1504,7 +1690,7 @@ fn run_interactive_xtensa(
     info!(
         "Initial PC: {:#x}, SP: {:#x}",
         machine.cpu.pc,
-        machine.cpu.a[1] // SP is a1 in Xtensa
+        machine.cpu.regs.read_logical(1) // SP is a1 in Xtensa
     );
 
     if cli.gdb.is_some() {
@@ -1587,6 +1773,9 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
                         StopReason::Exception
                     }
                     labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                    labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
+                    labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                    labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Exception,
                 };
                 stop_message = Some(e.to_string());
                 break;
@@ -1924,7 +2113,7 @@ fn run_test(args: TestArgs) -> ExitCode {
             let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
             setup_and_run!(cpu)
         }
-        labwired_core::Arch::Xtensa => {
+        labwired_core::Arch::XtensaLx7 => {
             let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
             setup_and_run!(cpu)
         }
@@ -2122,6 +2311,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                             StopReason::Exception
                         }
                         labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                        labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
+                        labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                        labwired_core::SimulationError::ExceptionRaised { .. } => {
+                            StopReason::Exception
+                        }
                     };
                     if stop_reason != StopReason::Halt {
                         error!("Simulation error at step {}: {}", step, e);
@@ -2143,6 +2337,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         StopReason::Exception
                     }
                     labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                    labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
+                    labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
+                    labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Exception,
                 };
                 if stop_reason != StopReason::Halt {
                     error!("Simulation error at step {}: {}", step, e);

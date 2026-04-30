@@ -1,15 +1,455 @@
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
-//
-// This software is released under the MIT License.
-// See the LICENSE file in the project root for full license information.
+// SPDX-License-Identifier: MIT
+
+//! Xtensa LX7 / ESP32-S3 system glue.
+//!
+//! `configure_xtensa_esp32s3` registers all peripherals defined for the
+//! ESP32-S3-Zero and returns a fresh `XtensaLx7` CPU.  After calling this,
+//! the caller invokes `boot::esp32s3::fast_boot` to load an ELF and
+//! synthesise CPU state, then enters the simulation loop.
 
 use crate::bus::SystemBus;
-use crate::cpu::Xtensa;
+use crate::cpu::xtensa_lx7::XtensaLx7;
+use crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral;
+use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
+use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
+use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
+use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
+use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
+use crate::peripherals::esp32s3::systimer::Systimer;
+use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+use crate::Cpu;
+use std::sync::{Arc, Mutex};
 
-pub fn configure_xtensa(_bus: &mut SystemBus) -> Xtensa {
-    // For now, no specific peripherals (interrupt controller, etc.) are mandated
-    // for the basic Xtensa simulation loop. Future iterations will add the
-    // ESP32-S3 interrupt matrix here.
-    Xtensa::new()
+#[derive(Debug, Clone)]
+pub struct Esp32s3Opts {
+    pub iram_size: u32,
+    pub dram_size: u32,
+    pub flash_size: u32,
+    pub cpu_clock_hz: u32,
+}
+
+impl Default for Esp32s3Opts {
+    fn default() -> Self {
+        Self {
+            iram_size: 512 * 1024,
+            dram_size: 480 * 1024,
+            flash_size: 4 * 1024 * 1024,
+            cpu_clock_hz: 80_000_000,
+        }
+    }
+}
+
+/// Result of `configure_xtensa_esp32s3` — exposes the flash backings so the
+/// boot path can write to them (Task 8).
+///
+/// On real ESP32-S3 silicon, the I-cache (0x4200_0000) and D-cache
+/// (0x3C00_0000) windows alias the same physical SPI flash, but each window
+/// has its own MMU page table. The bootloader programs them so the same
+/// physical page can appear at different virtual offsets in each window.
+///
+/// In our fast-boot model, the firmware ELF carries `.rodata` at vaddr
+/// 0x3c000020 and `.text` at vaddr 0x42000020 — both with vaddr-offset 0x20
+/// in their respective windows. If we shared a single backing buffer, the
+/// later-loaded segment would overwrite the earlier one. So each window
+/// gets its own backing buffer; fast_boot picks the correct one based on
+/// which window the segment's vaddr falls into.
+pub struct Esp32s3Wiring {
+    pub cpu: XtensaLx7,
+    pub icache_backing: Arc<Mutex<Vec<u8>>>,
+    pub dcache_backing: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Esp32s3Wiring {
+    /// Install a GPIO observer on the wired bus's `gpio` peripheral.
+    ///
+    /// Walks `bus.peripherals` to find the entry named `"gpio"`, downcasts
+    /// to `Esp32s3Gpio`, and pushes the observer onto its list. Panics if
+    /// no GPIO peripheral was registered (configure_xtensa_esp32s3 always
+    /// registers one, so this only fires if the caller used a different
+    /// configure path).
+    pub fn add_gpio_observer(&self, bus: &mut SystemBus, observer: Arc<dyn GpioObserver>) {
+        for p in bus.peripherals.iter_mut() {
+            if p.name == "gpio" {
+                if let Some(any) = p.dev.as_any_mut() {
+                    if let Some(gpio) = any.downcast_mut::<Esp32s3Gpio>() {
+                        gpio.add_observer(observer);
+                        return;
+                    }
+                }
+            }
+        }
+        panic!("add_gpio_observer: no gpio peripheral registered on the bus");
+    }
+}
+
+/// Phase B compatibility shim. Delegates to `configure_xtensa_esp32s3`
+/// with default options and discards the wiring (icache/dcache backings)
+/// that callers from Phase B's CLI/Python paths don't yet consume.
+pub fn configure_xtensa(bus: &mut SystemBus) -> XtensaLx7 {
+    configure_xtensa_esp32s3(bus, &Esp32s3Opts::default()).cpu
+}
+
+/// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
+/// shared flash backing buffer.
+pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3Wiring {
+    // SystemBus::new() seeds the bus with STM32 default peripherals
+    // (tim2 at 0x4000_0000, tim3 at 0x4000_0400, …). On ESP32-S3 the
+    // 0x4000_0000–0x4006_0000 window is the BROM, and on STM32 it's the
+    // peripheral aliased region — completely different memory maps. Drop
+    // the seeded peripherals before installing the ESP32-S3 bank, otherwise
+    // a tim3 read at 0x4000_057c shadows our `rtc_get_reset_reason` thunk
+    // and the BREAK 1,14 dispatch never fires.
+    bus.peripherals.clear();
+    // The seeded `flash` and `ram` LinearMemory slabs use STM32 base
+    // addresses (0x0 and 0x2000_0000) so they don't overlap, but they're
+    // dead weight on Xtensa — leave them allocated; the bus accessors check
+    // `addr >= base_addr` first and fall through to peripherals on miss.
+    //
+    // Disable Cortex-M bit-band aliasing — its 0x4200_0000–0x4400_0000 range
+    // collides with the ESP32-S3 flash-XIP I-cache window. With bit-band
+    // enabled, instruction fetches from 0x4200_xxxx get translated as
+    // single-bit reads of a synthetic peripheral byte instead of going
+    // through our FlashXipPeripheral. ESP32-S3 has no bit-band hardware.
+    bus.bit_band_enabled = false;
+
+    // ── IRAM (instruction fetch view) ─────────────────────────────────────
+    bus.add_peripheral(
+        "iram",
+        0x4037_0000,
+        opts.iram_size as u64,
+        None,
+        Box::new(RamPeripheral::new(opts.iram_size as usize)),
+    );
+
+    // ── DRAM (data view of the same physical SRAM0) ───────────────────────
+    bus.add_peripheral(
+        "dram",
+        0x3FC8_8000,
+        opts.dram_size as u64,
+        None,
+        Box::new(RamPeripheral::new(opts.dram_size as usize)),
+    );
+
+    // ── Flash-XIP backings — one per window (see Esp32s3Wiring docs) ──────
+    let icache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
+    let dcache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
+    let mut icache = FlashXipPeripheral::new_shared(icache_backing.clone(), 0x4200_0000);
+    let mut dcache = FlashXipPeripheral::new_shared(dcache_backing.clone(), 0x3C00_0000);
+    icache.map_identity();
+    dcache.map_identity();
+    bus.add_peripheral(
+        "flash_icache",
+        0x4200_0000,
+        opts.flash_size as u64,
+        None,
+        Box::new(icache),
+    );
+    bus.add_peripheral(
+        "flash_dcache",
+        0x3C00_0000,
+        opts.flash_size as u64,
+        None,
+        Box::new(dcache),
+    );
+
+    // ── ROM thunk bank ────────────────────────────────────────────────────
+    let mut rom_bank = RomThunkBank::new(0x4000_0000, 0x6_0000);
+    register_default_thunks(&mut rom_bank);
+    bus.add_peripheral(
+        "rom_thunks",
+        0x4000_0000,
+        0x6_0000,
+        None,
+        Box::new(rom_bank),
+    );
+
+    // ── USB_SERIAL_JTAG ───────────────────────────────────────────────────
+    bus.add_peripheral(
+        "usb_serial_jtag",
+        0x6003_8000,
+        0x1000,
+        None,
+        Box::new(UsbSerialJtag::new()),
+    );
+
+    // ── SYSTIMER ──────────────────────────────────────────────────────────
+    bus.add_peripheral(
+        "systimer",
+        0x6002_3000,
+        0x1000,
+        None,
+        Box::new(Systimer::new(opts.cpu_clock_hz)),
+    );
+
+    // ── GPIO / IO_MUX / Interrupt Matrix (Plan 3) ────────────────────────
+    // These three specific peripherals MUST register BEFORE the catch-all
+    // stubs below. SystemBus does first-match-wins iteration in
+    // read_u8/write_u8, so a catch-all covering 0x600C_0000..0x600D_0000
+    // (system) registered first would shadow intmatrix at 0x600C_2000.
+    bus.add_peripheral(
+        "gpio",
+        0x6000_4000,
+        0x800,
+        None,
+        Box::new(Esp32s3Gpio::new()),
+    );
+    bus.add_peripheral(
+        "io_mux",
+        0x6000_9000,
+        0x100,
+        None,
+        Box::new(Esp32s3IoMux::new()),
+    );
+    bus.add_peripheral(
+        "intmatrix",
+        0x600C_2000,
+        0x800,
+        None,
+        Box::new(Esp32s3IntMatrix::new()),
+    );
+
+    // ── SYSTEM / RTC_CNTL / EFUSE stubs ──────────────────────────────────
+    // SYSTEM peripheral on ESP32-S3 is followed by INTERRUPT_CORE0/1 at
+    // 0x600C_2000 / 0x600C_2800 (CPU intr-from-CPU mapping) and the AES /
+    // SHA / RSA accelerator block around 0x600C_4000-0x600C_FFFF. esp-hal's
+    // init pokes the interrupt-mapping registers and a few accelerator
+    // resets. Cover [0x600C_0000, 0x600D_0000) with one round-tripping
+    // stub — SystemStub::new() (read-as-zero on unwritten) so that the
+    // interrupt mapping reads back exactly what was written. The intmatrix
+    // peripheral registered above takes precedence at 0x600C_2000..0x600C_2800.
+    bus.add_peripheral(
+        "system",
+        0x600C_0000,
+        0x1_0000,
+        None,
+        Box::new(SystemStub::new()),
+    );
+    // RTC_CNTL through APB_CTRL/SYSCON are a contiguous block of register
+    // banks ESP-HAL pokes during init (clock muxing, voltage rails, GPIO
+    // mux, sensor ADC, PMS). Cover [0x6000_8000, 0x6001_0000) with a single
+    // round-tripping stub — 32 KiB of tracked-word storage matches the
+    // SystemStub semantics and is enough for any benign register hammer.
+    // The io_mux peripheral registered above takes precedence at
+    // 0x6000_9000..0x6000_9100.
+    bus.add_peripheral(
+        "rtc_cntl",
+        0x6000_8000,
+        0x8000,
+        None,
+        Box::new(RtcCntlStub::new()),
+    );
+    bus.add_peripheral(
+        "efuse",
+        0x6000_7000,
+        0x1000,
+        None,
+        Box::new(EfuseStub::new()),
+    );
+
+    // UART0..2, SPI0/1, GPIO, GPIO_SD, SDIO host live in the
+    // [0x6000_0000, 0x6000_7000) window. esp-hal touches GPIO config and
+    // (later) UART for the panic path; we provide a round-tripping stub so
+    // those reads/writes settle. Read-as-zero on unwritten matches the
+    // power-on register values for these blocks (no busy-waits live here).
+    bus.add_peripheral(
+        "low_mmio",
+        0x6000_0000,
+        0x7000,
+        None,
+        Box::new(SystemStub::new()),
+    );
+
+    // Catch-all for the rest of the high-MMIO range that esp-hal pokes
+    // during init (LEDC, RMT, GPIO matrix, GDMA, LCD_CAM, EXTMEM cache
+    // config, RTC calibration timer, …). Real silicon has dozens of
+    // distinct peripherals in this window with bit-precise behaviour;
+    // for hello-world we only need round-trip register storage and an
+    // "everything's ready" default for status polls. Use the unwritten-
+    // ones variant so that calibration-RDY / FIFO-empty / link-up bits
+    // trip on the first iteration. The block covers
+    // [0x6001_0000, 0x6004_0000) — 192 KiB.
+    bus.add_peripheral(
+        "mmio_rest",
+        0x6001_0000,
+        0x3_0000,
+        None,
+        Box::new(SystemStub::with_unwritten_ones()),
+    );
+
+    let mut cpu = XtensaLx7::new();
+    cpu.reset(bus).expect("xtensa reset");
+
+    Esp32s3Wiring {
+        cpu,
+        icache_backing,
+        dcache_backing,
+    }
+}
+
+/// Register the default thunk set for esp-hal hello-world boot.
+///
+/// Addresses are taken from `esp-rom-sys-0.1.4/ld/esp32s3/rom/esp32s3.rom.ld`
+/// (PROVIDE statements) and verified against the disassembled firmware.
+fn register_default_thunks(bank: &mut RomThunkBank) {
+    // Cache maintenance — esp-hal pre_init disables instruction cache before
+    // touching XIP-mapped flash and re-enables it after.
+    bank.register(0x4000_18b4, rom_thunks::cache_suspend_dcache);
+    bank.register(0x4000_18c0, rom_thunks::cache_resume_dcache);
+    // rom_config_instruction_cache_mode(cache_size, ways, line_size) — esp-hal
+    // calls this in pre_init to set up the I-cache to the bootloader's chosen
+    // geometry. NOP is fine because we don't model the cache.
+    bank.register(0x4000_1a1c, rom_thunks::rom_config_instruction_cache_mode);
+    // ets_printf — esp-hal panic / boot diagnostics call this.
+    bank.register(0x4000_05d0, rom_thunks::ets_printf);
+    // ets_set_appcpu_boot_addr — single-core build skips this, but multicore
+    // hal calls it to point cpu1 at park-loop. NOP is safe.
+    bank.register(0x4000_0720, rom_thunks::ets_set_appcpu_boot_addr);
+    // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
+    // but the symbol may be linked in.
+    bank.register(0x4000_0a2c, rom_thunks::esp_rom_spiflash_unlock);
+    // rtc_get_reset_reason(cpu_idx) — esp-hal queries this during init to
+    // distinguish power-on from soft reset; we always report POWERON_RESET.
+    bank.register(0x4000_057c, rom_thunks::rtc_get_reset_reason);
+    // rom_config_data_cache_mode — analogous to instruction cache config; NOP.
+    bank.register(0x4000_1a28, rom_thunks::nop_return_zero);
+    // ets_update_cpu_frequency(freq_mhz) — informs the ROM of the new clock
+    // so subsequent ets_delay_us calls calibrate correctly. We don't model
+    // ROM timing, so accepting and discarding the value is fine.
+    bank.register(0x4000_1a4c, rom_thunks::nop_return_zero);
+    // ets_delay_us(us) — busy-wait the requested microseconds. The simulator
+    // doesn't model wall-clock so we return immediately; real silicon would
+    // spin. Side-effect-free callers (boot timing) accept this.
+    bank.register(0x4000_0600, rom_thunks::nop_return_zero);
+    // esp_rom_regi2c_read / rom_i2c_writeReg — analog regulator I²C bus;
+    // ESP-IDF init touches this to tweak BBPLL. NOP-return-0 is acceptable
+    // here because we don't model the analog domain.
+    bank.register(0x4000_5d48, rom_thunks::nop_return_zero);
+    bank.register(0x4000_5d60, rom_thunks::nop_return_zero);
+    // memcpy and __udivdi3 do real work — emulate them so the firmware
+    // doesn't get garbage from the boot-init copy paths.
+    bank.register(0x4000_11f4, rom_thunks::rom_memcpy);
+    bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
+}
+
+// ── RamPeripheral helper (private) ───────────────────────────────────────
+
+/// Flat-array `Peripheral` used for IRAM + DRAM mappings.
+struct RamPeripheral {
+    data: std::cell::RefCell<Vec<u8>>,
+}
+
+impl RamPeripheral {
+    fn new(size: usize) -> Self {
+        Self {
+            data: std::cell::RefCell::new(vec![0u8; size]),
+        }
+    }
+}
+
+impl std::fmt::Debug for RamPeripheral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RamPeripheral({}B)", self.data.borrow().len())
+    }
+}
+
+impl crate::Peripheral for RamPeripheral {
+    fn read(&self, offset: u64) -> crate::SimResult<u8> {
+        Ok(*self.data.borrow().get(offset as usize).unwrap_or(&0))
+    }
+    fn write(&mut self, offset: u64, value: u8) -> crate::SimResult<()> {
+        let mut d = self.data.borrow_mut();
+        if let Some(slot) = d.get_mut(offset as usize) {
+            *slot = value;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Bus;
+
+    #[test]
+    fn configure_registers_all_peripherals() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        // Confirm core regions are reachable.
+        assert!(bus.read_u8(0x4037_0000).is_ok(), "IRAM");
+        assert!(bus.read_u8(0x3FC8_8000).is_ok(), "DRAM");
+        assert!(bus.read_u8(0x4200_0000).is_ok(), "flash I-cache");
+        assert!(bus.read_u8(0x3C00_0000).is_ok(), "flash D-cache");
+        assert!(bus.read_u8(0x6003_8000).is_ok(), "USB_SERIAL_JTAG");
+        assert!(bus.read_u8(0x6002_3000).is_ok(), "SYSTIMER");
+        assert!(bus.read_u8(0x600C_0000).is_ok(), "SYSTEM");
+        assert!(bus.read_u8(0x6000_8000).is_ok(), "RTC_CNTL");
+        assert!(bus.read_u8(0x6000_7000).is_ok(), "EFUSE");
+    }
+
+    #[test]
+    fn iram_writeable_and_readable() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        bus.write_u8(0x4037_0010, 0xAB).unwrap();
+        assert_eq!(bus.read_u8(0x4037_0010).unwrap(), 0xAB);
+    }
+
+    #[test]
+    fn configure_registers_gpio_io_mux_intmatrix() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+
+        let names: Vec<&str> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"gpio"), "gpio missing; have: {names:?}");
+        assert!(names.contains(&"io_mux"), "io_mux missing; have: {names:?}");
+        assert!(
+            names.contains(&"intmatrix"),
+            "intmatrix missing; have: {names:?}"
+        );
+    }
+
+    #[test]
+    fn add_gpio_observer_installs_on_gpio_peripheral() {
+        use crate::peripherals::esp32s3::gpio::GpioObserver;
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Debug, Default)]
+        struct CountObserver(Mutex<u32>);
+        impl GpioObserver for CountObserver {
+            fn on_pin_change(&self, _pin: u8, _from: bool, _to: bool, _sim_cycle: u64) {
+                *self.0.lock().unwrap() += 1;
+            }
+        }
+
+        let mut bus = SystemBus::new();
+        let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+
+        let obs = Arc::new(CountObserver::default());
+        wiring.add_gpio_observer(&mut bus, obs.clone());
+
+        // Trigger a GPIO transition by writing OUT_W1TS bit 5 via the bus.
+        // GPIO base 0x6000_4000, OUT_W1TS at offset 0x08.
+        bus.write_u8(0x6000_4008, 0x20).unwrap(); // bit 5 = 0x20
+        bus.write_u8(0x6000_4009, 0).unwrap();
+        bus.write_u8(0x6000_400A, 0).unwrap();
+        bus.write_u8(0x6000_400B, 0).unwrap();
+
+        assert!(*obs.0.lock().unwrap() >= 1, "observer should have fired");
+    }
+
+    #[test]
+    fn flash_xip_windows_have_independent_backings() {
+        // Real silicon shares the SPI flash between both windows but each has
+        // its own MMU page table; for fast-boot we model this as two distinct
+        // backing buffers so that ELFs with .rodata at 0x3c000020 and .text at
+        // 0x42000020 don't collide on the same physical offset.
+        let mut bus = SystemBus::new();
+        let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        wiring.icache_backing.lock().unwrap()[0] = 0xCA;
+        wiring.dcache_backing.lock().unwrap()[0] = 0xFE;
+        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache alias");
+        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xFE, "D-cache alias");
+    }
 }

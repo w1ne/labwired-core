@@ -155,7 +155,11 @@ impl Flash {
     }
 }
 
-impl Default for Flash { fn default() -> Self { Self::new() } }
+impl Default for Flash {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl crate::Peripheral for Flash {
     fn read(&self, offset: u64) -> SimResult<u8> {

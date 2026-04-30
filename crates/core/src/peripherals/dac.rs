@@ -24,15 +24,24 @@ use crate::SimResult;
 pub struct Dac {
     cr: u32,
     swtrigr: u32,
-    dhr12r1: u32, dhr12l1: u32, dhr8r1: u32,
-    dhr12r2: u32, dhr12l2: u32, dhr8r2: u32,
-    dhr12rd: u32, dhr12ld: u32, dhr8rd: u32,
-    dor1: u32, dor2: u32,
+    dhr12r1: u32,
+    dhr12l1: u32,
+    dhr8r1: u32,
+    dhr12r2: u32,
+    dhr12l2: u32,
+    dhr8r2: u32,
+    dhr12rd: u32,
+    dhr12ld: u32,
+    dhr8rd: u32,
+    dor1: u32,
+    dor2: u32,
     sr: u32,
 }
 
 impl Dac {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
@@ -76,7 +85,7 @@ impl Dac {
             0x1C => self.dhr8r2 = value & 0xFF,
             0x20 => self.dhr12rd = value,
             0x24 => self.dhr12ld = value,
-            0x28 | 0x2C => {} // DOR is read-only
+            0x28 | 0x2C => {}                      // DOR is read-only
             0x34 => self.sr = value & 0x3000_3000, // BWST/CAL flags W1C
             _ => {}
         }

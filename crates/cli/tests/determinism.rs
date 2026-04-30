@@ -98,10 +98,7 @@ assertions: []
         if trace_json_path.exists() {
             trace_hashes.push(sha256_file(&trace_json_path));
         } else {
-            panic!(
-                "Run {} failed to produce trace.json (--trace was set)",
-                i
-            );
+            panic!("Run {} failed to produce trace.json (--trace was set)", i);
         }
     }
 

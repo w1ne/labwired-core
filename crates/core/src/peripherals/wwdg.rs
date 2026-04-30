@@ -48,7 +48,11 @@ impl Wwdg {
     }
 }
 
-impl Default for Wwdg { fn default() -> Self { Self::new() } }
+impl Default for Wwdg {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl crate::Peripheral for Wwdg {
     fn read(&self, offset: u64) -> SimResult<u8> {

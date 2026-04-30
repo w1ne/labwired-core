@@ -1,599 +1,1478 @@
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
-//
-// This software is released under the MIT License.
-// See the LICENSE file in the project root for full license information.
+// SPDX-License-Identifier: MIT
 
-/// Xtensa LX7 Instruction Set (subset sufficient for ESP32-S3 firmware simulation)
-///
-/// Xtensa uses variable-length encoding:
-/// - 3-byte (24-bit) "wide" instructions (bits [1:0] != 0b00 of first byte, or check op0 field)
-/// - 2-byte (16-bit) "narrow" instructions (CALL0/density option instructions)
-///
-/// We follow the Xtensa ISA Reference Manual encoding conventions.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+//! Xtensa LX7 wide (24-bit) instruction decoder.
+//!
+//! Entry: [`decode`] takes a 32-bit fetch word; only the low 24 bits matter.
+//! Narrow (16-bit) instructions use [`super::xtensa_narrow::decode_narrow`].
+
+use std::fmt;
+
+/// Typed Xtensa instruction (covers MVP set: base ISA, windowed, density,
+/// MUL, bit-manip, atomics). FP lands in a future plan's extension.
+#[allow(
+    dead_code,
+    reason = "variants are used in later Plan 1 tasks B3-B8/D1-D8"
+)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
-    // Core ALU
-    Add { rd: u8, rs: u8, rt: u8 },
-    Addx2 { rd: u8, rs: u8, rt: u8 },
-    Addx4 { rd: u8, rs: u8, rt: u8 },
-    Addx8 { rd: u8, rs: u8, rt: u8 },
-    Sub { rd: u8, rs: u8, rt: u8 },
-    Subx2 { rd: u8, rs: u8, rt: u8 },
-    Subx4 { rd: u8, rs: u8, rt: u8 },
-    Subx8 { rd: u8, rs: u8, rt: u8 },
-    And { rd: u8, rs: u8, rt: u8 },
-    Or { rd: u8, rs: u8, rt: u8 },
-    Xor { rd: u8, rs: u8, rt: u8 },
-    Neg { rd: u8, rt: u8 },
-    Abs { rd: u8, rt: u8 },
-
-    // Shifts
-    Sll { rd: u8, rs: u8 },
-    Srl { rd: u8, rt: u8 },
-    Sra { rd: u8, rt: u8 },
-    Slli { rd: u8, rs: u8, sa: u8 },
-    Srli { rd: u8, rt: u8, sa: u8 },
-    Srai { rd: u8, rt: u8, sa: u8 },
-    Ssa8l { rs: u8 },
-    Ssl { rs: u8 },
-    Ssr { rs: u8 },
-    Ssai { sa: u8 },
-    Src { rd: u8, rs: u8, rt: u8 },
-    Extui { rd: u8, rt: u8, shift: u8, mask_bits: u8 },
-
-    // Multiply
-    Mull { rd: u8, rs: u8, rt: u8 },
-    Muluh { rd: u8, rs: u8, rt: u8 },
-    Mulsh { rd: u8, rs: u8, rt: u8 },
-
-    // Loads & Stores (3-byte)
-    L8ui { rt: u8, rs: u8, imm: u32 },
-    L16ui { rt: u8, rs: u8, imm: u32 },
-    L16si { rt: u8, rs: u8, imm: u32 },
-    L32i { rt: u8, rs: u8, imm: u32 },
-    S8i { rt: u8, rs: u8, imm: u32 },
-    S16i { rt: u8, rs: u8, imm: u32 },
-    S32i { rt: u8, rs: u8, imm: u32 },
-
-    // Immediates
-    Movi { rt: u8, imm: i32 },
-    Addi { rt: u8, rs: u8, imm: i32 },
-    Addmi { rt: u8, rs: u8, imm: i32 },
-
-    // Branches
-    J { offset: i32 },
-    Jx { rs: u8 },
-    Call0 { offset: i32 },
-    Callx0 { rs: u8 },
+    // -- ALU reg-reg (RRR) --
+    Add {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Sub {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    And {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Or {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Xor {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Neg {
+        ar: u8,
+        at: u8,
+    },
+    Abs {
+        ar: u8,
+        at: u8,
+    },
+    // -- Shift --
+    Sll {
+        ar: u8,
+        as_: u8,
+    },
+    Srl {
+        ar: u8,
+        at: u8,
+    },
+    Sra {
+        ar: u8,
+        at: u8,
+    },
+    Src {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Slli {
+        ar: u8,
+        as_: u8,
+        shamt: u8,
+    },
+    Srli {
+        ar: u8,
+        at: u8,
+        shamt: u8,
+    },
+    Srai {
+        ar: u8,
+        at: u8,
+        shamt: u8,
+    },
+    Ssl {
+        as_: u8,
+    },
+    Ssr {
+        as_: u8,
+    },
+    Ssa8l {
+        as_: u8,
+    },
+    Ssa8b {
+        as_: u8,
+    },
+    Ssai {
+        shamt: u8,
+    },
+    // -- Arith immediate --
+    Addi {
+        at: u8,
+        as_: u8,
+        imm8: i32,
+    },
+    Addmi {
+        at: u8,
+        as_: u8,
+        imm: i32,
+    },
+    Movi {
+        at: u8,
+        imm: i32,
+    },
+    // -- Loads / stores (RRI8 / LSAI) --
+    L8ui {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    L16ui {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    L16si {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    L32i {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    S8i {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    S16i {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    S32i {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    L32r {
+        at: u8,
+        pc_rel_byte_offset: i32,
+    },
+    // -- Branches (BRI8/BRI12/BR) --
+    Beq {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bne {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Blt {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bge {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bltu {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bgeu {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Beqz {
+        as_: u8,
+        offset: i32,
+    },
+    Bnez {
+        as_: u8,
+        offset: i32,
+    },
+    Bltz {
+        as_: u8,
+        offset: i32,
+    },
+    Bgez {
+        as_: u8,
+        offset: i32,
+    },
+    Beqi {
+        as_: u8,
+        imm: i32,
+        offset: i32,
+    },
+    Bnei {
+        as_: u8,
+        imm: i32,
+        offset: i32,
+    },
+    Blti {
+        as_: u8,
+        imm: i32,
+        offset: i32,
+    },
+    Bgei {
+        as_: u8,
+        imm: i32,
+        offset: i32,
+    },
+    Bltui {
+        as_: u8,
+        imm: u32,
+        offset: i32,
+    },
+    Bgeui {
+        as_: u8,
+        imm: u32,
+        offset: i32,
+    },
+    Bany {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Ball {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bnone {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bnall {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bbc {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bbs {
+        as_: u8,
+        at: u8,
+        offset: i32,
+    },
+    Bbci {
+        as_: u8,
+        bit: u8,
+        offset: i32,
+    },
+    Bbsi {
+        as_: u8,
+        bit: u8,
+        offset: i32,
+    },
+    // -- Jumps and calls --
+    J {
+        offset: i32,
+    },
+    Jx {
+        as_: u8,
+    },
+    Call0 {
+        offset: i32,
+    },
+    Callx0 {
+        as_: u8,
+    },
+    Call4 {
+        offset: i32,
+    },
+    Callx4 {
+        as_: u8,
+    },
+    Call8 {
+        offset: i32,
+    },
+    Callx8 {
+        as_: u8,
+    },
+    Call12 {
+        offset: i32,
+    },
+    Callx12 {
+        as_: u8,
+    },
     Ret,
-    RetW,
-
-    // Conditional branches
-    Beqz { rs: u8, offset: i32 },
-    Bnez { rs: u8, offset: i32 },
-    Bltz { rs: u8, offset: i32 },
-    Bgez { rs: u8, offset: i32 },
-    Beq { rs: u8, rt: u8, offset: i32 },
-    Bne { rs: u8, rt: u8, offset: i32 },
-    Blt { rs: u8, rt: u8, offset: i32 },
-    Bge { rs: u8, rt: u8, offset: i32 },
-    Bltu { rs: u8, rt: u8, offset: i32 },
-    Bgeu { rs: u8, rt: u8, offset: i32 },
-    Beqi { rs: u8, imm: i32, offset: i32 },
-    Bnei { rs: u8, imm: i32, offset: i32 },
-    Blti { rs: u8, imm: i32, offset: i32 },
-    Bgei { rs: u8, imm: i32, offset: i32 },
-    Bltui { rs: u8, imm: u32, offset: i32 },
-    Bgeui { rs: u8, imm: u32, offset: i32 },
-
-    // Bit test branches
-    Bbci { rs: u8, bit: u8, offset: i32 },
-    Bbsi { rs: u8, bit: u8, offset: i32 },
-
-    // Move conditional
-    Moveqz { rd: u8, rs: u8, rt: u8 },
-    Movnez { rd: u8, rs: u8, rt: u8 },
-    Movltz { rd: u8, rs: u8, rt: u8 },
-    Movgez { rd: u8, rs: u8, rt: u8 },
-
-    // Special registers
-    Rsr { rt: u8, sr: u8 },
-    Wsr { rt: u8, sr: u8 },
-    Xsr { rt: u8, sr: u8 },
-
-    // Misc
+    Retw,
+    // -- Windowed-only --
+    Entry {
+        as_: u8,
+        imm: u32,
+    },
+    Movsp {
+        at: u8,
+        as_: u8,
+    },
+    Rotw {
+        n: i8,
+    },
+    S32e {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    L32e {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    Rfwo,
+    Rfwu,
+    // -- Exception/interrupt return --
+    Rfe,
+    Rfde,
+    Rfi {
+        level: u8,
+    },
+    // -- Atomic / memory-order --
+    S32c1i {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    L32ai {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    S32ri {
+        at: u8,
+        as_: u8,
+        imm: u32,
+    },
+    // -- MUL / DIV --
+    Mull {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Muluh {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Mulsh {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Quos {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Quou {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Rems {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Remu {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Mul16s {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Mul16u {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    // -- Bit-manip --
+    Nsa {
+        ar: u8,
+        as_: u8,
+    },
+    Nsau {
+        ar: u8,
+        as_: u8,
+    },
+    Min {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Max {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Minu {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Maxu {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Sext {
+        ar: u8,
+        as_: u8,
+        t: u8,
+    },
+    Clamps {
+        ar: u8,
+        as_: u8,
+        t: u8,
+    },
+    Addx2 {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Addx4 {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Addx8 {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Subx2 {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Subx4 {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Subx8 {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    // -- CSR / SR --
+    Rsr {
+        at: u8,
+        sr: u16,
+    },
+    Wsr {
+        at: u8,
+        sr: u16,
+    },
+    Xsr {
+        at: u8,
+        sr: u16,
+    },
+    Rur {
+        ar: u8,
+        ur: u16,
+    },
+    Wur {
+        at: u8,
+        ur: u16,
+    },
+    // -- Loop (stubbed; decoded so SRs latch) --
+    Loop {
+        as_: u8,
+        offset: i32,
+    },
+    Loopnez {
+        as_: u8,
+        offset: i32,
+    },
+    Loopgtz {
+        as_: u8,
+        offset: i32,
+    },
+    // -- Misc --
     Nop,
-    Memw,
-    Isync,
-    Dsync,
-    Esync,
-    Rsync,
-    Extw,
-    Ill,
-    Break { s: u8, t: u8 },
+    Break {
+        imm_s: u8,
+        imm_t: u8,
+    },
     Syscall,
-
-    // Loop instructions
-    Loop { rs: u8, offset: i32 },
-    Loopnez { rs: u8, offset: i32 },
-    Loopgtz { rs: u8, offset: i32 },
-
-    // Narrow (16-bit density) instructions
-    NarrowL32iN { rt: u8, rs: u8, imm: u32 },
-    NarrowS32iN { rt: u8, rs: u8, imm: u32 },
-    NarrowAdd { rd: u8, rs: u8, rt: u8 },
-    NarrowAddi { rd: u8, rs: u8, imm: i32 },
-    NarrowMovi { rd: u8, imm: i32 },
-    NarrowBeqz { rs: u8, offset: i32 },
-    NarrowBnez { rs: u8, offset: i32 },
-    NarrowMov { rd: u8, rs: u8 },
-    NarrowRet,
-    NarrowRetW,
-    NarrowNop,
-
+    Ill,
+    Memw,
+    Extw,
+    Isync,
+    Rsync,
+    Esync,
+    Dsync,
+    /// RSIL at, level: read PS into at, then set PS.INTLEVEL = level.
+    Rsil {
+        at: u8,
+        level: u8,
+    },
+    /// EXTUI ar, at, shift, bits: ar = (at >> shift) & ((1 << bits) - 1).
+    Extui {
+        ar: u8,
+        at: u8,
+        shift: u8,
+        bits: u8,
+    },
     Unknown(u32),
 }
 
-/// Decode an Xtensa instruction from bytes fetched at current PC.
-/// Returns (instruction, byte_length) where byte_length is 2 or 3.
-pub fn decode_xtensa(bytes: &[u8; 3]) -> (Instruction, u32) {
-    // Xtensa encoding: if bits[3:0] of byte0 == 0b1000..1111 (i.e. narrow),
-    // then it's a 2-byte (16-bit) instruction. Otherwise 3-byte (24-bit).
-    // The density option uses op0 field = byte0[3:0].
-    // Narrow instructions have op0 in {1000, 1001, 1010, 1011, 1100, 1101} => bits[3]=1 and bits[2:0]!=111
-    // Actually the standard Xtensa encoding:
-    //   op0 = byte0[3:0]
-    //   If op0 >= 8 (bit3=1), instruction is 16-bit (narrow/density).
-    //   Otherwise, instruction is 24-bit.
-
-    let b0 = bytes[0];
-    let op0 = b0 & 0x0F;
-
-    if op0 & 0x08 != 0 {
-        // 16-bit narrow instruction
-        let inst16 = u16::from_le_bytes([bytes[0], bytes[1]]);
-        (decode_narrow(inst16), 2)
-    } else {
-        // 24-bit wide instruction
-        let inst24 = (bytes[0] as u32) | ((bytes[1] as u32) << 8) | ((bytes[2] as u32) << 16);
-        (decode_wide(inst24), 3)
-    }
-}
-
-fn decode_narrow(inst: u16) -> Instruction {
-    let op0 = (inst & 0x0F) as u8;
-    let t = ((inst >> 4) & 0x0F) as u8;
-    let s = ((inst >> 8) & 0x0F) as u8;
-    let r = ((inst >> 12) & 0x0F) as u8;
-
+/// Decode a 24-bit (wide) instruction. High byte of the 32-bit fetch word is
+/// ignored; caller must use [`super::xtensa_length::instruction_length`] first
+/// to confirm wideness.
+pub fn decode(word: u32) -> Instruction {
+    let w = word & 0x00FF_FFFF;
+    let op0 = (w & 0x0F) as u8;
     match op0 {
-        0x08 => {
-            // L32I.N
-            let imm = (t as u32) << 2; // 4-byte aligned offset
-            Instruction::NarrowL32iN { rt: t, rs: s, imm }
-        }
-        0x09 => {
-            // S32I.N
-            let imm = (t as u32) << 2;
-            Instruction::NarrowS32iN { rt: t, rs: s, imm }
-        }
-        0x0A => {
-            // ADD.N
-            Instruction::NarrowAdd { rd: r, rs: s, rt: t }
-        }
-        0x0B => {
-            // ADDI.N
-            let imm = if r == 0 { -1i32 } else { r as i32 };
-            Instruction::NarrowAddi { rd: t, rs: s, imm }
-        }
-        0x0C => {
-            // ST2 - MOVI.N, BEQZ.N, BNEZ.N, etc.
-            match r {
-                0..=6 => {
-                    // MOVI.N
-                    let _imm = if (inst >> 7) & 1 != 0 {
-                        // 7-bit signed
-                        ((r as i32) | 0x20) - 0x40 + ((((inst >> 12) & 0x0F) as i32) << 0)
-                    } else {
-                        (t as i32) | (((inst >> 12) as i32 & 0x0F) << 4)
-                    };
-                    // Actually MOVI.N encoding:
-                    // MOVI.N: op0=1100, r=imm7[6:4], s=at, t=imm7[3:0]
-                    let imm7 = ((r as u8 & 0x07) << 4) | t;
-                    let signed = if imm7 & 0x40 != 0 {
-                        (imm7 as i32) | !0x7F
-                    } else {
-                        imm7 as i32
-                    };
-                    Instruction::NarrowMovi { rd: s, imm: signed }
-                }
-                _ => Instruction::Unknown(inst as u32),
-            }
-        }
-        0x0D => {
-            // ST3 group: BEQZ.N, BNEZ.N, MOV.N, RET.N, etc.
-            match r {
-                0..=3 => {
-                    // BEQZ.N
-                    let imm = (t as i32) | ((r as i32 & 0x03) << 4);
-                    Instruction::NarrowBeqz { rs: s, offset: imm }
-                }
-                4..=7 => {
-                    // BNEZ.N
-                    let imm = (t as i32) | (((r as i32) & 0x03) << 4);
-                    Instruction::NarrowBnez { rs: s, offset: imm }
-                }
-                _ => Instruction::Unknown(inst as u32),
-            }
-        }
-        0x0E => {
-            // Misc narrow (RET.N, MOV.N, NOP.N ...)
-            // Actually: op0=0x0D for some, 0x0E for others
-            // RET.N = 0x00_0D (all zeros except op0)
-            // Let's re-check
-            if inst == 0xF01D {
-                Instruction::NarrowRetW
-            } else if inst == 0x0D {
-                Instruction::NarrowRet
-            } else {
-                Instruction::Unknown(inst as u32)
-            }
-        }
-        0x0F => {
-            // NOP.N = 0xF03D or similar
-            if inst == 0xF03D || inst == 0x203D {
-                Instruction::NarrowNop
-            } else {
-                Instruction::Unknown(inst as u32)
-            }
-        }
-        _ => Instruction::Unknown(inst as u32),
+        0x0 => decode_qrst(w),
+        0x1 => decode_l32r(w),
+        0x2 => decode_lsai(w),
+        0x3 => decode_lsci(w),
+        0x4 => decode_mac16(w),
+        0x5 => decode_calln(w),
+        0x6 => decode_si(w),
+        0x7 => decode_b(w),
+        // op0=0x9 is a 2-byte NARROW S32I.N (Code Density), never reached as
+        // a wide instruction here — the dispatcher in xtensa_lx7::step routes
+        // length-2 to xtensa_narrow::decode_narrow before calling us. Earlier
+        // drafts mistakenly routed op0=0x9 here to a fake S32E/L32E decoder
+        // that worked only on hand-crafted test inputs (see Plan 3 Task 10
+        // case study). Real S32E/L32E live in QRST op1=9 and are decoded
+        // there.
+        _ => Instruction::Unknown(w),
     }
 }
 
-fn b4_to_i32(val: u8) -> i32 {
-    // Xtensa B4CONST table for BEQI/BNEI/etc.
-    const B4CONST: [i32; 16] = [
-        -1, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256,
-    ];
-    B4CONST[val as usize & 0xF]
-}
+// Each `decode_*` is stubbed to `Unknown(w)` in this task; filled in by
+// subsequent tasks B3..B8.
+fn decode_qrst(w: u32) -> Instruction {
+    let op1 = ((w >> 16) & 0xF) as u8;
+    let op2 = ((w >> 20) & 0xF) as u8;
+    let r = ((w >> 12) & 0xF) as u8;
+    let s = ((w >> 8) & 0xF) as u8;
+    let t = ((w >> 4) & 0xF) as u8;
 
-fn _b4_to_u32(val: u8) -> u32 {
-    const B4CONSTU: [u32; 16] = [
-        0x8000, 0x10000, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 32, 64, 128, 256,
-    ];
-    B4CONSTU[val as usize & 0xF]
-}
-
-fn decode_wide(inst: u32) -> Instruction {
-    // 24-bit instruction. Fields:
-    // byte0 = inst[7:0], byte1 = inst[15:8], byte2 = inst[23:16]
-    // op0 = inst[3:0]
-    // t = inst[7:4]
-    // s = inst[11:8]
-    // r = inst[15:12]
-    // op1 = inst[19:16]
-    // op2 = inst[23:20]
-    let op0 = (inst & 0x0F) as u8;
-    let t = ((inst >> 4) & 0x0F) as u8;
-    let s = ((inst >> 8) & 0x0F) as u8;
-    let r = ((inst >> 12) & 0x0F) as u8;
-    let op1 = ((inst >> 16) & 0x0F) as u8;
-    let op2 = ((inst >> 20) & 0x0F) as u8;
-
-    match op0 {
-        0x00 => {
-            // QRST group
-            match op1 {
-                0x00 => {
-                    // RST0 group
-                    match op2 {
-                        0x00 => {
-                            // ST0 subgroup
-                            match r {
-                                0x00 if s == 0 && t == 0 => Instruction::Ill,
-                                0x00 => Instruction::Nop, // SNM0 group
-                                0x01 => Instruction::Ssl { rs: s },
-                                0x02 => Instruction::Ssr { rs: s },
-                                0x04 => {
-                                    if s == 0 && t == 0 {
-                                        Instruction::Ssai { sa: 0 }
-                                    } else {
-                                        Instruction::Ssa8l { rs: s }
-                                    }
-                                }
-                                _ => Instruction::Unknown(inst),
-                            }
-                        }
-                        0x01 => {
-                            // AND, OR, XOR
-                            match op2 {
-                                _ => Instruction::And { rd: r, rs: s, rt: t },
-                            }
-                        }
-                        0x02 => Instruction::Or { rd: r, rs: s, rt: t },
-                        0x03 => Instruction::Xor { rd: r, rs: s, rt: t },
-                        0x06 => Instruction::Neg { rd: r, rt: t },
-                        0x07 => Instruction::Abs { rd: r, rt: t },
-                        0x08 => {
-                            // ADD
-                            Instruction::Add { rd: r, rs: s, rt: t }
-                        }
-                        0x09 => Instruction::Addx2 { rd: r, rs: s, rt: t },
-                        0x0A => Instruction::Addx4 { rd: r, rs: s, rt: t },
-                        0x0B => Instruction::Addx8 { rd: r, rs: s, rt: t },
-                        0x0C => Instruction::Sub { rd: r, rs: s, rt: t },
-                        0x0D => Instruction::Subx2 { rd: r, rs: s, rt: t },
-                        0x0E => Instruction::Subx4 { rd: r, rs: s, rt: t },
-                        0x0F => Instruction::Subx8 { rd: r, rs: s, rt: t },
-                        _ => Instruction::Unknown(inst),
+    match op1 {
+        0x0 => {
+            match op2 {
+                0x0 => decode_st0(w, r, s, t),
+                0x1 => Instruction::And {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0x2 => Instruction::Or {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0x3 => Instruction::Xor {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                // op2=4 covers both shift-setup (r=0..4) and NSA/NSAU (r=0xE/0xF).
+                //
+                // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+                //   nsa  a3, a4 → 0x40E430: op2=4, r=0xE, s=as_=4, t=ar=3
+                //   nsau a3, a4 → 0x40F430: op2=4, r=0xF, s=as_=4, t=ar=3
+                // NSA/NSAU: op2=4 (constant sub-group selector), r=0xE/0xF (instruction
+                // discriminator), t=ar (destination register), s=as_ (source register).
+                //
+                // SUBX4/SUBX8 use op2=0xE/0xF (not op2=4), so they are routed to the
+                // 0xE/0xF match arms below and are never confused with NSA/NSAU.
+                // ROTW n: op1=0, op2=4, r=8, s=0, t=n (4-bit signed).
+                //
+                // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+                //   rotw  1 → 0x408010: op2=4, r=8, s=0, t=1 → n=+1
+                //   rotw -1 → 0x4080f0: op2=4, r=8, s=0, t=0xF → n=-1 (4-bit two's complement)
+                //   rotw  7 → 0x408070: op2=4, r=8, s=0, t=7   → n=+7
+                //   rotw -8 → 0x408080: op2=4, r=8, s=0, t=8   → n=-8 (4-bit two's complement)
+                //
+                // n is sign-extended from the 4-bit t field: values 8..=15 → -8..=-1.
+                0x4 => match r {
+                    0xE => Instruction::Nsa { ar: t, as_: s },
+                    0xF => Instruction::Nsau { ar: t, as_: s },
+                    0x8 => {
+                        // Sign-extend 4-bit t field to i8: if bit3 set, subtract 16.
+                        let n = if t & 0x8 != 0 {
+                            (t as i8).wrapping_sub(16)
+                        } else {
+                            t as i8
+                        };
+                        Instruction::Rotw { n }
                     }
-                }
-                0x01 => {
-                    // RST1 group
-                    match op2 {
-                        0x00 | 0x01 => {
-                            // SLLI
-                            let sa = (s | ((op2 & 1) << 4)) as u8;
-                            Instruction::Slli { rd: r, rs: t, sa: 32 - sa }
-                        }
-                        0x04 => Instruction::Srli { rd: r, rt: t, sa: s },
-                        0x05 => Instruction::Srai { rd: r, rt: t, sa: (s | ((op2 & 0x01) << 4)) },
-                        0x06 => Instruction::Src { rd: r, rs: s, rt: t },
-                        0x08 => Instruction::Sll { rd: r, rs: s },
-                        0x09 => Instruction::Srl { rd: r, rt: t },
-                        0x0A => Instruction::Sra { rd: r, rt: t },
-                        0x0B => {
-                            // MUL16U, MUL16S, MULL, MULUH, MULSH
-                            Instruction::Unknown(inst)
-                        }
-                        _ => {
-                            // EXTUI
-                            if op2 & 0x04 == 0x04 {
-                                let shift = s | ((op2 & 1) << 4);
-                                let mask_bits = t + 1;
-                                Instruction::Extui { rd: r, rt: t, shift: shift as u8, mask_bits }
-                            } else {
-                                Instruction::Unknown(inst)
-                            }
-                        }
-                    }
-                }
-                0x02 => {
-                    // RST2 group: MULL, MULUH, MULSH, etc.
-                    match op2 {
-                        0x08 => Instruction::Mull { rd: r, rs: s, rt: t },
-                        0x0A => Instruction::Muluh { rd: r, rs: s, rt: t },
-                        0x0B => Instruction::Mulsh { rd: r, rs: s, rt: t },
-                        _ => Instruction::Unknown(inst),
-                    }
-                }
-                0x03 => {
-                    // RST3: RSR, WSR, XSR, and condition moves
-                    match op2 {
-                        0x00 => Instruction::Rsr { rt: t, sr: s | (r << 4) },
-                        0x01 => Instruction::Wsr { rt: t, sr: s | (r << 4) },
-                        0x06 => Instruction::Xsr { rt: t, sr: s | (r << 4) },
-                        0x09 => Instruction::Moveqz { rd: r, rs: s, rt: t },
-                        0x0A => Instruction::Movnez { rd: r, rs: s, rt: t },
-                        0x0B => Instruction::Movltz { rd: r, rs: s, rt: t },
-                        0x0C => Instruction::Movgez { rd: r, rs: s, rt: t },
-                        _ => Instruction::Unknown(inst),
-                    }
-                }
-                0x04 => {
-                    // EXTUI (alternate encoding)
-                    let shift = s | ((op1 >> 4) << 4);
-                    let mask_bits = t + 1;
-                    Instruction::Extui { rd: r, rt: t, shift: shift as u8, mask_bits }
-                }
-                _ => Instruction::Unknown(inst),
+                    _ => decode_st3_shiftsetup(w, r, s, t),
+                },
+                0x6 => match s {
+                    0x0 => Instruction::Neg { ar: r, at: t },
+                    0x1 => Instruction::Abs { ar: r, at: t },
+                    _ => Instruction::Unknown(w),
+                },
+                0x8 => Instruction::Add {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0x9 => Instruction::Addx2 {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0xA => Instruction::Addx4 {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0xB => Instruction::Addx8 {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0xC => Instruction::Sub {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0xD => Instruction::Subx2 {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0xE => Instruction::Subx4 {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0xF => Instruction::Subx8 {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                _ => Instruction::Unknown(w),
             }
         }
-        0x01 => {
-            // L32R: PC-relative load from literal pool (always negative offset)
-            let imm16 = ((inst >> 8) & 0xFFFF) as u16;
-            let _offset = ((imm16 as i16 as i32) << 2) | !0x3FFFF_i32;
-            // L32R is PC-relative; we model it as L32I with rs=0 for now
-            Instruction::L32i { rt: t, rs: 0, imm: 0 }
-        }
-        0x02 => {
-            // LSAI group: L8UI, L16UI, L16SI, L32I, S8I, S16I, S32I
-            let imm8 = ((inst >> 16) & 0xFF) as u32;
-            match r {
-                0x00 => Instruction::L8ui { rt: t, rs: s, imm: imm8 },
-                0x01 => Instruction::L16ui { rt: t, rs: s, imm: imm8 << 1 },
-                0x02 => Instruction::L32i { rt: t, rs: s, imm: imm8 << 2 },
-                0x04 => Instruction::S8i { rt: t, rs: s, imm: imm8 },
-                0x05 => Instruction::S16i { rt: t, rs: s, imm: imm8 << 1 },
-                0x06 => Instruction::S32i { rt: t, rs: s, imm: imm8 << 2 },
-                0x09 => Instruction::L16si { rt: t, rs: s, imm: imm8 << 1 },
-                0x0A => {
-                    // MOVI
-                    let imm12 = (imm8 as i32) | ((t as i32) << 8);
-                    let imm = if imm12 & (1 << 11) != 0 {
-                        imm12 | !0xFFF
-                    } else {
-                        imm12
-                    };
-                    Instruction::Movi { rt: s, imm }
+        0x1 => match op2 {
+            // SLLI: 5-bit shift amount split across op2[0] (high bit) and t (low 4 bits).
+            // ISA RM §8: encodes 1_sa = 32 - sa, so shamt = 32 - raw.
+            0x0 | 0x1 => {
+                let raw = ((op2 & 0x1) << 4) | t;
+                let shamt = 32u8.wrapping_sub(raw);
+                Instruction::Slli {
+                    ar: r,
+                    as_: s,
+                    shamt,
                 }
-                0x0C => {
-                    // ADDI
-                    let imm = if (imm8 as i32) & 0x80 != 0 { (imm8 as i32) | !0xFF } else { imm8 as i32 };
-                    Instruction::Addi { rt: t, rs: s, imm }
+            }
+            // SRAI: 5-bit shift amount; direct encoding (no complement).
+            // ISA RM §8: shamt = ((op2 & 1) << 4) | t.
+            0x2 | 0x3 => {
+                let shamt = ((op2 & 0x1) << 4) | t;
+                Instruction::Srai {
+                    ar: r,
+                    at: t,
+                    shamt,
                 }
-                0x0D => {
-                    // ADDMI
-                    let imm = if (imm8 as i32) & 0x80 != 0 { ((imm8 as i32) | !0xFF) << 8 } else { (imm8 as i32) << 8 };
-                    Instruction::Addmi { rt: t, rs: s, imm }
+            }
+            // SRLI: 4-bit shift amount in `s` field (bits[11:8]); source register
+            // in `t` field (bits[7:4]). HW-oracle (xtensa-esp32s3-elf-as):
+            //   srli a8, a8, 13 → 0x418D80: t=8 (at), s=D=13 (shamt), r=8 (ar)
+            //   srli a3, a4, 5  → 0x413540: t=4, s=5, r=3
+            //   srli a5, a6, 0  → 0x415060: t=6, s=0, r=5
+            // Earlier draft of this decoder (and the matching xtensa_exec
+            // unit test) had `shamt = t = at`, treating the shift amount as
+            // colocated with the source register. That worked for hand-
+            // crafted tests but mis-decoded esp-hal's `(prid >> 13) & 1`
+            // CPU-discrimination check inside `__level_1_interrupt`, which
+            // crosses CPU0/CPU1 paths and routed every interrupt status
+            // read to the CPU1 INTR_STATUS bank — the alarm source IDs were
+            // stale (Plan 3 Task 10 case study).
+            0x4 => Instruction::Srli {
+                ar: r,
+                at: t,
+                shamt: s,
+            },
+            0x8 => Instruction::Src {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0x9 => Instruction::Srl { ar: r, at: t },
+            0xA => Instruction::Sll { ar: r, as_: s },
+            0xB => Instruction::Sra { ar: r, at: t },
+            // MUL16 family (16-bit multiply).
+            // HW-oracle (xtensa-esp32s3-elf-as + objdump, mul16u a3,a4,a5 → 0x5034c1):
+            //   MUL16U op1=0x1 op2=0xC  MUL16S op1=0x1 op2=0xD
+            0xC => Instruction::Mul16u {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0xD => Instruction::Mul16s {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            // XSR — atomic SR swap. Despite RSR/WSR living in op1=3, XSR is
+            // op1=1, op2=6. HW-oracle:
+            //   xsr.sar      a3 → 0x610330: op0=0,op1=1,op2=6,r=0,s=3,t=3
+            //   xsr.intenable a13→ 0x61e4d0: op0=0,op1=1,op2=6,r=0xE,s=4,t=0xD; sr=0xE4
+            // SR ID is bits[15:8] = (r<<4)|s; at = t.
+            0x6 => {
+                let sr = ((r as u16) << 4) | (s as u16);
+                Instruction::Xsr { at: t, sr }
+            }
+            _ => Instruction::Unknown(w),
+        },
+        // op1=0x2: MUL/DIV 32×32 family.
+        // HW-oracle (xtensa-esp32s3-elf-as + objdump, mull a3,a4,a5 → 0x503482):
+        //   MULL  op1=0x2 op2=0x8  MULUH op1=0x2 op2=0xA  MULSH op1=0x2 op2=0xB
+        //   QUOU  op1=0x2 op2=0xC  QUOS  op1=0x2 op2=0xD
+        //   REMU  op1=0x2 op2=0xE  REMS  op1=0x2 op2=0xF
+        // Source: xtensa-esp32s3-elf-as + objdump (esp-15.2.0_20250920):
+        //   quos a3,a4,a5 → 0xD23450  quou a3,a4,a5 → 0xC23450
+        //   rems a3,a4,a5 → 0xF23450  remu a3,a4,a5 → 0xE23450
+        0x2 => match op2 {
+            0x8 => Instruction::Mull {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0xA => Instruction::Muluh {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0xB => Instruction::Mulsh {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0xC => Instruction::Quou {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0xD => Instruction::Quos {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0xE => Instruction::Remu {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0xF => Instruction::Rems {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            _ => Instruction::Unknown(w),
+        },
+        // op1 = 0x3: RSR / WSR / RUR / WUR.
+        //
+        // HW-oracle (xtensa-esp-elf-as + objdump, esp-15.2.0_20250920):
+        //   rsr.sar a3      → 0x030330: op0=0,op1=3,op2=0; sr=bits[15:8]=0x03; at=t=3
+        //   wsr.sar a3      → 0x130330: op0=0,op1=3,op2=1; sr=bits[15:8]=0x03; at=t=3
+        //   rur.threadptr a3→ 0xe33e70: op0=0,op1=3,op2=0xe; ar=r=3; ur=(s<<4)|t=0xe7=231
+        //   wur.threadptr a3→ 0xf3e730: op0=0,op1=3,op2=0xf; at=t=3; ur=bits[15:8]=0xe7=231
+        //
+        // For RSR/WSR: SR ID is bits[15:8] = (r << 4) | s; at = t (bits[7:4]).
+        // For RUR:     ar = r (bits[15:12]); UR ID = (s << 4) | t.
+        // For WUR:     at = t (bits[7:4]); UR ID = bits[15:8] = (r << 4) | s.
+        //
+        // XSR is NOT in op1=3: see op1=1 below.
+        0x3 => {
+            let sr = ((r as u16) << 4) | (s as u16);
+            match op2 {
+                0x0 => Instruction::Rsr { at: t, sr },
+                0x1 => Instruction::Wsr { at: t, sr },
+                // MIN/MAX/MINU/MAXU live in op1=3, op2=4..=7 — three-operand
+                // RRR encoding, not the SR-access slot. HW-oracle:
+                //   min  a3, a4, a5 → 0x433450: op2=4
+                //   max  a3, a4, a5 → 0x533450: op2=5
+                //   minu a3, a4, a5 → 0x633450: op2=6
+                //   maxu a3, a4, a5 → 0x733450: op2=7
+                0x4 => Instruction::Min {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0x5 => Instruction::Max {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0x6 => Instruction::Minu {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0x7 => Instruction::Maxu {
+                    ar: r,
+                    as_: s,
+                    at: t,
+                },
+                0xE => {
+                    let ur = ((s as u16) << 4) | (t as u16);
+                    Instruction::Rur { ar: r, ur }
                 }
-                _ => Instruction::Unknown(inst),
+                0xF => Instruction::Wur { at: t, ur: sr },
+                _ => Instruction::Unknown(w),
             }
         }
-        0x03 => {
-            // LSCI: L32I with scaled offset (Float load/store - treat as unknown)
-            Instruction::Unknown(inst)
-        }
-        0x05 => {
-            // CALL0 / CALLX0
-            // op0=0x05 -> CALL0
-            let offset = ((inst >> 6) as i32) << 2;
-            // Sign extend 18-bit offset
-            let offset = if offset & (1 << 19) != 0 {
-                offset | !0xFFFFF
-            } else {
-                offset
-            };
-            Instruction::Call0 { offset }
-        }
-        0x06 => {
-            // SI group: J, BZ (BEQZ, BNEZ, BLTZ, BGEZ)
-            match r {
-                0x00 => {
-                    // J
-                    let offset18 = (inst >> 6) as i32;
-                    let offset = if offset18 & (1 << 17) != 0 {
-                        offset18 | !0x3FFFF
-                    } else {
-                        offset18
-                    };
-                    Instruction::J { offset }
-                }
-                0x01 => {
-                    // BEQZ
-                    let imm12 = ((inst >> 12) & 0xFFF) as i32;
-                    let offset = if imm12 & (1 << 11) != 0 {
-                        imm12 | !0xFFF
-                    } else {
-                        imm12
-                    };
-                    Instruction::Beqz { rs: s, offset }
-                }
-                0x05 => {
-                    // BNEZ
-                    let imm12 = ((inst >> 12) & 0xFFF) as i32;
-                    let offset = if imm12 & (1 << 11) != 0 {
-                        imm12 | !0xFFF
-                    } else {
-                        imm12
-                    };
-                    Instruction::Bnez { rs: s, offset }
-                }
-                0x09 => {
-                    // BLTZ
-                    let imm12 = ((inst >> 12) & 0xFFF) as i32;
-                    let offset = if imm12 & (1 << 11) != 0 {
-                        imm12 | !0xFFF
-                    } else {
-                        imm12
-                    };
-                    Instruction::Bltz { rs: s, offset }
-                }
-                0x0D => {
-                    // BGEZ
-                    let imm12 = ((inst >> 12) & 0xFFF) as i32;
-                    let offset = if imm12 & (1 << 11) != 0 {
-                        imm12 | !0xFFF
-                    } else {
-                        imm12
-                    };
-                    Instruction::Bgez { rs: s, offset }
-                }
-                0x08 => {
-                    // LOOP
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    Instruction::Loop { rs: s, offset: imm8 }
-                }
-                _ => Instruction::Unknown(inst),
+        // op1 = 0x4 / 0x5: EXTUI ar, at, shift, bits.
+        //
+        // EXTUI extracts `bits` consecutive bits from `at` starting at bit
+        // `shift`, zero-extending into `ar`. The 5-bit shift is split:
+        //   shift[3:0] = s field
+        //   shift[4]   = op1 LSB (so op1 ∈ {4, 5} both select EXTUI)
+        // The 4-bit bits-1 (range 1..=16) lives in op2.
+        //
+        // HW-oracle (xtensa-esp32s3-elf-as):
+        //   extui a5, a8, 21, 11 → 0xa55580: op0=0, op1=5, op2=0xa, r=5, s=5, t=8
+        //                          → shift=(1<<4)|5=21, bits=op2+1=11. ✓
+        //   extui a3, a4, 0, 1   → 0x043040: op1=4, op2=0 → shift=0, bits=1. ✓
+        //   extui a3, a4, 31, 1  → 0x053f40: op1=5, s=0xf, op2=0 → shift=31, bits=1. ✓
+        0x4 | 0x5 => {
+            let shift = ((op1 & 0x1) << 4) | s;
+            let bits = op2 + 1;
+            Instruction::Extui {
+                ar: r,
+                at: t,
+                shift,
+                bits,
             }
         }
-        0x07 => {
-            // B group: conditional branches with register comparisons
-            match r {
-                0x01 => {
-                    // BEQ
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Beq { rs: s, rt: t, offset }
-                }
-                0x09 => {
-                    // BNE
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bne { rs: s, rt: t, offset }
-                }
-                0x02 => {
-                    // BLT
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Blt { rs: s, rt: t, offset }
-                }
-                0x0A => {
-                    // BGE
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bge { rs: s, rt: t, offset }
-                }
-                0x03 => {
-                    // BLTU
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bltu { rs: s, rt: t, offset }
-                }
-                0x0B => {
-                    // BGEU
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bgeu { rs: s, rt: t, offset }
-                }
-                0x06 => {
-                    // BBCI
-                    let bit = s | ((r & 1) << 4);
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bbci { rs: s, bit, offset }
-                }
-                0x0E => {
-                    // BBSI
-                    let bit = s | ((r & 1) << 4);
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bbsi { rs: s, bit, offset }
-                }
-                0x04 => {
-                    // BEQI
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Beqi { rs: s, imm: b4_to_i32(t), offset }
-                }
-                0x0C => {
-                    // BNEI
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bnei { rs: s, imm: b4_to_i32(t), offset }
-                }
-                0x05 => {
-                    // BLTI
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Blti { rs: s, imm: b4_to_i32(t), offset }
-                }
-                0x0D => {
-                    // BGEI
-                    let imm8 = ((inst >> 16) & 0xFF) as i32;
-                    let offset = if imm8 & 0x80 != 0 { imm8 | !0xFF } else { imm8 };
-                    Instruction::Bgei { rs: s, imm: b4_to_i32(t), offset }
-                }
-                _ => Instruction::Unknown(inst),
+        // op1 = 0x9 — LSC4 group: S32E / L32E (windowed exception store/load).
+        //
+        // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+        //   s32e a3, a4, -16 → bytes 30 C4 49 → LE u32 0x49C430:
+        //     op0=0, op1=9 (bits[19:16]), op2=4 (bits[23:20]) → S32E
+        //     at = bits[7:4] = 3, as_ = bits[11:8] = 4, imm4 = bits[15:12] = 12
+        //     imm_byte = 12*4 - 64 = -16  ✓
+        //   s32e a0, a1, -12 → bytes 00 D1 49 → LE u32 0x49D100:
+        //     op2=4 → S32E; at=0, as_=1, imm4=13 → imm_byte = -12  ✓
+        //   l32e a3, a4, -16 → bytes 30 C4 09 → LE u32 0x09C430: op2=0 → L32E
+        //
+        // Field layout for op0=0, op1=9:
+        //   bits[3:0]   = op0 = 0
+        //   bits[7:4]   = at (value / destination register)
+        //   bits[11:8]  = as_ (base register)
+        //   bits[15:12] = imm4 (range 0..15; imm_byte = imm4*4 - 64, range -64..-4)
+        //   bits[19:16] = op1 = 9
+        //   bits[23:20] = op2: 0 = L32E, 4 = S32E
+        //
+        // Earlier drafts dispatched these via a top-level `op0 == 9` arm with
+        // swapped field positions — that worked only on hand-crafted test
+        // inputs and missed real-firmware S32E (e.g. esp-hal's
+        // __default_naked_exception spill at PC 0x40379049). The real
+        // assembler emits op0=0, so the QRST routing is canonical.
+        0x9 => {
+            // imm_byte = imm4 * 4 - 64  (range -64..-4), stored as two's-complement u32.
+            let imm4 = ((w >> 12) & 0xF) as u32;
+            let imm = imm4.wrapping_mul(4).wrapping_sub(64);
+            let at = t; // bits[7:4]
+            let as_ = s; // bits[11:8]
+            match op2 {
+                0x0 => Instruction::L32e { at, as_, imm },
+                0x4 => Instruction::S32e { at, as_, imm },
+                _ => Instruction::Unknown(w),
             }
         }
-        _ => Instruction::Unknown(inst),
+        // op1 = 0x6..=0x8, 0xA..=0xF — fill in as needed.
+        _ => Instruction::Unknown(w),
     }
 }
 
-// Handle RET / RET.W / CALLX0 / JX from the RST0 group
-// These are encoded within op0=0, op1=0, op2=0, with specific r/s/t values.
-// For a simpler implementation, we also handle them in the main decode.
+/// ST0 group — miscellaneous single-operand / zero-operand instructions.
+///
+/// Encoding: op0=0, op1=0, op2=0. Fields: r at bits[15:12], s at bits[11:8], t at bits[7:4].
+///
+/// HW-oracle verified encoding table (xtensa-esp-elf-objdump):
+///
+/// r=0, t=8              → RET           (s field ignored per ISA RM)
+/// r=0, t=9              → RETW          (s field ignored)
+/// r=0, s=<as>, t=0xA    → JX as_
+/// r=0, s=<as>, t=0xC    → CALLX0 as_
+/// r=0, s=<as>, t=0xD    → CALLX4 as_
+/// r=0, s=<as>, t=0xE    → CALLX8 as_
+/// r=0, s=<as>, t=0xF    → CALLX12 as_
+/// r=2, s=0, t=0          → ISYNC
+/// r=2, s=0, t=1          → RSYNC
+/// r=2, s=0, t=2          → ESYNC
+/// r=2, s=0, t=3          → DSYNC
+/// r=2, s=0, t=0xC        → MEMW
+/// r=2, s=0, t=0xD        → EXTW
+/// r=2, s=0, t=0xF        → NOP
+/// r=3, s=0, t=0          → RFE
+/// r=3, s=2, t=0          → RFDE
+/// r=3, s=4, t=0          → RFWO
+/// r=3, s=5, t=0          → RFWU
+/// r=3, s=<level>, t=1    → RFI level
+/// r=4, s=<imm_s>, t=<imm_t> → BREAK
+/// r=5, s=0, t=0          → SYSCALL
+fn decode_st0(w: u32, r: u8, s: u8, t: u8) -> Instruction {
+    match r {
+        0x0 => match t {
+            0x8 => Instruction::Ret,
+            0x9 => Instruction::Retw,
+            0xA => Instruction::Jx { as_: s },
+            0xC => Instruction::Callx0 { as_: s },
+            0xD => Instruction::Callx4 { as_: s },
+            0xE => Instruction::Callx8 { as_: s },
+            0xF => Instruction::Callx12 { as_: s },
+            _ => Instruction::Unknown(w),
+        },
+        // MOVSP at, as_: move stack pointer between adjacent windowed frames safely.
+        //
+        // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+        //   movsp a3, a4 → 0x001430: op0=0, op1=0, op2=0 (ST0 group), r=1, s=as_=4, t=at=3.
+        //
+        // Field layout (op0=0, op1=0, op2=0, r=1): s=as_ (source), t=at (destination).
+        0x1 => Instruction::Movsp { at: t, as_: s },
+        0x2 => match (s, t) {
+            (0, 0x0) => Instruction::Isync,
+            (0, 0x1) => Instruction::Rsync,
+            (0, 0x2) => Instruction::Esync,
+            (0, 0x3) => Instruction::Dsync,
+            (0, 0xC) => Instruction::Memw,
+            (0, 0xD) => Instruction::Extw,
+            (0, 0xF) => Instruction::Nop,
+            _ => Instruction::Unknown(w),
+        },
+        0x3 => match (t, s) {
+            (0x0, 0) => Instruction::Rfe,
+            (0x0, 2) => Instruction::Rfde,
+            (0x0, 4) => Instruction::Rfwo,
+            (0x0, 5) => Instruction::Rfwu,
+            (0x1, _) => Instruction::Rfi { level: s },
+            _ => Instruction::Unknown(w),
+        },
+        0x4 => Instruction::Break { imm_s: s, imm_t: t },
+        0x5 => match (s, t) {
+            (0, 0) => Instruction::Syscall,
+            _ => Instruction::Unknown(w),
+        },
+        // RSIL at, level: read PS into at, set PS.INTLEVEL = level.
+        // ST0 group: op0=0, op1=0, op2=0, r=6.
+        // s = level (4-bit immediate, typically 0..7), t = at.
+        // HW-oracle (xtensa-esp32s3-elf-as):
+        //   rsil a8, 5 → 0x006580: r=6, s=5 (level), t=8 (at).
+        0x6 => Instruction::Rsil { at: t, level: s },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// ST3 shift-setup group (`op1=0x0, op2=0x4`): SSR, SSL, SSA8L, SSA8B, SSAI.
+///
+/// `r` selects the specific instruction. SSAI has a 5-bit shift amount encoded
+/// as `{t[0], s[3:0]}` per ISA RM §8.
+fn decode_st3_shiftsetup(w: u32, r: u8, s: u8, t: u8) -> Instruction {
+    match r {
+        0x0 => Instruction::Ssr { as_: s },
+        0x1 => Instruction::Ssl { as_: s },
+        0x2 => Instruction::Ssa8l { as_: s },
+        0x3 => Instruction::Ssa8b { as_: s },
+        // SSAI: ISA RM §8: 5-bit shamt = {t[0], s[3:0]}.
+        0x4 => Instruction::Ssai {
+            shamt: ((t & 0x1) << 4) | s,
+        },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+fn decode_l32r(w: u32) -> Instruction {
+    let at = ((w >> 4) & 0xF) as u8;
+    let imm16 = (w >> 8) & 0xFFFF;
+    // Sign-extend 16-bit value (2's complement), interpret as word-count.
+    let sext = ((imm16 ^ 0x8000).wrapping_sub(0x8000)) as i32;
+    let pc_rel_byte_offset = sext * 4;
+    Instruction::L32r {
+        at,
+        pc_rel_byte_offset,
+    }
+}
+fn decode_lsai(w: u32) -> Instruction {
+    let imm8 = ((w >> 16) & 0xFF) as u32;
+    let r = ((w >> 12) & 0xF) as u8;
+    let s = ((w >> 8) & 0xF) as u8;
+    let t = ((w >> 4) & 0xF) as u8;
+
+    match r {
+        0x0 => Instruction::L8ui {
+            at: t,
+            as_: s,
+            imm: imm8,
+        },
+        0x1 => Instruction::L16ui {
+            at: t,
+            as_: s,
+            imm: imm8 << 1,
+        },
+        0x2 => Instruction::L32i {
+            at: t,
+            as_: s,
+            imm: imm8 << 2,
+        },
+        0x4 => Instruction::S8i {
+            at: t,
+            as_: s,
+            imm: imm8,
+        },
+        0x5 => Instruction::S16i {
+            at: t,
+            as_: s,
+            imm: imm8 << 1,
+        },
+        0x6 => Instruction::S32i {
+            at: t,
+            as_: s,
+            imm: imm8 << 2,
+        },
+        0x9 => Instruction::L16si {
+            at: t,
+            as_: s,
+            imm: imm8 << 1,
+        },
+        0xB => Instruction::L32ai {
+            at: t,
+            as_: s,
+            imm: imm8 << 2,
+        },
+        // MOVI at, imm12: 12-bit signed immediate; imm12 = {s[3:0], imm8[7:0]}.
+        // HW-oracle verified: `movi a3, -100` → 0x9caf32, s=0xf, imm8=0x9c → 0xf9c → sext12=-100.
+        0xA => {
+            let imm12 = ((s as u32) << 8) | imm8;
+            let sext = ((imm12 ^ 0x800).wrapping_sub(0x800)) as i32;
+            Instruction::Movi { at: t, imm: sext }
+        }
+        0xC => Instruction::Addi {
+            at: t,
+            as_: s,
+            imm8: sext8(imm8),
+        },
+        0xD => Instruction::Addmi {
+            at: t,
+            as_: s,
+            imm: sext8(imm8) << 8,
+        },
+        0xE => Instruction::S32c1i {
+            at: t,
+            as_: s,
+            imm: imm8 << 2,
+        },
+        0xF => Instruction::S32ri {
+            at: t,
+            as_: s,
+            imm: imm8 << 2,
+        },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+// (decode_s32e_l32e removed — S32E/L32E are decoded inline in QRST/op1=9
+//  at the canonical bit positions verified against real esp-hal firmware.)
+
+/// Sign-extend an 8-bit value in a u32 to i32, range [-128, 127].
+#[inline]
+fn sext8(v: u32) -> i32 {
+    ((v ^ 0x80) as i32).wrapping_sub(0x80)
+}
+/// LSCI group (op0=0x3): MIN, MAX, MINU, MAXU, SEXT, CLAMPS.
+///
+/// HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+///   min  a3,a4,a5 → 0x503443: op0=3, t=4(MIN),  r=ar=3, s=as_=4, op2=at=5
+///   max  a3,a4,a5 → 0x503453: op0=3, t=5(MAX),  r=ar=3, s=as_=4, op2=at=5
+///   minu a3,a4,a5 → 0x503463: op0=3, t=6(MINU), r=ar=3, s=as_=4, op2=at=5
+///   maxu a3,a4,a5 → 0x503473: op0=3, t=7(MAXU), r=ar=3, s=as_=4, op2=at=5
+///   sext a3,a4,7  → 0x003423: op0=3, t=2(SEXT),   r=ar=3, s=as_=4, op2=sa-7=0, sa=7
+///   clamps a3,a4,7 → 0x003433: op0=3, t=3(CLAMPS), r=ar=3, s=as_=4, op2=sa-7=0, sa=7
+///
+/// Field layout: op2=bits[23:20], op1=bits[19:16], r=bits[15:12], s=bits[11:8], t=bits[7:4].
+///   - MIN/MAX/MINU/MAXU: r=ar, s=as_, op2=at, op1=0, t=subop(4,5,6,7)
+///   - SEXT/CLAMPS:       r=ar, s=as_, op2=sa-7 (raw immediate, 0..=15), op1=0, t=subop(2,3)
+fn decode_lsci(w: u32) -> Instruction {
+    let op1 = ((w >> 16) & 0xF) as u8;
+    let op2 = ((w >> 20) & 0xF) as u8;
+    let r = ((w >> 12) & 0xF) as u8;
+    let s = ((w >> 8) & 0xF) as u8;
+    let t = ((w >> 4) & 0xF) as u8;
+
+    // SEXT/CLAMPS/MIN/MAX/MINU/MAXU all share op1=0. FP coprocessor loads
+    // (LSI/LSIU/SSI/SSIU/LSX/SSX/LSXU/SSXU) live in op0=3 with op1 != 0 (the
+    // op1 field encodes which 8-bit immediate scaling and which load/store
+    // direction). They overlap with SEXT/CLAMPS on the `t` discriminator
+    // (e.g. lsi f2, a1, 160 = 0x280123 has t=2, which would mis-decode as
+    // SEXT if we ignore op1). esp-hal's `restore_context` issues `lsi f0..f15`
+    // unconditionally, so without the op1 gate we'd clobber a0 mid-restore
+    // and the level-1 ISR would `ret` to garbage. Plan 3 Task 10 case study.
+    if op1 != 0 {
+        // Treat all op1!=0 LSCI variants as Nop (FP coprocessor not modeled).
+        return Instruction::Nop;
+    }
+
+    match t {
+        // SEXT ar, as_, sa: sign-extend as_ from bit position sa (7..=22).
+        // sa = op2 + 7.  Stored in Instruction as the `t` immediate field.
+        0x2 => Instruction::Sext {
+            ar: r,
+            as_: s,
+            t: op2 + 7,
+        },
+        // CLAMPS ar, as_, sa: saturate signed as_ into (sa+1)-bit range.
+        // sa = op2 + 7.  Stored in Instruction as the `t` immediate field.
+        0x3 => Instruction::Clamps {
+            ar: r,
+            as_: s,
+            t: op2 + 7,
+        },
+        // MIN ar, as_, at: ar = signed min(as_, at).
+        0x4 => Instruction::Min {
+            ar: r,
+            as_: s,
+            at: op2,
+        },
+        // MAX ar, as_, at: ar = signed max(as_, at).
+        0x5 => Instruction::Max {
+            ar: r,
+            as_: s,
+            at: op2,
+        },
+        // MINU ar, as_, at: ar = unsigned min(as_, at).
+        0x6 => Instruction::Minu {
+            ar: r,
+            as_: s,
+            at: op2,
+        },
+        // MAXU ar, as_, at: ar = unsigned max(as_, at).
+        0x7 => Instruction::Maxu {
+            ar: r,
+            as_: s,
+            at: op2,
+        },
+        _ => Instruction::Nop,
+    }
+}
+fn decode_mac16(w: u32) -> Instruction {
+    Instruction::Unknown(w)
+}
+
+/// CALLN family (op0=5): CALL0, CALL4, CALL8, CALL12.
+///
+/// Encoding (ISA RM §8 CALL format):
+///   bits[3:0]  = op0 = 0x5
+///   bits[5:4]  = n   (selects CALL0/4/8/12)
+///   bits[23:6] = imm18 (signed 18-bit word offset from (PC+3)&~3 per ISA RM §4.4)
+///
+/// HW-oracle verified: imm18=0 → target = (PC+3)&~3 (i.e. PC itself when PC is 4-aligned).
+/// Decoder convention: `offset` is signed byte displacement from (PC+3)&~3,
+/// i.e. offset = sign_extend18(imm18) * 4.  The executor applies the base as
+/// ((pc+3)&!3) + offset.
+fn decode_calln(w: u32) -> Instruction {
+    let n = ((w >> 4) & 0x3) as u8;
+    let imm18 = (w >> 6) & 0x3_FFFF;
+    // Sign-extend 18-bit: XOR with 0x2_0000 (bit 17) then subtract.
+    let off = (((imm18 ^ 0x2_0000).wrapping_sub(0x2_0000)) as i32) * 4;
+    match n {
+        0 => Instruction::Call0 { offset: off },
+        1 => Instruction::Call4 { offset: off },
+        2 => Instruction::Call8 { offset: off },
+        3 => Instruction::Call12 { offset: off },
+        _ => unreachable!(),
+    }
+}
+
+/// Decode op0=0x7 — BR format: two-register conditional branches and bit-test branches.
+///
+/// Encoding (ISA RM §3.2 BR format / RRI8):
+///   bits [3:0]  = op0 = 0x7
+///   bits [7:4]  = t   (second source register, or low 4 bits of bit-index for BBCI/BBSI)
+///   bits [11:8] = s   (first source register / as_)
+///   bits [15:12]= r   (sub-op selector; also high bit of bit-index for BBCI/BBSI)
+///   bits [23:16]= imm8 (signed 8-bit branch byte offset, added to PC+4)
+///
+/// Dispatch is on r (bits[15:12]), NOT on the high nibble of imm8.
+/// For BBCI/BBSI the 5-bit bit-index is: ((r & 0x1) << 4) | (t & 0xF).
+fn decode_b(w: u32) -> Instruction {
+    let imm8 = ((w >> 16) & 0xFF) as u32;
+    let r = ((w >> 12) & 0xF) as u8;
+    let s = ((w >> 8) & 0xF) as u8;
+    let t = ((w >> 4) & 0xF) as u8;
+    let offset = sext8(imm8) + 4;
+
+    match r {
+        0x0 => Instruction::Bnone {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0x1 => Instruction::Beq {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0x2 => Instruction::Blt {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0x3 => Instruction::Bltu {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0x4 => Instruction::Ball {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0x5 => Instruction::Bbc {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0x6 | 0x7 => Instruction::Bbci {
+            as_: s,
+            bit: ((r & 0x1) << 4) | (t & 0xF),
+            offset,
+        },
+        0x8 => Instruction::Bany {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0x9 => Instruction::Bne {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0xA => Instruction::Bge {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0xB => Instruction::Bgeu {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0xC => Instruction::Bnall {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0xD => Instruction::Bbs {
+            as_: s,
+            at: t,
+            offset,
+        },
+        0xE | 0xF => Instruction::Bbsi {
+            as_: s,
+            bit: ((r & 0x1) << 4) | (t & 0xF),
+            offset,
+        },
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// Decode op0=0x6 — SI format: J (unconditional jump), BZ family (BEQZ/BNEZ/BLTZ/BGEZ),
+/// BI family (BEQI/BNEI/BLTI/BGEI), and BIU family (BLTUI/BGEUI).
+///
+/// Field layout (ISA RM §3.2):
+///   bits [3:0]  = op0 = 0x6
+///   bits [5:4]  = n   (2-bit sub-format selector)
+///   bits [7:6]  = m   (2-bit sub-op selector within BZ/BI/BIU families)
+///   bits [11:8] = s   (source register index)
+///   bits [15:12]= r   (B4CONST/B4CONSTU table index for BI/BIU families)
+///   bits [23:12]= imm12 (12-bit signed offset for BZ family, n=1)
+///   bits [23:16]= imm8  (8-bit signed offset for BI/BIU families, n=2/3)
+///
+/// Dispatch by n:
+///   n=0 → J (CALL format, imm18 at bits[23:6])
+///   n=1 → BZ family (BRI12; m selects: 0=BEQZ, 1=BNEZ, 2=BLTZ, 3=BGEZ)
+///   n=2 → BI family (RRI8; m selects: 0=BEQI, 1=BNEI, 2=BLTI, 3=BGEI; r→B4CONST)
+///   n=3 → BIU family (RRI8; m=0,1 reserved; m=2=BLTUI, m=3=BGEUI; r→B4CONSTU)
+fn decode_si(w: u32) -> Instruction {
+    let n = ((w >> 4) & 0x3) as u8;
+    let m = ((w >> 6) & 0x3) as u8;
+    let s = ((w >> 8) & 0xF) as u8;
+    let r = ((w >> 12) & 0xF) as u8;
+
+    match n {
+        0 => {
+            // J: imm18 at bits[23:6], sign-extended, +4 pre-baked bias.
+            let imm18 = (w >> 6) & 0x3_FFFF;
+            let off = ((imm18 ^ 0x2_0000).wrapping_sub(0x2_0000)) as i32;
+            Instruction::J { offset: off + 4 }
+        }
+        1 => {
+            // BZ family (BRI12): imm12 at bits[23:12], sign-extended.
+            let imm12 = (w >> 12) & 0xFFF;
+            let off12 = ((imm12 ^ 0x800).wrapping_sub(0x800)) as i32 + 4;
+            match m {
+                0 => Instruction::Beqz {
+                    as_: s,
+                    offset: off12,
+                },
+                1 => Instruction::Bnez {
+                    as_: s,
+                    offset: off12,
+                },
+                2 => Instruction::Bltz {
+                    as_: s,
+                    offset: off12,
+                },
+                3 => Instruction::Bgez {
+                    as_: s,
+                    offset: off12,
+                },
+                _ => Instruction::Unknown(w),
+            }
+        }
+        2 => {
+            // BI family (RRI8): imm8 at bits[23:16] is the offset; r indexes B4CONST.
+            let imm8 = ((w >> 16) & 0xFF) as u32;
+            let off = sext8(imm8) + 4;
+            match m {
+                0 => Instruction::Beqi {
+                    as_: s,
+                    imm: b4const(r),
+                    offset: off,
+                },
+                1 => Instruction::Bnei {
+                    as_: s,
+                    imm: b4const(r),
+                    offset: off,
+                },
+                2 => Instruction::Blti {
+                    as_: s,
+                    imm: b4const(r),
+                    offset: off,
+                },
+                3 => Instruction::Bgei {
+                    as_: s,
+                    imm: b4const(r),
+                    offset: off,
+                },
+                _ => Instruction::Unknown(w),
+            }
+        }
+        3 => {
+            // n=3, m=0: ENTRY as_, imm12
+            //
+            // HW-oracle (xtensa-esp32s3-elf-as + objdump, esp-15.2.0_20250920):
+            //   entry a1, 32  → 004136 → w=0x004136: op0=6, n=3, m=0, s=1, imm12=4
+            //   entry a1, 256 → 020136 → w=0x020136: op0=6, n=3, m=0, s=1, imm12=32
+            //   entry sp, 16  → 002136 → w=0x002136: op0=6, n=3, m=0, s=1, imm12=2
+            //
+            // Field layout: op0=bits[3:0]=6, n=bits[5:4]=3, m=bits[7:6]=0,
+            //   as_=bits[11:8], imm12=bits[23:12].
+            // Stack decrement = imm12 * 8 bytes (8-byte-aligned frames per ISA RM §4.4).
+            // Instruction::Entry stores raw imm12 (not scaled).
+            //
+            // n=3, m=1: also reserved (Unknown).
+            // n=3, m=2: BLTUI; n=3, m=3: BGEUI (BIU family, unchanged).
+            match m {
+                0 => {
+                    // ENTRY as_, imm12
+                    let imm12 = (w >> 12) & 0xFFF;
+                    Instruction::Entry { as_: s, imm: imm12 }
+                }
+                1 => Instruction::Unknown(w), // reserved per ISA RM
+                2 => {
+                    // BLTUI as_, imm, offset (BIU family)
+                    let imm8 = (w >> 16) & 0xFF;
+                    let off = sext8(imm8) + 4;
+                    Instruction::Bltui {
+                        as_: s,
+                        imm: b4constu(r),
+                        offset: off,
+                    }
+                }
+                3 => {
+                    // BGEUI as_, imm, offset (BIU family)
+                    let imm8 = (w >> 16) & 0xFF;
+                    let off = sext8(imm8) + 4;
+                    Instruction::Bgeui {
+                        as_: s,
+                        imm: b4constu(r),
+                        offset: off,
+                    }
+                }
+                _ => Instruction::Unknown(w),
+            }
+        }
+        _ => Instruction::Unknown(w),
+    }
+}
+
+/// Look up the B4CONST table (ISA RM Appendix B4CONST).
+///
+/// Maps a 4-bit register-field index r to the immediate constant used by
+/// BEQI/BNEI/BLTI/BGEI.
+fn b4const(r: u8) -> i32 {
+    match r & 0xF {
+        0 => -1,
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4,
+        5 => 5,
+        6 => 6,
+        7 => 7,
+        8 => 8,
+        9 => 10,
+        10 => 12,
+        11 => 16,
+        12 => 32,
+        13 => 64,
+        14 => 128,
+        15 => 256,
+        _ => unreachable!(),
+    }
+}
+
+/// Look up the B4CONSTU table (ISA RM Appendix B4CONSTU).
+///
+/// Maps a 4-bit register-field index r to the unsigned immediate constant used
+/// by BLTUI/BGEUI.
+fn b4constu(r: u8) -> u32 {
+    match r & 0xF {
+        0 => 32768,
+        1 => 65536,
+        2 => 2,
+        3 => 3,
+        4 => 4,
+        5 => 5,
+        6 => 6,
+        7 => 7,
+        8 => 8,
+        9 => 10,
+        10 => 12,
+        11 => 16,
+        12 => 32,
+        13 => 64,
+        14 => 128,
+        15 => 256,
+        _ => unreachable!(),
+    }
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self) // adequate for Plan 1; proper disassembly format later
+    }
+}

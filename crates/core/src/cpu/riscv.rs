@@ -957,9 +957,9 @@ mod tests {
 
         machine.step().unwrap(); // PC 0x0 -> 0x4, x10 = 1, mtime = 1
         machine.step().unwrap(); // PC 0x4 -> 0x8, x10 = 2, mtime = 2
-        // This step executes 0x8 (x10 = 3, next_pc = 0xC). Then mtime -> 3
-        // hits mtimecmp and the trap fires. mepc must be saved as 0xC,
-        // not 0x8, so MRET doesn't re-execute the ADDI.
+                                 // This step executes 0x8 (x10 = 3, next_pc = 0xC). Then mtime -> 3
+                                 // hits mtimecmp and the trap fires. mepc must be saved as 0xC,
+                                 // not 0x8, so MRET doesn't re-execute the ADDI.
         machine.step().unwrap();
         assert_eq!(machine.cpu.read_reg(10), 3, "third ADDI executed once");
         assert_eq!(machine.cpu.pc, 0x2000, "trapped into ISR");
@@ -1028,16 +1028,7 @@ mod tests {
         let sc_w_fail = amo(0x03, 7, 5, 12);
 
         let prog = [
-            lui,
-            addi_x5,
-            addi_x6_7,
-            addi_x7_42,
-            sw,
-            lr_w,
-            sc_w,
-            amoadd,
-            amomax,
-            sc_w_fail,
+            lui, addi_x5, addi_x6_7, addi_x7_42, sw, lr_w, sc_w, amoadd, amomax, sc_w_fail,
         ];
         for (i, w) in prog.iter().enumerate() {
             bus.write_u32((i as u64) * 4, *w).unwrap();
@@ -1054,7 +1045,11 @@ mod tests {
         assert_eq!(machine.cpu.read_reg(5), 0x20000010, "x5 = cell address");
         assert_eq!(machine.cpu.read_reg(8), 7, "LR.W loaded initial value 7");
         assert_eq!(machine.cpu.read_reg(9), 0, "first SC.W succeeded");
-        assert_eq!(machine.cpu.read_reg(10), 42, "AMOADD.W returned pre-add value");
+        assert_eq!(
+            machine.cpu.read_reg(10),
+            42,
+            "AMOADD.W returned pre-add value"
+        );
         assert_eq!(
             machine.cpu.read_reg(11),
             84,

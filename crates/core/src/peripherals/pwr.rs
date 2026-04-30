@@ -21,15 +21,24 @@ pub struct Pwr {
     sr1: u32,
     sr2: u32,
     scr: u32,
-    pucra: u32, pdcra: u32,
-    pucrb: u32, pdcrb: u32,
-    pucrc: u32, pdcrc: u32,
-    pucrd: u32, pdcrd: u32,
-    pucre: u32, pdcre: u32,
-    pucrf: u32, pdcrf: u32,
-    pucrg: u32, pdcrg: u32,
-    pucrh: u32, pdcrh: u32,
-    pucri: u32, pdcri: u32,
+    pucra: u32,
+    pdcra: u32,
+    pucrb: u32,
+    pdcrb: u32,
+    pucrc: u32,
+    pdcrc: u32,
+    pucrd: u32,
+    pdcrd: u32,
+    pucre: u32,
+    pdcre: u32,
+    pucrf: u32,
+    pdcrf: u32,
+    pucrg: u32,
+    pdcrg: u32,
+    pucrh: u32,
+    pdcrh: u32,
+    pucri: u32,
+    pdcri: u32,
 }
 
 impl Pwr {
@@ -47,15 +56,24 @@ impl Pwr {
             sr1: 0,
             sr2: 0x0000_0100,
             scr: 0,
-            pucra: 0, pdcra: 0,
-            pucrb: 0, pdcrb: 0,
-            pucrc: 0, pdcrc: 0,
-            pucrd: 0, pdcrd: 0,
-            pucre: 0, pdcre: 0,
-            pucrf: 0, pdcrf: 0,
-            pucrg: 0, pdcrg: 0,
-            pucrh: 0, pdcrh: 0,
-            pucri: 0, pdcri: 0,
+            pucra: 0,
+            pdcra: 0,
+            pucrb: 0,
+            pdcrb: 0,
+            pucrc: 0,
+            pdcrc: 0,
+            pucrd: 0,
+            pdcrd: 0,
+            pucre: 0,
+            pdcre: 0,
+            pucrf: 0,
+            pdcrf: 0,
+            pucrg: 0,
+            pdcrg: 0,
+            pucrh: 0,
+            pdcrh: 0,
+            pucri: 0,
+            pdcri: 0,
         }
     }
 
@@ -68,15 +86,24 @@ impl Pwr {
             0x10 => self.sr1,
             0x14 => self.sr2,
             0x18 => self.scr,
-            0x20 => self.pucra, 0x24 => self.pdcra,
-            0x28 => self.pucrb, 0x2C => self.pdcrb,
-            0x30 => self.pucrc, 0x34 => self.pdcrc,
-            0x38 => self.pucrd, 0x3C => self.pdcrd,
-            0x40 => self.pucre, 0x44 => self.pdcre,
-            0x48 => self.pucrf, 0x4C => self.pdcrf,
-            0x50 => self.pucrg, 0x54 => self.pdcrg,
-            0x58 => self.pucrh, 0x5C => self.pdcrh,
-            0x60 => self.pucri, 0x64 => self.pdcri,
+            0x20 => self.pucra,
+            0x24 => self.pdcra,
+            0x28 => self.pucrb,
+            0x2C => self.pdcrb,
+            0x30 => self.pucrc,
+            0x34 => self.pdcrc,
+            0x38 => self.pucrd,
+            0x3C => self.pdcrd,
+            0x40 => self.pucre,
+            0x44 => self.pdcre,
+            0x48 => self.pucrf,
+            0x4C => self.pdcrf,
+            0x50 => self.pucrg,
+            0x54 => self.pdcrg,
+            0x58 => self.pucrh,
+            0x5C => self.pdcrh,
+            0x60 => self.pucri,
+            0x64 => self.pdcri,
             _ => 0,
         }
     }
@@ -99,21 +126,34 @@ impl Pwr {
                 self.sr1 &= !(value & 0x0000_031F);
                 self.scr = 0;
             }
-            0x20 => self.pucra = value, 0x24 => self.pdcra = value,
-            0x28 => self.pucrb = value, 0x2C => self.pdcrb = value,
-            0x30 => self.pucrc = value, 0x34 => self.pdcrc = value,
-            0x38 => self.pucrd = value, 0x3C => self.pdcrd = value,
-            0x40 => self.pucre = value, 0x44 => self.pdcre = value,
-            0x48 => self.pucrf = value, 0x4C => self.pdcrf = value,
-            0x50 => self.pucrg = value, 0x54 => self.pdcrg = value,
-            0x58 => self.pucrh = value, 0x5C => self.pdcrh = value,
-            0x60 => self.pucri = value, 0x64 => self.pdcri = value,
+            0x20 => self.pucra = value,
+            0x24 => self.pdcra = value,
+            0x28 => self.pucrb = value,
+            0x2C => self.pdcrb = value,
+            0x30 => self.pucrc = value,
+            0x34 => self.pdcrc = value,
+            0x38 => self.pucrd = value,
+            0x3C => self.pdcrd = value,
+            0x40 => self.pucre = value,
+            0x44 => self.pdcre = value,
+            0x48 => self.pucrf = value,
+            0x4C => self.pdcrf = value,
+            0x50 => self.pucrg = value,
+            0x54 => self.pdcrg = value,
+            0x58 => self.pucrh = value,
+            0x5C => self.pdcrh = value,
+            0x60 => self.pucri = value,
+            0x64 => self.pdcri = value,
             _ => {}
         }
     }
 }
 
-impl Default for Pwr { fn default() -> Self { Self::new() } }
+impl Default for Pwr {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl crate::Peripheral for Pwr {
     fn read(&self, offset: u64) -> SimResult<u8> {

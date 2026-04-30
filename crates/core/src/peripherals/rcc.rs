@@ -110,9 +110,7 @@ impl Rcc {
         // survival tests rely on it.
         let hsebyp = (self.cr & (1 << 18)) != 0;
         let hserdy_satisfied = match self.layout {
-            RccRegisterLayout::Stm32L4 => {
-                (self.cr & Self::CR_HSEON) != 0 && hsebyp
-            }
+            RccRegisterLayout::Stm32L4 => (self.cr & Self::CR_HSEON) != 0 && hsebyp,
             _ => (self.cr & Self::CR_HSEON) != 0,
         };
         if hserdy_satisfied {

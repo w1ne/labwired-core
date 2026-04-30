@@ -902,6 +902,7 @@ version = "0.13.0"
 dependencies = [
  "anyhow",
  "bitflags",
+ "goblin",
  "labwired-config",
  "labwired-ir",
  "labwired-loader",
