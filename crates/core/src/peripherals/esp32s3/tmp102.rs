@@ -64,13 +64,12 @@ impl I2cDevice for Tmp102 {
     }
 
     fn read(&mut self) -> u8 {
-        // For now, only the temperature register (pointer 0) is exercised.
         let value: u16 = match self.pointer {
             0 => self.temp_raw as u16,
-            1 => 0x60A0,                 // CONFIG canned value
-            2 => 0x4B00,                 // T_LOW = 75 °C
-            3 => 0x5000,                 // T_HIGH = 80 °C
-            _ => 0,                      // unreachable due to mask in write()
+            1 => 0x60A0,
+            2 => 0x4B00,
+            3 => 0x5000,
+            _ => 0,
         };
         let byte = if self.read_phase == 0 {
             (value >> 8) as u8
@@ -78,6 +77,14 @@ impl I2cDevice for Tmp102 {
             (value & 0xFF) as u8
         };
         self.read_phase ^= 1;
+        // Tick drift only at the end of a full MSB+LSB pair, and only when
+        // reading the temperature register.
+        if self.read_phase == 0 && self.pointer == 0 {
+            self.temp_raw = self.temp_raw.wrapping_add(0x80); // +0.5 °C
+            if self.temp_raw > 0x2300 {
+                self.temp_raw = 0x1400; // wrap to 20 °C
+            }
+        }
         byte
     }
 
@@ -123,5 +130,34 @@ mod tests {
         dev.start();        // reset phase
         let msb = dev.read();
         assert_eq!(msb, 0x19);
+    }
+
+    #[test]
+    fn drift_increments_after_full_read() {
+        let mut dev = Tmp102::new();
+        dev.start();
+        let _msb = dev.read();
+        let _lsb = dev.read(); // full read pair → tick
+        // Internal raw should have advanced by 0x80 (0.5 °C).
+        assert_eq!(dev.temp_raw, 0x1980);
+    }
+
+    #[test]
+    fn drift_wraps_at_35c_back_to_20c() {
+        let mut dev = Tmp102::new();
+        dev.temp_raw = 0x2300; // 35.0 °C
+        dev.start();
+        let _ = dev.read();
+        let _ = dev.read(); // tick → 35.5 °C → wraps to 20.0 °C
+        assert_eq!(dev.temp_raw, 0x1400);
+    }
+
+    #[test]
+    fn partial_read_does_not_increment() {
+        let mut dev = Tmp102::new();
+        dev.start();
+        let _ = dev.read(); // only MSB; phase=1
+        // No tick yet — temp_raw must be unchanged.
+        assert_eq!(dev.temp_raw, 0x1900);
     }
 }
