@@ -943,8 +943,10 @@ fn entry_window_overflow_of4() -> OracleCase {
             st.assert_epc1(IRAM_BASE + 8);
             // PS.EXCM was set to 1 on overflow entry.
             st.assert_excm(true);
-            // WindowBase was NOT rotated by the overflow (stays at 0).
-            st.assert_windowbase(0);
+            // Canonical Xtensa OF entry rotates WB by n where n = ctz(WS-ahead) + 1.
+            // WS = 0x0005 (bits 0, 2). With WB=0, WS_ahead = 0x28002 → ctz=1 → n=2.
+            // wb_handler = 0 + 2 = 2.
+            st.assert_windowbase(2);
         })
 }
 
@@ -1032,8 +1034,9 @@ fn retw_window_underflow_uf4() -> OracleCase {
             st.assert_epc1(IRAM_BASE);
             // PS.EXCM was set to 1 on underflow entry.
             st.assert_excm(true);
-            // WindowBase was NOT rotated by the underflow (stays at 1).
-            st.assert_windowbase(1);
+            // Canonical Xtensa UF entry rotates WB to wb_dest = wb_cur - N.
+            // wb_cur=1, N=1 → wb_dest=0.
+            st.assert_windowbase(0);
         })
 }
 

@@ -127,7 +127,7 @@ mod tests {
         let mut dev = Tmp102::new();
         dev.start();
         let _ = dev.read(); // advance phase to 1
-        dev.start();        // reset phase
+        dev.start(); // reset phase
         let msb = dev.read();
         assert_eq!(msb, 0x19);
     }
@@ -138,7 +138,7 @@ mod tests {
         dev.start();
         let _msb = dev.read();
         let _lsb = dev.read(); // full read pair → tick
-        // Internal raw should have advanced by 0x80 (0.5 °C).
+                               // Internal raw should have advanced by 0x80 (0.5 °C).
         assert_eq!(dev.temp_raw, 0x1980);
     }
 
@@ -157,7 +157,7 @@ mod tests {
         let mut dev = Tmp102::new();
         dev.start();
         let _ = dev.read(); // only MSB; phase=1
-        // No tick yet — temp_raw must be unchanged.
+                            // No tick yet — temp_raw must be unchanged.
         assert_eq!(dev.temp_raw, 0x1900);
     }
 }

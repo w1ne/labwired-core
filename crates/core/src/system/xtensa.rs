@@ -215,13 +215,7 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // ── I²C0 + attached TMP102 (Plan 4) ──────────────────────────────────
     let mut i2c0 = Esp32s3I2c::new();
     i2c0.attach_slave(Box::new(Tmp102::new()));
-    bus.add_peripheral(
-        "i2c0",
-        I2C0_BASE as u64,
-        I2C0_SIZE,
-        None,
-        Box::new(i2c0),
-    );
+    bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
     // Bind the I²C0 source ID through the intmatrix helper so esp-hal's
     // poll-then-read driver path doesn't depend on routing existing yet —
     // routing is firmware-controlled, this just leaves the source visible.
@@ -464,14 +458,15 @@ mod tests {
 
         // I2C0 should be present at 0x6001_3000.
         let names: Vec<_> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
-        assert!(
-            names.contains(&"i2c0"),
-            "i2c0 missing; have: {names:?}"
-        );
+        assert!(names.contains(&"i2c0"), "i2c0 missing; have: {names:?}");
 
         // The attached TMP102 should respond at address 0x48 by setting
         // INT_NACK to 0 after a one-byte write probe.
-        let i2c_idx = bus.peripherals.iter().position(|p| p.name == "i2c0").unwrap();
+        let i2c_idx = bus
+            .peripherals
+            .iter()
+            .position(|p| p.name == "i2c0")
+            .unwrap();
         let i2c_any = bus.peripherals[i2c_idx]
             .dev
             .as_any_mut()
@@ -481,11 +476,11 @@ mod tests {
             .expect("downcast to Esp32s3I2c");
 
         // Build a probe: RSTART; WRITE 1 (addr+W=0x90); STOP.
-        i2c.write_u32(0x58, ((0u32) << 11) | 0).unwrap(); // RSTART
-        i2c.write_u32(0x5C, ((1u32) << 11) | 1).unwrap(); // WRITE 1
-        i2c.write_u32(0x60, ((3u32) << 11) | 0).unwrap(); // STOP
-        i2c.write_u32(0x18, 0x90).unwrap();                // addr+W
-        i2c.write_u32(0x04, 1 << 5).unwrap();              // TRANS_START
+        i2c.write_u32(0x58, 0).unwrap(); // RSTART (opcode 0)
+        i2c.write_u32(0x5C, (1u32 << 11) | 1).unwrap(); // WRITE 1 byte
+        i2c.write_u32(0x60, 3u32 << 11).unwrap(); // STOP (opcode 3)
+        i2c.write_u32(0x18, 0x90).unwrap(); // addr+W
+        i2c.write_u32(0x04, 1 << 5).unwrap(); // TRANS_START
         let int_raw = i2c.read_u32(0x20).unwrap();
         assert_eq!(
             int_raw & (1 << 11),

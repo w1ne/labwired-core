@@ -160,12 +160,13 @@ impl Peripheral for Esp32s3I2c {
                 }
             }
             REG_SLAVE_ADDR => self.slave_addr = value,
-            REG_FIFO_DATA => {
-                // Byte 0 of value goes into TX FIFO (per esp-hal usage).
-                if self.tx_fifo.len() < FIFO_CAPACITY {
-                    self.tx_fifo.push_back((value & 0xFF) as u8);
-                }
+            // Byte 0 of value goes into TX FIFO (per esp-hal usage).
+            // Drop the byte silently if the FIFO is full — esp-hal checks
+            // FIFO_ST before pushing, so the bound check is defensive only.
+            REG_FIFO_DATA if self.tx_fifo.len() < FIFO_CAPACITY => {
+                self.tx_fifo.push_back((value & 0xFF) as u8);
             }
+            REG_FIFO_DATA => {}
             REG_FIFO_CONF => {
                 self.fifo_conf = value;
                 // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
@@ -197,7 +198,11 @@ impl Peripheral for Esp32s3I2c {
             self.irq_pending = false;
         }
         PeripheralTickResult {
-            explicit_irqs: if explicit.is_empty() { None } else { Some(explicit) },
+            explicit_irqs: if explicit.is_empty() {
+                None
+            } else {
+                Some(explicit)
+            },
             ..Default::default()
         }
     }
@@ -246,10 +251,7 @@ impl Esp32s3I2c {
                         if expects_addr && i == 0 {
                             // First byte of a WRITE following RSTART is addr+R/W.
                             let addr = b >> 1;
-                            active = self
-                                .slaves
-                                .iter()
-                                .position(|s| s.address() == addr);
+                            active = self.slaves.iter().position(|s| s.address() == addr);
                             if active.is_none() {
                                 self.int_raw |= INT_NACK;
                             }
@@ -409,7 +411,7 @@ mod tests {
 
     #[test]
     fn rx_fifo_pops_in_fifo_order_via_fifo_data_reads() {
-        let mut p = Esp32s3I2c::new();
+        let p = Esp32s3I2c::new();
         // Pre-load the RX FIFO directly to test the read path in isolation.
         p.rx_fifo.borrow_mut().push_back(0xAA);
         p.rx_fifo.borrow_mut().push_back(0xBB);

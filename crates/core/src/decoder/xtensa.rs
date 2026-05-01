@@ -799,6 +799,26 @@ fn decode_qrst(w: u32) -> Instruction {
             match op2 {
                 0x0 => Instruction::Rsr { at: t, sr },
                 0x1 => Instruction::Wsr { at: t, sr },
+                // SEXT / CLAMPS — sign-extend / saturate at op0=0, op1=3,
+                // op2=2/3. The SEXT/CLAMPS instructions also have a
+                // mirror at op0=3, op1=0 in `decode_lsci`; the Xtensa LX7
+                // ISA tolerates both encodings. esp-hal-1.1's compiled
+                // sign-extend sequence (`sext aN, aM, 7`, bytes `00 8M 23`)
+                // uses the QRST encoding, so we must decode it here too —
+                // omitting this slot caused IllegalInstruction faults
+                // mid-handler when running real esp-hal firmware.
+                //
+                // Encoding: r=ar, s=as_, sa = t + 7 (range 7..=22).
+                0x2 => Instruction::Sext {
+                    ar: r,
+                    as_: s,
+                    t: t + 7,
+                },
+                0x3 => Instruction::Clamps {
+                    ar: r,
+                    as_: s,
+                    t: t + 7,
+                },
                 // MIN/MAX/MINU/MAXU live in op1=3, op2=4..=7 — three-operand
                 // RRR encoding, not the SR-access slot. HW-oracle:
                 //   min  a3, a4, a5 → 0x433450: op2=4
