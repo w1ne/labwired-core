@@ -4,10 +4,10 @@
 
 To move from a technical project to a commercial success, LabWired must solve the three biggest blockers facing its target clients (Automotive, IoT, Silicon Vendors).
 
-## 1. The Friction-Killer: "1-Hour Onboarding" (AI Foundry)
-- **The Problem**: Potential clients are intrigued by simulation but won't commit if they have to spend weeks manually modeling their proprietary SoC.
-- **The Task**: Implement the **"SVD-to-Live" Pipeline**. A user uploads their chip's SVD file, and within one hour, they have a functional (though perhaps basic) virtual dev kit running their own firmware in VS Code.
-- **Client Value**: Extreme "Time-to-Value." It turns the "Simulation Tax" into a "Simulation Benefit" before the first sales meeting ends.
+## 1. The Friction-Killer: Catalog Onboarding Speed
+- **The Problem**: Potential clients are interested only if LabWired already supports the boards they care about, or can support them quickly without a consulting engagement.
+- **The Task**: Make internal board onboarding fast, repeatable, and measurable. The operating goal is a near-`"SVD-to-Live"` workflow for the LabWired team, not a public self-serve promise.
+- **Client Value**: Fast support for target boards without asking customers to trust raw AI-generated models.
 
 ## 2. The Trust-Builder: The "Truth Loop" (Automated Verification)
 - **The Problem**: Engineering leads are skeptical. They believe "it only works because the simulator is too perfect." They fear the simulator will hide real bugs.

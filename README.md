@@ -10,7 +10,7 @@ If you are evaluating LabWired as a user, use this order:
 1. Read [DEVELOPMENT.md](./DEVELOPMENT.md) for setup.
 2. Run a local example from [`core/examples/ci/`](./core/examples/ci/).
 3. Use [`docs/specs/compatibility_matrix.md`](./docs/specs/compatibility_matrix.md) to understand support boundaries.
-4. Treat hosted Foundry and AI-assisted generation as secondary or beta workflows.
+4. Treat hosted Foundry and catalog expansion workflows as secondary or beta workflows.
 
 ## CI Dashboard
 
@@ -40,7 +40,7 @@ Today, the most launchable LabWired experience is:
 - machine-readable CI artifacts
 - VS Code-assisted debugging
 
-Hosted Foundry and AI-assisted generation remain important, but they are not yet the primary onboarding path.
+Hosted Foundry and catalog expansion remain important, but they are not yet the primary onboarding path.
 
 ## 🤖 Agent-First Architecture
 LabWired is also built as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its long-term mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.

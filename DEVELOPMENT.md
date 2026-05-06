@@ -14,6 +14,11 @@ labwired/
 
 ## Prerequisites
 
+Host OS support:
+- Linux
+- macOS
+- Windows via WSL2 (recommended: Ubuntu)
+
 ### For Core Emulator
 - **Rust** 1.75+ ([Install](https://rustup.rs/))
 - **ARM Targets**:

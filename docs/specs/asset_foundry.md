@@ -2,7 +2,9 @@
 
 # Asset Foundry: SVD Ingestion & Strict IR
 
-The **Asset Foundry** is LabWired's pipeline for transforming vendor-specific hardware descriptions (SVDs) into a unified, AI-ready format called **Strict IR**.
+The **Asset Foundry** is LabWired's internal pipeline for transforming vendor-specific hardware descriptions (SVDs) into a unified, AI-ready format called **Strict IR**.
+
+This is an operator and contributor capability, not a customer-facing Foundry product surface. It exists to accelerate catalog onboarding, internal model iteration, and agent-assisted validation.
 
 ## Overview
 
@@ -31,7 +33,7 @@ The **Strict IR** removes all this complexity.
 
 ## CLI Usage
 
-The `labwired` CLI is used to perform the ingestion.
+The `labwired` CLI is used by LabWired operators and contributors to perform ingestion.
 
 ### Command
 ```bash
@@ -61,6 +63,6 @@ cargo test -p labwired-cli --test asset_import
 ---
 
 ## See Also
-- [Foundry Pricing Model](./spec/FOUNDRY_PRICING.md)
+- [Foundry Pricing Model](./FOUNDRY_PRICING.md)
 - [Simulation Protocol](../core/docs/simulation_protocol.md)
 - [High-Fidelity Verification Case Study](../core/docs/verification_lessons_adxl345.md)

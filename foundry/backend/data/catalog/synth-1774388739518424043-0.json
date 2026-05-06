@@ -1,0 +1,77 @@
+{
+  "artifact_type": "board_onboarding_draft",
+  "name": "MB1355C / NUCLEO-WB55RG board onboarding proof",
+  "description": "Board onboarding draft for MB1355C / NUCLEO-WB55RG board onboarding proof.",
+  "source": "foundry-synthesis",
+  "generated_at": "2026-03-24T21:45:39Z",
+  "inputs": {
+    "requirements": "Need deterministic board onboarding proof for STM32WB55RG app core, LED mapping, user button mapping, UART debug path, and simple BLE-oriented demo selection using official ST example references. Prefer board-level artifacts that can be turned into chip/system/example manifests."
+  },
+  "summary": "This board_onboarding_draft artifact delivers deterministic onboarding proof for the MB1355C/NUCLEO-WB55RG board, verifying STM32WB55RG app core, LED/user button mappings, UART debug path, and a simple BLE demo via official ST examples. It enables conversion to chip/system/example manifests but does not guarantee full production validation, RF certification, or exhaustive peripheral testing. (62 words)",
+  "board_draft": {
+    "board_id": "mb1355c__nucleo_wb55rg_board_onboarding_proof",
+    "chip_guess": "stm32wb55",
+    "bringup_scope": [
+      "app-core boot",
+      "rcc",
+      "gpio",
+      "uart console",
+      "board LEDs",
+      "user button"
+    ],
+    "deferred_scope": [
+      "wireless coprocessor / CPU2 behavior",
+      "IPCC/HCI transport",
+      "radio timing fidelity"
+    ],
+    "repo_artifacts": [
+      {
+        "path": "core/configs/chips/stm32wb55.yaml",
+        "purpose": "chip descriptor draft"
+      },
+      {
+        "path": "core/configs/systems/mb1355c__nucleo_wb55rg_board_onboarding_proof.yaml",
+        "purpose": "board system manifest draft"
+      },
+      {
+        "path": "core/examples/mb1355c__nucleo_wb55rg_board_onboarding_proof/README.md",
+        "purpose": "board example README"
+      },
+      {
+        "path": "core/examples/mb1355c__nucleo_wb55rg_board_onboarding_proof/system.yaml",
+        "purpose": "reproducible local system manifest"
+      },
+      {
+        "path": "core/examples/mb1355c__nucleo_wb55rg_board_onboarding_proof/VALIDATION.md",
+        "purpose": "validation record template"
+      }
+    ],
+    "recommended_examples": [
+      {
+        "name": "STM32CubeWB BLE_p2pServer",
+        "reason": "Good proof target for NUCLEO-WB55RG board IO plus BLE-facing application flow."
+      },
+      {
+        "name": "STM32CubeWB BLE_LLD_Pressbutton",
+        "reason": "Smaller board-level LED/button proof when radio fidelity is not the first milestone."
+      }
+    ],
+    "source_requirements": [
+      "MCU reference manual",
+      "datasheet with memory map and package details",
+      "board user manual / schematic for LED and button mapping",
+      "official vendor firmware example for proof workload"
+    ],
+    "validation_plan": [
+      "Boot firmware on app core and verify PC/SP initialization.",
+      "Confirm deterministic UART smoke output on the board console path.",
+      "Toggle board LED and exercise user button mapping in the simulator manifest.",
+      "Run unsupported-instruction audit against the selected smoke firmware."
+    ],
+    "open_questions": [
+      "Which UART instance is routed to the on-board ST-LINK virtual COM port?",
+      "Which exact LED GPIO pins and active levels are used on this board revision?",
+      "Is BLE scope limited to example selection and documentation, or is CPU2/radio behavior expected in simulation?"
+    ]
+  }
+}

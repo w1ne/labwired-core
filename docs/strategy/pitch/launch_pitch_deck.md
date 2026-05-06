@@ -3,13 +3,13 @@
 # LabWired Launch Pitch Deck (Draft)
 
 Audience: Co-founder/investor discussion (Lorenz context)
-Stage: Pre-launch, semi-automatic service now -> fully agentic workflow later
+Stage: Pre-launch, service-heavy now -> more automated internal onboarding later
 
 ## Slide 1 - One-liner
 LabWired is a deterministic MCU simulation platform for CI and AI agents.
 
 - Core promise: replace flaky, hardware-constrained firmware validation with reproducible software workflows.
-- Launch thesis: ship now with service-heavy onboarding, then productize into agentic self-serve.
+- Launch thesis: ship now with service-heavy onboarding, then automate internal catalog expansion rather than exposing raw self-serve synthesis too early.
 
 Speaker note:
 We are not pitching a future science project. We are already simulating popular MCUs, running debug flows, and producing deterministic artifacts.
@@ -74,7 +74,7 @@ Phase 1 (0-6 months): semi-automatic onboarding service.
 
 Phase 2 (6-18 months): productize recurring workflows.
 
-- Self-serve board onboarding flows.
+- Faster internal board onboarding flows.
 - Agent-assisted test authoring and triage.
 - Usage-based pricing around simulation/test volume.
 
@@ -83,7 +83,7 @@ Service is not a detour; it is the fastest way to close feedback loops and de-ri
 
 ## Slide 8 - Business Model (Draft)
 - Pilot package: fixed-fee onboarding + first CI test suite.
-- Recurring: per-seat + simulation-minute or per-run bundle.
+- Recurring: verification capacity and support bundle for hosted workflows.
 - Expansion: advanced peripheral packs, enterprise support, compliance evidence exports.
 
 Speaker note:

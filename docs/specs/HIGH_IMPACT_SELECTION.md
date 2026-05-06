@@ -7,8 +7,8 @@ Based on first-principles analysis and competitive research, these are the **Hig
 ## 1. The "Disruptors" (Game Changers)
 
 ### 1.1 AI Asset Foundry: SVD-to-Rust (Iteration 14B)
-- **Impact**: Eliminates the "Engineering Tax" that stops teams from simulating obscure hardware.
-- **Why**: It is the single biggest bottleneck in the industry today. Even if imperfect, it provides a 10x head start.
+- **Impact**: Eliminates the internal onboarding tax that stops LabWired from supporting obscure hardware quickly.
+- **Why**: It is the single biggest catalog-scaling bottleneck. Even if imperfect, it gives the team a 10x head start before human validation.
 
 ### 1.2 The "Truth Loop": HAL-Based Fuzzing (Iteration 14E)
 - **Impact**: Guarantees model fidelity without manual verification.

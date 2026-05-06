@@ -5,7 +5,7 @@ This document describes the current LabWired Foundry workflow from the user pers
 Status:
 - Hosted Foundry is still a beta or secondary workflow.
 - The primary LabWired launch path remains local deterministic simulation and VS Code debugging.
-- Use Foundry when you specifically want hosted verification or catalog access.
+- Use Foundry when you specifically want hosted verification, catalog access, or machine-readable hosted artifacts.
 
 Base URL:
 
@@ -44,7 +44,7 @@ curl -s https://<your-foundry-host>/v1/info
 {
   "engine": "Foundry",
   "version": "v1.x",
-  "capabilities": ["synthesis", "verification", "system-simulation"],
+  "capabilities": ["catalog", "verification", "system-simulation"],
   "status": "online"
 }
 ```
@@ -72,68 +72,29 @@ curl -s -H "Authorization: Bearer <key>" https://<your-foundry-host>/v1/usage
 ```json
 {
   "workspace_id": "labwired-team",
-  "tier": "builder",
+  "tier": "free",
   "runs_used_this_month": 15,
-  "quota": 1000,
-  "runs_remaining": 985
+  "quota": 100,
+  "runs_remaining": 85
 }
 ```
 
 ---
 
-## Flow C: Pricing Estimation
-**Cost: Free**
-
-Check the estimated cost before submitting a synthesis request.
-
-**Request:**
-```bash
-curl -s -X POST -H "Authorization: Bearer <key>" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "component_name": "ADXL345",
-       "requirements": "I2C interface required."
-     }' https://<your-foundry-host>/v1/estimate
-```
-
----
-
-## Flow D: Submit a Synthesis Run
-**Cost: Dynamic**
-
-Request the Foundry to synthesize and verify a digital twin.
-
-**Request:**
-```bash
-curl -s -X POST -H "Authorization: Bearer <key>" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "component_name": "ADXL345",
-       "requirements": "I2C interface required."
-     }' https://<your-foundry-host>/v1/synthesize
-```
-
-**Example Response:**
-```json
-{
-  "run_id": "run-synth-1772623321917987812",
-  "status": "queued",
-  "poll_url": "/v1/runs/run-synth-1772623321917987812"
-}
-```
-
----
-
-## Flow E: Submit a Verification Run
+## Flow C: Submit a Verification Run
 **Cost: 1 Run**
 
-Submit your own model description for hosted verification and artifact generation.
+Run hosted verification against a supported catalog target and receive artifacts.
 
 **Request:**
 ```bash
 curl -s -X POST -H "Authorization: Bearer <key>" \
      -H "Content-Type: application/json" \
-     -d @chip_spec.json https://<your-foundry-host>/v1/models/verify
+     -d '{
+       "peripheral_id": "ADXL345",
+       "limits": { "max_steps": 2000 },
+       "options": { "generate_vcd": true, "proof_level": "solid" }
+     }' https://<your-foundry-host>/v1/models/verify
 ```
 
 **Example Response:**
@@ -147,10 +108,36 @@ curl -s -X POST -H "Authorization: Bearer <key>" \
 
 ---
 
-## Flow F: Poll for Results
+## Flow D: Submit a Board Verification Run
 **Cost: Free**
 
-Retrieve the status and artifacts of a queued verification or synthesis run.
+Run an integrated board simulation against a supported system target.
+
+**Request:**
+```bash
+curl -s -X POST -H "Authorization: Bearer <key>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "system_id": "nucleo-f401re",
+       "firmware_url": "https://example.invalid/firmware.elf"
+     }' https://<your-foundry-host>/v1/systems/verify
+```
+
+**Example Response:**
+```json
+{
+  "run_id": "run-system-1772623321917987812",
+  "status": "queued",
+  "poll_url": "/v1/runs/run-system-1772623321917987812"
+}
+```
+
+---
+
+## Flow E: Poll for Results
+**Cost: Free**
+
+Retrieve the status and artifacts of a queued verification run.
 
 **Request:**
 ```bash
@@ -178,3 +165,4 @@ curl -s -H "Authorization: Bearer <key>" https://<your-foundry-host>/v1/runs/run
 
 - Foundry should not be the only public onboarding path until dashboard auth, API key flow, and hosted submission UX are fully aligned.
 - If you only want to evaluate LabWired today, start with the local CLI and VS Code workflow first.
+- Board onboarding remains curated by the LabWired team rather than exposed as a self-serve synthesis workflow.

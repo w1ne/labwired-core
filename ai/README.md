@@ -1,6 +1,6 @@
 # LabWired AI: Toolset for Agents (AIPi)
 
-This directory provides the **Programmable Toolset** used by agents to generate, verify, and emulate hardware peripherals from unstructured data.
+This directory provides the **Programmable Toolset** used by LabWired operators and agents to generate, verify, and emulate hardware peripherals from unstructured data.
 
 ## Structure
 
@@ -23,6 +23,8 @@ python -m labwired_ai auto-ingest \
 
 Chains: PDF ingestion → register extraction → behavioral synthesis → IR conversion → verification. On failure, collects errors, re-prompts the LLM, and retries (up to 3x). Confidence scoring auto-approves when pass rate >= threshold.
 
+This pipeline should be treated as an internal catalog-onboarding tool, not a public self-serve product promise.
+
 ### Telemetry Export
 
 When `LABWIRED_FOUNDRY_URL` and `LABWIRED_API_KEY` environment variables are set, usage telemetry (simulation minutes, operation types) is automatically exported to the Foundry backend.
@@ -33,5 +35,7 @@ LabWired solves the **Peripheral Modeling Bottleneck** by providing a high-fidel
 1.  **Extract**: Turn PDF datasheets into grounded Register Maps.
 2.  **Synthesize**: Generate Rust drivers and simulation behaviors.
 3.  **Verify**: Prove driver/firmware correctness in a bit-accurate ARM-native environment.
+
+Public Foundry positioning is narrower: customers consume curated catalog assets and hosted verification, while this AI toolchain remains the internal engine for expanding that catalog.
 
 See [AGENT_INTERFACE.md](file:///home/andrii/Projects/labwired/docs/AGENT_INTERFACE.md) for external agent integration patterns.

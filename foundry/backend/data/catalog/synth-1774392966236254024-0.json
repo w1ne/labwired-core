@@ -1,0 +1,167 @@
+{
+  "artifact_type": "board_onboarding_draft",
+  "name": "MB1355C / NUCLEO-WB55RG board onboarding proof",
+  "description": "Board onboarding draft for MB1355C / NUCLEO-WB55RG board onboarding proof.",
+  "source": "foundry-synthesis",
+  "generated_at": "2026-03-24T22:56:06Z",
+  "inputs": {
+    "requirements": "Need deterministic board onboarding proof for STM32WB55RG app core, LED mapping, user button mapping, UART debug path, and simple BLE-oriented demo selection using official ST example references. Prefer board-level artifacts that can be turned into chip/system/example manifests."
+  },
+  "summary": "This board_onboarding_draft provides deterministic proof for MB1355C/NUCLEO-WB55RG onboarding on STM32WB55RG app core, verifying LED/user button mappings, UART debug path, and simple BLE demo via official ST examples; it enables conversion to chip/system/example manifests. It intentionally does not guarantee full hardware certification, production readiness, or exhaustive peripheral validation. (62 words)",
+  "source_docs": [
+    {
+      "kind": "board_user_manual",
+      "title": "UM2819 STM32WB Nucleo-64 board (MB1355)",
+      "url": "https://www.st.com/resource/en/user_manual/um2819-stm32wb-nucleo64-board-mb1355-stmicroelectronics.pdf",
+      "required": true,
+      "origin": "autodiscovered"
+    },
+    {
+      "kind": "board_schematic",
+      "title": "MB1355-WB55RG board schematic",
+      "url": "https://www.st.com/resource/en/schematic_pack/mb1355-wb55rg-d01_schematic.pdf",
+      "required": true,
+      "origin": "autodiscovered"
+    },
+    {
+      "kind": "mcu_datasheet",
+      "title": "STM32WB55RG datasheet",
+      "url": "https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf",
+      "required": true,
+      "origin": "autodiscovered"
+    },
+    {
+      "kind": "reference_manual",
+      "title": "RM0434 STM32WB series reference manual",
+      "url": "https://www.st.com/resource/en/reference_manual/rm0434-stm32wb55xx-stm32wb35xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf",
+      "required": true,
+      "origin": "autodiscovered"
+    },
+    {
+      "kind": "vendor_examples",
+      "title": "STM32CubeWB firmware package",
+      "url": "https://github.com/STMicroelectronics/STM32CubeWB",
+      "required": true,
+      "origin": "autodiscovered"
+    },
+    {
+      "kind": "vendor_example",
+      "title": "STM32CubeWB BLE_p2pServer",
+      "url": "https://github.com/STMicroelectronics/STM32CubeWB/tree/master/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_p2pServer",
+      "required": true,
+      "origin": "autodiscovered"
+    },
+    {
+      "kind": "vendor_example",
+      "title": "STM32CubeWB BLE_LLD_Pressbutton",
+      "url": "https://github.com/STMicroelectronics/STM32CubeWB/tree/master/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_LLD_Pressbutton",
+      "required": false,
+      "origin": "autodiscovered"
+    }
+  ],
+  "repo_bundle": {
+    "files": [
+      {
+        "path": "core/configs/chips/stm32wb55.yaml",
+        "description": "Chip descriptor starter with required placeholder peripherals.",
+        "content": "name: \"STM32WB55\"\nflash:\n  base: 0x08000000\n  size: \"512KB\"\nram:\n  base: 0x20000000\n  size: \"256KB\"\n\nperipherals:\n  - id: \"rcc\"\n    type: \"rcc\"\n    base_address: 0x58000000\n  - id: \"gpioa\"\n    type: \"gpio\"\n    base_address: 0x48000000\n  - id: \"gpiob\"\n    type: \"gpio\"\n    base_address: 0x48000400\n  - id: \"gpioc\"\n    type: \"gpio\"\n    base_address: 0x48000800\n  - id: \"gpiod\"\n    type: \"gpio\"\n    base_address: 0x48000C00\n  - id: \"usart1\"\n    type: \"uart\"\n    base_address: 0x40013800\n    irq: 37\n"
+      },
+      {
+        "path": "core/configs/systems/mb1355c.yaml",
+        "description": "Board system manifest starter wired to console and board IO placeholders.",
+        "content": "name: \"mb1355c\"\nchip: \"../chips/stm32wb55.yaml\"\n\nconnectors:\n  - type: \"uart\"\n    peripheral: \"usart1\"\n    endpoint: \"host_console\"\n    tx: \"GPIOB6\"\n    rx: \"GPIOB7\"\n\nboard:\n  leds:\n    - id: \"led_blue\"\n      gpio: \"GPIOB5\"\n      active: \"high\"\n    - id: \"led_green\"\n      gpio: \"GPIOB0\"\n      active: \"high\"\n    - id: \"led_red\"\n      gpio: \"GPIOB1\"\n      active: \"high\"\n\n  buttons:\n    - id: \"button_sw1\"\n      gpio: \"GPIOC4\"\n      active: \"low\"\n    - id: \"button_sw2\"\n      gpio: \"GPIOD0\"\n      active: \"low\"\n    - id: \"button_sw3\"\n      gpio: \"GPIOD1\"\n      active: \"low\"\n\n"
+      },
+      {
+        "path": "core/examples/mb1355c/README.md",
+        "description": "Board example README starter.",
+        "content": "# mb1355c\n\nThis example was synthesized by Foundry as a board onboarding starter.\n\n## Scope\n\n- App-core boot path\n- RCC/GPIO/UART baseline\n- Board LED and user button mapping\n- BLE example selection reference only\n\n## Recommended ST Example\n\n- STM32CubeWB BLE_p2pServer\n- STM32CubeWB BLE_LLD_Pressbutton\n\n## Required Source Confirmation\n\n- Confirm MCU part number and package\n- Confirm VCP UART instance on ST-LINK\n- Confirm LED and button GPIO mappings from schematic\n- Confirm whether BLE scope is documentation-only or full simulator behavior\n\n## Auto-Resolved Source Docs\n\n- `board_user_manual` required: https://www.st.com/resource/en/user_manual/um2819-stm32wb-nucleo64-board-mb1355-stmicroelectronics.pdf\n- `board_schematic` required: https://www.st.com/resource/en/schematic_pack/mb1355-wb55rg-d01_schematic.pdf\n- `mcu_datasheet` required: https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf\n- `reference_manual` required: https://www.st.com/resource/en/reference_manual/rm0434-stm32wb55xx-stm32wb35xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf\n- `vendor_examples` required: https://github.com/STMicroelectronics/STM32CubeWB\n- `vendor_example` required: https://github.com/STMicroelectronics/STM32CubeWB/tree/master/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_p2pServer\n- `vendor_example` recommended: https://github.com/STMicroelectronics/STM32CubeWB/tree/master/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_LLD_Pressbutton\n"
+      },
+      {
+        "path": "core/examples/mb1355c/system.yaml",
+        "description": "Local reproducible system manifest copy.",
+        "content": "name: \"mb1355c\"\nchip: ../../configs/chips/stm32wb55.yaml\n\nconnectors:\n  - type: \"uart\"\n    peripheral: \"usart1\"\n    endpoint: \"host_console\"\n"
+      },
+      {
+        "path": "core/examples/mb1355c/REQUIRED_DOCS.md",
+        "description": "Source checklist for onboarding evidence.",
+        "content": "# Required Docs\n\n- `board_user_manual` required: https://www.st.com/resource/en/user_manual/um2819-stm32wb-nucleo64-board-mb1355-stmicroelectronics.pdf\n- `board_schematic` required: https://www.st.com/resource/en/schematic_pack/mb1355-wb55rg-d01_schematic.pdf\n- `mcu_datasheet` required: https://www.st.com/resource/en/datasheet/stm32wb55rg.pdf\n- `reference_manual` required: https://www.st.com/resource/en/reference_manual/rm0434-stm32wb55xx-stm32wb35xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf\n- `vendor_examples` required: https://github.com/STMicroelectronics/STM32CubeWB\n- `vendor_example` required: https://github.com/STMicroelectronics/STM32CubeWB/tree/master/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_p2pServer\n- `vendor_example` recommended: https://github.com/STMicroelectronics/STM32CubeWB/tree/master/Projects/P-NUCLEO-WB55.Nucleo/Applications/BLE/BLE_LLD_Pressbutton\n"
+      },
+      {
+        "path": "core/examples/mb1355c/EXTERNAL_COMPONENTS.md",
+        "description": "External component and deferred-scope notes.",
+        "content": "# External Components\n\n- ST-LINK virtual COM port connection\n- On-board user LEDs\n- On-board user button\n- BLE/radio subsystem is deferred unless engine support is explicitly added\n"
+      },
+      {
+        "path": "core/examples/mb1355c/VALIDATION.md",
+        "description": "Validation command template.",
+        "content": "# Validation\n\nRun from `core/` after replacing placeholders:\n\n```bash\ncargo run -q -p labwired-cli -- \\\n  --firmware path/to/firmware.elf \\\n  --system examples/mb1355c/system.yaml \\\n  --max-steps 64\n./scripts/unsupported_instruction_audit.sh \\\n  --firmware path/to/firmware.elf \\\n  --system configs/systems/mb1355c.yaml \\\n  --max-steps 200000 \\\n  --out-dir out/unsupported-audit/mb1355c\n```\n\nExpected evidence:\n\n- PC/SP initialize correctly\n- UART smoke output is deterministic\n- LED/button paths are mapped and exercised\n"
+      }
+    ]
+  },
+  "board_draft": {
+    "board_id": "mb1355c",
+    "chip_guess": "stm32wb55",
+    "bringup_scope": [
+      "app-core boot",
+      "rcc",
+      "gpio",
+      "uart console",
+      "board LEDs",
+      "user button"
+    ],
+    "deferred_scope": [
+      "wireless coprocessor / CPU2 behavior",
+      "IPCC/HCI transport",
+      "radio timing fidelity"
+    ],
+    "repo_artifacts": [
+      {
+        "path": "core/configs/chips/stm32wb55.yaml",
+        "purpose": "chip descriptor draft"
+      },
+      {
+        "path": "core/configs/systems/mb1355c.yaml",
+        "purpose": "board system manifest draft"
+      },
+      {
+        "path": "core/examples/mb1355c/README.md",
+        "purpose": "board example README"
+      },
+      {
+        "path": "core/examples/mb1355c/system.yaml",
+        "purpose": "reproducible local system manifest"
+      },
+      {
+        "path": "core/examples/mb1355c/VALIDATION.md",
+        "purpose": "validation record template"
+      }
+    ],
+    "recommended_examples": [
+      {
+        "name": "STM32CubeWB BLE_p2pServer",
+        "reason": "Good proof target for NUCLEO-WB55RG board IO plus BLE-facing application flow."
+      },
+      {
+        "name": "STM32CubeWB BLE_LLD_Pressbutton",
+        "reason": "Smaller board-level LED/button proof when radio fidelity is not the first milestone."
+      }
+    ],
+    "source_requirements": [
+      "MCU reference manual",
+      "datasheet with memory map and package details",
+      "board user manual / schematic for LED and button mapping",
+      "official vendor firmware example for proof workload"
+    ],
+    "validation_plan": [
+      "Boot firmware on app core and verify PC/SP initialization.",
+      "Confirm deterministic UART smoke output on the board console path.",
+      "Toggle board LED and exercise user button mapping in the simulator manifest.",
+      "Run unsupported-instruction audit against the selected smoke firmware."
+    ],
+    "open_questions": [
+      "Which UART instance is routed to the on-board ST-LINK virtual COM port?",
+      "Which exact LED GPIO pins and active levels are used on this board revision?",
+      "Is BLE scope limited to example selection and documentation, or is CPU2/radio behavior expected in simulation?"
+    ]
+  }
+}

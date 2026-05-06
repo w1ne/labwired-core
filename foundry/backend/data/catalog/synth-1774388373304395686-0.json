@@ -1,0 +1,7 @@
+{
+  "datasheet_url": "",
+  "generated_at": "2026-03-24T21:39:33Z",
+  "name": "MB1355C / NUCLEO-WB55RG board onboarding proof",
+  "requirements": "Need deterministic board onboarding proof for STM32WB55RG app core, LED mapping, user button mapping, UART debug path, and simple BLE-oriented demo selection using official ST example references. Prefer board-level artifacts that can be turned into chip/system/example manifests.",
+  "source": "foundry-synthesis"
+}

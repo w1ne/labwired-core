@@ -8,8 +8,8 @@ This document defines the technical, market, and operational conditions required
 
 ### 1.1 The "Time-to-Model" Breakthrough
 Success is predicated on breaking the "Peripheral Modeling Bottleneck."
-- **Required Condition**: New peripheral models must be generated from datasheets in **hours, not weeks**, using AI-driven synthesis (FlexEmu).
-- **Target**: Maintain an accuracy rate of >95% for AI-generated register state machines.
+- **Required Condition**: New peripheral and board models must be onboarded internally from datasheets in **hours, not weeks**, using AI-assisted synthesis plus human validation.
+- **Target**: Maintain an accuracy rate of >95% for AI-generated register state machines before they are promoted into the curated catalog.
 
 ### 1.2 Absolute Determinism
 Simulation must be a reliable "Ground Truth" for developers.
@@ -49,4 +49,4 @@ The platform must pivot from a "debug tool" to a "strategic risk mitigation tool
 - **Required Condition**: Capability to verify firmware portability across different MCUs in **<24 hours**, enabling rapid "second-sourcing" during chip shortages.
 
 ## 4. Summary: The Success Triage
-For this product to win, **Technical Fidelity** must establish trust, **Regulatory Compliance** must unlock enterprise budget, and **AI-Driven Velocity** must defeat incumbent inertia.
+For this product to win, **Technical Fidelity** must establish trust, **Regulatory Compliance** must unlock enterprise budget, and **AI-Driven Internal Velocity** must defeat incumbent inertia.

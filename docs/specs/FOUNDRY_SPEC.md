@@ -10,12 +10,12 @@
 
 ## 1. Product Vision
 
-LabWired Foundry is an **Agent-Native simulation API** — the first hosted service that transforms peripheral descriptions into formally verified hardware digital twins. The primary consumer is an AI coding agent, not a human clicking buttons.
+LabWired Foundry is an **Agent-Native verification API** for running firmware against a curated catalog of pre-verified board and chip assets. The primary consumer is an AI coding agent, CI system, or platform integration, not a human clicking buttons.
 
-> "Generate once on the Foundry. Run forever on your local CI. Zero cost for deterministic local runs."
+> "Verify on the Foundry. Run locally when you want. Use the same deterministic assets in both places."
 
-### The "Pay-for-Verification" Model
-Users pay for the expensive, high-fidelity **synthesis and formal proof** process on the Foundry. Once the asset is "Solid Proven," the resulting Strict IR is portable. Users can download the model and integrate it into their local dev environments or internal CI clusters using the open-source LabWired toolchain.
+### The Managed Verification Model
+Users pay for trusted hosted verification capacity, artifact retention, queue guarantees, and catalog-backed execution. Supported assets remain portable: users can download Strict IR and integrate it into local development environments or internal CI clusters using the open-source LabWired toolchain.
 
 ---
 
@@ -41,7 +41,7 @@ graph TD
 | :--- | :--- | :--- |
 | API Server | Go (`net/http`) | High-concurrency VaaS |
 | Job Queue | Go Channels | In-memory job buffering |
-| Database | SQLite | Stores API Keys & Run quotas |
+| Database | SQLite | Stores API keys, workspaces, and run quotas |
 | Artifact Storage | Local filesystem | Ephemeral VCD trace storage |
 | Simulation | LabWired Orchestrator | Native Rust execution |
 | Reverse Proxy | Caddy (auto TLS) | |
@@ -58,7 +58,7 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 ```
 
 - **Authentication**: API keys are generated via an admin CLI (`cmd/addkey`) and stored as bcrypt hashes in SQLite. The Go backend enforces auth middleware on all Agent API routes.
-- **Quota Management**: A dedicated `quotaMiddleware` intercepts expensive compute tasks. It queries the `simulation_runs` table in SQLite to ensure the authenticated workspace has not exceeded its monthly run limit (e.g., Builder Tier: 1000 runs/month). High-usage agents are HTTP 429 rate-limited if they exceed quotas.
+- **Quota Management**: A dedicated `quotaMiddleware` intercepts compute tasks. It queries the `simulation_runs` table in SQLite to ensure the authenticated workspace has not exceeded its monthly run limit for the active package. High-usage agents are HTTP 429 rate-limited if they exceed quotas.
 - **Revocation**: Keys can be rotated or soft-deleted via the database, instantly blocking further access.
 
 ---
@@ -67,12 +67,10 @@ Authorization: Bearer lw_sk_live_xxxxxxxxxxxxxxxx
 
 | Method | Path | Auth | Description |
 | :--- | :--- | :---: | :--- |
-| `GET` | `/v1/catalog` | Optional | List all public pre-verified peripherals |
+| `GET` | `/v1/catalog` | Optional | List all public pre-verified assets |
 | `GET` | `/v1/catalog/{id}` | Optional | Detail view: register map, proof status, artifact URLs |
-| `POST` | `/v1/models/verify` | Required | Enqueue a verification run for standard component |
+| `POST` | `/v1/models/verify` | Required | Enqueue a verification run for a supported catalog component |
 | `POST` | `/v1/systems/verify` | Required | Enqueue an integrated board simulation |
-| `POST` | `/v1/estimate` | Required | Quote the dynamic run cost of a synthesis request |
-| `POST` | `/v1/synthesize` | Required | Autonomous synthesis model generation |
 | `GET` | `/v1/usage` | Required | Current-period run count, quota, and tier |
 
 ---
@@ -99,7 +97,7 @@ Simulations are long-running (up to 30s). The API uses an **Asynchronous Polling
 | :---: | :--- | :--- | :--- |
 | `401` | `unauthorized` | Missing/Invalid API key. | Check key in dashboard. |
 | `429` | `quota_exceeded` | Monthly run limit reached. | Upgrade tier or wait for reset. |
-| `422` | `invalid_schema` | YAML/JSON failed schema validation. | Check input against [Strict IR Spec](../asset_foundry.md). |
+| `422` | `invalid_target` | Unsupported asset or malformed request. | Check the catalog and request payload. |
 | `429` | `rate_limited` | Too many requests per second (concurrency). | Implement exponential backoff. |
 | `503` | `queue_full` | System at capacity on the VPS. | Retry after 5-10 seconds. |
 | `500` | `internal_error` | Unexpected backend or sandbox crash. | Report to LabWired support. |
@@ -127,7 +125,7 @@ Current implementation executes verification as a host subprocess (`labwired tes
 | `id` | UUID | Primary key |
 | `workspace_id` | UUID | FK to workspace |
 | `key_hash` | TEXT | bcrypt hash of `lw_sk_live_...` |
-| `tier` | ENUM | `builder`, `team`, `enterprise` |
+| `tier` | ENUM | `free`, `pro`, `enterprise` |
 | `monthly_quota` | INT | Max runs per billing period |
 | `revoked` | BOOL | Soft-delete for rotation |
 
@@ -136,7 +134,7 @@ Current implementation executes verification as a host subprocess (`labwired tes
 | :--- | :--- | :--- |
 | `run_id` | UUID | Primary key, exposed to clients |
 | `workspace_id` | UUID | Owner |
-| `peripheral_id` | TEXT | Catalog ID or `custom` |
+| `peripheral_id` | TEXT | Catalog or private asset ID |
 | `status` | ENUM | `queued`, `running`, `pass`, `fail`, `error` |
 | `artifacts_path` | TEXT | `/srv/artifacts/{run_id}/` |
 | `assertions_passed` | INT | |
@@ -151,7 +149,7 @@ Current implementation executes verification as a host subprocess (`labwired tes
 | :--- | :--- | :--- |
 | **Simulation Artifacts** | 14 Days | VCD/JSON files deleted from VPS disk after expiry. |
 | **Usage Logs** | 90 Days | High-level metadata (run_id, timestamp) for billing. |
-| **SaaS Analytics** | Indefinite | Anonymized usage trends (runs-per-month). |
+| **SaaS Analytics** | Indefinite | Anonymized usage trends (verification runs per month). |
 | **API Keys** | Until Revoked | Stored as salted bcrypt hashes. |
 
 > **GDPR Compliance**: The Hetzner VPS is hosted in Frankfurt (EU). No personally identifiable information (PII) is included in simulation artifacts.
@@ -192,7 +190,7 @@ Pre-verified peripherals in the public catalog are added by the LabWired team:
 5.  The asset is immediately visible at `GET /v1/catalog/{id}`
 
 > The catalog is **curated and internally maintained** for quality. Users cannot push to the public catalog.
-> Enterprise users get a **private catalog** for their own synthesized assets.
+> Enterprise users can receive a **private catalog** backed by LabWired-managed onboarding and validation.
 
 ---
 
@@ -203,7 +201,7 @@ This is the highest-priority UX moment. A developer (or their agent) must be pro
 ### Step 1 — Signup (10s)
 - Email + password only (GitHub OAuth in v1.1)
 - API key shown immediately on screen, ready to copy
-- Credit card required (Stripe integration) to access Builder Tier
+- No credit card required for the Free tier during early rollout
 
 ### Step 2 — First API Call (30s)
 Landing page shows a single ready-to-run `curl` command, pre-populated with the user's key:
@@ -212,13 +210,13 @@ Landing page shows a single ready-to-run `curl` command, pre-populated with the 
 curl -X POST https://foundry.labwired.dev/v1/models/verify \
   -H "Authorization: Bearer lw_sk_live_YOUR_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"chip_yaml": "..."}'
+  -d '{"peripheral_id": "ADXL345", "limits": {"max_steps": 2000}}'
 ```
 
 ### Step 3 — Use the Result (20s)
 - Copy `artifacts.ir_url` from the JSON response
 - Download the `.json` and drop it into your LabWired project under `assets/`
-- Done — CI now runs formal simulation with a formally-proven peripheral model
+- Done — CI now runs formal simulation with the same verified asset used in Foundry
 
 ---
 
@@ -246,8 +244,8 @@ curl -X POST https://foundry.labwired.dev/v1/models/verify \
 
 #### `/` — Landing + Catalog *(unauthenticated)*
 - **Hero** (above fold):
-  - Headline: *"Formally proven hardware simulation. One API call."*
-  - Sub-text: Target embedded teams and AI agents
+  - Headline: *"Deterministic firmware verification. One API call."*
+  - Sub-text: For AI agents, CI systems, and embedded platform teams
   - Live `curl` snippet (dark code block, copy button)
   - CTA: "Get your free API key →"
 - **Catalog grid** (below fold):
@@ -261,10 +259,10 @@ curl -X POST https://foundry.labwired.dev/v1/models/verify \
 - **"Run New Simulation"** button (redirects to signup if unauthenticated)
 
 #### `/dashboard` — Developer Portal *(auth required)*
-- **Quota bar**: e.g., `12 / 1000 runs used this month (Builder tier)`
+- **Quota bar**: e.g., `12 / 100 runs used this month (Free tier)`
 - **Recent runs table**: run_id, chip, timestamp, status (with PASS/FAIL badge), artifact link
 - **API Key section**: masked key display, "Copy", "Rotate" button
-- **Upgrade CTA** for Team/Enterprise users
+- **Upgrade CTA** for Pro/Enterprise users
 
 ---
 
@@ -272,17 +270,17 @@ curl -X POST https://foundry.labwired.dev/v1/models/verify \
 
 ### Backend
 -   [x] Go API server with API Key Authentication & quota middleware.
--   [x] `/estimate`, `/synthesize`, `/v1/catalog`, `/v1/usage` endpoints.
+-   [x] `/v1/catalog`, `/v1/usage`, and verification endpoints.
 -   [/] **Async Job Queue**: `handleVerifyModel` / `handleVerifySystem` → `202 Accepted` + enqueue; `GET /v1/runs/{run_id}` polling endpoint.
 -   [/] **Per-workspace quota**: `monthly_quota` column in `api_keys`; middleware reads DB instead of hardcoded value.
--   [x] **Stripe credit top-up**: `POST /v1/webhooks/stripe` signature verification + idempotent credit application (event dedup).
+-   [x] **Billing webhook integration**: `POST /v1/webhooks/stripe` signature verification + idempotent subscription event handling.
 -   [x] **Artifact serving**: authenticated run-scoped endpoint `/v1/runs/{run_id}/artifacts/{file}`.
 -   [x] **Artifact retention cleanup**: periodic TTL sweep removes expired run artifacts and clears DB pointers.
 
 ### Frontend
 -   [/] **Public landing page** (`/`): hero with live `curl` snippet + CTA; catalog grid from `/v1/catalog`.
 -   [ ] **Asset detail page** (`/assets/:id`): proof badge, register map table, download buttons.
--   [/] **Developer dashboard** (`/dashboard`): quota bar, recent runs table, API key copy/rotate, "Buy More Runs" → Stripe link.
+-   [/] **Developer dashboard** (`/dashboard`): quota bar, recent runs table, API key copy/rotate, upgrade path for paid plans.
 
 ### Infrastructure
 -   [ ] Docker-wrapped verification sandbox (network=none, 512 MB, read-only rootfs).

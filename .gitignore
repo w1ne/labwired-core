@@ -5,6 +5,8 @@ Cargo.lock
 .vscode
 .DS_Store
 node_modules
+*.tsbuildinfo
+.superpowers/
 /out_check*
 *.vsix
 *.disasm

@@ -40,6 +40,8 @@ labwired --firmware <ELF> [--system <YAML>] [--vcd <PATH>] [--json]
 - `--json`: Output structured performance/error data instead of logs.
 
 ### Asset Foundry Commands
+
+These commands are primarily intended for internal onboarding, agent experimentation, and contributor workflows. They should not be treated as a public Foundry product contract.
 ```bash
 labwired asset init -o <DIR> [--chip <CHIP>]
 labwired asset import-svd -i <SVD> -o <JSON>

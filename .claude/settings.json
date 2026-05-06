@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh run:*)",
+      "Bash(find /home/andrii/Projects/labwired -name \"*.md\" -type f -exec grep -l \"esp32\\\\|ESP32\\\\|board\\\\|chip\\\\|target\" {})",
+      "Bash(cargo check:*)",
+      "Bash(cargo fix:*)",
+      "Bash(grep -r xtensa /home/andrii/.cargo/registry/src/*/gdbstub_arch-*/src/)",
+      "Bash(ls /home/andrii/.cargo/registry/src/*/gdbstub_arch-*/src/)",
+      "Bash(cargo test:*)",
+      "Bash(readelf -S /home/andrii/Projects/labwired/core/tests/fixtures/stm32f103-blinky.elf)",
+      "Bash(git log:*)"
+    ]
+  }
+}
