@@ -7,6 +7,7 @@ Cargo.lock
 node_modules
 *.tsbuildinfo
 .superpowers/
+.worktrees/
 /out_check*
 *.vsix
 *.disasm
