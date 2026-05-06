@@ -5,6 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::SimResult;
+use std::cell::{Cell, RefCell};
 
 pub trait I2cDevice: Send {
     fn address(&self) -> u8;
@@ -32,11 +33,13 @@ pub struct I2c {
     cycles_remaining: u32,
 
     #[serde(skip)]
-    pub attached_devices: Vec<Box<dyn I2cDevice>>,
+    pub attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
     current_target: Option<usize>,
     #[serde(skip)]
     is_reading: bool,
+    #[serde(skip)]
+    read_dr_consumed: Cell<bool>,
 }
 
 impl core::fmt::Debug for I2c {
@@ -62,6 +65,7 @@ impl Default for I2c {
             attached_devices: Vec::new(),
             current_target: None,
             is_reading: false,
+            read_dr_consumed: Cell::new(true),
         }
     }
 }
@@ -82,7 +86,7 @@ impl I2c {
     }
 
     pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
-        self.attached_devices.push(device);
+        self.attached_devices.push(RefCell::new(device));
     }
 
     fn read_reg(&self, offset: u64) -> u16 {
@@ -131,7 +135,7 @@ impl I2c {
                         self.current_target = self
                             .attached_devices
                             .iter()
-                            .position(|d| d.address() == addr);
+                            .position(|d| d.borrow().address() == addr);
                     } else {
                         // This is data
                         self.state = I2cState::DataPending;
@@ -142,7 +146,7 @@ impl I2c {
                         // Pass written data to device immediately
                         if !self.is_reading {
                             if let Some(idx) = self.current_target {
-                                self.attached_devices[idx].write(self.dr as u8);
+                                self.attached_devices[idx].borrow_mut().write(self.dr as u8);
                             }
                         }
                     }
@@ -161,6 +165,16 @@ impl crate::Peripheral for I2c {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
+        if reg_offset == 0x10 && byte_offset == 0 && self.is_reading && (self.sr1 & 0x0040) != 0 {
+            if !self.read_dr_consumed.replace(true) {
+                return Ok((self.dr & 0xFF) as u8);
+            }
+
+            if let Some(idx) = self.current_target {
+                return Ok(self.attached_devices[idx].borrow_mut().read());
+            }
+        }
+
         let reg_val = self.read_reg(reg_offset);
         if byte_offset < 2 {
             Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
@@ -195,7 +209,7 @@ impl crate::Peripheral for I2c {
                         self.sr1 |= 0x0001; // Set SB
                         self.state = I2cState::Idle;
                         if let Some(idx) = self.current_target {
-                            self.attached_devices[idx].start();
+                            self.attached_devices[idx].borrow_mut().start();
                         }
                     }
                     I2cState::AddressPending => {
@@ -216,7 +230,8 @@ impl crate::Peripheral for I2c {
                         if self.is_reading {
                             self.sr1 |= 0x0040; // Set RXNE
                             if let Some(idx) = self.current_target {
-                                self.dr = self.attached_devices[idx].read() as u16;
+                                self.dr = self.attached_devices[idx].borrow_mut().read() as u16;
+                                self.read_dr_consumed.set(false);
                             }
                             self.state = I2cState::Idle;
                         } else {
@@ -228,9 +243,10 @@ impl crate::Peripheral for I2c {
                     I2cState::StopPending => {
                         self.sr1 = 0; // Clear SR1
                         self.sr2 = 0; // Clear SR2
+                        self.read_dr_consumed.set(true);
                         self.state = I2cState::Idle;
                         if let Some(idx) = self.current_target {
-                            self.attached_devices[idx].stop();
+                            self.attached_devices[idx].borrow_mut().stop();
                         }
                     }
                     I2cState::Idle => {}
@@ -268,8 +284,35 @@ impl crate::Peripheral for I2c {
 
 #[cfg(test)]
 mod tests {
-    use super::I2c;
+    use super::{I2c, I2cDevice};
     use crate::Peripheral;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    struct CountingDevice {
+        address: u8,
+        reads: Arc<AtomicUsize>,
+    }
+
+    impl CountingDevice {
+        fn new(address: u8, reads: Arc<AtomicUsize>) -> Self {
+            Self { address, reads }
+        }
+    }
+
+    impl I2cDevice for CountingDevice {
+        fn address(&self) -> u8 {
+            self.address
+        }
+
+        fn read(&mut self) -> u8 {
+            self.reads.fetch_add(1, Ordering::SeqCst) as u8
+        }
+
+        fn write(&mut self, _data: u8) {}
+    }
 
     #[test]
     fn test_i2c_reset_values() {
@@ -332,5 +375,97 @@ mod tests {
         }
         assert_eq!(i2c.sr1, 0);
         assert_eq!(i2c.sr2, 0);
+    }
+
+    #[test]
+    fn test_adxl345_devid_and_axis_read() {
+        use crate::peripherals::components::Adxl345;
+
+        let mut i2c = I2c::new();
+        let mut sensor = Adxl345::new(0x53);
+        sensor.set_sample(256, -128, 64);
+        i2c.attach(Box::new(sensor));
+
+        i2c.write(0x00, 0x01).unwrap();
+        i2c.write(0x01, 0x01).unwrap();
+        for _ in 0..10 {
+            i2c.tick();
+        }
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0);
+
+        i2c.write(0x10, 0xA6).unwrap();
+        for _ in 0..20 {
+            i2c.tick();
+        }
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x02, 0);
+
+        i2c.write(0x10, 0x00).unwrap();
+        for _ in 0..20 {
+            i2c.tick();
+        }
+
+        i2c.write(0x01, 0x01).unwrap();
+        for _ in 0..10 {
+            i2c.tick();
+        }
+        i2c.write(0x10, 0xA7).unwrap();
+        for _ in 0..40 {
+            i2c.tick();
+        }
+        assert_eq!(i2c.read(0x10).unwrap(), 0xE5);
+
+        i2c.write(0x01, 0x02).unwrap();
+        for _ in 0..10 {
+            i2c.tick();
+        }
+
+        i2c.write(0x01, 0x01).unwrap();
+        for _ in 0..10 {
+            i2c.tick();
+        }
+        i2c.write(0x10, 0xA6).unwrap();
+        for _ in 0..20 {
+            i2c.tick();
+        }
+        i2c.write(0x10, 0x32).unwrap();
+        for _ in 0..20 {
+            i2c.tick();
+        }
+        i2c.write(0x01, 0x01).unwrap();
+        for _ in 0..10 {
+            i2c.tick();
+        }
+        i2c.write(0x10, 0xA7).unwrap();
+        for _ in 0..40 {
+            i2c.tick();
+        }
+
+        assert_eq!(i2c.read(0x10).unwrap(), 0x00);
+        assert_eq!(i2c.read(0x10).unwrap(), 0x01);
+        assert_eq!(i2c.read(0x10).unwrap(), 0x80);
+        assert_eq!(i2c.read(0x10).unwrap(), 0xFF);
+        assert_eq!(i2c.read(0x10).unwrap(), 0x40);
+        assert_eq!(i2c.read(0x10).unwrap(), 0x00);
+    }
+
+    #[test]
+    fn test_i2c_single_byte_read_advances_device_once() {
+        let reads = Arc::new(AtomicUsize::new(0));
+        let mut i2c = I2c::new();
+        i2c.attach(Box::new(CountingDevice::new(0x42, reads.clone())));
+
+        i2c.write(0x01, 0x01).unwrap();
+        for _ in 0..10 {
+            i2c.tick();
+        }
+
+        i2c.write(0x10, 0x85).unwrap();
+        for _ in 0..40 {
+            i2c.tick();
+        }
+
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x40, 0);
+        assert_eq!(i2c.read(0x10).unwrap(), 0);
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
     }
 }
