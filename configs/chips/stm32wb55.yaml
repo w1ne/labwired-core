@@ -1,0 +1,49 @@
+schema_version: "1.0"
+name: "STM32WB55"
+arch: "arm"
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58000000
+    config:
+      profile: "stm32v2"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x48000800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x48000C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    irq: 37
+    config:
+      profile: "stm32v2"

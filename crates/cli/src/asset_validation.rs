@@ -93,6 +93,10 @@ impl ValidationResult {
         self.issues.push(issue);
     }
 
+    fn record_check(&mut self) {
+        self.statistics.total_checks += 1;
+    }
+
     fn add_error(
         &mut self,
         code: impl Into<String>,
@@ -154,6 +158,21 @@ fn validate_system(path: &PathBuf) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    result.record_check();
+
+    if system.schema_version != "1.0" {
+        result.add_error(
+            "SYSTEM_SCHEMA_VERSION_UNSUPPORTED",
+            format!(
+                "Unsupported system schema version '{}'. Supported: '1.0'",
+                system.schema_version
+            ),
+            Some("Update schema_version field to '1.0' or migrate configuration".to_string()),
+            Some("schema_version".to_string()),
+        );
+    } else {
+        result.record_check();
+    }
 
     // 2. Load Referenced Chip
     // Resolving chip path relative to system file
@@ -182,6 +201,7 @@ fn validate_system(path: &PathBuf) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    result.record_check();
 
     // 3. Validate Connections
     // Every connection in external_devices must map to a valid peripheral ID in the chip
@@ -191,6 +211,7 @@ fn validate_system(path: &PathBuf) -> ExitCode {
     let valid_targets: Vec<String> = chip.peripherals.iter().map(|p| p.id.clone()).collect();
 
     for device in &system.external_devices {
+        result.record_check();
         let conn = &device.connection;
         // For now, simple ID matching.
         // If connection looks like "pc13", check if it's a known pin naming convention or if we have a GPIO peripheral.
@@ -215,6 +236,32 @@ fn validate_system(path: &PathBuf) -> ExitCode {
         }
     }
 
+    for binding in &system.board_io {
+        result.record_check();
+        if binding.id.trim().is_empty() {
+            result.add_error(
+                "INVALID_BOARD_IO_ID",
+                "Board IO binding is missing an id".to_string(),
+                Some("Set board_io[].id to a stable non-empty identifier".to_string()),
+                Some("board_io[].id".to_string()),
+            );
+        }
+        if !valid_targets.contains(&binding.peripheral) {
+            result.add_error(
+                "INVALID_BOARD_IO_PERIPHERAL",
+                format!(
+                    "Board IO '{}' references unknown peripheral '{}'. Available peripherals: {:?}",
+                    binding.id, binding.peripheral, valid_targets
+                ),
+                Some(format!(
+                    "Use one of the available peripheral IDs: {:?}",
+                    valid_targets
+                )),
+                Some("board_io[].peripheral".to_string()),
+            );
+        }
+    }
+
     print_result(&result)
 }
 
@@ -234,6 +281,7 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    result.record_check();
 
     // 1. Schema Version Validation
     if chip.schema_version != "1.0" {
@@ -259,6 +307,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
             Some("Use format 'MAJOR.MINOR' for schema_version".to_string()),
             Some("schema_version".to_string()),
         );
+    } else {
+        result.record_check();
     }
 
     // 2. Memory Region Validation
@@ -272,6 +322,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
             Some("Set flash.size to a valid size (e.g., '64KB', '128KB')".to_string()),
             Some("flash.size".to_string()),
         );
+    } else {
+        result.record_check();
     }
 
     if ram_size == 0 {
@@ -281,6 +333,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
             Some("Set ram.size to a valid size (e.g., '20KB', '64KB')".to_string()),
             Some("ram.size".to_string()),
         );
+    } else {
+        result.record_check();
     }
 
     // Check Flash/RAM overlap
@@ -306,6 +360,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
             Some("Adjust flash.base or ram.base to avoid overlap".to_string()),
             Some("flash.base, ram.base".to_string()),
         );
+    } else if chip.flash.base != chip.ram.base {
+        result.record_check();
     }
 
     // 3. Peripheral Validation
@@ -314,6 +370,7 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
     let mut irq_map: HashMap<u32, Vec<String>> = HashMap::new();
 
     for (idx, p) in chip.peripherals.iter().enumerate() {
+        result.record_check();
         // Check for duplicate IDs
         if let Some(_existing) = ids.insert(p.id.clone(), p) {
             result.add_error(
@@ -336,6 +393,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
         // Collect IRQ assignments
         if let Some(irq) = p.irq {
             irq_map.entry(irq).or_default().push(p.id.clone());
+        } else {
+            result.record_check();
         }
 
         // Check if peripheral overlaps with Flash
@@ -397,6 +456,7 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
 
     // 5. IRQ Conflict Detection
     for (irq_num, peripherals) in &irq_map {
+        result.record_check();
         if peripherals.len() > 1 {
             result.add_error(
                 "IRQ_CONFLICT",
@@ -418,6 +478,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
                 Some("Verify IRQ number against target architecture".to_string()),
                 None,
             );
+        } else {
+            result.record_check();
         }
     }
 

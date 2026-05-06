@@ -19,6 +19,11 @@ curl -fsSL https://labwired.com/install.sh | sh
 labwired --version
 ```
 
+Supported host environments:
+- Linux
+- macOS
+- Windows via WSL2
+
 Install options:
  - `LABWIRED_VERSION=v0.13.0` pins a release.
 - `LABWIRED_FROM_SOURCE=1` forces source build.

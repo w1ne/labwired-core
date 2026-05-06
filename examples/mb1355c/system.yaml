@@ -1,0 +1,41 @@
+schema_version: "1.0"
+name: "mb1355c"
+chip: ../../configs/chips/stm32wb55.yaml
+board_io:
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 1
+    signal: "output"
+    active_high: true
+  - id: "button_sw1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 4
+    signal: "input"
+    active_high: false
+  - id: "button_sw2"
+    kind: "button"
+    peripheral: "gpiod"
+    pin: 0
+    signal: "input"
+    active_high: false
+  - id: "button_sw3"
+    kind: "button"
+    peripheral: "gpiod"
+    pin: 1
+    signal: "input"
+    active_high: false
+

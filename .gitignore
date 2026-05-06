@@ -1,5 +1,6 @@
 # Build output
 /target/
+target/
 /*.rlib
 
 # Local release/test run outputs

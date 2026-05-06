@@ -4,7 +4,7 @@
 
 In the era of Agentic AI, fuzzing, and complex Cyber-Physical Systems (CPS), simulation is only valuable if it is strictly reproducible. If a Reinforcement Learning agent discovers a zero-day vulnerability at epoch 40,000, that execution path must be 100% reproducible on a developer's local machine to be actionable.
 
-LabWired guarantees **Strict Determinism**. A simulation run with the same Configuration, System Manifest, and Firmware Binary will produce the exact same observable state (registers, memory, output traces, and step count) across any supported host platform (Linux, macOS, Windows) and independent of host load.
+LabWired guarantees **Strict Determinism**. A simulation run with the same Configuration, System Manifest, and Firmware Binary will produce the exact same observable state (registers, memory, output traces, and step count) across any supported host platform (Linux, macOS, and Windows via WSL2) and independent of host load.
 
 This document outlines the architectural guarantees and the mandatory "Golden Board" release gating process that ensures this contract is never broken.
 
@@ -51,8 +51,8 @@ If a pull request introduces an optimization that subtly changes the timing of a
 
 Before any tag (e.g., `v1.2.0`) is cut and published to crates.io or GitHub Releases, the following mandatory steps are executed automatically via GitHub Actions:
 
-- [ ] **Cross-Platform Verification**: The Golden Board suite is executed on `ubuntu-latest`, `macos-latest`, and `windows-latest`.
-- [ ] **Hash Verification**: The SHA-256 hashes of the resulting `trace.vcd` and `result.json` artifacts for *every* Golden Board must match the version-controlled `expected_hashes.json` exactly across all three platforms.
+- [ ] **Cross-Platform Verification**: The Golden Board suite is executed on `ubuntu-latest` and `macos-latest`, with Windows support exercised through WSL2 userland validation.
+- [ ] **Hash Verification**: The SHA-256 hashes of the resulting `trace.vcd` and `result.json` artifacts for *every* Golden Board must match the version-controlled `expected_hashes.json` exactly across the supported release-gated platforms.
 - [ ] **Instruction Parity Check**: The `steps_executed` and `cycles` fields in `result.json` must exactly match the expected values.
 - [ ] **RTL Co-simulation Sync**: (If applicable) Any Verilator-backed peripherals must complete their integration tests proving zero-copy IPC did not drop or reorder bus transactions.
 
