@@ -1237,6 +1237,21 @@ impl CortexM {
                     self.write_reg(rd, val & 0xFF);
                 }
 
+                Instruction::Uxth { rd, rm } => {
+                    let val = self.read_reg(rm);
+                    self.write_reg(rd, val & 0xFFFF);
+                }
+
+                Instruction::Sxtb { rd, rm } => {
+                    let val = self.read_reg(rm) as u8 as i8 as i32 as u32;
+                    self.write_reg(rd, val);
+                }
+
+                Instruction::Sxth { rd, rm } => {
+                    let val = self.read_reg(rm) as u16 as i16 as i32 as u32;
+                    self.write_reg(rd, val);
+                }
+
                 Instruction::It { cond, mask } => {
                     self.it_state = (cond << 4) | mask;
                     it_block_instruction = false; // The IT instruction itself doesn't count towards the block's instructions
@@ -1293,6 +1308,13 @@ impl CortexM {
                     let res = op1.wrapping_mul(op2);
                     self.write_reg(rd, res);
                     self.update_nz(res);
+                }
+                Instruction::Mul32 { rd, rn, rm } => {
+                    let op1 = self.read_reg(rn);
+                    let op2 = self.read_reg(rm);
+                    let res = op1.wrapping_mul(op2);
+                    self.write_reg(rd, res);
+                    pc_increment = 4;
                 }
 
                 Instruction::Cpsie => {
