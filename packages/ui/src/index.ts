@@ -7,6 +7,8 @@ export { RegisterGrid } from './components/RegisterGrid/RegisterGrid';
 export { MemoryInspector } from './components/MemoryInspector/MemoryInspector';
 export { InstructionTrace } from './components/InstructionTrace/InstructionTrace';
 export { SerialMonitor } from './components/SerialMonitor/SerialMonitor';
+export { Adxl345Visualizer } from './components/Adxl345Visualizer/Adxl345Visualizer';
+export { GuidedLab } from './components/GuidedLab/GuidedLab';
 
 // Hooks
 export { useSimulator } from './hooks/useSimulator';
@@ -24,12 +26,15 @@ export type { RegisterGridProps } from './components/RegisterGrid/RegisterGrid';
 export type { MemoryInspectorProps } from './components/MemoryInspector/MemoryInspector';
 export type { InstructionTraceProps, TraceEntry } from './components/InstructionTrace/InstructionTrace';
 export type { SerialMonitorProps } from './components/SerialMonitor/SerialMonitor';
+export type { Adxl345Sample, Adxl345VisualizerProps } from './components/Adxl345Visualizer/Adxl345Visualizer';
+export type { GuidedLabProps, GuidedLabStep } from './components/GuidedLab/GuidedLab';
 export type { UseSimulatorOptions, UseSimulatorResult } from './hooks/useSimulator';
 export type { UseSimulationLoopOptions, UseSimulationLoopResult, SimulationState } from './hooks/useSimulationLoop';
 export type {
   AnalogState,
   BoardIoBinding,
   BoardIoState,
+  I2cSensorState,
   PeripheralInfo,
   SimulatorConfig,
   WasmModule,
