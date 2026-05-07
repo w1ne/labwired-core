@@ -111,4 +111,15 @@ mod tests {
         c.set_reset_en(false);
         assert!(c.is_app_cpu_released());
     }
+
+    #[test]
+    fn clkgate_not_set_blocks_release() {
+        let mut c = CoreController::new();
+        c.set_entry(0x4080_1234);
+        // runstall and reset_en default to false (their "released" values).
+        // clkgate_en remains false (its "blocked" value).
+        assert!(!c.is_app_cpu_released());
+        c.set_clkgate_en(true);
+        assert!(c.is_app_cpu_released());
+    }
 }
