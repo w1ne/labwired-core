@@ -156,6 +156,18 @@ impl OracleState {
         );
     }
 
+    /// Assert that `register & mask == expected`. Used by Plan 4 I2C oracle
+    /// tests to check specific INT_RAW or SR bits without pinning the
+    /// implementation-defined low-priority status fields.
+    pub fn assert_reg_masked(&self, name: &str, mask: u32, expected: u32) {
+        let actual = self.read_reg(name) & mask;
+        assert_eq!(
+            actual, expected,
+            "oracle: register {name} masked by 0x{mask:08X}: \
+             expected 0x{expected:08X}, got 0x{actual:08X}"
+        );
+    }
+
     /// Write a 32-bit word into the memory setup map.
     ///
     /// The address should be 4-byte aligned; unaligned accesses will still
@@ -700,6 +712,26 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     // Build a minimal bus: default SystemBus peripherals are all at STM32
     // addresses (0x2000_0000 RAM, 0x0 flash).  Both are outside the Xtensa
     // IRAM window (0x40370000); oracle_iram registered above covers that range.
+
+    // Register the ESP32-S3 I2C0 controller at 0x6001_3000 so Plan 4
+    // controller-register oracle tests can exercise the command engine.
+    // Tests that don't touch the I2C window are unaffected. We attach a
+    // TMP102 slave at 0x48 so address-matched transactions ACK; tests that
+    // probe the unmatched-address NACK path simply target a different
+    // address (e.g. 0x50).
+    {
+        use labwired_core::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_SIZE};
+        use labwired_core::peripherals::esp32s3::tmp102::Tmp102;
+        let mut i2c0 = Esp32s3I2c::new();
+        i2c0.attach_slave(Box::new(Tmp102::new()));
+        bus.add_peripheral(
+            "oracle_i2c0",
+            I2C0_BASE as u64,
+            I2C0_SIZE,
+            None,
+            Box::new(i2c0),
+        );
+    }
 
     let mut cpu = XtensaLx7::new();
     cpu.reset(&mut bus).unwrap();

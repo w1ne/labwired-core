@@ -1471,3 +1471,60 @@ fn fibonacci_10() -> OracleCase {
     .expect(|st| st.assert_reg("a2", 55))
     .tolerance(labwired_hw_oracle::Tolerance::exact())
 }
+
+// ── Plan 4: ESP32-S3 I2C0 controller-register tests ──────────────────────────
+//
+// These oracle programs poke the I2C0 controller register file directly:
+// CMD0..CMD7, CTR.TRANS_START, FIFO_CONF, DATA, INT_RAW, SR. They exercise
+// the simulator's I2C model end-to-end (sim path) and on real silicon the
+// same register sequence would drive the ESP32-S3's I2C engine. The sim
+// runner registers I2C0 with a TMP102 attached at 0x48 (see
+// `capture_sim_state` in lib.rs).
+
+/// Empty command list with a single STOP opcode → INT_RAW.TRANS_COMPLETE.
+#[hw_oracle_test]
+fn i2c0_stop_raises_trans_complete() -> OracleCase {
+    OracleCase::elf(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/xtensa-asm/i2c0_empty_cmdlist.elf"
+    ))
+    .expect(|st| {
+        // a4 holds INT_RAW after the run; bit 7 (TRANS_COMPLETE) must be set.
+        // The other bits are don't-care; mask before comparing.
+        let mask = 0x80; // INT_TRANS_COMPLETE
+        st.assert_reg_masked("a4", mask, mask);
+    })
+}
+
+/// Address-mismatched WRITE → INT_RAW.NACK.
+///
+/// The fixture programs CMD0=RSTART, CMD1=WRITE 1 byte, CMD2=STOP and
+/// pushes 0xA0 (= 0x50 << 1 | W) into DATA. No slave at 0x50 → master
+/// gets no ACK and INT_RAW bit 10 (NACK) latches.
+#[hw_oracle_test]
+fn i2c0_unmatched_addr_raises_nack() -> OracleCase {
+    OracleCase::elf(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/xtensa-asm/i2c0_unmatched_addr_nack.elf"
+    ))
+    .expect(|st| {
+        let mask = 0x400; // INT_NACK
+        st.assert_reg_masked("a4", mask, mask);
+    })
+}
+
+/// Three TX FIFO pushes via DATA → SR.txfifo_cnt == 3.
+///
+/// SR layout (per ESP32-S3 PAC `i2c0::sr`): bits[23:18] = TXFIFO_CNT.
+/// Three pushes ⇒ those bits == 3 ⇒ SR & 0x00FC_0000 == 0x000C_0000.
+#[hw_oracle_test]
+fn i2c0_fifo_pushes_update_sr_txcnt() -> OracleCase {
+    OracleCase::elf(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/xtensa-asm/i2c0_fifo_pushes.elf"
+    ))
+    .expect(|st| {
+        let mask = 0x00FC_0000; // SR.txfifo_cnt
+        st.assert_reg_masked("a4", mask, 3 << 18);
+    })
+}

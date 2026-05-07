@@ -2,5 +2,9 @@
 # without requiring the ESP toolchain.
 !*.bin
 !*.elf
+!*.s
+!*.ld
+!Makefile
+!README.md
 # Intermediate object files are not needed
 *.o
