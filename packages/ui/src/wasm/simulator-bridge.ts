@@ -26,6 +26,14 @@ export interface AnalogState {
   active?: boolean;
 }
 
+export interface I2cSensorState {
+  id: string;
+  kind: 'adxl345';
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface PeripheralInfo {
   name: string;
   base_address: string;
@@ -77,6 +85,10 @@ export interface WasmSimulatorInstance {
   // ADC / Analog
   set_adc_value(peripheral_name: string, value: number): void;
   get_board_io_analog_states(): AnalogState[];
+
+  // I2C sensors
+  set_i2c_sensor_sample(device_id: string, x: number, y: number, z: number): void;
+  get_i2c_sensor_states(): I2cSensorState[];
 
   // Peripherals
   get_peripheral_snapshot(name: string): unknown;
@@ -192,6 +204,14 @@ export class SimulatorBridge {
 
   getAnalogStates(): AnalogState[] {
     return this.sim.get_board_io_analog_states() ?? [];
+  }
+
+  setI2cSensorSample(deviceId: string, x: number, y: number, z: number): void {
+    this.sim.set_i2c_sensor_sample(deviceId, x, y, z);
+  }
+
+  getI2cSensorStates(): I2cSensorState[] {
+    return this.sim.get_i2c_sensor_states() ?? [];
   }
 
   getPeripheralSnapshot(name: string): unknown {
