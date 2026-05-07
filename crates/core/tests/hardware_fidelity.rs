@@ -59,18 +59,20 @@ fn test_pio_fidelity_ws2812() {
 }
 
 #[test]
-#[ignore = "TODO: SPI peripheral SR.RXNE not set after transfer. Pre-existing on main since PR #80 — \
-            tracking via the SPI fidelity rework that the L4 work depends on. Re-enable once SPI's \
-            tick state machine raises RXNE on completed transfers."]
 fn test_spi_fidelity_in_machine() {
     let mut bus = SystemBus::new();
-    // Add SPI1 at 0x40013000
+    // Enable SPI internal loopback so the test can exercise the read-back
+    // path without wiring a slave. Without loopback, real STM32 silicon
+    // (and our model) leaves RXNE clear when there's no MISO data — see
+    // the comment in `Spi::tick` for the production-smoke-test rationale.
+    let mut spi = Spi::new();
+    spi.set_loopback(true);
     bus.peripherals.push(PeripheralEntry {
         name: "SPI1".to_string(),
         base: 0x40013000,
         size: 0x400,
         irq: None,
-        dev: Box::new(Spi::new()),
+        dev: Box::new(spi),
         ticks_remaining: 0,
     });
     bus.refresh_peripheral_index();
