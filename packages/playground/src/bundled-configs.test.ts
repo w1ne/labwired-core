@@ -15,4 +15,13 @@ describe('BOARD_CONFIGS', () => {
     expect(nucleoF401?.chipYaml).toContain('name: "stm32f401re"');
     expect(nucleoF401?.systemYaml).toContain('button_user_pc13');
   });
+
+  it('bundles the ADXL345 sensor lab manifest and demo firmware path', () => {
+    const adxl345 = BOARD_CONFIGS.find((config) => config.boardId === 'adxl345-sensor-lab');
+
+    expect(adxl345).toBeDefined();
+    expect(adxl345?.systemYaml).toContain('type: "adxl345"');
+    expect(adxl345?.systemYaml).toContain('kind: "i2c_device"');
+    expect(adxl345?.demoFirmwarePath).toContain('demo-adxl345-sensor-lab.elf');
+  });
 });
