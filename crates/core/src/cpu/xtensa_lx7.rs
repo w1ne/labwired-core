@@ -136,6 +136,47 @@ impl XtensaLx7 {
 
     fn execute(&mut self, ins: xtensa::Instruction, bus: &mut dyn Bus, len: u32) -> SimResult<()> {
         use xtensa::Instruction::*;
+        // F5: Per-instruction Window Overflow check (Xtensa LX ISA RM §4.7).
+        //
+        // Hardware fires a Window Overflow exception when an instruction
+        // accesses a logical AR that aliases to a phys reg owned by a
+        // different live frame. The check is: for the highest logical reg `R`
+        // touched by the instruction, w = (R / 4) + 1 slots ahead of WB must
+        // be free. If `WindowStart[(WB + 1)..(WB + w)]` has any set bit, fire
+        // overflow with cause based on the rotation distance n (= position of
+        // first set bit + 1).
+        //
+        // Skipped under PS.EXCM (handlers run with EXCM=1 and use S32E/L32E
+        // for windowed access without further overflow checks). ENTRY has its
+        // own check inside the instruction body. WOE=0 disables windowing.
+        if self.ps.woe() && !self.ps.excm() && !matches!(ins, Entry { .. }) {
+            let max_reg = ins.max_logical_reg();
+            if max_reg >= 4 {
+                let w = (max_reg / 4) as u32; // slots ahead that need to be free
+                let wb_old = self.regs.windowbase();
+                let ws_full = self.regs.windowstart() as u32;
+                let ws_replicated = ws_full | (ws_full << 16);
+                let ws_ahead = ws_replicated >> ((wb_old as u32) + 1);
+                let trailing = ws_ahead.trailing_zeros();
+                if trailing < w {
+                    let n = trailing + 1;
+                    let wb_handler = wb_old.wrapping_add(n as u8) & 0x0F;
+                    let secondary = (ws_ahead >> n).trailing_zeros();
+                    let vec_ofs = match secondary {
+                        0 => 0x000_u32,
+                        1 => 0x080_u32,
+                        _ => 0x100_u32,
+                    };
+                    let vecbase = self.sr.read(VECBASE);
+                    self.sr.write(EPC1, self.pc);
+                    self.ps.set_owb(wb_old);
+                    self.regs.set_windowbase(wb_handler);
+                    self.ps.set_excm(true);
+                    self.pc = vecbase.wrapping_add(vec_ofs);
+                    return Ok(());
+                }
+            }
+        }
         match ins {
             Add { ar, as_, at } => {
                 let v = self
@@ -630,24 +671,54 @@ impl XtensaLx7 {
                 // ISA RM: if WindowStart[(wb_new + 1) mod 16] == 1, overflow.
                 let check_idx = wb_new.wrapping_add(1) & 0x0F;
                 if self.regs.windowstart_bit(check_idx) {
-                    // Window overflow: save state, redirect to overflow vector.
-                    // Window vector offsets (Xtensa LX ISA RM §5.6):
-                    //   OF4  (CALLINC=1): VECBASE + 0x000
-                    //   OF8  (CALLINC=2): VECBASE + 0x080
-                    //   OF12 (CALLINC=3): VECBASE + 0x100
-                    const OF4_VECOFS: u32 = 0x000;
-                    const OF8_VECOFS: u32 = 0x080;
-                    const OF12_VECOFS: u32 = 0x100;
-                    let vec_ofs = match callinc {
-                        1 => OF4_VECOFS,
-                        2 => OF8_VECOFS,
-                        _ => OF12_VECOFS, // callinc=3 → OF12; callinc=0 can't overflow
+                    // Window overflow path — implements the canonical Xtensa
+                    // exception entry per QEMU `target/xtensa/win_helper.c`
+                    // `HELPER(window_check)`:
+                    //
+                    //   1. n = ctz of WS-bits-ahead-of-WB + 1
+                    //      (= distance to nearest set WS bit ahead, inclusive).
+                    //   2. PS.OWB ← WB              (saved for RFWO restore)
+                    //   3. WB ← WB + n              (rotate so the handler runs
+                    //                                with the displaced frame
+                    //                                as its current window)
+                    //   4. PS.EXCM ← 1
+                    //   5. EPC1 ← PC of the faulting ENTRY
+                    //   6. PC ← VECBASE + offset    (OF4/OF8/OF12 chosen by
+                    //                                further WS-bit gaps)
+                    //
+                    // The standard xtensa-lx-rt `_WindowOverflow4` handler
+                    // (`s32e a0, a5, -16; ...; rfwo`) relies on this rotation:
+                    // its `a0..a3` map to the displaced frame's regs and `a5`
+                    // maps to the SP of the next frame (where the spill area
+                    // lives, per the Xtensa ABI). RFWO clears WS[WB] (= the
+                    // spilled frame's bit), restores WB from OWB, and the
+                    // re-executed ENTRY succeeds.
+                    let _ = callinc; // dispatch is by N and secondary ctz, not CALLINC
+                    let ws_full = self.regs.windowstart() as u32;
+                    let ws_replicated = ws_full | (ws_full << 16);
+                    let ws_ahead = ws_replicated >> ((wb_old as u32) + 1);
+                    let n = ws_ahead.trailing_zeros() + 1;
+                    let wb_handler = wb_old.wrapping_add(n as u8) & 0x0F;
+
+                    // Per QEMU `target/xtensa/win_helper.c::HELPER(window_check)`:
+                    // dispatch = ctz(ws_ahead >> n):
+                    //   0 → OF4  (vec+0x000) — only 1 frame to spill
+                    //   1 → OF8  (vec+0x080) — 2 frames to spill
+                    //   ≥2 → OF12 (vec+0x100) — 3+ frames to spill
+                    let secondary = (ws_ahead >> n).trailing_zeros();
+                    let vec_ofs = match secondary {
+                        0 => 0x000_u32,
+                        1 => 0x080_u32,
+                        _ => 0x100_u32,
                     };
                     let vecbase = self.sr.read(VECBASE);
                     self.sr.write(EPC1, self.pc);
+                    self.ps.set_owb(wb_old);
+                    self.regs.set_windowbase(wb_handler);
                     self.ps.set_excm(true);
                     self.pc = vecbase.wrapping_add(vec_ofs);
-                    // Do NOT rotate WindowBase, do NOT set WindowStart, do NOT clear CALLINC.
+                    // CALLINC retained — RFWO doesn't touch it; ENTRY re-execution
+                    // re-reads it. WS bits unchanged on entry.
                     return Ok(());
                 }
 
@@ -706,6 +777,19 @@ impl XtensaLx7 {
 
                 // F4: Window underflow check — destination frame must be live.
                 if !self.regs.windowstart_bit(wb_dest) {
+                    // Window underflow path — symmetric to ENTRY's overflow:
+                    // rotate WB *backwards* by N (the call type encoded in
+                    // a0[31:30]) so the handler runs in the window the
+                    // caller-of-caller occupies. Save WB → PS.OWB so RFWU
+                    // can restore it. Set EXCM, EPC1, jump to UF vector.
+                    //
+                    // The standard xtensa-lx-rt `_WindowUnderflow4` handler
+                    // (`l32e a0, a5, -16; ...; rfwu`) is the mirror of OF4: it
+                    // reloads the previously-spilled regs from memory at
+                    // [a5 - 16..a5 - 4] back into a0..a3. With WB rotated to
+                    // wb_dest, `a0..a3` map to wb_dest's logical regs and `a5`
+                    // to the SP of the next frame (whose save area we read).
+                    //
                     // Window underflow vector offsets (Xtensa LX ISA RM §5.6):
                     const UF4_VECOFS: u32 = 0x040;
                     const UF8_VECOFS: u32 = 0x0C0;
@@ -717,9 +801,10 @@ impl XtensaLx7 {
                     };
                     let vecbase = self.sr.read(VECBASE);
                     self.sr.write(EPC1, self.pc);
+                    self.ps.set_owb(wb_cur);
+                    self.regs.set_windowbase(wb_dest);
                     self.ps.set_excm(true);
                     self.pc = vecbase.wrapping_add(vec_ofs);
-                    // Do NOT rotate WindowBase, do NOT modify WindowStart.
                     return Ok(());
                 }
 
@@ -1206,65 +1291,42 @@ impl XtensaLx7 {
 
             // RFWO — Return From Window Overflow handler.
             //
-            // Called at the end of the WindowOverflow vector handler after the
-            // overflowed frame's registers have been spilled to the stack.
+            // Per QEMU `target/xtensa/translate.c::translate_rfw(par=true)`:
+            //   1. PS.EXCM ← 0
+            //   2. WindowStart[WindowBase] ← 0  (clear the spilled frame's bit;
+            //      handler is currently in that frame's window after the entry
+            //      rotation)
+            //   3. WindowBase ← PS.OWB          (restore via `restore_owb`)
+            //   4. PC ← EPC1                    (re-execute the faulting ENTRY)
             //
-            // ISA RM §4.4.5 / §8 RFWO (canonical hardware semantics):
-            //   s = WindowBase  (save old WB)
-            //   WindowBase ← (WindowBase + PS.CALLINC) mod NWINDOWS
-            //   WindowStart[s] ← 0     (clear the old frame's WS bit — it's spilled)
-            //   PS.EXCM ← 0
-            //   PC ← EPC1
-            //
-            // Note on our exception-entry model: our ENTRY-overflow handler does NOT
-            // rotate WB on exception entry (WB stays at wb_old). The canonical
-            // hardware DOES rotate WB to call[j] on overflow entry, then RFWO
-            // advances to call[i]. In our model, WB = call[i]'s position already
-            // (since ENTRY fired before completing its rotation), so RFWO here
-            // performs the rotation that ENTRY would have done: WB += CALLINC.
-            //
-            // After RFWO, EPC1 points back to the ENTRY instruction which will
-            // re-execute. The re-execution succeeds because the overflow frame was
-            // spilled (PS.EXCM=0, WS bit cleared by the handler via normal stores).
+            // After RFWO, the re-executed ENTRY succeeds because WS at the
+            // (previously conflicting) position is now 0, and ENTRY itself
+            // sets WS[wb_new] for the new frame.
             Rfwo => {
-                let wb_old = self.regs.windowbase();
-                let callinc = self.ps.callinc();
-                let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
-                self.regs.set_windowstart_bit(wb_old, false); // clear spilled frame
-                self.regs.set_windowbase(wb_new);
-                self.regs.set_windowstart_bit(wb_new, true); // new frame is live
+                let wb_handler = self.regs.windowbase();
+                let wb_old = self.ps.owb();
+                self.regs.set_windowstart_bit(wb_handler, false);
+                self.regs.set_windowbase(wb_old);
                 self.ps.set_excm(false);
                 self.pc = self.sr.read(EPC1);
             }
 
             // RFWU — Return From Window Underflow handler.
             //
-            // Called at the end of the WindowUnderflow vector handler after the
-            // underflowed frame's registers have been reloaded from the stack.
+            // Per QEMU `translate_rfw(par=false)`:
+            //   1. PS.EXCM ← 0
+            //   2. WindowStart[WindowBase] ← 1  (mark the reloaded frame live;
+            //      handler is currently in that frame's window after the entry
+            //      rotation)
+            //   3. WindowBase ← PS.OWB          (restore via `restore_owb`)
+            //   4. PC ← EPC1                    (re-execute the faulting RETW)
             //
-            // ISA RM §4.4.5 / §8 RFWU (canonical hardware semantics):
-            //   WindowBase ← (WindowBase - 1) mod NWINDOWS
-            //   s = WindowBase  (new WB)
-            //   WindowStart[s] ← 1     (mark the reloaded frame live)
-            //   PS.EXCM ← 0
-            //   PC ← EPC1
-            //
-            // Note on our exception-entry model: our RETW-underflow handler does NOT
-            // rotate WB on exception entry (WB stays at wb_cur = callee). The
-            // canonical hardware rotates WB to call[i] (= wb_dest) before entering
-            // the UF handler. In our model:
-            //   - For UF4: hardware would rotate by -1; RFWU -1 gives total -1.
-            //   - For UF8/12: hardware would rotate by -N; RFWU gives total -N-1.
-            // This is a known discrepancy in the Plan 1 model. UF8/12 are not
-            // exercised in Plan 1 tests; UF4 is the primary case.
-            //
-            // After RFWU, EPC1 points to the RETW instruction which will re-execute.
-            // The re-execution succeeds because WS[wb_dest] is now set.
+            // The re-executed RETW succeeds because WS[wb_dest] is now set.
             Rfwu => {
-                let wb_old = self.regs.windowbase();
-                let wb_new = wb_old.wrapping_sub(1) & 0x0F;
-                self.regs.set_windowbase(wb_new);
-                self.regs.set_windowstart_bit(wb_new, true); // reloaded frame is live
+                let wb_handler = self.regs.windowbase();
+                let wb_old = self.ps.owb();
+                self.regs.set_windowstart_bit(wb_handler, true);
+                self.regs.set_windowbase(wb_old);
                 self.ps.set_excm(false);
                 self.pc = self.sr.read(EPC1);
             }

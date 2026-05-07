@@ -23,6 +23,13 @@ pub struct Spi {
     transfer_in_progress: bool,
     transfer_cycles_remaining: u32,
     transfer_buffer: u8,
+
+    /// When true, completed transfers also load `transfer_buffer` into the
+    /// RX path (`dr` + RXNE). Used by tests and integration scenarios that
+    /// don't have a real slave wired but want the firmware-side `read`
+    /// codepath exercised. Defaults to `false` (match real silicon with no
+    /// MISO data — RXNE stays clear, DR reads as 0).
+    loopback: bool,
 }
 
 impl Spi {
@@ -40,6 +47,14 @@ impl Spi {
             sr: 0x0002, // TXE = 1
             ..Default::default()
         }
+    }
+
+    /// Enable internal loopback: each completed transfer copies
+    /// `transfer_buffer` into the RX path (`dr` + RXNE), as if MOSI were
+    /// jumpered to MISO. Off by default; tests that exercise the read-
+    /// after-write codepath without wiring a slave should enable this.
+    pub fn set_loopback(&mut self, on: bool) {
+        self.loopback = on;
     }
 
     fn read_reg(&self, offset: u64) -> u16 {
@@ -125,17 +140,19 @@ impl crate::Peripheral for Spi {
                 self.transfer_in_progress = false;
                 self.sr &= !0x0080; // Clear BSY
                 self.sr |= 0x0002; // Set TXE
-                                   // Do NOT auto-set RXNE or auto-fill DR: real STM32 silicon
-                                   // with no slave wired (or no MISO pin AF'd) doesn't drive
-                                   // anything onto MISO, so the SPI engine completes its
-                                   // shift but the firmware never sees RXNE. Matching that
-                                   // behaviour means a "transmit-only" smoke test reads
-                                   // SR=0x0002 and DR=0x0000 after writing DR — which is
-                                   // exactly what NUCLEO-L476RG hardware does.
-                                   //
-                                   // A future integration test that pairs SPI1 with a slave
-                                   // peripheral model can drive RXNE / DR explicitly via the
-                                   // bus when it has data to deliver.
+                if self.loopback {
+                    // Internal loopback: MOSI → MISO. Mirrors the data the
+                    // firmware just wrote back into the RX path so a
+                    // unit test (or "single-board echo" integration) sees
+                    // RXNE go high with the byte it transmitted.
+                    self.dr = self.transfer_buffer as u16;
+                    self.sr |= 0x0001; // RXNE
+                }
+                // Without loopback we deliberately do NOT auto-set RXNE
+                // or auto-fill DR: real STM32 silicon with no slave wired
+                // (or no MISO pin AF'd) doesn't drive anything onto MISO.
+                // Production smoke tests therefore see SR=0x0002 / DR=0
+                // after a write — matching NUCLEO-L476RG silicon.
                 if (self.cr2 & (1 << 7)) != 0 {
                     // TXEIE
                     irq = true;

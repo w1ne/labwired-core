@@ -4018,7 +4018,13 @@ fn test_exec_s32ri_imm_offset() {
 // Trigger condition: WindowStart[(wb_new + 1) mod 16] == 1
 //   where wb_new = (wb_old + callinc) & 0xF.
 
+// QEMU-aligned dispatch picks the OF{4,8,12} vector based on `ctz(ws_ahead >> n)`,
+// which lands all three setup_entry_overflow scenarios on OF12. Keeping the
+// constants in case a future test exercises a multi-conflict WS that picks
+// OF4 or OF8.
+#[allow(dead_code)]
 const OF4_VECOFS: u32 = 0x000;
+#[allow(dead_code)]
 const OF8_VECOFS: u32 = 0x080;
 const OF12_VECOFS: u32 = 0x100;
 
@@ -4054,22 +4060,25 @@ fn test_exec_entry_window_overflow_of4() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
+    // Per QEMU `target/xtensa/win_helper.c::HELPER(window_check)`:
+    //   ws_replicated = 0x0005_0005, ws_ahead = ws_replicated >> 1 = 0x0002_8002
+    //   n = ctz(ws_ahead) + 1 = 1+1 = 2 → WB rotates 0+2=2
+    //   secondary = ctz(ws_ahead >> n) = ctz(0x0000_a000) = 13 → vec OF12 (0x100)
+    // Setup chose minimal-conflict WS (only bits 0 and 2 set) — after rotation
+    // by n=2 the next conflict is far away, so dispatch is OF12 (max-spill).
     assert_eq!(
         cpu.pc,
-        vecbase.wrapping_add(OF4_VECOFS),
-        "OF4: PC should jump to VECBASE + 0x000"
+        vecbase.wrapping_add(OF12_VECOFS),
+        "Setup with WS=0x0005, CALLINC=1 → secondary ctz=13 → OF12 vector"
     );
     assert_eq!(
         cpu.sr.read(EPC1_ID),
         original_pc,
-        "OF4: EPC1 should hold the faulting ENTRY PC"
+        "EPC1 should hold the faulting ENTRY PC"
     );
-    assert!(cpu.ps.excm(), "OF4: PS.EXCM should be set");
-    assert_eq!(
-        cpu.regs.windowbase(),
-        0,
-        "OF4: WindowBase must NOT be rotated"
-    );
+    assert!(cpu.ps.excm(), "PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 2, "WindowBase rotates by n=2");
+    assert_eq!(cpu.ps.owb(), 0, "PS.OWB saves the original WB=0");
     // check_idx = (1 + 1) & 0xF = 2
     assert!(
         cpu.regs.windowstart_bit(2),
@@ -4094,22 +4103,24 @@ fn test_exec_entry_window_overflow_of8() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
+    // Per QEMU dispatch:
+    //   ws_replicated = 0x0009_0009, ws_ahead = >> 1 = 0x0004_8004
+    //   n = ctz(0x0004_8004) + 1 = 2+1 = 3 → WB rotates 0+3=3
+    //   secondary = ctz(0x0004_8004 >> 3) = ctz(0x0000_9000) = 12 → OF12
+    // Same as OF4 test: minimal-conflict WS picks OF12 max-spill vector.
     assert_eq!(
         cpu.pc,
-        vecbase.wrapping_add(OF8_VECOFS),
-        "OF8: PC should jump to VECBASE + 0x080"
+        vecbase.wrapping_add(OF12_VECOFS),
+        "Setup with WS=0x0009, CALLINC=2 → secondary ctz=12 → OF12 vector"
     );
     assert_eq!(
         cpu.sr.read(EPC1_ID),
         original_pc,
-        "OF8: EPC1 should hold the faulting ENTRY PC"
+        "EPC1 should hold the faulting ENTRY PC"
     );
-    assert!(cpu.ps.excm(), "OF8: PS.EXCM should be set");
-    assert_eq!(
-        cpu.regs.windowbase(),
-        0,
-        "OF8: WindowBase must NOT be rotated"
-    );
+    assert!(cpu.ps.excm(), "PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 3, "WindowBase rotates by n=3");
+    assert_eq!(cpu.ps.owb(), 0, "PS.OWB saves the original WB=0");
 }
 
 /// F3: ENTRY with CALLINC=3 triggers WindowOverflow12.
@@ -4140,11 +4151,11 @@ fn test_exec_entry_window_overflow_of12() {
         "OF12: EPC1 should hold the faulting ENTRY PC"
     );
     assert!(cpu.ps.excm(), "OF12: PS.EXCM should be set");
-    assert_eq!(
-        cpu.regs.windowbase(),
-        0,
-        "OF12: WindowBase must NOT be rotated"
-    );
+    // setup_entry_overflow(callinc=3) sets WS=0b10001 (bits 0,4). With WB=0,
+    // WS_ahead = (0x11 replicated) >> 1 has its first set bit at pos 3, so
+    // n=4; wb_handler = 0+4 = 4.
+    assert_eq!(cpu.regs.windowbase(), 4, "OF12: WindowBase rotates to 4");
+    assert_eq!(cpu.ps.owb(), 0, "OF12: PS.OWB saves the original WB=0");
 }
 
 /// F3 happy path: ENTRY proceeds normally when the target frame is clear.
@@ -4250,11 +4261,14 @@ fn test_exec_retw_window_underflow_uf4() {
         "UF4: EPC1 should hold the faulting RETW PC"
     );
     assert!(cpu.ps.excm(), "UF4: PS.EXCM should be set");
+    // Canonical Xtensa UF entry: WB rotates to wb_dest = wb_cur - N.
+    // Test setup uses callinc=1, so wb_cur=1, N=1, wb_dest=0.
     assert_eq!(
         cpu.regs.windowbase(),
-        1,
-        "UF4: WindowBase must NOT be rotated"
+        0,
+        "UF4: WindowBase rotates to wb_dest=0"
     );
+    assert_eq!(cpu.ps.owb(), 1, "UF4: PS.OWB saves the original WB=1");
     assert_eq!(
         cpu.regs.windowstart(),
         ws_before,
@@ -4291,11 +4305,13 @@ fn test_exec_retw_window_underflow_uf8() {
         "UF8: EPC1 should hold the faulting RETW PC"
     );
     assert!(cpu.ps.excm(), "UF8: PS.EXCM should be set");
+    // wb_cur=2, N=2, wb_dest=0.
     assert_eq!(
         cpu.regs.windowbase(),
-        2,
-        "UF8: WindowBase must NOT be rotated"
+        0,
+        "UF8: WindowBase rotates to wb_dest=0"
     );
+    assert_eq!(cpu.ps.owb(), 2, "UF8: PS.OWB saves the original WB=2");
     assert_eq!(
         cpu.regs.windowstart(),
         ws_before,
@@ -4332,11 +4348,13 @@ fn test_exec_retw_window_underflow_uf12() {
         "UF12: EPC1 should hold the faulting RETW PC"
     );
     assert!(cpu.ps.excm(), "UF12: PS.EXCM should be set");
+    // wb_cur=3, N=3, wb_dest=0.
     assert_eq!(
         cpu.regs.windowbase(),
-        3,
-        "UF12: WindowBase must NOT be rotated"
+        0,
+        "UF12: WindowBase rotates to wb_dest=0"
     );
+    assert_eq!(cpu.ps.owb(), 3, "UF12: PS.OWB saves the original WB=3");
     assert_eq!(
         cpu.regs.windowstart(),
         ws_before,
@@ -5259,9 +5277,12 @@ fn test_exec_rfwo_rotates_forward_and_clears_ws() {
     let (mut cpu, mut bus) = make_cpu_bus();
 
     let target_pc: u32 = 0x2000_0010; // simulate EPC1 = faulting ENTRY PC
-    cpu.regs.set_windowbase(0);
-    cpu.regs.set_windowstart_bit(0, true);
-    cpu.ps.set_callinc(1);
+                                      // Canonical RFWO state (post-OF entry rotation): WB = wb_handler,
+                                      // OWB = wb_old, WS[wb_handler] = 1 (spilled frame's bit).
+    cpu.regs.set_windowbase(2); // wb_handler after OF4 entry rotation
+    cpu.regs.set_windowstart_bit(0, true); // caller (OWB) bit
+    cpu.regs.set_windowstart_bit(2, true); // spilled frame bit
+    cpu.ps.set_owb(0); // OWB = original wb_old
     cpu.ps.set_excm(true);
     cpu.sr.set_raw(EPC1_ID, target_pc);
 
@@ -5269,32 +5290,32 @@ fn test_exec_rfwo_rotates_forward_and_clears_ws() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
-    assert_eq!(
-        cpu.regs.windowbase(),
-        1,
-        "RFWO: WB must advance by CALLINC=1 to 1"
+    assert_eq!(cpu.regs.windowbase(), 0, "RFWO: WB restored from OWB=0");
+    assert!(
+        !cpu.regs.windowstart_bit(2),
+        "RFWO: WS[wb_handler=2] must be cleared (frame spilled)"
     );
     assert!(
-        !cpu.regs.windowstart_bit(0),
-        "RFWO: WS[old_WB=0] must be cleared (frame spilled)"
-    );
-    assert!(
-        cpu.regs.windowstart_bit(1),
-        "RFWO: WS[new_WB=1] must be set (new frame live)"
+        cpu.regs.windowstart_bit(0),
+        "RFWO: WS[OWB=0] (caller) must remain set"
     );
     assert!(!cpu.ps.excm(), "RFWO: PS.EXCM must be 0");
     assert_eq!(cpu.get_pc(), target_pc, "RFWO: PC must be EPC1");
 }
 
-/// G2: RFWO with CALLINC=2 (OF8 scenario): WB advances by 2.
+/// G2: RFWO restores WB from OWB regardless of CALLINC — confirm this works
+/// for an OF8-style scenario where OF entry rotated by 3.
 #[test]
 fn test_exec_rfwo_callinc2_advances_wb_by_2() {
     let (mut cpu, mut bus) = make_cpu_bus();
 
     let target_pc: u32 = 0x2000_0020;
-    cpu.regs.set_windowbase(3);
-    cpu.regs.set_windowstart_bit(3, true);
-    cpu.ps.set_callinc(2);
+    // After OF8 entry rotation (n=3 for setup_entry_overflow(2)):
+    // wb_handler = 3 + 3 = 6, OWB = 3.
+    cpu.regs.set_windowbase(6);
+    cpu.regs.set_windowstart_bit(3, true); // caller (OWB) bit
+    cpu.regs.set_windowstart_bit(6, true); // spilled frame bit
+    cpu.ps.set_owb(3);
     cpu.ps.set_excm(true);
     cpu.sr.set_raw(EPC1_ID, target_pc);
 
@@ -5302,25 +5323,34 @@ fn test_exec_rfwo_callinc2_advances_wb_by_2() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
-    assert_eq!(cpu.regs.windowbase(), 5, "RFWO: WB=3 + CALLINC=2 = 5");
-    assert!(!cpu.regs.windowstart_bit(3), "RFWO: WS[old_WB=3] cleared");
-    assert!(cpu.regs.windowstart_bit(5), "RFWO: WS[new_WB=5] set");
+    assert_eq!(cpu.regs.windowbase(), 3, "RFWO: WB restored from OWB=3");
+    assert!(
+        !cpu.regs.windowstart_bit(6),
+        "RFWO: WS[wb_handler=6] cleared"
+    );
+    assert!(
+        cpu.regs.windowstart_bit(3),
+        "RFWO: WS[OWB=3] (caller) preserved"
+    );
     assert!(!cpu.ps.excm(), "RFWO: PS.EXCM=0");
     assert_eq!(cpu.get_pc(), target_pc, "RFWO: PC=EPC1");
 }
 
-/// G2: RFWU decrements WB by 1, sets WS[new_WB], clears PS.EXCM, jumps to EPC1.
+/// G2: RFWU restores WB from OWB and sets WS[wb_handler] for the reloaded frame.
 ///
-/// Scenario: WB=2 (underflow handler was entered with WB=2 = callee's frame).
-/// After RFWU: WB=1, WS[1]=1, PS.EXCM=0, PC=EPC1.
+/// Scenario: handler entered via UF4 from RETW with N=1.
+/// Pre-RFWU: WB=0 (= wb_dest after entry rotation), OWB=1 (= wb_cur), WS[0]=0
+///   (the frame just reloaded by L32E sequence; handler will set it via RFWU).
+/// Post-RFWU: WB=1 (restored), WS[0]=1 (reloaded frame marked live).
 #[test]
 fn test_exec_rfwu_rotates_back_and_sets_ws() {
     let (mut cpu, mut bus) = make_cpu_bus();
 
-    let target_pc: u32 = 0x2000_0030; // simulate EPC1 = faulting RETW PC
-    cpu.regs.set_windowbase(2);
-    cpu.regs.set_windowstart_bit(2, true); // callee frame is live
-    cpu.regs.set_windowstart_bit(1, false); // caller frame was not live (triggered UF)
+    let target_pc: u32 = 0x2000_0030;
+    cpu.regs.set_windowbase(0); // wb_handler = wb_dest after UF entry
+    cpu.regs.set_windowstart_bit(0, false); // dest bit not yet set
+    cpu.regs.set_windowstart_bit(1, true); // wb_cur bit
+    cpu.ps.set_owb(1); // OWB = original wb_cur
     cpu.ps.set_excm(true);
     cpu.sr.set_raw(EPC1_ID, target_pc);
 
@@ -5328,26 +5358,24 @@ fn test_exec_rfwu_rotates_back_and_sets_ws() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
-    assert_eq!(
-        cpu.regs.windowbase(),
-        1,
-        "RFWU: WB must decrement by 1 to 1"
-    );
+    assert_eq!(cpu.regs.windowbase(), 1, "RFWU: WB restored from OWB=1");
     assert!(
-        cpu.regs.windowstart_bit(1),
-        "RFWU: WS[new_WB=1] must be set (frame reloaded)"
+        cpu.regs.windowstart_bit(0),
+        "RFWU: WS[wb_handler=0] set (reloaded frame live)"
     );
     assert!(!cpu.ps.excm(), "RFWU: PS.EXCM must be 0");
     assert_eq!(cpu.get_pc(), target_pc, "RFWU: PC must be EPC1");
 }
 
-/// G2: RFWU wraps around at WB=0 → WB=15.
+/// G2: RFWU correctly handles wrap when wb_handler is high (e.g., 15).
 #[test]
 fn test_exec_rfwu_wraps_windowbase() {
     let (mut cpu, mut bus) = make_cpu_bus();
 
     let target_pc: u32 = 0x2000_0040;
-    cpu.regs.set_windowbase(0);
+    // wb_handler = 15 (e.g., wb_cur=0 with N=1 → wb_dest = 15 = -1 mod 16)
+    cpu.regs.set_windowbase(15);
+    cpu.ps.set_owb(0);
     cpu.ps.set_excm(true);
     cpu.sr.set_raw(EPC1_ID, target_pc);
 
@@ -5355,8 +5383,8 @@ fn test_exec_rfwu_wraps_windowbase() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
-    assert_eq!(cpu.regs.windowbase(), 15, "RFWU: WB=0 wraps to WB=15");
-    assert!(cpu.regs.windowstart_bit(15), "RFWU: WS[15] set after wrap");
+    assert_eq!(cpu.regs.windowbase(), 0, "RFWU: WB restored from OWB=0");
+    assert!(cpu.regs.windowstart_bit(15), "RFWU: WS[wb_handler=15] set");
     assert!(!cpu.ps.excm(), "RFWU: PS.EXCM=0 after wrap");
     assert_eq!(cpu.get_pc(), target_pc, "RFWU: PC=EPC1 after wrap");
 }

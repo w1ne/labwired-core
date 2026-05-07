@@ -6,9 +6,11 @@
 
 pub mod flash_xip;
 pub mod gpio;
+pub mod i2c;
 pub mod intmatrix;
 pub mod io_mux;
 pub mod rom_thunks;
 pub mod system_stub;
 pub mod systimer;
+pub mod tmp102;
 pub mod usb_serial_jtag;

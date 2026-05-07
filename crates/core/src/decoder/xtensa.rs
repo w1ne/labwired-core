@@ -799,6 +799,26 @@ fn decode_qrst(w: u32) -> Instruction {
             match op2 {
                 0x0 => Instruction::Rsr { at: t, sr },
                 0x1 => Instruction::Wsr { at: t, sr },
+                // SEXT / CLAMPS — sign-extend / saturate at op0=0, op1=3,
+                // op2=2/3. The SEXT/CLAMPS instructions also have a
+                // mirror at op0=3, op1=0 in `decode_lsci`; the Xtensa LX7
+                // ISA tolerates both encodings. esp-hal-1.1's compiled
+                // sign-extend sequence (`sext aN, aM, 7`, bytes `00 8M 23`)
+                // uses the QRST encoding, so we must decode it here too —
+                // omitting this slot caused IllegalInstruction faults
+                // mid-handler when running real esp-hal firmware.
+                //
+                // Encoding: r=ar, s=as_, sa = t + 7 (range 7..=22).
+                0x2 => Instruction::Sext {
+                    ar: r,
+                    as_: s,
+                    t: t + 7,
+                },
+                0x3 => Instruction::Clamps {
+                    ar: r,
+                    as_: s,
+                    t: t + 7,
+                },
                 // MIN/MAX/MINU/MAXU live in op1=3, op2=4..=7 — three-operand
                 // RRR encoding, not the SR-access slot. HW-oracle:
                 //   min  a3, a4, a5 → 0x433450: op2=4
@@ -1468,6 +1488,138 @@ fn b4constu(r: u8) -> u32 {
         14 => 128,
         15 => 256,
         _ => unreachable!(),
+    }
+}
+
+impl Instruction {
+    /// Returns the highest logical AR register number this instruction reads
+    /// or writes. Used by the windowed-register exception model: if accessing
+    /// a logical register that aliases to a phys reg owned by a different live
+    /// frame, the hardware fires a Window Overflow exception.
+    ///
+    /// Per Xtensa LX ISA RM §4.7: every instruction's effective register access
+    /// must check `WindowStart[(WindowBase + max_reg/4 + 1) MOD 16]`. If set,
+    /// raise WindowOverflow with cause based on the rotation distance.
+    ///
+    /// Returns 0 for instructions that only access fixed low registers (a0,
+    /// system regs, etc.) — these never trigger a window overflow.
+    pub fn max_logical_reg(&self) -> u8 {
+        use Instruction::*;
+        match *self {
+            // RRR: 3-reg ops
+            Add { ar, as_, at }
+            | Sub { ar, as_, at }
+            | And { ar, as_, at }
+            | Or { ar, as_, at }
+            | Xor { ar, as_, at }
+            | Src { ar, as_, at }
+            | Mull { ar, as_, at }
+            | Muluh { ar, as_, at }
+            | Mulsh { ar, as_, at }
+            | Quos { ar, as_, at }
+            | Quou { ar, as_, at }
+            | Rems { ar, as_, at }
+            | Remu { ar, as_, at }
+            | Mul16s { ar, as_, at }
+            | Mul16u { ar, as_, at }
+            | Min { ar, as_, at }
+            | Max { ar, as_, at }
+            | Minu { ar, as_, at }
+            | Maxu { ar, as_, at }
+            | Addx2 { ar, as_, at }
+            | Addx4 { ar, as_, at }
+            | Addx8 { ar, as_, at }
+            | Subx2 { ar, as_, at }
+            | Subx4 { ar, as_, at }
+            | Subx8 { ar, as_, at } => ar.max(as_).max(at),
+            // 2-reg ops
+            Neg { ar, at } | Abs { ar, at } | Srl { ar, at } | Sra { ar, at } => ar.max(at),
+            Sll { ar, as_ } => ar.max(as_),
+            Slli { ar, as_, .. } => ar.max(as_),
+            Srli { ar, at, .. } | Srai { ar, at, .. } => ar.max(at),
+            // SAR/shift setup — use one source reg
+            Ssl { as_ } | Ssr { as_ } | Ssa8l { as_ } | Ssa8b { as_ } => as_,
+            Ssai { .. } => 0,
+            // ALU + immediate
+            Addi { at, as_, .. } | Addmi { at, as_, .. } => at.max(as_),
+            Movi { at, .. } => at,
+            // Loads/stores
+            L8ui { at, as_, .. }
+            | L16ui { at, as_, .. }
+            | L16si { at, as_, .. }
+            | L32i { at, as_, .. }
+            | S8i { at, as_, .. }
+            | S16i { at, as_, .. }
+            | S32i { at, as_, .. }
+            | S32c1i { at, as_, .. }
+            | L32ai { at, as_, .. }
+            | S32ri { at, as_, .. }
+            | S32e { at, as_, .. }
+            | L32e { at, as_, .. } => at.max(as_),
+            L32r { at, .. } => at,
+            // Branches
+            Beq { as_, at, .. }
+            | Bne { as_, at, .. }
+            | Blt { as_, at, .. }
+            | Bge { as_, at, .. }
+            | Bltu { as_, at, .. }
+            | Bgeu { as_, at, .. }
+            | Bany { as_, at, .. }
+            | Ball { as_, at, .. }
+            | Bnone { as_, at, .. }
+            | Bnall { as_, at, .. }
+            | Bbc { as_, at, .. }
+            | Bbs { as_, at, .. } => as_.max(at),
+            Beqz { as_, .. }
+            | Bnez { as_, .. }
+            | Bltz { as_, .. }
+            | Bgez { as_, .. }
+            | Beqi { as_, .. }
+            | Bnei { as_, .. }
+            | Blti { as_, .. }
+            | Bgei { as_, .. }
+            | Bltui { as_, .. }
+            | Bgeui { as_, .. }
+            | Bbci { as_, .. }
+            | Bbsi { as_, .. } => as_,
+            // Jumps
+            J { .. } => 0,
+            Jx { as_ } => as_,
+            // Calls — CALL{N} and CALLX{N} both write to a[N] (CALLINC*4) of
+            // the OLD window. Indirect Callx variants also read a[as_]. The
+            // window check should account for the highest reg accessed.
+            Call0 { .. } => 0,
+            Callx0 { as_ } => as_,
+            // CALL4 writes to a4 (logical 4 in caller's window).
+            Call4 { .. } => 4,
+            Callx4 { as_ } => as_.max(4),
+            // CALL8 writes to a8.
+            Call8 { .. } => 8,
+            Callx8 { as_ } => as_.max(8),
+            // CALL12 writes to a12.
+            Call12 { .. } => 12,
+            Callx12 { as_ } => as_.max(12),
+            // Windowed flow
+            Entry { as_, .. } => as_,
+            Movsp { at, as_ } => at.max(as_),
+            Rotw { .. } => 0,
+            Ret => 0,
+            Retw => 0,
+            Rfwo | Rfwu | Rfe | Rfde => 0,
+            Rfi { .. } => 0,
+            // Bit/sign manipulation
+            Nsa { ar, as_ } | Nsau { ar, as_ } => ar.max(as_),
+            Sext { ar, as_, .. } | Clamps { ar, as_, .. } => ar.max(as_),
+            // SR/UR access
+            Rsr { at, .. } | Wsr { at, .. } | Xsr { at, .. } | Wur { at, .. } => at,
+            Rur { ar, .. } => ar,
+            // Loop / misc
+            Loop { as_, .. } | Loopnez { as_, .. } | Loopgtz { as_, .. } => as_,
+            Nop | Break { .. } | Syscall | Ill | Memw | Extw | Isync | Rsync | Esync | Dsync => 0,
+            Rsil { at, .. } => at,
+            Extui { ar, at, .. } => ar.max(at),
+            Unknown(_) => 0,
+        }
     }
 }
 

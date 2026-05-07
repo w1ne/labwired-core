@@ -922,29 +922,33 @@ fn call4_entry_retw_no_overflow() -> OracleCase {
 ///   IRAM_BASE+0x800: BREAK  ← OF4 vector (VECBASE+0x000)  [0xF0,0x41,0x00]
 #[hw_oracle_test]
 fn entry_window_overflow_of4() -> OracleCase {
-    let mut prog = vec![0u8; 0x803 + 3]; // space for BREAK at 0x800 plus 3 bytes
-                                         // CALL4 (imm18=1, target=IRAM_BASE+8) — HW formula: ((PC+4)&~3) + imm18*4
+    // Oracle program lays out BREAKs at all three OF vectors (0x000, 0x080,
+    // 0x100) so the CPU halts cleanly regardless of which OFx the rotation
+    // algorithm dispatches to. The expectation pins the dispatch — change it
+    // here if the QEMU `window_check` algorithm is updated.
+    let mut prog = vec![0u8; 0x903 + 3];
     prog[0..3].copy_from_slice(&[0x55, 0x00, 0x00]);
-    // ENTRY a1, 32 at offset 8
     prog[8..11].copy_from_slice(&[0x36, 0x41, 0x00]);
-    // BREAK at IRAM_BASE+0x800 (OF4 vector = VECBASE+0x000 when VECBASE=IRAM_BASE+0x800)
-    prog[0x800..0x803].copy_from_slice(&[0xF0, 0x41, 0x00]);
+    // BREAKs at OF4, OF8, OF12 vectors:
+    prog[0x800..0x803].copy_from_slice(&[0xF0, 0x41, 0x00]); // OF4 vec
+    prog[0x880..0x883].copy_from_slice(&[0xF0, 0x41, 0x00]); // OF8 vec
+    prog[0x900..0x903].copy_from_slice(&[0xF0, 0x41, 0x00]); // OF12 vec
     OracleCase::from_bytes(prog)
         .setup(|st| {
-            // Set VECBASE to IRAM_BASE+0x800 so OF4 vector is inside oracle IRAM.
             st.write_sr(VECBASE_SR, IRAM_BASE + 0x800);
             // WS bits 0 and 2 set: WS[2]=1 causes overflow when WB_new=1.
             st.write_windowstart(0x0005);
         })
         .expect(|st| {
-            // OF4 redirected PC to VECBASE+0x000 = IRAM_BASE+0x800 where BREAK is.
-            st.assert_pc(IRAM_BASE + 0x800);
-            // EPC1 holds the faulting ENTRY's address.
+            // QEMU dispatch for WS=0x0005, WB=0:
+            //   ws_ahead = (0x0005_0005 >> 1) = 0x0002_8002
+            //   n = ctz(0x0002_8002) + 1 = 1+1 = 2 → WB rotates 0+2=2
+            //   secondary = ctz(0x0002_8002 >> 2) = ctz(0x0000_a000) = 13
+            //   secondary ≥ 2 → OF12 vector (vec+0x100)
+            st.assert_pc(IRAM_BASE + 0x900);
             st.assert_epc1(IRAM_BASE + 8);
-            // PS.EXCM was set to 1 on overflow entry.
             st.assert_excm(true);
-            // WindowBase was NOT rotated by the overflow (stays at 0).
-            st.assert_windowbase(0);
+            st.assert_windowbase(2);
         })
 }
 
@@ -1032,8 +1036,9 @@ fn retw_window_underflow_uf4() -> OracleCase {
             st.assert_epc1(IRAM_BASE);
             // PS.EXCM was set to 1 on underflow entry.
             st.assert_excm(true);
-            // WindowBase was NOT rotated by the underflow (stays at 1).
-            st.assert_windowbase(1);
+            // Canonical Xtensa UF entry rotates WB to wb_dest = wb_cur - N.
+            // wb_cur=1, N=1 → wb_dest=0.
+            st.assert_windowbase(0);
         })
 }
 
@@ -1465,4 +1470,61 @@ fn fibonacci_10() -> OracleCase {
     ))
     .expect(|st| st.assert_reg("a2", 55))
     .tolerance(labwired_hw_oracle::Tolerance::exact())
+}
+
+// ── Plan 4: ESP32-S3 I2C0 controller-register tests ──────────────────────────
+//
+// These oracle programs poke the I2C0 controller register file directly:
+// CMD0..CMD7, CTR.TRANS_START, FIFO_CONF, DATA, INT_RAW, SR. They exercise
+// the simulator's I2C model end-to-end (sim path) and on real silicon the
+// same register sequence would drive the ESP32-S3's I2C engine. The sim
+// runner registers I2C0 with a TMP102 attached at 0x48 (see
+// `capture_sim_state` in lib.rs).
+
+/// Empty command list with a single STOP opcode → INT_RAW.TRANS_COMPLETE.
+#[hw_oracle_test]
+fn i2c0_stop_raises_trans_complete() -> OracleCase {
+    OracleCase::elf(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/xtensa-asm/i2c0_empty_cmdlist.elf"
+    ))
+    .expect(|st| {
+        // a4 holds INT_RAW after the run; bit 7 (TRANS_COMPLETE) must be set.
+        // The other bits are don't-care; mask before comparing.
+        let mask = 0x80; // INT_TRANS_COMPLETE
+        st.assert_reg_masked("a4", mask, mask);
+    })
+}
+
+/// Address-mismatched WRITE → INT_RAW.NACK.
+///
+/// The fixture programs CMD0=RSTART, CMD1=WRITE 1 byte, CMD2=STOP and
+/// pushes 0xA0 (= 0x50 << 1 | W) into DATA. No slave at 0x50 → master
+/// gets no ACK and INT_RAW bit 10 (NACK) latches.
+#[hw_oracle_test]
+fn i2c0_unmatched_addr_raises_nack() -> OracleCase {
+    OracleCase::elf(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/xtensa-asm/i2c0_unmatched_addr_nack.elf"
+    ))
+    .expect(|st| {
+        let mask = 0x400; // INT_NACK
+        st.assert_reg_masked("a4", mask, mask);
+    })
+}
+
+/// Three TX FIFO pushes via DATA → SR.txfifo_cnt == 3.
+///
+/// SR layout (per ESP32-S3 PAC `i2c0::sr`): bits[23:18] = TXFIFO_CNT.
+/// Three pushes ⇒ those bits == 3 ⇒ SR & 0x00FC_0000 == 0x000C_0000.
+#[hw_oracle_test]
+fn i2c0_fifo_pushes_update_sr_txcnt() -> OracleCase {
+    OracleCase::elf(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/xtensa-asm/i2c0_fifo_pushes.elf"
+    ))
+    .expect(|st| {
+        let mask = 0x00FC_0000; // SR.txfifo_cnt
+        st.assert_reg_masked("a4", mask, 3 << 18);
+    })
 }
