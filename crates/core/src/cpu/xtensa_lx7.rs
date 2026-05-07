@@ -107,6 +107,18 @@ impl XtensaLx7 {
         }
     }
 
+    /// Construct a CPU with a custom `PRID`. Identical to `new()` except for
+    /// the `PRID` SR. Use 0xCDCD for PRO_CPU (default) and 0xABAB for APP_CPU.
+    pub fn new_with_prid(prid: u32) -> Self {
+        Self {
+            regs: ArFile::new(),
+            ps: Ps::from_raw(0x1F),
+            sr: XtensaSrFile::with_prid(prid),
+            ur: [0u32; 256],
+            pc: 0x4000_0400,
+        }
+    }
+
     /// Read an SR by ID, with special routing for PS / WINDOWBASE / WINDOWSTART
     /// (which live outside `XtensaSrFile`).
     fn read_sr(&self, sr_id: u16) -> u32 {
@@ -1707,5 +1719,23 @@ impl Cpu for XtensaLx7 {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_with_prid_sets_supplied_value() {
+        let cpu = XtensaLx7::new_with_prid(0xABAB);
+        // PRID is SR id 235 (0xEB).
+        assert_eq!(cpu.sr.read(235), 0xABAB);
+    }
+
+    #[test]
+    fn default_new_keeps_pro_cpu_prid() {
+        let cpu = XtensaLx7::new();
+        assert_eq!(cpu.sr.read(235), 0xCDCD); // PRID_RESET_VALUE
     }
 }

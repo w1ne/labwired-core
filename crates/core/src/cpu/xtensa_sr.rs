@@ -125,6 +125,15 @@ impl XtensaSrFile {
         s
     }
 
+    /// Construct an SR file with `PRID` set to a custom value.
+    /// Other reset values match `Self::new()`. Used to distinguish PRO_CPU
+    /// (0xCDCD) from APP_CPU (0xABAB) per real ESP32-S3 silicon.
+    pub fn with_prid(prid: u32) -> Self {
+        let mut s = Self::new();
+        s.storage[IDX_PRID] = prid;
+        s
+    }
+
     /// Read an SR by numeric ID.
     ///
     /// Returns 0 for unknown or out-of-range IDs (traces a message).
