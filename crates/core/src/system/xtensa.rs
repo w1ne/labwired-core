@@ -476,10 +476,11 @@ mod tests {
             .expect("downcast to Esp32s3I2c");
 
         // Build a probe: RSTART; WRITE 1 (addr+W=0x90); STOP.
-        i2c.write_u32(0x58, 0).unwrap(); // RSTART (opcode 0)
+        // Opcodes per ESP32-S3 TRM § 29.5: 1=WRITE, 2=STOP, 6=RSTART.
+        i2c.write_u32(0x58, 6u32 << 11).unwrap(); // RSTART (opcode 6)
         i2c.write_u32(0x5C, (1u32 << 11) | 1).unwrap(); // WRITE 1 byte
-        i2c.write_u32(0x60, 3u32 << 11).unwrap(); // STOP (opcode 3)
-        i2c.write_u32(0x18, 0x90).unwrap(); // addr+W
+        i2c.write_u32(0x60, 2u32 << 11).unwrap(); // STOP (opcode 2)
+        i2c.write_u32(0x1C, 0x90).unwrap(); // addr+W (DATA at 0x1c)
         i2c.write_u32(0x04, 1 << 5).unwrap(); // TRANS_START
         let int_raw = i2c.read_u32(0x20).unwrap();
         assert_eq!(

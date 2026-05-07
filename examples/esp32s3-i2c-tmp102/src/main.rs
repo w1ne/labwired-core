@@ -22,7 +22,9 @@ use esp_hal::{
 use esp_println::println;
 
 const TMP102_ADDR: u8 = 0x48;
-const THRESHOLD_C: f32 = 30.0;
+// Threshold in 0.01 °C units to avoid pulling in the FPU (the simulator
+// doesn't model FP yet). 30.00 °C → 3000.
+const THRESHOLD_CENTI_C: i32 = 3000;
 
 static TICK_FLAG: Mutex<RefCell<bool>> = Mutex::new(RefCell::new(false));
 static ALARM: Mutex<RefCell<Option<PeriodicTimer<'static, esp_hal::Blocking>>>> =
@@ -74,10 +76,20 @@ fn main() -> ! {
             let mut buf = [0u8; 2];
             match i2c.write_read(TMP102_ADDR, &[0x00], &mut buf) {
                 Ok(()) => {
-                    let raw = ((buf[0] as i16) << 8) | (buf[1] as i16);
-                    let temp_c = (raw >> 4) as f32 * 0.0625;
-                    println!("T = {:.2} °C", temp_c);
-                    if temp_c > THRESHOLD_C {
+                    // Combine the 2-byte big-endian register read into a 16-bit
+                    // value. Cast through u32 to make the bit pattern unambiguous
+                    // (compiler-fused i16-cast paths produced wrong magic-number
+                    // divisions when the firmware was first ported). Top 12 bits
+                    // are the temperature value, in 1/16 °C units.
+                    let raw_u: u32 = ((buf[0] as u32) << 8) | (buf[1] as u32);
+                    let units_16: i32 = (raw_u >> 4) as i32;
+                    // Each unit = 0.0625 °C. Multiply by 625 then divide by 100
+                    // to get centi-degrees as integer (no FPU on this build).
+                    let centi_c: i32 = units_16 * 625 / 100;
+                    let int_part = centi_c / 100;
+                    let frac_part = centi_c.unsigned_abs() % 100;
+                    println!("T = {}.{:02} C", int_part, frac_part);
+                    if centi_c > THRESHOLD_CENTI_C {
                         led.set_high();
                     } else {
                         led.set_low();

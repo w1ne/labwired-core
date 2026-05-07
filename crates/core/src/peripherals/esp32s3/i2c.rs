@@ -8,18 +8,22 @@
 //!
 //! ## Register subset modeled
 //!
+//! Offsets per ESP32-S3 PAC `esp32s3::i2c0` (TRM § 29.6):
+//!
 //! | Offset | Name        | Notes                                          |
 //! |--------|-------------|------------------------------------------------|
 //! | 0x04   | CTR         | TRANS_START at bit 5                           |
+//! | 0x08   | SR          | Status — bit 0 = RESP_REC (slave acked)        |
 //! | 0x10   | SLAVE_ADDR  | 7-bit address in [6:0]                         |
-//! | 0x18   | FIFO_DATA   | Write→TX FIFO, read→pop RX FIFO                |
-//! | 0x1C   | FIFO_CONF   | Reset bits accept and clear (no behavior)      |
-//! | 0x20   | INT_RAW     | Bit 7 = TRANS_COMPLETE; bit 11 = NACK          |
+//! | 0x14   | FIFO_ST     | TX/RX FIFO levels                              |
+//! | 0x18   | FIFO_CONF   | Reset bits accept and clear (no behavior)      |
+//! | 0x1C   | DATA        | Write→TX FIFO, read→pop RX FIFO                |
+//! | 0x20   | INT_RAW     | Bit 3 = END_DETECT; bit 7 = TRANS_COMPLETE;    |
+//! |        |             | bit 10 = NACK                                  |
 //! | 0x24   | INT_CLR     | Write 1 to clear matching INT_RAW bits         |
 //! | 0x28   | INT_ENA     | Enable mask                                    |
 //! | 0x2C   | INT_ST      | INT_RAW & INT_ENA                              |
-//! | 0x44   | FIFO_ST     | TX/RX FIFO levels                              |
-//! | 0x58.. | CMD0..CMD15 | 14-bit command words (16 entries × 4 B)        |
+//! | 0x58.. | CMD0..CMD7  | 8 command slots; bit 31 = command_done         |
 //!
 //! All other offsets accept writes silently and read 0.
 
@@ -35,27 +39,42 @@ pub const I2C0_SIZE: u64 = 0x1000;
 pub const I2C0_INTR_SOURCE_ID: u32 = 49;
 
 const REG_CTR: u64 = 0x04;
+const REG_SR: u64 = 0x08;
 const REG_SLAVE_ADDR: u64 = 0x10;
-const REG_FIFO_DATA: u64 = 0x18;
-const REG_FIFO_CONF: u64 = 0x1C;
+const REG_FIFO_ST: u64 = 0x14;
+const REG_FIFO_CONF: u64 = 0x18;
+const REG_DATA: u64 = 0x1C;
 const REG_INT_RAW: u64 = 0x20;
 const REG_INT_CLR: u64 = 0x24;
 const REG_INT_ENA: u64 = 0x28;
 const REG_INT_ST: u64 = 0x2C;
-const REG_FIFO_ST: u64 = 0x44;
 const REG_CMD0: u64 = 0x58;
-const REG_CMD15: u64 = 0x94;
+const REG_CMD7: u64 = 0x74;
 
 const CTR_TRANS_START_BIT: u32 = 1 << 5;
 
-pub const INT_TRANS_COMPLETE: u32 = 1 << 7;
-pub const INT_NACK: u32 = 1 << 11;
+/// SR bit 0: set when the slave responded with ACK during the most recent
+/// command. esp-hal checks this after TRANS_COMPLETE — if clear it raises
+/// `AcknowledgeCheckFailed(Data)`.
+const SR_RESP_REC: u32 = 1 << 0;
 
-const NUM_CMDS: usize = 16;
+/// COMD bit 31: command_done. Set when a command finishes executing. esp-hal
+/// scans every COMD register and reports `ExecutionIncomplete` if any non-END
+/// command lacks this bit.
+const CMD_DONE_BIT: u32 = 1 << 31;
+
+pub const INT_END_DETECT: u32 = 1 << 3;
+pub const INT_TRANS_COMPLETE: u32 = 1 << 7;
+pub const INT_NACK: u32 = 1 << 10;
+
+/// ESP32-S3 has 8 COMD slots at offsets 0x58..0x78. Higher offsets are
+/// SCL/SP timing registers that we accept-and-ignore.
+const NUM_CMDS: usize = 8;
 const FIFO_CAPACITY: usize = 32;
 
 pub struct Esp32s3I2c {
     ctr: u32,
+    sr: u32,
     slave_addr: u32,
     int_raw: u32,
     int_ena: u32,
@@ -73,6 +92,7 @@ impl Esp32s3I2c {
     pub fn new() -> Self {
         Self {
             ctr: 0,
+            sr: 0,
             slave_addr: 0,
             int_raw: 0,
             int_ena: 0,
@@ -92,9 +112,26 @@ impl Esp32s3I2c {
     }
 
     fn fifo_status(&self) -> u32 {
-        // Bits [4:0] = TX FIFO level, bits [12:8] = RX FIFO level.
-        let rx_len = self.rx_fifo.borrow().len();
-        ((self.tx_fifo.len() as u32) & 0x1F) | (((rx_len as u32) & 0x1F) << 8)
+        // Per ESP32-S3 PAC `i2c0::fifo_st`:
+        //   bits  0..4  RXFIFO_RADDR
+        //   bits  5..9  RXFIFO_WADDR
+        //   bits 10..14 TXFIFO_RADDR ← used by esp-hal's estimate_ack_failed_reason
+        //   bits 15..19 TXFIFO_WADDR
+        // We approximate raddr with the bytes that have already been popped
+        // (FIFO_CAPACITY - tx_len). esp-hal compares <= 1 to distinguish
+        // address-NACK from data-NACK; we only need the comparison to be right.
+        let tx_raddr = (FIFO_CAPACITY as u32 - self.tx_fifo.len() as u32).min(0x1F);
+        tx_raddr << 10
+    }
+
+    fn status_register(&self) -> u32 {
+        // Per ESP32-S3 PAC `i2c0::sr`:
+        //   bit  0      RESP_REC (slave acked the most recent byte)
+        //   bits 8..13  RXFIFO_CNT
+        //   bits 18..23 TXFIFO_CNT
+        let rx = (self.rx_fifo.borrow().len() as u32) & 0x3F;
+        let tx = (self.tx_fifo.len() as u32) & 0x3F;
+        (self.sr & SR_RESP_REC) | (rx << 8) | (tx << 18)
     }
 }
 
@@ -127,15 +164,16 @@ impl Peripheral for Esp32s3I2c {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let v = match offset {
             REG_CTR => self.ctr,
+            REG_SR => self.status_register(),
             REG_SLAVE_ADDR => self.slave_addr,
-            REG_FIFO_DATA => self.rx_fifo.borrow_mut().pop_front().unwrap_or(0) as u32,
+            REG_DATA => self.rx_fifo.borrow_mut().pop_front().unwrap_or(0) as u32,
             REG_FIFO_CONF => self.fifo_conf,
             REG_INT_RAW => self.int_raw,
             REG_INT_CLR => 0,
             REG_INT_ENA => self.int_ena,
             REG_INT_ST => self.int_raw & self.int_ena,
             REG_FIFO_ST => self.fifo_status(),
-            REG_CMD0..=REG_CMD15 => {
+            REG_CMD0..=REG_CMD7 => {
                 let idx = ((offset - REG_CMD0) / 4) as usize;
                 self.cmds.get(idx).copied().unwrap_or(0)
             }
@@ -163,10 +201,10 @@ impl Peripheral for Esp32s3I2c {
             // Byte 0 of value goes into TX FIFO (per esp-hal usage).
             // Drop the byte silently if the FIFO is full — esp-hal checks
             // FIFO_ST before pushing, so the bound check is defensive only.
-            REG_FIFO_DATA if self.tx_fifo.len() < FIFO_CAPACITY => {
+            REG_DATA if self.tx_fifo.len() < FIFO_CAPACITY => {
                 self.tx_fifo.push_back((value & 0xFF) as u8);
             }
-            REG_FIFO_DATA => {}
+            REG_DATA => {}
             REG_FIFO_CONF => {
                 self.fifo_conf = value;
                 // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
@@ -180,7 +218,7 @@ impl Peripheral for Esp32s3I2c {
             }
             REG_INT_CLR => self.int_raw &= !value,
             REG_INT_ENA => self.int_ena = value,
-            REG_CMD0..=REG_CMD15 => {
+            REG_CMD0..=REG_CMD7 => {
                 let idx = ((offset - REG_CMD0) / 4) as usize;
                 if let Some(slot) = self.cmds.get_mut(idx) {
                     *slot = value;
@@ -223,27 +261,37 @@ impl Esp32s3I2c {
     /// WRITE bytes are delivered via `I2cDevice::write`. READ pulls bytes
     /// from the active slave via `I2cDevice::read` and pushes to the RX FIFO.
     fn run_command_list(&mut self) {
-        const OP_RSTART: u32 = 0;
+        // Opcodes per ESP32-S3 TRM § 29.5 / esp32s3 PAC `i2c0::comd::OPCODE`:
+        //   1 = WRITE, 2 = STOP, 3 = READ, 4 = END, 6 = RSTART
         const OP_WRITE: u32 = 1;
-        const OP_READ: u32 = 2;
-        const OP_STOP: u32 = 3;
+        const OP_STOP: u32 = 2;
+        const OP_READ: u32 = 3;
         const OP_END: u32 = 4;
+        const OP_RSTART: u32 = 6;
 
         // Index into self.slaves of the currently-selected device, or
         // None if no address has been latched yet (or just after RSTART).
         let mut active: Option<usize> = None;
         let mut expects_addr = true;
+        let mut last_op_was_end = false;
+        let mut hit_stop = false;
 
-        for &word in &self.cmds {
+        // Reset RESP_REC at the start of a new command-list run; the slave
+        // sets it back to 1 below if any byte is acknowledged.
+        self.sr &= !SR_RESP_REC;
+
+        for idx in 0..self.cmds.len() {
+            let word = self.cmds[idx];
             let opcode = (word >> 11) & 0x7;
             let byte_num = (word & 0xFF) as usize;
             match opcode {
                 OP_RSTART => {
-                    if let Some(idx) = active {
-                        self.slaves[idx].start();
+                    if let Some(slave_idx) = active {
+                        self.slaves[slave_idx].start();
                     }
                     expects_addr = true;
                     active = None;
+                    self.cmds[idx] |= CMD_DONE_BIT;
                 }
                 OP_WRITE => {
                     for i in 0..byte_num {
@@ -254,20 +302,26 @@ impl Esp32s3I2c {
                             active = self.slaves.iter().position(|s| s.address() == addr);
                             if active.is_none() {
                                 self.int_raw |= INT_NACK;
+                            } else {
+                                // Slave acknowledged its address.
+                                self.sr |= SR_RESP_REC;
                             }
                             expects_addr = false;
                             // Don't deliver the addr byte to the slave's write().
                             continue;
                         }
-                        if let Some(idx) = active {
-                            self.slaves[idx].write(b);
+                        if let Some(slave_idx) = active {
+                            self.slaves[slave_idx].write(b);
+                            // Slave acknowledged the data byte.
+                            self.sr |= SR_RESP_REC;
                         }
                     }
+                    self.cmds[idx] |= CMD_DONE_BIT;
                 }
                 OP_READ => {
                     for _ in 0..byte_num {
-                        let b = if let Some(idx) = active {
-                            self.slaves[idx].read()
+                        let b = if let Some(slave_idx) = active {
+                            self.slaves[slave_idx].read()
                         } else {
                             0
                         };
@@ -276,20 +330,41 @@ impl Esp32s3I2c {
                             rx.push_back(b);
                         }
                     }
+                    if active.is_some() {
+                        self.sr |= SR_RESP_REC;
+                    }
+                    self.cmds[idx] |= CMD_DONE_BIT;
                 }
                 OP_STOP => {
-                    if let Some(idx) = active {
-                        self.slaves[idx].stop();
+                    if let Some(slave_idx) = active {
+                        self.slaves[slave_idx].stop();
                     }
+                    self.cmds[idx] |= CMD_DONE_BIT;
+                    hit_stop = true;
                     break;
                 }
-                OP_END => break,
+                OP_END => {
+                    last_op_was_end = true;
+                    break;
+                }
                 _ => break, // reserved opcode — terminate
             }
         }
 
-        self.int_raw |= INT_TRANS_COMPLETE;
-        if self.int_ena & (INT_TRANS_COMPLETE | INT_NACK) != 0 {
+        // Per ESP32-S3 TRM § 29.5: END pauses execution and raises
+        // END_DETECT (bit 3). STOP completes the transaction and raises
+        // TRANS_COMPLETE (bit 7). esp-hal blocks on (END_DETECT | TX_COMPLETE)
+        // and uses END_DETECT to chain phase 2 of a write_read.
+        if last_op_was_end {
+            self.int_raw |= INT_END_DETECT;
+        } else if hit_stop {
+            self.int_raw |= INT_TRANS_COMPLETE;
+        } else {
+            // Empty cmd list or reserved opcode — set TRANS_COMPLETE so the
+            // driver's wait loop unblocks rather than hanging.
+            self.int_raw |= INT_TRANS_COMPLETE;
+        }
+        if self.int_ena & (INT_TRANS_COMPLETE | INT_END_DETECT | INT_NACK) != 0 {
             self.irq_pending = true;
         }
     }
@@ -306,11 +381,12 @@ mod tests {
         ((opcode as u32 & 0x7) << 11) | (byte_num as u32)
     }
 
-    const CMD_RSTART: u8 = 0;
+    // ESP32-S3 TRM § 29.5: 1=WRITE, 2=STOP, 3=READ, 4=END, 6=RSTART.
     const CMD_WRITE: u8 = 1;
-    const CMD_READ: u8 = 2;
-    const CMD_STOP: u8 = 3;
+    const CMD_STOP: u8 = 2;
+    const CMD_READ: u8 = 3;
     const CMD_END: u8 = 4;
+    const CMD_RSTART: u8 = 6;
 
     #[test]
     fn ctr_round_trip() {
@@ -330,9 +406,9 @@ mod tests {
     fn cmd_registers_round_trip() {
         let mut p = Esp32s3I2c::new();
         p.write_u32(REG_CMD0, 0x0000_0800).unwrap();
-        p.write_u32(REG_CMD15, 0x0000_2000).unwrap();
+        p.write_u32(REG_CMD7, 0x0000_2000).unwrap();
         assert_eq!(p.read_u32(REG_CMD0).unwrap(), 0x0000_0800);
-        assert_eq!(p.read_u32(REG_CMD15).unwrap(), 0x0000_2000);
+        assert_eq!(p.read_u32(REG_CMD7).unwrap(), 0x0000_2000);
     }
 
     #[test]
@@ -343,23 +419,29 @@ mod tests {
     }
 
     #[test]
-    fn fifo_status_reflects_pushes() {
+    fn sr_txfifo_cnt_reflects_pushes() {
+        // esp-hal reads TX/RX FIFO counts from SR.txfifo_cnt (bits 18..23)
+        // and SR.rxfifo_cnt (bits 8..13), not from FIFO_ST.
         let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_FIFO_DATA, 0xAA).unwrap();
-        p.write_u32(REG_FIFO_DATA, 0xBB).unwrap();
-        p.write_u32(REG_FIFO_DATA, 0xCC).unwrap();
-        let st = p.read_u32(REG_FIFO_ST).unwrap();
-        assert_eq!(st & 0x1F, 3, "TX level should reflect 3 pushes");
+        p.write_u32(REG_DATA, 0xAA).unwrap();
+        p.write_u32(REG_DATA, 0xBB).unwrap();
+        p.write_u32(REG_DATA, 0xCC).unwrap();
+        let sr = p.read_u32(REG_SR).unwrap();
+        assert_eq!(
+            (sr >> 18) & 0x3F,
+            3,
+            "SR.txfifo_cnt should reflect 3 pushes"
+        );
     }
 
     #[test]
     fn fifo_reset_bits_clear_fifos() {
         let mut p = Esp32s3I2c::new();
-        p.write_u32(REG_FIFO_DATA, 0x11).unwrap();
-        p.write_u32(REG_FIFO_DATA, 0x22).unwrap();
+        p.write_u32(REG_DATA, 0x11).unwrap();
+        p.write_u32(REG_DATA, 0x22).unwrap();
         p.write_u32(REG_FIFO_CONF, 1 << 13).unwrap(); // TX_FIFO_RST
-        let st = p.read_u32(REG_FIFO_ST).unwrap();
-        assert_eq!(st & 0x1F, 0);
+        let sr = p.read_u32(REG_SR).unwrap();
+        assert_eq!((sr >> 18) & 0x3F, 0);
     }
 
     #[test]
@@ -379,13 +461,23 @@ mod tests {
     }
 
     #[test]
-    fn empty_command_list_with_end_completes() {
+    fn end_opcode_raises_end_detect_not_trans_complete() {
+        // Per ESP32-S3 TRM § 29.5: the END opcode pauses the controller and
+        // raises END_DETECT (bit 3). esp-hal uses END_DETECT to chain phase 2
+        // of a write_read transaction. STOP is what raises TRANS_COMPLETE.
         let mut p = Esp32s3I2c::new();
         p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        let int_raw = p.read_u32(REG_INT_RAW).unwrap();
         assert_eq!(
-            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
-            INT_TRANS_COMPLETE
+            int_raw & INT_END_DETECT,
+            INT_END_DETECT,
+            "END must raise END_DETECT"
+        );
+        assert_eq!(
+            int_raw & INT_TRANS_COMPLETE,
+            0,
+            "END must NOT raise TRANS_COMPLETE"
         );
     }
 
@@ -415,8 +507,8 @@ mod tests {
         // Pre-load the RX FIFO directly to test the read path in isolation.
         p.rx_fifo.borrow_mut().push_back(0xAA);
         p.rx_fifo.borrow_mut().push_back(0xBB);
-        let first = p.read_u32(REG_FIFO_DATA).unwrap();
-        let second = p.read_u32(REG_FIFO_DATA).unwrap();
+        let first = p.read_u32(REG_DATA).unwrap();
+        let second = p.read_u32(REG_DATA).unwrap();
         assert_eq!(first, 0xAA);
         assert_eq!(second, 0xBB);
     }
@@ -439,15 +531,15 @@ mod tests {
         p.write_u32(REG_CMD0 + 20, cmd(CMD_STOP, 0)).unwrap();
 
         // Push TX bytes: addr+W, pointer 0, addr+R.
-        p.write_u32(REG_FIFO_DATA, 0x90).unwrap(); // 0x48 << 1 | W
-        p.write_u32(REG_FIFO_DATA, 0x00).unwrap(); // pointer
-        p.write_u32(REG_FIFO_DATA, 0x91).unwrap(); // 0x48 << 1 | R
+        p.write_u32(REG_DATA, 0x90).unwrap(); // 0x48 << 1 | W
+        p.write_u32(REG_DATA, 0x00).unwrap(); // pointer
+        p.write_u32(REG_DATA, 0x91).unwrap(); // 0x48 << 1 | R
 
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
 
         // Two bytes of temperature should now be in RX FIFO: 0x19, 0x00.
-        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0x19);
-        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0x00);
+        assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x19);
+        assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x00);
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
             INT_TRANS_COMPLETE
@@ -461,7 +553,7 @@ mod tests {
         p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
         p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
         p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
-        p.write_u32(REG_FIFO_DATA, 0xA0).unwrap(); // some addr+W, no slave
+        p.write_u32(REG_DATA, 0xA0).unwrap(); // some addr+W, no slave
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
@@ -484,12 +576,12 @@ mod tests {
         p.write_u32(REG_CMD0 + 16, cmd(CMD_READ, 2)).unwrap();
         p.write_u32(REG_CMD0 + 20, cmd(CMD_STOP, 0)).unwrap();
 
-        p.write_u32(REG_FIFO_DATA, 0x90).unwrap(); // addr+W
-        p.write_u32(REG_FIFO_DATA, 0x01).unwrap(); // pointer = CONFIG
-        p.write_u32(REG_FIFO_DATA, 0x91).unwrap(); // addr+R
+        p.write_u32(REG_DATA, 0x90).unwrap(); // addr+W
+        p.write_u32(REG_DATA, 0x01).unwrap(); // pointer = CONFIG
+        p.write_u32(REG_DATA, 0x91).unwrap(); // addr+R
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
 
-        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0x60);
-        assert_eq!(p.read_u32(REG_FIFO_DATA).unwrap(), 0xA0);
+        assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x60);
+        assert_eq!(p.read_u32(REG_DATA).unwrap(), 0xA0);
     }
 }

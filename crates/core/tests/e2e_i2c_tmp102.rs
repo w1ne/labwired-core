@@ -91,9 +91,11 @@ fn i2c_tmp102_firmware_runs_and_prints_temperature() {
     )
     .expect("fast_boot");
 
-    // Run for up to ~6 simulated seconds at 80 MHz = 480 M steps. Each
-    // SYSTIMER tick fires once per simulated second; we want ≥ 4 prints.
-    const MAX_STEPS: u64 = 480_000_000;
+    // Run for up to ~14 simulated seconds at 80 MHz = 1.12 G steps. Each
+    // SYSTIMER tick fires once per simulated second. The TMP102 model starts
+    // at 25 °C and drifts +0.5 °C per read, so reaching the firmware's 30 °C
+    // threshold (and seeing GPIO2 toggle) needs at least 11 reads.
+    const MAX_STEPS: u64 = 1_120_000_000;
     let observers: Vec<Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
     let cfg = labwired_core::SimulationConfig::default();
 
@@ -105,11 +107,23 @@ fn i2c_tmp102_firmware_runs_and_prints_temperature() {
         }
         let _ = bus.tick_peripherals_with_costs();
 
-        // Early-out once the JTAG sink has at least 4 temperature lines.
+        // Early-out once we have ≥4 complete "T = " lines AND have seen the
+        // GPIO2 0→1 transition that the firmware drives once temp exceeds the
+        // 30 °C threshold. The temp_lines>=12 cap guards against runaway
+        // execution if GPIO routing breaks.
         let bytes = jtag.lock().unwrap();
         let text = String::from_utf8_lossy(&bytes).to_string();
         let temp_lines: usize = text.lines().filter(|l| l.starts_with("T = ")).count();
-        if temp_lines >= 4 {
+        let gpio2_rose = obs
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|&(p, f, t, _)| p == 2 && !f && t);
+        if temp_lines >= 5 && gpio2_rose {
+            break;
+        }
+        if temp_lines >= 14 {
             break;
         }
     }

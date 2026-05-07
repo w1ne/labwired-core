@@ -136,6 +136,47 @@ impl XtensaLx7 {
 
     fn execute(&mut self, ins: xtensa::Instruction, bus: &mut dyn Bus, len: u32) -> SimResult<()> {
         use xtensa::Instruction::*;
+        // F5: Per-instruction Window Overflow check (Xtensa LX ISA RM §4.7).
+        //
+        // Hardware fires a Window Overflow exception when an instruction
+        // accesses a logical AR that aliases to a phys reg owned by a
+        // different live frame. The check is: for the highest logical reg `R`
+        // touched by the instruction, w = (R / 4) + 1 slots ahead of WB must
+        // be free. If `WindowStart[(WB + 1)..(WB + w)]` has any set bit, fire
+        // overflow with cause based on the rotation distance n (= position of
+        // first set bit + 1).
+        //
+        // Skipped under PS.EXCM (handlers run with EXCM=1 and use S32E/L32E
+        // for windowed access without further overflow checks). ENTRY has its
+        // own check inside the instruction body. WOE=0 disables windowing.
+        if self.ps.woe() && !self.ps.excm() && !matches!(ins, Entry { .. }) {
+            let max_reg = ins.max_logical_reg();
+            if max_reg >= 4 {
+                let w = (max_reg / 4) as u32; // slots ahead that need to be free
+                let wb_old = self.regs.windowbase();
+                let ws_full = self.regs.windowstart() as u32;
+                let ws_replicated = ws_full | (ws_full << 16);
+                let ws_ahead = ws_replicated >> ((wb_old as u32) + 1);
+                let trailing = ws_ahead.trailing_zeros();
+                if trailing < w {
+                    let n = trailing + 1;
+                    let wb_handler = wb_old.wrapping_add(n as u8) & 0x0F;
+                    let secondary = (ws_ahead >> n).trailing_zeros();
+                    let vec_ofs = match secondary {
+                        0 => 0x000_u32,
+                        1 => 0x080_u32,
+                        _ => 0x100_u32,
+                    };
+                    let vecbase = self.sr.read(VECBASE);
+                    self.sr.write(EPC1, self.pc);
+                    self.ps.set_owb(wb_old);
+                    self.regs.set_windowbase(wb_handler);
+                    self.ps.set_excm(true);
+                    self.pc = vecbase.wrapping_add(vec_ofs);
+                    return Ok(());
+                }
+            }
+        }
         match ins {
             Add { ar, as_, at } => {
                 let v = self
@@ -652,21 +693,23 @@ impl XtensaLx7 {
                     // lives, per the Xtensa ABI). RFWO clears WS[WB] (= the
                     // spilled frame's bit), restores WB from OWB, and the
                     // re-executed ENTRY succeeds.
+                    let _ = callinc; // dispatch is by N and secondary ctz, not CALLINC
                     let ws_full = self.regs.windowstart() as u32;
                     let ws_replicated = ws_full | (ws_full << 16);
                     let ws_ahead = ws_replicated >> ((wb_old as u32) + 1);
-                    let n = (ws_ahead.trailing_zeros() as u8 + 1).min(15);
-                    let wb_handler = wb_old.wrapping_add(n) & 0x0F;
+                    let n = ws_ahead.trailing_zeros() + 1;
+                    let wb_handler = wb_old.wrapping_add(n as u8) & 0x0F;
 
-                    // Window vector offsets (Xtensa LX ISA RM §5.6 / table 5-7).
-                    // The vector is selected by the original CALL size — OF4 for
-                    // CALL4 (spill 1 frame), OF8 for CALL8 (2 frames), OF12 for
-                    // CALL12 (3 frames). HW-validated against ESP32-S3 silicon
-                    // by `entry_window_overflow_of4` in the H7 oracle bank.
-                    let vec_ofs = match callinc {
-                        1 => 0x000_u32, // OF4
-                        2 => 0x080_u32, // OF8
-                        _ => 0x100_u32, // OF12 (callinc=3); callinc=0 cannot overflow
+                    // Per QEMU `target/xtensa/win_helper.c::HELPER(window_check)`:
+                    // dispatch = ctz(ws_ahead >> n):
+                    //   0 → OF4  (vec+0x000) — only 1 frame to spill
+                    //   1 → OF8  (vec+0x080) — 2 frames to spill
+                    //   ≥2 → OF12 (vec+0x100) — 3+ frames to spill
+                    let secondary = (ws_ahead >> n).trailing_zeros();
+                    let vec_ofs = match secondary {
+                        0 => 0x000_u32,
+                        1 => 0x080_u32,
+                        _ => 0x100_u32,
                     };
                     let vecbase = self.sr.read(VECBASE);
                     self.sr.write(EPC1, self.pc);

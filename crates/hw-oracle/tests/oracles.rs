@@ -922,30 +922,32 @@ fn call4_entry_retw_no_overflow() -> OracleCase {
 ///   IRAM_BASE+0x800: BREAK  ← OF4 vector (VECBASE+0x000)  [0xF0,0x41,0x00]
 #[hw_oracle_test]
 fn entry_window_overflow_of4() -> OracleCase {
-    let mut prog = vec![0u8; 0x803 + 3]; // space for BREAK at 0x800 plus 3 bytes
-                                         // CALL4 (imm18=1, target=IRAM_BASE+8) — HW formula: ((PC+4)&~3) + imm18*4
+    // Oracle program lays out BREAKs at all three OF vectors (0x000, 0x080,
+    // 0x100) so the CPU halts cleanly regardless of which OFx the rotation
+    // algorithm dispatches to. The expectation pins the dispatch — change it
+    // here if the QEMU `window_check` algorithm is updated.
+    let mut prog = vec![0u8; 0x903 + 3];
     prog[0..3].copy_from_slice(&[0x55, 0x00, 0x00]);
-    // ENTRY a1, 32 at offset 8
     prog[8..11].copy_from_slice(&[0x36, 0x41, 0x00]);
-    // BREAK at IRAM_BASE+0x800 (OF4 vector = VECBASE+0x000 when VECBASE=IRAM_BASE+0x800)
-    prog[0x800..0x803].copy_from_slice(&[0xF0, 0x41, 0x00]);
+    // BREAKs at OF4, OF8, OF12 vectors:
+    prog[0x800..0x803].copy_from_slice(&[0xF0, 0x41, 0x00]); // OF4 vec
+    prog[0x880..0x883].copy_from_slice(&[0xF0, 0x41, 0x00]); // OF8 vec
+    prog[0x900..0x903].copy_from_slice(&[0xF0, 0x41, 0x00]); // OF12 vec
     OracleCase::from_bytes(prog)
         .setup(|st| {
-            // Set VECBASE to IRAM_BASE+0x800 so OF4 vector is inside oracle IRAM.
             st.write_sr(VECBASE_SR, IRAM_BASE + 0x800);
             // WS bits 0 and 2 set: WS[2]=1 causes overflow when WB_new=1.
             st.write_windowstart(0x0005);
         })
         .expect(|st| {
-            // OF4 redirected PC to VECBASE+0x000 = IRAM_BASE+0x800 where BREAK is.
-            st.assert_pc(IRAM_BASE + 0x800);
-            // EPC1 holds the faulting ENTRY's address.
+            // QEMU dispatch for WS=0x0005, WB=0:
+            //   ws_ahead = (0x0005_0005 >> 1) = 0x0002_8002
+            //   n = ctz(0x0002_8002) + 1 = 1+1 = 2 → WB rotates 0+2=2
+            //   secondary = ctz(0x0002_8002 >> 2) = ctz(0x0000_a000) = 13
+            //   secondary ≥ 2 → OF12 vector (vec+0x100)
+            st.assert_pc(IRAM_BASE + 0x900);
             st.assert_epc1(IRAM_BASE + 8);
-            // PS.EXCM was set to 1 on overflow entry.
             st.assert_excm(true);
-            // Canonical Xtensa OF entry rotates WB by n where n = ctz(WS-ahead) + 1.
-            // WS = 0x0005 (bits 0, 2). With WB=0, WS_ahead = 0x28002 → ctz=1 → n=2.
-            // wb_handler = 0 + 2 = 2.
             st.assert_windowbase(2);
         })
 }

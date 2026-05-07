@@ -4018,7 +4018,13 @@ fn test_exec_s32ri_imm_offset() {
 // Trigger condition: WindowStart[(wb_new + 1) mod 16] == 1
 //   where wb_new = (wb_old + callinc) & 0xF.
 
+// QEMU-aligned dispatch picks the OF{4,8,12} vector based on `ctz(ws_ahead >> n)`,
+// which lands all three setup_entry_overflow scenarios on OF12. Keeping the
+// constants in case a future test exercises a multi-conflict WS that picks
+// OF4 or OF8.
+#[allow(dead_code)]
 const OF4_VECOFS: u32 = 0x000;
+#[allow(dead_code)]
 const OF8_VECOFS: u32 = 0x080;
 const OF12_VECOFS: u32 = 0x100;
 
@@ -4054,23 +4060,25 @@ fn test_exec_entry_window_overflow_of4() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
+    // Per QEMU `target/xtensa/win_helper.c::HELPER(window_check)`:
+    //   ws_replicated = 0x0005_0005, ws_ahead = ws_replicated >> 1 = 0x0002_8002
+    //   n = ctz(ws_ahead) + 1 = 1+1 = 2 → WB rotates 0+2=2
+    //   secondary = ctz(ws_ahead >> n) = ctz(0x0000_a000) = 13 → vec OF12 (0x100)
+    // Setup chose minimal-conflict WS (only bits 0 and 2 set) — after rotation
+    // by n=2 the next conflict is far away, so dispatch is OF12 (max-spill).
     assert_eq!(
         cpu.pc,
-        vecbase.wrapping_add(OF4_VECOFS),
-        "OF4: PC should jump to VECBASE + 0x000"
+        vecbase.wrapping_add(OF12_VECOFS),
+        "Setup with WS=0x0005, CALLINC=1 → secondary ctz=13 → OF12 vector"
     );
     assert_eq!(
         cpu.sr.read(EPC1_ID),
         original_pc,
-        "OF4: EPC1 should hold the faulting ENTRY PC"
+        "EPC1 should hold the faulting ENTRY PC"
     );
-    assert!(cpu.ps.excm(), "OF4: PS.EXCM should be set");
-    // Canonical Xtensa OF entry: WB rotates by n = ctz(WS_ahead)+1.
-    // setup_entry_overflow(callinc=1) sets WS=0b101 (bits 0,2). With WB=0,
-    // WS_ahead = (0x05 replicated) >> 1 has its first set bit at pos 1, so
-    // n=2; wb_handler = 0+2 = 2.
-    assert_eq!(cpu.regs.windowbase(), 2, "OF4: WindowBase rotates to 2");
-    assert_eq!(cpu.ps.owb(), 0, "OF4: PS.OWB saves the original WB=0");
+    assert!(cpu.ps.excm(), "PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 2, "WindowBase rotates by n=2");
+    assert_eq!(cpu.ps.owb(), 0, "PS.OWB saves the original WB=0");
     // check_idx = (1 + 1) & 0xF = 2
     assert!(
         cpu.regs.windowstart_bit(2),
@@ -4095,22 +4103,24 @@ fn test_exec_entry_window_overflow_of8() {
     cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
         .unwrap();
 
+    // Per QEMU dispatch:
+    //   ws_replicated = 0x0009_0009, ws_ahead = >> 1 = 0x0004_8004
+    //   n = ctz(0x0004_8004) + 1 = 2+1 = 3 → WB rotates 0+3=3
+    //   secondary = ctz(0x0004_8004 >> 3) = ctz(0x0000_9000) = 12 → OF12
+    // Same as OF4 test: minimal-conflict WS picks OF12 max-spill vector.
     assert_eq!(
         cpu.pc,
-        vecbase.wrapping_add(OF8_VECOFS),
-        "OF8: PC should jump to VECBASE + 0x080"
+        vecbase.wrapping_add(OF12_VECOFS),
+        "Setup with WS=0x0009, CALLINC=2 → secondary ctz=12 → OF12 vector"
     );
     assert_eq!(
         cpu.sr.read(EPC1_ID),
         original_pc,
-        "OF8: EPC1 should hold the faulting ENTRY PC"
+        "EPC1 should hold the faulting ENTRY PC"
     );
-    assert!(cpu.ps.excm(), "OF8: PS.EXCM should be set");
-    // setup_entry_overflow(callinc=2) sets WS=0b1001 (bits 0,3). With WB=0,
-    // WS_ahead = (0x09 replicated) >> 1 has its first set bit at pos 2, so
-    // n=3; wb_handler = 0+3 = 3.
-    assert_eq!(cpu.regs.windowbase(), 3, "OF8: WindowBase rotates to 3");
-    assert_eq!(cpu.ps.owb(), 0, "OF8: PS.OWB saves the original WB=0");
+    assert!(cpu.ps.excm(), "PS.EXCM should be set");
+    assert_eq!(cpu.regs.windowbase(), 3, "WindowBase rotates by n=3");
+    assert_eq!(cpu.ps.owb(), 0, "PS.OWB saves the original WB=0");
 }
 
 /// F3: ENTRY with CALLINC=3 triggers WindowOverflow12.
