@@ -83,6 +83,20 @@ pub struct I2c {
     current_target: Option<usize>,
     #[serde(skip)]
     is_reading: bool,
+    /// CR1.STOP requested by firmware while a data transaction was in
+    /// flight. Real silicon defers the stop condition until the current
+    /// byte has finished shifting; we mirror that by queueing the
+    /// transition here and firing it after DataPending completes.
+    #[serde(skip)]
+    stop_requested: bool,
+    /// Set when firmware reads DR while SR1.RXNE is set. On real silicon
+    /// reading DR clears RXNE in hardware; the simulator's `Peripheral::read`
+    /// is `&self` so we mark the consumption here (via interior mutability)
+    /// and clear the flag on the next tick. Without this, subsequent
+    /// `poll_sr1(RXNE)` calls see a stale RXNE and the firmware reads
+    /// stale DR values.
+    #[serde(skip)]
+    rxne_consumed: std::cell::Cell<bool>,
 }
 
 impl core::fmt::Debug for I2c {
@@ -119,6 +133,8 @@ impl Default for I2c {
             attached_devices: Vec::new(),
             current_target: None,
             is_reading: false,
+            stop_requested: false,
+            rxne_consumed: std::cell::Cell::new(false),
         }
     }
 }
@@ -130,7 +146,11 @@ enum I2cState {
     StartPending,
     AddressPending,
     DataPending,
-    StopPending,
+    // StopPending was a deferred-stop state from an earlier version of
+    // the model. STOP is now processed synchronously in the CR1 write
+    // handler (or queued via `stop_requested` if a data phase is in
+    // flight, then processed when DataPending fires) so the variant is
+    // no longer reachable.
 }
 
 impl I2c {
@@ -191,13 +211,34 @@ impl I2c {
         match offset {
             0x00 => {
                 self.cr1 = value as u32;
-                if (value & 0x0100) != 0 {
+                if (value & 0x0100) != 0 && self.state == I2cState::Idle {
                     self.state = I2cState::StartPending;
-                    self.cycles_remaining = 10;
+                    self.cycles_remaining = 1;
                 }
                 if (value & 0x0200) != 0 {
-                    self.state = I2cState::StopPending;
-                    self.cycles_remaining = 10;
+                    // STOP requested. If a data phase is in flight, defer
+                    // until that DataPending tick fires so RXNE/BTF latch
+                    // first (silicon clocks STOP after the current byte
+                    // shifts out — the standard HAL "set NACK + STOP →
+                    // poll RXNE → read DR" pattern depends on this
+                    // ordering). Otherwise complete the stop synchronously:
+                    // notify the device, clear MSL/BUSY in SR2, but leave
+                    // SR1 alone so any latched RXNE/BTF stays readable
+                    // until firmware consumes DR.
+                    if matches!(
+                        self.state,
+                        I2cState::DataPending | I2cState::AddressPending
+                    ) {
+                        self.stop_requested = true;
+                    } else {
+                        self.cr1 &= !0x0200;
+                        self.sr2 &= !0x0003;
+                        if let Some(idx) = self.current_target {
+                            self.attached_devices[idx].stop();
+                        }
+                        self.current_target = None;
+                        self.state = I2cState::Idle;
+                    }
                 }
             }
             0x04 => self.cr2 = value as u32,
@@ -215,6 +256,14 @@ impl I2c {
                             .attached_devices
                             .iter()
                             .position(|d| d.address() == addr);
+                        // Notify the device that a new transaction is
+                        // starting at *this* address. Address is now
+                        // latched and current_target is fresh — doing
+                        // this in StartPending instead would pass a
+                        // stale target (or None after a previous STOP).
+                        if let Some(idx) = self.current_target {
+                            self.attached_devices[idx].start();
+                        }
                     } else {
                         self.state = I2cState::DataPending;
                         self.cycles_remaining = 20;
@@ -291,6 +340,14 @@ impl crate::Peripheral for I2c {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
+        // Silicon clears RXNE when firmware reads DR. The trait method
+        // is `&self`, so we mark the consumption through interior
+        // mutability and the next tick performs the actual SR1 clear.
+        // This only fires on byte 0 of a 32-bit DR read — subsequent
+        // byte reads of the same word would otherwise double-consume.
+        if reg_offset == 0x10 && byte_offset == 0 && (self.sr1 & 0x40) != 0 {
+            self.rxne_consumed.set(true);
+        }
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
@@ -308,16 +365,46 @@ impl crate::Peripheral for I2c {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let mut irq = false;
 
+        // Mirror silicon's "RXNE clears on DR read" outside the main
+        // state-machine block so it fires even when the bus is Idle
+        // between transactions.
+        if self.rxne_consumed.replace(false) {
+            self.sr1 &= !0x0040;
+            // BTF is tied to the same shift register on a receive.
+            self.sr1 &= !0x0004;
+            // For a multi-byte read we have to feed the next byte
+            // ourselves — silicon would clock it in continuously while
+            // ACK is asserted. If the firmware is still in a read
+            // transaction (current_target set, is_reading=true), re-arm
+            // DataPending so the next tick latches another byte. The
+            // STOP handler clears current_target, which is how this
+            // chain naturally terminates after the final NACK+STOP byte.
+            if self.is_reading && self.current_target.is_some() {
+                self.state = I2cState::DataPending;
+                self.cycles_remaining = 1;
+            }
+        }
+
         if self.state != I2cState::Idle {
             self.cycles_remaining = self.cycles_remaining.saturating_sub(1);
             if self.cycles_remaining == 0 {
                 match self.state {
                     I2cState::StartPending => {
-                        self.sr1 |= 0x0001; // Set SB
+                        // Wipe any stale data-phase flags from the
+                        // previous transaction. On silicon those would
+                        // have been cleared by firmware's SR1+SR2/DR
+                        // read patterns; we don't model those side
+                        // effects (Peripheral::read is &self), so
+                        // a fresh transaction needs a fresh SR1 or
+                        // subsequent polls see stale ADDR/TXE/BTF and
+                        // exit prematurely on the next address-send.
+                        self.sr1 = 0x0001; // Only SB set
+                        // Hardware auto-clears the START request bit after
+                        // the start condition has been generated.
+                        self.cr1 &= !0x0100;
                         self.state = I2cState::Idle;
-                        if let Some(idx) = self.current_target {
-                            self.attached_devices[idx].start();
-                        }
+                        // device.start() is deferred to AddressPending —
+                        // current_target isn't known yet at this point.
                     }
                     I2cState::AddressPending => {
                         self.sr1 &= !0x0001; // Clear SB
@@ -330,6 +417,13 @@ impl crate::Peripheral for I2c {
                             self.state = I2cState::DataPending;
                             self.cycles_remaining = 20;
                         } else {
+                            // Write transaction: on real silicon TXE is high
+                            // immediately after the address ACK because the
+                            // shift register is empty and ready for the first
+                            // data byte. Firmware (e.g. STM32 HAL_I2C_Master_Transmit)
+                            // polls TXE before writing DR; without this latch
+                            // the polling loop never exits.
+                            self.sr1 |= 0x0080; // Set TXE
                             self.state = I2cState::Idle;
                         }
                     }
@@ -345,13 +439,20 @@ impl crate::Peripheral for I2c {
                             self.sr1 |= 0x0004; // Set BTF
                             self.state = I2cState::Idle;
                         }
-                    }
-                    I2cState::StopPending => {
-                        self.sr1 = 0; // Clear SR1
-                        self.sr2 = 0; // Clear SR2
-                        self.state = I2cState::Idle;
-                        if let Some(idx) = self.current_target {
-                            self.attached_devices[idx].stop();
+                        // Honour a STOP that the firmware queued before
+                        // the current byte finished shifting (the standard
+                        // STM32 HAL "set NACK+STOP, then poll RXNE" flow).
+                        // Apply STOP synchronously: clear MSL/BUSY in SR2
+                        // and notify the device, but keep SR1 untouched
+                        // so RXNE/BTF stay readable until firmware reads DR.
+                        if self.stop_requested {
+                            self.stop_requested = false;
+                            self.cr1 &= !0x0200;
+                            self.sr2 &= !0x0003;
+                            if let Some(idx) = self.current_target {
+                                self.attached_devices[idx].stop();
+                            }
+                            self.current_target = None;
                         }
                     }
                     I2cState::Idle => {}
@@ -454,12 +555,14 @@ mod tests {
         assert_ne!(i2c.sr1 & 0x80, 0); // TXE set
         assert_ne!(i2c.sr1 & 0x04, 0); // BTF set
 
-        // 4. STOP
+        // 4. STOP — silicon clears MSL/BUSY in SR2 but leaves SR1 set
+        // (firmware is expected to clear data-phase flags via DR reads /
+        // SR1+SR2 sequences). STARTPending of the next transaction
+        // resets SR1, so stale flags here don't leak.
         i2c.write(0x01, 0x02).unwrap(); // STOP bit 9
         for _ in 0..10 {
             i2c.tick();
         }
-        assert_eq!(i2c.sr1, 0);
-        assert_eq!(i2c.sr2, 0);
+        assert_eq!(i2c.sr2 & 0x0003, 0, "STOP must clear MSL+BUSY in SR2");
     }
 }

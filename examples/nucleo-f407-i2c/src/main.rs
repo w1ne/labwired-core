@@ -85,26 +85,42 @@ const POLL_BUDGET: u32 = 100_000;
 #[entry]
 fn main() -> ! {
     unsafe {
+        // Encode progress through PA pins as the firmware advances. The
+        // simulator-side e2e test polls GPIOA_ODR every step and records
+        // the max value seen, so partial progress shows up even if the
+        // firmware never reaches the "success" write.
+        //   PA0 — clock_init done
+        //   PA1 — gpio_init done
+        //   PA2 — i2c1_init done
+        //   PA3 — AHT20 trigger phase done
+        //   PA4 — AHT20 busy clear seen
+        //   PA5 — full success (both AHT20 + BMP280 read OK)
+        //   PA6 — AHT20 full read returned OK
+        //   PA7 — BMP280 chip-ID returned 0x58
         clock_init();
+        write_volatile(GPIOA_ODR, 1 << 0);
         gpio_init();
+        write_volatile(GPIOA_ODR, (1 << 0) | (1 << 1));
         i2c1_init();
+        write_volatile(GPIOA_ODR, (1 << 0) | (1 << 1) | (1 << 2));
+
+        let aht20_ok = aht20_one_shot();
+        let bmp280_ok = bmp280_chip_id() == 0x58;
+
+        let mut bits = (1u32 << 0) | (1 << 1) | (1 << 2);
+        if aht20_ok {
+            bits |= 1 << 6;
+        }
+        if bmp280_ok {
+            bits |= 1 << 7;
+        }
+        if aht20_ok && bmp280_ok {
+            bits |= 1 << 5;
+        }
+        write_volatile(GPIOA_ODR, bits);
 
         loop {
-            // Best-effort interaction loop. Each pass triggers an AHT20
-            // measurement, reads the BMP280 chip-ID, and toggles the LED
-            // on success.
-            let aht20_ok = aht20_one_shot();
-            let bmp280_ok = bmp280_chip_id() == 0x58;
-
-            if aht20_ok && bmp280_ok {
-                write_volatile(GPIOA_ODR, 1 << 5);
-            } else {
-                write_volatile(GPIOA_ODR, 0);
-            }
-
-            for _ in 0..200_000 {
-                cortex_m::asm::nop();
-            }
+            cortex_m::asm::nop();
         }
     }
 }

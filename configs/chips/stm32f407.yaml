@@ -30,19 +30,19 @@ peripherals:
     config:
       profile: "stm32f4"
   - id: "gpioa"
-    type: "gpio"
+    type: "stm32f4_gpio"
     base_address: 0x40020000
     size: "1KB"
   - id: "gpiob"
-    type: "gpio"
+    type: "stm32f4_gpio"
     base_address: 0x40020400
     size: "1KB"
   - id: "gpioc"
-    type: "gpio"
+    type: "stm32f4_gpio"
     base_address: 0x40020800
     size: "1KB"
   - id: "gpiod"
-    type: "gpio"
+    type: "stm32f4_gpio"
     base_address: 0x40020C00
     size: "1KB"
   - id: "systick"

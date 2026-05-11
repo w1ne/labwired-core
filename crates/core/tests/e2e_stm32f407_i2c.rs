@@ -19,9 +19,11 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::Bus;
+use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::{Bus, Cpu, Machine};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::process::Command;
 
 /// One firmware-issued I²C register access, as captured from silicon
 /// (via OpenOCD `mdw` / SWD reads) or replayed against the simulator.
@@ -248,4 +250,129 @@ fn aht20_bmp280_chip_id_handshake_matches_silicon() {
     if let Err(msg) = trace.replay(&mut bus) {
         panic!("oracle divergence: {msg}");
     }
+}
+
+// ── End-to-end firmware-driven test ───────────────────────────────────
+
+const F407_FIRMWARE_ELF: &str =
+    "../../target/thumbv7em-none-eabi/release/nucleo-f407-i2c";
+
+fn ensure_f407_firmware_built() -> PathBuf {
+    let elf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(F407_FIRMWARE_ELF);
+    if elf.exists() {
+        return elf;
+    }
+    let example_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/nucleo-f407-i2c");
+    let status = Command::new("cargo")
+        .arg("build")
+        .arg("--release")
+        .current_dir(&example_dir)
+        .status()
+        .expect("invoke cargo build for nucleo-f407-i2c");
+    assert!(status.success(), "nucleo-f407-i2c firmware failed to build");
+    assert!(
+        elf.exists(),
+        "firmware ELF not produced at {}",
+        elf.display()
+    );
+    elf
+}
+
+/// Load the F407 firmware, run it for enough cycles to exercise both
+/// AHT20 and BMP280 I²C transactions, and assert that the bus actually
+/// reflected the firmware's activity. This is the simulator-side proof
+/// that the runtime-attach machinery is wired all the way through —
+/// CPU → I²C peripheral state machine → attached device → back to CPU.
+///
+/// Specific assertions in priority order:
+/// 1. The CPU does not crash or run off into unmapped memory.
+/// 2. GPIOA_ODR bit 5 is set at some point — proves firmware reached
+///    the success branch where both AHT20 BUSY clears and BMP280
+///    chip-ID returns 0x58.
+#[test]
+fn firmware_drives_aht20_and_bmp280_through_simulator() {
+    let elf_path = ensure_f407_firmware_built();
+    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/nucleo-f407-i2c/system.yaml");
+    let manifest = SystemManifest::from_file(&system_path).expect("load f407 manifest");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load f407 chip");
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build f407 bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+
+    let image = labwired_loader::load_elf(&elf_path).expect("load f407 elf");
+    machine.load_firmware(&image).expect("load firmware");
+
+    // Track whether GPIOA PA5 (LED) was ever set high. The firmware only
+    // sets it when both AHT20 BUSY clears and BMP280 chip-ID = 0x58.
+    let mut led_was_high = false;
+    const GPIOA_ODR: u64 = 0x40020014;
+    const I2C1_CR1: u64 = 0x40005400;
+    const I2C1_SR1: u64 = 0x40005414;
+    const PA5_MASK: u32 = 1 << 5;
+    const MAX_CYCLES: u32 = 4_000_000;
+
+    let mut max_odr_seen: u32 = 0;
+    let mut last_pc = 0u32;
+    let mut stuck_count = 0u32;
+    for step in 0..MAX_CYCLES {
+        machine
+            .step()
+            .unwrap_or_else(|e| panic!("simulator crashed at step {step}: {e}"));
+
+        // Sample ODR every step to catch any LED transition.
+        let odr = machine.bus.read_u32(GPIOA_ODR).unwrap_or(0);
+        if odr > max_odr_seen {
+            max_odr_seen = odr;
+        }
+        if (odr & PA5_MASK) != 0 {
+            led_was_high = true;
+            break;
+        }
+
+        if step % 100_000 == 0 {
+            let pc = machine.cpu.get_pc();
+            let cr1 = machine.bus.read_u32(I2C1_CR1).unwrap_or(0);
+            let sr1 = machine.bus.read_u32(I2C1_SR1).unwrap_or(0);
+            eprintln!(
+                "step={:>8} pc=0x{:08x} cr1=0x{:04x} sr1=0x{:04x} odr=0x{:04x}",
+                step, pc, cr1, sr1, odr
+            );
+            if pc == last_pc {
+                stuck_count += 1;
+                if stuck_count >= 3 {
+                    eprintln!("PC stuck at 0x{pc:08x} for >300k cycles — bailing");
+                    break;
+                }
+            } else {
+                stuck_count = 0;
+                last_pc = pc;
+            }
+        }
+    }
+
+    // Diagnostic dump on failure.
+    if !led_was_high {
+        eprintln!("max ODR seen during run: 0x{:04x}", max_odr_seen);
+        eprintln!("  PA5 (LED, success)   set: {}", max_odr_seen & (1 << 5) != 0);
+        eprintln!("  PA6 (AHT20 ok diag)  set: {}", max_odr_seen & (1 << 6) != 0);
+        eprintln!("  PA7 (BMP280 ok diag) set: {}", max_odr_seen & (1 << 7) != 0);
+        // Dump i2c1 peripheral state via downcast.
+        let i2c_entry = machine
+            .bus
+            .peripherals
+            .iter()
+            .find(|p| p.name == "i2c1")
+            .unwrap();
+        let snap = i2c_entry.dev.snapshot();
+        eprintln!("i2c1 snapshot: {snap}");
+    }
+
+    assert!(
+        led_was_high,
+        "Firmware never set PA5 high — see eprintln trace above."
+    );
 }
