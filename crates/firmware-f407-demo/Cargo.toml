@@ -15,3 +15,9 @@ name = "firmware-f407-smoke"
 path = "src/smoke.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-f407-i2c"
+path = "src/i2c.rs"
+test = false
+bench = false

@@ -26,7 +26,7 @@ byte-for-byte (`crates/core/tests/firmware_survival.rs::test_nucleo_f407_*`).
 | Trace                   | Fixture ELF                                     | Hardware capture file                                  | Status                          |
 |-------------------------|-------------------------------------------------|--------------------------------------------------------|---------------------------------|
 | `nucleo_f407_smoke`     | `tests/fixtures/nucleo-f407-smoke.elf`          | [`tests/fixtures/hw_traces/nucleo_f407_smoke.txt`](../../tests/fixtures/hw_traces/nucleo_f407_smoke.txt) | ✅ Hardware-validated 2026-05-11 |
-| `nucleo_f407_i2c`       | (to land — `firmware-f407-demo` second binary)  | `tests/fixtures/hw_traces/nucleo_f407_i2c.txt` (pending)   | Not yet built                   |
+| `nucleo_f407_i2c`       | `tests/fixtures/nucleo-f407-i2c.elf`            | [`tests/fixtures/hw_traces/nucleo_f407_i2c.txt`](../../tests/fixtures/hw_traces/nucleo_f407_i2c.txt) | ✅ Hardware-validated 2026-05-11 |
 
 ## Capture-session playbook
 
@@ -156,11 +156,52 @@ Other things worth re-checking on future rounds:
   on a future variant, check that the chip yaml's USART2 type still
   dispatches the V1 register layout.
 
-### Round 2 — I²C state machine (`nucleo_f407_i2c`)
+### Round 2 — I²C no-slave register fingerprint (`nucleo_f407_i2c`) ✅
 
-**Not yet built.** Will be a `firmware-f407-i2c` binary that drives the
-AHT20 + BMP280 transactions via UART-traced events (e.g.
-`I2C START\r\nADDR=ED\r\nDR=58\r\n`) so the survival diff catches
-state-machine divergences. The `crates/core/src/peripherals/i2c.rs`
-fixes that landed in commit `63b3f03` should pre-emptively cover the
-common cases; the trace will tell us if anything else is hiding.
+**Captured 2026-05-11.** Hardware: STM32F4-DISCOVERY, no slaves on
+PB6/PB7 (sensors arrive separately). Capture path: ARM semihosting
+via openocd (same dual-emit pattern as Round 1).
+
+Trace shape: `I2C INIT → CR1/CR2/CCR/TRISE/OAR1/SR1/SR2 dump → START →
+SR1 dump → ADDR phase (0x70 = AHT20 write, but no chip wired) → SR1/SR2
+dump → STOP → SR1/SR2 dump`. 218 bytes total
+([`hw_traces/nucleo_f407_i2c.txt`](../../tests/fixtures/hw_traces/nucleo_f407_i2c.txt)),
+matches sim verbatim.
+
+The round drove **3 sub-fixes**, two in the simulator and one in the
+firmware:
+
+**Sub-fix #1 — Sim assumed ACK on every address phase (this commit).**
+`AddressPending` tick set `SR1.ADDR | SR2.MSL | SR2.BUSY`
+unconditionally, ignoring whether `current_target` was `None`. Real
+silicon raises `SR1.AF` (bit 10, Acknowledge Failure) when no slave
+replies, leaves `ADDR` clear, but **keeps** `MSL+BUSY` set in `SR2`
+(master mode active, waiting for STOP). Now matches: sim raises AF
+on `current_target.is_none()` and sets MSL+BUSY same way silicon does.
+
+**Sub-fix #2 — Firmware missing internal pull-ups (this commit).**
+Initial silicon capture showed `SR2.BUSY=1` from the very first
+register read, before any transaction. Cause: PB6/PB7 floating. The
+F4-DISCO has **no external pull-ups** on the I²C lines, and the
+firmware was leaving `GPIOB_PUPDR` at reset (00 = no pull). Floating
+SDA/SCL look like a stuck-low bus to the I²C peripheral, which
+latches BUSY and refuses to start any transaction. Fix: configure
+`PUPDR` bits for PB6/PB7 to `01` (internal pull-up). After the fix,
+silicon `SR2` reads `0x00` at boot, matching sim.
+
+**Sub-fix #3 — Unit test relied on the buggy ACK assumption.**
+`crates/core/src/peripherals/i2c.rs::tests::test_i2c_full_transfer_flow`
+wrote address `0xA0` (slave `0x50`) with no attached devices and
+asserted `SR1.ADDR` was set. With sub-fix #1 that now raises AF, not
+ADDR. Updated the test to attach an `Mpu6050::new(0x50)` so the
+address phase ACKs and the rest of the data-flow assertions stay
+meaningful.
+
+**No ST-LINK firmware divergence this round.** V2J43S0 from Round 1.
+
+**What this round does NOT yet cover.** Without I²C slaves wired up,
+the data phase (TXE/RXNE/BTF, multi-byte read, repeated start) isn't
+exercised. The simulator's recent state-machine fixes in commit
+`63b3f03` cover those paths — Round 3 will land when the AHT20 +
+BMP280 sensors arrive and the firmware can drive real transactions
+against modeled silicon counterparts.

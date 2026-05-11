@@ -19,6 +19,7 @@ fn main() {
         .unwrap();
     println!("cargo:rustc-link-search={}", out.display());
     println!("cargo:rustc-link-arg-bin=firmware-f407-smoke=-Tminimal.ld");
+    println!("cargo:rustc-link-arg-bin=firmware-f407-i2c=-Tminimal.ld");
     println!("cargo:rerun-if-changed=memory.x");
     println!("cargo:rerun-if-changed=minimal.ld");
 }
