@@ -613,6 +613,43 @@ DONE\r\n",
         valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
         expected_uart_output: b"F407 SMOKE\r\nDEV=10016413\r\nMUL=369D0368\r\nDONE\r\n",
     },
+    SurvivalCase {
+        // F407 Round 2 — I²C1 register-init + START + no-slave address
+        // phase + STOP. With `nucleo-f407.yaml::external_devices: []`
+        // and no chip wired to the Discovery's PB6/PB7, neither sim
+        // nor silicon should ACK the address — sim's AddressPending
+        // tick currently sets ADDR unconditionally, real silicon sets
+        // SR1.AF instead. Capture is the witness; the divergence (if
+        // any) lands as a sim fix.
+        //
+        // expected_uart_output below is the *simulator-produced* trace;
+        // it gets re-locked against silicon when the capture session
+        // surfaces the divergence (or confirms a match).
+        name: "nucleo_f407_i2c",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32f407",
+        system: "nucleo-f407",
+        fixture: "nucleo-f407-i2c.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"I2C INIT\r\n\
+CR1=00000001\r\n\
+CR2=00000010\r\n\
+CCR=00000050\r\n\
+TRISE=00000011\r\n\
+OAR1=00000000\r\n\
+SR1=00000000\r\n\
+SR2=00000000\r\n\
+I2C START\r\n\
+SR1=00000001\r\n\
+I2C ADDR\r\n\
+SR1=00000400\r\n\
+SR2=00000003\r\n\
+I2C STOP\r\n\
+SR1=00000400\r\n\
+SR2=00000000\r\n\
+DONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -947,6 +984,23 @@ fn test_nucleo_l476rg_r12_survival() {
 #[test]
 fn test_nucleo_f407_smoke_survival() {
     run_survival_case(&SURVIVAL_CASES[22]);
+}
+
+#[test]
+fn test_nucleo_f407_i2c_survival() {
+    // Capture and print whatever sim produces — the literal in
+    // SURVIVAL_CASES gets updated to match after the first run, then
+    // diffed against silicon.
+    let case = &SURVIVAL_CASES[23];
+    let firmware = fixtures().join(case.fixture);
+    let (pc, uart) =
+        run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES * 2);
+    assert_pc_in_range(pc, SURVIVAL_CYCLES * 2, case.valid_pc_ranges);
+    eprintln!("--- F407 I2C SIM UART ---");
+    eprintln!("{}", String::from_utf8_lossy(&uart));
+    eprintln!("--- END ---");
+    eprintln!("escaped: {:?}", String::from_utf8_lossy(&uart));
+    assert_uart_contains(&uart, case.expected_uart_output, case.name);
 }
 
 #[test]

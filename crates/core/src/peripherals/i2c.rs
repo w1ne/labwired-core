@@ -408,6 +408,38 @@ impl crate::Peripheral for I2c {
                     }
                     I2cState::AddressPending => {
                         self.sr1 &= !0x0001; // Clear SB
+
+                        // No slave at the addressed address → NACK on real
+                        // silicon. Real silicon raises SR1.AF (bit 10,
+                        // "Acknowledge Failure") and leaves ADDR/MSL/BUSY
+                        // clear. Surfaced by F407 Round 2 capture: writing
+                        // an address byte with `external_devices: []` in
+                        // the system manifest had sim setting SR1=0x82
+                        // (ADDR+TXE) while real silicon (with proper bus)
+                        // would have set SR1=0x400 (AF). Firmware that
+                        // probes for a chip's presence via the AF flag
+                        // depends on this.
+                        if self.current_target.is_none() {
+                            self.sr1 |= 0x0400; // AF
+                            // Per silicon: after a NACK the bus stays
+                            // in master mode with BUSY set until firmware
+                            // generates STOP. Round 2 capture showed
+                            // SR2=0x03 on real F407 after AF; sim was
+                            // leaving SR2=0.
+                            self.sr2 |= 0x0001; // MSL
+                            self.sr2 |= 0x0002; // BUSY
+                            self.state = I2cState::Idle;
+                            // ITERR (CR2 bit 8) raises IRQ on AF when set.
+                            if (self.cr2 & (1 << 8)) != 0 {
+                                irq = true;
+                            }
+                            return crate::PeripheralTickResult {
+                                irq,
+                                cycles: 0,
+                                ..Default::default()
+                            };
+                        }
+
                         self.sr1 |= 0x0002; // Set ADDR
                         self.sr2 |= 0x0001; // MSL (Master mode) set
                         self.sr2 |= 0x0002; // BUSY set
@@ -527,7 +559,13 @@ mod tests {
 
     #[test]
     fn test_i2c_full_transfer_flow() {
+        use crate::peripherals::components::Mpu6050;
         let mut i2c = I2c::new();
+        // Attach a real slave so the address phase ACKs. Without an
+        // attached device the address phase now raises SR1.AF instead
+        // of setting ADDR (Round 2 F407 fix); the test below exercises
+        // the happy-path data flow, so we need a slave.
+        i2c.attach(Box::new(Mpu6050::new(0x50)));
 
         // 1. START
         i2c.write(0x01, 0x01).unwrap();
@@ -536,8 +574,8 @@ mod tests {
         }
         assert_ne!(i2c.sr1 & 0x01, 0); // SB set
 
-        // 2. Address
-        i2c.write(0x10, 0xA0).unwrap(); // Write address to DR
+        // 2. Address — 0xA0 = (0x50 << 1) | W, matches the attached Mpu6050.
+        i2c.write(0x10, 0xA0).unwrap();
         for _ in 0..20 {
             i2c.tick();
         }
