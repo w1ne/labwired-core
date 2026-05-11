@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "chip": "stm32f407vgt6",
+    "scenario": "placeholder_for_schema_validation",
+    "i2c_base": 1073763328,
+    "firmware_elf": "target/thumbv7em-none-eabi/release/nucleo-f407-i2c",
+    "captured_at": null,
+    "openocd_version": null
+  },
+  "events": []
+}

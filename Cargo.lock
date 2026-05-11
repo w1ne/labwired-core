@@ -1280,6 +1280,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nucleo-f407-i2c"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"

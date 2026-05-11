@@ -9,6 +9,7 @@ If you are new to LabWired, start here:
 - **[Running Your Firmware](getting_started_firmware.md)**: Learn how to load ELF binaries and execute them in the simulator.
 - **[Per-Board Coverage](boards/)**: What's modeled per chip — see e.g.
   [`stm32f401`](boards/stm32f401.md),
+  [`stm32f407` (I²C onboarding-in-flight)](boards/stm32f407.md),
   [`stm32h563`](boards/stm32h563.md),
   [`stm32l476` (gold reference)](boards/nucleo-l476rg.md),
   [`nrf52840`](boards/nrf52840.md),

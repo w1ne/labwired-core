@@ -1,0 +1,15 @@
+[package]
+name = "nucleo-f407-i2c"
+version = "0.1.0"
+edition = "2021"
+description = "STM32F407 I²C onboarding firmware — AHT20 + BMP280 over I²C1"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "nucleo-f407-i2c"
+test = false
+bench = false

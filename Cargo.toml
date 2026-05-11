@@ -38,6 +38,7 @@ members = [
     "crates/wasm",
     "examples/arm-cortex-m0",
     "examples/demo-blinky",
+    "examples/nucleo-f407-i2c",
     "examples/riscv-virt",
 ]
 # firmware-hal-test is a standalone reference example pinned to stm32f1xx-hal.
