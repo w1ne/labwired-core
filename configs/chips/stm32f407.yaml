@@ -58,3 +58,15 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      # DBGMCU_IDCODE for STM32F407: DEV_ID=0x413 (F4 family). REV_ID
+      # varies by silicon revision; 0x1007 is the placeholder until a
+      # hardware capture session pins this against the user's specific
+      # die. The survival trace `nucleo_f407_smoke` is the witness — if
+      # silicon reports a different REV_ID, the test diverges and the
+      # value below gets updated to match.
+      idcode: 0x10070413

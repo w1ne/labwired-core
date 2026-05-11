@@ -589,6 +589,28 @@ PCR =00000018\r\n\
 SR  =00000040\r\n\
 DONE\r\n",
     },
+    SurvivalCase {
+        // F407 survival-trace smoke — the first F4-family entry in the
+        // rotation. Lands with the *simulator-produced* output as the
+        // assertion; running this on real F407 silicon (see
+        // examples/nucleo-f407-i2c/ORACLE_CAPTURE.md → "Smoke trace"
+        // section) will either confirm it byte-for-byte or surface a
+        // sim↔silicon divergence to investigate. Iterate by capturing,
+        // diffing, fixing the simulator, and re-running.
+        //
+        // DEV=10070413: F4 DBGMCU IDCODE (DEV_ID 0x413, placeholder
+        // REV_ID 0x1007 — real silicon will pin REV_ID exactly).
+        // MUL=369D0368: 0x12345678 * 3 (low 32 bits) — Thumb-2 MUL.W
+        // check that pins the decoder.
+        name: "nucleo_f407_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32f407",
+        system: "nucleo-f407",
+        fixture: "nucleo-f407-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"F407 SMOKE\r\nDEV=10070413\r\nMUL=369D0368\r\nDONE\r\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -918,6 +940,11 @@ fn test_nucleo_l476rg_r11_survival() {
 #[test]
 fn test_nucleo_l476rg_r12_survival() {
     run_survival_case(&SURVIVAL_CASES[21]);
+}
+
+#[test]
+fn test_nucleo_f407_smoke_survival() {
+    run_survival_case(&SURVIVAL_CASES[22]);
 }
 
 #[test]

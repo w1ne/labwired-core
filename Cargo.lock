@@ -572,6 +572,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-f407-demo"
+version = "0.13.0"
+dependencies = [
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-h563-demo"
 version = "0.13.0"
 dependencies = [

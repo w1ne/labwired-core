@@ -1,0 +1,26 @@
+# LabWired - NUCLEO-F407 system manifest (survival-trace target)
+#
+# Bare F407 system used by the firmware-survival test rotation. No
+# external devices — the smoke firmware exercises CPU + RCC + GPIO +
+# USART2 only. The `examples/nucleo-f407-i2c/system.yaml` is the
+# sibling system manifest that adds AHT20 + BMP280 for the I²C lane.
+#
+# USART2 PA2 (TX) / PA3 (RX) wired to ST-LINK V2 Virtual COM Port on
+# NUCLEO-F407 boards. LD2 (green) on PA5.
+
+name: "nucleo-f407"
+chip: "../chips/stm32f407.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false
