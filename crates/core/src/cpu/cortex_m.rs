@@ -1632,8 +1632,22 @@ impl CortexM {
                         tracing::error!("Bus Write Fault (STRH) at {:#x}", addr);
                     }
                 }
-                Instruction::Bkpt { imm8: _ } => {
-                    return Err(crate::SimulationError::Halt);
+                Instruction::Bkpt { imm8 } => {
+                    // ARM semihosting uses `bkpt #0xAB` as the trap into
+                    // the debugger. On real silicon openocd intercepts
+                    // these and emulates the syscall (WRITEC, WRITE0,
+                    // SYS_EXIT, …). The simulator doesn't emulate the
+                    // syscalls itself — firmware that wants the same
+                    // bytes available on both sides should also emit
+                    // them via UART, which our sink already captures.
+                    // Treating semihosting BKPT as a no-op here lets
+                    // such dual-emit firmware run identically on sim
+                    // and silicon. Any other BKPT immediate (typical
+                    // for `panic!` traps or debugger breakpoints) is
+                    // still a halt.
+                    if imm8 != 0xAB {
+                        return Err(crate::SimulationError::Halt);
+                    }
                 }
 
                 // Stack Operations

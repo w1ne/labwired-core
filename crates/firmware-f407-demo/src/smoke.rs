@@ -69,11 +69,30 @@ fn rmw32_mask(ptr: *mut u32, clear: u32, set: u32) {
     }
 }
 
+/// ARM semihosting WRITEC: write a single byte to the debugger's
+/// host-side console. On the simulator this is a no-op (the byte still
+/// flows out via USART2 in `uart_putc`); on real silicon openocd with
+/// `arm semihosting enable` captures the byte. Dual-emit lets the same
+/// firmware ELF produce identical byte streams on both sides.
+#[inline(always)]
+fn semihost_writec(byte: u8) {
+    let p = core::ptr::addr_of!(byte);
+    unsafe {
+        core::arch::asm!(
+            "bkpt #0xAB",
+            inout("r0") 0x03_u32 => _,  // SYS_WRITEC
+            in("r1") p,
+            options(preserves_flags, nostack),
+        );
+    }
+}
+
 fn uart_putc(c: u8) {
     unsafe {
         while (read_volatile(USART2_SR) & SR_TXE) == 0 {}
         write_volatile(USART2_DR, c as u32);
     }
+    semihost_writec(c);
 }
 
 fn uart_puts(s: &[u8]) {
@@ -120,6 +139,19 @@ fn usart2_init() {
 }
 
 // ── Entry ─────────────────────────────────────────────────────────────
+
+/// Catch-all handler for every exception other than Reset. The minimal
+/// vector table in `minimal.ld` points NMI/HardFault/MemManage/BusFault/
+/// UsageFault/SVCall/DebugMon/PendSV/SysTick all here, so any unexpected
+/// fault sits in WFI rather than escalating into a double fault by
+/// reading garbage as the handler PC. Useful in particular for catching
+/// a BKPT-escalation if openocd's semihosting trap isn't installed yet.
+#[no_mangle]
+pub extern "C" fn default_handler() -> ! {
+    loop {
+        unsafe { core::arch::asm!("wfi") }
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn Reset() -> ! {
