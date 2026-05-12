@@ -11,6 +11,7 @@
 //! so a yaml typo doesn't silently produce an empty bus.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use crate::peripherals::i2c::I2cDevice;
 
@@ -37,6 +38,21 @@ pub fn build_i2c_device(
                 .unwrap_or(0x76) as u8;
             Some(Box::new(crate::peripherals::components::Bmp280::new(
                 address,
+            )))
+        }
+        "shm_i2c" => {
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x24) as u8;
+            let shm_path = config
+                .get("shm_path")
+                .and_then(|v| v.as_str())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/tmp/labwired_proximity_imu"));
+            let size = config.get("size").and_then(|v| v.as_u64()).unwrap_or(128) as usize;
+            Some(Box::new(crate::peripherals::components::ShmI2c::new(
+                address, shm_path, size,
             )))
         }
         _ => None,
@@ -76,5 +92,20 @@ mod tests {
         let cfg = HashMap::new();
         assert!(build_i2c_device("TMP102", &cfg).is_some());
         assert!(build_i2c_device("Tmp102", &cfg).is_some());
+    }
+
+    #[test]
+    fn shm_i2c_built_from_config() {
+        let mut cfg = HashMap::new();
+        cfg.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(0x24)),
+        );
+        cfg.insert(
+            "shm_path".to_string(),
+            serde_yaml::Value::String("/tmp/labwired_proximity_imu".to_string()),
+        );
+        let dev = build_i2c_device("shm_i2c", &cfg).expect("shm_imu should build");
+        assert_eq!(dev.address(), 0x24);
     }
 }
