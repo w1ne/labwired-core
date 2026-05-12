@@ -14,8 +14,6 @@ use std::path::PathBuf;
 
 use crate::peripherals::i2c::I2cDevice;
 
-const DEFAULT_ADDR: u8 = 0x24;
-const DEFAULT_SIZE: usize = 128;
 
 #[derive(Debug)]
 pub struct ShmImu {
@@ -37,15 +35,12 @@ impl ShmImu {
         }
     }
 
-    pub fn proximity_default(shm_path: PathBuf) -> Self {
-        Self::new(DEFAULT_ADDR, shm_path, DEFAULT_SIZE)
-    }
-
     fn read_byte(&self, offset: u8) -> u8 {
         if offset as usize >= self.size {
             return 0;
         }
         let Ok(mut file) = OpenOptions::new().read(true).open(&self.shm_path) else {
+            tracing::warn!(path = %self.shm_path.display(), "shm_imu: failed to open shm file for read");
             return 0;
         };
         if file.seek(SeekFrom::Start(offset as u64)).is_err() {
@@ -69,6 +64,7 @@ impl ShmImu {
             .create(true)
             .open(&self.shm_path)
         else {
+            tracing::warn!(path = %self.shm_path.display(), "shm_imu: failed to open shm file for write");
             return;
         };
         if file.metadata().map(|m| m.len()).unwrap_or(0) < self.size as u64 {
