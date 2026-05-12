@@ -50,10 +50,7 @@ pub fn build_i2c_device(
                 .and_then(|v| v.as_str())
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("/tmp/labwired_proximity_imu"));
-            let size = config
-                .get("size")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(128) as usize;
+            let size = config.get("size").and_then(|v| v.as_u64()).unwrap_or(128) as usize;
             Some(Box::new(crate::peripherals::components::ShmI2c::new(
                 address, shm_path, size,
             )))

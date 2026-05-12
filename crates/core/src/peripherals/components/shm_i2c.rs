@@ -61,6 +61,7 @@ impl ShmI2c {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&self.shm_path)
         else {
             tracing::warn!(path = %self.shm_path.display(), "shm_i2c: failed to open shm file for write");
@@ -108,10 +109,8 @@ mod tests {
 
     #[test]
     fn pointer_read_and_write_round_trip() {
-        let path = std::env::temp_dir().join(format!(
-            "labwired_shm_i2c_test_{}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("labwired_shm_i2c_test_{}", std::process::id()));
         std::fs::write(&path, vec![0_u8; 8]).unwrap();
         let mut dev = ShmI2c::new(0x24, path.clone(), 8);
 
