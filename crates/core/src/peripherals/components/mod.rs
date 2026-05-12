@@ -8,10 +8,10 @@ pub mod aht20;
 pub mod bmp280;
 pub mod i2c_factory;
 pub mod mpu6050;
-pub mod shm_imu;
+pub mod shm_i2c;
 
 pub use aht20::Aht20;
 pub use bmp280::Bmp280;
 pub use i2c_factory::build_i2c_device;
 pub use mpu6050::Mpu6050;
-pub use shm_imu::ShmImu;
+pub use shm_i2c::ShmI2c;

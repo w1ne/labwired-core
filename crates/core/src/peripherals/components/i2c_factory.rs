@@ -40,7 +40,7 @@ pub fn build_i2c_device(
                 address,
             )))
         }
-        "shm_imu" => {
+        "shm_i2c" => {
             let address = config
                 .get("i2c_address")
                 .and_then(|v| v.as_u64())
@@ -54,7 +54,7 @@ pub fn build_i2c_device(
                 .get("size")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(128) as usize;
-            Some(Box::new(crate::peripherals::components::ShmImu::new(
+            Some(Box::new(crate::peripherals::components::ShmI2c::new(
                 address, shm_path, size,
             )))
         }
@@ -98,7 +98,7 @@ mod tests {
     }
 
     #[test]
-    fn shm_imu_built_from_config() {
+    fn shm_i2c_built_from_config() {
         let mut cfg = HashMap::new();
         cfg.insert(
             "i2c_address".to_string(),
@@ -108,7 +108,7 @@ mod tests {
             "shm_path".to_string(),
             serde_yaml::Value::String("/tmp/labwired_proximity_imu".to_string()),
         );
-        let dev = build_i2c_device("shm_imu", &cfg).expect("shm_imu should build");
+        let dev = build_i2c_device("shm_i2c", &cfg).expect("shm_imu should build");
         assert_eq!(dev.address(), 0x24);
     }
 }

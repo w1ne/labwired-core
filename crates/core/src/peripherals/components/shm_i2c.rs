@@ -14,9 +14,8 @@ use std::path::PathBuf;
 
 use crate::peripherals::i2c::I2cDevice;
 
-
 #[derive(Debug)]
-pub struct ShmImu {
+pub struct ShmI2c {
     address: u8,
     shm_path: PathBuf,
     size: usize,
@@ -24,7 +23,7 @@ pub struct ShmImu {
     register_address_written: bool,
 }
 
-impl ShmImu {
+impl ShmI2c {
     pub fn new(address: u8, shm_path: PathBuf, size: usize) -> Self {
         Self {
             address,
@@ -40,7 +39,7 @@ impl ShmImu {
             return 0;
         }
         let Ok(mut file) = OpenOptions::new().read(true).open(&self.shm_path) else {
-            tracing::warn!(path = %self.shm_path.display(), "shm_imu: failed to open shm file for read");
+            tracing::warn!(path = %self.shm_path.display(), "shm_i2c: failed to open shm file for read");
             return 0;
         };
         if file.seek(SeekFrom::Start(offset as u64)).is_err() {
@@ -64,7 +63,7 @@ impl ShmImu {
             .create(true)
             .open(&self.shm_path)
         else {
-            tracing::warn!(path = %self.shm_path.display(), "shm_imu: failed to open shm file for write");
+            tracing::warn!(path = %self.shm_path.display(), "shm_i2c: failed to open shm file for write");
             return;
         };
         if file.metadata().map(|m| m.len()).unwrap_or(0) < self.size as u64 {
@@ -77,7 +76,7 @@ impl ShmImu {
     }
 }
 
-impl I2cDevice for ShmImu {
+impl I2cDevice for ShmI2c {
     fn address(&self) -> u8 {
         self.address
     }
@@ -110,11 +109,11 @@ mod tests {
     #[test]
     fn pointer_read_and_write_round_trip() {
         let path = std::env::temp_dir().join(format!(
-            "labwired_shm_imu_test_{}",
+            "labwired_shm_i2c_test_{}",
             std::process::id()
         ));
         std::fs::write(&path, vec![0_u8; 8]).unwrap();
-        let mut dev = ShmImu::new(0x24, path.clone(), 8);
+        let mut dev = ShmI2c::new(0x24, path.clone(), 8);
 
         dev.start();
         dev.write(0x01);
