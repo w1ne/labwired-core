@@ -10,6 +10,7 @@ import chipNrf52840 from '../../../core/configs/chips/nrf52840.yaml?raw';
 import chipRp2040 from '../../../core/configs/chips/rp2040.yaml?raw';
 import chipStm32f103 from '../../../core/configs/chips/stm32f103.yaml?raw';
 import chipStm32f401 from '../../../core/configs/chips/stm32f401.yaml?raw';
+import chipStm32f401cdu6 from '../../../core/configs/chips/stm32f401cdu6.yaml?raw';
 import chipStm32h563 from '../../../core/configs/chips/stm32h563.yaml?raw';
 import systemEsp32c3Devkit from '../../../core/configs/systems/esp32c3-devkit.yaml?raw';
 import systemEsp32s3Zero from '../../../core/configs/systems/esp32s3-zero.yaml?raw';
@@ -17,6 +18,7 @@ import systemNrf52840Dk from '../../../core/configs/systems/nrf52840-dk.yaml?raw
 import systemNucleoF401re from '../../../core/configs/systems/nucleo-f401re.yaml?raw';
 import systemNucleoH563zi from '../../../core/configs/systems/nucleo-h563zi-demo.yaml?raw';
 import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw';
+import systemStm32f401cdu6Blackpill from '../../../core/configs/systems/stm32f401cdu6-blackpill.yaml?raw';
 import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yaml?raw';
 
 export interface BoardConfig {
@@ -54,6 +56,16 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipStm32f401,
     systemYaml: systemNucleoF401re,
     demoFirmwarePath: `${BASE}wasm/demo-nucleo-f401.elf`,
+    mcuComponentType: 'stm32-dev',
+  },
+  {
+    boardId: 'stm32f401cdu6-blackpill',
+    chipId: 'stm32f401cdu6',
+    name: 'STM32F401CDU6 Black Pill',
+    description: 'Compact STM32F401CDU6 Black Pill board with active-low PC13 LED.',
+    arch: 'ARM Cortex-M4',
+    chipYaml: chipStm32f401cdu6,
+    systemYaml: systemStm32f401cdu6Blackpill,
     mcuComponentType: 'stm32-dev',
   },
   {

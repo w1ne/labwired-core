@@ -5,6 +5,7 @@ describe('BOARD_CONFIGS', () => {
   it('loads bundled manifests directly from the engine-owned YAML files', () => {
     const stm32f103 = BOARD_CONFIGS.find((config) => config.boardId === 'stm32f103-blinky');
     const nucleoF401 = BOARD_CONFIGS.find((config) => config.boardId === 'nucleo-f401re');
+    const blackPill = BOARD_CONFIGS.find((config) => config.boardId === 'stm32f401cdu6-blackpill');
 
     expect(stm32f103).toBeDefined();
     expect(stm32f103?.chipYaml).toContain('name: "stm32f103c8"');
@@ -14,5 +15,46 @@ describe('BOARD_CONFIGS', () => {
     expect(nucleoF401).toBeDefined();
     expect(nucleoF401?.chipYaml).toContain('name: "stm32f401re"');
     expect(nucleoF401?.systemYaml).toContain('button_user_pc13');
+
+    expect(blackPill).toBeDefined();
+    expect(blackPill?.chipYaml).toContain('name: "stm32f401cdu6"');
+    expect(blackPill?.chipYaml).toContain('size: "384KB"');
+    expect(blackPill?.chipYaml).toContain('id: "i2c1"');
+    expect(blackPill?.chipYaml).toContain('id: "i2c2"');
+    expect(blackPill?.chipYaml).toContain('id: "i2c3"');
+    expect(blackPill?.chipYaml).toContain('type: "stm32f1_i2c"');
+    for (const peripheralId of [
+      'tim1',
+      'tim2',
+      'tim3',
+      'tim4',
+      'tim5',
+      'tim9',
+      'tim10',
+      'tim11',
+      'usart1',
+      'usart2',
+      'usart6',
+      'spi1',
+      'spi2',
+      'spi3',
+      'spi4',
+      'dma1',
+      'dma2',
+      'adc1',
+      'exti',
+      'syscfg',
+      'pwr',
+      'flash_ctrl',
+      'crc',
+      'otg_fs_global',
+    ]) {
+      expect(blackPill?.chipYaml).toContain(`id: "${peripheralId}"`);
+    }
+    expect(blackPill?.chipYaml).toContain('id: "dma1"\n    type: "stub"');
+    expect(blackPill?.chipYaml).toContain('id: "dma2"\n    type: "stub"');
+    expect(blackPill?.chipYaml).not.toContain('id: "tim8"');
+    expect(blackPill?.systemYaml).toContain('led_pc13');
+    expect(blackPill?.systemYaml).toContain('active_high: false');
   });
 });
