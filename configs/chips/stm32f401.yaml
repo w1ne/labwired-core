@@ -40,3 +40,8 @@ peripherals:
     base_address: 0x40004400
     size: "1KB"
     irq: 38
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
