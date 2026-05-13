@@ -85,6 +85,24 @@ fn test_stm32f401_chip_loads_with_i2c1() {
     );
 }
 
+#[test]
+fn test_stm32f401cdu6_chip_loads_with_i2c1() {
+    let chip_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/stm32f401cdu6.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).expect("F401CDU6 chip yaml failed to parse");
+
+    assert_eq!(chip.name, "stm32f401cdu6");
+    assert_eq!(chip.flash.size, "384KB");
+    assert_eq!(chip.ram.size, "96KB");
+    assert!(
+        chip.peripherals
+            .iter()
+            .any(|p| p.id == "i2c1" && p.base_address == 0x40005400),
+        "F401CDU6 must declare i2c1 at 0x40005400"
+    );
+}
+
 /// End-to-end proof that `external_devices` declared in a system manifest
 /// actually attach to the corresponding I²C peripheral at bus-construction
 /// time. Uses the demo-blinky fixture (STM32F103 + TMP102 on i2c1) which

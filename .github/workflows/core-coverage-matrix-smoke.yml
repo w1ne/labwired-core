@@ -49,13 +49,13 @@ jobs:
             profile_dir: release
             script: examples/nucleo-h563zi/uart-smoke.yaml
             system: examples/nucleo-h563zi/system.yaml
-          - id: stm32f401-nucleo
+          - id: stm32f401cdu6
             target: thumbv7em-none-eabi
             crate: firmware-f401-demo
             profile: release
             profile_dir: release
-            script: examples/nucleo-f401re/uart-smoke.yaml
-            system: configs/systems/nucleo-f401re.yaml
+            script: examples/stm32f401cdu6/uart-smoke.yaml
+            system: configs/systems/stm32f401cdu6.yaml
           - id: stm32f103-bluepill
             target: thumbv7m-none-eabi
             crate: demo-blinky
@@ -157,7 +157,7 @@ jobs:
             --json-out out/coverage-matrix/scoreboard.json \
             --required-target stm32f103-bluepill \
             --required-target stm32h563-nucleo \
-            --required-target stm32f401-nucleo \
+            --required-target stm32f401cdu6 \
             --required-target riscv-ci-fixture \
             --required-target demo-blinky-stm32f103 \
             --min-required-pass-rate 0.80
@@ -174,7 +174,7 @@ jobs:
             --json-out /tmp/coverage-matrix-gate.json \
             --required-target stm32f103-bluepill \
             --required-target stm32h563-nucleo \
-            --required-target stm32f401-nucleo \
+            --required-target stm32f401cdu6 \
             --required-target riscv-ci-fixture \
             --required-target demo-blinky-stm32f103 \
             --min-required-pass-rate 0.80

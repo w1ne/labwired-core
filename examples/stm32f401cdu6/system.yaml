@@ -1,0 +1,5 @@
+# LabWired - STM32F401CDU6 Example System
+name: "stm32f401cdu6"
+chip: "../../configs/chips/stm32f401cdu6.yaml"
+external_devices: []
+board_io: []
