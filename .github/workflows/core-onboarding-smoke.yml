@@ -21,11 +21,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - id: stm32f401-nucleo
+          - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi
-            script: examples/nucleo-f401re/uart-smoke.yaml
-            system: configs/systems/nucleo-f401re.yaml
+            script: examples/stm32f401cdu6/uart-smoke.yaml
+            system: configs/systems/stm32f401cdu6.yaml
           - id: stm32h563-nucleo
             crate: firmware-h563-demo
             target: thumbv7m-none-eabi

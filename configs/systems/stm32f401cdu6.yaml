@@ -1,0 +1,5 @@
+# LabWired - STM32F401CDU6 System Configuration
+name: "stm32f401cdu6"
+chip: "../chips/stm32f401cdu6.yaml"
+external_devices: []
+board_io: []

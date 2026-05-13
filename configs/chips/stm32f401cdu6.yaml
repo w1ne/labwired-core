@@ -1,0 +1,47 @@
+# LabWired - STM32F401CDU6 Chip Descriptor
+#
+# Verified on attached hardware via ST-LINK/OpenOCD:
+# - DBGMCU IDCODE: 0x10016433
+# - Flash size: 384 KiB
+
+name: "stm32f401cdu6"
+arch: "arm"
+registers_count: 150
+flash:
+  base: 0x08000000
+  size: "384KB"
+ram:
+  base: 0x20000000
+  size: "96KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31

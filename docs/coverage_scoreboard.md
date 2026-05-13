@@ -30,10 +30,10 @@ Latest validated run:
 | Metric | Baseline Value | Notes |
 |---|---|---|
 | Top-5 targets defined | `5` | Defined in `docs/spec/TOP20_COVERAGE_MATRIX.md` |
-| Top-5 with runnable smoke script | `5/5` | `stm32f401-nucleo` smoke package added |
+| Top-5 with runnable smoke script | `5/5` | `stm32f401cdu6` smoke package added |
 | Top-5 with deterministic evidence artifacts in matrix CI | `5/5` | Published in `coverage-matrix-scoreboard` artifact |
 | Top-5 with unsupported-instruction audit artifacts | `5/5` | Published per-target under matrix artifacts |
-| Top-5 with explicit known-limitations entries | `3/5` | `stm32f103-bluepill`, `stm32h563-nucleo`, `stm32f401-nucleo` |
+| Top-5 with explicit known-limitations entries | `3/5` | `stm32f103-bluepill`, `stm32h563-nucleo`, `stm32f401cdu6` |
 
 ## Target-Level Baseline
 
@@ -41,7 +41,7 @@ Latest validated run:
 |---|---|---|---|---|
 | `stm32f103-bluepill` | `examples/demo-blinky/io-smoke.yaml` | `cargo build -p demo-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f103-bluepill/` |
 | `stm32h563-nucleo` | `examples/nucleo-h563zi/uart-smoke.yaml` | `cargo build -p firmware-h563-demo --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32h563-nucleo/` |
-| `stm32f401-nucleo` | `examples/nucleo-f401re/uart-smoke.yaml` | `cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f401-nucleo/` |
+| `stm32f401cdu6` | `examples/stm32f401cdu6/uart-smoke.yaml` | `cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-stm32f401cdu6/` |
 | `riscv-ci-fixture` | `examples/ci/riscv-uart-ok.yaml` | `cargo build -p riscv-ci-fixture --release --target riscv32i-unknown-none-elf` | `passing` | `out/coverage-matrix/coverage-matrix-riscv-ci-fixture/` |
 | `demo-blinky-stm32f103` | `examples/demo-blinky/io-smoke.yaml` | `cargo build -p demo-blinky --release --target thumbv7m-none-eabi` | `passing` | `out/coverage-matrix/coverage-matrix-demo-blinky-stm32f103/` |
 
