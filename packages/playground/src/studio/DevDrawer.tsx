@@ -2,14 +2,15 @@ import { useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
-export type DevTab = 'serial' | 'registers' | 'trace' | 'memory' | 'yaml';
+export type DevTab = 'serial' | 'registers' | 'trace' | 'memory' | 'source' | 'yaml';
 
-const TAB_ORDER: DevTab[] = ['serial', 'registers', 'trace', 'memory', 'yaml'];
+const TAB_ORDER: DevTab[] = ['serial', 'registers', 'trace', 'memory', 'source', 'yaml'];
 const TAB_LABEL: Record<DevTab, string> = {
   serial: 'Serial',
   registers: 'Registers',
   trace: 'Trace',
   memory: 'Memory',
+  source: 'Source',
   yaml: 'YAML',
 };
 

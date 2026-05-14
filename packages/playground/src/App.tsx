@@ -889,6 +889,8 @@ export function App() {
     <SimDock
       state={simDockState}
       runtimeMs={0}
+      cycles={simState.cycles}
+      pc={simState.pc}
       onRun={handleRun}
       onPause={handlePause}
       onStep={handleStep}
@@ -911,6 +913,22 @@ export function App() {
         ),
         memory: (
           <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />
+        ),
+        source: (
+          selectedBoard.sourceCode ? (
+            <div className="h-full flex flex-col">
+              {selectedBoard.sourceFilename && (
+                <div className="px-3 py-1.5 text-fg-tertiary text-[11px] font-mono border-b border-border bg-bg-elevated/40 shrink-0">
+                  {selectedBoard.sourceFilename}
+                </div>
+              )}
+              <pre className="font-mono text-[12px] leading-[1.5] p-3 text-fg-secondary whitespace-pre overflow-auto flex-1">
+                {selectedBoard.sourceCode}
+              </pre>
+            </div>
+          ) : (
+            <div className="p-4 text-fg-tertiary text-sm">Source not bundled for this lab.</div>
+          )
         ),
         yaml: (
           <pre className="font-mono text-[12px] p-3 text-fg-secondary whitespace-pre-wrap">

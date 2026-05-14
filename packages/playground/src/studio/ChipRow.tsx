@@ -11,6 +11,7 @@ export interface StarterLab {
 export const STARTER_LABS: StarterLab[] = [
   { id: 'stm32f103-blinky', name: 'Blinky', icon: '⚡', locked: false },
   { id: 'adxl345-sensor-lab', name: 'ADXL345 Tilt', icon: '📊', locked: false },
+  { id: 'nucleo-f401re', name: 'Nucleo F4', icon: '🔵', locked: false },
 ];
 
 export interface ChipRowProps {

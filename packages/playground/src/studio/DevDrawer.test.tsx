@@ -9,6 +9,7 @@ describe('DevDrawer', () => {
     registers: <div>REG_PANEL</div>,
     trace: <div>TRACE_PANEL</div>,
     memory: <div>MEM_PANEL</div>,
+    source: <div>SOURCE_PANEL</div>,
     yaml: <div>YAML_PANEL</div>,
   };
 

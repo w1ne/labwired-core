@@ -6,10 +6,23 @@ export type SimState = 'idle' | 'building' | 'running' | 'paused' | 'halted';
 export interface SimDockProps {
   state: SimState;
   runtimeMs: number;
+  cycles?: number;
+  pc?: number;
   onRun: () => void;
   onPause: () => void;
   onStep: () => void;
   onReset: () => void;
+}
+
+function formatCycles(n: number): string {
+  if (n < 1_000) return n.toString();
+  if (n < 1_000_000) return `${(n / 1_000).toFixed(n < 10_000 ? 1 : 0)}K`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(n < 10_000_000 ? 2 : 1)}M`;
+  return `${(n / 1_000_000_000).toFixed(1)}B`;
+}
+
+function formatPc(pc: number): string {
+  return `0x${pc.toString(16).toUpperCase().padStart(8, '0')}`;
 }
 
 const STATE_LABEL: Record<SimState, string> = {
@@ -27,7 +40,7 @@ function formatRuntime(ms: number): string {
   return `${mm}:${ss}`;
 }
 
-export function SimDock({ state, runtimeMs, onRun, onPause, onStep, onReset }: SimDockProps) {
+export function SimDock({ state, runtimeMs, cycles, pc, onRun, onPause, onStep, onReset }: SimDockProps) {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       // Skip when focus is in an editable element
@@ -58,9 +71,12 @@ export function SimDock({ state, runtimeMs, onRun, onPause, onStep, onReset }: S
   const isRunning = state === 'running';
   const isPaused = state === 'paused';
 
+  const showCycles = cycles !== undefined && cycles > 0;
+  const showPc = pc !== undefined && pc > 0;
+
   return (
     <div
-      className="lw-glass absolute bottom-4 left-1/2 -translate-x-1/2 z-20 h-12 px-4 flex items-center gap-3 min-w-[480px]"
+      className="lw-glass absolute bottom-4 left-1/2 -translate-x-1/2 z-20 h-12 px-4 flex items-center gap-3 min-w-[560px]"
       role="toolbar"
       aria-label="Simulation controls"
     >
@@ -68,8 +84,9 @@ export function SimDock({ state, runtimeMs, onRun, onPause, onStep, onReset }: S
         type="button"
         onClick={isRunning ? onPause : onRun}
         aria-label={isRunning ? 'Pause' : 'Run'}
+        style={{ borderRadius: 999 }}
         className={clsx(
-          'h-8 px-3 rounded-button font-medium transition-colors duration-micro flex items-center gap-2',
+          'h-8 px-4 font-medium text-[13px] transition-all duration-micro flex items-center gap-2 outline-none',
           isRunning ? 'bg-magenta text-bg-base hover:opacity-90' : 'bg-accent text-bg-base hover:bg-accent-hover'
         )}
       >
@@ -81,7 +98,8 @@ export function SimDock({ state, runtimeMs, onRun, onPause, onStep, onReset }: S
         onClick={onStep}
         disabled={!isPaused}
         aria-label="Step"
-        className="h-8 w-8 rounded-button border border-border text-fg-secondary hover:text-fg-primary disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ borderRadius: 999 }}
+        className="h-8 w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary disabled:opacity-40 disabled:cursor-not-allowed outline-none border-0"
       >
         ⏵
       </button>
@@ -89,14 +107,43 @@ export function SimDock({ state, runtimeMs, onRun, onPause, onStep, onReset }: S
         type="button"
         onClick={onReset}
         aria-label="Reset"
-        className="h-8 w-8 rounded-button border border-border text-fg-secondary hover:text-fg-primary"
+        style={{ borderRadius: 999 }}
+        className="h-8 w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary outline-none border-0"
       >
         ↻
       </button>
       <div className="flex-1" />
-      <span className="text-fg-secondary font-mono text-[12px]">{formatRuntime(runtimeMs)}</span>
-      <div className="w-px h-5 bg-border" />
-      <div className="flex items-center gap-2">
+      {showPc && (
+        <span
+          className="text-fg-tertiary font-mono text-[11px]"
+          title="Program counter — exact silicon-parity instruction address"
+        >
+          PC <span className="text-fg-secondary">{formatPc(pc!)}</span>
+        </span>
+      )}
+      {showCycles && (
+        <>
+          <div className="w-px h-4 bg-border" aria-hidden />
+          <span
+            className="text-fg-tertiary font-mono text-[11px]"
+            title="Cycles executed — deterministic, reproducible across runs"
+          >
+            <span className="text-fg-secondary">{formatCycles(cycles!)}</span> cycles
+          </span>
+        </>
+      )}
+      <a
+        href="https://github.com/w1ne/labwired#-agent-first-architecture"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hidden md:inline-flex items-center gap-1 text-[10px] font-medium text-fg-tertiary hover:text-accent transition-colors duration-micro uppercase tracking-[0.06em]"
+        title="Cycle-accurate vs. real silicon — read the HIL-displacement showcase"
+      >
+        <span aria-hidden className="text-ok">✓</span>
+        Cycle-accurate
+      </a>
+      <div className="w-px h-4 bg-border" aria-hidden />
+      <div className="flex items-center gap-2 shrink-0">
         <span
           className={clsx('w-2 h-2 rounded-full', isRunning ? 'bg-magenta animate-pulse' : 'bg-fg-tertiary')}
           aria-hidden

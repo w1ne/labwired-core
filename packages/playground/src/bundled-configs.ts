@@ -21,6 +21,8 @@ import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw
 import systemStm32f401cdu6Blackpill from '../../../core/configs/systems/stm32f401cdu6-blackpill.yaml?raw';
 import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yaml?raw';
 import systemAdxl345SensorLab from '../../../core/examples/adxl345-sensor-lab/system.yaml?raw';
+import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
+import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -32,6 +34,10 @@ export interface BoardConfig {
   systemYaml: string;
   demoFirmwarePath?: string;
   mcuComponentType: string;
+  /** Raw firmware source code, surfaced in the Dev drawer's Source tab. */
+  sourceCode?: string;
+  /** Filename shown alongside the Source tab. */
+  sourceFilename?: string;
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -47,6 +53,8 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     systemYaml: systemAdxl345SensorLab,
     demoFirmwarePath: `${BASE}wasm/demo-adxl345-sensor-lab.elf`,
     mcuComponentType: 'stm32-dev',
+    sourceCode: sourceAdxl345,
+    sourceFilename: 'adxl345-sensor-lab/src/main.rs',
   },
   {
     boardId: 'stm32f103-blinky',
@@ -58,6 +66,8 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     systemYaml: systemStm32f103Blinky,
     demoFirmwarePath: `${BASE}wasm/demo-blinky.bin`,
     mcuComponentType: 'stm32-dev',
+    sourceCode: sourceBlinky,
+    sourceFilename: 'demo-blinky/src/main.rs',
   },
   {
     boardId: 'nucleo-f401re',
