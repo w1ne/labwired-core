@@ -82,6 +82,19 @@ impl Mpu6050 {
         }
     }
 
+    pub fn set_sample(&mut self, ax: i16, ay: i16, az: i16, gx: i16, gy: i16, gz: i16) {
+        self.accel_x = ax;
+        self.accel_y = ay;
+        self.accel_z = az;
+        self.gyro_x = gx;
+        self.gyro_y = gy;
+        self.gyro_z = gz;
+    }
+
+    pub fn sample(&self) -> (i16, i16, i16, i16, i16, i16) {
+        (self.accel_x, self.accel_y, self.accel_z, self.gyro_x, self.gyro_y, self.gyro_z)
+    }
+
     pub fn simulate_motion(&mut self) {
         // Simple tick function to alter data slightly if needed
         self.accel_x = self.accel_x.wrapping_add(10);
@@ -115,5 +128,13 @@ impl I2cDevice for Mpu6050 {
 
     fn stop(&mut self) {
         self.register_address_written = false;
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 }

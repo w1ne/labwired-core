@@ -30,6 +30,7 @@ members = [
     "examples/riscv-virt",
     "examples/demo-blinky",
     "examples/adxl345-sensor-lab",
+    "examples/mpu6050-sensor-lab",
     "crates/codegen",
     "crates/python", "crates/wasm",
 ]
@@ -125,6 +126,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.adxl345-sensor-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.mpu6050-sensor-lab]
 codegen-units = 1
 debug = true
 opt-level = "s"

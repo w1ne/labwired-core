@@ -398,17 +398,83 @@ impl WasmSimulator {
         )))
     }
 
-    /// Read back the current X/Y/Z sample from each ADXL345 declared in `board_io`.
-    /// Returns `[{ id, kind: "adxl345", x, y, z }, ...]` as a JSON array.
+    /// Set the simulated 6-DoF sample on an MPU6050 attached to an I2C peripheral.
+    #[wasm_bindgen]
+    pub fn set_i2c_sensor_sample_6dof(
+        &mut self,
+        device_id: &str,
+        ax: i16,
+        ay: i16,
+        az: i16,
+        gx: i16,
+        gy: i16,
+        gz: i16,
+    ) -> Result<(), JsValue> {
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("mpu6050"))
+            .cloned()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("No MPU6050 board_io binding '{}'", device_id))
+            })?;
+
+        let machine = self.machine.as_mut().unwrap();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "I2C peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| JsValue::from_str("I2C peripheral does not support downcasting"))?;
+        let i2c = any
+            .downcast_mut::<labwired_core::peripherals::i2c::I2c>()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "Peripheral '{}' is not an I2C controller",
+                    binding.peripheral
+                ))
+            })?;
+
+        let address = binding.i2c_address.unwrap_or(0x68);
+        for device in &mut i2c.attached_devices {
+            let mut device = device.borrow_mut();
+            if device.address() != address {
+                continue;
+            }
+            if let Some(sensor) = device
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<labwired_core::peripherals::components::Mpu6050>())
+            {
+                sensor.set_sample(ax, ay, az, gx, gy, gz);
+                return Ok(());
+            }
+        }
+
+        Err(JsValue::from_str(&format!(
+            "MPU6050 device at address 0x{:02x} not found on '{}'",
+            address, binding.peripheral
+        )))
+    }
+
+    /// Read back the current sensor data from each I2C sensor declared in `board_io`.
+    /// Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`.
     #[wasm_bindgen]
     pub fn get_i2c_sensor_states(&self) -> JsValue {
         let machine = self.machine.as_ref().unwrap();
         let mut states: Vec<serde_json::Value> = Vec::new();
 
         for binding in &self.board_io {
-            if binding.device_type.as_deref() != Some("adxl345") {
-                continue;
-            }
+            let device_type = match binding.device_type.as_deref() {
+                Some(t) if t == "adxl345" || t == "mpu6050" => t,
+                _ => continue,
+            };
             let Some(idx) = machine.bus.find_peripheral_index_by_name(&binding.peripheral) else {
                 continue;
             };
@@ -418,25 +484,53 @@ impl WasmSimulator {
             let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::i2c::I2c>() else {
                 continue;
             };
-            let address = binding.i2c_address.unwrap_or(0x53);
-            for device in &i2c.attached_devices {
-                let device = device.borrow();
-                if device.address() != address {
-                    continue;
+
+            if device_type == "adxl345" {
+                let address = binding.i2c_address.unwrap_or(0x53);
+                for device in &i2c.attached_devices {
+                    let device = device.borrow();
+                    if device.address() != address {
+                        continue;
+                    }
+                    if let Some(sensor) = device
+                        .as_any()
+                        .and_then(|any| any.downcast_ref::<labwired_core::peripherals::components::Adxl345>())
+                    {
+                        let (x, y, z) = sensor.sample();
+                        states.push(serde_json::json!({
+                            "id": binding.id,
+                            "kind": "adxl345",
+                            "x": x,
+                            "y": y,
+                            "z": z,
+                        }));
+                        break;
+                    }
                 }
-                if let Some(sensor) = device
-                    .as_any()
-                    .and_then(|any| any.downcast_ref::<labwired_core::peripherals::components::Adxl345>())
-                {
-                    let (x, y, z) = sensor.sample();
-                    states.push(serde_json::json!({
-                        "id": binding.id,
-                        "kind": "adxl345",
-                        "x": x,
-                        "y": y,
-                        "z": z,
-                    }));
-                    break;
+            } else if device_type == "mpu6050" {
+                let address = binding.i2c_address.unwrap_or(0x68);
+                for device in &i2c.attached_devices {
+                    let device = device.borrow();
+                    if device.address() != address {
+                        continue;
+                    }
+                    if let Some(sensor) = device
+                        .as_any()
+                        .and_then(|any| any.downcast_ref::<labwired_core::peripherals::components::Mpu6050>())
+                    {
+                        let (ax, ay, az, gx, gy, gz) = sensor.sample();
+                        states.push(serde_json::json!({
+                            "id": binding.id,
+                            "kind": "mpu6050",
+                            "ax": ax,
+                            "ay": ay,
+                            "az": az,
+                            "gx": gx,
+                            "gy": gy,
+                            "gz": gz,
+                        }));
+                        break;
+                    }
                 }
             }
         }
