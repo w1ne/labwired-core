@@ -20,6 +20,7 @@ import systemNucleoH563zi from '../../../core/configs/systems/nucleo-h563zi-demo
 import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw';
 import systemStm32f401cdu6Blackpill from '../../../core/configs/systems/stm32f401cdu6-blackpill.yaml?raw';
 import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yaml?raw';
+import systemAdxl345SensorLab from '../../../core/examples/adxl345-sensor-lab/system.yaml?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -36,6 +37,17 @@ export interface BoardConfig {
 const BASE = import.meta.env.BASE_URL;
 
 export const BOARD_CONFIGS: BoardConfig[] = [
+  {
+    boardId: 'adxl345-sensor-lab',
+    chipId: 'stm32f103',
+    name: 'ADXL345 Sensor Lab',
+    description: 'Guided STM32F103 + ADXL345 accelerometer lab over simulated I2C.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemAdxl345SensorLab,
+    demoFirmwarePath: `${BASE}wasm/demo-adxl345-sensor-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+  },
   {
     boardId: 'stm32f103-blinky',
     chipId: 'stm32f103',
