@@ -30,18 +30,25 @@ export function ChipRow({ onPick, onLocked }: ChipRowProps) {
           key={lab.id}
           type="button"
           onClick={() => (lab.locked ? onLocked(lab.id) : onPick(lab.id))}
+          style={{ borderRadius: 999 }}
           className={clsx(
-            'h-9 px-3 rounded-pill text-xs font-medium flex items-center gap-2',
-            'transition-colors duration-micro',
+            'h-10 px-4 text-[13px] font-medium inline-flex items-center gap-2',
+            'transition-all duration-150 outline-none border-0',
+            'focus-visible:ring-2 focus-visible:ring-accent/60',
             lab.locked
-              ? 'bg-bg-surface/50 border border-border text-fg-tertiary hover:text-fg-secondary'
-              : 'bg-bg-surface border border-border text-fg-primary hover:border-accent hover:text-accent'
+              ? 'bg-white/[0.04] text-fg-tertiary hover:bg-white/[0.07] hover:text-fg-secondary'
+              : 'bg-white/[0.06] text-fg-primary hover:bg-white/[0.10] hover:-translate-y-[1px] active:translate-y-0'
           )}
         >
-          <span aria-hidden>{lab.icon}</span>
-          {lab.name}
+          <span className="text-base leading-none" aria-hidden>{lab.icon}</span>
+          <span>{lab.name}</span>
           {lab.locked && lab.comingIn && (
-            <span className="text-fg-tertiary text-[10px] uppercase tracking-wider ml-1">{lab.comingIn}</span>
+            <span
+              style={{ borderRadius: 4 }}
+              className="text-fg-tertiary text-[9px] uppercase tracking-[0.08em] font-semibold ml-0.5 px-1.5 py-0.5 bg-white/[0.04]"
+            >
+              {lab.comingIn}
+            </span>
           )}
         </button>
       ))}

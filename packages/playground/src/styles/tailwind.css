@@ -29,16 +29,37 @@
     border-radius: var(--lw-radius-card);
   }
 
-  /* Hide legacy chrome that the new Studio shell replaces. The legacy canvas + side panels stay visible. */
+  /* Hide every legacy chrome surface the Studio shell replaces. Keep only the canvas + right-side wire/board inspector. */
   [data-legacy-shell] .playground-header,
-  [data-legacy-shell] > .playground-footer,
-  [data-legacy-shell] .sim-controls-bar {
+  [data-legacy-shell] .playground-footer,
+  [data-legacy-shell] .sim-controls-bar,
+  [data-legacy-shell] .editor-sidebar-left,
+  [data-legacy-shell] .editor-bottom-pane,
+  [data-legacy-shell] .bottom-tabs,
+  [data-legacy-shell] .demo-banner,
+  [data-legacy-shell] .sidebar-toggle,
+  [data-legacy-shell] .header-separator,
+  [data-legacy-shell] .toolbar-group,
+  [data-legacy-shell] .editor-code-pane {
     display: none !important;
   }
 
-  /* Make sure the legacy .playground container plays nicely with the absolute-positioned Studio chrome. */
+  /* Let the canvas occupy the full available space below the new top chrome. */
   [data-legacy-shell].playground {
     height: 100%;
     padding-top: 44px;
+  }
+
+  [data-legacy-shell] .editor-layout {
+    display: block !important;
+    height: 100%;
+  }
+
+  [data-legacy-shell] .editor-top-split,
+  [data-legacy-shell] .editor-center,
+  [data-legacy-shell] .editor-canvas-pane {
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important;
   }
 }
