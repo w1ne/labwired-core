@@ -28,4 +28,17 @@
     box-shadow: var(--lw-shadow-glass);
     border-radius: var(--lw-radius-card);
   }
+
+  /* Hide legacy chrome that the new Studio shell replaces. The legacy canvas + side panels stay visible. */
+  [data-legacy-shell] .playground-header,
+  [data-legacy-shell] > .playground-footer,
+  [data-legacy-shell] .sim-controls-bar {
+    display: none !important;
+  }
+
+  /* Make sure the legacy .playground container plays nicely with the absolute-positioned Studio chrome. */
+  [data-legacy-shell].playground {
+    height: 100%;
+    padding-top: 44px;
+  }
 }
