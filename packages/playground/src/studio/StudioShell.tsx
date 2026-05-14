@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { TopChrome } from './TopChrome';
 import { ChipRow } from './ChipRow';
 import { PaletteDrawer, type PaletteComponent } from './PaletteDrawer';
+import { Toast } from './Toast';
 import { useStudioLayout } from './useStudioLayout';
 
 export interface StudioShellProps {
@@ -17,6 +18,8 @@ export interface StudioShellProps {
   renderDevDrawer?: (devMode: boolean) => ReactNode;
   renderCommandPalette?: (commandOpen: boolean, closeCommand: () => void, openCommand: () => void) => ReactNode;
   onMountCommandRef?: (refs: { open: () => void; close: () => void }) => void;
+  toast?: string | null;
+  onDismissToast?: () => void;
   children?: ReactNode;
 }
 
@@ -33,6 +36,8 @@ export function StudioShell({
   renderDevDrawer,
   renderCommandPalette,
   onMountCommandRef,
+  toast,
+  onDismissToast,
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
@@ -87,6 +92,7 @@ export function StudioShell({
         {renderDevDrawer?.(layout.devMode)}
       </main>
       {renderCommandPalette?.(layout.commandOpen, layout.closeCommand, layout.openCommand)}
+      <Toast message={toast ?? null} onDismiss={() => onDismissToast?.()} />
     </div>
   );
 }

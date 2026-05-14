@@ -830,13 +830,51 @@ export function App() {
     setActiveSimulationConfig(null);
   }, [editor, selectedBoard]);
 
+  // Studio-shell toast (transient, auto-dismisses)
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Wall-clock runtime tracker — ticks while the simulation is running.
+  // Frozen on pause, reset to 0 when the simulation is reset.
+  const [runtimeMs, setRuntimeMs] = useState(0);
+  const runStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (running) {
+      runStartRef.current = Date.now() - runtimeMs;
+      const tick = () => {
+        if (runStartRef.current !== null) {
+          setRuntimeMs(Date.now() - runStartRef.current);
+        }
+      };
+      tick();
+      const interval = window.setInterval(tick, 500);
+      return () => window.clearInterval(interval);
+    }
+    runStartRef.current = null;
+    return undefined;
+    // We intentionally exclude `runtimeMs` from deps — including it would re-create
+    // the interval on every tick. The ref captures the latest value on `running` transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
+
+  useEffect(() => {
+    // Reset elapsed time whenever the active simulation is cleared (reset / board switch).
+    if (activeSimulationConfig === null) {
+      setRuntimeMs(0);
+      runStartRef.current = null;
+    }
+  }, [activeSimulationConfig]);
+
   // Share
   const handleShare = useCallback(async () => {
-    const url = await generateShareUrl(editor.state.diagram, source);
-    await navigator.clipboard.writeText(url);
-    setCompileOutput('Share URL copied to clipboard!');
-    setBottomTab('output');
-    setShowBottomPanel(true);
+    try {
+      const url = await generateShareUrl(editor.state.diagram, source);
+      await navigator.clipboard.writeText(url);
+      setToast('Share URL copied to clipboard');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setToast(`Share failed: ${message}`);
+    }
   }, [editor.state.diagram, source]);
 
   // Keyboard shortcuts
@@ -918,13 +956,16 @@ export function App() {
     <CommandPalette open={open} onClose={closeCommand} items={commandItems} />
   );
 
+  // Run-button intent: if a sim is already loaded, resume from pause; otherwise launch fresh.
+  const onSimRun = activeSimulationConfig ? handlePlay : handleRun;
+
   const simDockNode = (
     <SimDock
       state={simDockState}
-      runtimeMs={0}
+      runtimeMs={runtimeMs}
       cycles={simState.cycles}
       pc={simState.pc}
-      onRun={handleRun}
+      onRun={onSimRun}
       onPause={handlePause}
       onStep={handleStep}
       onReset={handleReset}
@@ -978,6 +1019,9 @@ export function App() {
       isEmpty={isEmpty}
       onPickLab={handlePickLab}
       onUploadFirmware={handleUploadFirmware}
+      onShare={handleShare}
+      toast={toast}
+      onDismissToast={() => setToast(null)}
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}

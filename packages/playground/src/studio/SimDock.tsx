@@ -26,6 +26,13 @@ function formatPc(pc: number): string {
   return `0x${pc.toString(16).toUpperCase().padStart(8, '0')}`;
 }
 
+function formatRuntime(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const ss = String(totalSeconds % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
 const STATE_LABEL: Record<SimState, string> = {
   idle: 'Idle',
   building: 'Building',
@@ -34,7 +41,7 @@ const STATE_LABEL: Record<SimState, string> = {
   halted: 'Halted',
 };
 
-export function SimDock({ state, cycles, pc, onRun, onPause, onStep, onReset }: SimDockProps) {
+export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onStep, onReset }: SimDockProps) {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       // Skip when focus is in an editable element
@@ -67,6 +74,7 @@ export function SimDock({ state, cycles, pc, onRun, onPause, onStep, onReset }: 
 
   const showCycles = cycles !== undefined && cycles > 0;
   const showPc = pc !== undefined && pc > 0;
+  const showRuntime = runtimeMs > 0;
 
   return (
     <div
@@ -107,13 +115,24 @@ export function SimDock({ state, cycles, pc, onRun, onPause, onStep, onReset }: 
         ↻
       </button>
       <div className="flex-1" />
-      {showPc && (
+      {showRuntime && (
         <span
           className="text-fg-tertiary font-mono text-[11px]"
-          title="Program counter — exact silicon-parity instruction address"
+          title="Wall-clock runtime since this simulation started"
         >
-          PC <span className="text-fg-secondary">{formatPc(pc!)}</span>
+          <span className="text-fg-secondary">{formatRuntime(runtimeMs)}</span>
         </span>
+      )}
+      {showPc && (
+        <>
+          {showRuntime && <div className="w-px h-4 bg-border" aria-hidden />}
+          <span
+            className="text-fg-tertiary font-mono text-[11px]"
+            title="Program counter — exact silicon-parity instruction address"
+          >
+            PC <span className="text-fg-secondary">{formatPc(pc!)}</span>
+          </span>
+        </>
       )}
       {showCycles && (
         <>
