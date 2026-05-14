@@ -32,6 +32,7 @@ import {
 } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
+import { StudioShell } from './studio/StudioShell';
 import { BoardPicker } from './BoardPicker';
 import {
   CheckIcon, UploadIcon, CodeIcon, PanelBottomIcon,
@@ -736,7 +737,8 @@ export function App() {
   };
 
   return (
-    <div className="playground">
+    <StudioShell boardName={selectedBoard.name}>
+    <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (
         <div className="playground-header">
@@ -1010,5 +1012,6 @@ export function App() {
         </div>
       )}
     </div>
+    </StudioShell>
   );
 }
