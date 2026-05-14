@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { CommandPalette, type CommandMode } from './studio/CommandPalette';
+import { CommandPalette } from './studio/CommandPalette';
 import { useCommandPaletteItems } from './studio/useCommandPaletteItems';
 import {
   SimControls,
@@ -256,7 +256,6 @@ export function App() {
   const autostartTriggeredRef = useRef(false);
 
   // Command palette mode + ref for global ⌘K shortcut
-  const [paletteMode, setPaletteMode] = useState<CommandMode>('search');
   const commandRefs = useRef<{ open: () => void; close: () => void } | null>(null);
 
   // Editor state
@@ -879,16 +878,7 @@ export function App() {
   });
 
   const renderCommandPalette = (open: boolean, closeCommand: () => void, _openCommand: () => void) => (
-    <CommandPalette
-      open={open}
-      onClose={() => {
-        closeCommand();
-        setPaletteMode('search');
-      }}
-      items={commandItems}
-      mode={paletteMode}
-      onModeChange={setPaletteMode}
-    />
+    <CommandPalette open={open} onClose={closeCommand} items={commandItems} />
   );
 
   const simDockNode = (
