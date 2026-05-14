@@ -59,3 +59,8 @@ export { compileCode, EXAMPLE_SKETCHES } from './editor/compile-service';
 export type { CompileResult, CompileOptions } from './editor/compile-service';
 export { startTone, stopTone, resumeAudio } from './editor/audio-engine';
 export { encodeProject, decodeProject, isEmbedMode, generateShareUrl, generateEmbedUrl } from './editor/sharing';
+
+/**
+ * @deprecated Replaced by `InspectorCard` in the Playground Studio shell. Will be removed in a future release.
+ */
+export { GuidedLab } from './components/GuidedLab/GuidedLab';

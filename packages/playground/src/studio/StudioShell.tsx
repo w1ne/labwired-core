@@ -13,6 +13,7 @@ export interface StudioShellProps {
   onPickLab?: (labId: string) => void;
   paletteComponents?: PaletteComponent[];
   onPaletteDrag?: (componentType: string) => void;
+  inspector?: ReactNode;
   children?: ReactNode;
 }
 
@@ -30,6 +31,7 @@ export function StudioShell({
   onPickLab,
   paletteComponents = [],
   onPaletteDrag,
+  inspector,
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
@@ -52,6 +54,7 @@ export function StudioShell({
       />
       <main role="main" aria-label="Canvas" className="absolute inset-0 pt-11 bg-bg-canvas">
         {children}
+        {inspector}
         {isEmpty && (
           <div className="absolute inset-0 flex flex-col items-center justify-start pt-[32vh] gap-6 px-4 pointer-events-none">
             <div className="pointer-events-auto w-full max-w-[640px]">

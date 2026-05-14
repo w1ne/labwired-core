@@ -33,6 +33,7 @@ import {
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { StudioShell } from './studio/StudioShell';
+import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
 import {
@@ -587,6 +588,32 @@ export function App() {
 
   const isEmpty = editor.state.diagram.parts.filter((p) => p.id !== 'mcu').length === 0;
 
+  // Inspector: derive selection from selectedIds (parts only; wires have no stable id in this schema)
+  const inspectorSelection = useMemo<InspectorSelection | null>(() => {
+    if (editor.state.selectedIds.size !== 1) return null;
+    const selectedId = [...editor.state.selectedIds][0];
+    const part = editor.state.diagram.parts.find((p) => p.id === selectedId);
+    if (!part) return null;
+    const def = COMPONENT_REGISTRY.get(part.type);
+    return {
+      kind: 'part',
+      partId: part.id,
+      partType: part.type,
+      label: def?.label ?? part.type,
+      pins: (def?.pins ?? []).map((p: { id: string; label?: string }) => ({ id: p.id, label: p.label ?? p.id })),
+      attrs: part.attrs ?? {},
+    };
+  }, [editor.state.selectedIds, editor.state.diagram.parts]);
+
+  const inspectorNode = (
+    <InspectorCard
+      selection={inspectorSelection}
+      devMode={false}
+      onDelete={(id) => { editor.select(id); editor.deleteSelected(); }}
+      onDuplicate={(_id) => { /* no duplicate API yet */ }}
+    />
+  );
+
   const paletteComponents = useMemo<PaletteComponent[]>(
     () =>
       Array.from(COMPONENT_REGISTRY.entries())
@@ -811,6 +838,7 @@ export function App() {
       onPickLab={handlePickLab}
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
+      inspector={inspectorNode}
     >
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
