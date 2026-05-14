@@ -28,6 +28,15 @@ const FEATURED: FeaturedLab[] = [
     icon: '📊',
   },
   {
+    id: 'mpu6050-sensor-lab',
+    name: 'MPU6050 IMU',
+    chip: 'STM32F103 + MPU6050 over I²C',
+    description: 'Read 6-DoF acceleration and gyroscope data from a real I²C device model.',
+    detail: 'Demonstrates LabWired\'s 6-DoF IMU device model: register-level MPU6050 implementation responding to I²C reads from your firmware. WHO_AM_I check + continuous accel/gyro loop.',
+    accent: '#B07BFF',
+    icon: '🧭',
+  },
+  {
     id: 'nucleo-f401re',
     name: 'Nucleo-F401RE',
     chip: 'Cortex-M4F · 84 MHz',
@@ -157,7 +166,6 @@ export function Gallery() {
             { name: 'ILI9341 TFT', wave: 'Wave 2' },
             { name: 'NEO-6M GPS', wave: 'Wave 3' },
             { name: 'NTC Thermistor', wave: 'Wave 3' },
-            { name: 'MPU6050 IMU', wave: 'Wave 1' },
           ].map((c) => (
             <div key={c.name} className="px-4 py-3 rounded-card bg-white/[0.03] border border-border/40 text-[13px] flex items-center justify-between">
               <span className="text-fg-secondary">{c.name}</span>

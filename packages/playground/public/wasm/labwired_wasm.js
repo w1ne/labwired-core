@@ -92,6 +92,15 @@ export class WasmSimulator {
         }
     }
     /**
+     * Read back the current sensor data from each I2C sensor declared in `board_io`.
+     * Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`.
+     * @returns {any}
+     */
+    get_i2c_sensor_states() {
+        const ret = wasm.wasmsimulator_get_i2c_sensor_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Legacy LED state query (hardcoded GPIOB pin 5 for backward compat).
      * @returns {boolean}
      */
@@ -210,6 +219,41 @@ export class WasmSimulator {
         const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.wasmsimulator_set_board_io_input(this.__wbg_ptr, ptr0, len0, active);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated X/Y/Z sample on an ADXL345 attached to an I2C peripheral.
+     * Looks up the binding in `board_io` by id; the binding must have
+     * `device_type: "adxl345"`.
+     * @param {string} device_id
+     * @param {number} x
+     * @param {number} y
+     * @param {number} z
+     */
+    set_i2c_sensor_sample(device_id, x, y, z) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_i2c_sensor_sample(this.__wbg_ptr, ptr0, len0, x, y, z);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated 6-DoF sample on an MPU6050 attached to an I2C peripheral.
+     * @param {string} device_id
+     * @param {number} ax
+     * @param {number} ay
+     * @param {number} az
+     * @param {number} gx
+     * @param {number} gy
+     * @param {number} gz
+     */
+    set_i2c_sensor_sample_6dof(device_id, ax, ay, az, gx, gy, gz) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_i2c_sensor_sample_6dof(this.__wbg_ptr, ptr0, len0, ax, ay, az, gx, gy, gz);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }

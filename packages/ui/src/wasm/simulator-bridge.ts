@@ -26,13 +26,26 @@ export interface AnalogState {
   active?: boolean;
 }
 
-export interface I2cSensorState {
+export interface I2cSensorStateAdxl345 {
   id: string;
   kind: 'adxl345';
   x: number;
   y: number;
   z: number;
 }
+
+export interface I2cSensorStateMpu6050 {
+  id: string;
+  kind: 'mpu6050';
+  ax: number;
+  ay: number;
+  az: number;
+  gx: number;
+  gy: number;
+  gz: number;
+}
+
+export type I2cSensorState = I2cSensorStateAdxl345 | I2cSensorStateMpu6050;
 
 export interface PeripheralInfo {
   name: string;
@@ -88,6 +101,7 @@ export interface WasmSimulatorInstance {
 
   // I2C sensors
   set_i2c_sensor_sample(device_id: string, x: number, y: number, z: number): void;
+  set_i2c_sensor_sample_6dof(device_id: string, ax: number, ay: number, az: number, gx: number, gy: number, gz: number): void;
   get_i2c_sensor_states(): I2cSensorState[];
 
   // Peripherals
@@ -208,6 +222,10 @@ export class SimulatorBridge {
 
   setI2cSensorSample(deviceId: string, x: number, y: number, z: number): void {
     this.sim.set_i2c_sensor_sample(deviceId, x, y, z);
+  }
+
+  setMpu6050Sample(deviceId: string, ax: number, ay: number, az: number, gx: number, gy: number, gz: number): void {
+    this.sim.set_i2c_sensor_sample_6dof(deviceId, ax, ay, az, gx, gy, gz);
   }
 
   getI2cSensorStates(): I2cSensorState[] {

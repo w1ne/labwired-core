@@ -21,8 +21,10 @@ import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw
 import systemStm32f401cdu6Blackpill from '../../../core/configs/systems/stm32f401cdu6-blackpill.yaml?raw';
 import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yaml?raw';
 import systemAdxl345SensorLab from '../../../core/examples/adxl345-sensor-lab/system.yaml?raw';
+import systemMpu6050SensorLab from '../../../core/examples/mpu6050-sensor-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
+import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -43,6 +45,19 @@ export interface BoardConfig {
 const BASE = import.meta.env.BASE_URL;
 
 export const BOARD_CONFIGS: BoardConfig[] = [
+  {
+    boardId: 'mpu6050-sensor-lab',
+    chipId: 'stm32f103',
+    name: 'MPU6050 IMU',
+    description: 'STM32F103 + MPU6050 6-DoF IMU over simulated I²C. Reads accel + gyro.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemMpu6050SensorLab,
+    demoFirmwarePath: `${BASE}wasm/demo-mpu6050-sensor-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceMpu6050,
+    sourceFilename: 'mpu6050-sensor-lab/src/main.rs',
+  },
   {
     boardId: 'adxl345-sensor-lab',
     chipId: 'stm32f103',

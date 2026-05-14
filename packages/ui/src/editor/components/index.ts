@@ -22,6 +22,7 @@ import { pirSensorComponent } from './pir-sensor';
 import { ultrasonicComponent } from './ultrasonic';
 import { ldrComponent } from './ldr';
 import { adxl345Component } from './adxl345';
+import { mpu6050Component } from './mpu6050';
 // Displays
 import { oledSsd1306Component } from './oled-ssd1306';
 import { ledMatrixComponent } from './led-matrix';
@@ -69,6 +70,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [ultrasonicComponent.type, ultrasonicComponent],
   [ldrComponent.type, ldrComponent],
   [adxl345Component.type, adxl345Component],
+  [mpu6050Component.type, mpu6050Component],
   // Displays
   [sevenSegmentComponent.type, sevenSegmentComponent],
   [lcd1602Component.type, lcd1602Component],

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, type ReactNode } from 'react';
 import { CommandPalette } from './studio/CommandPalette';
 import { useCommandPaletteItems } from './studio/useCommandPaletteItems';
 import {
@@ -196,6 +196,7 @@ const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 
 const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   adxl345: 'i2c',
+  mpu6050: 'i2c',
   'oled-ssd1306': 'i2c',
   lcd1602: 'i2c',
   dht22: 'misc',
@@ -624,10 +625,51 @@ export function App() {
     };
   }, [editor.state.selectedIds, editor.state.diagram.parts]);
 
+  // Build live sensor widget for selected I2C devices
+  const inspectorLabWidget = useMemo<ReactNode>(() => {
+    if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
+    const partType = inspectorSelection.partType;
+    if (partType !== 'adxl345' && partType !== 'mpu6050') return undefined;
+    const sensorStates = bridge.getI2cSensorStates();
+    if (partType === 'adxl345') {
+      const s = sensorStates.find((st) => st.kind === 'adxl345' && st.id === inspectorSelection.partId)
+        ?? sensorStates.find((st) => st.kind === 'adxl345');
+      if (!s || s.kind !== 'adxl345') return undefined;
+      return (
+        <table className="w-full text-[12px] font-mono">
+          <tbody>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">X</td><td className="text-fg-primary">{s.x}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Y</td><td className="text-fg-primary">{s.y}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Z</td><td className="text-fg-primary">{s.z}</td></tr>
+          </tbody>
+        </table>
+      );
+    }
+    if (partType === 'mpu6050') {
+      const s = sensorStates.find((st) => st.kind === 'mpu6050' && st.id === inspectorSelection.partId)
+        ?? sensorStates.find((st) => st.kind === 'mpu6050');
+      if (!s || s.kind !== 'mpu6050') return undefined;
+      return (
+        <table className="w-full text-[12px] font-mono">
+          <tbody>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">AX</td><td className="text-fg-primary">{s.ax}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">AY</td><td className="text-fg-primary">{s.ay}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">AZ</td><td className="text-fg-primary">{s.az}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">GX</td><td className="text-fg-primary">{s.gx}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">GY</td><td className="text-fg-primary">{s.gy}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">GZ</td><td className="text-fg-primary">{s.gz}</td></tr>
+          </tbody>
+        </table>
+      );
+    }
+    return undefined;
+  }, [bridge, inspectorSelection, simState.pc]);
+
   const inspectorNode = (
     <InspectorCard
       selection={inspectorSelection}
       devMode={false}
+      labWidget={inspectorLabWidget}
       onDelete={(id) => { editor.select(id); editor.deleteSelected(); }}
       onDuplicate={(_id) => { /* no duplicate API yet */ }}
     />
