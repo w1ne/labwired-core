@@ -15,6 +15,7 @@ export interface StudioShellProps {
   onPaletteDrag?: (componentType: string) => void;
   inspector?: ReactNode;
   simDock?: ReactNode;
+  renderDevDrawer?: (devMode: boolean) => ReactNode;
   children?: ReactNode;
 }
 
@@ -34,6 +35,7 @@ export function StudioShell({
   onPaletteDrag,
   inspector,
   simDock,
+  renderDevDrawer,
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
@@ -71,6 +73,7 @@ export function StudioShell({
           </div>
         )}
         {simDock}
+        {renderDevDrawer?.(layout.devMode)}
       </main>
       <WaitlistModal
         open={!!waitlistLab}

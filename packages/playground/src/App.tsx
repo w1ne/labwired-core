@@ -33,6 +33,7 @@ import {
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { StudioShell } from './studio/StudioShell';
+import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
 import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
@@ -850,6 +851,31 @@ export function App() {
     />
   );
 
+  const renderDevDrawer = (devMode: boolean) => (
+    <DevDrawer
+      devMode={devMode}
+      tabs={{
+        serial: (
+          <SerialMonitor output={simState.uartOutput} onClear={clearUart} style={{ height: '100%' }} />
+        ),
+        registers: (
+          <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />
+        ),
+        trace: (
+          <InstructionTrace entries={traceEntries} style={{ maxHeight: '100%', overflow: 'auto' }} />
+        ),
+        memory: (
+          <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />
+        ),
+        yaml: (
+          <pre className="font-mono text-[12px] p-3 text-fg-secondary whitespace-pre-wrap">
+            {selectedBoard.systemYaml}
+          </pre>
+        ),
+      }}
+    />
+  );
+
   return (
     <StudioShell
       boardName={selectedBoard.name}
@@ -859,6 +885,7 @@ export function App() {
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}
       simDock={simDockNode}
+      renderDevDrawer={renderDevDrawer}
     >
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
