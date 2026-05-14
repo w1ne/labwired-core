@@ -1,6 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { TopChrome } from './TopChrome';
-import { HeroPrompt } from './HeroPrompt';
 import { ChipRow } from './ChipRow';
 import { WaitlistModal } from './WaitlistModal';
 import { PaletteDrawer, type PaletteComponent } from './PaletteDrawer';
@@ -75,9 +74,12 @@ export function StudioShell({
         {children}
         {inspector}
         {isEmpty && (
-          <div className="absolute inset-0 flex flex-col items-center justify-start pt-[32vh] gap-6 px-4 pointer-events-none">
-            <div className="pointer-events-auto w-full max-w-[640px]">
-              <HeroPrompt onFocus={layout.openCommand} />
+          <div className="absolute inset-0 flex flex-col items-center justify-start pt-[28vh] gap-5 px-4 pointer-events-none">
+            <div className="pointer-events-none text-center">
+              <h2 className="text-fg-primary text-xl font-semibold tracking-tight">Pick a starter to begin</h2>
+              <p className="text-fg-tertiary text-[13px] mt-1">
+                Or press <kbd className="px-1.5 py-0.5 rounded border border-border text-fg-secondary font-mono text-[11px]">⌘K</kbd> to search components & boards
+              </p>
             </div>
             <div className="pointer-events-auto">
               <ChipRow
