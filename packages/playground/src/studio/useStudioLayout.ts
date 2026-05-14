@@ -1,11 +1,18 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const DEV_KEY = 'labwired:dev-mode';
+
+export const MOBILE_BREAKPOINT = 768;
+
+export function isMobileViewport(widthPx: number = typeof window === 'undefined' ? 1440 : window.innerWidth): boolean {
+  return widthPx < MOBILE_BREAKPOINT;
+}
 
 export interface StudioLayoutState {
   paletteOpen: boolean;
   commandOpen: boolean;
   devMode: boolean;
+  mobile: boolean;
 }
 
 export interface StudioLayoutActions {
@@ -22,6 +29,13 @@ export function useStudioLayout(): StudioLayoutState & StudioLayoutActions {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(DEV_KEY) === '1';
   });
+  const [mobile, setMobile] = useState(() => isMobileViewport());
+
+  useEffect(() => {
+    const onResize = () => setMobile(isMobileViewport());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const openCommand = useCallback(() => setCommandOpen(true), []);
   const closeCommand = useCallback(() => setCommandOpen(false), []);
@@ -35,5 +49,5 @@ export function useStudioLayout(): StudioLayoutState & StudioLayoutActions {
     });
   }, []);
 
-  return { paletteOpen, commandOpen, devMode, setPaletteOpen, openCommand, closeCommand, toggleDev };
+  return { paletteOpen, commandOpen, devMode, mobile, setPaletteOpen, openCommand, closeCommand, toggleDev };
 }
