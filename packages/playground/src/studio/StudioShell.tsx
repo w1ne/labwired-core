@@ -3,6 +3,7 @@ import { TopChrome } from './TopChrome';
 import { HeroPrompt } from './HeroPrompt';
 import { ChipRow } from './ChipRow';
 import { WaitlistModal } from './WaitlistModal';
+import { PaletteDrawer, type PaletteComponent } from './PaletteDrawer';
 import { useStudioLayout } from './useStudioLayout';
 
 export interface StudioShellProps {
@@ -10,6 +11,8 @@ export interface StudioShellProps {
   isEmpty?: boolean;
   onShare?: () => void;
   onPickLab?: (labId: string) => void;
+  paletteComponents?: PaletteComponent[];
+  onPaletteDrag?: (componentType: string) => void;
   children?: ReactNode;
 }
 
@@ -20,7 +23,15 @@ const LOCKED_NAMES: Record<string, string> = {
   'tft-demo': 'TFT Demo',
 };
 
-export function StudioShell({ boardName = 'Untitled', isEmpty = false, onShare, onPickLab, children }: StudioShellProps) {
+export function StudioShell({
+  boardName = 'Untitled',
+  isEmpty = false,
+  onShare,
+  onPickLab,
+  paletteComponents = [],
+  onPaletteDrag,
+  children,
+}: StudioShellProps) {
   const layout = useStudioLayout();
   const [waitlistLab, setWaitlistLab] = useState<string | null>(null);
 
@@ -32,6 +43,12 @@ export function StudioShell({ boardName = 'Untitled', isEmpty = false, onShare, 
         onOpenCommand={layout.openCommand}
         onToggleDev={layout.toggleDev}
         onShare={onShare}
+      />
+      <PaletteDrawer
+        components={paletteComponents}
+        open={layout.paletteOpen}
+        onOpenChange={layout.setPaletteOpen}
+        onDragStart={(type) => onPaletteDrag?.(type)}
       />
       <main role="main" aria-label="Canvas" className="absolute inset-0 pt-11 bg-bg-canvas">
         {children}

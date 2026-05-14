@@ -33,6 +33,7 @@ import {
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { StudioShell } from './studio/StudioShell';
+import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
 import {
   CheckIcon, UploadIcon, CodeIcon, PanelBottomIcon,
@@ -183,6 +184,35 @@ function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: st
 
 const DEFAULT_BOARD = BOARD_CONFIGS[0]; // stm32f103-blinky
 const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
+
+const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
+  adxl345: 'i2c',
+  'oled-ssd1306': 'i2c',
+  lcd1602: 'i2c',
+  dht22: 'misc',
+  led: 'gpio',
+  button: 'gpio',
+  'rgb-led': 'gpio',
+  buzzer: 'gpio',
+  'seven-segment': 'gpio',
+  'led-matrix': 'gpio',
+  neopixel: 'gpio',
+  servo: 'gpio',
+  'motor-driver-l293d': 'gpio',
+  potentiometer: 'analog',
+  ldr: 'analog',
+  ultrasonic: 'misc',
+  'pir-sensor': 'gpio',
+  keypad: 'gpio',
+  'slide-switch': 'gpio',
+  'dip-switch': 'gpio',
+  'rotary-encoder': 'gpio',
+  resistor: 'misc',
+  capacitor: 'misc',
+  diode: 'misc',
+  transistor: 'misc',
+  'shift-register-74hc595': 'misc',
+};
 
 export function App() {
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
@@ -557,6 +587,25 @@ export function App() {
 
   const isEmpty = editor.state.diagram.parts.filter((p) => p.id !== 'mcu').length === 0;
 
+  const paletteComponents = useMemo<PaletteComponent[]>(
+    () =>
+      Array.from(COMPONENT_REGISTRY.entries())
+        .filter(([type]) => type !== 'mcu' && !type.startsWith('boards/'))
+        .map(([type, def]) => ({
+          type,
+          label: def.label ?? type,
+          category: PALETTE_CATEGORY[type] ?? 'misc',
+          bus: undefined,
+        })),
+    []
+  );
+
+  const handlePaletteDrag = (componentType: string) => {
+    // The dataTransfer is set inside PaletteDrawer; this callback is purely informational
+    // for any future analytics or drag-state tracking. No-op for now.
+    void componentType;
+  };
+
   const handlePickLab = useCallback(
     (labId: string) => {
       const next = BOARD_CONFIGS.find((b) => b.boardId === labId);
@@ -756,7 +805,13 @@ export function App() {
   };
 
   return (
-    <StudioShell boardName={selectedBoard.name} isEmpty={isEmpty} onPickLab={handlePickLab}>
+    <StudioShell
+      boardName={selectedBoard.name}
+      isEmpty={isEmpty}
+      onPickLab={handlePickLab}
+      paletteComponents={paletteComponents}
+      onPaletteDrag={handlePaletteDrag}
+    >
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (
