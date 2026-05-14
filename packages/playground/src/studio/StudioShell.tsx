@@ -14,6 +14,7 @@ export interface StudioShellProps {
   paletteComponents?: PaletteComponent[];
   onPaletteDrag?: (componentType: string) => void;
   inspector?: ReactNode;
+  simDock?: ReactNode;
   children?: ReactNode;
 }
 
@@ -32,6 +33,7 @@ export function StudioShell({
   paletteComponents = [],
   onPaletteDrag,
   inspector,
+  simDock,
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
@@ -68,6 +70,7 @@ export function StudioShell({
             </div>
           </div>
         )}
+        {simDock}
       </main>
       <WaitlistModal
         open={!!waitlistLab}

@@ -33,6 +33,7 @@ import {
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { StudioShell } from './studio/StudioShell';
+import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
 import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
@@ -633,6 +634,13 @@ export function App() {
     void componentType;
   };
 
+  const simDockState: StudioSimState = useMemo(() => {
+    if (loading) return 'building';
+    if (running) return 'running';
+    if (bridge && !running) return 'paused';
+    return 'idle';
+  }, [loading, running, bridge]);
+
   const handlePickLab = useCallback(
     (labId: string) => {
       const next = BOARD_CONFIGS.find((b) => b.boardId === labId);
@@ -831,6 +839,17 @@ export function App() {
     }
   };
 
+  const simDockNode = (
+    <SimDock
+      state={simDockState}
+      runtimeMs={0}
+      onRun={handleRun}
+      onPause={handlePause}
+      onStep={handleStep}
+      onReset={handleReset}
+    />
+  );
+
   return (
     <StudioShell
       boardName={selectedBoard.name}
@@ -839,6 +858,7 @@ export function App() {
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}
+      simDock={simDockNode}
     >
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
