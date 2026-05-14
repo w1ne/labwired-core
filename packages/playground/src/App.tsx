@@ -555,6 +555,25 @@ export function App() {
     [editor],
   );
 
+  const isEmpty = editor.state.diagram.parts.filter((p) => p.id !== 'mcu').length === 0;
+
+  const handlePickLab = useCallback(
+    (labId: string) => {
+      const next = BOARD_CONFIGS.find((b) => b.boardId === labId);
+      if (!next) return;
+      const workspace = loadBoardWorkspace(next);
+      setSelectedBoard(next);
+      editor.loadDiagram(workspace.diagram);
+      setSource(workspace.source);
+      setCanvasValidationMessage(null);
+      setInvalidPins([]);
+      setRunning(false);
+      setBridge(null);
+      setActiveSimulationConfig(null);
+    },
+    [editor],
+  );
+
   const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
   const currentExample = EXAMPLE_SKETCHES.find((sketch) => sketch.source === source) ?? null;
   const boardSummary = useMemo(() => {
@@ -737,7 +756,7 @@ export function App() {
   };
 
   return (
-    <StudioShell boardName={selectedBoard.name}>
+    <StudioShell boardName={selectedBoard.name} isEmpty={isEmpty} onPickLab={handlePickLab}>
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (

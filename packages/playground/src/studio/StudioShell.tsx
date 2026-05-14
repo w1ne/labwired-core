@@ -1,15 +1,28 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { TopChrome } from './TopChrome';
+import { HeroPrompt } from './HeroPrompt';
+import { ChipRow } from './ChipRow';
+import { WaitlistModal } from './WaitlistModal';
 import { useStudioLayout } from './useStudioLayout';
 
 export interface StudioShellProps {
   boardName?: string;
+  isEmpty?: boolean;
   onShare?: () => void;
+  onPickLab?: (labId: string) => void;
   children?: ReactNode;
 }
 
-export function StudioShell({ boardName = 'Untitled', onShare, children }: StudioShellProps) {
+const LOCKED_NAMES: Record<string, string> = {
+  'bme280-weather': 'BME280 Weather',
+  'oled-hello': 'OLED Hello',
+  'gps-trail': 'GPS Trail',
+  'tft-demo': 'TFT Demo',
+};
+
+export function StudioShell({ boardName = 'Untitled', isEmpty = false, onShare, onPickLab, children }: StudioShellProps) {
   const layout = useStudioLayout();
+  const [waitlistLab, setWaitlistLab] = useState<string | null>(null);
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-bg-base text-fg-primary">
@@ -22,7 +35,25 @@ export function StudioShell({ boardName = 'Untitled', onShare, children }: Studi
       />
       <main role="main" aria-label="Canvas" className="absolute inset-0 pt-11 bg-bg-canvas">
         {children}
+        {isEmpty && (
+          <div className="absolute inset-0 flex flex-col items-center justify-start pt-[32vh] gap-6 px-4 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-[640px]">
+              <HeroPrompt onFocus={layout.openCommand} />
+            </div>
+            <div className="pointer-events-auto">
+              <ChipRow
+                onPick={(labId) => onPickLab?.(labId)}
+                onLocked={(labId) => setWaitlistLab(LOCKED_NAMES[labId] ?? labId)}
+              />
+            </div>
+          </div>
+        )}
       </main>
+      <WaitlistModal
+        open={!!waitlistLab}
+        labName={waitlistLab ?? ''}
+        onClose={() => setWaitlistLab(null)}
+      />
     </div>
   );
 }
