@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import clsx from 'clsx';
 
 export interface TopChromeProps {
@@ -6,9 +7,11 @@ export interface TopChromeProps {
   onOpenCommand: () => void;
   onToggleDev: () => void;
   onShare?: () => void;
+  onUploadFirmware?: (file: File) => void;
 }
 
-export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onShare }: TopChromeProps) {
+export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onShare, onUploadFirmware }: TopChromeProps) {
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   return (
     <header
       role="banner"
@@ -39,6 +42,33 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         </button>
       </div>
 
+      {onUploadFirmware && (
+        <>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".elf,.bin,.hex,.uf2,application/octet-stream"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onUploadFirmware(file);
+              event.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            aria-label="Upload firmware ELF"
+            title="Upload your compiled firmware (.elf / .bin / .hex)"
+            className="h-7 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-secondary hover:bg-white/[0.10] hover:text-fg-primary transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1.5 shrink-0"
+          >
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M8 2v9M5 5l3-3 3 3M3 12v2h10v-2" />
+            </svg>
+            Upload
+          </button>
+        </>
+      )}
       <button
         type="button"
         role="switch"
@@ -46,7 +76,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         aria-label="Dev mode"
         onClick={onToggleDev}
         className={clsx(
-          'h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-micro',
+          'h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-micro shrink-0',
           devMode
             ? 'bg-magenta-soft text-magenta border border-magenta/40'
             : 'bg-bg-surface/60 text-fg-secondary border border-border hover:text-fg-primary'
@@ -57,7 +87,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
       <button
         type="button"
         onClick={onShare}
-        className="h-7 px-3 rounded-pill text-xs font-medium bg-accent text-bg-base hover:bg-accent-hover transition-colors duration-micro"
+        className="h-7 px-3 rounded-pill text-xs font-medium bg-accent text-bg-base hover:bg-accent-hover transition-colors duration-micro shrink-0"
       >
         Share
       </button>

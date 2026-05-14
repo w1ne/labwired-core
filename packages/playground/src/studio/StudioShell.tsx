@@ -9,6 +9,7 @@ export interface StudioShellProps {
   isEmpty?: boolean;
   onShare?: () => void;
   onPickLab?: (labId: string) => void;
+  onUploadFirmware?: (file: File) => void;
   paletteComponents?: PaletteComponent[];
   onPaletteDrag?: (componentType: string) => void;
   inspector?: ReactNode;
@@ -24,6 +25,7 @@ export function StudioShell({
   isEmpty = false,
   onShare,
   onPickLab,
+  onUploadFirmware,
   paletteComponents = [],
   onPaletteDrag,
   inspector,
@@ -47,6 +49,7 @@ export function StudioShell({
         onOpenCommand={layout.openCommand}
         onToggleDev={layout.toggleDev}
         onShare={onShare}
+        onUploadFirmware={onUploadFirmware}
       />
       {layout.mobile && (
         <div className="absolute top-11 inset-x-0 z-30 bg-warning/10 border-b border-warning/30 px-4 py-2 text-warning text-[12px] text-center">

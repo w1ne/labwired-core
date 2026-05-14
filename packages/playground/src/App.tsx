@@ -668,6 +668,27 @@ export function App() {
     [editor],
   );
 
+  const handleUploadFirmware = useCallback(
+    async (file: File) => {
+      try {
+        setError(null);
+        setCompileOutput(`Loading firmware: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+        const firmware = new Uint8Array(await file.arrayBuffer());
+        await launchSimulation({
+          systemYaml: selectedBoard.systemYaml,
+          chipYaml: selectedBoard.chipYaml,
+          firmware,
+        });
+        setCompileOutput((prev) => `${prev}\nUploaded ${file.name} (${firmware.length} bytes). Simulation started.`);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        setError(`Upload failed: ${message}`);
+        setCompileOutput((prev) => `${prev}\nUpload failed: ${message}`);
+      }
+    },
+    [launchSimulation, selectedBoard.systemYaml, selectedBoard.chipYaml],
+  );
+
   const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
   const currentExample = EXAMPLE_SKETCHES.find((sketch) => sketch.source === source) ?? null;
   const boardSummary = useMemo(() => {
@@ -944,6 +965,7 @@ export function App() {
       boardName={selectedBoard.name}
       isEmpty={isEmpty}
       onPickLab={handlePickLab}
+      onUploadFirmware={handleUploadFirmware}
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}
