@@ -1,5 +1,18 @@
 import { useState } from 'react';
 
+// ──────────────────────────────────────────────────────────────────────────
+// External services — replace these placeholders with your real account URLs.
+// All three are zero-backend tools that "just work" for v1:
+//   • Stripe Payment Link  → create at https://dashboard.stripe.com/payment-links
+//   • Calendly             → personal link at https://calendly.com/<you>/intro
+//   • Formspree            → free 50/mo form endpoint, or replace with mailto:
+// Replace each STRIPE_URL / CALENDLY_URL / WAITLIST_FORM_ACTION with your own.
+// ──────────────────────────────────────────────────────────────────────────
+const STRIPE_TEAM_PAYMENT_LINK = 'https://buy.stripe.com/REPLACE_WITH_YOUR_TEAM_LINK';
+const CALENDLY_ENTERPRISE = 'https://calendly.com/labwired/enterprise-intro';
+const WAITLIST_FORM_ACTION = 'mailto:hello@labwired.com'; // swap for https://formspree.io/f/<id> when ready
+const GITHUB_REPO = 'https://github.com/w1ne/labwired';
+
 const GITHUB_ACTION_SNIPPET = `name: Firmware Regression
 on: [push, pull_request]
 
@@ -39,11 +52,29 @@ export function CiLanding() {
   const submitWaitlist = (event: React.FormEvent) => {
     event.preventDefault();
     if (!email) return;
-    const subject = encodeURIComponent('LabWired CI waitlist');
-    const body = encodeURIComponent(
-      `I'd like early access to LabWired CI.\n\nEmail: ${email}\n\nWhat I'm hoping to use it for:\n`,
-    );
-    window.location.href = `mailto:hello@labwired.com?subject=${subject}&body=${body}`;
+    if (WAITLIST_FORM_ACTION.startsWith('mailto:')) {
+      const subject = encodeURIComponent('LabWired CI waitlist');
+      const body = encodeURIComponent(
+        `I'd like early access to LabWired CI.\n\nEmail: ${email}\n\nWhat I'm hoping to use it for:\n`,
+      );
+      window.location.href = `${WAITLIST_FORM_ACTION}?subject=${subject}&body=${body}`;
+    } else {
+      // For Formspree, Tally, ConvertKit etc. — POST and let the service redirect.
+      const form = document.createElement('form');
+      form.action = WAITLIST_FORM_ACTION;
+      form.method = 'POST';
+      form.target = '_self';
+      const emailField = document.createElement('input');
+      emailField.name = 'email';
+      emailField.value = email;
+      form.appendChild(emailField);
+      const sourceField = document.createElement('input');
+      sourceField.name = 'source';
+      sourceField.value = 'ci-landing';
+      form.appendChild(sourceField);
+      document.body.appendChild(form);
+      form.submit();
+    }
     setSubmitted(true);
   };
 
@@ -289,22 +320,23 @@ export function CiLanding() {
                   'Community Discord',
                 ],
                 cta: 'Use today',
-                ctaHref: 'https://github.com/w1ne/labwired',
+                ctaHref: GITHUB_REPO,
                 ctaExternal: true,
               },
               {
                 name: 'Team',
-                price: 'Usage-based',
-                priceNote: 'starts ~$0.001/cycle',
+                price: '$49',
+                priceNote: 'per month · cancel anytime',
                 features: [
                   'Private repos',
-                  'Unlimited cycles',
+                  '500k cycles / month',
                   'Unlimited concurrency',
                   'Email support',
                   'VCD trace retention 30d',
                 ],
-                cta: 'Join waitlist',
-                ctaHref: '#waitlist',
+                cta: 'Start free trial →',
+                ctaHref: STRIPE_TEAM_PAYMENT_LINK,
+                ctaExternal: true,
                 highlighted: true,
               },
               {
@@ -319,8 +351,9 @@ export function CiLanding() {
                   'Dedicated SLA',
                   'Tool qualification (TQK)',
                 ],
-                cta: 'Talk to us',
-                ctaHref: 'mailto:hello@labwired.com?subject=LabWired%20CI%20Enterprise',
+                cta: 'Book a call',
+                ctaHref: CALENDLY_ENTERPRISE,
+                ctaExternal: true,
               },
             ].map((tier) => (
               <div
