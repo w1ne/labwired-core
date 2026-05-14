@@ -31,7 +31,6 @@ export const keypadComponent: ComponentDef = {
   attrFields: [],
   render: (_attrs, state) => {
     const selected = !!state?.selected;
-    const pressedKey = state?.pressedKey as string | undefined;
     const bw = 14;
     const bh = 14;
     const sx = 10;
@@ -50,10 +49,6 @@ export const keypadComponent: ComponentDef = {
             <stop offset="0" stopColor="#4a4a4a" />
             <stop offset="1" stopColor="#1c1c1c" />
           </radialGradient>
-          <radialGradient id="keypad-key-pressed" cx="0.5" cy="0.5" r="0.6">
-            <stop offset="0" stopColor="#3DD68C" />
-            <stop offset="1" stopColor="#1a3a22" />
-          </radialGradient>
         </defs>
 
         {/* Drop shadow */}
@@ -70,30 +65,24 @@ export const keypadComponent: ComponentDef = {
           row.map((key, ci) => {
             const x = sx + ci * (bw + hgap);
             const y = sy + ri * (bh + vgap);
-            const isPressed = pressedKey === key;
             return (
               <g key={`${ri}-${ci}`}>
-                {/* Key cap */}
                 <rect
                   x={x}
                   y={y}
                   width={bw}
                   height={bh}
                   rx={2.5}
-                  fill={isPressed ? 'url(#keypad-key-pressed)' : 'url(#keypad-key)'}
+                  fill="url(#keypad-key)"
                   stroke="#000"
                   strokeWidth={0.5}
                 />
-                {/* Top highlight */}
-                {!isPressed && (
-                  <rect x={x + 1.5} y={y + 1} width={bw - 3} height={1.5} rx={1} fill="rgba(255,255,255,0.15)" />
-                )}
-                {/* Key label */}
+                <rect x={x + 1.5} y={y + 1} width={bw - 3} height={1.5} rx={1} fill="rgba(255,255,255,0.15)" />
                 <text
                   x={x + bw / 2}
                   y={y + bh / 2 + 3.5}
                   textAnchor="middle"
-                  fill={isPressed ? '#0a2410' : '#e0e0e0'}
+                  fill="#e0e0e0"
                   fontFamily="'JetBrains Mono', monospace"
                   fontSize={9}
                   fontWeight={600}
