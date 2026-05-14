@@ -13,14 +13,15 @@ describe('SimDock', () => {
     baseHandlers.onReset.mockClear();
   });
 
-  it('renders run-time formatted as MM:SS for 0ms', () => {
-    render(<SimDock state="idle" runtimeMs={0} {...baseHandlers} />);
-    expect(screen.getByText('00:00')).toBeInTheDocument();
+  it('renders cycle count when cycles is positive', () => {
+    render(<SimDock state="running" cycles={1_234} {...baseHandlers} />);
+    expect(screen.getByText(/1\.2K/)).toBeInTheDocument();
+    expect(screen.getByText(/cycles/i)).toBeInTheDocument();
   });
 
-  it('renders run-time formatted as MM:SS for 134_000ms', () => {
-    render(<SimDock state="running" runtimeMs={134_000} {...baseHandlers} />);
-    expect(screen.getByText('02:14')).toBeInTheDocument();
+  it('renders PC in hex when pc is positive', () => {
+    render(<SimDock state="running" pc={0x08000244} {...baseHandlers} />);
+    expect(screen.getByText('0x08000244')).toBeInTheDocument();
   });
 
   it('invokes onRun when the run button is clicked from idle', async () => {

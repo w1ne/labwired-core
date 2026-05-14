@@ -5,7 +5,8 @@ export type SimState = 'idle' | 'building' | 'running' | 'paused' | 'halted';
 
 export interface SimDockProps {
   state: SimState;
-  runtimeMs: number;
+  /** Reserved for future use; not currently rendered (cycles is the real metric). */
+  runtimeMs?: number;
   cycles?: number;
   pc?: number;
   onRun: () => void;
@@ -33,14 +34,7 @@ const STATE_LABEL: Record<SimState, string> = {
   halted: 'Halted',
 };
 
-function formatRuntime(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
-  const ss = String(totalSeconds % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
-}
-
-export function SimDock({ state, runtimeMs, cycles, pc, onRun, onPause, onStep, onReset }: SimDockProps) {
+export function SimDock({ state, cycles, pc, onRun, onPause, onStep, onReset }: SimDockProps) {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       // Skip when focus is in an editable element
