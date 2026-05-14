@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { TopChrome } from './TopChrome';
 import { HeroPrompt } from './HeroPrompt';
 import { ChipRow } from './ChipRow';
@@ -16,6 +16,8 @@ export interface StudioShellProps {
   inspector?: ReactNode;
   simDock?: ReactNode;
   renderDevDrawer?: (devMode: boolean) => ReactNode;
+  renderCommandPalette?: (commandOpen: boolean, closeCommand: () => void, openCommand: () => void) => ReactNode;
+  onMountCommandRef?: (refs: { open: () => void; close: () => void }) => void;
   children?: ReactNode;
 }
 
@@ -36,10 +38,16 @@ export function StudioShell({
   inspector,
   simDock,
   renderDevDrawer,
+  renderCommandPalette,
+  onMountCommandRef,
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
   const [waitlistLab, setWaitlistLab] = useState<string | null>(null);
+
+  useEffect(() => {
+    onMountCommandRef?.({ open: layout.openCommand, close: layout.closeCommand });
+  }, [onMountCommandRef, layout.openCommand, layout.closeCommand]);
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-bg-base text-fg-primary">
@@ -80,6 +88,7 @@ export function StudioShell({
         labName={waitlistLab ?? ''}
         onClose={() => setWaitlistLab(null)}
       />
+      {renderCommandPalette?.(layout.commandOpen, layout.closeCommand, layout.openCommand)}
     </div>
   );
 }

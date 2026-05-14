@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { CommandPalette, type CommandMode } from './studio/CommandPalette';
+import { useCommandPaletteItems } from './studio/useCommandPaletteItems';
 import {
   SimControls,
   RegisterGrid,
@@ -252,6 +254,10 @@ export function App() {
   const [showRightSidebar, setShowRightSidebar] = useState(true);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
+
+  // Command palette mode + ref for global ⌘K shortcut
+  const [paletteMode, setPaletteMode] = useState<CommandMode>('search');
+  const commandRefs = useRef<{ open: () => void; close: () => void } | null>(null);
 
   // Editor state
   const editor = useEditorState(
@@ -824,6 +830,18 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [editor]);
 
+  // Global ⌘K shortcut — opens command palette
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        commandRefs.current?.open();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // Bottom tab content
   const bottomContent = () => {
     switch (bottomTab) {
@@ -839,6 +857,39 @@ export function App() {
         return <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />;
     }
   };
+
+  // Command palette items
+  const commandItems = useCommandPaletteItems({
+    boards: BOARD_CONFIGS,
+    onLoadBoard: handleBoardSelect,
+    onPickLab: handlePickLab,
+    onAddComponent: (type) => {
+      const def = COMPONENT_REGISTRY.get(type);
+      if (!def) return;
+      const part: Part = {
+        id: nextPartId(type), type, x: 200, y: 200, rotate: 0,
+        attrs: { ...def.defaultAttrs },
+      };
+      editor.addPart(part);
+    },
+    onRun: handleRun,
+    onShare: handleShare,
+    onReset: handleReset,
+    onToggleDev: () => { /* no-op: dev toggle is owned by useStudioLayout inside StudioShell; TopChrome's toggle still works */ },
+  });
+
+  const renderCommandPalette = (open: boolean, closeCommand: () => void, _openCommand: () => void) => (
+    <CommandPalette
+      open={open}
+      onClose={() => {
+        closeCommand();
+        setPaletteMode('search');
+      }}
+      items={commandItems}
+      mode={paletteMode}
+      onModeChange={setPaletteMode}
+    />
+  );
 
   const simDockNode = (
     <SimDock
@@ -886,6 +937,8 @@ export function App() {
       inspector={inspectorNode}
       simDock={simDockNode}
       renderDevDrawer={renderDevDrawer}
+      renderCommandPalette={renderCommandPalette}
+      onMountCommandRef={(refs) => { commandRefs.current = refs; }}
     >
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
