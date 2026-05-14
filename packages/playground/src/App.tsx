@@ -674,11 +674,23 @@ export function App() {
         setError(null);
         setCompileOutput(`Loading firmware: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
         const firmware = new Uint8Array(await file.arrayBuffer());
-        await launchSimulation({
-          systemYaml: selectedBoard.systemYaml,
-          chipYaml: selectedBoard.chipYaml,
-          firmware,
-        });
+
+        // Derive the system YAML from the current canvas so the user's wired-up components
+        // are exposed to the uploaded firmware. Chip YAML is fixed by the selected board.
+        let systemYaml = selectedBoard.systemYaml;
+        let chipYaml = selectedBoard.chipYaml;
+        try {
+          const config = diagramToConfig(editor.state.diagram, selectedBoard.chipYaml);
+          systemYaml = config.systemYaml;
+          chipYaml = config.chipYaml;
+        } catch (configErr) {
+          // If the canvas can't be translated (e.g., dangling wires), fall back to the bundled
+          // system YAML and surface a warning. The firmware still runs against the bundled board.
+          const msg = configErr instanceof Error ? configErr.message : String(configErr);
+          setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
+        }
+
+        await launchSimulation({ systemYaml, chipYaml, firmware });
         setCompileOutput((prev) => `${prev}\nUploaded ${file.name} (${firmware.length} bytes). Simulation started.`);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -686,7 +698,7 @@ export function App() {
         setCompileOutput((prev) => `${prev}\nUpload failed: ${message}`);
       }
     },
-    [launchSimulation, selectedBoard.systemYaml, selectedBoard.chipYaml],
+    [launchSimulation, selectedBoard.systemYaml, selectedBoard.chipYaml, editor.state.diagram],
   );
 
   const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
