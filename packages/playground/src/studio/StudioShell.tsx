@@ -1,7 +1,6 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { TopChrome } from './TopChrome';
 import { ChipRow } from './ChipRow';
-import { WaitlistModal } from './WaitlistModal';
 import { PaletteDrawer, type PaletteComponent } from './PaletteDrawer';
 import { useStudioLayout } from './useStudioLayout';
 
@@ -20,13 +19,6 @@ export interface StudioShellProps {
   children?: ReactNode;
 }
 
-const LOCKED_NAMES: Record<string, string> = {
-  'bme280-weather': 'BME280 Weather',
-  'oled-hello': 'OLED Hello',
-  'gps-trail': 'GPS Trail',
-  'tft-demo': 'TFT Demo',
-};
-
 export function StudioShell({
   boardName = 'Untitled',
   isEmpty = false,
@@ -42,7 +34,6 @@ export function StudioShell({
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
-  const [waitlistLab, setWaitlistLab] = useState<string | null>(null);
 
   useEffect(() => {
     onMountCommandRef?.({ open: layout.openCommand, close: layout.closeCommand });
@@ -84,7 +75,7 @@ export function StudioShell({
             <div className="pointer-events-auto">
               <ChipRow
                 onPick={(labId) => onPickLab?.(labId)}
-                onLocked={(labId) => setWaitlistLab(LOCKED_NAMES[labId] ?? labId)}
+                onLocked={() => { /* no locked labs in v1 */ }}
               />
             </div>
           </div>
@@ -92,11 +83,6 @@ export function StudioShell({
         {simDock}
         {renderDevDrawer?.(layout.devMode)}
       </main>
-      <WaitlistModal
-        open={!!waitlistLab}
-        labName={waitlistLab ?? ''}
-        onClose={() => setWaitlistLab(null)}
-      />
       {renderCommandPalette?.(layout.commandOpen, layout.closeCommand, layout.openCommand)}
     </div>
   );

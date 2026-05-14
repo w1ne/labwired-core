@@ -175,7 +175,11 @@ function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: st
   let diagram = makeStarterDiagram(config);
   if (savedDiagram) {
     try {
-      diagram = JSON.parse(savedDiagram) as Diagram;
+      const parsed = JSON.parse(savedDiagram) as Diagram;
+      const nonMcuParts = (parsed.parts ?? []).filter((p) => p.id !== 'mcu');
+      // Fall back to the starter when the saved diagram has been emptied — visitors should
+      // always land on a running-ready circuit, not a blank canvas.
+      diagram = nonMcuParts.length === 0 ? makeStarterDiagram(config) : parsed;
     } catch {
       diagram = makeStarterDiagram(config);
     }

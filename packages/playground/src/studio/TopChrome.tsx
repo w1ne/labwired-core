@@ -14,14 +14,17 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
       role="banner"
       className="absolute top-0 inset-x-0 z-30 flex items-center gap-3 h-11 px-3 bg-[rgba(13,14,18,0.6)] backdrop-blur"
     >
-      <a href="/" className="flex items-center gap-2 text-fg-primary font-semibold tracking-tight">
+      <a href="/" className="flex items-center gap-2 text-fg-primary font-semibold tracking-tight shrink-0">
         <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
           <path d="M11 2 4 12h4l-1 6 8-10h-4l1-6z" fill="currentColor" />
         </svg>
         LabWired
       </a>
-      <span className="text-fg-tertiary" aria-hidden>›</span>
-      <span className="text-fg-secondary truncate max-w-[28ch]">{boardName}</span>
+      <span className="text-fg-tertiary text-[11px] hidden lg:inline tracking-[0.01em] shrink-0">
+        Deterministic firmware simulation, no hardware needed
+      </span>
+      <span className="text-fg-tertiary shrink-0" aria-hidden>›</span>
+      <span className="text-fg-secondary truncate max-w-[24ch]">{boardName}</span>
 
       <div className="flex-1 max-w-[520px] mx-auto">
         <button

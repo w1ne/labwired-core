@@ -11,10 +11,6 @@ export interface StarterLab {
 export const STARTER_LABS: StarterLab[] = [
   { id: 'stm32f103-blinky', name: 'Blinky', icon: '⚡', locked: false },
   { id: 'adxl345-sensor-lab', name: 'ADXL345 Tilt', icon: '📊', locked: false },
-  { id: 'bme280-weather', name: 'BME280 Weather', icon: '🌡', locked: true, comingIn: 'Wave 2' },
-  { id: 'oled-hello', name: 'OLED Hello', icon: '📺', locked: true, comingIn: 'Wave 2' },
-  { id: 'gps-trail', name: 'GPS Trail', icon: '📡', locked: true, comingIn: 'Wave 3' },
-  { id: 'tft-demo', name: 'TFT Demo', icon: '🎨', locked: true, comingIn: 'Wave 2' },
 ];
 
 export interface ChipRowProps {
