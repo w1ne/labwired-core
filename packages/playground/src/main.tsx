@@ -1,7 +1,10 @@
 import { StrictMode, Component, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './styles/tokens.css';
+import './styles/tailwind.css';
 import '@labwired/ui/tokens.css';
-import './playground.css';
+// playground.css temporarily disabled — replaced by tokens/tailwind in Studio rework
+// import './playground.css';
 import { App } from './App';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {

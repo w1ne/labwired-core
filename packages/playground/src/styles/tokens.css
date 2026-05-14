@@ -1,0 +1,59 @@
+:root {
+  --lw-bg-base: #0A0B0F;
+  --lw-bg-surface: #13151B;
+  --lw-bg-elevated: #1A1D26;
+  --lw-bg-canvas: #0E1015;
+
+  --lw-fg-primary: #F2F4F9;
+  --lw-fg-secondary: #9098A8;
+  --lw-fg-tertiary: #5A6178;
+
+  --lw-border: #262A33;
+  --lw-border-strong: #363B46;
+  --lw-highlight: rgba(255, 255, 255, 0.04);
+
+  --lw-accent: #5B9DFF;
+  --lw-accent-hover: #7DB1FF;
+  --lw-accent-soft: rgba(91, 157, 255, 0.12);
+
+  --lw-magenta: #F062B8;
+  --lw-magenta-soft: rgba(240, 98, 184, 0.14);
+
+  --lw-success: #3DD68C;
+  --lw-warning: #F5B642;
+  --lw-danger: #F2545B;
+
+  --lw-pin-power: #F5B642;
+  --lw-pin-gnd: #5A6178;
+  --lw-pin-i2c-sda: #3DD68C;
+  --lw-pin-i2c-scl: #5B9DFF;
+  --lw-pin-spi-mosi: #F062B8;
+  --lw-pin-spi-miso: #B07BFF;
+  --lw-pin-spi-sck: #5B9DFF;
+  --lw-pin-data: #F2F4F9;
+
+  --lw-radius-card: 12px;
+  --lw-radius-button: 8px;
+  --lw-radius-pill: 999px;
+
+  --lw-shadow-glass: inset 0 1px 0 var(--lw-highlight),
+    0 24px 48px -16px rgba(0, 0, 0, 0.48);
+
+  --lw-blur-glass: blur(20px) saturate(160%);
+
+  --lw-font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --lw-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --lw-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --lw-dur-micro: 120ms;
+  --lw-dur-panel: 220ms;
+  --lw-dur-modal: 320ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lw-dur-micro: 1ms;
+    --lw-dur-panel: 1ms;
+    --lw-dur-modal: 1ms;
+  }
+}

@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    background: var(--lw-bg-base);
+    color: var(--lw-fg-primary);
+    font-family: var(--lw-font-ui);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--lw-magenta-soft);
+  }
+}
+
+@layer components {
+  .lw-glass {
+    background: rgba(19, 21, 27, 0.72);
+    backdrop-filter: var(--lw-blur-glass);
+    border: 1px solid var(--lw-border);
+    box-shadow: var(--lw-shadow-glass);
+    border-radius: var(--lw-radius-card);
+  }
+}
