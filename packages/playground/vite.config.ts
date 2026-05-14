@@ -16,4 +16,12 @@ export default defineConfig({
   define: {
     __BUILD_TIME__: JSON.stringify(Date.now()),
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        ci: path.resolve(__dirname, 'ci.html'),
+      },
+    },
+  },
 });

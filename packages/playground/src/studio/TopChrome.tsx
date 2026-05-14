@@ -84,6 +84,16 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
       >
         Dev {devMode ? 'on' : 'off'}
       </button>
+      <a
+        href="../ci.html"
+        className="hidden md:flex h-7 px-3 rounded-pill text-xs font-medium bg-magenta-soft text-magenta hover:bg-magenta/20 border border-magenta/30 transition-colors duration-micro items-center gap-1.5 shrink-0"
+        title="Use LabWired in your CI pipeline"
+      >
+        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M2 6h12M2 10h12M5 2v12M11 2v12" />
+        </svg>
+        For CI
+      </a>
       <button
         type="button"
         onClick={onShare}
