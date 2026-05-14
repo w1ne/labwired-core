@@ -26,20 +26,16 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
       <span className="text-fg-tertiary shrink-0" aria-hidden>›</span>
       <span className="text-fg-secondary truncate max-w-[24ch]">{boardName}</span>
 
-      <div className="flex-1 max-w-[520px] mx-auto">
+      <div className="flex-1 max-w-[440px] mx-auto">
         <button
           type="button"
           onClick={onOpenCommand}
-          className="w-full h-8 px-3 flex items-center gap-2 rounded-button bg-bg-surface/70 border border-border text-fg-tertiary text-left hover:border-border-strong transition-colors duration-micro"
+          style={{ borderRadius: 999 }}
+          className="w-full h-8 px-4 flex items-center gap-2 bg-white/[0.05] hover:bg-white/[0.09] text-left transition-colors duration-micro outline-none border-0 focus-visible:ring-2 focus-visible:ring-accent/50"
+          aria-label="Open command palette"
         >
-          <span aria-hidden>⌘K</span>
-          <input
-            tabIndex={-1}
-            readOnly
-            placeholder="Search components, boards, examples…"
-            onClick={onOpenCommand}
-            className="bg-transparent flex-1 outline-none text-fg-secondary placeholder:text-fg-tertiary cursor-pointer"
-          />
+          <span aria-hidden className="text-fg-tertiary text-[11px] font-mono">⌘K</span>
+          <span className="flex-1 text-fg-tertiary text-[12px] truncate">Search components, boards, examples…</span>
         </button>
       </div>
 

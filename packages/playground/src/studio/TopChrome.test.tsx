@@ -14,10 +14,10 @@ describe('TopChrome', () => {
     expect(screen.getByText('STM32F103 Blinky')).toBeInTheDocument();
   });
 
-  it('opens the command palette when the search input is clicked', async () => {
+  it('opens the command palette when the search affordance is clicked', async () => {
     const onOpenCommand = vi.fn();
     render(<TopChrome boardName="Untitled" onOpenCommand={onOpenCommand} devMode={false} onToggleDev={() => {}} />);
-    await userEvent.click(screen.getByPlaceholderText(/search components/i));
+    await userEvent.click(screen.getByRole('button', { name: /open command palette/i }));
     expect(onOpenCommand).toHaveBeenCalled();
   });
 
