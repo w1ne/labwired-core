@@ -238,6 +238,14 @@ export function App() {
   // Board selection (from catalog + bundled configs)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<BoardConfig>(() => {
+    // URL param ?lab=<boardId> overrides saved state — lets gallery cards deep-link.
+    if (typeof window !== 'undefined') {
+      const labParam = new URLSearchParams(window.location.search).get('lab');
+      if (labParam) {
+        const fromParam = BOARD_CONFIGS.find((c) => c.boardId === labParam);
+        if (fromParam) return fromParam;
+      }
+    }
     const savedId = localStorage.getItem('labwired-board');
     if (savedId) {
       const found = BOARD_CONFIGS.find((c) => c.boardId === savedId);

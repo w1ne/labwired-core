@@ -21,6 +21,7 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, 'index.html'),
         ci: path.resolve(__dirname, 'ci.html'),
+        gallery: path.resolve(__dirname, 'gallery.html'),
       },
     },
   },

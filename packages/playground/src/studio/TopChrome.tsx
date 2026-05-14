@@ -85,6 +85,13 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         Dev {devMode ? 'on' : 'off'}
       </button>
       <a
+        href="../gallery.html"
+        className="hidden lg:flex h-7 px-3 rounded-pill text-xs font-medium text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] transition-colors duration-micro items-center shrink-0"
+        title="Browse featured labs"
+      >
+        Gallery
+      </a>
+      <a
         href="../ci.html"
         className="hidden md:flex h-7 px-3 rounded-pill text-xs font-medium bg-magenta-soft text-magenta hover:bg-magenta/20 border border-magenta/30 transition-colors duration-micro items-center gap-1.5 shrink-0"
         title="Use LabWired in your CI pipeline"
