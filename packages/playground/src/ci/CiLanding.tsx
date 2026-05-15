@@ -331,7 +331,7 @@ export function CiLanding() {
                 priceNote: 'per seat · per month · cancel anytime',
                 features: [
                   'Private projects',
-                  'Unlimited simulations',
+                  '100M cycles / month included',
                   'Priority email support',
                   'VCD trace retention 30 days',
                   'All future updates',
