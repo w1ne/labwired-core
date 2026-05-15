@@ -37,6 +37,15 @@ const FEATURED: FeaturedLab[] = [
     icon: '🧭',
   },
   {
+    id: 'bme280-weather-lab',
+    name: 'BME280 Weather Station',
+    chip: 'STM32F103 + BME280 over I²C',
+    description: 'Read temperature, humidity, and pressure from a simulated BME280 sensor.',
+    detail: 'Demonstrates LabWired\'s environmental sensor model: register-level BME280 implementation with factory calibration coefficients. Chip ID check + continuous T/H/P reading loop.',
+    accent: '#3DD68C',
+    icon: '🌡',
+  },
+  {
     id: 'nucleo-f401re',
     name: 'Nucleo-F401RE',
     chip: 'Cortex-M4F · 84 MHz',
@@ -161,7 +170,6 @@ export function Gallery() {
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 opacity-60">
           {[
-            { name: 'BME280 Weather Station', wave: 'Wave 1' },
             { name: 'SSD1306 OLED', wave: 'Wave 2' },
             { name: 'ILI9341 TFT', wave: 'Wave 2' },
             { name: 'NEO-6M GPS', wave: 'Wave 3' },

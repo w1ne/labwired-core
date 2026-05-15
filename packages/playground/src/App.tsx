@@ -196,6 +196,7 @@ const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 
 const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   adxl345: 'i2c',
+  bme280: 'i2c',
   mpu6050: 'i2c',
   'oled-ssd1306': 'i2c',
   lcd1602: 'i2c',
@@ -629,7 +630,7 @@ export function App() {
   const inspectorLabWidget = useMemo<ReactNode>(() => {
     if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
     const partType = inspectorSelection.partType;
-    if (partType !== 'adxl345' && partType !== 'mpu6050') return undefined;
+    if (partType !== 'adxl345' && partType !== 'mpu6050' && partType !== 'bme280') return undefined;
     const sensorStates = bridge.getI2cSensorStates();
     if (partType === 'adxl345') {
       const s = sensorStates.find((st) => st.kind === 'adxl345' && st.id === inspectorSelection.partId)
@@ -658,6 +659,20 @@ export function App() {
             <tr><td className="py-0.5 pr-2 text-fg-secondary">GX</td><td className="text-fg-primary">{s.gx}</td></tr>
             <tr><td className="py-0.5 pr-2 text-fg-secondary">GY</td><td className="text-fg-primary">{s.gy}</td></tr>
             <tr><td className="py-0.5 pr-2 text-fg-secondary">GZ</td><td className="text-fg-primary">{s.gz}</td></tr>
+          </tbody>
+        </table>
+      );
+    }
+    if (partType === 'bme280') {
+      const s = sensorStates.find((st) => st.kind === 'bme280' && st.id === inspectorSelection.partId)
+        ?? sensorStates.find((st) => st.kind === 'bme280');
+      if (!s || s.kind !== 'bme280') return undefined;
+      return (
+        <table className="w-full text-[12px] font-mono">
+          <tbody>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Temp</td><td className="text-fg-primary">{s.temperature_c.toFixed(1)} °C</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Humidity</td><td className="text-fg-primary">{s.humidity_pct.toFixed(1)} %RH</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Pressure</td><td className="text-fg-primary">{s.pressure_hpa.toFixed(0)} hPa</td></tr>
           </tbody>
         </table>
       );

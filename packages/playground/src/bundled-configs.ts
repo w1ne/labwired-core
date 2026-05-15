@@ -22,9 +22,11 @@ import systemStm32f401cdu6Blackpill from '../../../core/configs/systems/stm32f40
 import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yaml?raw';
 import systemAdxl345SensorLab from '../../../core/examples/adxl345-sensor-lab/system.yaml?raw';
 import systemMpu6050SensorLab from '../../../core/examples/mpu6050-sensor-lab/system.yaml?raw';
+import systemBme280WeatherLab from '../../../core/examples/bme280-weather-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
+import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -45,6 +47,19 @@ export interface BoardConfig {
 const BASE = import.meta.env.BASE_URL;
 
 export const BOARD_CONFIGS: BoardConfig[] = [
+  {
+    boardId: 'bme280-weather-lab',
+    chipId: 'stm32f103',
+    name: 'BME280 Weather',
+    description: 'STM32F103 + BME280 temperature/humidity/pressure sensor over simulated I²C.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemBme280WeatherLab,
+    demoFirmwarePath: `${BASE}wasm/demo-bme280-weather-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceBme280,
+    sourceFilename: 'bme280-weather-lab/src/main.rs',
+  },
   {
     boardId: 'mpu6050-sensor-lab',
     chipId: 'stm32f103',

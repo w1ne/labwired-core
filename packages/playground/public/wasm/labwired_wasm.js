@@ -93,7 +93,8 @@ export class WasmSimulator {
     }
     /**
      * Read back the current sensor data from each I2C sensor declared in `board_io`.
-     * Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`.
+     * Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`
+     * or `[{ id, kind: "bme280", temperature_c, humidity_pct, pressure_hpa }, ...]`.
      * @returns {any}
      */
     get_i2c_sensor_states() {

@@ -45,7 +45,15 @@ export interface I2cSensorStateMpu6050 {
   gz: number;
 }
 
-export type I2cSensorState = I2cSensorStateAdxl345 | I2cSensorStateMpu6050;
+export interface I2cSensorStateBme280 {
+  id: string;
+  kind: 'bme280';
+  temperature_c: number;
+  humidity_pct: number;
+  pressure_hpa: number;
+}
+
+export type I2cSensorState = I2cSensorStateAdxl345 | I2cSensorStateMpu6050 | I2cSensorStateBme280;
 
 export interface PeripheralInfo {
   name: string;
