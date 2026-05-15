@@ -6,7 +6,7 @@ Three placeholder URLs in `CiLanding.tsx` need real values before this page acce
 |---|---|---|
 | `STRIPE_TEAM_PAYMENT_LINK` | A Stripe Payment Link URL | 1. `dashboard.stripe.com` → Products → New product. <br>2. Price: $49/mo recurring. <br>3. Payment Links → New → select product. <br>4. Copy URL like `https://buy.stripe.com/abc123`. |
 | `CALENDLY_ENTERPRISE` | Your Calendly intro-call link | 1. Create Calendly account. <br>2. New event type → 30-min intro. <br>3. Copy `https://calendly.com/<you>/enterprise-intro`. |
-| `WAITLIST_FORM_ACTION` | Formspree / Tally / ConvertKit endpoint | Default is `mailto:hello@labwired.com` (works today, no setup). When list grows: <br>1. `formspree.io` → New form (free 50/mo). <br>2. Replace with `https://formspree.io/f/<id>`. |
+| `WAITLIST_FORM_ACTION` | Formspree / Tally / ConvertKit endpoint | Default is `mailto:andrii@shylenko.com` (works today, no setup). When list grows: <br>1. `formspree.io` → New form (free 50/mo). <br>2. Replace with `https://formspree.io/f/<id>`. |
 
 ## Why this stack
 

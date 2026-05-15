@@ -73,13 +73,10 @@ These items have **no workaround**. Until each is done, the pricing page is thea
 - Files to touch: `core/crates/cli/src/main.rs`, `.github/actions/labwired-test/action.yml`, new `api/runs.ts` endpoint.
 - Definition of done: a paid customer's CI build authenticates, runs, and shows up as a cycle-consumption record in the backend.
 
-### 3.3 Working `hello@labwired.com` (30 min)
-- Current state: `mailto:` links scattered across landing + CI page; the inbox may not exist or auto-respond.
-- Action:
-  1. Verify the inbox exists and forwards to a checked address.
-  2. Set up an auto-responder: "Got your email — replying within 24h."
-  3. Optional: replace with Front / Help Scout / Plain shared inbox for $0–$25/mo as volume grows.
-- Definition of done: send a test email; receive auto-response within 1 min; human reply within 24h.
+### 3.3 Public contact email ✅ DONE
+- Using `andrii@shylenko.com` (founder's PR/public inbox, already in use across other projects).
+- All landing + CI + Library + WaitlistModal contact links now route to this address.
+- **Migration path:** swap to `hello@labwired.com` (or a shared inbox like Front/Help Scout) once volume justifies splitting personal from product mail. Probably trigger that at ~10 inbound emails/week.
 
 ### 3.4 Real Calendly URL (15 min)
 - Current state: `CALENDLY_ENTERPRISE = 'https://calendly.com/labwired/enterprise-intro'` is a placeholder.

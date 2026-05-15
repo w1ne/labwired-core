@@ -10,7 +10,7 @@ import { useState } from 'react';
 // ──────────────────────────────────────────────────────────────────────────
 const STRIPE_TEAM_PAYMENT_LINK = 'https://buy.stripe.com/REPLACE_WITH_YOUR_TEAM_LINK';
 const CALENDLY_ENTERPRISE = 'https://calendly.com/labwired/enterprise-intro';
-const WAITLIST_FORM_ACTION = 'mailto:hello@labwired.com'; // swap for https://formspree.io/f/<id> when ready
+const WAITLIST_FORM_ACTION = 'mailto:andrii@shylenko.com'; // swap for https://formspree.io/f/<id> when ready
 const GITHUB_REPO = 'https://github.com/w1ne/labwired';
 
 const GITHUB_ACTION_SNIPPET = `name: Firmware Regression
@@ -415,8 +415,8 @@ export function CiLanding() {
               <div className="text-ok text-2xl mb-2">✓ Thanks!</div>
               <p className="text-fg-secondary">
                 Your mail client should be open. If not, write us at{' '}
-                <a className="text-accent" href="mailto:hello@labwired.com">
-                  hello@labwired.com
+                <a className="text-accent" href="mailto:andrii@shylenko.com">
+                  andrii@shylenko.com
                 </a>
                 .
               </p>
@@ -466,7 +466,7 @@ export function CiLanding() {
           <div className="flex items-center gap-5">
             <a className="hover:text-fg-primary transition-colors" href="/playground/">Playground</a>
             <a className="hover:text-fg-primary transition-colors" href="https://github.com/w1ne/labwired" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a className="hover:text-fg-primary transition-colors" href="mailto:hello@labwired.com">Contact</a>
+            <a className="hover:text-fg-primary transition-colors" href="mailto:andrii@shylenko.com">Contact</a>
           </div>
         </div>
       </footer>

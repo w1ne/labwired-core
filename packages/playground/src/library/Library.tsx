@@ -358,7 +358,7 @@ export function Library() {
             <a className="hover:text-fg-primary transition-colors" href="./">Playground</a>
             <a className="hover:text-fg-primary transition-colors" href="ci.html">For CI</a>
             <a className="hover:text-fg-primary transition-colors" href="https://github.com/w1ne/labwired" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a className="hover:text-fg-primary transition-colors" href="mailto:hello@labwired.com">Contact</a>
+            <a className="hover:text-fg-primary transition-colors" href="mailto:andrii@shylenko.com">Contact</a>
           </div>
         </div>
       </footer>
