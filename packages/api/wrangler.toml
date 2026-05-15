@@ -4,6 +4,7 @@ name = "labwired-api"
 main = "src/index.ts"
 compatibility_date = "2025-05-14"
 compatibility_flags = ["nodejs_compat"]
+routes = [{ pattern = "api.labwired.com", custom_domain = true }]
 
 # ── KV namespaces ────────────────────────────────────────────────────────────
 # Replace the id/preview_id values with the real namespace IDs you get from:
@@ -13,18 +14,15 @@ compatibility_flags = ["nodejs_compat"]
 
 [[kv_namespaces]]
 binding = "KV_KEYS"
-id = "REPLACE_WITH_KV_KEYS_ID"
-preview_id = "REPLACE_WITH_KV_KEYS_PREVIEW_ID"
+id = "5d15fd1dfc2c46f9b4c33ea9f4c1ccc4"
 
 [[kv_namespaces]]
 binding = "KV_WORKSPACES"
-id = "REPLACE_WITH_KV_WORKSPACES_ID"
-preview_id = "REPLACE_WITH_KV_WORKSPACES_PREVIEW_ID"
+id = "bceec07d091b4238be0d9e322b76bf69"
 
 [[kv_namespaces]]
 binding = "KV_STRIPE_SUBS"
-id = "REPLACE_WITH_KV_STRIPE_SUBS_ID"
-preview_id = "REPLACE_WITH_KV_STRIPE_SUBS_PREVIEW_ID"
+id = "1a683745399d43ef93c97c6568d191a4"
 
 # ── Secrets (set via `wrangler secret put <NAME>`) ───────────────────────────
 # Do NOT put real values here. This block just declares the expected names.
@@ -41,6 +39,3 @@ LABWIRED_API_BASE = "https://api.labwired.com"
 FROM_EMAIL = "onboarding@labwired.com"
 PRO_CYCLES_QUOTA = "100000000"
 ENVIRONMENT = "production"
-
-# ── Custom domain (configure in Cloudflare dashboard) ───────────────────────
-# routes = [{ pattern = "api.labwired.com/*", custom_domain = true }]
