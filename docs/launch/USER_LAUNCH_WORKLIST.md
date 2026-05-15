@@ -18,7 +18,7 @@ For launch, the core workflow must be:
 4. Open the same example in VS Code and debug it.
 5. Reuse the same workflow in CI.
 
-Hosted Foundry is valuable, but it is a secondary or beta workflow until the local and IDE loop is fully coherent.
+The paid CI tier (`packages/api`) gates this same workflow behind an API key for private projects.
 
 ## Must Fix Before Launch
 
@@ -64,8 +64,6 @@ Hosted Foundry is valuable, but it is a secondary or beta workflow until the loc
 
 These can be public, but only if labeled clearly as beta or experimental:
 
-- Hosted Foundry verification service
-- Foundry billing and quota purchase flows
 - AI-assisted datasheet-to-model generation
 - Broader board catalog beyond the recommended launch targets
 
@@ -84,9 +82,9 @@ These should not block the first user-facing launch:
 - `DEVELOPMENT.md`
 - `docs/README.md`
 - `docs/specs/compatibility_matrix.md`
-- `docs/user_flows.md`
 - `vscode/README.md`
-- `foundry/frontend/README.md`
+- `packages/api/README.md`
+- `packages/playground/src/ci/CiLanding.tsx` (live pricing copy)
 
 ## Cleanup Rule
 

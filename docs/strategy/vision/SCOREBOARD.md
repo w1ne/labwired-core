@@ -51,7 +51,11 @@ Last updated: 2026-03-21
 | Telemetry export (Python → Foundry) | :green_circle: | `ai/labwired_ai/telemetry.py` → `export_to_foundry()` |
 | COGS tracking / pricing instrumentation | :red_circle: | Not implemented |
 
-## Gap 4: Foundry Multi-Tenancy
+## Gap 4: Multi-Tenancy (legacy Foundry stack — deprioritised)
+
+> The evidence rows below point at code in `/foundry/`, which is the retired Go backend. Kept as a historical record of what was built. The current product (paid CI tier) does not yet have organisation primitives.
+
+
 
 | Item | Status | Evidence |
 |------|--------|----------|
@@ -86,7 +90,7 @@ Last updated: 2026-03-21
 | Getting Started tutorial | :green_circle: | `docs/tutorials/getting-started.md` |
 | CI Integration tutorial | :green_circle: | `docs/tutorials/ci-integration.md` |
 | Unified docs hub | :green_circle: | `docs/README.md` |
-| API reference (Foundry) | :yellow_circle: | Endpoints documented in code; no standalone API docs |
+| API reference (CI tier Worker) | :yellow_circle: | Endpoints described in `packages/api/README.md`; no standalone OpenAPI doc yet |
 
 ---
 
@@ -97,6 +101,6 @@ Last updated: 2026-03-21
 | 1. Foundation | 4 | 1 | 1 | :yellow_circle: |
 | 2. Agentic Loop | 5 | 1 | 1 | :yellow_circle: |
 | 3. Metering | 6 | 0 | 1 | :green_circle: |
-| 4. Foundry Multi-Tenancy | 6 | 0 | 2 | :yellow_circle: |
+| 4. Multi-Tenancy (legacy stack) | 6 | 0 | 2 | :black_circle: deprioritised |
 | 5. Human Observer | 8 | 1 | 0 | :green_circle: |
 | 6. Documentation | 4 | 1 | 0 | :green_circle: |

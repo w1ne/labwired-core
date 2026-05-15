@@ -1,14 +1,13 @@
 # Foundry Deploy Workflow
+#
+# DEPRECATED: Foundry as a product framing has been retired in favour of the
+# LabWired CI tier (Pro plan in CiLanding.tsx + packages/api Cloudflare Worker).
+# This workflow is kept for emergency redeploys of the legacy Hetzner stack
+# while the live system winds down. Auto-trigger on push has been disabled —
+# run manually via the Actions tab if a redeploy is genuinely needed.
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
-    paths:
-      - "foundry/**"
-      - "core/**"
-      - "packages/**"
-      - ".github/workflows/foundry-deploy.yml"
 
 permissions:
   contents: read

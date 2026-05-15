@@ -9,7 +9,7 @@ This document captures what is still missing to finish the vision in `docs/visio
 Vision target:
 - Phase 1: Foundation
 - Phase 2: Agentic Loop
-- Phase 3: Foundry
+- Phase 3: Hosted CI (formerly "Foundry"; reframed 2026-05-15 — see note at end)
 
 Completion standard:
 - "Vision complete" means all three phases are operational, not only documented.
@@ -47,27 +47,21 @@ For a detailed item-by-item tracker, see [SCOREBOARD.md](./SCOREBOARD.md).
 - AIPi contract versioning and backward-compatibility policy not formalized.
 - Advanced timing semantics and cross-peripheral side effects not yet in synthesis pipeline.
 
-## 3) Metering Economy — LARGELY CLOSED
+## 3) Metering Economy — REFRAMED
 
-**Closed:**
-- Per-operation type tracking (`op_type` column) and simulation minutes (`sim_minutes` column) in Foundry DB.
-- Usage breakdown endpoint (`GET /v1/account/usage/breakdown`) for per-operation reporting.
-- Python SDK telemetry auto-exports to Foundry when `LABWIRED_FOUNDRY_URL` is set.
+The legacy Foundry Go backend implemented per-operation metering and a usage-breakdown endpoint, and the Python SDK exported telemetry when `LABWIRED_FOUNDRY_URL` was set. Going forward, metering is handled by the Cloudflare Worker in [`packages/api`](../../../packages/api/) (cycles-per-month quota on the Pro tier).
 
 **Remaining:**
-- COGS tracking per run and pricing instrumentation for billing-grade monetization.
+- Re-wire Python SDK telemetry to the Worker endpoints (currently still points at the legacy Foundry URL).
+- COGS tracking per run.
 
-## 4) Foundry Multi-Tenancy — LARGELY CLOSED
+## 4) Multi-Tenancy — DEPRIORITISED
 
-**Closed:**
-- Organization model with `organizations` and `org_members` tables.
-- RBAC middleware (admin > developer > viewer) on org-scoped endpoints.
-- Audit logging with `audit_log` table and `GET /v1/account/org/{id}/audit` endpoint.
-- Org management API (`POST/GET /v1/account/org`, member management).
+The legacy Foundry backend had organisations + RBAC + audit logging. The retired product framing made these load-bearing; the CI tier currently uses per-workspace API keys without organisation primitives.
 
-**Remaining:**
-- Secure cloud execution fabric (scheduler, isolation boundary, fleet management).
-- SSO integration beyond Clerk.
+**Remaining (only if/when enterprise demands it):**
+- Workspace → organisation upgrade path on the Worker side.
+- SSO.
 - Compliance evidence pipeline / retention policy.
 
 ## 5) Human Observer (VS Code) — LARGELY CLOSED
@@ -108,9 +102,10 @@ The vision is complete when all conditions below are true:
 - Quota enforcement and billing-grade usage accounting are active in runtime services.
 - Organization-level usage visibility and limits are enforced.
 
-4. Foundry:
-- Hosted API can create/run/delete simulation jobs in isolated environments.
-- Tenancy, RBAC, audit logs, and compliance evidence exports are operational.
+4. Hosted CI:
+- Cloudflare Worker accepts paid API keys, enforces monthly cycle quota, and meters runs.
+- Stripe checkout provisions a workspace + API key end-to-end.
+- Onboarding email delivers the key.
 
 5. Human Observer:
 - One-click IDE lifecycle flow is stable.
@@ -121,4 +116,8 @@ The vision is complete when all conditions below are true:
 1. Ship determinism proof + compatibility matrix as release gates.
 2. Close zero-touch Agentic Loop for Tier-1 targets.
 3. Implement metering backend + tenancy primitives.
-4. Build hosted Foundry control plane and execution service.
+4. Deploy + harden the Cloudflare Worker CI control plane (`packages/api`) — Stripe webhook, key gating, run metering, Resend onboarding email.
+
+---
+
+**Note on the Foundry reframing (2026-05-15):** The "Foundry" hosted-API framing — managed multi-tenant verification with a separate Go backend, dashboard, runs-per-month pricing — has been retired in favour of a simpler model: an open-source CLI + GitHub Action, with a paid Cloudflare Worker API gating cycles for private CI workloads. The legacy `/foundry/` Hetzner deployment remains running but is no longer the product story. See [Decommission runbook](../../ops/FOUNDRY_DECOMMISSION.md).

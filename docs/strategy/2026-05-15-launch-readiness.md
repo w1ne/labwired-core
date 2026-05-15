@@ -95,7 +95,7 @@ These items have **no workaround**. Until each is done, the pricing page is thea
 - Definition of done: both URLs return rendered pages and are linked from the footer of every public page.
 
 ### 3.6 Domain + DNS + SSL (1-2 hours)
-- Verify `labwired.com` (landing) and `foundry.labwired.com` (playground) actually serve the current branch.
+- Verify `labwired.com` (landing) and the playground subdomain actually serve the current branch.
 - Set up `api.labwired.com` and `status.labwired.com` subdomains.
 - Cloudflare or similar for SSL + CDN.
 

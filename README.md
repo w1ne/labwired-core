@@ -10,7 +10,7 @@ If you are evaluating LabWired as a user, use this order:
 1. Read [DEVELOPMENT.md](./DEVELOPMENT.md) for setup.
 2. Run a local example from [`core/examples/ci/`](./core/examples/ci/).
 3. Use [`docs/specs/compatibility_matrix.md`](./docs/specs/compatibility_matrix.md) to understand support boundaries.
-4. Treat hosted Foundry and catalog expansion workflows as secondary or beta workflows.
+4. Drop the GitHub Action into your CI: see [CI Integration Guide](./core/docs/ci_integration.md).
 
 ## CI Dashboard
 
@@ -31,16 +31,17 @@ Explore the [Documentation Hub](./docs/README.md) for strategy and platform-leve
 - `labwired-core` repo owns simulator engine correctness and heavy verification workflows.
 - Root CI stays lean for fast merge feedback; heavy validation runs in `labwired-core`.
 - Hardware target validation and catalog pass-rate refresh are owned by `labwired-core` (`core-validate-hw-targets.yml`).
-- Foundry catalog consumes validation metadata from `core/configs/onboarding/*.yaml` (`validation.run_url` + `validation.artifacts_url`).
 
 ## Product Shape
 
-Today, the most launchable LabWired experience is:
-- local deterministic firmware simulation
-- machine-readable CI artifacts
-- VS Code-assisted debugging
+The shipped LabWired product is:
+- local deterministic firmware simulation (`labwired-cli`)
+- the [`labwired-test` GitHub Action](./.github/actions/labwired-test/)
+- machine-readable CI artifacts (`result.json`, `.vcd`, UART log)
+- VS Code-assisted debugging (DAP)
+- a paid CI tier ($19/seat/month Pro) backed by the Cloudflare Worker in [`packages/api`](./packages/api/)
 
-Hosted Foundry and catalog expansion remain important, but they are not yet the primary onboarding path.
+> The previous "Foundry" hosted-API framing has been deprecated. The [`/foundry/`](./foundry/) directory and its workflows remain on the legacy Hetzner deploy for the moment but are not the product story.
 
 ## 🤖 Agent-First Architecture
 LabWired is also built as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its long-term mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
@@ -64,7 +65,7 @@ The primary interface for autonomous interaction.
 - **Schematic Intelligence**: VLM-based perception of hardware topology.
 - **Datasheet Ingestion**: "Chain-of-Thought" grounding for generating peripheral models.
 - **Zero-Touch Pipeline**: `auto-ingest` orchestrator with LLM-assisted retries and confidence scoring.
-- **Telemetry**: Usage-based metering with automatic Foundry export.
+- **Telemetry**: Usage-based metering reported to the LabWired API for paid CI runs.
 
 ### [`vscode/`](./vscode/) - Human Observer (Debug)
 A secondary interface for human verification of agent outputs.

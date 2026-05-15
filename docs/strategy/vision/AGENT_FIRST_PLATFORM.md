@@ -51,4 +51,4 @@ Humans only step in to verify the agent's work. The VS Code extension is a **vie
 
 1.  **Phase 1: Foundation**: Deterministic engine, JSON outputs, initial Python bindings (Done).
 2.  **Phase 2: Agentic Loop**: Autonomous fix demos, datasheet-to-simulation pipeline (In Progress).
-3.  **Phase 3: The Foundry**: A hosted service where agents can "spin up" valid hardware twins on demand (Future).
+3.  **Phase 3: Hosted CI**: API-key-gated paid CI tier — Cloudflare Worker + Stripe + GitHub Action ([packages/api](../../../packages/api/)). Live in beta. (The earlier "Foundry" hosted-API framing has been retired in favour of this simpler CI surface.)

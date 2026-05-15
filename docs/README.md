@@ -24,8 +24,8 @@ graph TD
 
     Strategy --> Vision[Vision & Market]
     Strategy --> Agent[Agent Strategy]
-    Specs --> Foundry[Foundry Specs]
     Specs --> Peripherals[Peripheral Specs]
+    Specs --> Engine[Engine & IR]
     Ops --> Checklists[Release Checklists]
     Audit --> PM[Postmortems]
 ```
@@ -38,7 +38,6 @@ graph TD
 - **[Getting Started](./tutorials/getting-started.md)** - install, run your first simulation, inspect results, debug in VS Code.
 - **[CI Integration](./tutorials/ci-integration.md)** - GitHub Actions, GitLab CI, and Docker recipes for firmware testing.
 - **[Compatibility Matrix](./specs/compatibility_matrix.md)** - supported targets and known limits.
-- **[Foundry User Flows](./user_flows.md)** - current beta hosted workflow and API patterns.
 - **[Release Checklist](./ops/RELEASE_CHECKLIST.md)** - release-grade validation requirements.
 
 ## 🧭 [Strategy & Planning](./strategy/)
@@ -52,7 +51,6 @@ graph TD
 ## 🛠️ [Specifications](./specs/)
 *Technical definitions and product contracts.*
 - **[Digital Twin Spec](./specs/DIGITAL_TWIN_SPEC.md)** - Core simulation engine requirements.
-- **[Foundry Product Spec](./specs/FOUNDRY_SPEC.md)** - Dashboard and API surface definitions.
 - **[Declarative Peripherals](./specs/declarative_peripherals.md)** - JSON-first peripheral modeling.
 - **[Compatibility Matrix](./specs/compatibility_matrix.md)** - Supported MCU/target coverage.
 
@@ -66,9 +64,9 @@ graph TD
 ## ⚙️ [Operations & Release](./ops/)
 *Release gates and operating runbooks.*
 - **[Release Checklist](./ops/RELEASE_CHECKLIST.md)** - Platform-level quality gates.
-- **[Foundry Production Checklist](./ops/FOUNDRY_PRODUCTION_CHECKLIST.md)** - First-production deployment and cutover gates for Foundry.
 - **[Demo Dry Run](./ops/DEMO_DRY_RUN.md)** - Checklist for external demos.
 - **[VS Code UI Checklist](./ops/VS_CODE_UI_DEMO_CHECKLIST.md)** - Manual UI validation steps.
+- **[Foundry Decommission Runbook](./ops/FOUNDRY_DECOMMISSION.md)** - Manual steps for retiring the legacy Foundry stack (Stripe, Hetzner, DNS).
 
 ## 📊 [Audit & Postmortems](./audit/)
 *Historical records and incident analyses. Useful for contributors, not the first stop for users.*

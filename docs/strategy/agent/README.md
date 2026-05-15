@@ -39,9 +39,9 @@ labwired --firmware <ELF> [--system <YAML>] [--vcd <PATH>] [--json]
 - `--vcd`: Export simulation trace to VCD file.
 - `--json`: Output structured performance/error data instead of logs.
 
-### Asset Foundry Commands
+### Asset Onboarding Commands
 
-These commands are primarily intended for internal onboarding, agent experimentation, and contributor workflows. They should not be treated as a public Foundry product contract.
+These commands are primarily intended for internal onboarding, agent experimentation, and contributor workflows. They are not part of the public CI product surface.
 ```bash
 labwired asset init -o <DIR> [--chip <CHIP>]
 labwired asset import-svd -i <SVD> -o <JSON>

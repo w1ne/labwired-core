@@ -27,7 +27,9 @@ This pipeline should be treated as an internal catalog-onboarding tool, not a pu
 
 ### Telemetry Export
 
-When `LABWIRED_FOUNDRY_URL` and `LABWIRED_API_KEY` environment variables are set, usage telemetry (simulation minutes, operation types) is automatically exported to the Foundry backend.
+When `LABWIRED_FOUNDRY_URL` and `LABWIRED_API_KEY` environment variables are set, usage telemetry (simulation minutes, operation types) is exported to the legacy Foundry Go backend.
+
+> The Foundry backend has been deprecated as a product framing — paid CI metering is now handled by the Cloudflare Worker in `packages/api`. The telemetry export still works against the legacy backend if it's running, but it is not part of the live billing path and will be re-wired when this SDK is updated.
 
 ## Strategic Goal: The Agentic Moat
 
@@ -36,6 +38,6 @@ LabWired solves the **Peripheral Modeling Bottleneck** by providing a high-fidel
 2.  **Synthesize**: Generate Rust drivers and simulation behaviors.
 3.  **Verify**: Prove driver/firmware correctness in a bit-accurate ARM-native environment.
 
-Public Foundry positioning is narrower: customers consume curated catalog assets and hosted verification, while this AI toolchain remains the internal engine for expanding that catalog.
+Public product positioning is narrower: customers run firmware against the curated board catalog via the CLI or paid CI tier; this AI toolchain remains the internal engine for expanding that catalog.
 
 See [AGENT_INTERFACE.md](file:///home/andrii/Projects/labwired/docs/AGENT_INTERFACE.md) for external agent integration patterns.
