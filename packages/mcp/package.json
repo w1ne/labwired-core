@@ -1,0 +1,33 @@
+{
+  "name": "@labwired/mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server exposing the LabWired deterministic firmware simulator as agent tools.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "labwired-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3",
+    "vitest": "~3.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
