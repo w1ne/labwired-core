@@ -32,6 +32,7 @@ members = [
     "examples/adxl345-sensor-lab",
     "examples/mpu6050-sensor-lab",
     "examples/bme280-weather-lab",
+    "examples/ssd1306-hello-lab",
     "crates/codegen",
     "crates/python", "crates/wasm",
 ]
@@ -137,6 +138,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.bme280-weather-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ssd1306-hello-lab]
 codegen-units = 1
 debug = true
 opt-level = "s"

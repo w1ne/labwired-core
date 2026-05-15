@@ -674,6 +674,72 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
+    /// Return the SSD1306 GDDRAM framebuffer for the device identified by `device_id`.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type: "oled-ssd1306"`.
+    /// Returns a 1024-byte `Uint8Array` (128 columns × 8 pages, page-major).
+    /// Returns a JS error if the device is not found.
+    #[wasm_bindgen]
+    pub fn get_ssd1306_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+
+        // Find the board_io binding for this device.
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("oled-ssd1306"))
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "No oled-ssd1306 board_io binding '{}'",
+                    device_id
+                ))
+            })?;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "I2C peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+
+        let i2c = any
+            .downcast_ref::<labwired_core::peripherals::i2c::I2c>()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "Peripheral '{}' is not an I2C controller",
+                    binding.peripheral
+                ))
+            })?;
+
+        let address = binding.i2c_address.unwrap_or(0x3C);
+        for device in &i2c.attached_devices {
+            let device = device.borrow();
+            if device.address() != address {
+                continue;
+            }
+            if let Some(oled) = device
+                .as_any()
+                .and_then(|any| any.downcast_ref::<labwired_core::peripherals::components::Ssd1306>())
+            {
+                let fb = oled.framebuffer().to_vec().into_boxed_slice();
+                return Ok(fb);
+            }
+        }
+
+        Err(JsValue::from_str(&format!(
+            "SSD1306 device at address 0x{:02x} not found on '{}'",
+            address, binding.peripheral
+        )))
+    }
+
     /// List all peripherals: [{ name, base_address }]
     #[wasm_bindgen]
     pub fn get_peripheral_list(&self) -> JsValue {

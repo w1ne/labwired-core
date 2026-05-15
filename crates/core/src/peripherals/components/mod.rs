@@ -7,7 +7,9 @@
 pub mod adxl345;
 pub mod bme280;
 pub mod mpu6050;
+pub mod ssd1306;
 
 pub use adxl345::Adxl345;
 pub use bme280::Bme280;
 pub use mpu6050::Mpu6050;
+pub use ssd1306::Ssd1306;
