@@ -39,6 +39,9 @@ import {
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { StudioShell } from './studio/StudioShell';
+import { AuthPill } from './studio/AuthPill';
+import { AuthModal } from './studio/AuthModal';
+import { useAuth } from './studio/useAuth';
 import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
 import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
@@ -985,6 +988,10 @@ export function App() {
   // Studio-shell toast (transient, auto-dismisses)
   const [toast, setToast] = useState<string | null>(null);
 
+  // Auth surface (API-key paste, localStorage, /v1/workspaces/me)
+  const auth = useAuth();
+  const [authOpen, setAuthOpen] = useState(false);
+
   // Wall-clock runtime tracker — ticks while the simulation is running.
   // Frozen on pause, reset to 0 when the simulation is reset.
   const [runtimeMs, setRuntimeMs] = useState(0);
@@ -1178,10 +1185,12 @@ export function App() {
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}
       simDock={simDockNode}
+      authSlot={<AuthPill auth={auth} onOpen={() => setAuthOpen(true)} />}
       renderDevDrawer={renderDevDrawer}
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}
     >
+    <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} auth={auth} />
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (

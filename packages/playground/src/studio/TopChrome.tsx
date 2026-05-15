@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import clsx from 'clsx';
 
 export interface TopChromeProps {
@@ -8,9 +8,10 @@ export interface TopChromeProps {
   onToggleDev: () => void;
   onShare?: () => void;
   onUploadFirmware?: (file: File) => void;
+  authSlot?: ReactNode;
 }
 
-export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onShare, onUploadFirmware }: TopChromeProps) {
+export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onShare, onUploadFirmware, authSlot }: TopChromeProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   return (
     <header
@@ -101,6 +102,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         </svg>
         For CI
       </a>
+      {authSlot}
       <button
         type="button"
         onClick={onShare}
