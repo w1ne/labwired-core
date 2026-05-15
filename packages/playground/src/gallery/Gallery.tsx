@@ -64,6 +64,15 @@ const FEATURED: FeaturedLab[] = [
     icon: '🔥',
   },
   {
+    id: 'neo6m-gps-lab',
+    name: 'NEO-6M GPS',
+    chip: 'STM32F103 + NEO-6M over UART',
+    description: 'Read live NMEA sentences from a simulated GPS module via UART RX injection.',
+    detail: 'Demonstrates LabWired\'s UART stream-device model: all NMEA generation, checksum, and DDMM.mmmm conversion lives in Rust core. The firmware echoes the raw GPS stream to the serial monitor.',
+    accent: '#B07BFF',
+    icon: '📡',
+  },
+  {
     id: 'nucleo-f401re',
     name: 'Nucleo-F401RE',
     chip: 'Cortex-M4F · 84 MHz',
@@ -189,7 +198,6 @@ export function Gallery() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 opacity-60">
           {[
             { name: 'ILI9341 TFT', wave: 'Wave 2' },
-            { name: 'NEO-6M GPS', wave: 'Wave 3' },
             { name: 'NTC Thermistor', wave: 'Wave 3' },
           ].map((c) => (
             <div key={c.name} className="px-4 py-3 rounded-card bg-white/[0.03] border border-border/40 text-[13px] flex items-center justify-between">

@@ -25,12 +25,14 @@ import systemMpu6050SensorLab from '../../../core/examples/mpu6050-sensor-lab/sy
 import systemBme280WeatherLab from '../../../core/examples/bme280-weather-lab/system.yaml?raw';
 import systemMax31855ThermocoupleLab from '../../../core/examples/max31855-thermocouple-lab/system.yaml?raw';
 import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
+import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
 import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
 import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src/main.rs?raw';
 import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
+import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -51,6 +53,19 @@ export interface BoardConfig {
 const BASE = import.meta.env.BASE_URL;
 
 export const BOARD_CONFIGS: BoardConfig[] = [
+  {
+    boardId: 'neo6m-gps-lab',
+    chipId: 'stm32f103',
+    name: 'NEO-6M GPS',
+    description: 'STM32F103 + NEO-6M GPS module over simulated UART. Live NMEA stream injection, all parsing in Rust core.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemNeo6mGpsLab,
+    demoFirmwarePath: `${BASE}wasm/demo-neo6m-gps-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceNeo6mGps,
+    sourceFilename: 'neo6m-gps-lab/src/main.rs',
+  },
   {
     boardId: 'ssd1306-hello-lab',
     chipId: 'stm32f103',

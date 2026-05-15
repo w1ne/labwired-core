@@ -1,4 +1,6 @@
 // Components
+export { GpsControl } from './components/GpsControl/GpsControl';
+export type { GpsControlProps } from './components/GpsControl/GpsControl';
 export { BoardCanvas } from './components/BoardCanvas/BoardCanvas';
 export { Led } from './components/Led/Led';
 export { PushButton } from './components/PushButton/PushButton';
@@ -36,6 +38,8 @@ export type {
   BoardIoBinding,
   BoardIoState,
   I2cSensorState,
+  UartDeviceState,
+  UartDeviceStateNeo6mGps,
   PeripheralInfo,
   SimulatorConfig,
   WasmModule,

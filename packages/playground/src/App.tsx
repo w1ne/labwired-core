@@ -9,6 +9,7 @@ import {
   SerialMonitor,
   SimulatorBridge,
   Ssd1306Display,
+  GpsControl,
   useSimulationLoop,
   EditorCanvas,
   ComponentPalette,
@@ -201,6 +202,7 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   max31855: 'spi',
   mpu6050: 'i2c',
   'oled-ssd1306': 'i2c',
+  'neo6m-gps': 'uart',
   lcd1602: 'i2c',
   dht22: 'misc',
   led: 'gpio',
@@ -645,12 +647,27 @@ export function App() {
     };
   }, [editor.state.selectedIds, editor.state.diagram.parts]);
 
-  // Build live sensor widget for selected I2C devices
+  // Build live sensor widget for selected I2C / UART devices
   const inspectorLabWidget = useMemo<ReactNode>(() => {
     if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
     const partType = inspectorSelection.partType;
     if (partType === 'oled-ssd1306') {
       return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
+    }
+    if (partType === 'neo6m-gps') {
+      const gpsStates = bridge.getUartDeviceStates();
+      const s = gpsStates.find((st) => st.kind === 'neo6m-gps' && st.id === inspectorSelection.partId)
+        ?? gpsStates.find((st) => st.kind === 'neo6m-gps');
+      if (!s || s.kind !== 'neo6m-gps') return undefined;
+      return (
+        <GpsControl
+          lat={s.lat}
+          lon={s.lon}
+          hasFix={s.has_fix}
+          onChange={(lat, lon) => bridge.setGpsPosition(inspectorSelection.partId, lat, lon)}
+          onFixToggle={(active) => bridge.setGpsFix(inspectorSelection.partId, active)}
+        />
+      );
     }
     if (partType !== 'adxl345' && partType !== 'mpu6050' && partType !== 'bme280') return undefined;
     const sensorStates = bridge.getI2cSensorStates();

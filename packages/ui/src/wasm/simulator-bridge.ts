@@ -64,6 +64,16 @@ export interface SpiDeviceStateMax31855 {
 
 export type SpiDeviceState = SpiDeviceStateMax31855;
 
+export interface UartDeviceStateNeo6mGps {
+  id: string;
+  kind: 'neo6m-gps';
+  lat: number;
+  lon: number;
+  has_fix: boolean;
+}
+
+export type UartDeviceState = UartDeviceStateNeo6mGps;
+
 export interface PeripheralInfo {
   name: string;
   base_address: string;
@@ -127,6 +137,11 @@ export interface WasmSimulatorInstance {
   // SPI devices
   get_spi_device_states(): SpiDeviceState[];
   set_max31855_temperature(device_id: string, tc_c: number, internal_c: number): void;
+
+  // UART stream devices (GPS)
+  set_gps_position(device_id: string, lat: number, lon: number): void;
+  set_gps_fix(device_id: string, active: boolean): void;
+  get_uart_device_states(): UartDeviceState[];
 
   // Peripherals
   get_peripheral_snapshot(name: string): unknown;
@@ -270,6 +285,21 @@ export class SimulatorBridge {
 
   setMax31855Temperature(deviceId: string, tc_c: number, internal_c: number): void {
     this.sim.set_max31855_temperature(deviceId, tc_c, internal_c);
+  }
+
+  /** Set the simulated GPS position. No NMEA math here — all logic is in Rust core. */
+  setGpsPosition(deviceId: string, lat: number, lon: number): void {
+    this.sim.set_gps_position(deviceId, lat, lon);
+  }
+
+  /** Enable or disable the GPS fix. */
+  setGpsFix(deviceId: string, active: boolean): void {
+    this.sim.set_gps_fix(deviceId, active);
+  }
+
+  /** Read state of UART stream devices (GPS modules, etc.). */
+  getUartDeviceStates(): UartDeviceState[] {
+    return this.sim.get_uart_device_states() ?? [];
   }
 
   /** Returns the 1024-byte GDDRAM framebuffer for an SSD1306 OLED, or null if not found. */
