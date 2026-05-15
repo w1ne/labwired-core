@@ -144,6 +144,12 @@ jobs:
           context: ${{ env.CHECKOUT_PATH }}
           file: ${{ env.CHECKOUT_PATH }}/packages/playground/Dockerfile
           push: true
+          # VITE_* build args are read at Vite build time and baked into the
+          # static bundle. NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is the legacy
+          # GitHub-secret name; the value is the same Clerk pk_live_… key.
+          build-args: |
+            VITE_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+            VITE_LABWIRED_API_BASE=https://api.labwired.com
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-playground:${{ steps.meta.outputs.image_tag }}
             ghcr.io/${{ steps.meta.outputs.owner_lower }}/foundry-playground:latest
