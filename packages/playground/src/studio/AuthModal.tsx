@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SignInButton, useUser } from '@clerk/clerk-react';
 import type { UseAuthResult } from './useAuth';
+import { buildStripeUpgradeUrl } from './stripeUpgrade';
 
 export interface AuthModalProps {
   open: boolean;
@@ -131,7 +132,7 @@ export function AuthModal({ open, onClose, auth, onOpenAccount }: AuthModalProps
             <p className="mt-4 text-fg-tertiary text-xs">
               Don't have a key?{' '}
               <a
-                href="https://buy.stripe.com/bJeaEW56u3H16Tc3Gz5AQ03"
+                href={buildStripeUpgradeUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-accent hover:underline"

@@ -1,14 +1,14 @@
 import { useState } from 'react';
+import { useUser } from '@clerk/clerk-react';
+import { buildStripeUpgradeUrl } from '../studio/stripeUpgrade';
 
 // ──────────────────────────────────────────────────────────────────────────
 // External services — replace these placeholders with your real account URLs.
-// All three are zero-backend tools that "just work" for v1:
-//   • Stripe Payment Link  → create at https://dashboard.stripe.com/payment-links
+// Stripe Payment Link lives in ../studio/stripeUpgrade.ts so the cabinet and
+// the marketing page agree on one URL (plus Clerk-aware query params).
 //   • Calendly             → personal link at https://calendly.com/<you>/intro
 //   • Formspree            → free 50/mo form endpoint, or replace with mailto:
-// Replace each STRIPE_URL / CALENDLY_URL / WAITLIST_FORM_ACTION with your own.
 // ──────────────────────────────────────────────────────────────────────────
-const STRIPE_PRO_PAYMENT_LINK = 'https://buy.stripe.com/bJeaEW56u3H16Tc3Gz5AQ03';
 const CALENDLY_ENTERPRISE = 'https://calendly.com/labwired/enterprise-intro';
 const WAITLIST_FORM_ACTION = 'mailto:andrii@shylenko.com'; // swap for https://formspree.io/f/<id> when ready
 const GITHUB_REPO = 'https://github.com/w1ne/labwired';
@@ -44,6 +44,11 @@ export function CiLanding() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
+  const { isSignedIn, user } = useUser();
+  const stripeProUrl = buildStripeUpgradeUrl({
+    clerkUserId: isSignedIn ? user?.id : undefined,
+    email: isSignedIn ? user?.primaryEmailAddress?.emailAddress : undefined,
+  });
 
   const copySnippet = async () => {
     await navigator.clipboard.writeText(GITHUB_ACTION_SNIPPET);
@@ -337,9 +342,12 @@ export function CiLanding() {
                   'All future updates',
                 ],
                 cta: 'Start with Pro →',
-                ctaHref: STRIPE_PRO_PAYMENT_LINK,
+                ctaHref: stripeProUrl,
                 ctaExternal: true,
                 highlighted: true,
+                hint: !isSignedIn
+                  ? 'Sign in first so your API key shows up in the playground after checkout.'
+                  : undefined,
               },
               {
                 name: 'Enterprise',
@@ -396,6 +404,11 @@ export function CiLanding() {
                 >
                   {tier.cta}
                 </a>
+                {'hint' in tier && tier.hint && (
+                  <p className="mt-3 text-fg-tertiary text-[11px] text-center">
+                    {tier.hint}
+                  </p>
+                )}
               </div>
             ))}
           </div>

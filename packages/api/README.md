@@ -5,10 +5,12 @@ This Worker handles Stripe webhooks, API key issuance, and per-run cycle meterin
 ## Architecture
 
 ```
-Stripe checkout → POST /v1/webhooks/stripe → issue key → Resend email → customer
+Stripe checkout → POST /v1/webhooks/stripe → issue key (mapped to Clerk user via client_reference_id)
+Playground      → GET  /v1/auth/me         → key shown in private cabinet (Wokwi-pattern)
 CLI run starts  → POST /v1/keys/validate   → 200 (valid + quota) | 401 | 403
 CLI run ends    → POST /v1/runs            → record cycles, return 200 | 429
-Dashboard       → GET  /v1/workspaces/me   → workspace info
+Cabinet rotate  → POST /v1/keys/rotate     → new key, old key invalidated
+Dashboard       → GET  /v1/workspaces/me   → workspace info (Bearer api_key)
 ```
 
 **KV namespaces:**
@@ -16,8 +18,9 @@ Dashboard       → GET  /v1/workspaces/me   → workspace info
 | Namespace | Key | Value |
 |-----------|-----|-------|
 | `KV_KEYS` | `lwk_live_<32chars>` | `{ workspace_id, status, created_at, last_used_at }` |
-| `KV_WORKSPACES` | `ws_<16hex>` | `{ stripe_customer_id, plan, cycles_used_mtd, ... }` |
+| `KV_WORKSPACES` | `ws_<16hex>` | `{ stripe_customer_id, plan, cycles_used_mtd, clerk_user_id, ... }` |
 | `KV_STRIPE_SUBS` | `sub_xxx` | `workspace_id` |
+| `KV_CLERK_TO_WORKSPACE` | `user_xxx` (Clerk user id) | `workspace_id` |
 
 ---
 
@@ -40,14 +43,16 @@ Run each command and paste the returned `id` into `wrangler.toml`:
 wrangler kv:namespace create KV_KEYS
 wrangler kv:namespace create KV_WORKSPACES
 wrangler kv:namespace create KV_STRIPE_SUBS
+wrangler kv:namespace create KV_CLERK_TO_WORKSPACE
 
 # Also create preview namespaces for local dev:
 wrangler kv:namespace create KV_KEYS --preview
 wrangler kv:namespace create KV_WORKSPACES --preview
 wrangler kv:namespace create KV_STRIPE_SUBS --preview
+wrangler kv:namespace create KV_CLERK_TO_WORKSPACE --preview
 ```
 
-Then edit `wrangler.toml` and replace the `REPLACE_WITH_*` placeholders with the real IDs.
+Then edit `wrangler.toml` and replace the `REPLACE_ME` / placeholder IDs with the real values.
 
 ### 3. Set Stripe secrets
 
@@ -78,18 +83,7 @@ wrangler secret put STRIPE_WEBHOOK_SECRET
 # Paste the whsec_... signing secret when prompted
 ```
 
-### 5. Set up Resend
-
-1. Sign up at [resend.com](https://resend.com)
-2. Add and verify the `labwired.com` domain (Resend will give you DNS records to add in Cloudflare)
-3. Create an API key with "Sending access":
-
-```bash
-wrangler secret put RESEND_API_KEY
-# Paste the re_... key when prompted
-```
-
-### 6. DNS for api.labwired.com
+### 5. DNS for api.labwired.com
 
 Option A — Cloudflare Worker custom domain (recommended):
 
@@ -101,7 +95,7 @@ Option B — CNAME (if custom domains aren't available on your plan):
 1. Cloudflare Dashboard → DNS → Add record
 2. Type: CNAME, Name: `api`, Target: `labwired-api.<your-account>.workers.dev`, Proxy: enabled
 
-### 7. Deploy
+### 6. Deploy
 
 ```bash
 cd packages/api
@@ -109,7 +103,7 @@ npm install
 wrangler deploy
 ```
 
-### 8. Verify the deploy
+### 7. Verify the deploy
 
 ```bash
 # Should return 401
@@ -122,13 +116,17 @@ curl -X POST https://api.labwired.com/v1/keys/validate \
 curl https://api.labwired.com/v2/whatever
 ```
 
-### 9. End-to-end test
+### 8. End-to-end test
 
 1. Set up a Stripe test mode Payment Link pointing at your Pro product
-2. Use a [Stripe test card](https://docs.stripe.com/testing) to complete checkout
-3. Watch `wrangler tail` for the webhook log lines
-4. Check your email for the onboarding message
-5. Test the key:
+2. Visit the playground signed in via Clerk, click "Upgrade" — the link includes
+   `?client_reference_id=<clerk_user_id>&prefilled_email=<email>` so the webhook
+   can map the new workspace back to that Clerk user.
+3. Use a [Stripe test card](https://docs.stripe.com/testing) to complete checkout
+4. Watch `wrangler tail` for the webhook log lines
+5. Re-open the playground cabinet — the new `lwk_live_*` API key is shown,
+   copyable, and rotatable. No email is sent.
+6. Test the key:
 
 ```bash
 LABWIRED_API_KEY=lwk_live_<your_key> labwired test --script tests/example.yaml
@@ -173,11 +171,11 @@ wrangler kv:key get --binding=KV_KEYS "lwk_live_<key>"
 
 ## Rotating an API key
 
-There is no automated key rotation endpoint yet (v1 scope). To rotate manually:
+Customers can self-serve rotation from the playground cabinet — that calls
+`POST /v1/keys/rotate` with their Clerk session JWT. The Worker generates a
+new `lwk_live_*`, swaps it into `KV_KEYS` + `KV_WORKSPACES`, and deletes the
+old key in a single request.
 
-1. Look up the workspace: `wrangler kv:key get --binding=KV_KEYS "lwk_live_<old_key>"`
-2. Note the `workspace_id`
-3. Generate a new key (any base32 string starting with `lwk_live_`)
-4. Write the new key record and update the workspace's `api_key` field in KV
-5. Email the customer with the new key
-6. Delete the old key: `wrangler kv:key delete --binding=KV_KEYS "lwk_live_<old_key>"`
+To rotate from the CLI for a workspace whose owner can't sign in, edit KV by
+hand: write a new `lwk_live_*` key record, update `KV_WORKSPACES.api_key`, then
+delete the old `KV_KEYS` entry.

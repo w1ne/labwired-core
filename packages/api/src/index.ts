@@ -18,9 +18,11 @@ import {
   getWorkspaceRecord,
   writeSubMapping,
   getSubMapping,
+  writeClerkMapping,
+  getWorkspaceIdByClerkUserId,
+  deleteKeyRecord,
   maybeResetMtdCycles,
 } from './keys.js';
-import { sendOnboardingEmail } from './email.js';
 import { verifyStripeWebhook } from './stripe.js';
 import { verifyClerkRequest } from './clerk.js';
 
@@ -69,6 +71,9 @@ export default {
       }
       if (method === 'GET' && pathname === '/v1/auth/me') {
         return handleAuthMe(request, env);
+      }
+      if (method === 'POST' && pathname === '/v1/keys/rotate') {
+        return handleRotateKey(request, env);
       }
       return errorResponse('Not found', 404);
     } catch (err) {
@@ -136,6 +141,10 @@ async function handleCheckoutCompleted(
     typeof session.subscription === 'string'
       ? session.subscription
       : session.subscription?.id ?? '';
+  const clerkUserId =
+    typeof session.client_reference_id === 'string' && session.client_reference_id
+      ? session.client_reference_id
+      : undefined;
 
   if (!customerEmail) {
     console.error('checkout.session.completed: no customer email in session', session.id);
@@ -157,6 +166,7 @@ async function handleCheckoutCompleted(
     status: 'active',
     created_at: new Date().toISOString(),
     api_key: apiKey,
+    clerk_user_id: clerkUserId,
   };
 
   await writeWorkspaceRecord(env, workspaceId, workspace);
@@ -164,10 +174,14 @@ async function handleCheckoutCompleted(
   if (stripeSubId) {
     await writeSubMapping(env, stripeSubId, workspaceId);
   }
+  if (clerkUserId) {
+    await writeClerkMapping(env, clerkUserId, workspaceId);
+  }
 
-  console.log(`Workspace created: ${workspaceId} for ${customerEmail}`);
-
-  await sendOnboardingEmail(env, customerEmail, apiKey, workspaceId);
+  console.log(
+    `Workspace created: ${workspaceId} for ${customerEmail}` +
+      (clerkUserId ? ` (clerk_user_id=${clerkUserId})` : ' (no clerk_user_id; legacy path)'),
+  );
 }
 
 async function handleSubscriptionDeleted(
@@ -385,8 +399,9 @@ async function handleGetWorkspace(request: Request, env: Env): Promise<Response>
 
 // ── GET /v1/auth/me ────────────────────────────────────────────────────────
 // Verifies the request's Clerk session JWT (networkless via CLERK_JWT_KEY) and
-// returns the user's id + email + plan. Plan is always 'free' until we wire
-// a clerk_user_id ↔ workspace mapping (TODO).
+// returns the user's id, email, plan, and — if the Clerk user is mapped to a
+// paid workspace — the workspace's API key + quota info. This is what powers
+// the playground cabinet's "Your LabWired API key" panel.
 async function handleAuthMe(request: Request, env: Env): Promise<Response> {
   const verified = await verifyClerkRequest(request, env);
   if (!verified) return errorResponse('Not authenticated', 401);
@@ -397,10 +412,63 @@ async function handleAuthMe(request: Request, env: Env): Promise<Response> {
     (typeof claims.primary_email_address === 'string' && claims.primary_email_address) ||
     null;
 
+  const workspaceId = await getWorkspaceIdByClerkUserId(env, verified.userId);
+  if (workspaceId) {
+    const workspace = await getWorkspaceRecord(env, workspaceId);
+    if (workspace && workspace.status === 'active') {
+      const updated = await maybeResetMtdCycles(env, workspaceId, workspace);
+      return corsResponse({
+        user_id: verified.userId,
+        session_id: verified.sessionId,
+        email,
+        plan: updated.plan,
+        workspace_id: workspaceId,
+        api_key: updated.api_key,
+        cycles_used_mtd: updated.cycles_used_mtd,
+        cycles_quota: updated.cycles_quota_per_month,
+        status: updated.status,
+      });
+    }
+  }
+
   return corsResponse({
     user_id: verified.userId,
     session_id: verified.sessionId,
     email,
     plan: 'free' as const,
+  });
+}
+
+// ── POST /v1/keys/rotate ───────────────────────────────────────────────────
+// Authenticated via Clerk JWT. Generates a new lwk_live_* for the caller's
+// workspace, swaps it into KV_KEYS + KV_WORKSPACES, and deletes the old key.
+async function handleRotateKey(request: Request, env: Env): Promise<Response> {
+  const verified = await verifyClerkRequest(request, env);
+  if (!verified) return errorResponse('Not authenticated', 401);
+
+  const workspaceId = await getWorkspaceIdByClerkUserId(env, verified.userId);
+  if (!workspaceId) return errorResponse('No workspace for this user', 404);
+
+  const workspace = await getWorkspaceRecord(env, workspaceId);
+  if (!workspace) return errorResponse('Workspace not found', 500);
+  if (workspace.status !== 'active') {
+    return errorResponse(`Workspace ${workspace.status}`, 403);
+  }
+
+  const oldKey = workspace.api_key;
+  const newKey = generateApiKey();
+
+  await writeKeyRecord(env, newKey, workspaceId);
+  workspace.api_key = newKey;
+  await writeWorkspaceRecord(env, workspaceId, workspace);
+  if (oldKey && oldKey !== newKey) {
+    await deleteKeyRecord(env, oldKey);
+  }
+
+  console.log(`Key rotated for workspace ${workspaceId} (clerk_user_id=${verified.userId})`);
+
+  return corsResponse({
+    api_key: newKey,
+    workspace_id: workspaceId,
   });
 }

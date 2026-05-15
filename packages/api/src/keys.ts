@@ -115,6 +115,28 @@ export async function getSubMapping(env: Env, stripeSubId: string): Promise<stri
   return env.KV_STRIPE_SUBS.get(stripeSubId);
 }
 
+/** Write a Clerk user_id → workspace_id mapping. */
+export async function writeClerkMapping(
+  env: Env,
+  clerkUserId: string,
+  workspaceId: string,
+): Promise<void> {
+  await env.KV_CLERK_TO_WORKSPACE.put(clerkUserId, workspaceId);
+}
+
+/** Read the workspace_id mapped to a Clerk user. */
+export async function getWorkspaceIdByClerkUserId(
+  env: Env,
+  clerkUserId: string,
+): Promise<string | null> {
+  return env.KV_CLERK_TO_WORKSPACE.get(clerkUserId);
+}
+
+/** Delete a key record (used when rotating). */
+export async function deleteKeyRecord(env: Env, apiKey: string): Promise<void> {
+  await env.KV_KEYS.delete(apiKey);
+}
+
 /**
  * Check if the billing period has rolled over and reset cycles_used_mtd if so.
  * Returns the (potentially updated) workspace record.

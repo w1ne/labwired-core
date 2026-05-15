@@ -26,15 +26,15 @@ function makeEnv(
   kvKeys: KvStub,
   kvWorkspaces: KvStub,
   kvSubs: KvStub,
+  kvClerk?: KvStub,
 ) {
   return {
     KV_KEYS: kvKeys as unknown as KVNamespace,
     KV_WORKSPACES: kvWorkspaces as unknown as KVNamespace,
     KV_STRIPE_SUBS: kvSubs as unknown as KVNamespace,
+    KV_CLERK_TO_WORKSPACE: (kvClerk ?? makeKvStub()) as unknown as KVNamespace,
     STRIPE_SECRET_KEY: 'sk_test_placeholder',
     STRIPE_WEBHOOK_SECRET: 'whsec_placeholder',
-    RESEND_API_KEY: '',
-    FROM_EMAIL: 'onboarding@labwired.com',
     PRO_CYCLES_QUOTA: '100000000',
     ENVIRONMENT: 'test',
   };

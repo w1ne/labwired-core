@@ -25,6 +25,8 @@ export interface WorkspaceRecord {
   created_at: string; // ISO 8601
   /** Most recently issued API key. Stored here for /workspaces/me convenience. */
   api_key: string;
+  /** Clerk user id captured from Stripe checkout's client_reference_id, if present. */
+  clerk_user_id?: string;
 }
 
 /** Stored in KV_STRIPE_SUBS under key = Stripe subscription ID ("sub_...") */
@@ -36,15 +38,15 @@ export interface Env {
   KV_KEYS: KVNamespace;
   KV_WORKSPACES: KVNamespace;
   KV_STRIPE_SUBS: KVNamespace;
+  /** clerk_user_id → workspace_id reverse index. */
+  KV_CLERK_TO_WORKSPACE: KVNamespace;
 
   // Secrets (set via `wrangler secret put`)
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
-  RESEND_API_KEY: string;
   CLERK_SECRET_KEY: string;
 
   // Env vars (from wrangler.toml [vars])
-  FROM_EMAIL: string;
   PRO_CYCLES_QUOTA: string;
   ENVIRONMENT: string;
   /** Clerk JWT verification key (PEM). Public; safe to commit. */

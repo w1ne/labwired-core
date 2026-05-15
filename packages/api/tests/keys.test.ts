@@ -71,10 +71,9 @@ function makeEnv(kvKeys?: KVNamespace, kvWorkspaces?: KVNamespace, kvSubs?: KVNa
     KV_KEYS: kvKeys ?? makeKvStub(),
     KV_WORKSPACES: kvWorkspaces ?? makeKvStub(),
     KV_STRIPE_SUBS: kvSubs ?? makeKvStub(),
+    KV_CLERK_TO_WORKSPACE: makeKvStub(),
     STRIPE_SECRET_KEY: 'sk_test_placeholder',
     STRIPE_WEBHOOK_SECRET: 'whsec_placeholder',
-    RESEND_API_KEY: '',
-    FROM_EMAIL: 'onboarding@labwired.com',
     PRO_CYCLES_QUOTA: '100000000',
     ENVIRONMENT: 'test',
   };
