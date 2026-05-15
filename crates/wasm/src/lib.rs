@@ -740,6 +740,106 @@ impl WasmSimulator {
         )))
     }
 
+    /// Read back the current state of each SPI sensor declared in `board_io`.
+    /// Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
+    #[wasm_bindgen]
+    pub fn get_spi_device_states(&self) -> JsValue {
+        let machine = self.machine.as_ref().unwrap();
+        let mut states: Vec<serde_json::Value> = Vec::new();
+
+        for binding in &self.board_io {
+            let device_type = match binding.device_type.as_deref() {
+                Some(t) if t == "max31855" => t,
+                _ => continue,
+            };
+            let Some(idx) = machine.bus.find_peripheral_index_by_name(&binding.peripheral) else {
+                continue;
+            };
+            let Some(any) = machine.bus.peripherals[idx].dev.as_any() else {
+                continue;
+            };
+            let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() else {
+                continue;
+            };
+
+            if device_type == "max31855" {
+                for device in &spi.attached_devices {
+                    if let Some(sensor) = device
+                        .as_any()
+                        .and_then(|a| a.downcast_ref::<labwired_core::peripherals::components::Max31855>())
+                    {
+                        let (tc_c, internal_c) = sensor.temperature();
+                        states.push(serde_json::json!({
+                            "id": binding.id,
+                            "kind": "max31855",
+                            "tc_c": tc_c,
+                            "internal_c": internal_c,
+                        }));
+                        break;
+                    }
+                }
+            }
+        }
+
+        serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
+    }
+
+    /// Set the simulated thermocouple and internal temperatures on a MAX31855 device.
+    #[wasm_bindgen]
+    pub fn set_max31855_temperature(
+        &mut self,
+        device_id: &str,
+        tc_c: f32,
+        internal_c: f32,
+    ) -> Result<(), JsValue> {
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("max31855"))
+            .cloned()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("No MAX31855 board_io binding '{}'", device_id))
+            })?;
+
+        let machine = self.machine.as_mut().unwrap();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "SPI peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| JsValue::from_str("SPI peripheral does not support downcasting"))?;
+        let spi = any
+            .downcast_mut::<labwired_core::peripherals::spi::Spi>()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "Peripheral '{}' is not an SPI controller",
+                    binding.peripheral
+                ))
+            })?;
+
+        for device in &mut spi.attached_devices {
+            if let Some(sensor) = device
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<labwired_core::peripherals::components::Max31855>())
+            {
+                sensor.set_temperature(tc_c, internal_c);
+                return Ok(());
+            }
+        }
+
+        Err(JsValue::from_str(&format!(
+            "MAX31855 device not found on '{}'",
+            binding.peripheral
+        )))
+    }
+
     /// List all peripherals: [{ name, base_address }]
     #[wasm_bindgen]
     pub fn get_peripheral_list(&self) -> JsValue {

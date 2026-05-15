@@ -5,9 +5,35 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::SimResult;
+use std::any::Any;
+
+/// Trait implemented by simulated SPI devices (peripherals attached to an SPI bus).
+///
+/// For v1, CS-pin-aware routing is not implemented: all transfers are broadcast
+/// to every attached device and the first non-zero MISO byte wins.  This is
+/// correct for single-device labs (MAX31855 alone).  CS-aware routing is noted
+/// as a Phase 2 follow-up.
+pub trait SpiDevice: Send {
+    /// Called when the CS line goes low (chip is selected).
+    fn cs_select(&mut self) {}
+    /// Called when the CS line goes high (chip is released — flush state).
+    fn cs_release(&mut self) {}
+    /// SPI is full-duplex: master sends `mosi_byte`, device returns its current MISO byte.
+    /// On read-only devices like MAX31855, `mosi_byte` is ignored.
+    fn transfer(&mut self, mosi_byte: u8) -> u8;
+    /// CS pin label this device is wired to (e.g. "PA4" or numeric pin ID). Used by the bus
+    /// dispatcher to pick which device responds when the firmware drives a particular CS line.
+    fn cs_pin(&self) -> &str;
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
+}
 
 /// STM32F1 compatible SPI peripheral
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Default, serde::Serialize)]
 pub struct Spi {
     cr1: u16,
     cr2: u16,
@@ -23,6 +49,19 @@ pub struct Spi {
     transfer_in_progress: bool,
     transfer_cycles_remaining: u32,
     transfer_buffer: u8,
+
+    #[serde(skip)]
+    pub attached_devices: Vec<Box<dyn SpiDevice>>,
+}
+
+impl core::fmt::Debug for Spi {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Spi")
+            .field("cr1", &self.cr1)
+            .field("sr", &self.sr)
+            .field("transfer_in_progress", &self.transfer_in_progress)
+            .finish()
+    }
 }
 
 impl Spi {
@@ -31,6 +70,10 @@ impl Spi {
             sr: 0x0002, // Reset value: TXE (Transmit buffer empty) set
             ..Default::default()
         }
+    }
+
+    pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
+        self.attached_devices.push(device);
     }
 
     fn read_reg(&self, offset: u64) -> u16 {
@@ -77,6 +120,20 @@ impl Spi {
                     // This is a simplification but better than instant.
                     self.transfer_cycles_remaining = 8 * divider;
                     self.transfer_buffer = (value & 0xFF) as u8;
+
+                    // v1 routing: broadcast to all attached devices, use last non-zero response.
+                    // CS-pin-aware routing is Phase 2 (see concerns in commit).
+                    if !self.attached_devices.is_empty() {
+                        let mosi = self.transfer_buffer;
+                        let mut miso: u8 = 0;
+                        for dev in &mut self.attached_devices {
+                            let resp = dev.transfer(mosi);
+                            if resp != 0 {
+                                miso = resp;
+                            }
+                        }
+                        self.transfer_buffer = miso;
+                    }
                 }
             }
             _ => {}
@@ -88,6 +145,10 @@ impl crate::Peripheral for Spi {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
+        // SPI registers are 16-bit; bytes 2..3 of any 32-bit aligned slot read as 0
+        if byte_offset >= 2 {
+            return Ok(0);
+        }
         let reg_val = self.read_reg(reg_offset);
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
@@ -95,6 +156,11 @@ impl crate::Peripheral for Spi {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
+
+        // SPI registers are 16-bit; ignore writes to bytes 2..3 of any 32-bit slot
+        if byte_offset >= 2 {
+            return Ok(());
+        }
 
         let mut reg_val = self.read_reg(reg_offset);
         let mask = 0xFF << (byte_offset * 8);
@@ -134,6 +200,14 @@ impl crate::Peripheral for Spi {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 }
 

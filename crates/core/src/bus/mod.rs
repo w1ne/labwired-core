@@ -254,6 +254,14 @@ impl SystemBus {
         Ok(address as u8)
     }
 
+    fn max31855_cs_pin(ext: &ExternalDevice) -> String {
+        ext.config
+            .get("cs_pin")
+            .and_then(|v| v.as_str())
+            .unwrap_or("PA4")
+            .to_string()
+    }
+
     fn ssd1306_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
         let Some(value) = ext.config.get("i2c_address") else {
             return Ok(0x3C);
@@ -685,62 +693,98 @@ impl SystemBus {
         }
 
         for ext in &manifest.external_devices {
-            if ext.r#type != "adxl345"
-                && ext.r#type != "mpu6050"
-                && ext.r#type != "bme280"
-                && ext.r#type != "oled-ssd1306"
-            {
-                tracing::warn!(
-                    "Unsupported external device '{}' type '{}' on connection '{}'; skipping",
-                    ext.id,
-                    ext.r#type,
-                    ext.connection
-                );
-                continue;
-            }
-
-            let address = match ext.r#type.as_str() {
-                "mpu6050" => Self::mpu6050_i2c_address(ext)?,
-                "bme280" => Self::bme280_i2c_address(ext)?,
-                "oled-ssd1306" => Self::ssd1306_i2c_address(ext)?,
-                _ => Self::adxl345_i2c_address(ext)?,
-            };
-            let idx = bus
-                .find_peripheral_index_by_name(&ext.connection)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "External device '{}' type '{}' references missing connection '{}'",
-                        ext.id,
-                        ext.r#type,
-                        ext.connection
-                    )
-                })?;
-
-            let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "External device '{}' type '{}' connection '{}' cannot be downcast",
-                    ext.id,
-                    ext.r#type,
-                    ext.connection
-                )
-            })?;
-
-            let i2c = any
-                .downcast_mut::<crate::peripherals::i2c::I2c>()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "External device '{}' type '{}' connection '{}' is not an I2C peripheral",
-                        ext.id,
-                        ext.r#type,
-                        ext.connection
-                    )
-                })?;
-
             match ext.r#type.as_str() {
-                "mpu6050" => i2c.attach(Box::new(crate::peripherals::components::Mpu6050::new(address))),
-                "bme280" => i2c.attach(Box::new(crate::peripherals::components::Bme280::new(address))),
-                "oled-ssd1306" => i2c.attach(Box::new(crate::peripherals::components::Ssd1306::new(address))),
-                _ => i2c.attach(Box::new(crate::peripherals::components::Adxl345::new(address))),
+                "adxl345" | "mpu6050" | "bme280" | "oled-ssd1306" => {
+                    // I2C device path
+                    let address = match ext.r#type.as_str() {
+                        "mpu6050" => Self::mpu6050_i2c_address(ext)?,
+                        "bme280" => Self::bme280_i2c_address(ext)?,
+                        "oled-ssd1306" => Self::ssd1306_i2c_address(ext)?,
+                        _ => Self::adxl345_i2c_address(ext)?,
+                    };
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let i2c = any
+                        .downcast_mut::<crate::peripherals::i2c::I2c>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not an I2C peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    match ext.r#type.as_str() {
+                        "mpu6050" => i2c.attach(Box::new(crate::peripherals::components::Mpu6050::new(address))),
+                        "bme280" => i2c.attach(Box::new(crate::peripherals::components::Bme280::new(address))),
+                        "oled-ssd1306" => i2c.attach(Box::new(crate::peripherals::components::Ssd1306::new(address))),
+                        _ => i2c.attach(Box::new(crate::peripherals::components::Adxl345::new(address))),
+                    }
+                }
+                "max31855" => {
+                    // SPI device path
+                    let cs_pin = Self::max31855_cs_pin(ext);
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let spi = any
+                        .downcast_mut::<crate::peripherals::spi::Spi>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    spi.attach(Box::new(crate::peripherals::components::Max31855::new(cs_pin)));
+                }
+                _ => {
+                    tracing::warn!(
+                        "Unsupported external device '{}' type '{}' on connection '{}'; skipping",
+                        ext.id,
+                        ext.r#type,
+                        ext.connection
+                    );
+                    continue;
+                }
             }
         }
 
