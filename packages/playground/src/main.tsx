@@ -1,10 +1,12 @@
 import { StrictMode, Component, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ClerkProvider } from '@clerk/clerk-react';
 import './styles/tokens.css';
 import './styles/tailwind.css';
 import '@labwired/ui/tokens.css';
 import './playground.css';
 import { App } from './App';
+import { CLERK_PUBLISHABLE_KEY } from './clerk';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -33,7 +35,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/">
+        <App />
+      </ClerkProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

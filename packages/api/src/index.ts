@@ -22,12 +22,7 @@ import {
 } from './keys.js';
 import { sendOnboardingEmail } from './email.js';
 import { verifyStripeWebhook } from './stripe.js';
-import {
-  handleGithubStart,
-  handleGithubCallback,
-  handleAuthMe,
-  handleAuthLogout,
-} from './auth.js';
+import { verifyClerkRequest } from './clerk.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
 const CORS_HEADERS: Record<string, string> = {
@@ -72,17 +67,8 @@ export default {
       if (method === 'GET' && pathname === '/v1/workspaces/me') {
         return handleGetWorkspace(request, env);
       }
-      if (method === 'GET' && pathname === '/v1/auth/github/start') {
-        return handleGithubStart(request, env);
-      }
-      if (method === 'GET' && pathname === '/v1/auth/github/callback') {
-        return handleGithubCallback(request, env);
-      }
       if (method === 'GET' && pathname === '/v1/auth/me') {
         return handleAuthMe(request, env);
-      }
-      if (method === 'POST' && pathname === '/v1/auth/logout') {
-        return handleAuthLogout(request, env);
       }
       return errorResponse('Not found', 404);
     } catch (err) {
@@ -394,5 +380,27 @@ async function handleGetWorkspace(request: Request, env: Env): Promise<Response>
     cycles_quota: updatedWorkspace.cycles_quota_per_month,
     period_start_date: updatedWorkspace.period_start_date,
     created_at: updatedWorkspace.created_at,
+  });
+}
+
+// ── GET /v1/auth/me ────────────────────────────────────────────────────────
+// Verifies the request's Clerk session JWT (networkless via CLERK_JWT_KEY) and
+// returns the user's id + email + plan. Plan is always 'free' until we wire
+// a clerk_user_id ↔ workspace mapping (TODO).
+async function handleAuthMe(request: Request, env: Env): Promise<Response> {
+  const verified = await verifyClerkRequest(request, env);
+  if (!verified) return errorResponse('Not authenticated', 401);
+
+  const claims = verified.claims;
+  const email =
+    (typeof claims.email === 'string' && claims.email) ||
+    (typeof claims.primary_email_address === 'string' && claims.primary_email_address) ||
+    null;
+
+  return corsResponse({
+    user_id: verified.userId,
+    session_id: verified.sessionId,
+    email,
+    plan: 'free' as const,
   });
 }

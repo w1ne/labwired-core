@@ -4,7 +4,9 @@ name = "labwired-api"
 main = "src/index.ts"
 compatibility_date = "2025-05-14"
 compatibility_flags = ["nodejs_compat"]
-routes = [{ pattern = "api.labwired.com", custom_domain = true }]
+# Custom domain temporarily disabled for dry-run deploy to *.workers.dev.
+# Re-enable after curl verifies the workers.dev URL responds correctly.
+# routes = [{ pattern = "api.labwired.com", custom_domain = true }]
 
 # ── KV namespaces ────────────────────────────────────────────────────────────
 # Replace the id/preview_id values with the real namespace IDs you get from:
@@ -24,13 +26,6 @@ id = "bceec07d091b4238be0d9e322b76bf69"
 binding = "KV_STRIPE_SUBS"
 id = "1a683745399d43ef93c97c6568d191a4"
 
-# KV_SESSIONS stores GitHub OAuth state (10-min TTL) and signed-in session tokens
-# (30-day TTL). Create it once and paste the returned ID below:
-#   wrangler kv:namespace create KV_SESSIONS
-[[kv_namespaces]]
-binding = "KV_SESSIONS"
-id = "REPLACE_ME"
-
 # ── Secrets (set via `wrangler secret put <NAME>`) ───────────────────────────
 # Do NOT put real values here. This block just declares the expected names.
 # See .dev.vars.example for local development stubs.
@@ -39,10 +34,8 @@ id = "REPLACE_ME"
 #   STRIPE_SECRET_KEY         — Stripe restricted key (NOT the leaked one!)
 #   STRIPE_WEBHOOK_SECRET     — Signing secret from Stripe webhook endpoint
 #   RESEND_API_KEY            — Resend API key for transactional email
-#   GITHUB_CLIENT_SECRET      — GitHub OAuth app client secret
-#                               Register the app at https://github.com/settings/developers
-#                               Authorization callback URL must be
-#                               https://api.labwired.com/v1/auth/github/callback
+#   CLERK_SECRET_KEY          — Clerk backend secret key.
+#                               Register the Clerk app at https://dashboard.clerk.com → API Keys → Secret keys.
 
 # ── Environment variables ────────────────────────────────────────────────────
 [vars]
@@ -50,5 +43,5 @@ LABWIRED_API_BASE = "https://api.labwired.com"
 FROM_EMAIL = "onboarding@labwired.com"
 PRO_CYCLES_QUOTA = "100000000"
 ENVIRONMENT = "production"
-GITHUB_CLIENT_ID = ""
-PLAYGROUND_ORIGIN = "https://foundry.labwired.com"
+# Public Clerk JWT verification key (PEM). Paste from Clerk dashboard → API Keys.
+CLERK_JWT_KEY = ""

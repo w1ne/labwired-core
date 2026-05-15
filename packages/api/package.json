@@ -11,11 +11,12 @@
     "tail": "wrangler tail"
   },
   "dependencies": {
+    "@clerk/backend": "^2.33.3",
     "stripe": "^17.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250514.0",
     "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250514.0",
     "typescript": "~5.9.3",
     "vitest": "~3.2.0",
     "wrangler": "^4.0.0"

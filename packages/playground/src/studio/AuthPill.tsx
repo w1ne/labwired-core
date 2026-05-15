@@ -1,9 +1,8 @@
+import { useUser, UserButton } from '@clerk/clerk-react';
 import type { UseAuthResult } from './useAuth';
-import type { UseSessionResult } from './useSession';
 
 export interface AuthPillProps {
   auth: UseAuthResult;
-  session?: UseSessionResult;
   onOpen: () => void;
 }
 
@@ -12,30 +11,23 @@ function quotaPct(used: number, quota: number): number {
   return Math.min(100, Math.round((used / quota) * 100));
 }
 
-export function AuthPill({ auth, session, onOpen }: AuthPillProps) {
-  const githubSignedIn = session?.status === 'ok' && session.user !== null;
+export function AuthPill({ auth, onOpen }: AuthPillProps) {
+  const { isLoaded, isSignedIn } = useUser();
   const apiKeyConnected = auth.status === 'ok' && auth.workspace !== null;
-  const loading = auth.status === 'loading' || session?.status === 'loading';
+  const loading = auth.status === 'loading' || !isLoaded;
 
-  if (githubSignedIn && session?.user) {
-    const u = session.user;
+  if (isSignedIn) {
     return (
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Account: ${u.login}`}
-        title={u.login}
-        className="h-7 pl-1 pr-3 rounded-pill text-xs font-medium bg-white/[0.06] text-fg-primary hover:bg-white/[0.10] transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1.5 shrink-0"
-      >
-        <img
-          src={u.avatar_url}
-          alt=""
-          aria-hidden
-          className="w-5 h-5 rounded-full"
-          referrerPolicy="no-referrer"
+      <div className="flex items-center shrink-0">
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: 'w-7 h-7',
+            },
+          }}
         />
-        <span>{u.login}</span>
-      </button>
+      </div>
     );
   }
 

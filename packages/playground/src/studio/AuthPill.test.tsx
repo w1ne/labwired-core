@@ -1,9 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// Mock Clerk before importing AuthPill — controlled per-test via mockClerkUser.
+const mockClerkUser: {
+  isLoaded: boolean;
+  isSignedIn: boolean;
+  user: { id?: string; primaryEmailAddress?: { emailAddress: string } } | null;
+} = {
+  isLoaded: true,
+  isSignedIn: false,
+  user: null,
+};
+
+vi.mock('@clerk/clerk-react', () => ({
+  useUser: () => mockClerkUser,
+  UserButton: () => <div data-testid="clerk-user-button">UserButton</div>,
+}));
+
 import { AuthPill } from './AuthPill';
 import type { UseAuthResult, Workspace } from './useAuth';
-import type { UseSessionResult, SessionUser } from './useSession';
 
 function makeAuth(overrides: Partial<UseAuthResult> = {}): UseAuthResult {
   return {
@@ -13,19 +29,6 @@ function makeAuth(overrides: Partial<UseAuthResult> = {}): UseAuthResult {
     error: null,
     save: vi.fn().mockResolvedValue(true),
     clear: vi.fn(),
-    refresh: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  };
-}
-
-function makeSession(overrides: Partial<UseSessionResult> = {}): UseSessionResult {
-  return {
-    token: null,
-    user: null,
-    status: 'idle',
-    error: null,
-    signInUrl: 'https://api.labwired.com/v1/auth/github/start',
-    signOut: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -43,11 +46,17 @@ const proWorkspace: Workspace = {
 
 describe('AuthPill', () => {
   it('renders "Connect" when signed out', () => {
+    mockClerkUser.isLoaded = true;
+    mockClerkUser.isSignedIn = false;
+    mockClerkUser.user = null;
     render(<AuthPill auth={makeAuth()} onOpen={() => {}} />);
     expect(screen.getByRole('button', { name: /connect/i })).toBeInTheDocument();
   });
 
-  it('renders plan + quota percent when signed in', () => {
+  it('renders plan + quota percent when signed in via API key', () => {
+    mockClerkUser.isLoaded = true;
+    mockClerkUser.isSignedIn = false;
+    mockClerkUser.user = null;
     render(
       <AuthPill
         auth={makeAuth({ status: 'ok', workspace: proWorkspace })}
@@ -58,31 +67,24 @@ describe('AuthPill', () => {
     expect(screen.getByText(/Pro · 47%/)).toBeInTheDocument();
   });
 
-  it('calls onOpen when clicked', async () => {
+  it('calls onOpen when "Connect" is clicked', async () => {
+    mockClerkUser.isLoaded = true;
+    mockClerkUser.isSignedIn = false;
+    mockClerkUser.user = null;
     const onOpen = vi.fn();
     render(<AuthPill auth={makeAuth()} onOpen={onOpen} />);
     await userEvent.click(screen.getByRole('button', { name: /connect/i }));
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
-  it('renders GitHub avatar + login when signed in via GitHub', () => {
-    const user: SessionUser = {
-      github_id: 4242,
-      login: 'octocat',
-      avatar_url: 'https://avatars.example/octocat.png',
-      email: null,
-      plan: 'free',
+  it('renders Clerk UserButton when signed in via Clerk', () => {
+    mockClerkUser.isLoaded = true;
+    mockClerkUser.isSignedIn = true;
+    mockClerkUser.user = {
+      id: 'user_test',
+      primaryEmailAddress: { emailAddress: 'andrii@example.com' },
     };
-    render(
-      <AuthPill
-        auth={makeAuth()}
-        session={makeSession({ status: 'ok', token: 'sess_abc', user })}
-        onOpen={() => {}}
-      />,
-    );
-    expect(screen.getByRole('button', { name: /octocat/i })).toBeInTheDocument();
-    const avatar = screen.getByRole('button', { name: /octocat/i }).querySelector('img');
-    expect(avatar).not.toBeNull();
-    expect(avatar?.getAttribute('src')).toBe('https://avatars.example/octocat.png');
+    render(<AuthPill auth={makeAuth()} onOpen={() => {}} />);
+    expect(screen.getByTestId('clerk-user-button')).toBeInTheDocument();
   });
 });

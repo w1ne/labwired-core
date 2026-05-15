@@ -5,6 +5,7 @@
 #   wrangler secret put STRIPE_SECRET_KEY
 #   wrangler secret put STRIPE_WEBHOOK_SECRET
 #   wrangler secret put RESEND_API_KEY
+#   wrangler secret put CLERK_SECRET_KEY
 
 # Stripe restricted API key (NOT the leaked key — create a new one in Stripe dashboard)
 # Minimum permissions required: read Subscriptions, read Customers
@@ -16,3 +17,6 @@ STRIPE_WEBHOOK_SECRET=whsec_REPLACE_ME
 # Resend API key (from resend.com → API Keys)
 # If left empty, emails will be console.log'd instead of sent (fine for local dev)
 RESEND_API_KEY=re_REPLACE_ME
+
+# Clerk backend secret key (https://dashboard.clerk.com → API Keys → Secret keys)
+CLERK_SECRET_KEY=sk_test_REPLACE_ME
