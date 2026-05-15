@@ -24,6 +24,13 @@ id = "bceec07d091b4238be0d9e322b76bf69"
 binding = "KV_STRIPE_SUBS"
 id = "1a683745399d43ef93c97c6568d191a4"
 
+# KV_SESSIONS stores GitHub OAuth state (10-min TTL) and signed-in session tokens
+# (30-day TTL). Create it once and paste the returned ID below:
+#   wrangler kv:namespace create KV_SESSIONS
+[[kv_namespaces]]
+binding = "KV_SESSIONS"
+id = "REPLACE_ME"
+
 # ── Secrets (set via `wrangler secret put <NAME>`) ───────────────────────────
 # Do NOT put real values here. This block just declares the expected names.
 # See .dev.vars.example for local development stubs.
@@ -32,6 +39,10 @@ id = "1a683745399d43ef93c97c6568d191a4"
 #   STRIPE_SECRET_KEY         — Stripe restricted key (NOT the leaked one!)
 #   STRIPE_WEBHOOK_SECRET     — Signing secret from Stripe webhook endpoint
 #   RESEND_API_KEY            — Resend API key for transactional email
+#   GITHUB_CLIENT_SECRET      — GitHub OAuth app client secret
+#                               Register the app at https://github.com/settings/developers
+#                               Authorization callback URL must be
+#                               https://api.labwired.com/v1/auth/github/callback
 
 # ── Environment variables ────────────────────────────────────────────────────
 [vars]
@@ -39,3 +50,5 @@ LABWIRED_API_BASE = "https://api.labwired.com"
 FROM_EMAIL = "onboarding@labwired.com"
 PRO_CYCLES_QUOTA = "100000000"
 ENVIRONMENT = "production"
+GITHUB_CLIENT_ID = ""
+PLAYGROUND_ORIGIN = "https://foundry.labwired.com"

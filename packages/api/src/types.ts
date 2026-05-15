@@ -30,22 +30,35 @@ export interface WorkspaceRecord {
 /** Stored in KV_STRIPE_SUBS under key = Stripe subscription ID ("sub_...") */
 export type StripeSubRecord = string; // just the workspace_id
 
+/** Stored in KV_SESSIONS under key = opaque session token (random hex). */
+export interface SessionRecord {
+  github_id: number;
+  login: string;
+  avatar_url: string;
+  email: string | null;
+  created_at: string;
+}
+
 /** Cloudflare Worker environment bindings */
 export interface Env {
   // KV namespaces
   KV_KEYS: KVNamespace;
   KV_WORKSPACES: KVNamespace;
   KV_STRIPE_SUBS: KVNamespace;
+  KV_SESSIONS: KVNamespace;
 
   // Secrets (set via `wrangler secret put`)
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
   RESEND_API_KEY: string;
+  GITHUB_CLIENT_SECRET: string;
 
   // Env vars (from wrangler.toml [vars])
   FROM_EMAIL: string;
   PRO_CYCLES_QUOTA: string;
   ENVIRONMENT: string;
+  GITHUB_CLIENT_ID: string;
+  PLAYGROUND_ORIGIN: string;
 }
 
 /** Response body for POST /v1/keys/validate */

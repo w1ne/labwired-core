@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthPill } from './AuthPill';
 import type { UseAuthResult, Workspace } from './useAuth';
+import type { UseSessionResult, SessionUser } from './useSession';
 
 function makeAuth(overrides: Partial<UseAuthResult> = {}): UseAuthResult {
   return {
@@ -12,6 +13,19 @@ function makeAuth(overrides: Partial<UseAuthResult> = {}): UseAuthResult {
     error: null,
     save: vi.fn().mockResolvedValue(true),
     clear: vi.fn(),
+    refresh: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function makeSession(overrides: Partial<UseSessionResult> = {}): UseSessionResult {
+  return {
+    token: null,
+    user: null,
+    status: 'idle',
+    error: null,
+    signInUrl: 'https://api.labwired.com/v1/auth/github/start',
+    signOut: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -49,5 +63,26 @@ describe('AuthPill', () => {
     render(<AuthPill auth={makeAuth()} onOpen={onOpen} />);
     await userEvent.click(screen.getByRole('button', { name: /connect/i }));
     expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('renders GitHub avatar + login when signed in via GitHub', () => {
+    const user: SessionUser = {
+      github_id: 4242,
+      login: 'octocat',
+      avatar_url: 'https://avatars.example/octocat.png',
+      email: null,
+      plan: 'free',
+    };
+    render(
+      <AuthPill
+        auth={makeAuth()}
+        session={makeSession({ status: 'ok', token: 'sess_abc', user })}
+        onOpen={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /octocat/i })).toBeInTheDocument();
+    const avatar = screen.getByRole('button', { name: /octocat/i }).querySelector('img');
+    expect(avatar).not.toBeNull();
+    expect(avatar?.getAttribute('src')).toBe('https://avatars.example/octocat.png');
   });
 });

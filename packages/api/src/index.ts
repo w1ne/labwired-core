@@ -22,6 +22,12 @@ import {
 } from './keys.js';
 import { sendOnboardingEmail } from './email.js';
 import { verifyStripeWebhook } from './stripe.js';
+import {
+  handleGithubStart,
+  handleGithubCallback,
+  handleAuthMe,
+  handleAuthLogout,
+} from './auth.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
 const CORS_HEADERS: Record<string, string> = {
@@ -65,6 +71,18 @@ export default {
       }
       if (method === 'GET' && pathname === '/v1/workspaces/me') {
         return handleGetWorkspace(request, env);
+      }
+      if (method === 'GET' && pathname === '/v1/auth/github/start') {
+        return handleGithubStart(request, env);
+      }
+      if (method === 'GET' && pathname === '/v1/auth/github/callback') {
+        return handleGithubCallback(request, env);
+      }
+      if (method === 'GET' && pathname === '/v1/auth/me') {
+        return handleAuthMe(request, env);
+      }
+      if (method === 'POST' && pathname === '/v1/auth/logout') {
+        return handleAuthLogout(request, env);
       }
       return errorResponse('Not found', 404);
     } catch (err) {

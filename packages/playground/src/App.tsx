@@ -42,6 +42,7 @@ import { StudioShell } from './studio/StudioShell';
 import { AuthPill } from './studio/AuthPill';
 import { AuthModal } from './studio/AuthModal';
 import { useAuth } from './studio/useAuth';
+import { useSession } from './studio/useSession';
 import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
 import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
@@ -990,6 +991,8 @@ export function App() {
 
   // Auth surface (API-key paste, localStorage, /v1/workspaces/me)
   const auth = useAuth();
+  // GitHub OAuth session (Wokwi-style sign-in; separate from API key)
+  const session = useSession();
   const [authOpen, setAuthOpen] = useState(false);
 
   // Wall-clock runtime tracker — ticks while the simulation is running.
@@ -1185,12 +1188,12 @@ export function App() {
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}
       simDock={simDockNode}
-      authSlot={<AuthPill auth={auth} onOpen={() => setAuthOpen(true)} />}
+      authSlot={<AuthPill auth={auth} session={session} onOpen={() => setAuthOpen(true)} />}
       renderDevDrawer={renderDevDrawer}
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}
     >
-    <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} auth={auth} />
+    <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} auth={auth} session={session} />
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (
