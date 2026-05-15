@@ -4,9 +4,7 @@ name = "labwired-api"
 main = "src/index.ts"
 compatibility_date = "2025-05-14"
 compatibility_flags = ["nodejs_compat"]
-# Custom domain temporarily disabled for dry-run deploy to *.workers.dev.
-# Re-enable after curl verifies the workers.dev URL responds correctly.
-# routes = [{ pattern = "api.labwired.com", custom_domain = true }]
+routes = [{ pattern = "api.labwired.com", custom_domain = true }]
 
 # ── KV namespaces ────────────────────────────────────────────────────────────
 # Replace the id/preview_id values with the real namespace IDs you get from:
