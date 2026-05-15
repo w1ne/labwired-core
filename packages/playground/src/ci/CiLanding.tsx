@@ -8,7 +8,7 @@ import { useState } from 'react';
 //   • Formspree            → free 50/mo form endpoint, or replace with mailto:
 // Replace each STRIPE_URL / CALENDLY_URL / WAITLIST_FORM_ACTION with your own.
 // ──────────────────────────────────────────────────────────────────────────
-const STRIPE_TEAM_PAYMENT_LINK = 'https://buy.stripe.com/REPLACE_WITH_YOUR_TEAM_LINK';
+const STRIPE_PRO_PAYMENT_LINK = 'https://buy.stripe.com/bJeaEW56u3H16Tc3Gz5AQ03';
 const CALENDLY_ENTERPRISE = 'https://calendly.com/labwired/enterprise-intro';
 const WAITLIST_FORM_ACTION = 'mailto:andrii@shylenko.com'; // swap for https://formspree.io/f/<id> when ready
 const GITHUB_REPO = 'https://github.com/w1ne/labwired';
@@ -148,7 +148,7 @@ export function CiLanding() {
             { value: '~6,000×', label: 'faster than real-time', note: 'on commodity CI runners' },
             { value: '100%', label: 'deterministic', note: 'identical PC at every cycle' },
             { value: '0 hrs', label: 'rig setup', note: 'YAML manifest, runs immediately' },
-            { value: '$0', label: 'per CI seat', note: 'usage-based — pay for cycles, not hardware' },
+            { value: '$0', label: 'free tier', note: 'public repos · unlimited runs while in beta' },
           ].map((m) => (
             <div key={m.label}>
               <div className="text-accent text-[28px] font-bold tracking-tight font-mono">{m.value}</div>
@@ -299,11 +299,11 @@ export function CiLanding() {
             Pricing
           </div>
           <h2 className="text-[32px] font-bold tracking-tight mb-3 max-w-[22ch]">
-            Pay for cycles, not benches.
+            One paid tier. Done.
           </h2>
           <p className="text-fg-secondary text-[16px] mb-12 max-w-[60ch]">
-            Usage-based — you pay for the simulation minutes your CI actually consumes. No seats, no
-            per-developer fees.
+            Free for public repos. <span className="text-fg-primary font-semibold">Pro at $19/seat/month</span> for everything else.
+            Enterprise contracts for SAML, on-prem, and compliance evidence.
           </p>
 
           <div className="grid md:grid-cols-3 gap-6">
@@ -324,18 +324,18 @@ export function CiLanding() {
                 ctaExternal: true,
               },
               {
-                name: 'Team',
-                price: '$49',
-                priceNote: 'per month · cancel anytime',
+                name: 'Pro',
+                price: '$19',
+                priceNote: 'per seat · per month · cancel anytime',
                 features: [
-                  'Private repos',
-                  '500k cycles / month',
-                  'Unlimited concurrency',
-                  'Email support',
-                  'VCD trace retention 30d',
+                  'Private projects',
+                  'Unlimited simulations',
+                  'Priority email support',
+                  'VCD trace retention 30 days',
+                  'All future updates',
                 ],
-                cta: 'Start free trial →',
-                ctaHref: STRIPE_TEAM_PAYMENT_LINK,
+                cta: 'Start with Pro →',
+                ctaHref: STRIPE_PRO_PAYMENT_LINK,
                 ctaExternal: true,
                 highlighted: true,
               },
@@ -344,7 +344,7 @@ export function CiLanding() {
                 price: 'Custom',
                 priceNote: 'annual contract',
                 features: [
-                  'Everything in Team',
+                  'Everything in Pro',
                   'SAML / SSO',
                   'On-prem / self-hosted',
                   'ISO 26262 evidence kit',
