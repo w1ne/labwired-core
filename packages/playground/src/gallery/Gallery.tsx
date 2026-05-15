@@ -46,6 +46,15 @@ const FEATURED: FeaturedLab[] = [
     icon: '🌡',
   },
   {
+    id: 'ssd1306-hello-lab',
+    name: 'SSD1306 OLED',
+    chip: 'STM32F103 + SSD1306 over I²C',
+    description: 'Drive a 128×64 OLED display with live pixel rendering in the browser.',
+    detail: 'Demonstrates LabWired\'s paged GDDRAM framebuffer model: full SSD1306 I²C command set, horizontal addressing mode, and live canvas rendering of every pixel your firmware writes.',
+    accent: '#5BD8FF',
+    icon: '📺',
+  },
+  {
     id: 'nucleo-f401re',
     name: 'Nucleo-F401RE',
     chip: 'Cortex-M4F · 84 MHz',
@@ -170,7 +179,6 @@ export function Gallery() {
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 opacity-60">
           {[
-            { name: 'SSD1306 OLED', wave: 'Wave 2' },
             { name: 'ILI9341 TFT', wave: 'Wave 2' },
             { name: 'NEO-6M GPS', wave: 'Wave 3' },
             { name: 'NTC Thermistor', wave: 'Wave 3' },

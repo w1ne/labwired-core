@@ -13,6 +13,7 @@ export const STARTER_LABS: StarterLab[] = [
   { id: 'adxl345-sensor-lab', name: 'ADXL345 Tilt', icon: '📊', locked: false },
   { id: 'mpu6050-sensor-lab', name: 'MPU6050 IMU', icon: '🧭', locked: false },
   { id: 'bme280-weather-lab', name: 'BME280 Weather', icon: '🌡', locked: false },
+  { id: 'ssd1306-hello-lab', name: 'OLED Hello', icon: '📺', locked: false },
   { id: 'nucleo-f401re', name: 'Nucleo F4', icon: '🔵', locked: false },
 ];
 

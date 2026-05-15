@@ -23,10 +23,12 @@ import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yam
 import systemAdxl345SensorLab from '../../../core/examples/adxl345-sensor-lab/system.yaml?raw';
 import systemMpu6050SensorLab from '../../../core/examples/mpu6050-sensor-lab/system.yaml?raw';
 import systemBme280WeatherLab from '../../../core/examples/bme280-weather-lab/system.yaml?raw';
+import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
 import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
+import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -47,6 +49,19 @@ export interface BoardConfig {
 const BASE = import.meta.env.BASE_URL;
 
 export const BOARD_CONFIGS: BoardConfig[] = [
+  {
+    boardId: 'ssd1306-hello-lab',
+    chipId: 'stm32f103',
+    name: 'SSD1306 OLED',
+    description: 'STM32F103 + SSD1306 128×64 OLED display over simulated I²C. Live pixel rendering.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemSsd1306HelloLab,
+    demoFirmwarePath: `${BASE}wasm/demo-ssd1306-hello-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceSsd1306,
+    sourceFilename: 'ssd1306-hello-lab/src/main.rs',
+  },
   {
     boardId: 'bme280-weather-lab',
     chipId: 'stm32f103',

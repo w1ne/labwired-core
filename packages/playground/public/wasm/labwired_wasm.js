@@ -151,6 +151,26 @@ export class WasmSimulator {
         return ret;
     }
     /**
+     * Return the SSD1306 GDDRAM framebuffer for the device identified by `device_id`.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "oled-ssd1306"`.
+     * Returns a 1024-byte `Uint8Array` (128 columns × 8 pages, page-major).
+     * Returns a JS error if the device is not found.
+     * @param {string} device_id
+     * @returns {Uint8Array}
+     */
+    get_ssd1306_framebuffer(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_ssd1306_framebuffer(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
      * Legacy constructor: hardcoded STM32F107 Cortex-M3 with 128KB flash + 20KB RAM.
      * Kept for backward compatibility with the existing landing page sandbox.
      * @param {Uint8Array} firmware

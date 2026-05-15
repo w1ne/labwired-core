@@ -8,6 +8,7 @@ import {
   InstructionTrace,
   SerialMonitor,
   SimulatorBridge,
+  Ssd1306Display,
   useSimulationLoop,
   EditorCanvas,
   ComponentPalette,
@@ -517,6 +518,23 @@ export function App() {
     }
   }, [activeSimulationConfig, clearUart, launchSimulation]);
 
+  // SSD1306 live framebuffer
+  const [ssd1306Framebuffer, setSsd1306Framebuffer] = useState<Uint8Array | null>(null);
+
+  useEffect(() => {
+    if (!running || !bridge) {
+      setSsd1306Framebuffer(null);
+      return;
+    }
+    const poll = () => {
+      const fb = bridge.getSsd1306Framebuffer('oled');
+      if (fb) setSsd1306Framebuffer(fb);
+    };
+    poll();
+    const id = window.setInterval(poll, 100);
+    return () => window.clearInterval(id);
+  }, [running, bridge]);
+
   const analogStates = useMemo(() => bridge?.getAnalogStates() ?? [], [bridge, simState.pc]);
 
   const boardIoStateMap = useMemo(() => {
@@ -630,6 +648,9 @@ export function App() {
   const inspectorLabWidget = useMemo<ReactNode>(() => {
     if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
     const partType = inspectorSelection.partType;
+    if (partType === 'oled-ssd1306') {
+      return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
+    }
     if (partType !== 'adxl345' && partType !== 'mpu6050' && partType !== 'bme280') return undefined;
     const sensorStates = bridge.getI2cSensorStates();
     if (partType === 'adxl345') {
@@ -678,7 +699,7 @@ export function App() {
       );
     }
     return undefined;
-  }, [bridge, inspectorSelection, simState.pc]);
+  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer]);
 
   const inspectorNode = (
     <InspectorCard

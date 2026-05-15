@@ -112,6 +112,9 @@ export interface WasmSimulatorInstance {
   set_i2c_sensor_sample_6dof(device_id: string, ax: number, ay: number, az: number, gx: number, gy: number, gz: number): void;
   get_i2c_sensor_states(): I2cSensorState[];
 
+  // SSD1306 OLED framebuffer
+  get_ssd1306_framebuffer(device_id: string): Uint8Array;
+
   // Peripherals
   get_peripheral_snapshot(name: string): unknown;
   get_peripheral_list(): PeripheralInfo[];
@@ -246,6 +249,16 @@ export class SimulatorBridge {
 
   getPeripheralList(): PeripheralInfo[] {
     return this.sim.get_peripheral_list();
+  }
+
+  /** Returns the 1024-byte GDDRAM framebuffer for an SSD1306 OLED, or null if not found. */
+  getSsd1306Framebuffer(deviceId: string): Uint8Array | null {
+    try {
+      const fb = this.sim.get_ssd1306_framebuffer(deviceId);
+      return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Legacy: hardcoded LED state for backward compat. */

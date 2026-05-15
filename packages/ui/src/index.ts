@@ -8,6 +8,8 @@ export { MemoryInspector } from './components/MemoryInspector/MemoryInspector';
 export { InstructionTrace } from './components/InstructionTrace/InstructionTrace';
 export { SerialMonitor } from './components/SerialMonitor/SerialMonitor';
 export { Adxl345Visualizer } from './components/Adxl345Visualizer/Adxl345Visualizer';
+export { Ssd1306Display } from './components/Ssd1306Display/Ssd1306Display';
+export type { Ssd1306DisplayProps } from './components/Ssd1306Display/Ssd1306Display';
 
 // Hooks
 export { useSimulator } from './hooks/useSimulator';
