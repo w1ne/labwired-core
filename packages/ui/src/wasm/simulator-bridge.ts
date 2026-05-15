@@ -55,6 +55,15 @@ export interface I2cSensorStateBme280 {
 
 export type I2cSensorState = I2cSensorStateAdxl345 | I2cSensorStateMpu6050 | I2cSensorStateBme280;
 
+export interface SpiDeviceStateMax31855 {
+  id: string;
+  kind: 'max31855';
+  tc_c: number;
+  internal_c: number;
+}
+
+export type SpiDeviceState = SpiDeviceStateMax31855;
+
 export interface PeripheralInfo {
   name: string;
   base_address: string;
@@ -114,6 +123,10 @@ export interface WasmSimulatorInstance {
 
   // SSD1306 OLED framebuffer
   get_ssd1306_framebuffer(device_id: string): Uint8Array;
+
+  // SPI devices
+  get_spi_device_states(): SpiDeviceState[];
+  set_max31855_temperature(device_id: string, tc_c: number, internal_c: number): void;
 
   // Peripherals
   get_peripheral_snapshot(name: string): unknown;
@@ -249,6 +262,14 @@ export class SimulatorBridge {
 
   getPeripheralList(): PeripheralInfo[] {
     return this.sim.get_peripheral_list();
+  }
+
+  getSpiDeviceStates(): SpiDeviceState[] {
+    return this.sim.get_spi_device_states() ?? [];
+  }
+
+  setMax31855Temperature(deviceId: string, tc_c: number, internal_c: number): void {
+    this.sim.set_max31855_temperature(deviceId, tc_c, internal_c);
   }
 
   /** Returns the 1024-byte GDDRAM framebuffer for an SSD1306 OLED, or null if not found. */

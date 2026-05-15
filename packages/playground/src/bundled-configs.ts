@@ -23,11 +23,13 @@ import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yam
 import systemAdxl345SensorLab from '../../../core/examples/adxl345-sensor-lab/system.yaml?raw';
 import systemMpu6050SensorLab from '../../../core/examples/mpu6050-sensor-lab/system.yaml?raw';
 import systemBme280WeatherLab from '../../../core/examples/bme280-weather-lab/system.yaml?raw';
+import systemMax31855ThermocoupleLab from '../../../core/examples/max31855-thermocouple-lab/system.yaml?raw';
 import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
 import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
+import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src/main.rs?raw';
 import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
 
 export interface BoardConfig {
@@ -74,6 +76,19 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceBme280,
     sourceFilename: 'bme280-weather-lab/src/main.rs',
+  },
+  {
+    boardId: 'max31855-thermocouple-lab',
+    chipId: 'stm32f103',
+    name: 'MAX31855 Thermocouple',
+    description: 'STM32F103 + MAX31855 K-type thermocouple interface over simulated SPI. Live temperature reading.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemMax31855ThermocoupleLab,
+    demoFirmwarePath: `${BASE}wasm/demo-max31855-thermocouple-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceMax31855,
+    sourceFilename: 'max31855-thermocouple-lab/src/main.rs',
   },
   {
     boardId: 'mpu6050-sensor-lab',

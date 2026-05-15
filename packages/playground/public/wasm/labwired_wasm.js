@@ -151,6 +151,15 @@ export class WasmSimulator {
         return ret;
     }
     /**
+     * Read back the current state of each SPI sensor declared in `board_io`.
+     * Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
+     * @returns {any}
+     */
+    get_spi_device_states() {
+        const ret = wasm.wasmsimulator_get_spi_device_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Return the SSD1306 GDDRAM framebuffer for the device identified by `device_id`.
      *
      * `device_id` must match a `board_io` binding with `device_type: "oled-ssd1306"`.
@@ -275,6 +284,20 @@ export class WasmSimulator {
         const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.wasmsimulator_set_i2c_sensor_sample_6dof(this.__wbg_ptr, ptr0, len0, ax, ay, az, gx, gy, gz);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated thermocouple and internal temperatures on a MAX31855 device.
+     * @param {string} device_id
+     * @param {number} tc_c
+     * @param {number} internal_c
+     */
+    set_max31855_temperature(device_id, tc_c, internal_c) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_max31855_temperature(this.__wbg_ptr, ptr0, len0, tc_c, internal_c);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }

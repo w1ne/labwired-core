@@ -14,6 +14,7 @@ export const STARTER_LABS: StarterLab[] = [
   { id: 'mpu6050-sensor-lab', name: 'MPU6050 IMU', icon: '🧭', locked: false },
   { id: 'bme280-weather-lab', name: 'BME280 Weather', icon: '🌡', locked: false },
   { id: 'ssd1306-hello-lab', name: 'OLED Hello', icon: '📺', locked: false },
+  { id: 'max31855-thermocouple-lab', name: 'MAX31855 Thermocouple', icon: '🔥', locked: false },
   { id: 'nucleo-f401re', name: 'Nucleo F4', icon: '🔵', locked: false },
 ];
 

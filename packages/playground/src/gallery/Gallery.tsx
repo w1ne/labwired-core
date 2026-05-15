@@ -55,6 +55,15 @@ const FEATURED: FeaturedLab[] = [
     icon: '📺',
   },
   {
+    id: 'max31855-thermocouple-lab',
+    name: 'MAX31855 Thermocouple',
+    chip: 'STM32F103 + MAX31855 over SPI',
+    description: 'Read K-type thermocouple temperature from a simulated MAX31855 sensor.',
+    detail: 'Demonstrates LabWired\'s first SPI device model: register-level MAX31855 implementation returning a 32-bit status word over SPI. Thermocouple + cold-junction temperature, fault detection.',
+    accent: '#F5B642',
+    icon: '🔥',
+  },
+  {
     id: 'nucleo-f401re',
     name: 'Nucleo-F401RE',
     chip: 'Cortex-M4F · 84 MHz',

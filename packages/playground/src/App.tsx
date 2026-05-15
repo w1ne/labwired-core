@@ -198,6 +198,7 @@ const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   adxl345: 'i2c',
   bme280: 'i2c',
+  max31855: 'spi',
   mpu6050: 'i2c',
   'oled-ssd1306': 'i2c',
   lcd1602: 'i2c',
