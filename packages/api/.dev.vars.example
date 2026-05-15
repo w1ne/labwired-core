@@ -1,0 +1,18 @@
+# Wrangler local development secrets — copy to .dev.vars and fill in real values.
+# .dev.vars is git-ignored. NEVER commit it.
+#
+# For production, set these via:
+#   wrangler secret put STRIPE_SECRET_KEY
+#   wrangler secret put STRIPE_WEBHOOK_SECRET
+#   wrangler secret put RESEND_API_KEY
+
+# Stripe restricted API key (NOT the leaked key — create a new one in Stripe dashboard)
+# Minimum permissions required: read Subscriptions, read Customers
+STRIPE_SECRET_KEY=sk_test_REPLACE_ME
+
+# Stripe webhook signing secret (from Stripe dashboard → Developers → Webhooks)
+STRIPE_WEBHOOK_SECRET=whsec_REPLACE_ME
+
+# Resend API key (from resend.com → API Keys)
+# If left empty, emails will be console.log'd instead of sent (fine for local dev)
+RESEND_API_KEY=re_REPLACE_ME

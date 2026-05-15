@@ -8,6 +8,14 @@ name: "LabWired Test Runner"
 description: "Run `labwired test` in CI, emit artifact paths, and write a GitHub Actions summary."
 
 inputs:
+  api-key:
+    description: >
+      Optional LabWired Pro API key. Set the LABWIRED_API_KEY repository secret and pass
+      it here to authenticate against your Pro/Enterprise workspace. When present, the CLI
+      validates the key before running and meters cycle consumption against your monthly quota.
+      Omit (or leave blank) to run in free-tier mode.
+    required: false
+    default: ""
   script:
     description: "Path to the LabWired test script YAML."
     required: true
@@ -94,6 +102,8 @@ runs:
     - name: Run labwired test (capture exit code)
       id: run
       shell: bash
+      env:
+        LABWIRED_API_KEY: ${{ inputs.api-key }}
       run: |
         set -euo pipefail
 

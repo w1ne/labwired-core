@@ -19,6 +19,9 @@ vscode/out
 # AI Secrets
 ai/.env
 .env
+
+# Wrangler local secrets (never commit — use packages/api/.dev.vars.example as template)
+.dev.vars
 core/demo_chip.json
 __pycache__/
 

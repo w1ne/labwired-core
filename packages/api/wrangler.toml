@@ -1,0 +1,46 @@
+# LabWired API Worker — Cloudflare configuration
+# After running `wrangler kv:namespace create KV_KEYS` etc., paste the returned IDs below.
+name = "labwired-api"
+main = "src/index.ts"
+compatibility_date = "2025-05-14"
+compatibility_flags = ["nodejs_compat"]
+
+# ── KV namespaces ────────────────────────────────────────────────────────────
+# Replace the id/preview_id values with the real namespace IDs you get from:
+#   wrangler kv:namespace create KV_KEYS
+#   wrangler kv:namespace create KV_WORKSPACES
+#   wrangler kv:namespace create KV_STRIPE_SUBS
+
+[[kv_namespaces]]
+binding = "KV_KEYS"
+id = "REPLACE_WITH_KV_KEYS_ID"
+preview_id = "REPLACE_WITH_KV_KEYS_PREVIEW_ID"
+
+[[kv_namespaces]]
+binding = "KV_WORKSPACES"
+id = "REPLACE_WITH_KV_WORKSPACES_ID"
+preview_id = "REPLACE_WITH_KV_WORKSPACES_PREVIEW_ID"
+
+[[kv_namespaces]]
+binding = "KV_STRIPE_SUBS"
+id = "REPLACE_WITH_KV_STRIPE_SUBS_ID"
+preview_id = "REPLACE_WITH_KV_STRIPE_SUBS_PREVIEW_ID"
+
+# ── Secrets (set via `wrangler secret put <NAME>`) ───────────────────────────
+# Do NOT put real values here. This block just declares the expected names.
+# See .dev.vars.example for local development stubs.
+#
+# Required secrets:
+#   STRIPE_SECRET_KEY         — Stripe restricted key (NOT the leaked one!)
+#   STRIPE_WEBHOOK_SECRET     — Signing secret from Stripe webhook endpoint
+#   RESEND_API_KEY            — Resend API key for transactional email
+
+# ── Environment variables ────────────────────────────────────────────────────
+[vars]
+LABWIRED_API_BASE = "https://api.labwired.com"
+FROM_EMAIL = "onboarding@labwired.com"
+PRO_CYCLES_QUOTA = "100000000"
+ENVIRONMENT = "production"
+
+# ── Custom domain (configure in Cloudflare dashboard) ───────────────────────
+# routes = [{ pattern = "api.labwired.com/*", custom_domain = true }]

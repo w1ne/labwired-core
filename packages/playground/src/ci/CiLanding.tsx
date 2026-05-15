@@ -30,6 +30,8 @@ jobs:
         with:
           script: tests/firmware-regression.yaml
           output_dir: test-results
+        env:
+          LABWIRED_API_KEY: \${{ secrets.LABWIRED_API_KEY }}
 
       - name: Upload artifacts
         if: always()
