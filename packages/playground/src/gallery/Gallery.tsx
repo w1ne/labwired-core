@@ -73,6 +73,15 @@ const FEATURED: FeaturedLab[] = [
     icon: '📡',
   },
   {
+    id: 'ntc-thermistor-lab',
+    name: 'NTC Thermistor',
+    chip: 'STM32F103 + NTC 3950 on ADC1',
+    description: 'Slide the temperature and watch the simulated ADC count change in real time.',
+    detail: 'Demonstrates LabWired\'s ADC stimulus path: Steinhart-Hart Beta equation in Rust core converts °C → Ω → mV → 12-bit count. The slider sends only a temperature value; all math stays in the simulator engine.',
+    accent: '#F5B642',
+    icon: '🌡️',
+  },
+  {
     id: 'nucleo-f401re',
     name: 'Nucleo-F401RE',
     chip: 'Cortex-M4F · 84 MHz',
@@ -198,7 +207,6 @@ export function Gallery() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 opacity-60">
           {[
             { name: 'ILI9341 TFT', wave: 'Wave 2' },
-            { name: 'NTC Thermistor', wave: 'Wave 3' },
           ].map((c) => (
             <div key={c.name} className="px-4 py-3 rounded-card bg-white/[0.03] border border-border/40 text-[13px] flex items-center justify-between">
               <span className="text-fg-secondary">{c.name}</span>

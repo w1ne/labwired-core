@@ -10,6 +10,7 @@ import {
   SimulatorBridge,
   Ssd1306Display,
   GpsControl,
+  ThermistorControl,
   useSimulationLoop,
   EditorCanvas,
   ComponentPalette,
@@ -203,6 +204,7 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   mpu6050: 'i2c',
   'oled-ssd1306': 'i2c',
   'neo6m-gps': 'uart',
+  'ntc-thermistor': 'analog',
   lcd1602: 'i2c',
   dht22: 'misc',
   led: 'gpio',
@@ -521,6 +523,9 @@ export function App() {
     }
   }, [activeSimulationConfig, clearUart, launchSimulation]);
 
+  // NTC thermistor temperature state (device id -> temperature °C)
+  const [ntcTemperatures, setNtcTemperatures] = useState<Record<string, number>>({});
+
   // SSD1306 live framebuffer
   const [ssd1306Framebuffer, setSsd1306Framebuffer] = useState<Uint8Array | null>(null);
 
@@ -539,6 +544,7 @@ export function App() {
   }, [running, bridge]);
 
   const analogStates = useMemo(() => bridge?.getAnalogStates() ?? [], [bridge, simState.pc]);
+  const adcDeviceStates = useMemo(() => bridge?.getAdcDeviceStates() ?? [], [bridge, simState.pc]);
 
   const boardIoStateMap = useMemo(() => {
     const map: Record<string, ComponentState> = {};
@@ -669,6 +675,23 @@ export function App() {
         />
       );
     }
+    if (partType === 'ntc-thermistor') {
+      const partId = inspectorSelection.partId;
+      const s = adcDeviceStates.find((st) => st.kind === 'ntc-thermistor' && st.id === partId)
+        ?? adcDeviceStates.find((st) => st.kind === 'ntc-thermistor');
+      const tempC = ntcTemperatures[partId] ?? 25.0;
+      return (
+        <ThermistorControl
+          temperatureC={tempC}
+          dividerMv={s?.divider_mv}
+          adcCount={s?.adc_count}
+          onChange={(t) => {
+            setNtcTemperatures((prev) => ({ ...prev, [partId]: t }));
+            bridge.setNtcTemperature(partId, t);
+          }}
+        />
+      );
+    }
     if (partType !== 'adxl345' && partType !== 'mpu6050' && partType !== 'bme280') return undefined;
     const sensorStates = bridge.getI2cSensorStates();
     if (partType === 'adxl345') {
@@ -717,7 +740,8 @@ export function App() {
       );
     }
     return undefined;
-  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, adcDeviceStates, ntcTemperatures]);
 
   const inspectorNode = (
     <InspectorCard

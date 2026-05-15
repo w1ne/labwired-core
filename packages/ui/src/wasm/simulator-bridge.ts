@@ -74,6 +74,15 @@ export interface UartDeviceStateNeo6mGps {
 
 export type UartDeviceState = UartDeviceStateNeo6mGps;
 
+export interface AdcDeviceStateNtcThermistor {
+  id: string;
+  kind: 'ntc-thermistor';
+  divider_mv: number;
+  adc_count: number;
+}
+
+export type AdcDeviceState = AdcDeviceStateNtcThermistor;
+
 export interface PeripheralInfo {
   name: string;
   base_address: string;
@@ -142,6 +151,10 @@ export interface WasmSimulatorInstance {
   set_gps_position(device_id: string, lat: number, lon: number): void;
   set_gps_fix(device_id: string, active: boolean): void;
   get_uart_device_states(): UartDeviceState[];
+
+  // ADC analog source devices (NTC thermistor)
+  set_ntc_temperature(device_id: string, temperature_c: number): void;
+  get_adc_device_states(): AdcDeviceState[];
 
   // Peripherals
   get_peripheral_snapshot(name: string): unknown;
@@ -300,6 +313,16 @@ export class SimulatorBridge {
   /** Read state of UART stream devices (GPS modules, etc.). */
   getUartDeviceStates(): UartDeviceState[] {
     return this.sim.get_uart_device_states() ?? [];
+  }
+
+  /** Set temperature on an NTC thermistor device. All Steinhart-Hart math lives in Rust core. */
+  setNtcTemperature(deviceId: string, temperatureC: number): void {
+    this.sim.set_ntc_temperature(deviceId, temperatureC);
+  }
+
+  /** Read state of ADC analog source devices (NTC thermistor). */
+  getAdcDeviceStates(): AdcDeviceState[] {
+    return this.sim.get_adc_device_states() ?? [];
   }
 
   /** Returns the 1024-byte GDDRAM framebuffer for an SSD1306 OLED, or null if not found. */

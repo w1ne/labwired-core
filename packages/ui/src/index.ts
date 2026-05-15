@@ -12,6 +12,8 @@ export { SerialMonitor } from './components/SerialMonitor/SerialMonitor';
 export { Adxl345Visualizer } from './components/Adxl345Visualizer/Adxl345Visualizer';
 export { Ssd1306Display } from './components/Ssd1306Display/Ssd1306Display';
 export type { Ssd1306DisplayProps } from './components/Ssd1306Display/Ssd1306Display';
+export { ThermistorControl } from './components/ThermistorControl/ThermistorControl';
+export type { ThermistorControlProps } from './components/ThermistorControl/ThermistorControl';
 
 // Hooks
 export { useSimulator } from './hooks/useSimulator';
@@ -40,6 +42,8 @@ export type {
   I2cSensorState,
   UartDeviceState,
   UartDeviceStateNeo6mGps,
+  AdcDeviceState,
+  AdcDeviceStateNtcThermistor,
   PeripheralInfo,
   SimulatorConfig,
   WasmModule,

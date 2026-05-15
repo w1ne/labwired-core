@@ -50,6 +50,18 @@ export class WasmSimulator {
         return v2;
     }
     /**
+     * Read back the current state of all NTC thermistor devices declared in `board_io`.
+     *
+     * Returns `[{ id, kind: "ntc-thermistor", temperature_c, divider_mv, adc_count }]`.
+     * All conversion math (Steinhart-Hart, mV→count) is performed here by calling into
+     * core types — no conversion logic in this WASM bridge body.
+     * @returns {any}
+     */
+    get_adc_device_states() {
+        const ret = wasm.wasmsimulator_get_adc_device_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Returns analog state for ADC and PWM board_io bindings.
      * @returns {any}
      */
@@ -180,6 +192,15 @@ export class WasmSimulator {
         return v2;
     }
     /**
+     * Read back the current state of all NEO-6M GPS devices declared in `board_io`.
+     * Returns `[{ id, kind: "neo6m-gps", lat, lon, has_fix }]`.
+     * @returns {any}
+     */
+    get_uart_device_states() {
+        const ret = wasm.wasmsimulator_get_uart_device_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Legacy constructor: hardcoded STM32F107 Cortex-M3 with 128KB flash + 20KB RAM.
      * Kept for backward compatibility with the existing landing page sandbox.
      * @param {Uint8Array} firmware
@@ -254,6 +275,35 @@ export class WasmSimulator {
         }
     }
     /**
+     * Enable or disable the GPS fix on a NEO-6M module.
+     * @param {string} device_id
+     * @param {boolean} active
+     */
+    set_gps_fix(device_id, active) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_gps_fix(this.__wbg_ptr, ptr0, len0, active);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated position on a NEO-6M GPS module attached to a UART peripheral.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "neo6m-gps"`.
+     * @param {string} device_id
+     * @param {number} lat
+     * @param {number} lon
+     */
+    set_gps_position(device_id, lat, lon) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_gps_position(this.__wbg_ptr, ptr0, len0, lat, lon);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * Set the simulated X/Y/Z sample on an ADXL345 attached to an I2C peripheral.
      * Looks up the binding in `board_io` by id; the binding must have
      * `device_type: "adxl345"`.
@@ -298,6 +348,25 @@ export class WasmSimulator {
         const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.wasmsimulator_set_max31855_temperature(this.__wbg_ptr, ptr0, len0, tc_c, internal_c);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated temperature on an NTC thermistor attached to an ADC channel.
+     *
+     * All Steinhart-Hart math lives in Rust core (NtcThermistor::divider_output_mv).
+     * This function only stores the new temperature, recomputes divider_mv → ADC count
+     * via core, and injects the result into the ADC peripheral's channel.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "ntc-thermistor"`.
+     * @param {string} device_id
+     * @param {number} temperature_c
+     */
+    set_ntc_temperature(device_id, temperature_c) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_ntc_temperature(this.__wbg_ptr, ptr0, len0, temperature_c);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }

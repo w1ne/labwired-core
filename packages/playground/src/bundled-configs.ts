@@ -26,6 +26,7 @@ import systemBme280WeatherLab from '../../../core/examples/bme280-weather-lab/sy
 import systemMax31855ThermocoupleLab from '../../../core/examples/max31855-thermocouple-lab/system.yaml?raw';
 import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
 import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
+import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
@@ -33,6 +34,7 @@ import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?
 import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src/main.rs?raw';
 import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
+import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -53,6 +55,19 @@ export interface BoardConfig {
 const BASE = import.meta.env.BASE_URL;
 
 export const BOARD_CONFIGS: BoardConfig[] = [
+  {
+    boardId: 'ntc-thermistor-lab',
+    chipId: 'stm32f103',
+    name: 'NTC Thermistor',
+    description: 'STM32F103 + NTC 3950 thermistor on ADC1 ch0. Steinhart-Hart Beta equation in Rust core. Slide the temperature and watch the ADC count change.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemNtcThermistorLab,
+    demoFirmwarePath: `${BASE}wasm/demo-ntc-thermistor-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceNtcThermistor,
+    sourceFilename: 'ntc-thermistor-lab/src/main.rs',
+  },
   {
     boardId: 'neo6m-gps-lab',
     chipId: 'stm32f103',

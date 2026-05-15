@@ -26,6 +26,7 @@ import { bme280Component } from './bme280';
 import { max31855Component } from './max31855';
 import { mpu6050Component } from './mpu6050';
 import { neo6mGpsComponent } from './neo6m-gps';
+import { ntcThermistorComponent } from './ntc-thermistor';
 // Displays
 import { oledSsd1306Component } from './oled-ssd1306';
 import { ledMatrixComponent } from './led-matrix';
@@ -77,6 +78,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [max31855Component.type, max31855Component],
   [mpu6050Component.type, mpu6050Component],
   [neo6mGpsComponent.type, neo6mGpsComponent],
+  [ntcThermistorComponent.type, ntcThermistorComponent],
   // Displays
   [sevenSegmentComponent.type, sevenSegmentComponent],
   [lcd1602Component.type, lcd1602Component],
