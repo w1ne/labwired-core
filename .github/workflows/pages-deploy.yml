@@ -1,0 +1,67 @@
+# Build + deploy the playground to Cloudflare Pages on every push to main.
+#
+# Project: labwired-playground (https://labwired-playground.pages.dev)
+#
+# Required repo secrets:
+#   CLOUDFLARE_API_TOKEN  — Pages:Edit + Account:Read on shylenkoa account
+#   CLOUDFLARE_ACCOUNT_ID — 53f45abe9550f62856af4475880e0a77
+#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY — pk_live_… (reused from foundry-deploy)
+#
+# If these aren't set, the deploy step fails fast. The workflow can also be
+# triggered manually via the Actions tab (workflow_dispatch).
+
+name: Deploy playground to Pages
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "packages/playground/**"
+      - "packages/ui/**"
+      - "core/**"
+      - ".github/workflows/pages-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            packages/ui/package-lock.json
+            packages/playground/package-lock.json
+
+      - name: Install + build @labwired/ui
+        working-directory: packages/ui
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      - name: Install + build @labwired/playground
+        working-directory: packages/playground
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          VITE_LABWIRED_API_BASE: https://api.labwired.com
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy packages/playground/dist --project-name=labwired-playground --branch=main --commit-dirty=true

@@ -4,7 +4,10 @@ import path from 'node:path';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/playground/',
+  // Default `/` matches the Cloudflare Pages deploy (root). For the legacy
+  // Hetzner Caddy mount we used `/playground/` — pass `--base=/playground/`
+  // or set `BASE_URL=/playground/` if you ever rebuild that target.
+  base: process.env.BASE_URL ?? '/',
   server: {
     fs: {
       allow: [path.resolve(__dirname, '../..')],
