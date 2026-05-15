@@ -143,6 +143,9 @@ export interface WasmSimulatorInstance {
   // SSD1306 OLED framebuffer
   get_ssd1306_framebuffer(device_id: string): Uint8Array;
 
+  // ILI9341 TFT framebuffer
+  get_ili9341_framebuffer(device_id: string): Uint8Array;
+
   // SPI devices
   get_spi_device_states(): SpiDeviceState[];
   set_max31855_temperature(device_id: string, tc_c: number, internal_c: number): void;
@@ -329,6 +332,16 @@ export class SimulatorBridge {
   getSsd1306Framebuffer(deviceId: string): Uint8Array | null {
     try {
       const fb = this.sim.get_ssd1306_framebuffer(deviceId);
+      return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Returns the 153,600-byte RGB565 framebuffer for an ILI9341 TFT, or null if not found. */
+  getIli9341Framebuffer(deviceId: string): Uint8Array | null {
+    try {
+      const fb = this.sim.get_ili9341_framebuffer(deviceId);
       return fb ? new Uint8Array(fb) : null;
     } catch {
       return null;

@@ -30,6 +30,7 @@ import { ntcThermistorComponent } from './ntc-thermistor';
 // Displays
 import { oledSsd1306Component } from './oled-ssd1306';
 import { ledMatrixComponent } from './led-matrix';
+import { ili9341TftComponent } from './ili9341-tft';
 // Passives
 import { capacitorComponent } from './capacitor';
 import { diodeComponent } from './diode';
@@ -84,6 +85,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [lcd1602Component.type, lcd1602Component],
   [oledSsd1306Component.type, oledSsd1306Component],
   [ledMatrixComponent.type, ledMatrixComponent],
+  [ili9341TftComponent.type, ili9341TftComponent],
   // Passives
   [resistorComponent.type, resistorComponent],
   [capacitorComponent.type, capacitorComponent],

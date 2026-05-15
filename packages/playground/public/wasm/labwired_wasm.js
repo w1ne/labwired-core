@@ -114,6 +114,26 @@ export class WasmSimulator {
         return ret;
     }
     /**
+     * Return the ILI9341 RGB565 framebuffer for the device identified by `device_id`.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "ili9341"`.
+     * Returns a 153,600-byte `Uint8Array` (240×320 pixels × 2 bytes, row-major, big-endian RGB565).
+     * Returns a JS error if the device is not found.
+     * @param {string} device_id
+     * @returns {Uint8Array}
+     */
+    get_ili9341_framebuffer(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_ili9341_framebuffer(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
      * Legacy LED state query (hardcoded GPIOB pin 5 for backward compat).
      * @returns {boolean}
      */

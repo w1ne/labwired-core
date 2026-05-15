@@ -27,6 +27,7 @@ import systemMax31855ThermocoupleLab from '../../../core/examples/max31855-therm
 import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
 import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
 import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
+import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
@@ -35,6 +36,7 @@ import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src
 import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
+import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -106,6 +108,19 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceBme280,
     sourceFilename: 'bme280-weather-lab/src/main.rs',
+  },
+  {
+    boardId: 'ili9341-tft-lab',
+    chipId: 'stm32f103',
+    name: 'ILI9341 TFT Color',
+    description: 'STM32F103 + ILI9341 240×320 RGB565 TFT display over simulated SPI. Live color framebuffer rendering.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemIli9341TftLab,
+    demoFirmwarePath: `${BASE}wasm/demo-ili9341-tft-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceIli9341Tft,
+    sourceFilename: 'ili9341-tft-lab/src/main.rs',
   },
   {
     boardId: 'max31855-thermocouple-lab',

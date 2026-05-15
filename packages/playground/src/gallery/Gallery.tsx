@@ -82,6 +82,15 @@ const FEATURED: FeaturedLab[] = [
     icon: '🌡️',
   },
   {
+    id: 'ili9341-tft-lab',
+    name: 'ILI9341 TFT Color',
+    chip: 'STM32F103 + ILI9341 over SPI',
+    description: 'Drive a 240×320 RGB565 color TFT with live pixel rendering in the browser.',
+    detail: 'Demonstrates LabWired\'s color framebuffer model: full ILI9341 SPI command set, CASET/PASET addressing window, RAMWR pixel data stream, and live RGB565→RGB888 canvas rendering of every pixel your firmware writes.',
+    accent: '#F062B8',
+    icon: '🎨',
+  },
+  {
     id: 'nucleo-f401re',
     name: 'Nucleo-F401RE',
     chip: 'Cortex-M4F · 84 MHz',
@@ -200,20 +209,6 @@ export function Gallery() {
           </a>
         </div>
 
-        {/* Coming soon */}
-        <div className="mt-12 mb-2 text-[11px] uppercase tracking-[0.1em] text-fg-tertiary font-semibold">
-          Coming soon
-        </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 opacity-60">
-          {[
-            { name: 'ILI9341 TFT', wave: 'Wave 2' },
-          ].map((c) => (
-            <div key={c.name} className="px-4 py-3 rounded-card bg-white/[0.03] border border-border/40 text-[13px] flex items-center justify-between">
-              <span className="text-fg-secondary">{c.name}</span>
-              <span className="text-fg-tertiary text-[10px] uppercase tracking-[0.08em] font-semibold">{c.wave}</span>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* Footer */}

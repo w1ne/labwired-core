@@ -9,6 +9,7 @@ import {
   SerialMonitor,
   SimulatorBridge,
   Ssd1306Display,
+  Ili9341Display,
   GpsControl,
   ThermistorControl,
   useSimulationLoop,
@@ -200,6 +201,7 @@ const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   adxl345: 'i2c',
   bme280: 'i2c',
+  ili9341: 'spi',
   max31855: 'spi',
   mpu6050: 'i2c',
   'oled-ssd1306': 'i2c',
@@ -543,6 +545,25 @@ export function App() {
     return () => window.clearInterval(id);
   }, [running, bridge]);
 
+  // ILI9341 live framebuffer (153 KB @ 100 ms = ~1.5 MB/s WASM→JS)
+  const [ili9341Framebuffer, setIli9341Framebuffer] = useState<Uint8Array | null>(null);
+
+  useEffect(() => {
+    if (!running || !bridge) {
+      setIli9341Framebuffer(null);
+      return;
+    }
+    const poll = () => {
+      try {
+        const fb = bridge.getIli9341Framebuffer('tft');
+        if (fb) setIli9341Framebuffer(new Uint8Array(fb));
+      } catch { /* device not present in this lab */ }
+    };
+    poll();
+    const id = window.setInterval(poll, 100);
+    return () => window.clearInterval(id);
+  }, [running, bridge]);
+
   const analogStates = useMemo(() => bridge?.getAnalogStates() ?? [], [bridge, simState.pc]);
   const adcDeviceStates = useMemo(() => bridge?.getAdcDeviceStates() ?? [], [bridge, simState.pc]);
 
@@ -660,6 +681,9 @@ export function App() {
     if (partType === 'oled-ssd1306') {
       return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
     }
+    if (partType === 'ili9341') {
+      return <Ili9341Display framebuffer={ili9341Framebuffer} width={240} />;
+    }
     if (partType === 'neo6m-gps') {
       const gpsStates = bridge.getUartDeviceStates();
       const s = gpsStates.find((st) => st.kind === 'neo6m-gps' && st.id === inspectorSelection.partId)
@@ -741,7 +765,7 @@ export function App() {
     }
     return undefined;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, adcDeviceStates, ntcTemperatures]);
+  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
 
   const inspectorNode = (
     <InspectorCard

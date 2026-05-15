@@ -12,6 +12,8 @@ export { SerialMonitor } from './components/SerialMonitor/SerialMonitor';
 export { Adxl345Visualizer } from './components/Adxl345Visualizer/Adxl345Visualizer';
 export { Ssd1306Display } from './components/Ssd1306Display/Ssd1306Display';
 export type { Ssd1306DisplayProps } from './components/Ssd1306Display/Ssd1306Display';
+export { Ili9341Display } from './components/Ili9341Display/Ili9341Display';
+export type { Ili9341DisplayProps } from './components/Ili9341Display/Ili9341Display';
 export { ThermistorControl } from './components/ThermistorControl/ThermistorControl';
 export type { ThermistorControlProps } from './components/ThermistorControl/ThermistorControl';
 

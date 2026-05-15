@@ -17,6 +17,7 @@ export const STARTER_LABS: StarterLab[] = [
   { id: 'max31855-thermocouple-lab', name: 'MAX31855 Thermocouple', icon: '🔥', locked: false },
   { id: 'neo6m-gps-lab', name: 'NEO-6M GPS', icon: '📡', locked: false },
   { id: 'ntc-thermistor-lab', name: 'NTC Thermistor', icon: '🌡️', locked: false },
+  { id: 'ili9341-tft-lab', name: 'TFT Color', icon: '🎨', locked: false },
   { id: 'nucleo-f401re', name: 'Nucleo F4', icon: '🔵', locked: false },
 ];
 
