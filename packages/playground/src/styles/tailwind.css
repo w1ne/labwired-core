@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    background: var(--lw-bg-base);
+    color: var(--lw-fg-primary);
+    font-family: var(--lw-font-ui);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--lw-magenta-soft);
+  }
+}
+
+@layer components {
+  .lw-glass {
+    background: rgba(19, 21, 27, 0.72);
+    backdrop-filter: var(--lw-blur-glass);
+    border: 1px solid var(--lw-border);
+    box-shadow: var(--lw-shadow-glass);
+    border-radius: var(--lw-radius-card);
+  }
+
+  /* Hide every legacy chrome surface the Studio shell replaces. Keep only the canvas + right-side wire/board inspector. */
+  [data-legacy-shell] .playground-header,
+  [data-legacy-shell] .playground-footer,
+  [data-legacy-shell] .sim-controls-bar,
+  [data-legacy-shell] .editor-sidebar-left,
+  [data-legacy-shell] .editor-bottom-pane,
+  [data-legacy-shell] .bottom-tabs,
+  [data-legacy-shell] .demo-banner,
+  [data-legacy-shell] .sidebar-toggle,
+  [data-legacy-shell] .header-separator,
+  [data-legacy-shell] .toolbar-group,
+  [data-legacy-shell] .editor-code-pane {
+    display: none !important;
+  }
+
+  /* Let the canvas occupy the full available space below the new top chrome. */
+  [data-legacy-shell].playground {
+    height: 100%;
+    padding-top: 44px;
+  }
+
+  [data-legacy-shell] .editor-layout {
+    display: block !important;
+    height: 100%;
+  }
+
+  [data-legacy-shell] .editor-top-split,
+  [data-legacy-shell] .editor-center,
+  [data-legacy-shell] .editor-canvas-pane {
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important;
+  }
+}

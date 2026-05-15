@@ -21,9 +21,16 @@ import { dht22Component } from './dht22';
 import { pirSensorComponent } from './pir-sensor';
 import { ultrasonicComponent } from './ultrasonic';
 import { ldrComponent } from './ldr';
+import { adxl345Component } from './adxl345';
+import { bme280Component } from './bme280';
+import { max31855Component } from './max31855';
+import { mpu6050Component } from './mpu6050';
+import { neo6mGpsComponent } from './neo6m-gps';
+import { ntcThermistorComponent } from './ntc-thermistor';
 // Displays
 import { oledSsd1306Component } from './oled-ssd1306';
 import { ledMatrixComponent } from './led-matrix';
+import { ili9341TftComponent } from './ili9341-tft';
 // Passives
 import { capacitorComponent } from './capacitor';
 import { diodeComponent } from './diode';
@@ -67,11 +74,18 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [pirSensorComponent.type, pirSensorComponent],
   [ultrasonicComponent.type, ultrasonicComponent],
   [ldrComponent.type, ldrComponent],
+  [adxl345Component.type, adxl345Component],
+  [bme280Component.type, bme280Component],
+  [max31855Component.type, max31855Component],
+  [mpu6050Component.type, mpu6050Component],
+  [neo6mGpsComponent.type, neo6mGpsComponent],
+  [ntcThermistorComponent.type, ntcThermistorComponent],
   // Displays
   [sevenSegmentComponent.type, sevenSegmentComponent],
   [lcd1602Component.type, lcd1602Component],
   [oledSsd1306Component.type, oledSsd1306Component],
   [ledMatrixComponent.type, ledMatrixComponent],
+  [ili9341TftComponent.type, ili9341TftComponent],
   // Passives
   [resistorComponent.type, resistorComponent],
   [capacitorComponent.type, capacitorComponent],

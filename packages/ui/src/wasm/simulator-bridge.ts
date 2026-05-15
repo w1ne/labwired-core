@@ -26,6 +26,63 @@ export interface AnalogState {
   active?: boolean;
 }
 
+export interface I2cSensorStateAdxl345 {
+  id: string;
+  kind: 'adxl345';
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface I2cSensorStateMpu6050 {
+  id: string;
+  kind: 'mpu6050';
+  ax: number;
+  ay: number;
+  az: number;
+  gx: number;
+  gy: number;
+  gz: number;
+}
+
+export interface I2cSensorStateBme280 {
+  id: string;
+  kind: 'bme280';
+  temperature_c: number;
+  humidity_pct: number;
+  pressure_hpa: number;
+}
+
+export type I2cSensorState = I2cSensorStateAdxl345 | I2cSensorStateMpu6050 | I2cSensorStateBme280;
+
+export interface SpiDeviceStateMax31855 {
+  id: string;
+  kind: 'max31855';
+  tc_c: number;
+  internal_c: number;
+}
+
+export type SpiDeviceState = SpiDeviceStateMax31855;
+
+export interface UartDeviceStateNeo6mGps {
+  id: string;
+  kind: 'neo6m-gps';
+  lat: number;
+  lon: number;
+  has_fix: boolean;
+}
+
+export type UartDeviceState = UartDeviceStateNeo6mGps;
+
+export interface AdcDeviceStateNtcThermistor {
+  id: string;
+  kind: 'ntc-thermistor';
+  divider_mv: number;
+  adc_count: number;
+}
+
+export type AdcDeviceState = AdcDeviceStateNtcThermistor;
+
 export interface PeripheralInfo {
   name: string;
   base_address: string;
@@ -77,6 +134,30 @@ export interface WasmSimulatorInstance {
   // ADC / Analog
   set_adc_value(peripheral_name: string, value: number): void;
   get_board_io_analog_states(): AnalogState[];
+
+  // I2C sensors
+  set_i2c_sensor_sample(device_id: string, x: number, y: number, z: number): void;
+  set_i2c_sensor_sample_6dof(device_id: string, ax: number, ay: number, az: number, gx: number, gy: number, gz: number): void;
+  get_i2c_sensor_states(): I2cSensorState[];
+
+  // SSD1306 OLED framebuffer
+  get_ssd1306_framebuffer(device_id: string): Uint8Array;
+
+  // ILI9341 TFT framebuffer
+  get_ili9341_framebuffer(device_id: string): Uint8Array;
+
+  // SPI devices
+  get_spi_device_states(): SpiDeviceState[];
+  set_max31855_temperature(device_id: string, tc_c: number, internal_c: number): void;
+
+  // UART stream devices (GPS)
+  set_gps_position(device_id: string, lat: number, lon: number): void;
+  set_gps_fix(device_id: string, active: boolean): void;
+  get_uart_device_states(): UartDeviceState[];
+
+  // ADC analog source devices (NTC thermistor)
+  set_ntc_temperature(device_id: string, temperature_c: number): void;
+  get_adc_device_states(): AdcDeviceState[];
 
   // Peripherals
   get_peripheral_snapshot(name: string): unknown;
@@ -194,12 +275,77 @@ export class SimulatorBridge {
     return this.sim.get_board_io_analog_states() ?? [];
   }
 
+  setI2cSensorSample(deviceId: string, x: number, y: number, z: number): void {
+    this.sim.set_i2c_sensor_sample(deviceId, x, y, z);
+  }
+
+  setMpu6050Sample(deviceId: string, ax: number, ay: number, az: number, gx: number, gy: number, gz: number): void {
+    this.sim.set_i2c_sensor_sample_6dof(deviceId, ax, ay, az, gx, gy, gz);
+  }
+
+  getI2cSensorStates(): I2cSensorState[] {
+    return this.sim.get_i2c_sensor_states() ?? [];
+  }
+
   getPeripheralSnapshot(name: string): unknown {
     return this.sim.get_peripheral_snapshot(name);
   }
 
   getPeripheralList(): PeripheralInfo[] {
     return this.sim.get_peripheral_list();
+  }
+
+  getSpiDeviceStates(): SpiDeviceState[] {
+    return this.sim.get_spi_device_states() ?? [];
+  }
+
+  setMax31855Temperature(deviceId: string, tc_c: number, internal_c: number): void {
+    this.sim.set_max31855_temperature(deviceId, tc_c, internal_c);
+  }
+
+  /** Set the simulated GPS position. No NMEA math here — all logic is in Rust core. */
+  setGpsPosition(deviceId: string, lat: number, lon: number): void {
+    this.sim.set_gps_position(deviceId, lat, lon);
+  }
+
+  /** Enable or disable the GPS fix. */
+  setGpsFix(deviceId: string, active: boolean): void {
+    this.sim.set_gps_fix(deviceId, active);
+  }
+
+  /** Read state of UART stream devices (GPS modules, etc.). */
+  getUartDeviceStates(): UartDeviceState[] {
+    return this.sim.get_uart_device_states() ?? [];
+  }
+
+  /** Set temperature on an NTC thermistor device. All Steinhart-Hart math lives in Rust core. */
+  setNtcTemperature(deviceId: string, temperatureC: number): void {
+    this.sim.set_ntc_temperature(deviceId, temperatureC);
+  }
+
+  /** Read state of ADC analog source devices (NTC thermistor). */
+  getAdcDeviceStates(): AdcDeviceState[] {
+    return this.sim.get_adc_device_states() ?? [];
+  }
+
+  /** Returns the 1024-byte GDDRAM framebuffer for an SSD1306 OLED, or null if not found. */
+  getSsd1306Framebuffer(deviceId: string): Uint8Array | null {
+    try {
+      const fb = this.sim.get_ssd1306_framebuffer(deviceId);
+      return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Returns the 153,600-byte RGB565 framebuffer for an ILI9341 TFT, or null if not found. */
+  getIli9341Framebuffer(deviceId: string): Uint8Array | null {
+    try {
+      const fb = this.sim.get_ili9341_framebuffer(deviceId);
+      return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Legacy: hardcoded LED state for backward compat. */

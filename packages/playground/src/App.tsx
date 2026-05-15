@@ -1,4 +1,6 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, type ReactNode } from 'react';
+import { CommandPalette } from './studio/CommandPalette';
+import { useCommandPaletteItems } from './studio/useCommandPaletteItems';
 import {
   SimControls,
   RegisterGrid,
@@ -6,6 +8,10 @@ import {
   InstructionTrace,
   SerialMonitor,
   SimulatorBridge,
+  Ssd1306Display,
+  Ili9341Display,
+  GpsControl,
+  ThermistorControl,
   useSimulationLoop,
   EditorCanvas,
   ComponentPalette,
@@ -32,6 +38,11 @@ import {
 } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
+import { StudioShell } from './studio/StudioShell';
+import { DevDrawer } from './studio/DevDrawer';
+import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
+import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
+import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
 import {
   CheckIcon, UploadIcon, CodeIcon, PanelBottomIcon,
@@ -168,7 +179,11 @@ function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: st
   let diagram = makeStarterDiagram(config);
   if (savedDiagram) {
     try {
-      diagram = JSON.parse(savedDiagram) as Diagram;
+      const parsed = JSON.parse(savedDiagram) as Diagram;
+      const nonMcuParts = (parsed.parts ?? []).filter((p) => p.id !== 'mcu');
+      // Fall back to the starter when the saved diagram has been emptied — visitors should
+      // always land on a running-ready circuit, not a blank canvas.
+      diagram = nonMcuParts.length === 0 ? makeStarterDiagram(config) : parsed;
     } catch {
       diagram = makeStarterDiagram(config);
     }
@@ -182,6 +197,41 @@ function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: st
 
 const DEFAULT_BOARD = BOARD_CONFIGS[0]; // stm32f103-blinky
 const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
+
+const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
+  adxl345: 'i2c',
+  bme280: 'i2c',
+  ili9341: 'spi',
+  max31855: 'spi',
+  mpu6050: 'i2c',
+  'oled-ssd1306': 'i2c',
+  'neo6m-gps': 'uart',
+  'ntc-thermistor': 'analog',
+  lcd1602: 'i2c',
+  dht22: 'misc',
+  led: 'gpio',
+  button: 'gpio',
+  'rgb-led': 'gpio',
+  buzzer: 'gpio',
+  'seven-segment': 'gpio',
+  'led-matrix': 'gpio',
+  neopixel: 'gpio',
+  servo: 'gpio',
+  'motor-driver-l293d': 'gpio',
+  potentiometer: 'analog',
+  ldr: 'analog',
+  ultrasonic: 'misc',
+  'pir-sensor': 'gpio',
+  keypad: 'gpio',
+  'slide-switch': 'gpio',
+  'dip-switch': 'gpio',
+  'rotary-encoder': 'gpio',
+  resistor: 'misc',
+  capacitor: 'misc',
+  diode: 'misc',
+  transistor: 'misc',
+  'shift-register-74hc595': 'misc',
+};
 
 export function App() {
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
@@ -198,6 +248,14 @@ export function App() {
   // Board selection (from catalog + bundled configs)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<BoardConfig>(() => {
+    // URL param ?lab=<boardId> overrides saved state — lets gallery cards deep-link.
+    if (typeof window !== 'undefined') {
+      const labParam = new URLSearchParams(window.location.search).get('lab');
+      if (labParam) {
+        const fromParam = BOARD_CONFIGS.find((c) => c.boardId === labParam);
+        if (fromParam) return fromParam;
+      }
+    }
     const savedId = localStorage.getItem('labwired-board');
     if (savedId) {
       const found = BOARD_CONFIGS.find((c) => c.boardId === savedId);
@@ -218,6 +276,9 @@ export function App() {
   const [showRightSidebar, setShowRightSidebar] = useState(true);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
+
+  // Command palette mode + ref for global ⌘K shortcut
+  const commandRefs = useRef<{ open: () => void; close: () => void } | null>(null);
 
   // Editor state
   const editor = useEditorState(
@@ -464,7 +525,47 @@ export function App() {
     }
   }, [activeSimulationConfig, clearUart, launchSimulation]);
 
+  // NTC thermistor temperature state (device id -> temperature °C)
+  const [ntcTemperatures, setNtcTemperatures] = useState<Record<string, number>>({});
+
+  // SSD1306 live framebuffer
+  const [ssd1306Framebuffer, setSsd1306Framebuffer] = useState<Uint8Array | null>(null);
+
+  useEffect(() => {
+    if (!running || !bridge) {
+      setSsd1306Framebuffer(null);
+      return;
+    }
+    const poll = () => {
+      const fb = bridge.getSsd1306Framebuffer('oled');
+      if (fb) setSsd1306Framebuffer(fb);
+    };
+    poll();
+    const id = window.setInterval(poll, 100);
+    return () => window.clearInterval(id);
+  }, [running, bridge]);
+
+  // ILI9341 live framebuffer (153 KB @ 100 ms = ~1.5 MB/s WASM→JS)
+  const [ili9341Framebuffer, setIli9341Framebuffer] = useState<Uint8Array | null>(null);
+
+  useEffect(() => {
+    if (!running || !bridge) {
+      setIli9341Framebuffer(null);
+      return;
+    }
+    const poll = () => {
+      try {
+        const fb = bridge.getIli9341Framebuffer('tft');
+        if (fb) setIli9341Framebuffer(new Uint8Array(fb));
+      } catch { /* device not present in this lab */ }
+    };
+    poll();
+    const id = window.setInterval(poll, 100);
+    return () => window.clearInterval(id);
+  }, [running, bridge]);
+
   const analogStates = useMemo(() => bridge?.getAnalogStates() ?? [], [bridge, simState.pc]);
+  const adcDeviceStates = useMemo(() => bridge?.getAdcDeviceStates() ?? [], [bridge, simState.pc]);
 
   const boardIoStateMap = useMemo(() => {
     const map: Record<string, ComponentState> = {};
@@ -552,6 +653,204 @@ export function App() {
       editor.addPart(part);
     },
     [editor],
+  );
+
+  const isEmpty = editor.state.diagram.parts.filter((p) => p.id !== 'mcu').length === 0;
+
+  // Inspector: derive selection from selectedIds (parts only; wires have no stable id in this schema)
+  const inspectorSelection = useMemo<InspectorSelection | null>(() => {
+    if (editor.state.selectedIds.size !== 1) return null;
+    const selectedId = [...editor.state.selectedIds][0];
+    const part = editor.state.diagram.parts.find((p) => p.id === selectedId);
+    if (!part) return null;
+    const def = COMPONENT_REGISTRY.get(part.type);
+    return {
+      kind: 'part',
+      partId: part.id,
+      partType: part.type,
+      label: def?.label ?? part.type,
+      pins: (def?.pins ?? []).map((p: { id: string; label?: string }) => ({ id: p.id, label: p.label ?? p.id })),
+      attrs: part.attrs ?? {},
+    };
+  }, [editor.state.selectedIds, editor.state.diagram.parts]);
+
+  // Build live sensor widget for selected I2C / UART devices
+  const inspectorLabWidget = useMemo<ReactNode>(() => {
+    if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
+    const partType = inspectorSelection.partType;
+    if (partType === 'oled-ssd1306') {
+      return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
+    }
+    if (partType === 'ili9341') {
+      return <Ili9341Display framebuffer={ili9341Framebuffer} width={240} />;
+    }
+    if (partType === 'neo6m-gps') {
+      const gpsStates = bridge.getUartDeviceStates();
+      const s = gpsStates.find((st) => st.kind === 'neo6m-gps' && st.id === inspectorSelection.partId)
+        ?? gpsStates.find((st) => st.kind === 'neo6m-gps');
+      if (!s || s.kind !== 'neo6m-gps') return undefined;
+      return (
+        <GpsControl
+          lat={s.lat}
+          lon={s.lon}
+          hasFix={s.has_fix}
+          onChange={(lat, lon) => bridge.setGpsPosition(inspectorSelection.partId, lat, lon)}
+          onFixToggle={(active) => bridge.setGpsFix(inspectorSelection.partId, active)}
+        />
+      );
+    }
+    if (partType === 'ntc-thermistor') {
+      const partId = inspectorSelection.partId;
+      const s = adcDeviceStates.find((st) => st.kind === 'ntc-thermistor' && st.id === partId)
+        ?? adcDeviceStates.find((st) => st.kind === 'ntc-thermistor');
+      const tempC = ntcTemperatures[partId] ?? 25.0;
+      return (
+        <ThermistorControl
+          temperatureC={tempC}
+          dividerMv={s?.divider_mv}
+          adcCount={s?.adc_count}
+          onChange={(t) => {
+            setNtcTemperatures((prev) => ({ ...prev, [partId]: t }));
+            bridge.setNtcTemperature(partId, t);
+          }}
+        />
+      );
+    }
+    if (partType !== 'adxl345' && partType !== 'mpu6050' && partType !== 'bme280') return undefined;
+    const sensorStates = bridge.getI2cSensorStates();
+    if (partType === 'adxl345') {
+      const s = sensorStates.find((st) => st.kind === 'adxl345' && st.id === inspectorSelection.partId)
+        ?? sensorStates.find((st) => st.kind === 'adxl345');
+      if (!s || s.kind !== 'adxl345') return undefined;
+      return (
+        <table className="w-full text-[12px] font-mono">
+          <tbody>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">X</td><td className="text-fg-primary">{s.x}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Y</td><td className="text-fg-primary">{s.y}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Z</td><td className="text-fg-primary">{s.z}</td></tr>
+          </tbody>
+        </table>
+      );
+    }
+    if (partType === 'mpu6050') {
+      const s = sensorStates.find((st) => st.kind === 'mpu6050' && st.id === inspectorSelection.partId)
+        ?? sensorStates.find((st) => st.kind === 'mpu6050');
+      if (!s || s.kind !== 'mpu6050') return undefined;
+      return (
+        <table className="w-full text-[12px] font-mono">
+          <tbody>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">AX</td><td className="text-fg-primary">{s.ax}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">AY</td><td className="text-fg-primary">{s.ay}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">AZ</td><td className="text-fg-primary">{s.az}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">GX</td><td className="text-fg-primary">{s.gx}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">GY</td><td className="text-fg-primary">{s.gy}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">GZ</td><td className="text-fg-primary">{s.gz}</td></tr>
+          </tbody>
+        </table>
+      );
+    }
+    if (partType === 'bme280') {
+      const s = sensorStates.find((st) => st.kind === 'bme280' && st.id === inspectorSelection.partId)
+        ?? sensorStates.find((st) => st.kind === 'bme280');
+      if (!s || s.kind !== 'bme280') return undefined;
+      return (
+        <table className="w-full text-[12px] font-mono">
+          <tbody>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Temp</td><td className="text-fg-primary">{s.temperature_c.toFixed(1)} °C</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Humidity</td><td className="text-fg-primary">{s.humidity_pct.toFixed(1)} %RH</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Pressure</td><td className="text-fg-primary">{s.pressure_hpa.toFixed(0)} hPa</td></tr>
+          </tbody>
+        </table>
+      );
+    }
+    return undefined;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
+
+  const inspectorNode = (
+    <InspectorCard
+      selection={inspectorSelection}
+      devMode={false}
+      labWidget={inspectorLabWidget}
+      onDelete={(id) => { editor.select(id); editor.deleteSelected(); }}
+      onDuplicate={(_id) => { /* no duplicate API yet */ }}
+    />
+  );
+
+  const paletteComponents = useMemo<PaletteComponent[]>(
+    () =>
+      Array.from(COMPONENT_REGISTRY.entries())
+        .filter(([type]) => type !== 'mcu' && !type.startsWith('boards/'))
+        .map(([type, def]) => ({
+          type,
+          label: def.label ?? type,
+          category: PALETTE_CATEGORY[type] ?? 'misc',
+          bus: undefined,
+        })),
+    []
+  );
+
+  const handlePaletteDrag = (componentType: string) => {
+    // The dataTransfer is set inside PaletteDrawer; this callback is purely informational
+    // for any future analytics or drag-state tracking. No-op for now.
+    void componentType;
+  };
+
+  const simDockState: StudioSimState = useMemo(() => {
+    if (loading) return 'building';
+    if (running) return 'running';
+    if (bridge && !running) return 'paused';
+    return 'idle';
+  }, [loading, running, bridge]);
+
+  const handlePickLab = useCallback(
+    (labId: string) => {
+      const next = BOARD_CONFIGS.find((b) => b.boardId === labId);
+      if (!next) return;
+      const workspace = loadBoardWorkspace(next);
+      setSelectedBoard(next);
+      editor.loadDiagram(workspace.diagram);
+      setSource(workspace.source);
+      setCanvasValidationMessage(null);
+      setInvalidPins([]);
+      setRunning(false);
+      setBridge(null);
+      setActiveSimulationConfig(null);
+    },
+    [editor],
+  );
+
+  const handleUploadFirmware = useCallback(
+    async (file: File) => {
+      try {
+        setError(null);
+        setCompileOutput(`Loading firmware: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+        const firmware = new Uint8Array(await file.arrayBuffer());
+
+        // Derive the system YAML from the current canvas so the user's wired-up components
+        // are exposed to the uploaded firmware. Chip YAML is fixed by the selected board.
+        let systemYaml = selectedBoard.systemYaml;
+        let chipYaml = selectedBoard.chipYaml;
+        try {
+          const config = diagramToConfig(editor.state.diagram, selectedBoard.chipYaml);
+          systemYaml = config.systemYaml;
+          chipYaml = config.chipYaml;
+        } catch (configErr) {
+          // If the canvas can't be translated (e.g., dangling wires), fall back to the bundled
+          // system YAML and surface a warning. The firmware still runs against the bundled board.
+          const msg = configErr instanceof Error ? configErr.message : String(configErr);
+          setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
+        }
+
+        await launchSimulation({ systemYaml, chipYaml, firmware });
+        setCompileOutput((prev) => `${prev}\nUploaded ${file.name} (${firmware.length} bytes). Simulation started.`);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        setError(`Upload failed: ${message}`);
+        setCompileOutput((prev) => `${prev}\nUpload failed: ${message}`);
+      }
+    },
+    [launchSimulation, selectedBoard.systemYaml, selectedBoard.chipYaml, editor.state.diagram],
   );
 
   const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
@@ -683,13 +982,51 @@ export function App() {
     setActiveSimulationConfig(null);
   }, [editor, selectedBoard]);
 
+  // Studio-shell toast (transient, auto-dismisses)
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Wall-clock runtime tracker — ticks while the simulation is running.
+  // Frozen on pause, reset to 0 when the simulation is reset.
+  const [runtimeMs, setRuntimeMs] = useState(0);
+  const runStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (running) {
+      runStartRef.current = Date.now() - runtimeMs;
+      const tick = () => {
+        if (runStartRef.current !== null) {
+          setRuntimeMs(Date.now() - runStartRef.current);
+        }
+      };
+      tick();
+      const interval = window.setInterval(tick, 500);
+      return () => window.clearInterval(interval);
+    }
+    runStartRef.current = null;
+    return undefined;
+    // We intentionally exclude `runtimeMs` from deps — including it would re-create
+    // the interval on every tick. The ref captures the latest value on `running` transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
+
+  useEffect(() => {
+    // Reset elapsed time whenever the active simulation is cleared (reset / board switch).
+    if (activeSimulationConfig === null) {
+      setRuntimeMs(0);
+      runStartRef.current = null;
+    }
+  }, [activeSimulationConfig]);
+
   // Share
   const handleShare = useCallback(async () => {
-    const url = await generateShareUrl(editor.state.diagram, source);
-    await navigator.clipboard.writeText(url);
-    setCompileOutput('Share URL copied to clipboard!');
-    setBottomTab('output');
-    setShowBottomPanel(true);
+    try {
+      const url = await generateShareUrl(editor.state.diagram, source);
+      await navigator.clipboard.writeText(url);
+      setToast('Share URL copied to clipboard');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setToast(`Share failed: ${message}`);
+    }
   }, [editor.state.diagram, source]);
 
   // Keyboard shortcuts
@@ -719,6 +1056,18 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [editor]);
 
+  // Global ⌘K shortcut — opens command palette
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        commandRefs.current?.open();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // Bottom tab content
   const bottomContent = () => {
     switch (bottomTab) {
@@ -735,8 +1084,105 @@ export function App() {
     }
   };
 
+  // Command palette items
+  const commandItems = useCommandPaletteItems({
+    boards: BOARD_CONFIGS,
+    onLoadBoard: handleBoardSelect,
+    onPickLab: handlePickLab,
+    onAddComponent: (type) => {
+      const def = COMPONENT_REGISTRY.get(type);
+      if (!def) return;
+      const part: Part = {
+        id: nextPartId(type), type, x: 200, y: 200, rotate: 0,
+        attrs: { ...def.defaultAttrs },
+      };
+      editor.addPart(part);
+    },
+    onRun: handleRun,
+    onShare: handleShare,
+    onReset: handleReset,
+    onToggleDev: () => { /* no-op: dev toggle is owned by useStudioLayout inside StudioShell; TopChrome's toggle still works */ },
+  });
+
+  const renderCommandPalette = (open: boolean, closeCommand: () => void, _openCommand: () => void) => (
+    <CommandPalette open={open} onClose={closeCommand} items={commandItems} />
+  );
+
+  // Run-button intent: if a sim is already loaded, resume from pause; otherwise launch fresh.
+  const onSimRun = activeSimulationConfig ? handlePlay : handleRun;
+
+  const simDockNode = (
+    <SimDock
+      state={simDockState}
+      runtimeMs={runtimeMs}
+      cycles={simState.cycles}
+      pc={simState.pc}
+      onRun={onSimRun}
+      onPause={handlePause}
+      onStep={handleStep}
+      onReset={handleReset}
+    />
+  );
+
+  const renderDevDrawer = (devMode: boolean) => (
+    <DevDrawer
+      devMode={devMode}
+      tabs={{
+        serial: (
+          <SerialMonitor output={simState.uartOutput} onClear={clearUart} style={{ height: '100%' }} />
+        ),
+        registers: (
+          <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />
+        ),
+        trace: (
+          <InstructionTrace entries={traceEntries} style={{ maxHeight: '100%', overflow: 'auto' }} />
+        ),
+        memory: (
+          <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />
+        ),
+        source: (
+          selectedBoard.sourceCode ? (
+            <div className="h-full flex flex-col">
+              {selectedBoard.sourceFilename && (
+                <div className="px-3 py-1.5 text-fg-tertiary text-[11px] font-mono border-b border-border bg-bg-elevated/40 shrink-0">
+                  {selectedBoard.sourceFilename}
+                </div>
+              )}
+              <pre className="font-mono text-[12px] leading-[1.5] p-3 text-fg-secondary whitespace-pre overflow-auto flex-1">
+                {selectedBoard.sourceCode}
+              </pre>
+            </div>
+          ) : (
+            <div className="p-4 text-fg-tertiary text-sm">Source not bundled for this lab.</div>
+          )
+        ),
+        yaml: (
+          <pre className="font-mono text-[12px] p-3 text-fg-secondary whitespace-pre-wrap">
+            {selectedBoard.systemYaml}
+          </pre>
+        ),
+      }}
+    />
+  );
+
   return (
-    <div className="playground">
+    <StudioShell
+      boardName={selectedBoard.name}
+      isEmpty={isEmpty}
+      onPickLab={handlePickLab}
+      onUploadFirmware={handleUploadFirmware}
+      onShare={handleShare}
+      toast={toast}
+      onDismissToast={() => setToast(null)}
+      paletteComponents={paletteComponents}
+      onPaletteDrag={handlePaletteDrag}
+      inspector={inspectorNode}
+      simDock={simDockNode}
+      renderDevDrawer={renderDevDrawer}
+      renderCommandPalette={renderCommandPalette}
+      onMountCommandRef={(refs) => { commandRefs.current = refs; }}
+    >
+    <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (
         <div className="playground-header">
@@ -1010,5 +1456,6 @@ export function App() {
         </div>
       )}
     </div>
+    </StudioShell>
   );
 }

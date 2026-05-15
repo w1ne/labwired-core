@@ -20,6 +20,23 @@ import systemNucleoH563zi from '../../../core/configs/systems/nucleo-h563zi-demo
 import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw';
 import systemStm32f401cdu6Blackpill from '../../../core/configs/systems/stm32f401cdu6-blackpill.yaml?raw';
 import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yaml?raw';
+import systemAdxl345SensorLab from '../../../core/examples/adxl345-sensor-lab/system.yaml?raw';
+import systemMpu6050SensorLab from '../../../core/examples/mpu6050-sensor-lab/system.yaml?raw';
+import systemBme280WeatherLab from '../../../core/examples/bme280-weather-lab/system.yaml?raw';
+import systemMax31855ThermocoupleLab from '../../../core/examples/max31855-thermocouple-lab/system.yaml?raw';
+import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
+import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
+import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
+import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
+import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
+import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
+import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
+import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
+import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src/main.rs?raw';
+import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
+import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
+import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
+import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -31,11 +48,119 @@ export interface BoardConfig {
   systemYaml: string;
   demoFirmwarePath?: string;
   mcuComponentType: string;
+  /** Raw firmware source code, surfaced in the Dev drawer's Source tab. */
+  sourceCode?: string;
+  /** Filename shown alongside the Source tab. */
+  sourceFilename?: string;
 }
 
 const BASE = import.meta.env.BASE_URL;
 
 export const BOARD_CONFIGS: BoardConfig[] = [
+  {
+    boardId: 'ntc-thermistor-lab',
+    chipId: 'stm32f103',
+    name: 'NTC Thermistor',
+    description: 'STM32F103 + NTC 3950 thermistor on ADC1 ch0. Steinhart-Hart Beta equation in Rust core. Slide the temperature and watch the ADC count change.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemNtcThermistorLab,
+    demoFirmwarePath: `${BASE}wasm/demo-ntc-thermistor-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceNtcThermistor,
+    sourceFilename: 'ntc-thermistor-lab/src/main.rs',
+  },
+  {
+    boardId: 'neo6m-gps-lab',
+    chipId: 'stm32f103',
+    name: 'NEO-6M GPS',
+    description: 'STM32F103 + NEO-6M GPS module over simulated UART. Live NMEA stream injection, all parsing in Rust core.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemNeo6mGpsLab,
+    demoFirmwarePath: `${BASE}wasm/demo-neo6m-gps-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceNeo6mGps,
+    sourceFilename: 'neo6m-gps-lab/src/main.rs',
+  },
+  {
+    boardId: 'ssd1306-hello-lab',
+    chipId: 'stm32f103',
+    name: 'SSD1306 OLED',
+    description: 'STM32F103 + SSD1306 128×64 OLED display over simulated I²C. Live pixel rendering.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemSsd1306HelloLab,
+    demoFirmwarePath: `${BASE}wasm/demo-ssd1306-hello-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceSsd1306,
+    sourceFilename: 'ssd1306-hello-lab/src/main.rs',
+  },
+  {
+    boardId: 'bme280-weather-lab',
+    chipId: 'stm32f103',
+    name: 'BME280 Weather',
+    description: 'STM32F103 + BME280 temperature/humidity/pressure sensor over simulated I²C.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemBme280WeatherLab,
+    demoFirmwarePath: `${BASE}wasm/demo-bme280-weather-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceBme280,
+    sourceFilename: 'bme280-weather-lab/src/main.rs',
+  },
+  {
+    boardId: 'ili9341-tft-lab',
+    chipId: 'stm32f103',
+    name: 'ILI9341 TFT Color',
+    description: 'STM32F103 + ILI9341 240×320 RGB565 TFT display over simulated SPI. Live color framebuffer rendering.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemIli9341TftLab,
+    demoFirmwarePath: `${BASE}wasm/demo-ili9341-tft-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceIli9341Tft,
+    sourceFilename: 'ili9341-tft-lab/src/main.rs',
+  },
+  {
+    boardId: 'max31855-thermocouple-lab',
+    chipId: 'stm32f103',
+    name: 'MAX31855 Thermocouple',
+    description: 'STM32F103 + MAX31855 K-type thermocouple interface over simulated SPI. Live temperature reading.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemMax31855ThermocoupleLab,
+    demoFirmwarePath: `${BASE}wasm/demo-max31855-thermocouple-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceMax31855,
+    sourceFilename: 'max31855-thermocouple-lab/src/main.rs',
+  },
+  {
+    boardId: 'mpu6050-sensor-lab',
+    chipId: 'stm32f103',
+    name: 'MPU6050 IMU',
+    description: 'STM32F103 + MPU6050 6-DoF IMU over simulated I²C. Reads accel + gyro.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemMpu6050SensorLab,
+    demoFirmwarePath: `${BASE}wasm/demo-mpu6050-sensor-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceMpu6050,
+    sourceFilename: 'mpu6050-sensor-lab/src/main.rs',
+  },
+  {
+    boardId: 'adxl345-sensor-lab',
+    chipId: 'stm32f103',
+    name: 'ADXL345 Sensor Lab',
+    description: 'Guided STM32F103 + ADXL345 accelerometer lab over simulated I2C.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemAdxl345SensorLab,
+    demoFirmwarePath: `${BASE}wasm/demo-adxl345-sensor-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceAdxl345,
+    sourceFilename: 'adxl345-sensor-lab/src/main.rs',
+  },
   {
     boardId: 'stm32f103-blinky',
     chipId: 'stm32f103',
@@ -46,6 +171,8 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     systemYaml: systemStm32f103Blinky,
     demoFirmwarePath: `${BASE}wasm/demo-blinky.bin`,
     mcuComponentType: 'stm32-dev',
+    sourceCode: sourceBlinky,
+    sourceFilename: 'demo-blinky/src/main.rs',
   },
   {
     boardId: 'nucleo-f401re',

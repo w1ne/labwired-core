@@ -57,4 +57,13 @@ describe('BOARD_CONFIGS', () => {
     expect(blackPill?.systemYaml).toContain('led_pc13');
     expect(blackPill?.systemYaml).toContain('active_high: false');
   });
+
+  it('bundles the ADXL345 sensor lab manifest and demo firmware path', () => {
+    const adxl345 = BOARD_CONFIGS.find((config) => config.boardId === 'adxl345-sensor-lab');
+
+    expect(adxl345).toBeDefined();
+    expect(adxl345?.systemYaml).toContain('type: "adxl345"');
+    expect(adxl345?.systemYaml).toContain('kind: "i2c_device"');
+    expect(adxl345?.demoFirmwarePath).toContain('demo-adxl345-sensor-lab.elf');
+  });
 });

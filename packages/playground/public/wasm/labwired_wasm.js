@@ -50,6 +50,18 @@ export class WasmSimulator {
         return v2;
     }
     /**
+     * Read back the current state of all NTC thermistor devices declared in `board_io`.
+     *
+     * Returns `[{ id, kind: "ntc-thermistor", temperature_c, divider_mv, adc_count }]`.
+     * All conversion math (Steinhart-Hart, mV→count) is performed here by calling into
+     * core types — no conversion logic in this WASM bridge body.
+     * @returns {any}
+     */
+    get_adc_device_states() {
+        const ret = wasm.wasmsimulator_get_adc_device_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Returns analog state for ADC and PWM board_io bindings.
      * @returns {any}
      */
@@ -90,6 +102,36 @@ export class WasmSimulator {
         } finally {
             wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
         }
+    }
+    /**
+     * Read back the current sensor data from each I2C sensor declared in `board_io`.
+     * Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`
+     * or `[{ id, kind: "bme280", temperature_c, humidity_pct, pressure_hpa }, ...]`.
+     * @returns {any}
+     */
+    get_i2c_sensor_states() {
+        const ret = wasm.wasmsimulator_get_i2c_sensor_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Return the ILI9341 RGB565 framebuffer for the device identified by `device_id`.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "ili9341"`.
+     * Returns a 153,600-byte `Uint8Array` (240×320 pixels × 2 bytes, row-major, big-endian RGB565).
+     * Returns a JS error if the device is not found.
+     * @param {string} device_id
+     * @returns {Uint8Array}
+     */
+    get_ili9341_framebuffer(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_ili9341_framebuffer(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
     }
     /**
      * Legacy LED state query (hardcoded GPIOB pin 5 for backward compat).
@@ -138,6 +180,44 @@ export class WasmSimulator {
      */
     get_register_names() {
         const ret = wasm.wasmsimulator_get_register_names(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Read back the current state of each SPI sensor declared in `board_io`.
+     * Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
+     * @returns {any}
+     */
+    get_spi_device_states() {
+        const ret = wasm.wasmsimulator_get_spi_device_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Return the SSD1306 GDDRAM framebuffer for the device identified by `device_id`.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "oled-ssd1306"`.
+     * Returns a 1024-byte `Uint8Array` (128 columns × 8 pages, page-major).
+     * Returns a JS error if the device is not found.
+     * @param {string} device_id
+     * @returns {Uint8Array}
+     */
+    get_ssd1306_framebuffer(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_ssd1306_framebuffer(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
+     * Read back the current state of all NEO-6M GPS devices declared in `board_io`.
+     * Returns `[{ id, kind: "neo6m-gps", lat, lon, has_fix }]`.
+     * @returns {any}
+     */
+    get_uart_device_states() {
+        const ret = wasm.wasmsimulator_get_uart_device_states(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -210,6 +290,103 @@ export class WasmSimulator {
         const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.wasmsimulator_set_board_io_input(this.__wbg_ptr, ptr0, len0, active);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Enable or disable the GPS fix on a NEO-6M module.
+     * @param {string} device_id
+     * @param {boolean} active
+     */
+    set_gps_fix(device_id, active) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_gps_fix(this.__wbg_ptr, ptr0, len0, active);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated position on a NEO-6M GPS module attached to a UART peripheral.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "neo6m-gps"`.
+     * @param {string} device_id
+     * @param {number} lat
+     * @param {number} lon
+     */
+    set_gps_position(device_id, lat, lon) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_gps_position(this.__wbg_ptr, ptr0, len0, lat, lon);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated X/Y/Z sample on an ADXL345 attached to an I2C peripheral.
+     * Looks up the binding in `board_io` by id; the binding must have
+     * `device_type: "adxl345"`.
+     * @param {string} device_id
+     * @param {number} x
+     * @param {number} y
+     * @param {number} z
+     */
+    set_i2c_sensor_sample(device_id, x, y, z) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_i2c_sensor_sample(this.__wbg_ptr, ptr0, len0, x, y, z);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated 6-DoF sample on an MPU6050 attached to an I2C peripheral.
+     * @param {string} device_id
+     * @param {number} ax
+     * @param {number} ay
+     * @param {number} az
+     * @param {number} gx
+     * @param {number} gy
+     * @param {number} gz
+     */
+    set_i2c_sensor_sample_6dof(device_id, ax, ay, az, gx, gy, gz) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_i2c_sensor_sample_6dof(this.__wbg_ptr, ptr0, len0, ax, ay, az, gx, gy, gz);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated thermocouple and internal temperatures on a MAX31855 device.
+     * @param {string} device_id
+     * @param {number} tc_c
+     * @param {number} internal_c
+     */
+    set_max31855_temperature(device_id, tc_c, internal_c) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_max31855_temperature(this.__wbg_ptr, ptr0, len0, tc_c, internal_c);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Set the simulated temperature on an NTC thermistor attached to an ADC channel.
+     *
+     * All Steinhart-Hart math lives in Rust core (NtcThermistor::divider_output_mv).
+     * This function only stores the new temperature, recomputes divider_mv → ADC count
+     * via core, and injects the result into the ADC peripheral's channel.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "ntc-thermistor"`.
+     * @param {string} device_id
+     * @param {number} temperature_c
+     */
+    set_ntc_temperature(device_id, temperature_c) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_ntc_temperature(this.__wbg_ptr, ptr0, len0, temperature_c);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
