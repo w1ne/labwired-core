@@ -41,7 +41,8 @@ export function AccountPanel({ open, onClose }: AccountPanelProps) {
   if (!open) return null;
 
   const email = user?.primaryEmailAddress?.emailAddress ?? null;
-  const upgradeUrl = buildStripeUpgradeUrl({ clerkUserId: user?.id, email });
+  const designerUpgradeUrl = buildStripeUpgradeUrl({ tier: 'designer', clerkUserId: user?.id, email });
+  const proUpgradeUrl = buildStripeUpgradeUrl({ tier: 'pro', clerkUserId: user?.id, email });
 
   const handleCopy = async () => {
     if (!account?.api_key) return;
@@ -125,17 +126,37 @@ export function AccountPanel({ open, onClose }: AccountPanelProps) {
           {status === 'ok' && account && !account.api_key && (
             <div>
               <p className="text-fg-secondary text-sm mb-4">
-                You're on the Free tier. Upgrade to Pro to get an API key for CI and agent workflows —
-                100M cycles/month, private projects, VCD trace retention.
+                You're on the Free tier. Pick a paid plan to unlock workspace features and an API key for
+                CI and agent workflows.
               </p>
-              <a
-                href={upgradeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9 px-4 items-center rounded-pill bg-accent text-bg-base text-sm font-semibold hover:bg-accent-hover transition-colors"
-              >
-                Upgrade to Pro — $19/mo
-              </a>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <a
+                  href={designerUpgradeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg border border-border bg-white/[0.04] hover:bg-white/[0.07] transition-colors p-4"
+                >
+                  <div className="text-fg-primary font-semibold text-[14px] mb-1">
+                    Upgrade to Designer — $5/mo
+                  </div>
+                  <div className="text-fg-tertiary text-[12px] leading-[1.5]">
+                    Private projects (coming soon) · 10M cycles / month · save &amp; fork in browser
+                  </div>
+                </a>
+                <a
+                  href={proUpgradeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg border border-accent/40 bg-accent/10 hover:bg-accent/15 transition-colors p-4"
+                >
+                  <div className="text-fg-primary font-semibold text-[14px] mb-1">
+                    Upgrade to Pro — $19/mo
+                  </div>
+                  <div className="text-fg-tertiary text-[12px] leading-[1.5]">
+                    100M cycles / month · priority email support · VCD trace retention 30 days
+                  </div>
+                </a>
+              </div>
             </div>
           )}
 
@@ -218,6 +239,34 @@ export function AccountPanel({ open, onClose }: AccountPanelProps) {
             </div>
           )}
         </section>
+
+        {/* Designer → Pro upsell. Only shown to active Designer customers. */}
+        {status === 'ok' && account?.plan === 'designer' && (
+          <section
+            aria-label="Upgrade to Pro"
+            className="rounded-xl border border-accent/30 bg-accent/[0.06] p-5"
+          >
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <h3 className="text-fg-primary text-[15px] font-semibold mb-1">
+                  Need more cycles?
+                </h3>
+                <p className="text-fg-secondary text-[13px] leading-[1.5] max-w-[52ch]">
+                  Pro lifts your monthly quota from 10M to 100M cycles, adds priority email support and
+                  30-day VCD trace retention. Same API key — only the limits change.
+                </p>
+              </div>
+              <a
+                href={proUpgradeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 px-4 items-center rounded-pill bg-accent text-bg-base text-sm font-semibold hover:bg-accent-hover transition-colors shrink-0"
+              >
+                Upgrade to Pro — $19/mo
+              </a>
+            </div>
+          </section>
+        )}
 
         <UserProfile routing="hash" />
       </div>

@@ -46,6 +46,12 @@ export function CiLanding() {
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
   const { isSignedIn, user } = useUser();
   const stripeProUrl = buildStripeUpgradeUrl({
+    tier: 'pro',
+    clerkUserId: isSignedIn ? user?.id : undefined,
+    email: isSignedIn ? user?.primaryEmailAddress?.emailAddress : undefined,
+  });
+  const stripeDesignerUrl = buildStripeUpgradeUrl({
+    tier: 'designer',
     clerkUserId: isSignedIn ? user?.id : undefined,
     email: isSignedIn ? user?.primaryEmailAddress?.emailAddress : undefined,
   });
@@ -306,14 +312,15 @@ export function CiLanding() {
             Pricing
           </div>
           <h2 className="text-[32px] font-bold tracking-tight mb-3 max-w-[22ch]">
-            One paid tier. Done.
+            Pricing that scales with you.
           </h2>
           <p className="text-fg-secondary text-[16px] mb-12 max-w-[60ch]">
-            Free for public repos. <span className="text-fg-primary font-semibold">Pro at $19/seat/month</span> for everything else.
-            Enterprise contracts for SAML, on-prem, and compliance evidence.
+            Free for public repos. <span className="text-fg-primary font-semibold">Designer at $5/seat/month</span> for solo
+            tinkerers who want privacy. <span className="text-fg-primary font-semibold">Pro at $19/seat/month</span> for
+            teams shipping firmware in CI. Enterprise contracts for SAML, on-prem, and compliance evidence.
           </p>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
                 name: 'Open Source',
@@ -329,6 +336,24 @@ export function CiLanding() {
                 cta: 'Use today',
                 ctaHref: GITHUB_REPO,
                 ctaExternal: true,
+              },
+              {
+                name: 'Designer',
+                price: '$5',
+                priceNote: 'per seat · per month · cancel anytime',
+                features: [
+                  'Private projects (coming soon)',
+                  '10M cycles / month included',
+                  'Save / share / fork in browser',
+                  'Community Discord access',
+                  'All future Designer updates',
+                ],
+                cta: 'Start with Designer →',
+                ctaHref: stripeDesignerUrl,
+                ctaExternal: true,
+                hint: !isSignedIn
+                  ? 'Sign in first so your workspace links to your account after checkout.'
+                  : undefined,
               },
               {
                 name: 'Pro',

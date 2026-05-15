@@ -2,7 +2,7 @@
 
 export type WorkspaceStatus = 'active' | 'canceled' | 'payment_failed';
 export type KeyStatus = 'active' | 'canceled' | 'payment_failed';
-export type Plan = 'free' | 'pro' | 'enterprise';
+export type Plan = 'free' | 'designer' | 'pro' | 'enterprise';
 
 /** Stored in KV_KEYS under key = the raw API key string (e.g. "lwk_live_...") */
 export interface KeyRecord {
@@ -48,6 +48,8 @@ export interface Env {
 
   // Env vars (from wrangler.toml [vars])
   PRO_CYCLES_QUOTA: string;
+  /** Monthly cycle quota for the Designer ($5/mo) tier. */
+  DESIGNER_CYCLES_QUOTA: string;
   ENVIRONMENT: string;
   /** Clerk JWT verification key (PEM). Public; safe to commit. */
   CLERK_JWT_KEY: string;

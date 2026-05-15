@@ -45,6 +45,8 @@ id = "f042ec21b3cf44898cd6adf632ce8c9b"
 [vars]
 LABWIRED_API_BASE = "https://api.labwired.com"
 PRO_CYCLES_QUOTA = "100000000"
+# Designer ($5/seat/mo) — 10M cycles/mo, 10× less than Pro.
+DESIGNER_CYCLES_QUOTA = "10000000"
 ENVIRONMENT = "production"
 # Public Clerk JWT verification key (PEM). Paste from Clerk dashboard → API Keys.
 CLERK_JWT_KEY = ""

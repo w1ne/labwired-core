@@ -23,7 +23,7 @@ import {
   deleteKeyRecord,
   maybeResetMtdCycles,
 } from './keys.js';
-import { verifyStripeWebhook } from './stripe.js';
+import { verifyStripeWebhook, getStripeClient } from './stripe.js';
 import { verifyClerkRequest } from './clerk.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
@@ -130,6 +130,57 @@ async function handleStripeWebhook(request: Request, env: Env): Promise<Response
   });
 }
 
+// ── Stripe price IDs ───────────────────────────────────────────────────────
+// These map a Stripe price to a LabWired plan. Update when new SKUs are added.
+//
+// To add a new tier:
+//   1. Create the product + recurring price in Stripe Dashboard.
+//   2. Copy the price_* ID into the table below.
+//   3. Add the plan key to the `Plan` union in ./types.ts.
+export const STRIPE_PRICE_PRO = 'price_1TXODOC1n7clsM1CaRfa5EV7';
+// TODO(billing): replace with the real Designer price_* after creating the
+// "LabWired Designer" $5/seat/mo product in Stripe Dashboard.
+export const STRIPE_PRICE_DESIGNER = 'price_REPLACE_DESIGNER';
+
+type PaidPlan = 'designer' | 'pro';
+
+/**
+ * Resolve the LabWired plan a checkout session paid for from its line items.
+ * Falls back to fetching the session via the Stripe API when line items are
+ * not expanded in the webhook payload (the default for `checkout.session.completed`).
+ *
+ * Default fallback is 'pro' so that an unrecognized price never accidentally
+ * downgrades a paying customer to a smaller quota.
+ */
+async function resolvePaidPlanFromSession(
+  session: Stripe.Checkout.Session,
+  env: Env,
+): Promise<PaidPlan> {
+  let priceId: string | null = null;
+
+  const inlineItem = session.line_items?.data?.[0];
+  if (inlineItem?.price?.id) {
+    priceId = inlineItem.price.id;
+  } else if (session.id) {
+    try {
+      const stripe = getStripeClient(env);
+      const items = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+      priceId = items.data[0]?.price?.id ?? null;
+    } catch (err) {
+      console.error('listLineItems failed; defaulting to pro plan', err);
+    }
+  }
+
+  if (priceId === STRIPE_PRICE_DESIGNER) return 'designer';
+  if (priceId === STRIPE_PRICE_PRO) return 'pro';
+  // Unknown price ID — default to 'pro' to avoid accidentally giving paying
+  // customers a smaller quota. Log so we notice.
+  console.warn(
+    `checkout.session.completed: unrecognized price_id "${priceId}" on session ${session.id}; defaulting to pro`,
+  );
+  return 'pro';
+}
+
 async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
   env: Env,
@@ -154,13 +205,17 @@ async function handleCheckoutCompleted(
   const workspaceId = generateWorkspaceId();
   const apiKey = generateApiKey();
   const proQuota = parseInt(env.PRO_CYCLES_QUOTA || '100000000', 10);
+  const designerQuota = parseInt(env.DESIGNER_CYCLES_QUOTA || '10000000', 10);
+
+  const plan = await resolvePaidPlanFromSession(session, env);
+  const cyclesQuota = plan === 'designer' ? designerQuota : proQuota;
 
   const workspace: WorkspaceRecord = {
     stripe_customer_id: stripeCustomerId,
     stripe_subscription_id: stripeSubId,
     customer_email: customerEmail,
-    plan: 'pro',
-    cycles_quota_per_month: proQuota,
+    plan,
+    cycles_quota_per_month: cyclesQuota,
     cycles_used_mtd: 0,
     period_start_date: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
     status: 'active',
@@ -179,7 +234,7 @@ async function handleCheckoutCompleted(
   }
 
   console.log(
-    `Workspace created: ${workspaceId} for ${customerEmail}` +
+    `Workspace created: ${workspaceId} for ${customerEmail} (plan=${plan}, quota=${cyclesQuota})` +
       (clerkUserId ? ` (clerk_user_id=${clerkUserId})` : ' (no clerk_user_id; legacy path)'),
   );
 }

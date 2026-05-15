@@ -10,7 +10,7 @@ const API_BASE =
 export interface ClerkAccount {
   user_id: string;
   email: string | null;
-  plan: 'free' | 'pro' | 'enterprise';
+  plan: 'free' | 'designer' | 'pro' | 'enterprise';
   workspace_id?: string;
   api_key?: string;
   cycles_used_mtd?: number;
