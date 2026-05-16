@@ -41,6 +41,7 @@ import { motorDriverL293dComponent } from './motor-driver-l293d';
 // Board MCUs
 import { arduinoUnoComponent } from './boards/arduino-uno';
 import { esp32Component } from './boards/esp32';
+import { esp32C3SuperMiniComponent } from './boards/esp32-c3-supermini';
 import { esp32S3ZeroComponent } from './boards/esp32-s3-zero';
 import { rpiPicoComponent } from './boards/rpi-pico';
 import { nrf52840DkComponent } from './boards/nrf52840-dk';
@@ -53,6 +54,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [arduinoUnoComponent.type, arduinoUnoComponent],
   [stm32DevComponent.type, stm32DevComponent],
   [esp32Component.type, esp32Component],
+  [esp32C3SuperMiniComponent.type, esp32C3SuperMiniComponent],
   [esp32S3ZeroComponent.type, esp32S3ZeroComponent],
   [rpiPicoComponent.type, rpiPicoComponent],
   [nrf52840DkComponent.type, nrf52840DkComponent],

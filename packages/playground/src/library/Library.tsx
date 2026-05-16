@@ -71,12 +71,12 @@ const SUPPORTED_BOARDS: SupportedBoard[] = [
   },
   {
     chip: 'ESP32-C3',
-    family: 'ESP32-C3 DevKit',
+    family: 'ESP32-C3 Super Mini',
     arch: 'RISC-V',
     vendor: 'Espressif',
     status: 'bring-your-own',
-    notes: 'RISC-V SoC · status LED on GPIO8',
-    playgroundBoardId: 'esp32c3-devkit',
+    notes: 'Compact RISC-V board · USB-C · built-in LED on GPIO8',
+    playgroundBoardId: 'esp32c3-supermini',
   },
   {
     chip: 'ESP32-S3',

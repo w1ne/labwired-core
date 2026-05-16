@@ -206,14 +206,14 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
   },
   {
-    boardId: 'esp32c3-devkit',
+    boardId: 'esp32c3-supermini',
     chipId: 'esp32c3',
-    name: 'ESP32-C3 DevKit',
-    description: 'RISC-V based ESP32-C3 with WiFi/BLE. Status LED on GPIO8.',
+    name: 'ESP32-C3 Super Mini',
+    description: 'Compact RISC-V ESP32-C3 Super Mini board with USB-C. Built-in user LED on GPIO8 (active-low).',
     arch: 'RISC-V',
     chipYaml: chipEsp32c3,
     systemYaml: systemEsp32c3Devkit,
-    mcuComponentType: 'esp32',
+    mcuComponentType: 'esp32-c3-supermini',
   },
   {
     boardId: 'esp32s3-zero',
