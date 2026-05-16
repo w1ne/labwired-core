@@ -54,6 +54,12 @@ export interface BoardConfig {
   sourceCode?: string;
   /** Filename shown alongside the Source tab. */
   sourceFilename?: string;
+  /**
+   * Project shape — drives BoardPicker grouping. `bare` = MCU only (you wire
+   * everything). `lab` = full pre-wired project with peripheral on canvas and
+   * demo firmware ready to Run.
+   */
+  kind?: 'bare' | 'lab';
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -71,6 +77,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceNtcThermistor,
     sourceFilename: 'ntc-thermistor-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'neo6m-gps-lab',
@@ -84,6 +91,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceNeo6mGps,
     sourceFilename: 'neo6m-gps-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'ssd1306-hello-lab',
@@ -97,6 +105,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceSsd1306,
     sourceFilename: 'ssd1306-hello-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'bme280-weather-lab',
@@ -110,6 +119,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceBme280,
     sourceFilename: 'bme280-weather-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'ili9341-tft-lab',
@@ -123,6 +133,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceIli9341Tft,
     sourceFilename: 'ili9341-tft-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'epaper-tricolor-lab',
@@ -136,6 +147,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceEpaperTricolor,
     sourceFilename: 'epaper-tricolor-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'max31855-thermocouple-lab',
@@ -149,6 +161,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceMax31855,
     sourceFilename: 'max31855-thermocouple-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'mpu6050-sensor-lab',
@@ -162,6 +175,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceMpu6050,
     sourceFilename: 'mpu6050-sensor-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'adxl345-sensor-lab',
@@ -175,6 +189,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceAdxl345,
     sourceFilename: 'adxl345-sensor-lab/src/main.rs',
+    kind: 'lab',
   },
   {
     boardId: 'stm32f103-blinky',

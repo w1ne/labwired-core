@@ -637,6 +637,24 @@ html, body, #root {
   flex: 1;
 }
 
+.board-picker-section + .board-picker-section {
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.board-picker-section-header {
+  position: sticky;
+  top: 0;
+  background: var(--lw-bg-elev, #181a1f);
+  color: var(--lw-gray, #777);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 12px 4px;
+  z-index: 1;
+}
+
 .board-picker-item {
   display: flex;
   align-items: center;

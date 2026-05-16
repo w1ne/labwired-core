@@ -138,6 +138,150 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
+  // -------- I²C labs (oled, sensors): all share PB6 SCL / PB7 SDA on I2C1 --------
+
+  if (config.boardId === 'ssd1306-hello-lab') {
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'oled', type: 'oled-ssd1306', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'oled', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'oled', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'oled', pin: 'SCL' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'oled', pin: 'SDA' }, color: '#B07BFF' },
+      ],
+    };
+  }
+
+  if (config.boardId === 'mpu6050-sensor-lab') {
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'mpu6050', type: 'mpu6050', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'mpu6050', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'mpu6050', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'mpu6050', pin: 'SCL' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'mpu6050', pin: 'SDA' }, color: '#B07BFF' },
+      ],
+    };
+  }
+
+  if (config.boardId === 'adxl345-sensor-lab') {
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'adxl345', type: 'adxl345', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'adxl345', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'adxl345', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'adxl345', pin: 'SCL' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'adxl345', pin: 'SDA' }, color: '#B07BFF' },
+      ],
+    };
+  }
+
+  if (config.boardId === 'bme280-weather-lab') {
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'bme280', type: 'bme280', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'bme280', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'bme280', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'bme280', pin: 'SCL' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'bme280', pin: 'SDA' }, color: '#B07BFF' },
+      ],
+    };
+  }
+
+  // -------- SPI labs --------
+
+  if (config.boardId === 'ili9341-tft-lab') {
+    // ILI9341 sim ignores D/C (state machine over command boundaries), but
+    // real hardware needs it — wire to PB0 so the same diagram is honest for
+    // both. RESET wired to PB1; LED backlight tied to VCC.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'tft', type: 'ili9341', x: 540, y: 60, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'tft', pin: 'VCC'   }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'tft', pin: 'GND'   }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA4' }, to: { part: 'tft', pin: 'CS'    }, color: '#3DD68C' },
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'tft', pin: 'SCK'   }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA7' }, to: { part: 'tft', pin: 'MOSI'  }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PB0' }, to: { part: 'tft', pin: 'DC'    }, color: '#5B9DFF' },
+        { from: { part: 'mcu', pin: 'PB1' }, to: { part: 'tft', pin: 'RESET' }, color: '#F5B642' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'tft', pin: 'LED'   }, color: '#FFE680' },
+      ],
+    };
+  }
+
+  if (config.boardId === 'max31855-thermocouple-lab') {
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'tc1', type: 'max31855', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'tc1', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'tc1', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA4' }, to: { part: 'tc1', pin: 'CS'  }, color: '#3DD68C' },
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'tc1', pin: 'SCK' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA6' }, to: { part: 'tc1', pin: 'DO'  }, color: '#B07BFF' },
+      ],
+    };
+  }
+
+  // -------- UART --------
+
+  if (config.boardId === 'neo6m-gps-lab') {
+    // STM32 TX → GPS RX, GPS TX → STM32 RX (crossover).
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'gps', type: 'neo6m-gps', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC'  }, to: { part: 'gps', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND'  }, to: { part: 'gps', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA9'  }, to: { part: 'gps', pin: 'RX'  }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PA10' }, to: { part: 'gps', pin: 'TX'  }, color: '#5BD8FF' },
+      ],
+    };
+  }
+
+  // -------- Analog (ADC) --------
+
+  if (config.boardId === 'ntc-thermistor-lab') {
+    // NTC voltage divider sits between VCC and GND; tap into ADC1 ch0 on PA0.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'ntc', type: 'ntc-thermistor', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PA0' }, to: { part: 'ntc', pin: 'A' }, color: '#F5B642' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'ntc', pin: 'B' }, color: '#888888' },
+      ],
+    };
+  }
+
   if (config.boardId === 'epaper-tricolor-lab') {
     // STM32F103 driving the Waveshare 2.9" SSD1680 tri-color panel.
     // Pin map matches the firmware (examples/epaper-tricolor-lab/src/main.rs)

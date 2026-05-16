@@ -71,6 +71,12 @@ export function BoardPicker({ catalog, selectedBoardId, onSelect }: BoardPickerP
 
   filtered.sort((a, b) => a.name.localeCompare(b.name));
 
+  // Split into Labs (pre-wired, ready to Run) and Bare boards (MCU only —
+  // you wire it). Renders as two sections with sticky headers so visitors
+  // can see at a glance which entries are demo-ready.
+  const labs = filtered.filter((b) => b.config.kind === 'lab');
+  const bares = filtered.filter((b) => b.config.kind !== 'lab');
+
   const selected = BOARD_CONFIG_MAP.get(selectedBoardId);
 
   return (
@@ -91,42 +97,55 @@ export function BoardPicker({ catalog, selectedBoardId, onSelect }: BoardPickerP
             autoFocus
           />
           <div className="board-picker-list">
-            {filtered.map((item) => (
-              <button
-                key={item.id}
-                className={`board-picker-item ${item.id === selectedBoardId ? 'selected' : ''}`}
-                onClick={() => {
-                  onSelect(item.config);
-                  setOpen(false);
-                  setFilter('');
-                }}
-              >
-                <div className="board-picker-img">
-                  {item.imageUrl ? (
-                    <img
-                      src={item.imageUrl}
-                      alt={item.name}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  ) : (
-                    <div className="board-picker-chip-icon" />
-                  )}
+            {[
+              { label: 'Labs · pre-wired projects', items: labs },
+              { label: 'Bare boards · MCU only', items: bares },
+            ].map((section) =>
+              section.items.length === 0 ? null : (
+                <div key={section.label} className="board-picker-section">
+                  <div className="board-picker-section-header">{section.label}</div>
+                  {section.items.map((item) => (
+                    <button
+                      key={item.id}
+                      className={`board-picker-item ${item.id === selectedBoardId ? 'selected' : ''}`}
+                      onClick={() => {
+                        onSelect(item.config);
+                        setOpen(false);
+                        setFilter('');
+                      }}
+                    >
+                      <div className="board-picker-img">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="board-picker-chip-icon" />
+                        )}
+                      </div>
+                      <div className="board-picker-info">
+                        <div className="board-picker-item-name">
+                          {item.name}
+                          {item.config.kind === 'lab' && (
+                            <span className="badge badge-demo">Lab</span>
+                          )}
+                          {item.config.kind !== 'lab' && item.hasDemoFw && (
+                            <span className="badge badge-demo">Demo</span>
+                          )}
+                        </div>
+                        <div className="board-picker-item-meta">
+                          {item.arch && <span>{item.arch}</span>}
+                          {item.registers > 0 && <span>{item.registers} regs</span>}
+                          {item.verified && <span className="verified-badge">Verified</span>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-                <div className="board-picker-info">
-                  <div className="board-picker-item-name">
-                    {item.name}
-                    {item.hasDemoFw && (
-                      <span className="badge badge-demo">Demo</span>
-                    )}
-                  </div>
-                  <div className="board-picker-item-meta">
-                    {item.arch && <span>{item.arch}</span>}
-                    {item.registers > 0 && <span>{item.registers} regs</span>}
-                    {item.verified && <span className="verified-badge">Verified</span>}
-                  </div>
-                </div>
-              </button>
-            ))}
+              ),
+            )}
             {filtered.length === 0 && (
               <div className="board-picker-empty">No boards match "{filter}"</div>
             )}
