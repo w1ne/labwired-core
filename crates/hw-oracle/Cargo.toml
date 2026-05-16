@@ -25,3 +25,5 @@ default = []
 hw-oracle = ["dep:serialport"]
 # Gates RISC-V/ESP32-C3 _hw and _diff runners.  Sim-side is always built.
 hw-oracle-c3 = []
+# Gates ARM Thumb/STM32 _hw and _diff runners.  Sim-side is always built.
+hw-oracle-stm32 = []
