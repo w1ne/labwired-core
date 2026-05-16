@@ -746,7 +746,20 @@ fn capture_hw_state(case: &ThumbOracleCase) -> ThumbOracleState {
         "run_hw: setting breakpoint failed: {bp_resp}"
     );
 
-    // 6. Apply setup state.
+    // 6. Apply setup state.  First zero r0..r12 so the HW baseline
+    // matches the sim baseline — silicon (or OpenOCD's reset path)
+    // leaves arbitrary values in unused registers, which would surface
+    // as spurious mismatches in `_diff` tests that only write a subset
+    // of registers explicitly.  LR is set to the architectural
+    // post-reset convention (0xFFFFFFFF, EXC_RETURN sentinel) to match
+    // what `capture_sim_state` does on the sim side.
+    for i in 0..13u8 {
+        oc.write_register(&format!("r{i}"), 0)
+            .unwrap_or_else(|e| panic!("run_hw: zero r{i} failed: {e:?}"));
+    }
+    oc.write_register("lr", 0xFFFF_FFFF)
+        .expect("run_hw: write lr failed");
+
     let mut init_state = ThumbOracleState::default();
     (case.setup)(&mut init_state);
     // Default SP — overridden if setup wrote "sp".
