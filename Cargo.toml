@@ -17,6 +17,7 @@ members = [
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
     "crates/firmware-f401-demo",
+    "crates/firmware-f401cdu6-blackpill-demo",
     "crates/firmware-f407-demo",
     "crates/firmware-h563-demo",
     "crates/firmware-h563-fullchip-demo",
