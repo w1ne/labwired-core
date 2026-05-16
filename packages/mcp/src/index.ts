@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { listChips, runSimulation, validateSystem } from './cli.js';
 
 const SERVER_NAME = '@labwired/mcp';
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.1.1';
 
 const CatalogInput = z.object({
   filter: z

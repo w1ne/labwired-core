@@ -9,6 +9,13 @@ const execFileP = promisify(execFile);
 const CLI_BIN = process.env.LABWIRED_CLI ?? 'labwired';
 const EXEC_TIMEOUT_MS = 120_000;
 
+const CLI_NOT_INSTALLED_MSG =
+  `The 'labwired' CLI was not found on PATH. ` +
+  `@labwired/mcp shells out to the LabWired simulator binary; ` +
+  `install it with:\n` +
+  `  curl -fsSL https://labwired.com/install.sh | sh\n` +
+  `Or set the LABWIRED_CLI env var to the absolute path of an existing binary.`;
+
 export interface CliResult {
   stdout: string;
   stderr: string;
@@ -23,7 +30,10 @@ export async function runCli(args: string[]): Promise<CliResult> {
     });
     return { stdout, stderr, exitCode: 0 };
   } catch (err: unknown) {
-    const e = err as { stdout?: string; stderr?: string; code?: number; message?: string };
+    const e = err as { stdout?: string; stderr?: string; code?: number | string; message?: string };
+    if (e.code === 'ENOENT') {
+      return { stdout: '', stderr: CLI_NOT_INSTALLED_MSG, exitCode: 127 };
+    }
     return {
       stdout: e.stdout ?? '',
       stderr: e.stderr ?? e.message ?? '',
@@ -110,7 +120,8 @@ export async function listChips(filter?: string): Promise<unknown> {
   if (filter) args.push('--filter', filter);
   const { stdout, stderr, exitCode } = await runCli(args);
   if (exitCode !== 0) {
-    throw new Error(`labwired asset list-chips failed (${exitCode}): ${stderr}`);
+    if (exitCode === 127) throw new Error(stderr);
+    throw new Error(`labwired asset list-chips failed (exit ${exitCode}): ${stderr || '(no output)'}`);
   }
   try {
     return JSON.parse(stdout);
