@@ -642,6 +642,180 @@ html, body, #root {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* ── My Projects modal ──────────────────────────────────────────────────── */
+
+.projects-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.projects-modal {
+  background: var(--lw-bg-elev, #1a1c22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  width: min(720px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.projects-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.projects-modal-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.projects-modal-close {
+  background: none;
+  border: none;
+  color: var(--lw-gray, #888);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+
+.projects-modal-close:hover {
+  color: #fff;
+}
+
+.projects-modal-save {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.projects-modal-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ddd;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.projects-modal-input::placeholder {
+  color: var(--lw-gray, #666);
+}
+
+.projects-modal-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ddd;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.projects-modal-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.projects-modal-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.projects-modal-btn.primary {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.projects-modal-btn.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.projects-modal-btn.danger {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.projects-modal-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.projects-modal-empty,
+.projects-modal-error {
+  padding: 24px 20px;
+  color: var(--lw-gray, #999);
+  font-size: 12px;
+  text-align: center;
+}
+
+.projects-modal-error {
+  color: #f87171;
+}
+
+.projects-modal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.projects-modal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.projects-modal-item.active {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.projects-modal-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.projects-modal-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #eee;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-modal-item-meta {
+  font-size: 11px;
+  color: var(--lw-gray, #777);
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.projects-modal-item-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: 12px;
+}
+
 .board-picker-section-header {
   position: sticky;
   top: 0;

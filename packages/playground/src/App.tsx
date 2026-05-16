@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect, type ReactNode } from 'react';
+import { ProjectsModal } from './studio/ProjectsModal';
+import type { ProjectRecord } from './studio/useProjects';
 import { CommandPalette } from './studio/CommandPalette';
 import { useCommandPaletteItems } from './studio/useCommandPaletteItems';
 import {
@@ -443,6 +445,11 @@ export function App() {
   const [showCode, setShowCode] = useState(true);
   const [showBottomPanel, setShowBottomPanel] = useState(true);
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+  const [projectsModalOpen, setProjectsModalOpen] = useState(false);
+  // Tracks the currently-loaded cloud project (null if the canvas is from
+  // a board starter or unsaved). When set, "Save" overwrites this project.
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
   const [showRightSidebar, setShowRightSidebar] = useState(true);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
@@ -1401,8 +1408,20 @@ export function App() {
             <BoardPicker
               catalog={catalog}
               selectedBoardId={selectedBoard.boardId}
-              onSelect={handleBoardSelect}
+              onSelect={(cfg) => {
+                // Switching board breaks the link to the loaded project.
+                setActiveProjectId(null);
+                setActiveProjectName(null);
+                handleBoardSelect(cfg);
+              }}
             />
+            <button
+              className="project-selector"
+              onClick={() => setProjectsModalOpen(true)}
+              title="Open My Projects"
+            >
+              {activeProjectName ? `📂 ${activeProjectName}` : '📂 My Projects'}
+            </button>
             <select
               className="project-selector"
               value={currentExample?.name ?? ''}
@@ -1666,6 +1685,41 @@ export function App() {
         </div>
       )}
     </div>
+    <ProjectsModal
+      open={projectsModalOpen}
+      onClose={() => setProjectsModalOpen(false)}
+      currentBoardId={selectedBoard.boardId}
+      currentDiagramJson={JSON.stringify(editor.state.diagram)}
+      currentSourceCode={source}
+      activeProjectId={activeProjectId}
+      activeProjectName={activeProjectName}
+      onCreated={(p: ProjectRecord) => {
+        setActiveProjectId(p.id);
+        setActiveProjectName(p.name);
+      }}
+      onSaved={(p: ProjectRecord) => {
+        setActiveProjectId(p.id);
+        setActiveProjectName(p.name);
+      }}
+      onLoad={(p: ProjectRecord) => {
+        // Find the matching board config — projects are tied to a board for
+        // chip/system context, so we have to swap board too if the loaded
+        // project is for a different one.
+        const cfg = BOARD_CONFIGS.find((b: BoardConfig) => b.boardId === p.board_id);
+        if (cfg && cfg.boardId !== selectedBoard.boardId) {
+          handleBoardSelect(cfg);
+        }
+        try {
+          const parsed = JSON.parse(p.diagram_json);
+          editor.loadDiagram(parsed);
+        } catch {
+          /* malformed diagram in stored project — keep current canvas */
+        }
+        if (p.source_code !== null) setSource(p.source_code);
+        setActiveProjectId(p.id);
+        setActiveProjectName(p.name);
+      }}
+    />
     </StudioShell>
   );
 }
