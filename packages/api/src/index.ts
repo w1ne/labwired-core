@@ -25,11 +25,18 @@ import {
 } from './keys.js';
 import { verifyStripeWebhook, getStripeClient } from './stripe.js';
 import { verifyClerkRequest } from './clerk.js';
+import {
+  handleListProjects,
+  handleCreateProject,
+  handleGetProject,
+  handleUpdateProject,
+  handleDeleteProject,
+} from './projects.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
@@ -75,6 +82,20 @@ export default {
       if (method === 'POST' && pathname === '/v1/keys/rotate') {
         return handleRotateKey(request, env);
       }
+
+      // ── /v1/projects[/(:id)] — user-owned project storage ────────────────
+      if (pathname === '/v1/projects') {
+        if (method === 'GET') return handleListProjects(request, env);
+        if (method === 'POST') return handleCreateProject(request, env);
+      }
+      const projectMatch = pathname.match(/^\/v1\/projects\/([A-Za-z0-9_-]+)$/);
+      if (projectMatch) {
+        const projectId = projectMatch[1];
+        if (method === 'GET') return handleGetProject(request, env, projectId);
+        if (method === 'PUT') return handleUpdateProject(request, env, projectId);
+        if (method === 'DELETE') return handleDeleteProject(request, env, projectId);
+      }
+
       return errorResponse('Not found', 404);
     } catch (err) {
       console.error('Unhandled error:', err);

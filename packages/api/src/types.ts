@@ -40,6 +40,8 @@ export interface Env {
   KV_STRIPE_SUBS: KVNamespace;
   /** clerk_user_id → workspace_id reverse index. */
   KV_CLERK_TO_WORKSPACE: KVNamespace;
+  /** User-owned project storage. Keyed `project:<clerkUserId>:<projectId>`. */
+  KV_PROJECTS: KVNamespace;
 
   // Secrets (set via `wrangler secret put`)
   STRIPE_SECRET_KEY: string;

@@ -29,6 +29,11 @@ id = "1a683745399d43ef93c97c6568d191a4"
 binding = "KV_CLERK_TO_WORKSPACE"
 id = "f042ec21b3cf44898cd6adf632ce8c9b"
 
+# User-owned project storage. Each entry keyed `project:<clerkUserId>:<projectId>`.
+[[kv_namespaces]]
+binding = "KV_PROJECTS"
+id = "PLACEHOLDER_KV_PROJECTS_ID"
+
 # ── Secrets (set via `wrangler secret put <NAME>`) ───────────────────────────
 # Do NOT put real values here. This block just declares the expected names.
 # See .dev.vars.example for local development stubs.
