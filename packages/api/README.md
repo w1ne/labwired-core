@@ -110,7 +110,9 @@ wrangler deploy
 curl -X POST https://api.labwired.com/v1/keys/validate \
   -H "Content-Type: application/json" \
   -d '{"api_key":"lwk_live_TESTINVALID"}'
-# Expected: {"error":"API key not found"}
+# Expected: {"error":"Invalid API key format"}
+# (lwk_live_TESTINVALID is too short to pass the format gate; a well-formed but
+# unknown key like lwk_live_<32 random chars> returns {"error":"API key not found"}.)
 
 # Should return 404
 curl https://api.labwired.com/v2/whatever

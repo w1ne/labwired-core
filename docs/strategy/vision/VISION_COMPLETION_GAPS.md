@@ -105,7 +105,7 @@ The vision is complete when all conditions below are true:
 4. Hosted CI:
 - Cloudflare Worker accepts paid API keys, enforces monthly cycle quota, and meters runs.
 - Stripe checkout provisions a workspace + API key end-to-end.
-- Onboarding email delivers the key.
+- The new key is rendered in the customer's private cabinet on checkout return (Wokwi pattern) — no transactional email step.
 
 5. Human Observer:
 - One-click IDE lifecycle flow is stable.
@@ -116,7 +116,7 @@ The vision is complete when all conditions below are true:
 1. Ship determinism proof + compatibility matrix as release gates.
 2. Close zero-touch Agentic Loop for Tier-1 targets.
 3. Implement metering backend + tenancy primitives.
-4. Deploy + harden the Cloudflare Worker CI control plane (`packages/api`) — Stripe webhook, key gating, run metering, Resend onboarding email.
+4. Deploy + harden the Cloudflare Worker CI control plane (`packages/api`) — Stripe webhook, key gating, run metering, cabinet-render key handoff on checkout return.
 
 ---
 

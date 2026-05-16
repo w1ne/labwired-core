@@ -41,8 +41,10 @@ agent loop.
 
 The MCP server is shipped — `npx -y @labwired/mcp` exposes three tools
 (`labwired_catalog`, `labwired_simulate`, `labwired_validate_system`) over
-stdio. Concrete STM32H563 GPDMA walkthrough:
-`docs/strategy/HIL_DISPLACEMENT_SHOWCASE.md` in `github.com/w1ne/labwired`.
+stdio. The concrete proof point is a GPDMA stress case on STM32H563ZI where
+logic-analyzer HIL hides the bug under sampling jitter and a deterministic
+simulator surfaces it on every run — happy to walk through it on a call.
+Rust core is open at `github.com/w1ne/labwired-core`.
 
 Ask: 30 minutes with whoever owns Devin's tool surface. Design-partner terms
 if useful — free Pro for the team, founder-led integration support, priority
@@ -131,9 +133,8 @@ hit. Edit step is good, verify step is hardware-or-bust. A deterministic
 simulator over MCP closes the loop inside the IDE, no bench required.
 
 `npx -y @labwired/mcp` — stdio, three tools (catalog, simulate, validate),
-one-line config in any MCP-aware client including Continue. Repo:
-`github.com/w1ne/labwired`. Longer pitch at
-`docs/strategy/pitch/labwired-as-agent-oracle.md`.
+one-line config in any MCP-aware client including Continue. Rust core open at
+`github.com/w1ne/labwired-core`. Happy to send the longer pitch on reply.
 
 Ask: 30-minute technical call. Design-partner terms if useful — free Pro for
 the team, founder integration support, priority on the tools Continue users
@@ -180,8 +181,10 @@ breaks, because there is no determinism oracle the agent can call. LabWired
 fills that slot.
 
 MCP server: `npx -y @labwired/mcp`. Three tools, stdio, drops into any MCP
-host. STM32H563 GPDMA walkthrough in
-`docs/strategy/HIL_DISPLACEMENT_SHOWCASE.md` at `github.com/w1ne/labwired`.
+host. Concrete proof point is an STM32H563 GPDMA stress case where HIL hides
+the bug under sampling jitter and the simulator catches it every run — happy
+to walk through it on a call. Rust core open at
+`github.com/w1ne/labwired-core`.
 
 Ask: 30 minutes with whoever owns Agent's tool surface. Design-partner terms
 if useful — free Pro for the team, founder integration support, priority on

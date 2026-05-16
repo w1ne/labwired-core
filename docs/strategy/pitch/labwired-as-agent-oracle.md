@@ -2,7 +2,7 @@
 
 A design-partner proposal for AI lab tech leads.
 
-Andrii Shylenko · andrii@shylenko.com · <https://github.com/w1ne/labwired>
+Andrii Shylenko · andrii@shylenko.com · <https://github.com/w1ne/labwired-core>
 
 ---
 
@@ -41,8 +41,9 @@ every time, on any host.
 
 This makes LabWired a usable oracle: the agent gets a verdict it can trust,
 fast enough to live inside the inner loop of an iterate-and-verify cycle. The
-artifact `docs/strategy/HIL_DISPLACEMENT_SHOWCASE.md` walks through the GPDMA
-stress case on STM32H563ZI where this matters in practice.
+concrete shape we keep hitting in practice is a GPDMA stress case on
+STM32H563ZI where logic-analyzer-driven HIL debugging hides the bug under
+sampling jitter and LabWired surfaces it on every run.
 
 ## How the agent integration looks today
 
@@ -58,11 +59,12 @@ README shows the install one-liner. It exposes three tools:
 - `labwired_validate_system` — schema-check a manifest before you spend cycles
   simulating with it.
 
-Tool names and shapes live in `packages/mcp/src/index.ts`. Cycle metering and
-billing for hosted runs is in `packages/api/` — a Cloudflare Worker on
-`api.labwired.com` with Stripe checkout → API key issuance → Resend onboarding
-email → per-workspace quota. Pro is $19/seat/month, 100M cycles/month included.
-Local CLI runs are free.
+Tool surface is published as `@labwired/mcp` on npm — install with
+`npx -y @labwired/mcp` to inspect the schemas. The cycle-metering and billing
+Worker lives behind `api.labwired.com`; we'll share the Worker source under
+NDA on request. Stripe checkout issues the API key and surfaces it in the
+customer's private cabinet on return — no email handoff. Pro is
+$19/seat/month, 100M cycles/month included. Local CLI runs are free.
 
 ### The loop, concretely
 

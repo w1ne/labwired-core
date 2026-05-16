@@ -40,6 +40,10 @@ jobs:
           name: labwired-results
           path: test-results/`;
 
+// Feature flag: render the Designer tier card only when the Stripe product is live.
+// Set VITE_DESIGNER_TIER_ENABLED=true in packages/playground/.env.local after creating it.
+const DESIGNER_TIER_ENABLED = import.meta.env.VITE_DESIGNER_TIER_ENABLED === 'true';
+
 export function CiLanding() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -315,12 +319,18 @@ export function CiLanding() {
             Pricing that scales with you.
           </h2>
           <p className="text-fg-secondary text-[16px] mb-12 max-w-[60ch]">
-            Free for public repos. <span className="text-fg-primary font-semibold">Designer at $5/seat/month</span> for solo
-            tinkerers who want privacy. <span className="text-fg-primary font-semibold">Pro at $19/seat/month</span> for
+            Free for public repos.{' '}
+            {DESIGNER_TIER_ENABLED && (
+              <>
+                <span className="text-fg-primary font-semibold">Designer at $5/seat/month</span> for solo
+                tinkerers who want privacy.{' '}
+              </>
+            )}
+            <span className="text-fg-primary font-semibold">Pro at $19/seat/month</span> for
             teams shipping firmware in CI. Enterprise contracts for SAML, on-prem, and compliance evidence.
           </p>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className={`grid md:grid-cols-2 ${DESIGNER_TIER_ENABLED ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6`}>
             {[
               {
                 name: 'Open Source',
@@ -337,24 +347,28 @@ export function CiLanding() {
                 ctaHref: GITHUB_REPO,
                 ctaExternal: true,
               },
-              {
-                name: 'Designer',
-                price: '$5',
-                priceNote: 'per seat · per month · cancel anytime',
-                features: [
-                  'Private projects (coming soon)',
-                  '10M cycles / month included',
-                  'Save / share / fork in browser',
-                  'Community Discord access',
-                  'All future Designer updates',
-                ],
-                cta: 'Start with Designer →',
-                ctaHref: stripeDesignerUrl,
-                ctaExternal: true,
-                hint: !isSignedIn
-                  ? 'Sign in first so your workspace links to your account after checkout.'
-                  : undefined,
-              },
+              ...(DESIGNER_TIER_ENABLED
+                ? [
+                    {
+                      name: 'Designer',
+                      price: '$5',
+                      priceNote: 'per seat · per month · cancel anytime',
+                      features: [
+                        'Private projects (coming soon)',
+                        '10M cycles / month included',
+                        'Save / share / fork in browser',
+                        'Community Discord access',
+                        'All future Designer updates',
+                      ],
+                      cta: 'Start with Designer →',
+                      ctaHref: stripeDesignerUrl,
+                      ctaExternal: true,
+                      hint: !isSignedIn
+                        ? 'Sign in first so your workspace links to your account after checkout.'
+                        : undefined,
+                    },
+                  ]
+                : []),
               {
                 name: 'Pro',
                 price: '$19',
