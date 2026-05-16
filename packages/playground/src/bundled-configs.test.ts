@@ -22,7 +22,10 @@ describe('BOARD_CONFIGS', () => {
     expect(blackPill?.chipYaml).toContain('id: "i2c1"');
     expect(blackPill?.chipYaml).toContain('id: "i2c2"');
     expect(blackPill?.chipYaml).toContain('id: "i2c3"');
-    expect(blackPill?.chipYaml).toContain('type: "stm32f1_i2c"');
+    // After the streams merged, the chip yaml uses the canonical `type: "i2c"`
+    // (with the F1 layout picked via profile/default) — same convention as
+    // every other STM32 chip yaml in core/configs/chips/.
+    expect(blackPill?.chipYaml).toContain('type: "i2c"');
     for (const peripheralId of [
       'tim1',
       'tim2',
