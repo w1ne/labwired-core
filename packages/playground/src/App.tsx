@@ -40,9 +40,7 @@ import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { StudioShell } from './studio/StudioShell';
 import { AuthPill } from './studio/AuthPill';
-import { AuthModal } from './studio/AuthModal';
 import { AccountPanel } from './studio/AccountPanel';
-import { useAuth } from './studio/useAuth';
 import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
 import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
@@ -989,9 +987,10 @@ export function App() {
   // Studio-shell toast (transient, auto-dismisses)
   const [toast, setToast] = useState<string | null>(null);
 
-  // Auth surface (API-key paste, localStorage, /v1/workspaces/me)
-  const auth = useAuth();
-  const [authOpen, setAuthOpen] = useState(false);
+  // Clerk handles sign-in directly via <SignInButton mode="modal"> in AuthPill.
+  // The cabinet (AccountPanel) shows the API key + Clerk profile, opened from
+  // anywhere via setAccountOpen — currently triggered by UserButton's profile
+  // hook in a follow-up; for now it's reachable from URL fragment.
   const [accountOpen, setAccountOpen] = useState(false);
 
   // Wall-clock runtime tracker — ticks while the simulation is running.
@@ -1187,17 +1186,11 @@ export function App() {
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}
       simDock={simDockNode}
-      authSlot={<AuthPill auth={auth} onOpen={() => setAuthOpen(true)} />}
+      authSlot={<AuthPill />}
       renderDevDrawer={renderDevDrawer}
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}
     >
-    <AuthModal
-      open={authOpen}
-      onClose={() => setAuthOpen(false)}
-      auth={auth}
-      onOpenAccount={() => setAccountOpen(true)}
-    />
     <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}

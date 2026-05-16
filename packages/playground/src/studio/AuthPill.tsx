@@ -1,62 +1,42 @@
-import { useUser, UserButton } from '@clerk/clerk-react';
-import type { UseAuthResult } from './useAuth';
+import { useUser, UserButton, SignInButton } from '@clerk/clerk-react';
 
-export interface AuthPillProps {
-  auth: UseAuthResult;
-  onOpen: () => void;
-}
-
-function quotaPct(used: number, quota: number): number {
-  if (quota <= 0) return 0;
-  return Math.min(100, Math.round((used / quota) * 100));
-}
-
-export function AuthPill({ auth, onOpen }: AuthPillProps) {
+// Single Clerk-only auth surface. Signed-out users click "Sign in", which opens
+// Clerk's hosted modal directly (no intermediate wrapper). Signed-in users see
+// Clerk's UserButton with profile/sign-out built in.
+export function AuthPill() {
   const { isLoaded, isSignedIn } = useUser();
-  const apiKeyConnected = auth.status === 'ok' && auth.workspace !== null;
-  const loading = auth.status === 'loading' || !isLoaded;
+
+  if (!isLoaded) {
+    return (
+      <span
+        aria-label="Loading account"
+        className="h-7 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-tertiary flex items-center shrink-0"
+      >
+        …
+      </span>
+    );
+  }
 
   if (isSignedIn) {
     return (
       <div className="flex items-center shrink-0">
         <UserButton
           afterSignOutUrl="/"
-          appearance={{
-            elements: {
-              avatarBox: 'w-7 h-7',
-            },
-          }}
+          appearance={{ elements: { avatarBox: 'w-7 h-7' } }}
         />
       </div>
     );
   }
 
-  if (apiKeyConnected && auth.workspace) {
-    const pct = quotaPct(auth.workspace.cycles_used_mtd, auth.workspace.cycles_quota);
-    const planLabel = auth.workspace.plan.charAt(0).toUpperCase() + auth.workspace.plan.slice(1);
-    return (
+  return (
+    <SignInButton mode="modal">
       <button
         type="button"
-        onClick={onOpen}
-        aria-label={`Account: ${planLabel}, ${pct}% of cycle quota used`}
-        title={`${auth.workspace.cycles_used_mtd.toLocaleString()} / ${auth.workspace.cycles_quota.toLocaleString()} cycles`}
-        className="h-7 px-3 rounded-pill text-xs font-medium bg-accent/15 text-accent hover:bg-accent/25 transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1.5 shrink-0"
+        aria-label="Sign in to LabWired"
+        className="h-7 px-3 rounded-pill text-xs font-medium bg-accent text-bg-base hover:bg-accent/90 transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1.5 shrink-0"
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden />
-        {planLabel} · {pct}%
+        Sign in
       </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Connect LabWired account"
-      disabled={loading}
-      className="h-7 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-secondary hover:bg-white/[0.10] hover:text-fg-primary transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1.5 shrink-0 disabled:opacity-50"
-    >
-      {loading ? 'Connecting…' : 'Connect'}
-    </button>
+    </SignInButton>
   );
 }
