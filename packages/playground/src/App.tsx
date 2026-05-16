@@ -138,6 +138,29 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
+  if (config.boardId === 'epaper-tricolor-lab') {
+    // STM32F103 driving the Waveshare 2.9" SSD1680 tri-color panel.
+    // Pin map matches the firmware (examples/epaper-tricolor-lab/src/main.rs)
+    // AND a real NUCLEO-F103RB wiring of the panel — same ELF runs in both.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'epaper', type: 'ssd1680_tricolor_290', x: 540, y: 40, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' },  to: { part: 'epaper', pin: 'VCC'  }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' },  to: { part: 'epaper', pin: 'GND'  }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA7' },  to: { part: 'epaper', pin: 'DIN'  }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PA5' },  to: { part: 'epaper', pin: 'CLK'  }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA4' },  to: { part: 'epaper', pin: 'CS'   }, color: '#3DD68C' },
+        { from: { part: 'mcu', pin: 'PB0' },  to: { part: 'epaper', pin: 'DC'   }, color: '#5B9DFF' },
+        { from: { part: 'mcu', pin: 'PA9' },  to: { part: 'epaper', pin: 'RST'  }, color: '#F5B642' },
+        { from: { part: 'mcu', pin: 'PC7' },  to: { part: 'epaper', pin: 'BUSY' }, color: '#FFE680' },
+      ],
+    };
+  }
+
   if (config.boardId === 'nucleo-f401re') {
     return {
       ...createEmptyDiagram(config.chipId),

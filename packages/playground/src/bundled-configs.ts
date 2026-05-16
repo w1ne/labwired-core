@@ -28,6 +28,7 @@ import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/syst
 import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
 import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
+import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
@@ -37,6 +38,7 @@ import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
+import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -121,6 +123,19 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceIli9341Tft,
     sourceFilename: 'ili9341-tft-lab/src/main.rs',
+  },
+  {
+    boardId: 'epaper-tricolor-lab',
+    chipId: 'stm32f103',
+    name: 'E-Paper 2.9" Tri-color',
+    description: 'STM32F103 + Waveshare 2.9" SSD1680 tri-color e-paper over simulated SPI. Same firmware ELF flashes to a real NUCLEO-F103RB + Waveshare panel for side-by-side digital-twin verification.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemEpaperTricolorLab,
+    demoFirmwarePath: `${BASE}wasm/demo-epaper-tricolor-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceEpaperTricolor,
+    sourceFilename: 'epaper-tricolor-lab/src/main.rs',
   },
   {
     boardId: 'max31855-thermocouple-lab',
