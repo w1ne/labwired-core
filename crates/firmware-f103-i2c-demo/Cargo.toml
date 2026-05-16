@@ -1,0 +1,17 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-f103-i2c-demo"
+version.workspace = true
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-f103-i2c-demo"
+path = "src/main.rs"
+test = false
+bench = false

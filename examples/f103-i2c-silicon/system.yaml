@@ -1,0 +1,8 @@
+# LabWired - STM32F103 I²C silicon-validation system configuration.
+# Empty bus — exercises the "no slave on I2C1" path which raises SR1.AF.
+# The captured UART trace from this run is the F1 sibling of the F407
+# Round 2 silicon-validated fingerprint.
+name: "f103-i2c-silicon"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices: []
+board_io: []

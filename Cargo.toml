@@ -16,6 +16,7 @@ members = [
     "crates/firmware-ci-fixture",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
+    "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
     "crates/firmware-f401cdu6-blackpill-demo",
     "crates/firmware-f407-demo",
