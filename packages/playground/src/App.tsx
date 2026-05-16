@@ -434,11 +434,22 @@ export function App() {
     setBridge(null);
   }, []);
 
+  // Build the display-device list from the diagram so the loop knows what
+  // to poll. Filter to types that have a known wasm framebuffer accessor.
+  const displays = useMemo(
+    () =>
+      editor.state.diagram.parts
+        .filter((p) => p.type === 'ssd1680_tricolor_290')
+        .map((p) => ({ partId: p.id, kind: 'ssd1680_tricolor_290' as const })),
+    [editor.state.diagram.parts],
+  );
+
   // Drive the simulation loop
   const { state: simState, stepOnce, clearUart } = useSimulationLoop({
     bridge,
     running,
     cyclesPerFrame: 100000,
+    displays,
   });
 
   // Accumulate trace entries
@@ -1403,6 +1414,7 @@ export function App() {
               <EditorCanvas
                 state={editor.state}
                 boardIoStates={boardIoStateMap}
+                displayBuffers={simState.displayBuffers}
                 validationMessage={canvasValidationMessage}
                 invalidPins={invalidPins}
                 onMovePart={editor.movePart}

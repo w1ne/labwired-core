@@ -66,7 +66,23 @@ export interface ComponentState {
   displayText?: string;
   frequency?: number;
   angle?: number;
+  /** Live framebuffer from a simulated display peripheral, if present. */
+  displayBuffer?: DisplayBuffer;
 }
+
+/**
+ * Snapshot of a simulated display's framebuffer, poll-fetched from the wasm
+ * sim each frame. `kind` selects how `data` is interpreted:
+ *   - `ssd1680_tricolor_290`: 9472 bytes = 4736 black plane | 4736 red plane,
+ *     128 px wide × 296 px tall native (portrait), MSB-first packing,
+ *     wire encoding (1=white/no-ink, 0=ink) — render layer must compose.
+ */
+export type DisplayBuffer =
+  | {
+      kind: 'ssd1680_tricolor_290';
+      generation: number;
+      data: Uint8Array;
+    };
 
 export interface AttrFieldDef {
   key: string;

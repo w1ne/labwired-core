@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import type { Part, PinDef, ComponentState, EditorState, WireEndpoint } from './types';
+import type { Part, PinDef, ComponentState, DisplayBuffer, EditorState, WireEndpoint } from './types';
 import { COMPONENT_REGISTRY } from './components/index';
 import { validateWireConnection } from './circuitValidation';
 import { WireLayer } from './WireLayer';
@@ -13,6 +13,8 @@ function snap(v: number): number {
 interface EditorCanvasProps {
   state: EditorState;
   boardIoStates?: Record<string, ComponentState>;
+  /** Live display framebuffers, keyed by part id. */
+  displayBuffers?: Record<string, DisplayBuffer>;
   validationMessage?: string | null;
   invalidPins?: WireEndpoint[];
   onMovePart: (id: string, x: number, y: number) => void;
@@ -33,6 +35,7 @@ interface EditorCanvasProps {
 export function EditorCanvas({
   state,
   boardIoStates,
+  displayBuffers,
   validationMessage,
   invalidPins,
   onMovePart,
@@ -351,10 +354,12 @@ export function EditorCanvas({
 
         const isSelected = state.selectedIds.has(part.id);
         const ioState = boardIoStates?.[part.id];
+        const displayBuffer = displayBuffers?.[part.id];
         const compState: ComponentState = {
           selected: isSelected,
           active: ioState?.active ?? false,
           ...ioState,
+          ...(displayBuffer ? { displayBuffer } : {}),
         };
         const sc = part.scale ?? 1;
         const sw = def.width * sc;
