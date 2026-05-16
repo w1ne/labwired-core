@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import '../styles/tokens.css';
 import '../styles/tailwind.css';
+import './ci-light.css';
 import { CiLanding } from './CiLanding';
 import { CLERK_PUBLISHABLE_KEY } from '../clerk';
 

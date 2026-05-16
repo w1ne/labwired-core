@@ -11,7 +11,7 @@ import { buildStripeUpgradeUrl } from '../studio/stripeUpgrade';
 // ──────────────────────────────────────────────────────────────────────────
 const CALENDLY_ENTERPRISE = 'https://calendly.com/labwired/enterprise-intro';
 const WAITLIST_FORM_ACTION = 'mailto:andrii@shylenko.com'; // swap for https://formspree.io/f/<id> when ready
-const GITHUB_REPO = 'https://github.com/w1ne/labwired';
+const GITHUB_REPO = 'https://github.com/w1ne/labwired-core';
 
 const GITHUB_ACTION_SNIPPET = `name: Firmware Regression
 on: [push, pull_request]
@@ -97,33 +97,33 @@ export function CiLanding() {
 
   return (
     <div className="min-h-screen bg-bg-base text-fg-primary font-sans">
-      {/* Top chrome */}
-      <header className="sticky top-0 z-30 h-12 px-6 flex items-center gap-4 bg-[rgba(13,14,18,0.7)] backdrop-blur border-b border-border/60">
-        <a href="/playground/" className="flex items-center gap-2 text-fg-primary font-semibold tracking-tight shrink-0">
+      {/* Top chrome — sticky, translucent white, hard bottom border */}
+      <header className="lw-chrome">
+        <a href="/" className="flex items-center gap-2 text-fg-primary font-bold tracking-tight shrink-0">
           <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
             <path d="M11 2 4 12h4l-1 6 8-10h-4l1-6z" fill="currentColor" />
           </svg>
           LabWired
         </a>
-        <span className="text-fg-tertiary text-[11px] hidden md:inline tracking-[0.01em]">
+        <span className="text-fg-tertiary text-[12px] hidden md:inline tracking-[0.01em]">
           Deterministic firmware simulation
         </span>
         <div className="flex-1" />
-        <nav className="flex items-center gap-4 text-[13px]">
-          <a href="/playground/" className="text-fg-secondary hover:text-fg-primary transition-colors duration-150">
+        <nav className="flex items-center gap-5 text-[14px]">
+          <a href="/" className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150">
             Playground
           </a>
           <a
-            href="https://github.com/w1ne/labwired"
+            href="https://github.com/w1ne/labwired-core"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-fg-secondary hover:text-fg-primary transition-colors duration-150"
+            className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150"
           >
             GitHub
           </a>
           <a
             href="#waitlist"
-            className="h-7 px-3 rounded-pill text-xs font-medium bg-accent text-bg-base hover:bg-accent-hover transition-colors duration-150 flex items-center"
+            className="inline-flex items-center px-3.5 py-1.5 rounded-pill text-[13px] font-semibold bg-[#1a1a1a] text-white border-2 border-[#1a1a1a] shadow-[3px_3px_0_#0056b3] hover:shadow-[4px_4px_0_#0056b3] hover:-translate-x-[1px] hover:-translate-y-[1px] transition-all duration-150"
           >
             Get access
           </a>
@@ -131,35 +131,30 @@ export function CiLanding() {
       </header>
 
       {/* Hero */}
-      <section className="px-6 pt-24 pb-20 max-w-[1080px] mx-auto">
-        <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-magenta font-semibold mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-magenta animate-pulse" />
+      <section className="px-6 pt-24 pb-20 max-w-[1120px] mx-auto">
+        <div className="lw-kicker-pill mb-6">
+          <span className="lw-kicker-dot" />
           LabWired for CI
         </div>
-        <h1 className="text-[44px] md:text-[56px] leading-[1.05] font-bold tracking-tight max-w-[18ch]">
-          Replace your HIL bench with deterministic simulation.
+        <h1 className="text-[44px] md:text-[60px] leading-[1.05] font-bold tracking-tight max-w-[18ch] text-fg-primary">
+          Replace your HIL bench with{' '}
+          <span className="text-accent">deterministic simulation.</span>
         </h1>
-        <p className="text-fg-secondary text-[18px] leading-[1.5] mt-6 max-w-[60ch]">
+        <p className="text-fg-secondary text-[19px] leading-[1.5] mt-6 max-w-[60ch]">
           Run STM32 firmware regression tests on every commit. Cycle-accurate. Reproducible. Parallel. No
-          benches, no cables, no flaky tests. <span className="text-fg-primary">$0 per seat.</span>
+          benches, no cables, no flaky tests. <span className="text-fg-primary font-semibold">$0 per seat.</span>
         </p>
 
-        <div className="flex flex-wrap gap-3 mt-10">
-          <a
-            href="#waitlist"
-            className="h-10 px-5 rounded-pill bg-accent text-bg-base font-semibold hover:bg-accent-hover transition-colors duration-150 flex items-center"
-          >
-            Request early access →
+        <div className="flex flex-wrap gap-3.5 mt-10">
+          <a href="#waitlist" className="lw-cta-primary">
+            Request early access &rarr;
           </a>
-          <a
-            href="#how-it-works"
-            className="h-10 px-5 rounded-pill bg-white/[0.05] hover:bg-white/[0.10] text-fg-primary font-medium transition-colors duration-150 flex items-center"
-          >
+          <a href="#how-it-works" className="lw-cta-secondary">
             See it run
           </a>
         </div>
 
-        {/* Hero metrics */}
+        {/* Hero metrics — brutalist white cards with hard shadow */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16">
           {[
             { value: '~6,000×', label: 'faster than real-time', note: 'on commodity CI runners' },
@@ -167,9 +162,12 @@ export function CiLanding() {
             { value: '0 hrs', label: 'rig setup', note: 'YAML manifest, runs immediately' },
             { value: '$0', label: 'free tier', note: 'public repos · unlimited runs while in beta' },
           ].map((m) => (
-            <div key={m.label}>
+            <div
+              key={m.label}
+              className="bg-white border-2 border-[#1a1a1a] rounded-[10px] p-5 shadow-[3px_3px_0_#1a1a1a]"
+            >
               <div className="text-accent text-[28px] font-bold tracking-tight font-mono">{m.value}</div>
-              <div className="text-fg-primary text-[14px] mt-0.5 font-medium">{m.label}</div>
+              <div className="text-fg-primary text-[14px] mt-1 font-semibold">{m.label}</div>
               <div className="text-fg-tertiary text-[12px] mt-1">{m.note}</div>
             </div>
           ))}
@@ -177,15 +175,15 @@ export function CiLanding() {
       </section>
 
       {/* Why CI section — 3 value props */}
-      <section className="px-6 py-20 bg-bg-surface/30">
-        <div className="max-w-[1080px] mx-auto">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-fg-tertiary font-semibold mb-3">
+      <section className="lw-section-bg px-6 py-24">
+        <div className="max-w-[1120px] mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-fg-tertiary font-bold mb-3">
             Why teams switch
           </div>
-          <h2 className="text-[32px] font-bold tracking-tight mb-12 max-w-[18ch]">
+          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight mb-12 max-w-[20ch] text-fg-primary">
             Three problems HIL benches can't solve.
           </h2>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-7">
             {[
               {
                 icon: '🎯',
@@ -203,10 +201,13 @@ export function CiLanding() {
                 body: 'Every run produces a JSON result + VCD trace + UART log + cycle-by-cycle PC history. Attach artifacts to bug reports. Diff traces between commits to find regressions instantly. Logic analyzer-grade visibility, in CI.',
               },
             ].map((v) => (
-              <div key={v.title} className="lw-glass p-6">
+              <div
+                key={v.title}
+                className="bg-white border-2 border-[#1a1a1a] rounded-[10px] p-7 shadow-[5px_5px_0_#1a1a1a] transition-all duration-150 hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[7px_7px_0_#1a1a1a]"
+              >
                 <div className="text-3xl mb-3" aria-hidden>{v.icon}</div>
-                <h3 className="text-fg-primary font-semibold text-[17px] mb-2">{v.title}</h3>
-                <p className="text-fg-secondary text-[14px] leading-[1.55]">{v.body}</p>
+                <h3 className="text-fg-primary font-bold text-[18px] mb-2">{v.title}</h3>
+                <p className="text-fg-secondary text-[14.5px] leading-[1.55]">{v.body}</p>
               </div>
             ))}
           </div>
@@ -214,36 +215,38 @@ export function CiLanding() {
       </section>
 
       {/* How it works — GitHub Action snippet */}
-      <section id="how-it-works" className="px-6 py-20">
-        <div className="max-w-[1080px] mx-auto">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-fg-tertiary font-semibold mb-3">
+      <section id="how-it-works" className="px-6 py-24">
+        <div className="max-w-[1120px] mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-fg-tertiary font-bold mb-3">
             Drop it in
           </div>
-          <h2 className="text-[32px] font-bold tracking-tight mb-3 max-w-[20ch]">
+          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight mb-3 max-w-[20ch] text-fg-primary">
             One YAML file. Zero hardware.
           </h2>
-          <p className="text-fg-secondary text-[16px] mb-8 max-w-[60ch]">
+          <p className="text-fg-secondary text-[16px] mb-10 max-w-[60ch]">
             Add the LabWired GitHub Action to any repo with a Rust or C firmware target. Push a commit — see
             the simulation run. Get JUnit XML for your CI dashboard, JSON for your custom tooling.
           </p>
 
-          <div className="lw-glass overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-elevated/40">
-              <span className="text-fg-tertiary text-[11px] font-mono">.github/workflows/firmware.yml</span>
+          <div className="lw-snippet">
+            <div className="lw-snippet-header">
+              <span className="text-[#9098a8] text-[11px] font-mono">
+                .github/workflows/firmware.yml
+              </span>
               <button
                 type="button"
                 onClick={copySnippet}
-                className="text-fg-tertiary hover:text-fg-primary text-[11px] font-medium transition-colors duration-150"
+                className="text-[#9098a8] hover:text-white text-[11px] font-semibold transition-colors duration-150"
               >
                 {copyState === 'copied' ? '✓ Copied' : 'Copy'}
               </button>
             </div>
-            <pre className="text-[13px] leading-[1.65] p-5 overflow-x-auto font-mono text-fg-secondary">
+            <pre>
               <code>{GITHUB_ACTION_SNIPPET}</code>
             </pre>
           </div>
 
-          <div className="mt-6 text-fg-tertiary text-[12px] flex flex-wrap gap-x-6 gap-y-2">
+          <div className="mt-6 text-fg-tertiary text-[13px] flex flex-wrap gap-x-6 gap-y-2">
             <span>✓ GitHub Actions</span>
             <span>✓ GitLab CI</span>
             <span>✓ Docker image</span>
@@ -254,26 +257,26 @@ export function CiLanding() {
       </section>
 
       {/* Comparison table */}
-      <section className="px-6 py-20 bg-bg-surface/30">
-        <div className="max-w-[1080px] mx-auto">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-fg-tertiary font-semibold mb-3">
+      <section className="lw-section-bg px-6 py-24">
+        <div className="max-w-[1120px] mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-fg-tertiary font-bold mb-3">
             How we compare
           </div>
-          <h2 className="text-[32px] font-bold tracking-tight mb-10 max-w-[22ch]">
+          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight mb-10 max-w-[22ch] text-fg-primary">
             Built for the regression suite that has to ship.
           </h2>
 
-          <div className="overflow-x-auto">
+          <div className="bg-white border-2 border-[#1a1a1a] rounded-[10px] shadow-[5px_5px_0_#1a1a1a] overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 pr-4 text-fg-tertiary font-medium uppercase tracking-wider text-[11px]"></th>
-                  <th className="text-left py-3 px-4 text-fg-primary font-semibold">
+                <tr className="border-b-2 border-[#1a1a1a] bg-[#f8f9fa]">
+                  <th className="text-left py-3 px-4 text-fg-tertiary font-bold uppercase tracking-wider text-[11px]"></th>
+                  <th className="text-left py-3 px-4 text-fg-primary font-bold">
                     <span className="text-accent">LabWired CI</span>
                   </th>
-                  <th className="text-left py-3 px-4 text-fg-secondary font-medium">Wokwi CI</th>
-                  <th className="text-left py-3 px-4 text-fg-secondary font-medium">Renode</th>
-                  <th className="text-left py-3 px-4 text-fg-secondary font-medium">HIL bench</th>
+                  <th className="text-left py-3 px-4 text-fg-secondary font-semibold">Wokwi CI</th>
+                  <th className="text-left py-3 px-4 text-fg-secondary font-semibold">Renode</th>
+                  <th className="text-left py-3 px-4 text-fg-secondary font-semibold">HIL bench</th>
                 </tr>
               </thead>
               <tbody className="font-mono text-[12.5px]">
@@ -287,10 +290,13 @@ export function CiLanding() {
                   ['VS Code timeline', '✓', '✓', '✓', '—'],
                   ['Fault injection', 'roadmap', '—', '✓', 'manual'],
                   ['Open-source core', '✓', '—', '✓', 'n/a'],
-                ].map(([row, lw, wk, ren, hil], i) => (
-                  <tr key={i} className="border-b border-border/40">
-                    <td className="py-3 pr-4 text-fg-secondary font-sans">{row}</td>
-                    <td className="py-3 px-4 text-accent font-semibold">{lw}</td>
+                ].map(([row, lw, wk, ren, hil], i, arr) => (
+                  <tr
+                    key={i}
+                    className={i === arr.length - 1 ? '' : 'border-b border-[#d6d8dc]'}
+                  >
+                    <td className="py-3 px-4 text-fg-secondary font-sans font-semibold">{row}</td>
+                    <td className="py-3 px-4 text-accent font-bold">{lw}</td>
                     <td className="py-3 px-4 text-fg-secondary">{wk}</td>
                     <td className="py-3 px-4 text-fg-secondary">{ren}</td>
                     <td className="py-3 px-4 text-fg-secondary">{hil}</td>
@@ -300,9 +306,9 @@ export function CiLanding() {
             </table>
           </div>
 
-          <p className="text-fg-tertiary text-[12px] mt-4">
+          <p className="text-fg-tertiary text-[13px] mt-5 max-w-[80ch]">
             Wokwi is great for prototyping and IoT. Renode is best-in-class for low-level peripheral fidelity
-            on the desktop. Our wedge: <span className="text-fg-primary">cycle-accurate STM32 with a
+            on the desktop. Our wedge: <span className="text-fg-primary font-semibold">cycle-accurate STM32 with a
             zero-setup browser playground and drop-in CI</span>. The right answer for embedded teams
             shipping STM32-based products.
           </p>
@@ -310,12 +316,12 @@ export function CiLanding() {
       </section>
 
       {/* Pricing */}
-      <section className="px-6 py-20">
-        <div className="max-w-[1080px] mx-auto">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-fg-tertiary font-semibold mb-3">
+      <section className="px-6 py-24">
+        <div className="max-w-[1120px] mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-fg-tertiary font-bold mb-3">
             Pricing
           </div>
-          <h2 className="text-[32px] font-bold tracking-tight mb-3 max-w-[22ch]">
+          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight mb-3 max-w-[22ch] text-fg-primary">
             Pricing that scales with you.
           </h2>
           <p className="text-fg-secondary text-[16px] mb-12 max-w-[60ch]">
@@ -330,7 +336,7 @@ export function CiLanding() {
             teams shipping firmware in CI. Enterprise contracts for SAML, on-prem, and compliance evidence.
           </p>
 
-          <div className={`grid md:grid-cols-2 ${DESIGNER_TIER_ENABLED ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6`}>
+          <div className={`grid md:grid-cols-2 ${DESIGNER_TIER_ENABLED ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-7`}>
             {[
               {
                 name: 'Open Source',
@@ -409,24 +415,24 @@ export function CiLanding() {
                 key={tier.name}
                 className={
                   tier.highlighted
-                    ? 'lw-glass p-6 ring-2 ring-accent/40 relative'
-                    : 'lw-glass p-6'
+                    ? 'relative bg-white border-2 border-[#0056b3] rounded-[10px] p-7 shadow-[5px_5px_0_#0056b3] transition-all duration-150 hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[7px_7px_0_#0056b3]'
+                    : 'relative bg-white border-2 border-[#1a1a1a] rounded-[10px] p-7 shadow-[5px_5px_0_#1a1a1a] transition-all duration-150 hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[7px_7px_0_#1a1a1a]'
                 }
               >
                 {tier.highlighted && (
-                  <div className="absolute -top-3 left-6 text-[10px] uppercase tracking-[0.1em] bg-accent text-bg-base px-2 py-0.5 rounded font-semibold">
+                  <div className="absolute -top-3 left-6 text-[10px] uppercase tracking-[0.12em] bg-[#0056b3] text-white px-2.5 py-1 rounded-pill font-bold border-2 border-[#1a1a1a]">
                     Most popular
                   </div>
                 )}
-                <div className="text-fg-tertiary text-[11px] uppercase tracking-[0.1em] font-semibold mb-3">
+                <div className="text-fg-tertiary text-[11px] uppercase tracking-[0.14em] font-bold mb-3">
                   {tier.name}
                 </div>
-                <div className="text-fg-primary text-[28px] font-bold tracking-tight">{tier.price}</div>
+                <div className="text-fg-primary text-[32px] font-bold tracking-tight">{tier.price}</div>
                 <div className="text-fg-tertiary text-[12px] mb-5">{tier.priceNote}</div>
-                <ul className="space-y-2 mb-6">
+                <ul className="space-y-2 mb-7">
                   {tier.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-fg-secondary text-[13px]">
-                      <span className="text-ok mt-0.5" aria-hidden>✓</span>
+                    <li key={f} className="flex items-start gap-2 text-fg-secondary text-[13.5px]">
+                      <span className="text-accent mt-0.5 font-bold" aria-hidden>✓</span>
                       {f}
                     </li>
                   ))}
@@ -437,8 +443,8 @@ export function CiLanding() {
                   rel={tier.ctaExternal ? 'noopener noreferrer' : undefined}
                   className={
                     tier.highlighted
-                      ? 'block text-center h-10 leading-[2.5rem] rounded-pill bg-accent text-bg-base font-semibold hover:bg-accent-hover transition-colors duration-150'
-                      : 'block text-center h-10 leading-[2.5rem] rounded-pill bg-white/[0.05] hover:bg-white/[0.10] text-fg-primary font-medium transition-colors duration-150'
+                      ? 'block text-center py-3 rounded-pill bg-[#0056b3] text-white font-semibold border-2 border-[#1a1a1a] shadow-[3px_3px_0_#1a1a1a] hover:bg-[#004494] hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0_#1a1a1a] transition-all duration-150'
+                      : 'block text-center py-3 rounded-pill bg-white text-fg-primary font-semibold border-2 border-[#1a1a1a] shadow-[3px_3px_0_#1a1a1a] hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0_#1a1a1a] transition-all duration-150'
                   }
                 >
                   {tier.cta}
@@ -455,49 +461,46 @@ export function CiLanding() {
       </section>
 
       {/* Waitlist CTA */}
-      <section id="waitlist" className="px-6 py-24 bg-bg-surface/30">
+      <section id="waitlist" className="lw-section-bg px-6 py-28">
         <div className="max-w-[640px] mx-auto text-center">
-          <h2 className="text-[36px] font-bold tracking-tight mb-4">
+          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight mb-4 text-fg-primary">
             Early access. Real teams. Real bugs.
           </h2>
-          <p className="text-fg-secondary text-[16px] mb-8">
+          <p className="text-fg-secondary text-[16px] mb-10">
             We're onboarding 20 embedded teams to the closed beta. Drop your email and we'll get you a
             workspace + onboarding call within 48 hours.
           </p>
           {submitted ? (
-            <div className="lw-glass p-6 text-fg-primary">
-              <div className="text-ok text-2xl mb-2">✓ Thanks!</div>
+            <div className="bg-white border-2 border-[#1a1a1a] rounded-[10px] p-7 shadow-[5px_5px_0_#1a1a1a] text-fg-primary">
+              <div className="text-accent text-2xl mb-2 font-bold">✓ Thanks!</div>
               <p className="text-fg-secondary">
                 Your mail client should be open. If not, write us at{' '}
-                <a className="text-accent" href="mailto:andrii@shylenko.com">
+                <a className="text-accent font-semibold underline" href="mailto:andrii@shylenko.com">
                   andrii@shylenko.com
                 </a>
                 .
               </p>
             </div>
           ) : (
-            <form onSubmit={submitWaitlist} className="flex flex-col sm:flex-row gap-2 max-w-[480px] mx-auto">
+            <form onSubmit={submitWaitlist} className="flex flex-col sm:flex-row gap-3 max-w-[480px] mx-auto">
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@yourcompany.com"
-                className="flex-1 h-12 px-4 rounded-pill bg-bg-surface border border-border text-fg-primary placeholder:text-fg-tertiary outline-none focus:border-accent text-[15px]"
+                className="lw-input flex-1"
               />
-              <button
-                type="submit"
-                className="h-12 px-6 rounded-pill bg-accent text-bg-base font-semibold hover:bg-accent-hover transition-colors duration-150"
-              >
+              <button type="submit" className="lw-cta-primary">
                 Request access
               </button>
             </form>
           )}
-          <div className="text-fg-tertiary text-[11px] mt-4">
+          <div className="text-fg-tertiary text-[12px] mt-5">
             Or open-source it today on{' '}
             <a
-              className="text-accent hover:underline"
-              href="https://github.com/w1ne/labwired"
+              className="text-accent font-semibold hover:underline"
+              href="https://github.com/w1ne/labwired-core"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -509,18 +512,18 @@ export function CiLanding() {
       </section>
 
       {/* Footer */}
-      <footer className="px-6 py-10 border-t border-border/60">
-        <div className="max-w-[1080px] mx-auto flex flex-wrap items-center justify-between gap-4 text-[12px] text-fg-tertiary">
-          <div className="flex items-center gap-2">
+      <footer className="px-6 py-10 border-t-2 border-[#1a1a1a] bg-white">
+        <div className="max-w-[1120px] mx-auto flex flex-wrap items-center justify-between gap-4 text-[13px] text-fg-tertiary">
+          <div className="flex items-center gap-2 font-semibold">
             <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden>
               <path d="M11 2 4 12h4l-1 6 8-10h-4l1-6z" fill="currentColor" />
             </svg>
             <span>LabWired · Deterministic firmware simulation</span>
           </div>
           <div className="flex items-center gap-5">
-            <a className="hover:text-fg-primary transition-colors" href="/playground/">Playground</a>
-            <a className="hover:text-fg-primary transition-colors" href="https://github.com/w1ne/labwired" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a className="hover:text-fg-primary transition-colors" href="mailto:andrii@shylenko.com">Contact</a>
+            <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="/">Playground</a>
+            <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="https://github.com/w1ne/labwired-core" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="mailto:andrii@shylenko.com">Contact</a>
           </div>
         </div>
       </footer>

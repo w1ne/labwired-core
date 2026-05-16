@@ -38,6 +38,7 @@ import {
 } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
+import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
 import { AuthPill } from './studio/AuthPill';
 import { AccountPanel } from './studio/AccountPanel';
@@ -993,6 +994,23 @@ export function App() {
   // hook in a follow-up; for now it's reachable from URL fragment.
   const [accountOpen, setAccountOpen] = useState(false);
 
+  // Sign-in gate: anonymous browse is fine, but Run / Step (anything that
+  // consumes simulator cycles) requires a Clerk account. This is the primary
+  // conversion lever — users come in, browse, hit Run, sign in, become users.
+  const { isSignedIn, isLoaded: clerkLoaded } = useUser();
+  const { openSignIn } = useClerk();
+  const requireAuth = useCallback(
+    (action: () => void) => {
+      if (!clerkLoaded) return;
+      if (!isSignedIn) {
+        openSignIn({});
+        return;
+      }
+      action();
+    },
+    [clerkLoaded, isSignedIn, openSignIn],
+  );
+
   // Wall-clock runtime tracker — ticks while the simulation is running.
   // Frozen on pause, reset to 0 when the simulation is reset.
   const [runtimeMs, setRuntimeMs] = useState(0);
@@ -1106,7 +1124,7 @@ export function App() {
       };
       editor.addPart(part);
     },
-    onRun: handleRun,
+    onRun: () => requireAuth(handleRun),
     onShare: handleShare,
     onReset: handleReset,
     onToggleDev: () => { /* no-op: dev toggle is owned by useStudioLayout inside StudioShell; TopChrome's toggle still works */ },
@@ -1119,15 +1137,18 @@ export function App() {
   // Run-button intent: if a sim is already loaded, resume from pause; otherwise launch fresh.
   const onSimRun = activeSimulationConfig ? handlePlay : handleRun;
 
+  // Cycle-consuming actions are gated behind Clerk sign-in. Anonymous users
+  // who click Run get the Clerk modal instead. Pause/Reset stay open — they
+  // don't consume cycles and tend to be reached only mid-flow anyway.
   const simDockNode = (
     <SimDock
       state={simDockState}
       runtimeMs={runtimeMs}
       cycles={simState.cycles}
       pc={simState.pc}
-      onRun={onSimRun}
+      onRun={() => requireAuth(onSimRun)}
       onPause={handlePause}
-      onStep={handleStep}
+      onStep={() => requireAuth(handleStep)}
       onReset={handleReset}
     />
   );
@@ -1226,7 +1247,7 @@ export function App() {
             <button className="toolbar-btn toolbar-btn-primary toolbar-btn-verify" onClick={handleCompile} disabled={compiling}>
               <CheckIcon size={14} /> {compiling ? 'Checking...' : 'Check Wiring'}
             </button>
-            <button className="toolbar-btn toolbar-btn-primary" onClick={handleRun} disabled={compiling || loading}>
+            <button className="toolbar-btn toolbar-btn-primary" onClick={() => requireAuth(handleRun)} disabled={compiling || loading}>
               <UploadIcon size={14} /> {selectedBoard.demoFirmwarePath ? 'Run Demo' : 'Run Circuit'}
             </button>
             <button className="toolbar-btn toolbar-btn-ghost" onClick={handleResetDemo} title="Reset starter workspace">
@@ -1242,9 +1263,9 @@ export function App() {
                 <SimControls
                   variant="dark"
                   running={running}
-                  onPlay={handlePlay}
+                  onPlay={() => requireAuth(handlePlay)}
                   onPause={handlePause}
-                  onStep={handleStep}
+                  onStep={() => requireAuth(handleStep)}
                   onReset={handleReset}
                   pc={simState.pc}
                   cycles={simState.cycles}
