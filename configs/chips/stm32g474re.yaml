@@ -1,0 +1,49 @@
+schema_version: "1.0"
+name: "STM32G474RE"
+arch: "arm"
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    config:
+      profile: "stm32v2"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x48000400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x48000800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x48000c00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    irq: 38
+    config:
+      profile: "stm32v2"

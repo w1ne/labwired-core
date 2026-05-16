@@ -1,0 +1,213 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: "stm32f401cdu6"
+arch: "arm"
+registers_count: 150
+flash:
+  base: 0x08000000
+  size: "384KB"
+ram:
+  base: 0x20000000
+  size: "96KB"
+peripherals:
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 50
+  - id: "rtc"
+    type: "stub"
+    base_address: 0x40002800
+    size: "1KB"
+  - id: "wwdg"
+    type: "stub"
+    base_address: 0x40002C00
+    size: "1KB"
+  - id: "iwdg"
+    type: "stub"
+    base_address: 0x40003000
+    size: "1KB"
+  - id: "i2s2ext"
+    type: "stub"
+    base_address: 0x40003400
+    size: "1KB"
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+  - id: "i2s3ext"
+    type: "stub"
+    base_address: 0x40004000
+    size: "1KB"
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+  - id: "i2c1"
+    type: "stm32f1_i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+  - id: "i2c2"
+    type: "stm32f1_i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+  - id: "i2c3"
+    type: "stm32f1_i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+  - id: "pwr"
+    type: "stub"
+    base_address: 0x40007000
+    size: "1KB"
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40010000
+    size: "1KB"
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+  - id: "usart6"
+    type: "uart"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 71
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+  - id: "sdio"
+    type: "stub"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 49
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+  - id: "spi4"
+    type: "spi"
+    base_address: 0x40013400
+    size: "1KB"
+    irq: 84
+  - id: "syscfg"
+    type: "stub"
+    base_address: 0x40013800
+    size: "1KB"
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40013C00
+    size: "1KB"
+  - id: "tim9"
+    type: "timer"
+    base_address: 0x40014000
+    size: "1KB"
+  - id: "tim10"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+  - id: "tim11"
+    type: "timer"
+    base_address: 0x40014800
+    size: "1KB"
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  - id: "crc"
+    type: "stub"
+    base_address: 0x40023000
+    size: "1KB"
+  - id: "flash_ctrl"
+    type: "stub"
+    base_address: 0x40023C00
+    size: "1KB"
+  - id: "dma1"
+    type: "stub"
+    base_address: 0x40026000
+    size: "1KB"
+  - id: "dma2"
+    type: "stub"
+    base_address: 0x40026400
+    size: "1KB"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40020C00
+    size: "1KB"
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x40021000
+    size: "1KB"
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x40021C00
+    size: "1KB"
+  - id: "otg_fs_global"
+    type: "stub"
+    base_address: 0x50000000
+    size: "1KB"
+  - id: "otg_fs_host"
+    type: "stub"
+    base_address: 0x50000400
+    size: "1KB"
+  - id: "otg_fs_device"
+    type: "stub"
+    base_address: 0x50000800
+    size: "1KB"
+  - id: "otg_fs_pwrclk"
+    type: "stub"
+    base_address: 0x50000E00
+    size: "512B"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  - id: "dbg"
+    type: "stub"
+    base_address: 0xE0042000
+    size: "1KB"

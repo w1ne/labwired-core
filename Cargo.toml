@@ -41,6 +41,14 @@ members = [
     "examples/demo-blinky",
     "examples/nucleo-f407-i2c",
     "examples/riscv-virt",
+    "examples/adxl345-sensor-lab",
+    "examples/mpu6050-sensor-lab",
+    "examples/bme280-weather-lab",
+    "examples/max31855-thermocouple-lab",
+    "examples/ssd1306-hello-lab",
+    "examples/neo6m-gps-lab",
+    "examples/ntc-thermistor-lab",
+    "examples/ili9341-tft-lab",
 ]
 # firmware-hal-test is a standalone reference example pinned to stm32f1xx-hal.
 # It carries its own [profile.release] (opt-level = "z", lto = true) that is
@@ -83,6 +91,7 @@ panic-halt = "0.2"
 memmap2 = "0.9"
 pio = "0.2"
 pio-parser = "0.2"
+ureq = { version = "2.12", features = ["json"] }
 
 [profile.dev]
 panic = "abort"
@@ -143,4 +152,39 @@ opt-level = "s"
 
 [profile.release.package.riscv-ci-fixture]
 codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.adxl345-sensor-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.mpu6050-sensor-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.bme280-weather-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.max31855-thermocouple-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ssd1306-hello-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.neo6m-gps-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ntc-thermistor-lab]
+codegen-units = 1
+debug = true
 opt-level = "s"

@@ -1,0 +1,18 @@
+schema_version: "1.0"
+name: "nucleo_g474re"
+chip: "../chips/stm32g474re.yaml"
+
+board_io:
+  - id: "led_user"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: true
+

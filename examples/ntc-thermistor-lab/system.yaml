@@ -1,0 +1,17 @@
+name: "ntc-thermistor-lab"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "thermistor"
+    type: "ntc-thermistor"
+    connection: "adc1"
+    config:
+      channel: 0
+      initial_temperature_c: 25.0
+board_io:
+  - id: "thermistor"
+    kind: "adc_input"
+    peripheral: "adc1"
+    pin: 0
+    signal: "input"
+    active_high: true
+    device_type: "ntc-thermistor"

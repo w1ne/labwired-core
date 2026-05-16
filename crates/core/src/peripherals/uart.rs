@@ -5,10 +5,25 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::SimResult;
+use std::any::Any;
 use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+
+/// A device that emits bytes through the UART's RX path (e.g. a GPS module).
+pub trait UartStreamDevice: Send {
+    /// Called periodically by the bus tick. Returns the next byte to push into UART RX,
+    /// or None if no byte is pending. Implementations should respect `elapsed_us` to
+    /// pace output (e.g. 9600 baud → ~1 ms/byte → emit one byte per ~1000 us tick).
+    fn poll(&mut self, elapsed_us: u32) -> Option<u8>;
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -37,7 +52,7 @@ impl FromStr for UartRegisterLayout {
 }
 
 /// Minimal UART mock with selectable register layout.
-#[derive(Debug, serde::Serialize)]
+#[derive(serde::Serialize)]
 pub struct Uart {
     layout: UartRegisterLayout,
     #[serde(skip)]
@@ -49,6 +64,21 @@ pub struct Uart {
     cr1: u32,
     cr3: u32,
     dma_tx_pending: bool,
+    /// Stream devices attached to the RX path (e.g. GPS modules).
+    #[serde(skip)]
+    pub attached_streams: Vec<Box<dyn UartStreamDevice>>,
+    /// Microseconds accumulated since last stream tick.
+    elapsed_us: u32,
+}
+
+impl core::fmt::Debug for Uart {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Uart")
+            .field("layout", &self.layout)
+            .field("cr1", &self.cr1)
+            .field("streams", &self.attached_streams.len())
+            .finish()
+    }
 }
 
 impl Default for Uart {
@@ -71,7 +101,14 @@ impl Uart {
             cr1: 0,
             cr3: 0,
             dma_tx_pending: false,
+            attached_streams: Vec::new(),
+            elapsed_us: 0,
         }
+    }
+
+    /// Attach a stream device to the UART RX path.
+    pub fn attach_stream(&mut self, dev: Box<dyn UartStreamDevice>) {
+        self.attached_streams.push(dev);
     }
 
     /// Get a shared handle to the RX buffer for external data injection.
@@ -227,6 +264,24 @@ impl crate::Peripheral for Uart {
         if self.dma_tx_pending {
             dma_signals = Some(vec![1]); // 1 = TX Signal
             self.dma_tx_pending = false;
+        }
+
+        // Poll attached stream devices and push emitted bytes into the RX buffer.
+        // Each tick represents ~1000 µs (1 ms) of simulated time.
+        // At 9600 baud that is about 1 byte/ms, which matches the GPS pacing.
+        if !self.attached_streams.is_empty() {
+            const TICK_US: u32 = 1000;
+            self.elapsed_us = self.elapsed_us.saturating_add(TICK_US);
+            let elapsed = self.elapsed_us;
+            self.elapsed_us = 0; // consumed this tick
+
+            if let Ok(mut rx_guard) = self.rx_buf.lock() {
+                for stream in &mut self.attached_streams {
+                    if let Some(byte) = stream.poll(elapsed) {
+                        rx_guard.push_back(byte);
+                    }
+                }
+            }
         }
 
         // Fire while either TXEIE or TCIE is set:

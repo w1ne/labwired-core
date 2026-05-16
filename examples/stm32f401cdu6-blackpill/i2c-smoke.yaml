@@ -1,0 +1,10 @@
+# LabWired - STM32F401CDU6 Black Pill I2C smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-i2c-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 4096
+assertions:
+  - uart_contains: "I2C_OK"
+  - expected_stop_reason: max_steps

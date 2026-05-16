@@ -287,6 +287,11 @@ pub enum Instruction {
     }, // ADD Rd, SP, #imm (ADR-like for SP)
 
     // Other ALU
+    Mul32 {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    }, // MUL.W Rd, Rn, Rm (T2)
     Uxtb {
         rd: u8,
         rm: u8,
@@ -902,6 +907,27 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
                 0b10 => Instruction::Uxth { rd, rm },
                 _ => Instruction::Uxtb { rd, rm },
             };
+        }
+
+        // UXTH (T1): 1011 0010 10 mmm ddd -> 0xB280 base
+        if (opcode & 0xFFC0) == 0xB280 {
+            let rm = ((opcode >> 3) & 0x7) as u8;
+            let rd = (opcode & 0x7) as u8;
+            return Instruction::Uxth { rd, rm };
+        }
+
+        // SXTH (T1): 1011 0010 00 mmm ddd -> 0xB200 base
+        if (opcode & 0xFFC0) == 0xB200 {
+            let rm = ((opcode >> 3) & 0x7) as u8;
+            let rd = (opcode & 0x7) as u8;
+            return Instruction::Sxth { rd, rm };
+        }
+
+        // SXTB (T1): 1011 0010 01 mmm ddd -> 0xB240 base
+        if (opcode & 0xFFC0) == 0xB240 {
+            let rm = ((opcode >> 3) & 0x7) as u8;
+            let rd = (opcode & 0x7) as u8;
+            return Instruction::Sxtb { rd, rm };
         }
 
         // CBZ/CBNZ (T1): 1011 op i 1 imm5 rn
@@ -1554,6 +1580,15 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
+    // MUL.W (T2): 1111 1011 0000 nnnn 1111 dddd 0000 mmmm -> FB0. F.0.
+    // Distinguishes from MLA (Ra != 0xF in h2[15:12]).
+    if (h1 & 0xFFF0) == 0xFB00 && (h2 & 0xF0F0) == 0xF000 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        return Instruction::Mul32 { rd, rn, rm };
+    }
+
     // UDIV / SDIV: 1111 1011 10x1 ... -> FB9.. / FBB..
     if (h1 & 0xFFD0) == 0xFB90 && (h2 & 0xF0F0) == 0xF0F0 {
         let is_unsigned = (h1 & 0x0020) != 0;
@@ -1755,6 +1790,31 @@ mod tests {
         assert_eq!(
             decode_thumb_32(0xFA92, 0xF081),
             Instruction::Rev { rd: 0, rm: 2 }
+        );
+    }
+
+    #[test]
+    fn test_decode_extend_t1() {
+        // SXTH R1, R0 -> 0xB201
+        assert_eq!(decode_thumb_16(0xB201), Instruction::Sxth { rd: 1, rm: 0 });
+        // SXTB R3, R2 -> 0xB253 (B240 | (rm << 3) | rd)
+        assert_eq!(decode_thumb_16(0xB253), Instruction::Sxtb { rd: 3, rm: 2 });
+        // UXTH R1, R0 -> 0xB281
+        assert_eq!(decode_thumb_16(0xB281), Instruction::Uxth { rd: 1, rm: 0 });
+        // UXTB R5, R4 -> 0xB2E5 (preserves existing behavior)
+        assert_eq!(decode_thumb_16(0xB2E5), Instruction::Uxtb { rd: 5, rm: 4 });
+    }
+
+    #[test]
+    fn test_decode_mul_w_t2() {
+        // MUL.W R4, R1, LR -> 0xFB01 0xF40E (Rn=1, Rd=4, Rm=14)
+        assert_eq!(
+            decode_thumb_32(0xFB01, 0xF40E),
+            Instruction::Mul32 {
+                rd: 4,
+                rn: 1,
+                rm: 14
+            }
         );
     }
 

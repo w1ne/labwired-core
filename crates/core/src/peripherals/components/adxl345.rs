@@ -1,0 +1,112 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+//
+// This software is released under the MIT License.
+// See the LICENSE file in the project root for full license information.
+
+use crate::peripherals::i2c::I2cDevice;
+
+/// ADXL345 3-axis accelerometer I2C component.
+#[derive(Debug, serde::Serialize)]
+pub struct Adxl345 {
+    address: u8,
+    current_register: u8,
+    register_address_written: bool,
+    power_ctl: u8,
+    data_format: u8,
+    bw_rate: u8,
+    sample_x: i16,
+    sample_y: i16,
+    sample_z: i16,
+}
+
+impl Default for Adxl345 {
+    fn default() -> Self {
+        Self::new(0x53)
+    }
+}
+
+impl Adxl345 {
+    pub fn new(address: u8) -> Self {
+        Self {
+            address,
+            current_register: 0,
+            register_address_written: false,
+            power_ctl: 0,
+            data_format: 0,
+            bw_rate: 0x0A,
+            sample_x: 0,
+            sample_y: 0,
+            sample_z: 256,
+        }
+    }
+
+    pub fn set_sample(&mut self, x: i16, y: i16, z: i16) {
+        self.sample_x = x;
+        self.sample_y = y;
+        self.sample_z = z;
+    }
+
+    pub fn sample(&self) -> (i16, i16, i16) {
+        (self.sample_x, self.sample_y, self.sample_z)
+    }
+
+    fn read_register(&self, reg: u8) -> u8 {
+        match reg {
+            0x00 => 0xE5,
+            0x2C => self.bw_rate,
+            0x2D => self.power_ctl,
+            0x31 => self.data_format,
+            0x32 => self.sample_x as u16 as u8,
+            0x33 => ((self.sample_x as u16) >> 8) as u8,
+            0x34 => self.sample_y as u16 as u8,
+            0x35 => ((self.sample_y as u16) >> 8) as u8,
+            0x36 => self.sample_z as u16 as u8,
+            0x37 => ((self.sample_z as u16) >> 8) as u8,
+            _ => 0,
+        }
+    }
+
+    fn write_register(&mut self, reg: u8, value: u8) {
+        match reg {
+            0x2C => self.bw_rate = value,
+            0x2D => self.power_ctl = value,
+            0x31 => self.data_format = value,
+            _ => {}
+        }
+    }
+}
+
+impl I2cDevice for Adxl345 {
+    fn address(&self) -> u8 {
+        self.address
+    }
+
+    fn read(&mut self) -> u8 {
+        let value = self.read_register(self.current_register);
+        self.current_register = self.current_register.wrapping_add(1);
+        value
+    }
+
+    fn write(&mut self, data: u8) {
+        if !self.register_address_written {
+            self.current_register = data;
+            self.register_address_written = true;
+        } else {
+            self.write_register(self.current_register, data);
+            self.current_register = self.current_register.wrapping_add(1);
+        }
+    }
+
+    fn stop(&mut self) {
+        self.register_address_written = false;
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+}

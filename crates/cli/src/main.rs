@@ -15,6 +15,7 @@ use labwired_core::{Bus, Cpu};
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
+mod api_client;
 mod asset_validation;
 mod gpio_observer;
 mod size_limited_writer;
@@ -365,6 +366,11 @@ struct TestArgs {
     /// Maximum number of instructions to trace
     #[arg(long, default_value = "100000")]
     trace_max: usize,
+
+    /// Explicitly opt out of sending LABWIRED_API_KEY even if it is set in the environment.
+    /// Useful for local development and testing.
+    #[arg(long)]
+    no_key: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1901,6 +1907,45 @@ fn build_stop_reason_details(
 
 #[allow(clippy::if_same_then_else)]
 fn run_test(args: TestArgs) -> ExitCode {
+    // ── API key validation (Pro tier gate) ──────────────────────────────
+    // If LABWIRED_API_KEY is set and --no-key is not passed, validate before
+    // starting the simulation so we fail fast with a clear message.
+    let api_key_opt: Option<String> = if args.no_key {
+        None
+    } else {
+        std::env::var("LABWIRED_API_KEY").ok()
+    };
+
+    let run_start = std::time::Instant::now();
+
+    if let Some(ref key) = api_key_opt {
+        match api_client::validate_key(key) {
+            api_client::ValidateOutcome::Valid { workspace_id, plan, cycles_quota, cycles_used_mtd } => {
+                info!(
+                    "LabWired Pro — workspace={} plan={} cycles_used={}/{} this month",
+                    workspace_id, plan, cycles_used_mtd, cycles_quota
+                );
+            }
+            api_client::ValidateOutcome::Invalid => {
+                eprintln!(
+                    "❌ LABWIRED_API_KEY is invalid. Check your dashboard or unset to use the free tier."
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+            api_client::ValidateOutcome::QuotaExceeded => {
+                eprintln!(
+                    "⚠️  Monthly cycle quota exceeded. Upgrade your plan or wait until next billing period."
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+            api_client::ValidateOutcome::NetworkError(e) => {
+                // Network errors are non-fatal — fall through to run in free-tier mode
+                // to avoid blocking CI when the API is temporarily unreachable.
+                tracing::warn!("LabWired API unreachable ({}); continuing in free-tier mode", e);
+            }
+        }
+    }
+
     let loaded = match load_test_script(&args.script) {
         Ok(s) => s,
         Err(e) => {
@@ -2104,7 +2149,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         }};
     }
 
-    match program.arch {
+    let exit_code = match program.arch {
         labwired_core::Arch::Arm => {
             let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
             setup_and_run!(cpu)
@@ -2130,7 +2175,34 @@ fn run_test(args: TestArgs) -> ExitCode {
             );
             ExitCode::from(EXIT_CONFIG_ERROR)
         }
+    };
+
+    // ── Best-effort run metering (Pro tier) ──────────────────────────────
+    if let Some(ref key) = api_key_opt {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(&firmware_bytes);
+        let firmware_hash = format!("{:x}", hasher.finalize());
+
+        let duration_ms = run_start.elapsed().as_millis() as u64;
+        let cycles = metrics.get_cycles();
+        // Encode exit code as an integer for the API payload.
+        // EXIT_PASS=0, EXIT_ASSERT_FAIL=1, EXIT_CONFIG_ERROR=2, EXIT_RUNTIME_ERROR=3
+        let exit_val: i32 = if exit_code == ExitCode::from(EXIT_PASS) {
+            0
+        } else if exit_code == ExitCode::from(EXIT_ASSERT_FAIL) {
+            1
+        } else if exit_code == ExitCode::from(EXIT_RUNTIME_ERROR) {
+            3
+        } else {
+            2
+        };
+
+        // best-effort — don't block on failure
+        api_client::record_run(key, &firmware_hash, cycles, duration_ms, exit_val);
     }
+
+    exit_code
 }
 
 #[allow(clippy::too_many_arguments)]

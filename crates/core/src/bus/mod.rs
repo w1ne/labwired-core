@@ -12,7 +12,9 @@ use crate::peripherals::uart::Uart;
 use crate::peripherals::uart::UartRegisterLayout;
 use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
 use anyhow::Context;
-use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
+use labwired_config::{
+    parse_size, ChipDescriptor, ExternalDevice, PeripheralConfig, SystemManifest,
+};
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -231,6 +233,142 @@ impl SystemBus {
         } else {
             raw
         }
+    }
+
+    fn adxl345_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
+        let Some(value) = ext.config.get("i2c_address") else {
+            return Ok(0x53);
+        };
+
+        let Some(address) = value.as_u64() else {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                serde_yaml::to_string(value)
+                    .unwrap_or_else(|_| "<unprintable>".to_string())
+                    .trim()
+            ));
+        };
+
+        if address > 0x7f {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                address
+            ));
+        }
+
+        Ok(address as u8)
+    }
+
+    fn mpu6050_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
+        let Some(value) = ext.config.get("i2c_address") else {
+            return Ok(0x68);
+        };
+
+        let Some(address) = value.as_u64() else {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                serde_yaml::to_string(value)
+                    .unwrap_or_else(|_| "<unprintable>".to_string())
+                    .trim()
+            ));
+        };
+
+        if address > 0x7f {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                address
+            ));
+        }
+
+        Ok(address as u8)
+    }
+
+    fn bme280_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
+        let Some(value) = ext.config.get("i2c_address") else {
+            return Ok(0x76);
+        };
+
+        let Some(address) = value.as_u64() else {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                serde_yaml::to_string(value)
+                    .unwrap_or_else(|_| "<unprintable>".to_string())
+                    .trim()
+            ));
+        };
+
+        if address > 0x7f {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                address
+            ));
+        }
+
+        Ok(address as u8)
+    }
+
+    fn max31855_cs_pin(ext: &ExternalDevice) -> String {
+        ext.config
+            .get("cs_pin")
+            .and_then(|v| v.as_str())
+            .unwrap_or("PA4")
+            .to_string()
+    }
+
+    fn ili9341_cs_pin(ext: &ExternalDevice) -> String {
+        ext.config
+            .get("cs_pin")
+            .and_then(|v| v.as_str())
+            .unwrap_or("PA4")
+            .to_string()
+    }
+
+    fn ssd1306_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
+        let Some(value) = ext.config.get("i2c_address") else {
+            return Ok(0x3C);
+        };
+
+        let Some(address) = value.as_u64() else {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                serde_yaml::to_string(value)
+                    .unwrap_or_else(|_| "<unprintable>".to_string())
+                    .trim()
+            ));
+        };
+
+        if address > 0x7f {
+            return Err(anyhow::anyhow!(
+                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
+                ext.id,
+                ext.r#type,
+                ext.connection,
+                address
+            ));
+        }
+
+        Ok(address as u8)
     }
 
     fn is_peripheral_addr(p: &PeripheralEntry, addr: u64) -> bool {
@@ -814,6 +952,232 @@ impl SystemBus {
                 dev,
                 ticks_remaining: 0,
             });
+        }
+
+        for ext in &manifest.external_devices {
+            match ext.r#type.as_str() {
+                "ili9341" => {
+                    // SPI device path
+                    let cs_pin = Self::ili9341_cs_pin(ext);
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let spi = any
+                        .downcast_mut::<crate::peripherals::spi::Spi>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    spi.attach(Box::new(crate::peripherals::components::Ili9341::new(cs_pin)));
+                }
+                "adxl345" | "mpu6050" | "bme280" | "oled-ssd1306" => {
+                    // I2C device path
+                    let address = match ext.r#type.as_str() {
+                        "mpu6050" => Self::mpu6050_i2c_address(ext)?,
+                        "bme280" => Self::bme280_i2c_address(ext)?,
+                        "oled-ssd1306" => Self::ssd1306_i2c_address(ext)?,
+                        _ => Self::adxl345_i2c_address(ext)?,
+                    };
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let i2c = any
+                        .downcast_mut::<crate::peripherals::i2c::I2c>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not an I2C peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    match ext.r#type.as_str() {
+                        "mpu6050" => i2c.attach(Box::new(crate::peripherals::components::Mpu6050::new(address))),
+                        "bme280" => i2c.attach(Box::new(crate::peripherals::components::Bme280::new(address))),
+                        "oled-ssd1306" => i2c.attach(Box::new(crate::peripherals::components::Ssd1306::new(address))),
+                        _ => i2c.attach(Box::new(crate::peripherals::components::Adxl345::new(address))),
+                    }
+                }
+                "neo6m-gps" => {
+                    // UART stream device path
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let uart = any
+                        .downcast_mut::<crate::peripherals::uart::Uart>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not a UART peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let mut gps = crate::peripherals::components::Neo6mGps::new();
+
+                    // Optionally read initial position from config
+                    if let Some(lat) = ext.config.get("lat_deg").and_then(|v| v.as_f64()) {
+                        if let Some(lon) = ext.config.get("lon_deg").and_then(|v| v.as_f64()) {
+                            gps.set_position(lat, lon);
+                        }
+                    }
+
+                    uart.attach_stream(Box::new(gps));
+                }
+                "max31855" => {
+                    // SPI device path
+                    let cs_pin = Self::max31855_cs_pin(ext);
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let spi = any
+                        .downcast_mut::<crate::peripherals::spi::Spi>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    spi.attach(Box::new(crate::peripherals::components::Max31855::new(cs_pin)));
+                }
+                "ntc-thermistor" => {
+                    // Analog source path: NTC connects directly to an ADC channel.
+                    // Read channel + initial temperature from config.
+                    let channel = ext
+                        .config
+                        .get("channel")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u8;
+                    let initial_temp_c = ext
+                        .config
+                        .get("initial_temperature_c")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(25.0) as f32;
+
+                    // Find the ADC peripheral by the connection name.
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let adc = any
+                        .downcast_mut::<crate::peripherals::adc::Adc>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not an ADC peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    // Seed the ADC channel with the initial temperature's voltage.
+                    let ntc = crate::peripherals::components::NtcThermistor::new(channel, initial_temp_c);
+                    adc.set_channel_input(channel, ntc.divider_output_mv());
+                }
+                _ => {
+                    tracing::warn!(
+                        "Unsupported external device '{}' type '{}' on connection '{}'; skipping",
+                        ext.id,
+                        ext.r#type,
+                        ext.connection
+                    );
+                    continue;
+                }
+            }
         }
 
         bus.rebuild_peripheral_ranges();
@@ -1478,6 +1842,212 @@ mod tests {
             .find(|p| p.name == "TIMER1")
             .expect("TIMER1 not found");
         assert_eq!(found.base, 0x40001000);
+    }
+
+    #[test]
+    fn test_from_config_attaches_adxl345_external_device_to_i2c() {
+        use labwired_config::{
+            Arch, ChipDescriptor, ExternalDevice, MemoryRange, PeripheralConfig, SystemManifest,
+        };
+        use std::collections::HashMap;
+
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "stm32f103-test".to_string(),
+            arch: Arch::Arm,
+            flash: MemoryRange {
+                base: 0x0800_0000,
+                size: "64KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "i2c1".to_string(),
+                r#type: "i2c".to_string(),
+                base_address: 0x4000_5400,
+                size: Some("1KB".to_string()),
+                irq: Some(31),
+                config: HashMap::new(),
+            }],
+        };
+
+        let mut config = HashMap::new();
+        config.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(0x53.into()),
+        );
+        let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "adxl345-test".to_string(),
+            chip: "../chips/stm32f103.yaml".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: vec![ExternalDevice {
+                id: "adxl345".to_string(),
+                r#type: "adxl345".to_string(),
+                connection: "i2c1".to_string(),
+                config,
+            }],
+            board_io: Vec::new(),
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let i2c_idx = bus.find_peripheral_index_by_name("i2c1").unwrap();
+        let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
+        let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
+        assert_eq!(i2c.attached_devices.len(), 1);
+    }
+
+    fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
+        use labwired_config::{Arch, MemoryRange, PeripheralConfig};
+        use std::collections::HashMap;
+
+        labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "stm32f103-test".to_string(),
+            arch: Arch::Arm,
+            flash: MemoryRange {
+                base: 0x0800_0000,
+                size: "64KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            peripherals: vec![
+                PeripheralConfig {
+                    id: "i2c1".to_string(),
+                    r#type: "i2c".to_string(),
+                    base_address: 0x4000_5400,
+                    size: Some("1KB".to_string()),
+                    irq: Some(31),
+                    config: HashMap::new(),
+                },
+                PeripheralConfig {
+                    id: "uart1".to_string(),
+                    r#type: "uart".to_string(),
+                    base_address: 0x4000_3800,
+                    size: Some("1KB".to_string()),
+                    irq: Some(37),
+                    config: HashMap::new(),
+                },
+            ],
+        }
+    }
+
+    fn manifest_with_external_device(
+        r#type: &str,
+        connection: &str,
+        config: std::collections::HashMap<String, serde_yaml::Value>,
+    ) -> labwired_config::SystemManifest {
+        labwired_config::SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "adxl345-test".to_string(),
+            chip: "../chips/stm32f103.yaml".to_string(),
+            memory_overrides: std::collections::HashMap::new(),
+            external_devices: vec![labwired_config::ExternalDevice {
+                id: "sensor1".to_string(),
+                r#type: r#type.to_string(),
+                connection: connection.to_string(),
+                config,
+            }],
+            board_io: Vec::new(),
+            peripherals: Vec::new(),
+        }
+    }
+
+    fn assert_external_device_error_contains_context(
+        err: anyhow::Error,
+        ext_type: &str,
+        connection: &str,
+    ) {
+        let message = err.to_string();
+        assert!(
+            message.contains("sensor1"),
+            "error missing external device id: {message}"
+        );
+        assert!(
+            message.contains(ext_type),
+            "error missing external device type: {message}"
+        );
+        assert!(
+            message.contains(connection),
+            "error missing external device connection: {message}"
+        );
+    }
+
+    fn expect_from_config_error(
+        chip: &labwired_config::ChipDescriptor,
+        manifest: &labwired_config::SystemManifest,
+    ) -> anyhow::Error {
+        match SystemBus::from_config(chip, manifest) {
+            Ok(_) => panic!("expected SystemBus::from_config to reject manifest"),
+            Err(err) => err,
+        }
+    }
+
+    #[test]
+    fn test_from_config_errors_for_missing_external_device_connection() {
+        let chip = chip_with_i2c_and_uart();
+        let manifest = manifest_with_external_device(
+            "adxl345",
+            "missing-i2c",
+            std::collections::HashMap::new(),
+        );
+
+        let err = expect_from_config_error(&chip, &manifest);
+
+        assert_external_device_error_contains_context(err, "adxl345", "missing-i2c");
+    }
+
+    #[test]
+    fn test_from_config_errors_for_external_device_on_non_i2c_connection() {
+        let chip = chip_with_i2c_and_uart();
+        let manifest =
+            manifest_with_external_device("adxl345", "uart1", std::collections::HashMap::new());
+
+        let err = expect_from_config_error(&chip, &manifest);
+
+        assert_external_device_error_contains_context(err, "adxl345", "uart1");
+    }
+
+    #[test]
+    fn test_from_config_skips_unsupported_external_device_type() {
+        let chip = chip_with_i2c_and_uart();
+        let mut config = std::collections::HashMap::new();
+        config.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(0x48.into()),
+        );
+        // Use a clearly-fictional device type — tmp102/adxl345/etc. are all
+        // real components now, so we need something the factory will refuse.
+        let manifest = manifest_with_external_device("definitely_not_a_device", "i2c1", config);
+
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let i2c_idx = bus.find_peripheral_index_by_name("i2c1").unwrap();
+        let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
+        let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
+
+        assert_eq!(i2c.attached_devices.len(), 0);
+    }
+
+    #[test]
+    fn test_from_config_errors_for_invalid_external_device_i2c_address() {
+        for value in [
+            serde_yaml::Value::String("0x53".to_string()),
+            serde_yaml::Value::Number(0x80.into()),
+        ] {
+            let chip = chip_with_i2c_and_uart();
+            let mut config = std::collections::HashMap::new();
+            config.insert("i2c_address".to_string(), value);
+            let manifest = manifest_with_external_device("adxl345", "i2c1", config);
+
+            let err = expect_from_config_error(&chip, &manifest);
+
+            assert_external_device_error_contains_context(err, "adxl345", "i2c1");
+        }
     }
 
     #[test]

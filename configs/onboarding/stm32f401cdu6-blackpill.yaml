@@ -1,0 +1,26 @@
+name: stm32f401cdu6-blackpill
+description: 'STMicroelectronics STM32F401CDU6 Black Pill ARM Cortex-M4 board with
+  384KB Flash, 96KB RAM, active-low PC13 LED, and a broad STM32F401xB/xC
+  peripheral map. LabWired executable models cover RCC, GPIO, SysTick, USART,
+  I2C, SPI, timers, ADC, and EXTI; DMA stream controllers and remaining mapped
+  blocks without F401-compatible behavior are safe stubs.
+  Physical validation is ST-Link USB/SWD sanity only; UART and I2C output are
+  simulation evidence.'
+family: STM32F4
+url: https://www.st.com/en/microcontrollers-microprocessors/stm32f401cd.html
+code_example: "/* LabWired STM32F401 simulation smoke */\nint main(void) {\n    /* Firmware emits OK on simulated USART2 and I2C_OK after I2C1 register smoke. */\n    for (;;) {}\n}"
+pass_rate: 100
+verified: true
+system: systems/onboarding/stm32f401cdu6-blackpill.yaml
+validation:
+  method: local-simulation-trace
+  reason: simulation-ok-stlink-usb-swd-sanity-only
+  checks:
+    system_manifest: true
+    chip_descriptor: true
+    simulation: true
+    i2c_smoke: true
+    stlink_usb_swd_sanity: true
+    physical_uart: false
+  timestamp_utc: '2026-05-12T16:09:40+00:00'
+  artifacts_url: core/out/stm32f401cdu6-blackpill/

@@ -1,0 +1,25 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+[package]
+name = "firmware-f401cdu6-blackpill-demo"
+version.workspace = true
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-f401cdu6-blackpill-demo"
+path = "src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "firmware-f401cdu6-blackpill-i2c-demo"
+path = "src/i2c_smoke.rs"
+test = false
+bench = false

@@ -63,7 +63,12 @@ pub struct Adc {
     // Internal state (legacy)
     converting: bool,
     cycles_remaining: u32,
-    conversion_time: u32,
+    conversion_time: u32, // Cycles per conversion (e.g. 14)
+
+    // Per-channel injected values (12-bit ADC counts, 0..4095).
+    // Index = channel number (STM32 ADC has up to 18 channels).
+    // Value 0xFFFF means "no injection" — hardware will use incrementing counter.
+    channel_inputs: [u16; 18],
 }
 
 impl Adc {
@@ -101,6 +106,19 @@ impl Adc {
             converting: false,
             cycles_remaining: 0,
             conversion_time: 14,
+            channel_inputs: [0xFFFF; 18],
+        }
+    }
+
+    /// Inject a millivolt reading for a specific ADC channel.
+    ///
+    /// The firmware's next conversion on this channel will return the equivalent
+    /// 12-bit count (scaled to 3.3 V reference).  All conversion math lives here
+    /// in core — the WASM bridge only calls this with an already-computed mV value.
+    pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
+        if (channel as usize) < self.channel_inputs.len() {
+            let count = ((millivolts as u32 * 4095) / 3300).min(4095) as u16;
+            self.channel_inputs[channel as usize] = count;
         }
     }
 }
@@ -240,9 +258,16 @@ impl Peripheral for Adc {
                 // Conversion Complete
                 self.converting = false;
 
-                // Mock result: 12-bit value (0..4095).
-                // Just increment DR for visual feedback or random.
-                self.dr = (self.dr + 1) & 0xFFF;
+                // Use injected channel value if available; otherwise increment DR for
+                // visual feedback (no external source connected).
+                // SQR3 bits [4:0] hold the first sequence channel number.
+                let sqr3_ch = (self.cr2 >> 0) & 0x1F; // fallback; real SQR3 is at 0x34 but not modeled
+                let ch = sqr3_ch as usize;
+                if ch < self.channel_inputs.len() && self.channel_inputs[ch] != 0xFFFF {
+                    self.dr = self.channel_inputs[ch] as u32;
+                } else {
+                    self.dr = (self.dr + 1) & 0xFFF;
+                }
 
                 // Set EOC (Bit 1)
                 self.sr |= 1 << 1;

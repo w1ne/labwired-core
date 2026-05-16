@@ -1313,6 +1313,13 @@ impl CortexM {
                     self.write_reg(rd, res);
                     self.update_nz(res);
                 }
+                Instruction::Mul32 { rd, rn, rm } => {
+                    let op1 = self.read_reg(rn);
+                    let op2 = self.read_reg(rm);
+                    let res = op1.wrapping_mul(op2);
+                    self.write_reg(rd, res);
+                    pc_increment = 4;
+                }
 
                 Instruction::Cpsie => {
                     self.primask = false;

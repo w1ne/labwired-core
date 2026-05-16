@@ -220,32 +220,60 @@ fn firmware_path_from_smoke(smoke_test: &Path) -> anyhow::Result<Option<PathBuf>
 }
 
 fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<PathBuf> {
-    // Semi-hardcoded lookup or decent heuristic.
-    // stm32h563 -> nucleo-h563zi
-    // stm32f401 -> nucleo-f401re (hypothetical)
-    // stm32f103 -> bluepill (hypothetical)
-
-    // Better: Grep all exampl../../configs/systems/labwired-demo-board.yaml for "chip: .*<chip_name>"
-    // This is robust.
+    // Collect every example whose system.yaml references this chip, then
+    // prefer a canonical "smoke" example over richer sensor labs. The
+    // strict-onboarding gate wants the simplest io-smoke per chip; sensor
+    // labs (adxl345-*, ili9341-*, ssd1306-*, etc.) have their own coverage
+    // and would otherwise mask the smoke-test signal here.
 
     let examples = root.join("examples");
     if !examples.exists() {
         return None;
     }
 
+    let mut candidates: Vec<PathBuf> = Vec::new();
     for entry in fs::read_dir(examples).ok()? {
         let entry = entry.ok()?;
         if entry.path().is_dir() {
             let system_yaml = entry.path().join("system.yaml");
             if system_yaml.exists() {
-                let content = fs::read_to_string(&system_yaml).ok()?;
+                let content = fs::read_to_string(&system_yaml).unwrap_or_default();
                 if content.contains(&format!("chips/{}.yaml", chip_name))
                     || content.contains(&format!("chips/{}", chip_name))
                 {
-                    return Some(entry.path());
+                    candidates.push(entry.path());
                 }
             }
         }
     }
-    None
+
+    if candidates.is_empty() {
+        return None;
+    }
+
+    // Preferred canonical names (in order): demo-blinky for STM32F1, the
+    // HIL displacement showcase for H5, then any *-blinky/hello-world
+    // before sensor labs (whose io-smokes need richer external state).
+    let preferred_substrings = [
+        "demo-blinky",
+        "hil-displacement-showcase",
+        "blinky",
+        "hello-world",
+        "rp2040-pio-onboarding",
+    ];
+    for needle in &preferred_substrings {
+        if let Some(pick) = candidates.iter().find(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.contains(needle))
+                .unwrap_or(false)
+        }) {
+            return Some(pick.clone());
+        }
+    }
+
+    // No preferred match — sort by directory name so results are
+    // deterministic across machines (read_dir isn't ordered on Linux).
+    candidates.sort();
+    candidates.into_iter().next()
 }

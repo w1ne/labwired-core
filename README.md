@@ -42,6 +42,11 @@ curl -fsSL https://labwired.com/install.sh -o install.sh
 LABWIRED_VERSION=v0.14.0 sh install.sh
 ```
 
+Supported host environments:
+- Linux
+- macOS
+- Windows via WSL2
+
 Install options:
 
 - `LABWIRED_VERSION=v0.14.0` pins a release (omit for latest).

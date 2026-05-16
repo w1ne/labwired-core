@@ -1,0 +1,17 @@
+# LabWired - STM32F401CDU6 Black Pill System Configuration
+name: "stm32f401cdu6-blackpill"
+chip: "../chips/stm32f401cdu6.yaml"
+external_devices: []
+board_io:
+  - id: "led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false
+  - id: "button_user_pa0"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: true
