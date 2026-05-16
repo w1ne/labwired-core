@@ -93,6 +93,94 @@ pub fn configure_xtensa(bus: &mut SystemBus) -> XtensaLx7 {
     configure_xtensa_esp32s3(bus, &Esp32s3Opts::default()).cpu
 }
 
+/// Register a minimum-viable ESP32 (classic, Xtensa LX6) memory map on
+/// `bus` and return the CPU.  Reuses `XtensaLx7` for the CPU — LX6 is a
+/// near-subset of LX7 for the instructions a demo firmware uses (base
+/// ALU, windowed registers, branches, loads/stores).  Real LX6-only
+/// firmware that hits LX7-extension opcodes would need a proper LX6
+/// CPU type; the on-the-line demo doesn't.
+///
+/// What's wired:
+///   * IRAM (SRAM0, instruction view) at 0x4008_0000
+///   * DRAM (SRAM2, data view)        at 0x3FFB_0000
+///   * Flash XIP (I-cache)            at 0x400D_0000
+///   * Flash XIP (D-cache alias)      at 0x3F40_0000
+///   * ROM0 (Espressif boot ROM)      at 0x4000_0000
+///   * UART0 (STM32F1-style layout)   at 0x3FF4_0000
+///
+/// What's NOT wired (silicon has these but they're out of scope for
+/// the hello-world / survival-test slice):
+///   * Wi-Fi MAC, Bluetooth controller, RTC, eFuse, GPIO matrix,
+///     SPI0/SPI1/SPI2/SPI3, I²C0/I²C1, TIMG0/TIMG1, second LX6 core,
+///     ULP coprocessor, hardware crypto.
+///
+/// UART0 caveat: the existing `peripherals::uart::Uart` defaults to
+/// the STM32F1 register layout (SR @ 0x00, DR @ 0x04).  Real ESP32
+/// UART places its TX/RX FIFO at offset 0x00, not 0x04.  The demo
+/// firmware in `firmware-esp32-demo` writes to the STM32F1 DR offset
+/// so the simulator's UART model emits cleanly; a dedicated
+/// `UartRegisterLayout::Esp32` variant is the follow-up that would
+/// let unmodified Espressif firmware run.
+pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
+    use crate::peripherals::uart::Uart;
+
+    // Same rationale as configure_xtensa_esp32s3: drop the seeded STM32
+    // peripherals and disable Cortex-M bit-band — neither applies to Xtensa.
+    bus.peripherals.clear();
+    bus.bit_band_enabled = false;
+
+    // IRAM (SRAM0, 128 KiB).
+    bus.add_peripheral(
+        "iram",
+        0x4008_0000,
+        0x20000,
+        None,
+        Box::new(RamPeripheral::new(0x20000)),
+    );
+    // DRAM (SRAM2, 192 KiB to cover the data region the linker uses).
+    bus.add_peripheral(
+        "dram",
+        0x3FFB_0000,
+        0x30000,
+        None,
+        Box::new(RamPeripheral::new(0x30000)),
+    );
+    // Flash XIP, instruction window (4 MiB).
+    bus.add_peripheral(
+        "flash_icache",
+        0x400D_0000,
+        0x400000,
+        None,
+        Box::new(RamPeripheral::new(0x400000)),
+    );
+    // Flash XIP, data-cache alias (4 MiB at a different virtual base).
+    bus.add_peripheral(
+        "flash_dcache",
+        0x3F40_0000,
+        0x400000,
+        None,
+        Box::new(RamPeripheral::new(0x400000)),
+    );
+    // ROM0 (448 KiB).
+    bus.add_peripheral(
+        "rom",
+        0x4000_0000,
+        0x70000,
+        None,
+        Box::new(RamPeripheral::new(0x70000)),
+    );
+    // UART0 — STM32F1 layout for now (see caveat above).
+    bus.add_peripheral(
+        "uart0",
+        0x3FF4_0000,
+        0x100,
+        None,
+        Box::new(Uart::new()),
+    );
+
+    XtensaLx7::new()
+}
+
 /// Register all ESP32-S3 peripherals on `bus` and return the CPU + the
 /// shared flash backing buffer.
 pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3Wiring {

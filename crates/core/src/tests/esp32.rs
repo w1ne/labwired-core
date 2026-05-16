@@ -1,0 +1,112 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+//
+// ESP32 (classic, Xtensa LX6 dual-core) modeling smoke tests.
+//
+// These verify three things:
+//   1. The chip yaml `configs/chips/esp32.yaml` loads cleanly.
+//   2. The system builder `configure_xtensa_esp32` registers every
+//      declared peripheral (IRAM, DRAM, ROM, flash I-cache, flash
+//      D-cache, UART0) at the documented addresses.
+//   3. Writes to UART0's DR (STM32F1 layout offset 0x04 on top of the
+//      ESP32 UART0 base 0x3FF4_0000) propagate to the bus's TX sink —
+//      the same UART pipe every other LabWired chip uses.
+//
+// A full Xtensa LX6 firmware demo (hand-rolled vector table + UART
+// init in `.S`) is the follow-up; for the half-day modeling slice
+// the goal is just to prove the simulator's memory map and UART path
+// match real ESP32 silicon's documented layout, with the chip yaml
+// + system builder as the contract.
+
+use crate::bus::SystemBus;
+use crate::system::xtensa::configure_xtensa_esp32;
+use crate::Bus;
+use labwired_config::{ChipDescriptor, SystemManifest};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+#[test]
+fn esp32_chip_yaml_loads() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/esp32.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path)
+        .unwrap_or_else(|_| panic!("Failed to load chip config at {:?}", chip_path));
+    assert_eq!(chip.name, "esp32");
+    // The Arch enum collapses both LX6 and LX7 to `Xtensa` per
+    // labwired_config::lib's `FromStr` map (XTENSA/LX7/LX6 → Xtensa).
+    assert!(matches!(chip.arch, labwired_config::Arch::Xtensa));
+}
+
+#[test]
+fn esp32_wroom_system_yaml_loads() {
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/esp32-wroom-32.yaml");
+    let manifest = SystemManifest::from_file(&system_path)
+        .unwrap_or_else(|_| panic!("Failed to load system manifest at {:?}", system_path));
+    assert_eq!(manifest.name, "esp32-wroom-32");
+}
+
+#[test]
+fn esp32_system_builder_wires_documented_regions() {
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    // Every region declared in esp32.yaml must respond to at least one
+    // read.  Bus::read_u8 returns Ok for any address inside a registered
+    // peripheral and an error for unmapped addresses.
+    for (name, addr) in [
+        ("IRAM",         0x4008_0000),
+        ("DRAM",         0x3FFB_0000),
+        ("ROM",          0x4000_0000),
+        ("flash_icache", 0x400D_0000),
+        ("flash_dcache", 0x3F40_0000),
+        ("UART0",        0x3FF4_0000),
+    ] {
+        bus.read_u8(addr)
+            .unwrap_or_else(|e| panic!("{name} @ 0x{addr:08X} unreachable: {e:?}"));
+    }
+}
+
+#[test]
+fn esp32_uart0_emits_to_sink() {
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+
+    // UART0 base 0x3FF4_0000.  The simulator's UART model uses the
+    // STM32F1 layout (SR @ 0x00, DR @ 0x04) for now; the firmware-side
+    // ergonomic path for ESP32 (FIFO at offset 0x00) is a follow-up
+    // that needs a dedicated UartRegisterLayout::Esp32 variant.  For
+    // the modeling smoke we write directly to DR and assert the sink
+    // sees the byte.
+    bus.write_u8(0x3FF4_0004, b'E').unwrap();
+    bus.write_u8(0x3FF4_0004, b'S').unwrap();
+    bus.write_u8(0x3FF4_0004, b'P').unwrap();
+    bus.write_u8(0x3FF4_0004, b'3').unwrap();
+    bus.write_u8(0x3FF4_0004, b'2').unwrap();
+
+    let bytes = sink.lock().unwrap();
+    assert_eq!(
+        bytes.as_slice(),
+        b"ESP32",
+        "UART0 sink should have received 'ESP32', got {:?}",
+        std::str::from_utf8(&bytes).unwrap_or("<non-utf8>")
+    );
+}
+
+#[test]
+fn esp32_iram_round_trip() {
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    // Write a sentinel word to IRAM, read it back from both the
+    // instruction-fetch view (IRAM at 0x4008_0000) — exercises the
+    // SRAM0 backing the way real Xtensa code-load would.
+    let addr = 0x4008_0100;
+    bus.write_u32(addr, 0xDEAD_BEEF).unwrap();
+    let v = bus.read_u32(addr).unwrap();
+    assert_eq!(v, 0xDEAD_BEEF, "IRAM round-trip failed at 0x{:08X}", addr);
+}

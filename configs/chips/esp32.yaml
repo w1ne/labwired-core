@@ -1,0 +1,60 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# ESP32 (classic, dual-core Xtensa LX6) chip descriptor.
+#
+# This YAML is documentation of the memory map; the simulator's
+# `crate::system::xtensa::configure_xtensa_esp32` function is the
+# authoritative wiring code.  The YAML is loaded by the CLI to
+# validate that --chip references a known chip.
+#
+# Reference: ESP32 Technical Reference Manual v4.6 §1.3 (Memory Map),
+# Table 1-2.  Probed against a real ESP32-WROOM-32 module reporting
+# chip type esp32 revision v1.0 (24:6f:28:a9:f6:30, 4 MiB flash,
+# WiFi/BT/dual-core, 240 MHz, 40 MHz crystal — Espressif's standard
+# Wi-Fi/BT module).
+#
+# Differences from ESP32-S3 (Xtensa LX7):
+#   - IRAM   at 0x4008_0000 (S3: 0x4037_0000)
+#   - DRAM   at 0x3FFB_0000 (S3: 0x3FC8_8000)
+#   - Flash  at 0x400D_0000 (I-cache, S3: 0x4200_0000)
+#   - Flash  at 0x3F40_0000 (D-cache, S3: 0x3C00_0000)
+#   - ROM    at 0x4000_0000 (448 KiB on classic, S3: 384 KiB)
+#   - UART0  at 0x3FF4_0000 (peripheral block, S3: 0x6000_0000)
+#   - No USB-Serial-JTAG (introduced on S3)
+#   - LX6 cores have no FPU (S3 LX7 has FPU)
+
+name: "esp32"
+arch: "xtensa-lx6"
+flash:
+  base: 0x400D0000
+  size: "4MiB"
+ram:
+  base: 0x3FFB0000
+  size: "192KiB"        # SRAM2 (128KiB) + tail of SRAM1 we expose
+peripherals:
+  - id: "iram"
+    type: "ram"
+    base_address: 0x40080000
+    size: "128KiB"      # SRAM0 — instruction-fetch view
+  - id: "dram"
+    type: "ram"
+    base_address: 0x3FFB0000
+    size: "192KiB"      # SRAM2 data view
+  - id: "rom"
+    type: "ram"
+    base_address: 0x40000000
+    size: "448KiB"      # Internal ROM0 (Espressif boot ROM)
+  - id: "flash_icache"
+    type: "ram"
+    base_address: 0x400D0000
+    size: "4MiB"        # Flash XIP, instruction window
+  - id: "flash_dcache"
+    type: "ram"
+    base_address: 0x3F400000
+    size: "4MiB"        # Flash XIP, data window (cache alias)
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x3FF40000
+    size: "256B"

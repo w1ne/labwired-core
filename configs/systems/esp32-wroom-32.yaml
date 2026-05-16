@@ -1,0 +1,15 @@
+# LabWired - ESP32-WROOM-32 System Configuration
+#
+# Espressif's standard ESP32 module (dual-core LX6, 4 MiB flash, Wi-Fi/BT).
+# The simulator models the chip without Wi-Fi/BT (those are closed-silicon
+# blobs); UART0 + GPIO + flash XIP are enough to exercise non-radio firmware.
+name: "esp32-wroom-32"
+chip: "../chips/esp32.yaml"
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 2          # GPIO2 — the on-module status LED on most ESP32-WROOM dev boards
+    signal: "output"
+    active_high: true

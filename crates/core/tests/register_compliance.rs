@@ -73,9 +73,23 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
             validate_registers(&mut machine, &chip)?;
         }
         Arch::Xtensa => {
-            let cpu = system::xtensa::configure_xtensa(&mut bus);
-            let mut machine = Machine::new(cpu, bus);
-            validate_registers(&mut machine, &chip)?;
+            // Two Xtensa families exist today: the classic ESP32 (LX6,
+            // memory map starts at 0x4000_0000 ROM + 0x4008_0000 IRAM)
+            // and the ESP32-S3 (LX7, memory map starts at 0x4037_0000
+            // IRAM).  `configure_xtensa` defaults to S3 wiring, which
+            // leaves the ESP32 addresses unmapped and trips
+            // MemoryViolation in the smoke validator.  Dispatch on the
+            // chip name so each yaml is validated against its own
+            // builder.
+            if chip.name == "esp32" {
+                let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
+                let mut machine = Machine::new(cpu, bus);
+                validate_registers(&mut machine, &chip)?;
+            } else {
+                let cpu = system::xtensa::configure_xtensa(&mut bus);
+                let mut machine = Machine::new(cpu, bus);
+                validate_registers(&mut machine, &chip)?;
+            }
         }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);

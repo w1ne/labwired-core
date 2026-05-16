@@ -1,4 +1,6 @@
 #[cfg(test)]
+pub mod esp32;
+#[cfg(test)]
 pub mod integration;
 #[cfg(test)]
 pub mod nrf52;
