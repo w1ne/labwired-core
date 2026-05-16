@@ -17,7 +17,7 @@
 //! internal SRAM 0 (IRAM) window on ESP32-S3.  Source: ESP32-S3 TRM v1.4 §3.3.11
 //! "Internal SRAM 0", and confirmed by OpenOCD memory-write tests in H1/H2.
 
-pub use labwired_hw_oracle_macros::hw_oracle_test;
+pub use labwired_hw_oracle_macros::{hw_oracle_test, riscv_oracle_test};
 
 // `flash` depends on the optional `serialport` crate via TargetBoard::detect.
 // Gate the whole module behind the same feature so plain (sim-only) builds
@@ -25,6 +25,10 @@ pub use labwired_hw_oracle_macros::hw_oracle_test;
 #[cfg(feature = "hw-oracle")]
 pub mod flash;
 pub mod openocd;
+
+/// RISC-V / ESP32-C3 oracle harness.  Parallel to the Xtensa types in this
+/// module; see [`riscv::RiscVOracleCase`] for the entry point.
+pub mod riscv;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
