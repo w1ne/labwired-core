@@ -146,6 +146,10 @@ export interface WasmSimulatorInstance {
   // ILI9341 TFT framebuffer
   get_ili9341_framebuffer(device_id: string): Uint8Array;
 
+  // SSD1680 tri-color e-paper framebuffer (9472 B: 4736 black plane | 4736 red plane)
+  get_ssd1680_framebuffer(device_id: string): Uint8Array;
+  get_ssd1680_refresh_generation(device_id: string): number;
+
   // SPI devices
   get_spi_device_states(): SpiDeviceState[];
   set_max31855_temperature(device_id: string, tc_c: number, internal_c: number): void;
@@ -343,6 +347,30 @@ export class SimulatorBridge {
     try {
       const fb = this.sim.get_ili9341_framebuffer(deviceId);
       return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Returns the 9472-byte tri-color e-paper framebuffer for an SSD1680 panel, or null if not found.
+   * Layout: first 4736 bytes = black plane (1=white/0=black), next 4736 = red plane on the wire
+   * (1=no-red/0=red — GxEPD2 inverts source bitmap before sending 0x26). Row-major, 128 px wide ×
+   * 296 px tall native, MSB-first within byte.
+   */
+  getSsd1680Framebuffer(deviceId: string): Uint8Array | null {
+    try {
+      const fb = this.sim.get_ssd1680_framebuffer(deviceId);
+      return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Cheap u32 — UI uses it to poll for "did the panel refresh?" before re-fetching the full buffer. */
+  getSsd1680RefreshGeneration(deviceId: string): number | null {
+    try {
+      return this.sim.get_ssd1680_refresh_generation(deviceId);
     } catch {
       return null;
     }
