@@ -16,6 +16,7 @@ pub mod neo6m;
 pub mod ntc_thermistor;
 pub mod shm_i2c;
 pub mod ssd1306;
+pub mod ssd1680_tricolor_290;
 
 pub use adxl345::Adxl345;
 pub use aht20::Aht20;
@@ -29,3 +30,4 @@ pub use neo6m::Neo6mGps;
 pub use ntc_thermistor::NtcThermistor;
 pub use shm_i2c::ShmI2c;
 pub use ssd1306::Ssd1306;
+pub use ssd1680_tricolor_290::Ssd1680Tricolor290;

@@ -1,0 +1,37 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# NUCLEO-F103RB + Waveshare 2.9" tri-color e-paper (SSD1680 / GDEM029C90).
+#
+# Wiring assumed (matches AgentDeck schematic ported to F103 Arduino headers):
+#   SPI1.SCK  -> PA5  (D13)  -> CLK
+#   SPI1.MOSI -> PA7  (D11)  -> DIN
+#   GPIO      -> PA4  (D10)  -> CS
+#   GPIO      -> PB0  (A3)   -> DC
+#   GPIO      -> PA9  (D8)   -> RST
+#   GPIO      -> PC7  (D9)   -> BUSY (input)
+#
+# Any firmware that drives an SSD1680 over SPI1 will animate the panel; no
+# specific demo firmware is bundled — point this YAML at your own ELF.
+
+name: "nucleo-f103rb-epaper"
+chip: "../chips/stm32f103.yaml"
+
+external_devices:
+  - id: "epaper"
+    type: "ssd1680_tricolor_290"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+
+board_io:
+  - id: "epaper"
+    kind: "spi_device"
+    peripheral: "spi1"
+    pin: 0
+    signal: "input"
+    active_high: true
+    device_type: "ssd1680_tricolor_290"

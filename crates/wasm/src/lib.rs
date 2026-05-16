@@ -923,6 +923,134 @@ impl WasmSimulator {
         )))
     }
 
+    /// Return the SSD1680 tri-color e-paper framebuffer for the device identified by `device_id`.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type: "ssd1680_tricolor_290"`.
+    /// Returns a 9472-byte `Uint8Array`: first 4736 bytes are the black plane
+    /// (1 = white / 0 = black), next 4736 bytes are the red plane on the wire
+    /// (1 = no-red / 0 = red — see GxEPD2 inversion in writeImage). Row-major,
+    /// 128 pixels wide / 296 tall native, MSB-first packing within each byte.
+    /// Returns a JS error if the device is not found.
+    #[wasm_bindgen]
+    pub fn get_ssd1680_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| {
+                b.id == device_id
+                    && matches!(
+                        b.device_type.as_deref(),
+                        Some("ssd1680_tricolor_290") | Some("epd-2in9-tricolor")
+                    )
+            })
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "No ssd1680_tricolor_290 board_io binding '{}'",
+                    device_id
+                ))
+            })?;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "SPI peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+
+        let spi = any
+            .downcast_ref::<labwired_core::peripherals::spi::Spi>()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "Peripheral '{}' is not an SPI controller",
+                    binding.peripheral
+                ))
+            })?;
+
+        for device in &spi.attached_devices {
+            if let Some(panel) = device.as_any().and_then(|a| {
+                a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
+            }) {
+                let mut combined = Vec::with_capacity(panel.black_plane().len() * 2);
+                combined.extend_from_slice(panel.black_plane());
+                combined.extend_from_slice(panel.red_plane());
+                return Ok(combined.into_boxed_slice());
+            }
+        }
+
+        Err(JsValue::from_str(&format!(
+            "SSD1680 device not found on SPI peripheral '{}'",
+            binding.peripheral
+        )))
+    }
+
+    /// Cheap accessor returning just the SSD1680 refresh-generation counter.
+    /// UI uses this to decide whether to re-fetch the (larger) framebuffer.
+    #[wasm_bindgen]
+    pub fn get_ssd1680_refresh_generation(&self, device_id: &str) -> Result<u32, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| {
+                b.id == device_id
+                    && matches!(
+                        b.device_type.as_deref(),
+                        Some("ssd1680_tricolor_290") | Some("epd-2in9-tricolor")
+                    )
+            })
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "No ssd1680_tricolor_290 board_io binding '{}'",
+                    device_id
+                ))
+            })?;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("SPI peripheral '{}' not found", binding.peripheral))
+            })?;
+
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+
+        let spi = any
+            .downcast_ref::<labwired_core::peripherals::spi::Spi>()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "Peripheral '{}' is not an SPI controller",
+                    binding.peripheral
+                ))
+            })?;
+
+        for device in &spi.attached_devices {
+            if let Some(panel) = device.as_any().and_then(|a| {
+                a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
+            }) {
+                return Ok(panel.refresh_generation());
+            }
+        }
+
+        Err(JsValue::from_str(&format!(
+            "SSD1680 device not found on SPI peripheral '{}'",
+            binding.peripheral
+        )))
+    }
+
     /// Read back the current state of each SPI sensor declared in `board_io`.
     /// Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
     #[wasm_bindgen]

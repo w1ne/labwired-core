@@ -195,6 +195,26 @@ impl crate::Peripheral for Spi {
         Ok(())
     }
 
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        // SPI DR (offset 0x0C) MUST be atomic — a Thumb `strh` from firmware
+        // is one bus access, kicking off a single SPI transfer. The default
+        // trait impl byte-splits, which would start two transfers back-to-back
+        // and broadcast a spurious upper-byte (typically 0x00) to attached
+        // devices — devastating for protocol state machines that interpret
+        // every byte (SSD1680 e-paper command set). For 8-bit DFF (the default
+        // and only mode we support) only the low byte goes on the wire; the
+        // upper byte is discarded by silicon. For 16-bit DFF this would need
+        // a 16-cycle transfer; not modeled, low byte only is fine for now.
+        if offset == 0x0C {
+            self.write_reg(0x0C, value);
+            return Ok(());
+        }
+        // Other registers: byte-split is fine (no transfer side-effects).
+        self.write(offset, (value & 0xFF) as u8)?;
+        self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+        Ok(())
+    }
+
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let mut irq = false;
         if self.transfer_in_progress {

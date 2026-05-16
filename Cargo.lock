@@ -547,6 +547,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "epaper-tricolor-lab"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

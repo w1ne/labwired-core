@@ -1,0 +1,16 @@
+name: "epaper-tricolor-lab"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "epaper"
+    type: "ssd1680_tricolor_290"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+board_io:
+  - id: "epaper"
+    kind: "spi_device"
+    peripheral: "spi1"
+    pin: 4
+    signal: "input"
+    active_high: true
+    device_type: "ssd1680_tricolor_290"

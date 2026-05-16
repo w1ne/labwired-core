@@ -53,6 +53,16 @@ peripherals:
     base_address: 0x40005800
     size: "1KB"
     irq: 33
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
   - id: "afio"
     type: "afio"
     base_address: 0x40010000

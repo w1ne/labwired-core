@@ -50,6 +50,7 @@ members = [
     "examples/neo6m-gps-lab",
     "examples/ntc-thermistor-lab",
     "examples/ili9341-tft-lab",
+    "examples/epaper-tricolor-lab",
 ]
 # firmware-hal-test is a standalone reference example pinned to stm32f1xx-hal.
 # It carries its own [profile.release] (opt-level = "z", lto = true) that is
