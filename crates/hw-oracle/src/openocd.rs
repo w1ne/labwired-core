@@ -68,12 +68,33 @@ impl OpenOcd {
     /// `DBGMCU IDCODE = 0x10016433` (STM32F401x family) — same chip the
     /// `arm_thumb` oracle bank targets.
     pub fn spawn_stm32f4() -> Result<Self> {
-        Self::spawn_with_args(&[
-            "-f",
-            "interface/stlink.cfg",
-            "-f",
-            "target/stm32f4x.cfg",
-        ])
+        Self::spawn_stm32("stm32f4x")
+    }
+
+    /// Spawn OpenOCD configured for STM32F1 over ST-Link SWD.
+    ///
+    /// Equivalent to:
+    /// ```text
+    /// openocd -f interface/stlink.cfg -f target/stm32f1x.cfg
+    /// ```
+    ///
+    /// Validated against a Nucleo-F103RB (STM32F103RB, Cortex-M3, IDCODE
+    /// 0x20036410, 128 KiB flash, 20 KiB SRAM).
+    pub fn spawn_stm32f1() -> Result<Self> {
+        Self::spawn_stm32("stm32f1x")
+    }
+
+    /// Generic STM32 SWD helper.
+    ///
+    /// `target_family` is the OpenOCD config name without the `.cfg`
+    /// suffix — e.g. `"stm32f1x"`, `"stm32f4x"`, `"stm32h7x"`.  The
+    /// `arm_thumb` oracle bank can also override the family at runtime
+    /// via the `STM32_TARGET` env var, which is convenient when CI or a
+    /// developer wants to point the same test binary at different
+    /// silicon without recompiling.
+    pub fn spawn_stm32(target_family: &str) -> Result<Self> {
+        let target_cfg = format!("target/{target_family}.cfg");
+        Self::spawn_with_args(&["-f", "interface/stlink.cfg", "-f", &target_cfg])
     }
 
     /// Spawn OpenOCD with explicit `-f` config arguments, plus `init`.

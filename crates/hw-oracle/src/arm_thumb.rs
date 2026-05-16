@@ -35,24 +35,32 @@ use std::path::PathBuf;
 pub const PROG_BASE: u32 = 0x0800_0000;
 
 /// SRAM address where oracle programs are loaded on real STM32 silicon.
-/// 32 KiB into SRAM — past the data window at [`DATA_BASE`], leaves
-/// room for the stack to grow down from the top of SRAM.
-pub const PROG_BASE_HW: u32 = 0x2000_8000;
+/// 8 KiB into SRAM — past the data window at [`DATA_BASE`], with room
+/// for the stack to grow down from [`INIT_SP`] without colliding.
+///
+/// Chosen to fit on the smallest target in the bank: STM32F103RB has
+/// only 20 KiB SRAM (0x2000_0000-0x2000_5000).  F4 has 96 KiB so the
+/// program fits comfortably; this address works for both families.
+pub const PROG_BASE_HW: u32 = 0x2000_2000;
 
 /// Start of the STM32 SRAM window — used for both sim and HW data
-/// (STR/LDR target).  The 16 KiB from `DATA_BASE..DATA_BASE+0x4000`
+/// (STR/LDR target).  The 8 KiB from `DATA_BASE..DATA_BASE+0x2000`
 /// is reserved as the data window in both runners.
 pub const DATA_BASE: u32 = 0x2000_0000;
 
 /// Scratch window size.  64 KiB is comfortably larger than any oracle
-/// program; STM32F401CDU6 has 384 KiB of flash and 96 KiB of SRAM.
+/// program in the sim.  On HW we only write the actual program byte
+/// count, so an over-large sim allocation doesn't hurt.
 pub const ORACLE_MEM_SIZE: usize = 64 * 1024;
 
-/// Initial stack pointer — top of the F4 SRAM window (96 KiB at
-/// 0x2000_0000-0x2001_8000), 8-byte aligned.  Stack grows downward from
-/// here; in the current oracle bank no test pushes anything substantial,
-/// so collisions with the HW program at 0x2000_8000 are not a concern.
-pub const INIT_SP: u32 = 0x2001_7FF8;
+/// Initial stack pointer — top of the F103RB SRAM window (20 KiB at
+/// 0x2000_0000-0x2000_5000), 8-byte aligned at 0x2000_4FF8.
+///
+/// Smaller than the F4's 96 KiB top of SRAM, but the oracle bank
+/// doesn't push anything (no function calls).  Using the smaller
+/// value means the same SP works for every STM32 family the harness
+/// targets.
+pub const INIT_SP: u32 = 0x2000_4FF8;
 
 /// `B .` — 16-bit Thumb branch-to-self.  Used as the program terminator.
 const B_SELF: u16 = 0xE7FE;
@@ -670,9 +678,14 @@ fn capture_hw_state(case: &ThumbOracleCase) -> ThumbOracleState {
     use crate::openocd::OpenOcd;
     use std::time::Duration;
 
-    // 1. Spawn OpenOCD against the attached ST-Link.
-    let mut oc = OpenOcd::spawn_stm32f4()
-        .expect("run_hw: failed to spawn OpenOCD for STM32F4 — is the board attached?");
+    // 1. Spawn OpenOCD against the attached ST-Link.  STM32 family is
+    // selectable via the `STM32_TARGET` env var (e.g. "stm32f1x" for
+    // F103, "stm32f4x" for F401); defaults to F4 since that's the chip
+    // the bank was originally silicon-validated against.
+    let target = std::env::var("STM32_TARGET").unwrap_or_else(|_| "stm32f4x".to_string());
+    let mut oc = OpenOcd::spawn_stm32(&target).unwrap_or_else(|e| {
+        panic!("run_hw: failed to spawn OpenOCD for {target} — is the board attached? {e:?}")
+    });
 
     // 2. Reset + halt the CPU.
     oc.reset_halt().expect("run_hw: reset_halt failed");
