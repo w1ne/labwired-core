@@ -145,17 +145,6 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
           </span>
         </>
       )}
-      <a
-        href="https://github.com/w1ne/labwired#-agent-first-architecture"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="hidden md:inline-flex items-center gap-1 text-[10px] font-medium text-fg-tertiary hover:text-accent transition-colors duration-micro uppercase tracking-[0.06em]"
-        title="Cycle-accurate vs. real silicon — read the HIL-displacement showcase"
-      >
-        <span aria-hidden className="text-ok">✓</span>
-        Cycle-accurate
-      </a>
-      <div className="w-px h-4 bg-border" aria-hidden />
       <div className="flex items-center gap-2 shrink-0">
         <span
           className={clsx('w-2 h-2 rounded-full', isRunning ? 'bg-magenta animate-pulse' : 'bg-fg-tertiary')}
