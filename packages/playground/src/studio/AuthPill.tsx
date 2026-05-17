@@ -12,13 +12,13 @@ export function AuthPill({ onOpenProjects }: AuthPillProps = {}) {
   const { isLoaded, isSignedIn } = useUser();
 
   if (!isLoaded) {
+    // Avatar-shaped skeleton so the toolbar doesn't shift width once Clerk
+    // resolves. Matches the w-7 h-7 of the actual UserButton avatar below.
     return (
       <span
         aria-label="Loading account"
-        className="h-7 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-tertiary flex items-center shrink-0"
-      >
-        …
-      </span>
+        className="w-7 h-7 rounded-full bg-white/[0.05] shrink-0 animate-pulse"
+      />
     );
   }
 

@@ -1334,17 +1334,26 @@ export function App() {
   // Cycle-consuming actions are gated behind Clerk sign-in. Anonymous users
   // who click Run get the Clerk modal instead. Pause/Reset stay open — they
   // don't consume cycles and tend to be reached only mid-flow anyway.
+  const showRunHint = simDockState === 'idle' && (simState.cycles ?? 0) === 0;
   const simDockNode = (
-    <SimDock
-      state={simDockState}
-      runtimeMs={runtimeMs}
-      cycles={simState.cycles}
-      pc={simState.pc}
-      onRun={() => requireAuth(onSimRun)}
-      onPause={handlePause}
-      onStep={() => requireAuth(handleStep)}
-      onReset={handleReset}
-    />
+    <div className="flex flex-col items-center gap-2">
+      {showRunHint && (
+        <div className="px-3 py-1.5 rounded-pill bg-accent/15 border border-accent/40 text-accent text-[11px] font-medium flex items-center gap-1.5 shadow-[0_6px_18px_-6px_rgba(91,157,255,0.45)]">
+          <span aria-hidden>▶</span>
+          Click Run to start — the LED should blink
+        </div>
+      )}
+      <SimDock
+        state={simDockState}
+        runtimeMs={runtimeMs}
+        cycles={simState.cycles}
+        pc={simState.pc}
+        onRun={() => requireAuth(onSimRun)}
+        onPause={handlePause}
+        onStep={() => requireAuth(handleStep)}
+        onReset={handleReset}
+      />
+    </div>
   );
 
   const renderDevDrawer = (devMode: boolean) => (
