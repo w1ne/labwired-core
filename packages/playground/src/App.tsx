@@ -368,7 +368,11 @@ function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: st
   };
 }
 
-const DEFAULT_BOARD = BOARD_CONFIGS[0]; // stm32f103-blinky
+// First-visit default: a Blue Pill with one blinking LED — the canonical
+// embedded "hello world". Simple, no wiring errors possible, Run shows it
+// blinking immediately. Falls back to the first config if this id ever moves.
+const DEFAULT_BOARD =
+  BOARD_CONFIGS.find((c) => c.boardId === 'stm32f103-blinky') ?? BOARD_CONFIGS[0];
 const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 
 const PALETTE_CATEGORY: Record<string, PaletteCategory> = {

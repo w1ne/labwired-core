@@ -25,8 +25,14 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         </svg>
         LabWired
       </a>
-      <span className="text-fg-tertiary text-[11px] hidden lg:inline tracking-[0.01em] shrink-0">
-        Deterministic firmware simulation, no hardware needed
+      <span
+        title="LabWired runs your firmware cycle-accurately and bit-identical across runs — the same .elf produces the same output every time. Drop it into CI for regression tests."
+        className="hidden md:inline-flex items-center gap-1.5 h-6 px-2 rounded-pill bg-success/10 border border-success/30 text-success text-[10.5px] font-medium tracking-[0.02em] shrink-0"
+      >
+        <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(61,214,140,0.7)]" />
+        Deterministic
+        <span aria-hidden className="text-success/40">·</span>
+        Cycle-accurate
       </span>
       <span className="text-fg-tertiary shrink-0" aria-hidden>›</span>
       <span className="text-fg-secondary truncate max-w-[24ch]">{boardName}</span>
