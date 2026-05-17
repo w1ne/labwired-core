@@ -410,6 +410,17 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   'shift-register-74hc595': 'misc',
 };
 
+function EmptyTabState({ label }: { label: string }) {
+  return (
+    <div className="h-full flex items-center justify-center px-6">
+      <div className="text-fg-tertiary text-[12px] text-center max-w-[28ch]">
+        <div className="text-fg-secondary text-[13px] mb-1">▶ Idle</div>
+        {label}
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
   const [bridge, setBridge] = useState<SimulatorBridge | null>(null);
@@ -1369,21 +1380,34 @@ export function App() {
     </div>
   );
 
-  const renderDevDrawer = (devMode: boolean) => (
+  const renderDevDrawer = (devMode: boolean, leftOffset: number) => (
     <DevDrawer
       devMode={devMode}
+      leftOffset={leftOffset}
       tabs={{
         serial: (
           <SerialMonitor output={simState.uartOutput} onClear={clearUart} style={{ height: '100%' }} />
         ),
         registers: (
-          <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />
+          bridge ? (
+            <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />
+          ) : (
+            <EmptyTabState label="Run the simulator to inspect CPU registers." />
+          )
         ),
         trace: (
-          <InstructionTrace entries={traceEntries} style={{ maxHeight: '100%', overflow: 'auto' }} />
+          bridge ? (
+            <InstructionTrace entries={traceEntries} style={{ maxHeight: '100%', overflow: 'auto' }} />
+          ) : (
+            <EmptyTabState label="Run the simulator to see the instruction trace." />
+          )
         ),
         memory: (
-          <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />
+          bridge ? (
+            <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />
+          ) : (
+            <EmptyTabState label="Run the simulator to inspect memory." />
+          )
         ),
         source: (
           selectedBoard.sourceCode ? (

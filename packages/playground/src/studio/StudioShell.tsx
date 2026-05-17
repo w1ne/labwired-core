@@ -17,7 +17,7 @@ export interface StudioShellProps {
   simDock?: ReactNode;
   authSlot?: ReactNode;
   projectSlot?: ReactNode;
-  renderDevDrawer?: (devMode: boolean) => ReactNode;
+  renderDevDrawer?: (devMode: boolean, leftOffset: number) => ReactNode;
   renderCommandPalette?: (commandOpen: boolean, closeCommand: () => void, openCommand: () => void) => ReactNode;
   onMountCommandRef?: (refs: { open: () => void; close: () => void }) => void;
   toast?: string | null;
@@ -102,7 +102,7 @@ export function StudioShell({
             {simDock}
           </div>
         )}
-        {renderDevDrawer?.(layout.devMode)}
+        {renderDevDrawer?.(layout.devMode, !layout.mobile && layout.paletteOpen ? 280 : 0)}
       </main>
       {renderCommandPalette?.(layout.commandOpen, layout.closeCommand, layout.openCommand)}
       <Toast message={toast ?? null} onDismiss={() => onDismissToast?.()} />

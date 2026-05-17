@@ -18,9 +18,11 @@ export interface DevDrawerProps {
   devMode: boolean;
   tabs: Record<DevTab, ReactNode>;
   defaultHeight?: number;
+  /** px to push the drawer's left edge in by, e.g. to clear the palette. */
+  leftOffset?: number;
 }
 
-export function DevDrawer({ devMode, tabs, defaultHeight = 240 }: DevDrawerProps) {
+export function DevDrawer({ devMode, tabs, defaultHeight = 240, leftOffset = 0 }: DevDrawerProps) {
   const [active, setActive] = useState<DevTab>('serial');
   const [height, setHeight] = useState(defaultHeight);
 
@@ -32,8 +34,8 @@ export function DevDrawer({ devMode, tabs, defaultHeight = 240 }: DevDrawerProps
           animate={{ y: 0 }}
           exit={{ y: height }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          style={{ height }}
-          className="absolute bottom-0 inset-x-0 z-10 bg-bg-surface border-t border-border flex flex-col"
+          style={{ height, left: leftOffset, right: 0, transition: 'left 220ms cubic-bezier(0.16, 1, 0.3, 1)' }}
+          className="absolute bottom-0 z-10 bg-bg-surface border-t border-border flex flex-col"
         >
           <div
             role="separator"
