@@ -94,7 +94,14 @@ export function StudioShell({
             </div>
           </div>
         )}
-        {simDock}
+        {simDock && (
+          <div
+            className="absolute left-1/2 -translate-x-1/2 z-20 transition-[bottom] duration-panel ease-out"
+            style={{ bottom: layout.devMode ? 256 : 16 }}
+          >
+            {simDock}
+          </div>
+        )}
         {renderDevDrawer?.(layout.devMode)}
       </main>
       {renderCommandPalette?.(layout.commandOpen, layout.closeCommand, layout.openCommand)}

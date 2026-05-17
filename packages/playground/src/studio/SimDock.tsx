@@ -78,7 +78,7 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
 
   return (
     <div
-      className="lw-glass absolute bottom-4 left-1/2 -translate-x-1/2 z-20 h-12 px-4 flex items-center gap-3 min-w-[560px]"
+      className="lw-glass h-12 px-4 flex items-center gap-3 min-w-[560px]"
       role="toolbar"
       aria-label="Simulation controls"
     >
