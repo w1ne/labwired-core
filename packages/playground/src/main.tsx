@@ -7,6 +7,7 @@ import '@labwired/ui/tokens.css';
 import './playground.css';
 import { App } from './App';
 import { CLERK_PUBLISHABLE_KEY } from './clerk';
+import { clerkAppearance } from './clerkAppearance';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -35,7 +36,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/">
+      <ClerkProvider
+        publishableKey={CLERK_PUBLISHABLE_KEY}
+        afterSignOutUrl="/"
+        appearance={clerkAppearance}
+      >
         <App />
       </ClerkProvider>
     </ErrorBoundary>
