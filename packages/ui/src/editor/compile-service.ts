@@ -28,8 +28,15 @@ export async function compileCode(options: CompileOptions): Promise<CompileResul
     return { success: false, errors, output: 'Compilation failed with syntax errors.' };
   }
 
-  // Try compile servers: local dev server (port 3001), then same-origin
-  const urls = ['http://localhost:3001/api/compile', '/api/compile'];
+  // Try compile servers. In dev, try localhost:3001 first (typical local
+  // compile-server port). Same-origin /api/compile is the prod hook — only
+  // attempted when an explicit env override is set, because foundry.labwired.com
+  // doesn't ship one and the request just 405s noisily otherwise.
+  const isDev = typeof import.meta !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+  const override = typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_COMPILE_URL?: string } }).env?.VITE_COMPILE_URL;
+  const urls: string[] = [];
+  if (override) urls.push(override);
+  if (isDev) urls.push('http://localhost:3001/api/compile');
   for (const url of urls) {
   try {
     const resp = await fetch(url, {

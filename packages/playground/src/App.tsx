@@ -509,8 +509,18 @@ export function App() {
   }, [wasmModule]);
 
   const launchSimulation = useCallback(async (config: ActiveSimulationConfig) => {
-    const mod = await loadWasm();
-    const nextBridge = await SimulatorBridge.fromConfig(mod, config);
+    let mod;
+    try {
+      mod = await loadWasm();
+    } catch (e) {
+      throw new Error(`WASM load failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    let nextBridge;
+    try {
+      nextBridge = await SimulatorBridge.fromConfig(mod, config);
+    } catch (e) {
+      throw new Error(`Simulator init failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
     setActiveSimulationConfig(config);
     setBridge(nextBridge);
     setRunning(true);
@@ -601,7 +611,10 @@ export function App() {
         firmware,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      setToast(`Run failed: ${msg}`);
+      console.error('[LabWired] Run failed:', e);
     } finally {
       setLoading(false);
     }

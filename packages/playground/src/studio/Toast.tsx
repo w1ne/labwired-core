@@ -7,12 +7,14 @@ export interface ToastProps {
   durationMs?: number;
 }
 
-export function Toast({ message, onDismiss, durationMs = 2400 }: ToastProps) {
+export function Toast({ message, onDismiss, durationMs = 4000 }: ToastProps) {
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(onDismiss, durationMs);
     return () => clearTimeout(timer);
   }, [message, durationMs, onDismiss]);
+
+  const isError = !!message && /(failed|error|cannot|unable)/i.test(message);
 
   return (
     <AnimatePresence>
@@ -26,7 +28,9 @@ export function Toast({ message, onDismiss, durationMs = 2400 }: ToastProps) {
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className="lw-glass fixed bottom-20 left-1/2 -translate-x-1/2 z-40 h-10 px-4 flex items-center gap-2 text-fg-primary text-[13px] font-medium shrink-0"
         >
-          <span className="text-ok" aria-hidden>✓</span>
+          <span className={isError ? 'text-danger' : 'text-ok'} aria-hidden>
+            {isError ? '⚠' : '✓'}
+          </span>
           {message}
         </motion.div>
       )}
