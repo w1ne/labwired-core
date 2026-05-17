@@ -199,7 +199,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     arch: 'ARM Cortex-M3',
     chipYaml: chipStm32f103,
     systemYaml: systemStm32f103Blinky,
-    demoFirmwarePath: `${BASE}wasm/demo-blinky.bin`,
+    demoFirmwarePath: `${BASE}wasm/demo-blinky.elf`,
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceBlinky,
     sourceFilename: 'demo-blinky/src/main.rs',
