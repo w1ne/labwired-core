@@ -75,16 +75,20 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         type="button"
         role="switch"
         aria-checked={devMode}
-        aria-label="Dev mode"
+        aria-label={devMode ? 'Hide code editor' : 'Show code editor'}
+        title={devMode ? 'Hide code editor' : 'Show code editor'}
         onClick={onToggleDev}
         className={clsx(
-          'h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-micro shrink-0',
+          'h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-micro shrink-0 flex items-center gap-1.5',
           devMode
-            ? 'bg-magenta-soft text-magenta border border-magenta/40'
+            ? 'bg-accent-soft text-accent border border-accent/40'
             : 'bg-bg-surface/60 text-fg-secondary border border-border hover:text-fg-primary'
         )}
       >
-        Dev {devMode ? 'on' : 'off'}
+        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M5 4 1 8l4 4 M11 4l4 4-4 4" />
+        </svg>
+        Code
       </button>
       <a
         href="../library.html"

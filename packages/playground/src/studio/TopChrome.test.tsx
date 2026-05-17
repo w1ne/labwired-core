@@ -21,10 +21,10 @@ describe('TopChrome', () => {
     expect(onOpenCommand).toHaveBeenCalled();
   });
 
-  it('toggles dev mode when the Dev pill is clicked', async () => {
+  it('toggles the code editor when the Code pill is clicked', async () => {
     const onToggleDev = vi.fn();
     render(<TopChrome boardName="Untitled" onOpenCommand={() => {}} devMode={false} onToggleDev={onToggleDev} />);
-    await userEvent.click(screen.getByRole('switch', { name: /dev mode/i }));
+    await userEvent.click(screen.getByRole('switch', { name: /show code editor/i }));
     expect(onToggleDev).toHaveBeenCalled();
   });
 });

@@ -26,8 +26,9 @@ export function useStudioLayout(): StudioLayoutState & StudioLayoutActions {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [devMode, setDevMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(DEV_KEY) === '1';
+    if (typeof window === 'undefined') return true;
+    // Default ON. Only honor an explicit '0' opt-out.
+    return localStorage.getItem(DEV_KEY) !== '0';
   });
   const [mobile, setMobile] = useState(() => isMobileViewport());
 
