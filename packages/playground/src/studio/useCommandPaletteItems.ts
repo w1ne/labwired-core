@@ -3,6 +3,24 @@ import { COMPONENT_REGISTRY } from '@labwired/ui';
 import type { CommandItem } from './CommandPalette';
 import type { BoardConfig } from '../bundled-configs';
 import { STARTER_LABS } from './ChipRow';
+import { getComponentIcon } from './componentIcons';
+import type { PaletteCategory } from './PaletteDrawer';
+
+// Mirror of App.tsx's PALETTE_CATEGORY so icon lookup uses the same category for fallbacks.
+const CATEGORY_BY_TYPE: Record<string, PaletteCategory> = {
+  adxl345: 'i2c', bme280: 'i2c', mpu6050: 'i2c', 'oled-ssd1306': 'i2c', lcd1602: 'i2c',
+  ili9341: 'spi', max31855: 'spi',
+  'neo6m-gps': 'uart',
+  'ntc-thermistor': 'analog', potentiometer: 'analog', ldr: 'analog',
+  led: 'gpio', button: 'gpio', 'rgb-led': 'gpio', buzzer: 'gpio',
+  'seven-segment': 'gpio', 'led-matrix': 'gpio', neopixel: 'gpio',
+  servo: 'gpio', 'motor-driver-l293d': 'gpio',
+  'pir-sensor': 'gpio', keypad: 'gpio',
+  'slide-switch': 'gpio', 'dip-switch': 'gpio', 'rotary-encoder': 'gpio',
+  dht22: 'misc', ultrasonic: 'misc', resistor: 'misc',
+  capacitor: 'misc', diode: 'misc', transistor: 'misc',
+  'shift-register-74hc595': 'misc',
+};
 
 export interface CommandPaletteContext {
   boards: BoardConfig[];
@@ -26,6 +44,7 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
         bucket: 'Components',
         label: def?.label ?? type,
         hint: 'drop on canvas',
+        icon: getComponentIcon(type, CATEGORY_BY_TYPE[type] ?? 'misc'),
         action: () => ctx.onAddComponent(type),
       });
     }
@@ -36,6 +55,7 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
         bucket: 'Boards',
         label: board.name,
         hint: board.arch,
+        icon: getComponentIcon(board.mcuComponentType ?? 'mcu', 'misc'),
         action: () => ctx.onLoadBoard(board),
       });
     }

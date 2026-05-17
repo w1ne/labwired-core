@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Command } from 'cmdk';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -9,6 +9,7 @@ export interface CommandItem {
   bucket: CommandBucket;
   label: string;
   hint?: string;
+  icon?: ReactNode;
   action: () => void;
 }
 
@@ -75,7 +76,7 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
                     <Command.Group
                       key={bucket}
                       heading={bucket}
-                      className="text-fg-tertiary text-[10px] uppercase tracking-wider px-3 py-1"
+                      className="[&_[cmdk-group-heading]]:text-fg-tertiary [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1"
                     >
                       {inBucket.map((item) => (
                         <Command.Item
@@ -85,10 +86,17 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
                             item.action();
                             onClose();
                           }}
-                          className="flex items-center justify-between px-3 py-2 text-fg-primary text-[13px] aria-selected:bg-accent-soft aria-selected:text-accent cursor-pointer rounded"
+                          className="flex items-center justify-between gap-3 px-3 py-2 text-fg-primary text-[13px] normal-case tracking-normal aria-selected:bg-accent-soft aria-selected:text-accent cursor-pointer rounded"
                         >
-                          <span>{item.label}</span>
-                          {item.hint && <span className="text-fg-tertiary text-[11px]">{item.hint}</span>}
+                          <span className="flex items-center gap-2 min-w-0">
+                            {item.icon && (
+                              <span aria-hidden className="w-6 h-6 rounded bg-bg-canvas border border-border flex items-center justify-center shrink-0">
+                                {item.icon}
+                              </span>
+                            )}
+                            <span className="truncate">{item.label}</span>
+                          </span>
+                          {item.hint && <span className="text-fg-tertiary text-[11px] normal-case shrink-0">{item.hint}</span>}
                         </Command.Item>
                       ))}
                     </Command.Group>
