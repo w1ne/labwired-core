@@ -43,6 +43,7 @@ import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
 import { AuthPill } from './studio/AuthPill';
+import { getComponentIcon } from './studio/componentIcons';
 import { AccountPanel } from './studio/AccountPanel';
 import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
@@ -969,12 +970,16 @@ export function App() {
     () =>
       Array.from(COMPONENT_REGISTRY.entries())
         .filter(([type]) => type !== 'mcu' && !type.startsWith('boards/'))
-        .map(([type, def]) => ({
-          type,
-          label: def.label ?? type,
-          category: PALETTE_CATEGORY[type] ?? 'misc',
-          bus: undefined,
-        })),
+        .map(([type, def]) => {
+          const category = PALETTE_CATEGORY[type] ?? 'misc';
+          return {
+            type,
+            label: def.label ?? type,
+            category,
+            bus: undefined,
+            thumb: getComponentIcon(type, category),
+          };
+        }),
     []
   );
 
