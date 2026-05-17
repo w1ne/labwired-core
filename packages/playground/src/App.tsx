@@ -1381,7 +1381,7 @@ export function App() {
 
   return (
     <StudioShell
-      boardName={selectedBoard.name}
+      boardName={activeProjectName ?? selectedBoard.name}
       isEmpty={isEmpty}
       onPickLab={handlePickLab}
       onUploadFirmware={handleUploadFirmware}
@@ -1392,7 +1392,19 @@ export function App() {
       onPaletteDrag={handlePaletteDrag}
       inspector={inspectorNode}
       simDock={simDockNode}
-      authSlot={<AuthPill />}
+      authSlot={<AuthPill onOpenProjects={() => setProjectsModalOpen(true)} />}
+      projectSlot={
+        <button
+          type="button"
+          onClick={() => setProjectsModalOpen(true)}
+          aria-label="Open My Projects"
+          title={activeProjectName ? `Open ${activeProjectName}` : 'Open My Projects'}
+          className="h-7 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-secondary hover:bg-white/[0.10] hover:text-fg-primary transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1.5 shrink-0 max-w-[18ch]"
+        >
+          <span aria-hidden>📂</span>
+          <span className="truncate">{activeProjectName ?? 'My Projects'}</span>
+        </button>
+      }
       renderDevDrawer={renderDevDrawer}
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}

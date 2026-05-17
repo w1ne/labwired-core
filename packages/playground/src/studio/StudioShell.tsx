@@ -16,6 +16,7 @@ export interface StudioShellProps {
   inspector?: ReactNode;
   simDock?: ReactNode;
   authSlot?: ReactNode;
+  projectSlot?: ReactNode;
   renderDevDrawer?: (devMode: boolean) => ReactNode;
   renderCommandPalette?: (commandOpen: boolean, closeCommand: () => void, openCommand: () => void) => ReactNode;
   onMountCommandRef?: (refs: { open: () => void; close: () => void }) => void;
@@ -35,6 +36,7 @@ export function StudioShell({
   inspector,
   simDock,
   authSlot,
+  projectSlot,
   renderDevDrawer,
   renderCommandPalette,
   onMountCommandRef,
@@ -58,6 +60,7 @@ export function StudioShell({
         onShare={onShare}
         onUploadFirmware={onUploadFirmware}
         authSlot={authSlot}
+        projectSlot={projectSlot}
       />
       {layout.mobile && (
         <div className="absolute top-11 inset-x-0 z-30 bg-warning/10 border-b border-warning/30 px-4 py-2 text-warning text-[12px] text-center">

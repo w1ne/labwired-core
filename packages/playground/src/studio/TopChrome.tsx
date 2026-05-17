@@ -9,9 +9,10 @@ export interface TopChromeProps {
   onShare?: () => void;
   onUploadFirmware?: (file: File) => void;
   authSlot?: ReactNode;
+  projectSlot?: ReactNode;
 }
 
-export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onShare, onUploadFirmware, authSlot }: TopChromeProps) {
+export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onShare, onUploadFirmware, authSlot, projectSlot }: TopChromeProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   return (
     <header
@@ -102,6 +103,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         </svg>
         For CI
       </a>
+      {projectSlot}
       {authSlot}
       <button
         type="button"

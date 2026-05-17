@@ -1,9 +1,14 @@
 import { useUser, UserButton, SignInButton } from '@clerk/clerk-react';
 
+export interface AuthPillProps {
+  onOpenProjects?: () => void;
+}
+
 // Single Clerk-only auth surface. Signed-out users click "Sign in", which opens
 // Clerk's hosted modal directly (no intermediate wrapper). Signed-in users see
-// Clerk's UserButton with profile/sign-out built in.
-export function AuthPill() {
+// Clerk's UserButton with profile/sign-out built in. When onOpenProjects is
+// passed, a "My projects" entry is injected into the avatar dropdown.
+export function AuthPill({ onOpenProjects }: AuthPillProps = {}) {
   const { isLoaded, isSignedIn } = useUser();
 
   if (!isLoaded) {
@@ -23,7 +28,17 @@ export function AuthPill() {
         <UserButton
           afterSignOutUrl="/"
           appearance={{ elements: { avatarBox: 'w-7 h-7' } }}
-        />
+        >
+          {onOpenProjects && (
+            <UserButton.MenuItems>
+              <UserButton.Action
+                label="My projects"
+                labelIcon={<FolderIcon />}
+                onClick={onOpenProjects}
+              />
+            </UserButton.MenuItems>
+          )}
+        </UserButton>
       </div>
     );
   }
@@ -38,5 +53,13 @@ export function AuthPill() {
         Sign in
       </button>
     </SignInButton>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 4a1 1 0 0 1 1-1h3l2 2h5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />
+    </svg>
   );
 }
