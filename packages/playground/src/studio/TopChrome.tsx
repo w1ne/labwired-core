@@ -30,14 +30,14 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         className="hidden md:inline-flex items-center gap-1.5 h-6 px-2 rounded-pill bg-success/10 border border-success/30 text-success text-[10.5px] font-medium tracking-[0.02em] shrink-0"
       >
         <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(61,214,140,0.7)]" />
-        Deterministic
-        <span aria-hidden className="text-success/40">·</span>
+        <span className="hidden xl:inline">Deterministic</span>
+        <span aria-hidden className="text-success/40 hidden xl:inline">·</span>
         Cycle-accurate
       </span>
       <span className="text-fg-tertiary shrink-0" aria-hidden>›</span>
       <span className="text-fg-secondary truncate max-w-[24ch]">{boardName}</span>
 
-      <div className="flex-1 max-w-[440px] mx-auto">
+      <div className="flex-1 max-w-[360px] mx-auto min-w-0">
         <button
           type="button"
           onClick={onOpenCommand}
@@ -105,7 +105,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
       </a>
       <a
         href="../ci.html"
-        className="hidden md:flex h-7 px-3 rounded-pill text-xs font-medium bg-magenta-soft text-magenta hover:bg-magenta/20 border border-magenta/30 transition-colors duration-micro items-center gap-1.5 shrink-0"
+        className="hidden xl:flex h-7 px-3 rounded-pill text-xs font-medium bg-magenta-soft text-magenta hover:bg-magenta/20 border border-magenta/30 transition-colors duration-micro items-center gap-1.5 shrink-0"
         title="Use LabWired in your CI pipeline"
       >
         <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
