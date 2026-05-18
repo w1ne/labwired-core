@@ -1428,7 +1428,22 @@ fn decode_si(w: u32) -> Instruction {
                     let imm12 = (w >> 12) & 0xFFF;
                     Instruction::Entry { as_: s, imm: imm12 }
                 }
-                1 => Instruction::Unknown(w), // reserved per ISA RM
+                1 => {
+                    // n=3, m=1: LOOP family (BRI8-shaped, r selects variant).
+                    // Per Xtensa ISA RM §7.4 Zero-Overhead Loop Option:
+                    //   r=8  → LOOP   as_, imm8 (always taken)
+                    //   r=9  → LOOPNEZ as_, imm8 (skip body if as_==0)
+                    //   r=10 → LOOPGTZ as_, imm8 (skip body if as_<=0 signed)
+                    // imm8 in bits[23:16], offset relative to PC+4.
+                    let imm8 = (w >> 16) & 0xFF;
+                    let offset = imm8 as i32 + 4;
+                    match r {
+                        8  => Instruction::Loop    { as_: s, offset },
+                        9  => Instruction::Loopnez { as_: s, offset },
+                        10 => Instruction::Loopgtz { as_: s, offset },
+                        _ => Instruction::Unknown(w),
+                    }
+                }
                 2 => {
                     // BLTUI as_, imm, offset (BIU family)
                     let imm8 = (w >> 16) & 0xFF;

@@ -279,6 +279,39 @@ impl XtensaLx7 {
                 // can detect "halted" without us tracking extra state.
                 self.ps.set_intlevel(level);
             }
+            // Xtensa Zero Overhead Loops (LOOP / LOOPNEZ / LOOPGTZ).
+            // ISA RM §4.3.2: LCOUNT = as_ - 1, LBEG = PC + 3 (after LOOP),
+            // LEND = PC + 3 + offset. After each instruction at PC=LEND-N
+            // (last instruction in the loop body), CPU implicitly checks
+            // LCOUNT > 0 and branches back to LBEG. We don't have a
+            // post-instruction LEND hook today, so this implementation
+            // unrolls the loop iteratively here: pre-decrement LCOUNT and
+            // jump out when zero, otherwise just fall through and let the
+            // body execute. The body's natural fall-through hits PC=LEND
+            // which is the instruction AFTER the loop — at that point our
+            // ZOL post-PC check below (see step()) re-enters the body.
+            Loop { as_, offset } | Loopnez { as_, offset } | Loopgtz { as_, offset } => {
+                use crate::cpu::xtensa_sr::{LBEG, LCOUNT, LEND};
+                let count = self.regs.read_logical(as_);
+                let take = match ins {
+                    Loop { .. } => count != 0,
+                    Loopnez { .. } => count != 0,
+                    Loopgtz { .. } => (count as i32) > 0,
+                    _ => unreachable!(),
+                };
+                let after = self.pc.wrapping_add(len);
+                let lend = (after as i32).wrapping_add(offset) as u32;
+                if take {
+                    self.sr.write(LBEG, after);
+                    self.sr.write(LEND, lend);
+                    self.sr.write(LCOUNT, count.wrapping_sub(1));
+                    self.pc = after; // fall through to loop body
+                } else {
+                    // Skip the body — branch past LEND.
+                    self.sr.write(LCOUNT, 0);
+                    self.pc = lend;
+                }
+            }
 
             // ── D2: SAR-setup instructions ───────────────────────────────────
             // SSL as_: SAR = 32 - (as_ & 0x1F).
@@ -1644,7 +1677,20 @@ impl Cpu for XtensaLx7 {
             let w = bus.read_u32(pc as u64)?;
             xtensa::decode(w)
         };
-        self.execute(ins, bus, len)
+        self.execute(ins, bus, len)?;
+
+        // Zero Overhead Loop post-instruction check: if we've just executed
+        // the last instruction of a ZOL body, LCOUNT > 0 means branch back
+        // to LBEG. ISA RM §4.3.2 — the implicit branch is checked AFTER PC
+        // is updated by the last body instruction. Our `pc` now points to
+        // (LEND - len) + len = LEND, the instruction after the loop body.
+        use crate::cpu::xtensa_sr::{LBEG, LCOUNT, LEND};
+        let lcount = self.sr.read(LCOUNT);
+        if lcount > 0 && self.pc == self.sr.read(LEND) {
+            self.sr.write(LCOUNT, lcount - 1);
+            self.pc = self.sr.read(LBEG);
+        }
+        Ok(())
     }
 
     fn set_pc(&mut self, val: u32) {

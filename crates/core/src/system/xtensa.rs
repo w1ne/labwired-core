@@ -185,6 +185,18 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4000_9200, rom_thunks::nop_return_zero); // (unnamed esp32_init helper)
     rom_bank.register(0x4000_4348, rom_thunks::nop_return_zero); // rom_i2c_writeReg vicinity
     rom_bank.register(0x4000_41a4, rom_thunks::nop_return_zero); // rom_i2c_writeReg
+    // Cache control — esp-hal pokes these during boot. We don't model
+    // flash cache state so all four are no-ops.
+    rom_bank.register(0x4000_9a14, rom_thunks::nop_return_zero); // Cache_Flush_rom
+    rom_bank.register(0x4000_9a84, rom_thunks::nop_return_zero); // Cache_Read_Enable_rom
+    rom_bank.register(0x4000_9ab8, rom_thunks::nop_return_zero); // Cache_Read_Disable_rom
+    rom_bank.register(0x4000_95e0, rom_thunks::nop_return_zero); // cache_flash_mmu_set_rom
+    rom_bank.register(0x4000_97f4, rom_thunks::nop_return_zero); // cache_sram_mmu_set_rom
+    // GPIO ROM helpers — Arduino-ESP32 uses these to set up VSPI pins.
+    // No-op in sim (our Esp32Gpio/Esp32Spi peripherals accept signals
+    // directly without IO_MUX-state enforcement).
+    rom_bank.register(0x4000_9edc, rom_thunks::nop_return_zero); // esp_rom_gpio_connect_in_signal
+    rom_bank.register(0x4000_9fdc, rom_thunks::nop_return_zero); // esp_rom_gpio_pad_select_gpio
     bus.add_peripheral(
         "rom",
         0x4000_0000,
