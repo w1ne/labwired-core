@@ -118,7 +118,15 @@ impl Peripheral for RtcCntlStub {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
-        let word = self.words.get(&word_off).copied().unwrap_or(0);
+        let mut word = self.words.get(&word_off).copied().unwrap_or(0);
+        // ESP32-classic RTC_CNTL_TIME_UPDATE_REG at offset 0x0C — Arduino-
+        // ESP32's `rtc_time_get` writes bit 31 (TIME_UPDATE) and polls
+        // bit 30 (TIME_VALID). On real silicon, the RTC asserts TIME_VALID
+        // within a few RTC cycles. Auto-set it on read so the poll exits
+        // on the first iteration.
+        if word_off == 0x0C {
+            word |= 1 << 30;
+        }
         Ok(((word >> byte_off) & 0xFF) as u8)
     }
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {

@@ -336,14 +336,21 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32s3::system_stub::RtcCntlStub::new()),
     );
 
-    // TIMG0 (timer group 0). esp_hal::init pokes the WDT regs here to
-    // disable the task watchdog. Round-trip stub is sufficient.
+    // TIMG0 (timer group 0). Two roles:
+    //   1. Watchdog regs (WDTCONFIG0..WDTWPROTECT) — round-trip writes
+    //      are enough; esp-hal pokes them to disable the WDT.
+    //   2. RTC clock calibration (RTCCALICFG at 0x68, RTCCALICFG1 at 0x6c).
+    //      Arduino-ESP32's `rtc_clk_cal_internal` writes RTCCALICFG with
+    //      START set, then polls RTCCALICFG1 bit 0 (RDY) and reads the
+    //      cycle count from bits[31:7]. With `with_unwritten_ones()` the
+    //      RDY bit reads as 1 immediately and the cycle count returns
+    //      0xFFFFFE0 — enough to satisfy the calibration loop.
     bus.add_peripheral(
         "timg0",
         0x3FF5_F000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
     );
 
     // TIMG1 — same shape as TIMG0.
@@ -352,7 +359,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x3FF6_0000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
     );
 
     // EFUSE — esp-hal reads MAC / chip-revision bits during init.
