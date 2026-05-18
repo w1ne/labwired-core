@@ -214,6 +214,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4000_c84c, rom_thunks::rom_lshrdi3);   // __lshrdi3
     rom_bank.register(0x4000_ca84, rom_thunks::rom_divdi3);    // __divdi3
     rom_bank.register(0x4000_cd4c, rom_thunks::rom_moddi3);    // __moddi3
+    rom_bank.register(0x4000_cff8, rom_thunks::rom_udivdi3);   // __udivdi3
     rom_bank.register(0x4000_c7e8, rom_thunks::rom_clzsi2);    // __clzsi2
     rom_bank.register(0x4000_c7f0, rom_thunks::rom_ctzsi2);    // __ctzsi2
     // SPI flash / eFuse helpers — used by Arduino-ESP32's flash init.
@@ -370,6 +371,25 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x1000,
         None,
         Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
+    );
+
+    // RTC slow memory (8 KiB at 0x5000_0000). Arduino-ESP32 stores
+    // sleep-mode reference counts and bootloader state here.
+    bus.add_peripheral(
+        "rtc_slow",
+        0x5000_0000,
+        0x2000,
+        None,
+        Box::new(RamPeripheral::new(0x2000)),
+    );
+
+    // RTC fast memory (8 KiB at 0x3FF8_0000) — alias for instruction view.
+    bus.add_peripheral(
+        "rtc_fast",
+        0x3FF8_0000,
+        0x2000,
+        None,
+        Box::new(RamPeripheral::new(0x2000)),
     );
 
     XtensaLx7::new()

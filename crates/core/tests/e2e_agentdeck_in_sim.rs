@@ -54,6 +54,12 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     // for `s_cpu_up[1]` to be set by the second core. We don't model the
     // second core, so pre-write 1 to its slot so the loop exits.
     let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
+    // Fake the BROM XTAL-frequency probe. esp_clk_init asserts that
+    // `rtc_clk_xtal_freq_get()` doesn't return SOC_XTAL_FREQ_AUTO. The
+    // probe reads RTC_APB_FREQ_REG (0x3FF480B0): low and high halves
+    // must be equal AND not -1/-2, encoding (freq_mhz << 1). For 40 MHz
+    // XTAL → value = 0x0050_0050.
+    let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
 
     // Generous step budget — Arduino-ESP32 + GxEPD2 boot is much heavier
     // than our hand-rolled Rust firmware. ~500M steps is comfortable
@@ -70,12 +76,31 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     let mut samples: Vec<(u64, u32)> = Vec::new();
     for _ in 0..MAX_STEPS {
         step_count += 1;
-        // Re-write s_cpu_up[1] every 10k steps. xtensa-lx-rt's Reset zeroes
-        // .bss BEFORE start_other_core polls this byte, so a one-shot write
-        // before stepping gets clobbered. Periodic re-write keeps it set
-        // until start_other_core's spin loop reads it.
         if step_count % 10_000 == 0 {
             let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
+        }
+        // Diagnostic: catch __assert_func entry and print its args
+        // (filename, line, function, expr).
+        if machine.cpu.get_pc() == 0x40091fe4 {
+            // Inside the caller's window, args are a10..a13.
+            // Find them by checking PS.callinc and reading the AR file.
+            let read_string = |addr: u32, bus: &SystemBus| -> String {
+                let mut out = String::new();
+                for i in 0..128u32 {
+                    let b = bus.read_u8(addr.wrapping_add(i) as u64).unwrap_or(0);
+                    if b == 0 { break; }
+                    out.push(b as char);
+                }
+                out
+            };
+            let f_addr = machine.cpu.get_register(10);
+            let line = machine.cpu.get_register(11);
+            let fn_addr = machine.cpu.get_register(12);
+            let expr_addr = machine.cpu.get_register(13);
+            let f = read_string(f_addr, &machine.bus);
+            let n = read_string(fn_addr, &machine.bus);
+            let e = read_string(expr_addr, &machine.bus);
+            eprintln!("[agentdeck-sim] __assert_func: file=\"{f}\" line={line} fn=\"{n}\" expr=\"{e}\" (step {step_count})");
         }
         if let Err(e) = machine.step() {
             eprintln!(
