@@ -1156,6 +1156,17 @@ export function App() {
     void handleRun();
   }, [embed, handleRun, selectedBoard.boardId]);
 
+  // ?run=1 — auto-click Run once the board is loaded. Used by the watch overlay
+  // iframe ("agent picked this board, show me the sim running"). Unconditional:
+  // overrides the default-board guard above and the autostart localStorage key.
+  useEffect(() => {
+    if (autostartTriggeredRef.current) return;
+    const wantsAutoRun = new URLSearchParams(window.location.search).get('run') === '1';
+    if (!wantsAutoRun) return;
+    autostartTriggeredRef.current = true;
+    void handleRun();
+  }, [handleRun]);
+
   useEffect(() => {
     localStorage.setItem(
       getWorkspaceStorageKey(selectedBoard.boardId, 'diagram'),
