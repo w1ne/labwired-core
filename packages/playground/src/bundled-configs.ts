@@ -4,6 +4,7 @@
  * aligned with the engine's source-of-truth chip/system definitions.
  */
 
+import chipEsp32 from '../../../core/configs/chips/esp32.yaml?raw';
 import chipEsp32c3 from '../../../core/configs/chips/esp32c3.yaml?raw';
 import chipEsp32s3 from '../../../core/configs/chips/esp32s3.yaml?raw';
 import chipNrf52840 from '../../../core/configs/chips/nrf52840.yaml?raw';
@@ -29,6 +30,7 @@ import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?
 import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
+import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
@@ -39,6 +41,7 @@ import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
+import sourceEsp32Epaper from '../../../core/examples/esp32-epaper-lab/src/main.rs?raw';
 
 export interface BoardConfig {
   boardId: string;
@@ -147,6 +150,20 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceEpaperTricolor,
     sourceFilename: 'epaper-tricolor-lab/src/main.rs',
+    kind: 'lab',
+  },
+  {
+    boardId: 'esp32-epaper-lab',
+    chipId: 'esp32',
+    name: 'ESP32 + E-Paper 2.9" Tri-color',
+    description: 'ESP32-WROOM-32 + Waveshare 2.9" SSD1680 tri-color e-paper over simulated VSPI. Same Rust no_std ELF flashes to a real ESP32 module via espflash for side-by-side digital-twin verification with the AgentDeck hardware pin map.',
+    arch: 'Xtensa LX6',
+    chipYaml: chipEsp32,
+    systemYaml: systemEsp32EpaperLab,
+    demoFirmwarePath: `${BASE}wasm/demo-esp32-epaper-lab.elf`,
+    mcuComponentType: 'esp32',
+    sourceCode: sourceEsp32Epaper,
+    sourceFilename: 'esp32-epaper-lab/src/main.rs',
     kind: 'lab',
   },
   {

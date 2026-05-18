@@ -309,6 +309,31 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
+  if (config.boardId === 'esp32-epaper-lab') {
+    // ESP32-WROOM-32 driving the same Waveshare panel via VSPI. Wiring
+    // matches AgentDeck (`firmware/src/pins.h`) — BUSY=GPIO4 / RST=GPIO16
+    // / DC=GPIO17 / CS=GPIO5 / SCK=GPIO18 / MOSI=GPIO23 — so the same
+    // ELF that espflash'es to the AgentDeck hardware paints the panel
+    // here too.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'epaper', type: 'ssd1680_tricolor_290', x: 540, y: 40, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: '3V3' },     to: { part: 'epaper', pin: 'VCC'  }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' },     to: { part: 'epaper', pin: 'GND'  }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'GPIO23' },  to: { part: 'epaper', pin: 'DIN'  }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'GPIO18' },  to: { part: 'epaper', pin: 'CLK'  }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'GPIO5'  },  to: { part: 'epaper', pin: 'CS'   }, color: '#3DD68C' },
+        { from: { part: 'mcu', pin: 'GPIO17' },  to: { part: 'epaper', pin: 'DC'   }, color: '#5B9DFF' },
+        { from: { part: 'mcu', pin: 'GPIO16' },  to: { part: 'epaper', pin: 'RST'  }, color: '#F5B642' },
+        { from: { part: 'mcu', pin: 'GPIO4'  },  to: { part: 'epaper', pin: 'BUSY' }, color: '#FFE680' },
+      ],
+    };
+  }
+
   if (config.boardId === 'nucleo-f401re') {
     return {
       ...createEmptyDiagram(config.chipId),

@@ -232,12 +232,45 @@ const ESP32C3_PINS: Record<string, PinMapping> = Object.fromEntries(
   ]),
 );
 
+/** ESP32-classic pin mappings (GPIO0-GPIO39 + power rails).
+ *  VSPI default pinmux puts SCK on GPIO18, MOSI on GPIO23, MISO on GPIO19,
+ *  CS on GPIO5 — surfaced as `spi` functions so the validator marks them
+ *  SPI-capable for `epaper-tricolor-lab`-style components. */
+const ESP32_PINS: Record<string, PinMapping> = {
+  // Power rails (sim-only — physical 3V3 / GND don't have a GPIO bank).
+  '3V3': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  'GND': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  ...Object.fromEntries(
+    [
+      0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27,
+      32, 33, 34, 35, 36, 39,
+    ].map((n) => {
+      const spi: PinFunction[] =
+        n === 18 || n === 23 || n === 19 || n === 5
+          ? [{ type: 'spi', peripheral: 'spi3', role: 'sck' }]
+          : [];
+      const uart: PinFunction[] =
+        n === 1 || n === 3
+          ? [{ type: 'uart', peripheral: 'uart0', role: n === 1 ? 'tx' : 'rx' }]
+          : [];
+      return [
+        `GPIO${n}`,
+        {
+          gpio: { peripheral: 'gpio', pin: n },
+          functions: [...spi, ...uart],
+        },
+      ];
+    }),
+  ),
+};
+
 const PIN_MAPS: Record<string, Record<string, PinMapping>> = {
   stm32f103: STM32F103_PINS,
   stm32f401: STM32F103_PINS, // Similar enough for now
   stm32h563: STM32H563_PINS,
   rp2040: RP2040_PINS,
   nrf52840: NRF52840_PINS,
+  esp32: ESP32_PINS,
   esp32c3: ESP32C3_PINS,
 };
 

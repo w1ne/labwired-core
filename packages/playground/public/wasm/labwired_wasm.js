@@ -37,11 +37,19 @@ export class WasmSimulator {
         wasm.wasmsimulator_feed_uart_input(this.__wbg_ptr, ptr0, len0);
     }
     /**
-     * @param {Uint8Array} packet
+     * Browser-side GDB stub entry point.
+     *
+     * Disabled in this build: the GdbStub `Target` impl in `labwired-gdbstub`
+     * is concrete on `LabwiredTarget<CortexM>` / `LabwiredTarget<RiscV>`,
+     * but `WasmSimulator` now holds `Machine<Box<dyn Cpu>>` so the bound
+     * isn't satisfied. The playground has no JS caller for this method,
+     * so we return an empty packet rather than refactor `labwired-gdbstub`
+     * to be dyn-aware. Track via the v0.6 plan.
+     * @param {Uint8Array} _packet
      * @returns {Uint8Array}
      */
-    gdb_process_packet(packet) {
-        const ptr0 = passArray8ToWasm0(packet, wasm.__wbindgen_malloc);
+    gdb_process_packet(_packet) {
+        const ptr0 = passArray8ToWasm0(_packet, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.wasmsimulator_gdb_process_packet(this.__wbg_ptr, ptr0, len0);
         var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
@@ -275,6 +283,15 @@ export class WasmSimulator {
     }
     /**
      * Config-driven constructor: initialize from system YAML, chip YAML, and firmware ELF.
+     *
+     * Dispatches on `chip.arch`:
+     *   * `Arm` → `SystemBus::from_config` + `configure_cortex_m` (existing path).
+     *   * `Xtensa` → `configure_xtensa_esp32` + inline external-device attach.
+     *     ESP32 chip YAMLs declare RAM banks (IRAM/DRAM/flash XIP/ROM) via
+     *     `peripherals: [{type: ram, ...}]`, which `from_config` doesn't
+     *     understand — it'd stub them out and break instruction fetch. So
+     *     ESP32 takes the dedicated path that explicitly registers those
+     *     banks before attaching SPI / I²C external devices.
      * @param {string} system_yaml
      * @param {string} chip_yaml
      * @param {Uint8Array} firmware
