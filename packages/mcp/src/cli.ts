@@ -129,3 +129,116 @@ export async function listChips(filter?: string): Promise<unknown> {
     return { raw: stdout };
   }
 }
+
+// ─── High-level lab runner ─────────────────────────────────────────────────
+// `runLab` is the agent-friendly tool surface. The agent picks a board, hands
+// us an ELF, says "run it for N cycles". We synthesize the test script YAML,
+// invoke `labwired test`, read result.json + uart.log + the gpio trace, and
+// pack a structured response.
+
+const GPIO_EVENT_CAP = 10_000;
+const UART_CAP_BYTES = 256 * 1024;
+
+export interface RunLabOpts {
+  systemYaml: string;
+  chipYaml?: string; // currently unused — labwired-cli resolves chip from system manifest
+  firmware: Buffer;
+  maxCycles?: number;
+  captureGpio?: boolean;
+}
+
+export interface RunLabResult {
+  exit_code: number;
+  exit_reason?: string;
+  final_cycles?: number;
+  final_pc_hex?: string;
+  serial_output: string;
+  serial_truncated: boolean;
+  gpio_events?: Array<{ sim_cycle: number; pin: string; from: 0 | 1; to: 0 | 1 }>;
+  gpio_truncated?: boolean;
+  gpio_total_count?: number;
+  raw_result: unknown;
+  stderr: string;
+}
+
+export async function runLab(opts: RunLabOpts): Promise<RunLabResult> {
+  const work = await mkdtemp(join(tmpdir(), 'labwired-mcp-lab-'));
+  try {
+    const firmwarePath = join(work, 'firmware.elf');
+    const systemPath = join(work, 'system.yaml');
+    const scriptPath = join(work, 'script.yaml');
+    const outputDir = join(work, 'out');
+
+    await writeFile(firmwarePath, opts.firmware);
+    await writeFile(systemPath, opts.systemYaml);
+
+    // Synthesize a minimal "run for N cycles, stop on no_progress" script.
+    const maxCycles = opts.maxCycles ?? 10_000_000;
+    const script = [
+      'schema_version: "1.0"',
+      'limits:',
+      `  max_steps: ${maxCycles}`,
+      `  no_progress_steps: 1000`,
+      'assertions:',
+      '  - expected_stop_reason: max_steps',
+      '  - expected_stop_reason: no_progress',
+    ].join('\n') + '\n';
+    await writeFile(scriptPath, script);
+
+    const args = [
+      'test',
+      '--firmware', firmwarePath,
+      '--system', systemPath,
+      '--script', scriptPath,
+      '--output-dir', outputDir,
+      '--no-uart-stdout',
+      '--max-cycles', String(maxCycles),
+    ];
+
+    const { stderr, exitCode } = await runCli(args);
+
+    // result.json + uart.log are always written by `test` mode (when the run starts)
+    let raw_result: unknown = null;
+    let serial_output = '';
+    try {
+      raw_result = JSON.parse(await readFile(join(outputDir, 'result.json'), 'utf-8'));
+    } catch { /* keep null */ }
+    try {
+      serial_output = await readFile(join(outputDir, 'uart.log'), 'utf-8');
+    } catch { /* keep empty */ }
+
+    const serial_truncated = serial_output.length > UART_CAP_BYTES;
+    if (serial_truncated) serial_output = serial_output.slice(-UART_CAP_BYTES);
+
+    // Tease out structured fields from raw_result. Schema (per CLI's TestResult):
+    //   { exit_code, exit_reason: "max_steps"|"no_progress"|..., total_cycles, final_pc, ... }
+    let exit_reason: string | undefined;
+    let final_cycles: number | undefined;
+    let final_pc_hex: string | undefined;
+    if (raw_result && typeof raw_result === 'object') {
+      const r = raw_result as Record<string, unknown>;
+      if (typeof r.exit_reason === 'string') exit_reason = r.exit_reason;
+      if (typeof r.total_cycles === 'number') final_cycles = r.total_cycles;
+      if (typeof r.final_pc === 'number') final_pc_hex = `0x${r.final_pc.toString(16).toUpperCase().padStart(8, '0')}`;
+      else if (typeof r.final_pc === 'string') final_pc_hex = r.final_pc;
+    }
+
+    return {
+      exit_code: exitCode,
+      exit_reason,
+      final_cycles,
+      final_pc_hex,
+      serial_output,
+      serial_truncated,
+      // GPIO capture is best-effort; the current `test` subcommand may not emit
+      // a gpio trace. Left as undefined until the CLI grows that flag.
+      gpio_events: undefined,
+      raw_result,
+      stderr,
+    };
+  } finally {
+    await rm(work, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+void GPIO_EVENT_CAP; // reserved for when CLI emits gpio traces

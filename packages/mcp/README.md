@@ -8,8 +8,11 @@ LabWired runs ARM Cortex-M / RISC-V / Xtensa firmware against a cycle-accurate, 
 
 | Tool | What it does |
 |---|---|
-| `labwired_catalog` | List supported chips/boards (filter by name). |
-| `labwired_simulate` | Run firmware against a test script. Returns `result.json` + UART log. Deterministic. |
+| `labwired_list_boards` | High-level: list pre-wired boards (chip + peripherals + demo firmware). Start here. |
+| `labwired_run_lab` | High-level: run an ELF on a board by id. Synthesizes the test script, returns cycles + serial + a `snapshot_id`. |
+| `labwired_inspect_run` | Fetch detail from a prior `snapshot_id` — `summary`, `serial`, `gpio`, `raw`. 10-min TTL. |
+| `labwired_catalog` | Low-level: list raw chip descriptors. |
+| `labwired_simulate` | Low-level: run firmware against a custom System Manifest + test script YAML. Full control. |
 | `labwired_validate_system` | Validate a System Manifest YAML before simulating. Fast schema check. |
 
 ## Prerequisites
@@ -65,6 +68,7 @@ Once installed, ask your agent things like:
 ## Environment variables
 
 - `LABWIRED_CLI` — override the CLI binary path. Defaults to `labwired` on `PATH`.
+- `LABWIRED_REPO_ROOT` — absolute path to your labwired checkout. The high-level `labwired_run_lab` tool resolves board YAMLs from `core/configs/`. Auto-detected when the MCP server is run from inside the repo; required when running globally.
 
 ## Why deterministic matters for agents
 
@@ -74,7 +78,12 @@ LabWired is bit-accurate and reproducible by design: the same firmware + same sy
 
 ## Status
 
-Early MVP (v0.1). Three tools, stdio transport, no auth required for local use (the simulator runs on your machine). Worker-side metering for hosted runs lands in a future version.
+v0.2 — six tools, stdio transport, no auth required for local use (the simulator runs on your machine).
+
+- v0.2 (this release): adds the high-level `labwired_list_boards` / `labwired_run_lab` / `labwired_inspect_run` workflow on top of the v0.1 chip+YAML tools. ELF-in only — agents compile locally.
+- v0.3 (next): browser-watch sessions — agent's runs stream live to `https://foundry.labwired.com/?watch=<id>` so a human can follow along.
+- v0.4: structured `labwired_validate_diagram` with machine-readable diagnostics (pin/wire/bus errors with suggested fixes).
+- v0.5: Worker-side metering for hosted runs.
 
 Issues / requests: <https://github.com/w1ne/labwired/issues>.
 
