@@ -9,9 +9,10 @@ import { z } from 'zod';
 import { listChips, runSimulation, validateSystem, runLab } from './cli.js';
 import { listBoards, getBoard, readBoardYamls } from './boards.js';
 import { putSnapshot, getSnapshot } from './snapshots.js';
+import { diagnoseDiagram, type ValidateDiagram } from './diagnostics.js';
 
 const SERVER_NAME = '@labwired/mcp';
-const SERVER_VERSION = '0.2.0';
+const SERVER_VERSION = '0.3.0';
 
 const CatalogInput = z.object({
   filter: z
@@ -74,6 +75,22 @@ const InspectRunInput = z.object({
     .enum(['summary', 'serial', 'gpio', 'raw'])
     .default('summary')
     .describe('summary | serial | gpio | raw. Default summary.'),
+});
+
+const ValidateDiagramInput = z.object({
+  diagram: z
+    .object({
+      board: z.string(),
+      parts: z.array(z.object({ id: z.string(), type: z.string() }).passthrough()),
+      wires: z.array(
+        z.object({
+          from: z.object({ part: z.string(), pin: z.string() }),
+          to: z.object({ part: z.string(), pin: z.string() }),
+        }),
+      ),
+    })
+    .passthrough()
+    .describe('Diagram JSON: { board, parts: [{id, type, ...}], wires: [{from, to}] }.'),
 });
 
 const server = new Server(
@@ -210,6 +227,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: 'string',
             enum: ['summary', 'serial', 'gpio', 'raw'],
             description: 'Slice to return. Default summary.',
+          },
+        },
+      },
+    },
+    {
+      name: 'labwired_validate_diagram',
+      description:
+        'Structurally validate a wired diagram BEFORE attempting to run it. Returns an array of ' +
+        'machine-readable diagnostics (severity, code, message, location, suggested fix) — much ' +
+        'friendlier than waiting for the simulator to fail at run time. Common codes: ' +
+        'PIN_NOT_ON_CHIP, PIN_LACKS_I2C, BOARDIO_NOT_TO_MCU, NO_MCU, COMPONENT_DANGLING. Use this ' +
+        'when building circuits programmatically; iterate until you get back an empty array.',
+      inputSchema: {
+        type: 'object',
+        required: ['diagram'],
+        properties: {
+          diagram: {
+            type: 'object',
+            description:
+              'Diagram JSON: { board: "stm32f103", parts: [{id, type}], wires: [{from:{part,pin}, to:{part,pin}}] }',
           },
         },
       },
@@ -386,6 +423,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
         isError: run.exit_code !== 0,
+      };
+    }
+
+    if (name === 'labwired_validate_diagram') {
+      const { diagram } = ValidateDiagramInput.parse(args ?? {});
+      const diagnostics = diagnoseDiagram(diagram as unknown as ValidateDiagram);
+      const errors = diagnostics.filter((d) => d.severity === 'error').length;
+      const warnings = diagnostics.filter((d) => d.severity === 'warning').length;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                ok: errors === 0,
+                error_count: errors,
+                warning_count: warnings,
+                diagnostics,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+        isError: errors > 0,
       };
     }
 

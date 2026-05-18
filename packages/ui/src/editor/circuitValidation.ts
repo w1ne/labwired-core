@@ -1,6 +1,7 @@
 import { COMPONENT_REGISTRY } from './components/index';
 import { findPinFunction, getPinMapping } from './pin-mapping';
 import type { Diagram, WireEndpoint } from './types';
+import { diagnoseDiagram } from './circuitDiagnostics';
 
 function getPart(diagram: Diagram, endpoint: WireEndpoint) {
   return diagram.parts.find((part) => part.id === endpoint.part) ?? null;
@@ -120,43 +121,13 @@ export function validateWireConnection(diagram: Diagram, from: WireEndpoint, to:
   return null;
 }
 
+/**
+ * Legacy string[] API for callers that don't need structured diagnostics
+ * (current playground toast surface). New code should use diagnoseDiagram()
+ * from ./circuitDiagnostics — that's the single source of truth.
+ */
 export function validateDiagram(diagram: Diagram): string[] {
-  const errors: string[] = [];
-  const seen = new Set<string>();
-
-  for (const wire of diagram.wires) {
-    const key = `${wire.from.part}:${wire.from.pin}->${wire.to.part}:${wire.to.pin}`;
-    if (seen.has(key)) continue;
-    const error = validateWireEndpoints(diagram, wire.from, wire.to);
-    if (error) {
-      errors.push(error);
-      seen.add(key);
-    }
-  }
-
-  const mcuAssignments = new Map<string, string>();
-  const componentAssignments = new Set<string>();
-
-  for (const wire of diagram.wires) {
-    const mcuEndpoint = getRole(diagram, wire.from).isMcu ? wire.from : getRole(diagram, wire.to).isMcu ? wire.to : null;
-    const otherEndpoint = mcuEndpoint === wire.from ? wire.to : mcuEndpoint === wire.to ? wire.from : null;
-    if (!mcuEndpoint || !otherEndpoint) continue;
-
-    const otherRole = getRole(diagram, otherEndpoint);
-    if (!otherRole.boardIoKind) continue;
-
-    const partKey = otherEndpoint.part;
-    if (componentAssignments.has(partKey)) {
-      errors.push(`${otherRole.def?.label ?? 'This component'} already has multiple MCU connections.`);
-    }
-    componentAssignments.add(partKey);
-
-    const existingPart = mcuAssignments.get(mcuEndpoint.pin);
-    if (existingPart && existingPart !== otherEndpoint.part) {
-      errors.push(`MCU pin ${mcuEndpoint.pin} is assigned to multiple functional components.`);
-    }
-    mcuAssignments.set(mcuEndpoint.pin, otherEndpoint.part);
-  }
-
-  return [...new Set(errors)];
+  return diagnoseDiagram(diagram)
+    .filter((d) => d.severity === 'error')
+    .map((d) => d.message);
 }
