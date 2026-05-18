@@ -1,5 +1,5 @@
 import { COMPONENT_REGISTRY } from './components/index';
-import { findPinFunction, getPinMapping } from './pin-mapping';
+import { getPinMapping } from './pin-mapping';
 import type { Diagram, WireEndpoint } from './types';
 import { diagnoseDiagram } from './circuitDiagnostics';
 
@@ -29,19 +29,12 @@ function validateBoardIoPinCompatibility(board: string, mcuPin: string, kind: st
     return `Pin ${mcuPin} is not available on this board model.`;
   }
 
-  if (kind === 'adc_input' && !findPinFunction(board, mcuPin, 'adc')) {
-    return `${mcuPin} does not expose ADC input on this board.`;
-  }
-  if (kind === 'pwm_output' && !findPinFunction(board, mcuPin, 'timer')) {
-    return `${mcuPin} does not expose a timer/PWM output on this board.`;
-  }
-  if (kind === 'i2c_device' && !findPinFunction(board, mcuPin, 'i2c')) {
-    return `${mcuPin} is not an I2C-capable pin on this board.`;
-  }
-  if (kind === 'spi_device' && !findPinFunction(board, mcuPin, 'spi')) {
-    return `${mcuPin} is not an SPI-capable pin on this board.`;
-  }
-
+  // Alt-function "lacks" checks intentionally removed — see circuitDiagnostics
+  // for rationale. A wire from MCU.PB0 → e-paper.DC is valid even though PB0
+  // isn't an SPI alt-function pin, because DC is a plain GPIO control line.
+  // The boardIoKind is component-aggregate; we can't tell from one wire which
+  // signal it carries.
+  void kind;
   return null;
 }
 

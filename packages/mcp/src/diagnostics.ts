@@ -99,40 +99,41 @@ function pinCompatibilityDiag(
       fix: 'Pick a pin that exists on the selected board.',
     };
   }
+  // Alt-function "lacks" diagnostics are WARNINGS, not errors — see UI copy.
   if (kind === 'adc_input' && !findPinFunction(board, mcuPin, 'adc')) {
     return {
-      severity: 'error',
+      severity: 'warning',
       code: 'PIN_LACKS_ADC',
-      message: `${mcuPin} does not expose ADC input on this board.`,
+      message: `${mcuPin} doesn't expose ADC input — fine if this is a digital control wire.`,
       location: { pin: mcuPin, part_id: partId },
-      fix: 'Route the analog sensor to an ADC-capable pin (commonly PA0-PA7 on STM32F1).',
+      fix: 'For the analog signal, route to an ADC-capable pin (PA0-PA7 on STM32F1).',
     };
   }
   if (kind === 'pwm_output' && !findPinFunction(board, mcuPin, 'timer')) {
     return {
-      severity: 'error',
+      severity: 'warning',
       code: 'PIN_LACKS_PWM',
-      message: `${mcuPin} does not expose a timer/PWM output on this board.`,
+      message: `${mcuPin} doesn't expose a timer/PWM output — fine if this is a digital control wire.`,
       location: { pin: mcuPin, part_id: partId },
-      fix: 'Route to a pin with timer alternate function.',
+      fix: 'For the PWM signal, route to a pin with timer alternate function.',
     };
   }
   if (kind === 'i2c_device' && !findPinFunction(board, mcuPin, 'i2c')) {
     return {
-      severity: 'error',
+      severity: 'warning',
       code: 'PIN_LACKS_I2C',
-      message: `${mcuPin} is not an I2C-capable pin on this board.`,
+      message: `${mcuPin} isn't I2C-capable — fine if this is a control line (RST/INT/etc.).`,
       location: { pin: mcuPin, part_id: partId },
-      fix: 'On STM32F1, I2C1 SDA=PB7, SCL=PB6; I2C2 SDA=PB11, SCL=PB10.',
+      fix: 'I2C SDA/SCL signals must go to I2C-capable pins.',
     };
   }
   if (kind === 'spi_device' && !findPinFunction(board, mcuPin, 'spi')) {
     return {
-      severity: 'error',
+      severity: 'warning',
       code: 'PIN_LACKS_SPI',
-      message: `${mcuPin} is not an SPI-capable pin on this board.`,
+      message: `${mcuPin} isn't SPI-capable — fine if this is a control line (DC/RST/BUSY/etc.).`,
       location: { pin: mcuPin, part_id: partId },
-      fix: 'On STM32F1, SPI1 SCK=PA5 MISO=PA6 MOSI=PA7.',
+      fix: 'SPI MOSI/MISO/SCK signals must go to SPI-capable pins.',
     };
   }
   return null;
