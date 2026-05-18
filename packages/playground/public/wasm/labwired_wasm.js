@@ -2,7 +2,6 @@
 
 export class WasmSimulator {
     static __wrap(ptr) {
-        ptr = ptr >>> 0;
         const obj = Object.create(WasmSimulator.prototype);
         obj.__wbg_ptr = ptr;
         WasmSimulatorFinalization.register(obj, obj.__wbg_ptr, obj);
@@ -212,6 +211,44 @@ export class WasmSimulator {
         return v2;
     }
     /**
+     * Return the SSD1680 tri-color e-paper framebuffer for the device identified by `device_id`.
+     *
+     * `device_id` must match a `board_io` binding with `device_type: "ssd1680_tricolor_290"`.
+     * Returns a 9472-byte `Uint8Array`: first 4736 bytes are the black plane
+     * (1 = white / 0 = black), next 4736 bytes are the red plane on the wire
+     * (1 = no-red / 0 = red — see GxEPD2 inversion in writeImage). Row-major,
+     * 128 pixels wide / 296 tall native, MSB-first packing within each byte.
+     * Returns a JS error if the device is not found.
+     * @param {string} device_id
+     * @returns {Uint8Array}
+     */
+    get_ssd1680_framebuffer(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_ssd1680_framebuffer(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
+     * Cheap accessor returning just the SSD1680 refresh-generation counter.
+     * UI uses this to decide whether to re-fetch the (larger) framebuffer.
+     * @param {string} device_id
+     * @returns {number}
+     */
+    get_ssd1680_refresh_generation(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_ssd1680_refresh_generation(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
      * Read back the current state of all NEO-6M GPS devices declared in `board_io`.
      * Returns `[{ id, kind: "neo6m-gps", lat, lon, has_fix }]`.
      * @returns {any}
@@ -232,7 +269,7 @@ export class WasmSimulator {
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
-        this.__wbg_ptr = ret[0] >>> 0;
+        this.__wbg_ptr = ret[0];
         WasmSimulatorFinalization.register(this, this.__wbg_ptr, this);
         return this;
     }
@@ -420,47 +457,39 @@ export class WasmSimulator {
     }
 }
 if (Symbol.dispose) WasmSimulator.prototype[Symbol.dispose] = WasmSimulator.prototype.free;
-
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
-        __wbg_Error_4577686b3a6d9b3a: function(arg0, arg1) {
+        __wbg_Error_bce6d499ff0a4aff: function(arg0, arg1) {
             const ret = Error(getStringFromWasm0(arg0, arg1));
             return ret;
         },
-        __wbg___wbindgen_debug_string_ddde1867f49c2442: function(arg0, arg1) {
-            const ret = debugString(arg1);
-            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len1 = WASM_VECTOR_LEN;
-            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-        },
-        __wbg___wbindgen_is_string_7debe47dc1e045c2: function(arg0) {
+        __wbg___wbindgen_is_string_dde0fd9020db4434: function(arg0) {
             const ret = typeof(arg0) === 'string';
             return ret;
         },
-        __wbg___wbindgen_throw_39bc967c0e5a9b58: function(arg0, arg1) {
+        __wbg___wbindgen_throw_9c31b086c2b26051: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
-        __wbg_new_92df58a8ec3bfb6b: function() {
-            const ret = new Map();
-            return ret;
-        },
-        __wbg_new_cbee8c0d5c479eac: function() {
-            const ret = new Array();
-            return ret;
-        },
-        __wbg_new_ed69e637b553a997: function() {
+        __wbg_new_02d162bc6cf02f60: function() {
             const ret = new Object();
             return ret;
         },
-        __wbg_set_4c81cfb5dc3a333c: function(arg0, arg1, arg2) {
-            arg0[arg1 >>> 0] = arg2;
+        __wbg_new_070df68d66325372: function() {
+            const ret = new Map();
+            return ret;
+        },
+        __wbg_new_310879b66b6e95e1: function() {
+            const ret = new Array();
+            return ret;
         },
         __wbg_set_6be42768c690e380: function(arg0, arg1, arg2) {
             arg0[arg1] = arg2;
         },
-        __wbg_set_cfc6de03f990decf: function(arg0, arg1, arg2) {
+        __wbg_set_78ea6a19f4818587: function(arg0, arg1, arg2) {
+            arg0[arg1 >>> 0] = arg2;
+        },
+        __wbg_set_facb7a5914e0fa39: function(arg0, arg1, arg2) {
             const ret = arg0.set(arg1, arg2);
             return ret;
         },
@@ -502,89 +531,15 @@ function __wbg_get_imports() {
 
 const WasmSimulatorFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wasmsimulator_free(ptr >>> 0, 1));
-
-function debugString(val) {
-    // primitive types
-    const type = typeof val;
-    if (type == 'number' || type == 'boolean' || val == null) {
-        return  `${val}`;
-    }
-    if (type == 'string') {
-        return `"${val}"`;
-    }
-    if (type == 'symbol') {
-        const description = val.description;
-        if (description == null) {
-            return 'Symbol';
-        } else {
-            return `Symbol(${description})`;
-        }
-    }
-    if (type == 'function') {
-        const name = val.name;
-        if (typeof name == 'string' && name.length > 0) {
-            return `Function(${name})`;
-        } else {
-            return 'Function';
-        }
-    }
-    // objects
-    if (Array.isArray(val)) {
-        const length = val.length;
-        let debug = '[';
-        if (length > 0) {
-            debug += debugString(val[0]);
-        }
-        for(let i = 1; i < length; i++) {
-            debug += ', ' + debugString(val[i]);
-        }
-        debug += ']';
-        return debug;
-    }
-    // Test for built-in
-    const builtInMatches = /\[object ([^\]]+)\]/.exec(toString.call(val));
-    let className;
-    if (builtInMatches && builtInMatches.length > 1) {
-        className = builtInMatches[1];
-    } else {
-        // Failed to match the standard '[object ClassName]'
-        return toString.call(val);
-    }
-    if (className == 'Object') {
-        // we're a user defined class or Object
-        // JSON.stringify avoids problems with cycles, and is generally much
-        // easier than looping through ownProperties of `val`.
-        try {
-            return 'Object(' + JSON.stringify(val) + ')';
-        } catch (_) {
-            return 'Object';
-        }
-    }
-    // errors
-    if (val instanceof Error) {
-        return `${val.name}: ${val.message}\n${val.stack}`;
-    }
-    // TODO we could test for more things here, like `Set`s and `Map`s.
-    return className;
-}
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmsimulator_free(ptr, 1));
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
-let cachedDataViewMemory0 = null;
-function getDataViewMemory0() {
-    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
-        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
-    }
-    return cachedDataViewMemory0;
-}
-
 function getStringFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return decodeText(ptr, len);
+    return decodeText(ptr >>> 0, len);
 }
 
 let cachedUint8ArrayMemory0 = null;
@@ -674,11 +629,11 @@ if (!('encodeInto' in cachedTextEncoder)) {
 
 let WASM_VECTOR_LEN = 0;
 
-let wasmModule, wasm;
+let wasmModule, wasmInstance, wasm;
 function __wbg_finalize_init(instance, module) {
+    wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
-    cachedDataViewMemory0 = null;
     cachedUint8ArrayMemory0 = null;
     wasm.__wbindgen_start();
     return wasm;
