@@ -118,10 +118,16 @@ impl Esp32Spi {
     /// Run one user-defined transaction synchronously: drain MOSI bytes
     /// from the FIFO and stream them to every attached device, then clear
     /// the USR bit so firmware's busy-poll completes.
+    ///
+    /// CS-aware routing: we do NOT call `cs_select` / `cs_release` here.
+    /// Real ESP32 firmware drives the CS pin via the GPIO matrix
+    /// (writes to GPIO_OUT_W1TS/W1TC) and a single logical "transaction"
+    /// to a peripheral like SSD1680 spans MANY SPI3 CMD.USR fires — the
+    /// firmware writes 1 byte for the command, then dozens of 32-byte
+    /// chunks for the plane data, all while holding CS low. Pulsing
+    /// CS per CMD.USR would reset the SSD1680 protocol state mid-stream.
     fn kick_user_transaction(&mut self) {
         // If the firmware didn't request a MOSI phase, there's nothing to stream.
-        // Real silicon still pulses CS and the controller activates; for sim
-        // we no-op so we don't flush bogus zero bytes to the panel.
         if self.user & USER_USR_MOSI_BIT == 0 {
             self.cmd &= !CMD_USR_BIT;
             return;
@@ -129,18 +135,12 @@ impl Esp32Spi {
         let bits = (self.mosi_dlen & 0x7FF) + 1;
         let byte_count = bits.div_ceil(8) as usize;
 
-        for dev in &mut self.attached_devices {
-            dev.cs_select();
-        }
         for i in 0..byte_count {
             let word = self.fifo[i / 4];
             let byte = ((word >> ((i % 4) * 8)) & 0xFF) as u8;
             for dev in &mut self.attached_devices {
                 dev.transfer(byte);
             }
-        }
-        for dev in &mut self.attached_devices {
-            dev.cs_release();
         }
         self.cmd &= !CMD_USR_BIT;
     }
@@ -281,8 +281,9 @@ mod tests {
             .downcast_ref::<Recorder>()
             .unwrap();
         assert_eq!(rec.bytes, vec![0x12, 0x34, 0x56, 0x78, 0x9A]);
-        assert_eq!(rec.cs_low, 1, "CS pulsed once");
-        assert_eq!(rec.cs_high, 1);
+        // CS is GPIO-controlled by firmware, not auto-pulsed per CMD.USR.
+        assert_eq!(rec.cs_low, 0);
+        assert_eq!(rec.cs_high, 0);
     }
 
     #[test]

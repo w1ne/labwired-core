@@ -225,6 +225,65 @@ pub fn rom_memcpy(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     Ok(())
 }
 
+/// `memset(dst, value, n) -> dst` — byte-wise fill via the bus.
+///
+/// Args (Xtensa C ABI, same window-rotation rules as `rom_memcpy`):
+///   a2 = dst pointer / a3 = byte value (low 8 bits) / a4 = byte count
+/// Used by every esp-hal hello-world to zero its .bss before main.
+pub fn rom_memset(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let dst = cpu.regs.read_logical(n + 2);
+    let value = (cpu.regs.read_logical(n + 3) & 0xFF) as u8;
+    let count = cpu.regs.read_logical(n + 4);
+    for i in 0..count {
+        bus.write_u8(dst.wrapping_add(i) as u64, value)?;
+    }
+    RomThunkBank::return_with(cpu, dst);
+    Ok(())
+}
+
+/// `memmove(dst, src, n) -> dst` — handles overlapping copy direction.
+pub fn rom_memmove(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let dst = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let count = cpu.regs.read_logical(n + 4);
+    // Copy direction matters only when src/dst overlap.
+    if dst > src && dst - src < count {
+        // Overlap — copy backwards.
+        for i in (0..count).rev() {
+            let b = bus.read_u8(src.wrapping_add(i) as u64)?;
+            bus.write_u8(dst.wrapping_add(i) as u64, b)?;
+        }
+    } else {
+        for i in 0..count {
+            let b = bus.read_u8(src.wrapping_add(i) as u64)?;
+            bus.write_u8(dst.wrapping_add(i) as u64, b)?;
+        }
+    }
+    RomThunkBank::return_with(cpu, dst);
+    Ok(())
+}
+
+/// `memcmp(a, b, n) -> i32` — lexicographic byte compare.
+pub fn rom_memcmp(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let a = cpu.regs.read_logical(n + 2);
+    let b = cpu.regs.read_logical(n + 3);
+    let count = cpu.regs.read_logical(n + 4);
+    let mut ret: i32 = 0;
+    for i in 0..count {
+        let ax = bus.read_u8(a.wrapping_add(i) as u64)? as i32;
+        let bx = bus.read_u8(b.wrapping_add(i) as u64)? as i32;
+        if ax != bx {
+            ret = ax - bx;
+            break;
+        }
+    }
+    RomThunkBank::return_with(cpu, ret as u32);
+    Ok(())
+}
+
 /// `__udivdi3(num: u64, den: u64) -> u64` — 64-bit unsigned divide.
 ///
 /// Args (Xtensa C ABI for 64-bit values: a2:a3 = num low:high, a4:a5 = den

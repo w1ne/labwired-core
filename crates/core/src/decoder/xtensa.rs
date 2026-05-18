@@ -506,6 +506,14 @@ pub enum Instruction {
         imm_t: u8,
     },
     Syscall,
+    /// WAITI level — set PS.INTLEVEL=level and halt until an interrupt
+    /// at a higher level fires. In the sim we don't model interrupts
+    /// for the e-paper labs, so the CPU sits at the WAITI instruction
+    /// (PC doesn't advance), and the test loop's wfi-streak detector
+    /// breaks out cleanly.
+    Waiti {
+        level: u8,
+    },
     Ill,
     Memw,
     Extw,
@@ -992,6 +1000,15 @@ fn decode_st0(w: u32, r: u8, s: u8, t: u8) -> Instruction {
         // HW-oracle (xtensa-esp32s3-elf-as):
         //   rsil a8, 5 → 0x006580: r=6, s=5 (level), t=8 (at).
         0x6 => Instruction::Rsil { at: t, level: s },
+        // WAITI imm4 — ST0 group, op2=0, r=7, s=0, t=imm4 (interrupt level).
+        // ISA RM §7.4: WAITI sets PS.INTLEVEL=imm4 and waits for an
+        // interrupt of higher level. We don't model interrupts in the
+        // ESP32-classic e-paper labs, so the CPU stays parked on the
+        // instruction — see exec arm in xtensa_lx7.rs.
+        0x7 => match s {
+            0 => Instruction::Waiti { level: t },
+            _ => Instruction::Unknown(w),
+        },
         _ => Instruction::Unknown(w),
     }
 }
@@ -1615,7 +1632,7 @@ impl Instruction {
             Rur { ar, .. } => ar,
             // Loop / misc
             Loop { as_, .. } | Loopnez { as_, .. } | Loopgtz { as_, .. } => as_,
-            Nop | Break { .. } | Syscall | Ill | Memw | Extw | Isync | Rsync | Esync | Dsync => 0,
+            Nop | Break { .. } | Syscall | Waiti { .. } | Ill | Memw | Extw | Isync | Rsync | Esync | Dsync => 0,
             Rsil { at, .. } => at,
             Extui { ar, at, .. } => ar.max(at),
             Unknown(_) => 0,

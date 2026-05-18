@@ -161,13 +161,28 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x400000)),
     );
-    // ROM0 (448 KiB).
+    // ROM0 (Espressif boot ROM, 448 KiB). RomThunkBank — same backing
+    // store as a RamPeripheral but lets us pre-fill specific addresses
+    // with BREAK 1,14 so the CPU's BREAK exec arm dispatches a Rust thunk
+    // when esp-hal calls a BROM function (rtc_get_reset_reason, etc).
+    let mut rom_bank = rom_thunks::RomThunkBank::new(0x4000_0000, 0x70000);
+    // ESP32-classic BROM function addresses (per ESP-IDF rom/esp32.rom.ld).
+    // Returning 0 means "POWERON_RESET" — adequate for first-boot init.
+    // ESP32-classic BROM thunks (addresses per ESP-IDF rom/esp32.rom.ld).
+    rom_bank.register(0x4000_81d4, rom_thunks::rtc_get_reset_reason);
+    rom_bank.register(0x4000_2a40, rom_thunks::nop_return_zero); // Cache_Read_Disable
+    rom_bank.register(0x4000_29ac, rom_thunks::nop_return_zero); // Cache_Read_Enable
+    // libc-equivalents the firmware links against ROM copies of:
+    rom_bank.register(0x4000_c260, rom_thunks::rom_memcmp);
+    rom_bank.register(0x4000_c2c8, rom_thunks::rom_memcpy);
+    rom_bank.register(0x4000_c3c0, rom_thunks::rom_memmove);
+    rom_bank.register(0x4000_c44c, rom_thunks::rom_memset);
     bus.add_peripheral(
         "rom",
         0x4000_0000,
         0x70000,
         None,
-        Box::new(RamPeripheral::new(0x70000)),
+        Box::new(rom_bank),
     );
     // UART0 — STM32F1 layout for now (see caveat above).
     bus.add_peripheral(
