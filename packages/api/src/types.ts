@@ -43,6 +43,9 @@ export interface Env {
   /** User-owned project storage. Keyed `project:<clerkUserId>:<projectId>`. */
   KV_PROJECTS: KVNamespace;
 
+  /** Live agent-driven sessions for the playground watch mode (v0.3 MCP bridge). */
+  SESSIONS: DurableObjectNamespace;
+
   // Secrets (set via `wrangler secret put`)
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;

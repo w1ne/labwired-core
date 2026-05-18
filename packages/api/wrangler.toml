@@ -34,6 +34,16 @@ id = "f042ec21b3cf44898cd6adf632ce8c9b"
 binding = "KV_PROJECTS"
 id = "22751dc0a6364ccd8f58b3faec269048"
 
+# ── Durable Objects ──────────────────────────────────────────────────────────
+# v0.3 MCP session bridge: each session is a separate DO with WebSocket pub/sub.
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionDO"]
+
 # ── Secrets (set via `wrangler secret put <NAME>`) ───────────────────────────
 # Do NOT put real values here. This block just declares the expected names.
 # See .dev.vars.example for local development stubs.

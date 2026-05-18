@@ -32,6 +32,14 @@ import {
   handleUpdateProject,
   handleDeleteProject,
 } from './projects.js';
+import {
+  handleCreateSession,
+  handleGetSession,
+  handleUpdateSession,
+  handleDeleteSession,
+  handleSessionWebSocket,
+} from './sessions.js';
+export { SessionDO } from './SessionDO.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
 const CORS_HEADERS: Record<string, string> = {
@@ -94,6 +102,22 @@ export default {
         if (method === 'GET') return handleGetProject(request, env, projectId);
         if (method === 'PUT') return handleUpdateProject(request, env, projectId);
         if (method === 'DELETE') return handleDeleteProject(request, env, projectId);
+      }
+
+      // ── /v1/sessions[/(:id)[/ws]] — live agent-driven session state ──────
+      if (pathname === '/v1/sessions') {
+        if (method === 'POST') return handleCreateSession(request, env);
+      }
+      const sessionWsMatch = pathname.match(/^\/v1\/sessions\/([A-Za-z0-9_-]+)\/ws$/);
+      if (sessionWsMatch && method === 'GET') {
+        return handleSessionWebSocket(request, env, sessionWsMatch[1]);
+      }
+      const sessionMatch = pathname.match(/^\/v1\/sessions\/([A-Za-z0-9_-]+)$/);
+      if (sessionMatch) {
+        const sessionId = sessionMatch[1];
+        if (method === 'GET') return handleGetSession(request, env, sessionId);
+        if (method === 'PUT') return handleUpdateSession(request, env, sessionId);
+        if (method === 'DELETE') return handleDeleteSession(request, env, sessionId);
       }
 
       return errorResponse('Not found', 404);

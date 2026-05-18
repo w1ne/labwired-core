@@ -44,6 +44,7 @@ import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
+import { WatchOverlay } from './studio/WatchOverlay';
 import { AccountPanel } from './studio/AccountPanel';
 import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
@@ -422,6 +423,17 @@ function EmptyTabState({ label }: { label: string }) {
 }
 
 export function App() {
+  // ?watch=<sessionId> short-circuits the entire playground into a read-only
+  // overlay that mirrors an agent-driven session via WebSocket.
+  const watchSessionId =
+    typeof window !== 'undefined'
+      ? (() => {
+          const id = new URLSearchParams(window.location.search).get('watch');
+          return id && /^[A-Za-z0-9_-]{4,64}$/.test(id) ? id : null;
+        })()
+      : null;
+  if (watchSessionId) return <WatchOverlay sessionId={watchSessionId} />;
+
   const [wasmModule, setWasmModule] = useState<WasmModule | null>(null);
   const [bridge, setBridge] = useState<SimulatorBridge | null>(null);
   const [activeSimulationConfig, setActiveSimulationConfig] = useState<ActiveSimulationConfig | null>(null);

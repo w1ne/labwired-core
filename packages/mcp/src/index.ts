@@ -12,7 +12,32 @@ import { putSnapshot, getSnapshot } from './snapshots.js';
 import { diagnoseDiagram, type ValidateDiagram } from './diagnostics.js';
 
 const SERVER_NAME = '@labwired/mcp';
-const SERVER_VERSION = '0.3.0';
+const SERVER_VERSION = '0.4.0';
+
+// ─── Session API (Worker-backed) ───────────────────────────────────────────
+// Optional: agent calls labwired_create_session(), gets a watch URL, and any
+// subsequent run_lab / set_diagram / set_source updates the session's state on
+// the Worker, which broadcasts to playground watchers via WebSocket.
+const SESSIONS_API_BASE = process.env.LABWIRED_API ?? 'https://api.labwired.com';
+const sessionStore: { id?: string; owner_token?: string; watch_url?: string } = {};
+
+async function createWorkerSession(): Promise<{ session_id: string; owner_token: string; watch_url: string }> {
+  const resp = await fetch(`${SESSIONS_API_BASE}/v1/sessions`, { method: 'POST' });
+  if (!resp.ok) throw new Error(`session create failed: ${resp.status} ${await resp.text()}`);
+  return (await resp.json()) as { session_id: string; owner_token: string; watch_url: string };
+}
+
+async function patchSession(diff: Record<string, unknown>): Promise<void> {
+  if (!sessionStore.id || !sessionStore.owner_token) return;
+  await fetch(`${SESSIONS_API_BASE}/v1/sessions/${sessionStore.id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionStore.owner_token}`,
+    },
+    body: JSON.stringify(diff),
+  }).catch(() => { /* best-effort */ });
+}
 
 const CatalogInput = z.object({
   filter: z
@@ -75,6 +100,16 @@ const InspectRunInput = z.object({
     .enum(['summary', 'serial', 'gpio', 'raw'])
     .default('summary')
     .describe('summary | serial | gpio | raw. Default summary.'),
+});
+
+const CreateSessionInput = z.object({});
+const EndSessionInput = z.object({});
+
+const SetDiagramInput = z.object({
+  diagram: z.unknown().describe('Diagram JSON to mirror to the watch session.'),
+});
+const SetSourceInput = z.object({
+  source: z.string().describe('Source code to mirror to the watch session.'),
 });
 
 const ValidateDiagramInput = z.object({
@@ -229,6 +264,45 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description: 'Slice to return. Default summary.',
           },
         },
+      },
+    },
+    {
+      name: 'labwired_create_session',
+      description:
+        'Create a live watch session. Returns a watch_url like ' +
+        'https://foundry.labwired.com/?watch=<id> that a human can open to see your runs ' +
+        'unfold in real time — diagram, source, and simulation state stream to the browser ' +
+        'via WebSocket. After this call, subsequent labwired_run_lab / labwired_set_diagram / ' +
+        'labwired_set_source calls automatically mirror to the session. Anonymous; the URL is ' +
+        'the only credential.',
+      inputSchema: { type: 'object', properties: {} },
+    },
+    {
+      name: 'labwired_end_session',
+      description:
+        'End the active watch session. Subsequent tool calls no longer mirror state to a watcher.',
+      inputSchema: { type: 'object', properties: {} },
+    },
+    {
+      name: 'labwired_set_diagram',
+      description:
+        "Push a diagram (parts + wires) to the active watch session so a human watcher can see " +
+        "the circuit you're building. No-op if no session is active.",
+      inputSchema: {
+        type: 'object',
+        required: ['diagram'],
+        properties: { diagram: { type: 'object' } },
+      },
+    },
+    {
+      name: 'labwired_set_source',
+      description:
+        "Push source code to the active watch session. Mirrors what your agent is writing so a " +
+        "human can read along. No-op if no session is active.",
+      inputSchema: {
+        type: 'object',
+        required: ['source'],
+        properties: { source: { type: 'string' } },
       },
     },
     {
@@ -396,6 +470,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         created_at: Date.now(),
       });
 
+      // Mirror to the active watch session so humans see it live (best-effort).
+      await patchSession({
+        board_id: input.board_id,
+        status: run.exit_code === 0 ? 'completed' : 'failed',
+        last_sim_state: {
+          exit_reason: run.exit_reason,
+          final_cycles: run.final_cycles,
+          final_pc_hex: run.final_pc_hex,
+          serial_tail: run.serial_output.slice(-4000),
+          snapshot_id,
+        },
+      });
+
       // Trim serial in the inline response — full transcript is in snapshot.
       const SERIAL_INLINE_CAP = 8000;
       const serialInline = run.serial_output.slice(-SERIAL_INLINE_CAP);
@@ -424,6 +511,76 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ],
         isError: run.exit_code !== 0,
       };
+    }
+
+    if (name === 'labwired_create_session') {
+      CreateSessionInput.parse(args ?? {});
+      const s = await createWorkerSession();
+      sessionStore.id = s.session_id;
+      sessionStore.owner_token = s.owner_token;
+      sessionStore.watch_url = s.watch_url;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                ok: true,
+                session_id: s.session_id,
+                watch_url: s.watch_url,
+                hint: 'Open the watch_url in a browser to watch this session live. Subsequent run_lab / set_diagram / set_source mirror automatically.',
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
+
+    if (name === 'labwired_end_session') {
+      EndSessionInput.parse(args ?? {});
+      const wasActive = !!sessionStore.id;
+      if (sessionStore.id && sessionStore.owner_token) {
+        await fetch(`${SESSIONS_API_BASE}/v1/sessions/${sessionStore.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${sessionStore.owner_token}` },
+        }).catch(() => { /* best-effort */ });
+      }
+      sessionStore.id = undefined;
+      sessionStore.owner_token = undefined;
+      sessionStore.watch_url = undefined;
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ ok: true, was_active: wasActive }) }],
+      };
+    }
+
+    if (name === 'labwired_set_diagram') {
+      const { diagram } = SetDiagramInput.parse(args ?? {});
+      if (!sessionStore.id) {
+        return {
+          content: [
+            { type: 'text', text: JSON.stringify({ ok: false, error: 'NO_ACTIVE_SESSION', hint: 'Call labwired_create_session first.' }) },
+          ],
+          isError: true,
+        };
+      }
+      await patchSession({ diagram });
+      return { content: [{ type: 'text', text: JSON.stringify({ ok: true, mirrored: true }) }] };
+    }
+
+    if (name === 'labwired_set_source') {
+      const { source } = SetSourceInput.parse(args ?? {});
+      if (!sessionStore.id) {
+        return {
+          content: [
+            { type: 'text', text: JSON.stringify({ ok: false, error: 'NO_ACTIVE_SESSION', hint: 'Call labwired_create_session first.' }) },
+          ],
+          isError: true,
+        };
+      }
+      await patchSession({ source });
+      return { content: [{ type: 'text', text: JSON.stringify({ ok: true, mirrored: true }) }] };
     }
 
     if (name === 'labwired_validate_diagram') {

@@ -1,6 +1,6 @@
 {
   "name": "@labwired/mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Model Context Protocol server exposing the LabWired deterministic firmware simulator as agent tools.",
   "license": "MIT",
   "type": "module",
