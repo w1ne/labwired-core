@@ -149,6 +149,30 @@ const STM32F103_PINS: Record<string, PinMapping> = {
   PC5: { gpio: { peripheral: 'gpioc', pin: 5 }, functions: [
     { type: 'adc', peripheral: 'adc1', channel: 15 },
   ]},
+  // PC6-PC12: LQFP-64 only (Nucleo-F103RB). See packages/ui/.../pin-mapping.ts.
+  PC6: { gpio: { peripheral: 'gpioc', pin: 6 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 1 },
+  ]},
+  PC7: { gpio: { peripheral: 'gpioc', pin: 7 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 2 },
+  ]},
+  PC8: { gpio: { peripheral: 'gpioc', pin: 8 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 3 },
+  ]},
+  PC9: { gpio: { peripheral: 'gpioc', pin: 9 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 4 },
+  ]},
+  PC10: { gpio: { peripheral: 'gpioc', pin: 10 }, functions: [
+    { type: 'spi', peripheral: 'spi3', role: 'sck' },
+    { type: 'uart', peripheral: 'uart3', role: 'tx' },
+  ]},
+  PC11: { gpio: { peripheral: 'gpioc', pin: 11 }, functions: [
+    { type: 'spi', peripheral: 'spi3', role: 'miso' },
+    { type: 'uart', peripheral: 'uart3', role: 'rx' },
+  ]},
+  PC12: { gpio: { peripheral: 'gpioc', pin: 12 }, functions: [
+    { type: 'spi', peripheral: 'spi3', role: 'mosi' },
+  ]},
   PC13: { gpio: { peripheral: 'gpioc', pin: 13 }, functions: [] },
   PC14: { gpio: { peripheral: 'gpioc', pin: 14 }, functions: [] },
   PC15: { gpio: { peripheral: 'gpioc', pin: 15 }, functions: [] },

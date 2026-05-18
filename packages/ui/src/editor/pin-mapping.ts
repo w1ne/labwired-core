@@ -149,6 +149,32 @@ const STM32F103_PINS: Record<string, PinMapping> = {
   PC5: { gpio: { peripheral: 'gpioc', pin: 5 }, functions: [
     { type: 'adc', peripheral: 'adc1', channel: 15 },
   ]},
+  // PC6-PC12: present on LQFP-64 (Nucleo-F103RB) but not on LQFP-48 (Blue Pill).
+  // Listed here so bundled labs authored for Nucleo (e.g. epaper-tricolor-lab,
+  // which wires BUSY → PC7) don't trip PIN_NOT_ON_CHIP in the playground.
+  PC6: { gpio: { peripheral: 'gpioc', pin: 6 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 1 },
+  ]},
+  PC7: { gpio: { peripheral: 'gpioc', pin: 7 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 2 },
+  ]},
+  PC8: { gpio: { peripheral: 'gpioc', pin: 8 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 3 },
+  ]},
+  PC9: { gpio: { peripheral: 'gpioc', pin: 9 }, functions: [
+    { type: 'timer', peripheral: 'tim8', channel: 4 },
+  ]},
+  PC10: { gpio: { peripheral: 'gpioc', pin: 10 }, functions: [
+    { type: 'spi', peripheral: 'spi3', role: 'sck' },
+    { type: 'uart', peripheral: 'uart3', role: 'tx' },
+  ]},
+  PC11: { gpio: { peripheral: 'gpioc', pin: 11 }, functions: [
+    { type: 'spi', peripheral: 'spi3', role: 'miso' },
+    { type: 'uart', peripheral: 'uart3', role: 'rx' },
+  ]},
+  PC12: { gpio: { peripheral: 'gpioc', pin: 12 }, functions: [
+    { type: 'spi', peripheral: 'spi3', role: 'mosi' },
+  ]},
   PC13: { gpio: { peripheral: 'gpioc', pin: 13 }, functions: [] },
   PC14: { gpio: { peripheral: 'gpioc', pin: 14 }, functions: [] },
   PC15: { gpio: { peripheral: 'gpioc', pin: 15 }, functions: [] },
