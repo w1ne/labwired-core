@@ -16,6 +16,7 @@ export async function verifyClerkRequest(
 
   const client = createClerkClient({
     secretKey: env.CLERK_SECRET_KEY,
+    publishableKey: env.CLERK_PUBLISHABLE_KEY || undefined,
     jwtKey: env.CLERK_JWT_KEY || undefined,
   });
 
@@ -23,6 +24,7 @@ export async function verifyClerkRequest(
   try {
     state = await client.authenticateRequest(request, {
       jwtKey: env.CLERK_JWT_KEY || undefined,
+      authorizedParties: ['https://foundry.labwired.com', 'https://labwired.com'],
     });
   } catch {
     return null;

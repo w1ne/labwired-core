@@ -53,3 +53,7 @@ DESIGNER_CYCLES_QUOTA = "10000000"
 ENVIRONMENT = "production"
 # Public Clerk JWT verification key (PEM). Paste from Clerk dashboard → API Keys.
 CLERK_JWT_KEY = ""
+# Clerk publishable key — required by @clerk/backend v2 to resolve the
+# Frontend API URL. Safe to bake into the Worker (it's public, same value
+# the browser bundle uses).
+CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsubGFid2lyZWQuY29tJA"

@@ -55,6 +55,8 @@ export interface Env {
   ENVIRONMENT: string;
   /** Clerk JWT verification key (PEM). Public; safe to commit. */
   CLERK_JWT_KEY: string;
+  /** Clerk publishable key. Required by @clerk/backend v2 to resolve the Frontend API. */
+  CLERK_PUBLISHABLE_KEY: string;
 }
 
 /** Response body for POST /v1/keys/validate */
