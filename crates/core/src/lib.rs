@@ -410,16 +410,32 @@ impl<C: Cpu> Machine<C> {
 impl<C: Cpu> Machine<C> {
     pub fn load_firmware(&mut self, image: &memory::ProgramImage) -> SimResult<()> {
         for segment in &image.segments {
-            // Try loading into Flash first
-            if !self.bus.flash.load_from_segment(segment) {
-                // If not flash, try RAM? Or just warn?
-                // For now, let's assume everything goes to Flash or RAM mapped spaces
-                if !self.bus.ram.load_from_segment(segment) {
-                    tracing::warn!(
-                        "Failed to load segment at {:#x} - outside of memory map",
-                        segment.start_addr
-                    );
+            // 1. Try Cortex-M / ARM flash backing.
+            if self.bus.flash.load_from_segment(segment) {
+                continue;
+            }
+            // 2. Try Cortex-M / ARM ram backing.
+            if self.bus.ram.load_from_segment(segment) {
+                continue;
+            }
+            // 3. Fall back to peripheral-backed memory (ESP32 IRAM /
+            //    flash XIP, RP2040 SRAM, etc — anything registered as a
+            //    Peripheral rather than living in bus.flash/bus.ram).
+            //    Walk the segment byte-by-byte through the bus dispatcher.
+            //    Slow path, but only runs once at load time.
+            let mut all_written = true;
+            for (i, byte) in segment.data.iter().enumerate() {
+                let addr = segment.start_addr + i as u64;
+                if self.bus.write_u8(addr, *byte).is_err() {
+                    all_written = false;
+                    break;
                 }
+            }
+            if !all_written {
+                tracing::warn!(
+                    "Failed to load segment at {:#x} - outside of memory map",
+                    segment.start_addr
+                );
             }
         }
 

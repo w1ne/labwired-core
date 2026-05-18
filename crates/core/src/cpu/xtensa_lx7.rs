@@ -271,6 +271,14 @@ impl XtensaLx7 {
             Nop | Memw | Extw | Isync | Rsync | Esync | Dsync => {
                 self.pc = self.pc.wrapping_add(len);
             }
+            Waiti { level } => {
+                // Set PS.INTLEVEL = level (real silicon does this before
+                // entering wait state). We don't model the actual wait —
+                // the CPU stays at this instruction (PC doesn't advance),
+                // so a caller poll-loop sees the same PC each step and
+                // can detect "halted" without us tracking extra state.
+                self.ps.set_intlevel(level);
+            }
 
             // ── D2: SAR-setup instructions ───────────────────────────────────
             // SSL as_: SAR = 32 - (as_ & 0x1F).

@@ -47,7 +47,6 @@ fn ensure_firmware_built() -> PathBuf {
 }
 
 #[test]
-#[ignore = "v0.6 WIP: firmware traps in esp-hal __pre_init → esp32_init before reaching main; needs DPORT/IO_MUX peripheral stubs or a weak-symbol override of esp-hal's pre-init hook."]
 fn firmware_drives_panel_to_three_band_pattern() {
     let elf_path = ensure_firmware_built();
     if !elf_path.exists() {
@@ -92,12 +91,17 @@ fn firmware_drives_panel_to_three_band_pattern() {
     const MAX_STEPS: u64 = 100_000_000;
     let mut wfi_streak = 0u32;
     let mut last_pc = 0u32;
+    let mut step_count = 0u64;
     for _ in 0..MAX_STEPS {
-        if machine.step().is_err() {
-            // Many Xtensa instructions our LX6/LX7 decoder doesn't
-            // implement will error; we treat that as the test failing
-            // (we want the demo's hot path to be fully decodable).
-            panic!("CPU step error at PC {:#x}", machine.cpu.get_pc());
+        step_count += 1;
+        if let Err(e) = machine.step() {
+            panic!(
+                "CPU step error after {step_count} steps. \
+                 Last PC before error: {last_pc:#x}. \
+                 Current PC: {:#x}. \
+                 Error: {e}",
+                machine.cpu.get_pc()
+            );
         }
         let pc = machine.cpu.get_pc();
         if pc == last_pc {
