@@ -1037,30 +1037,42 @@ impl WasmSimulator {
             .as_any()
             .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
 
-        let spi = any
-            .downcast_ref::<labwired_core::peripherals::spi::Spi>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an SPI controller",
-                    binding.peripheral
-                ))
-            })?;
+        // The SSD1680 panel attaches to either the generic STM32-shape Spi
+        // peripheral or the Esp32Spi controller (same SpiDevice trait,
+        // different controller models). Try both downcasts.
+        let panel_bytes = if let Some(spi) =
+            any.downcast_ref::<labwired_core::peripherals::spi::Spi>()
+        {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any().and_then(|a| {
+                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
+                }).map(|panel| (panel.black_plane().to_vec(), panel.red_plane().to_vec()))
+            })
+        } else if let Some(spi) =
+            any.downcast_ref::<labwired_core::peripherals::esp32::spi::Esp32Spi>()
+        {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any().and_then(|a| {
+                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
+                }).map(|panel| (panel.black_plane().to_vec(), panel.red_plane().to_vec()))
+            })
+        } else {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' is not an SPI controller",
+                binding.peripheral
+            )));
+        };
 
-        for device in &spi.attached_devices {
-            if let Some(panel) = device.as_any().and_then(|a| {
-                a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-            }) {
-                let mut combined = Vec::with_capacity(panel.black_plane().len() * 2);
-                combined.extend_from_slice(panel.black_plane());
-                combined.extend_from_slice(panel.red_plane());
-                return Ok(combined.into_boxed_slice());
-            }
-        }
-
-        Err(JsValue::from_str(&format!(
-            "SSD1680 device not found on SPI peripheral '{}'",
-            binding.peripheral
-        )))
+        let (black, red) = panel_bytes.ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "SSD1680 device not found on SPI peripheral '{}'",
+                binding.peripheral
+            ))
+        })?;
+        let mut combined = Vec::with_capacity(black.len() + red.len());
+        combined.extend_from_slice(&black);
+        combined.extend_from_slice(&red);
+        Ok(combined.into_boxed_slice())
     }
 
     /// Cheap accessor returning just the SSD1680 refresh-generation counter.
@@ -1098,27 +1110,34 @@ impl WasmSimulator {
             .as_any()
             .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
 
-        let spi = any
-            .downcast_ref::<labwired_core::peripherals::spi::Spi>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an SPI controller",
-                    binding.peripheral
-                ))
-            })?;
-
-        for device in &spi.attached_devices {
-            if let Some(panel) = device.as_any().and_then(|a| {
-                a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-            }) {
-                return Ok(panel.refresh_generation());
-            }
-        }
-
-        Err(JsValue::from_str(&format!(
-            "SSD1680 device not found on SPI peripheral '{}'",
-            binding.peripheral
-        )))
+        let gen = if let Some(spi) =
+            any.downcast_ref::<labwired_core::peripherals::spi::Spi>()
+        {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any().and_then(|a| {
+                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
+                }).map(|panel| panel.refresh_generation())
+            })
+        } else if let Some(spi) =
+            any.downcast_ref::<labwired_core::peripherals::esp32::spi::Esp32Spi>()
+        {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any().and_then(|a| {
+                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
+                }).map(|panel| panel.refresh_generation())
+            })
+        } else {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' is not an SPI controller",
+                binding.peripheral
+            )));
+        };
+        gen.ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "SSD1680 device not found on SPI peripheral '{}'",
+                binding.peripheral
+            ))
+        })
     }
 
     /// Read back the current state of each SPI sensor declared in `board_io`.

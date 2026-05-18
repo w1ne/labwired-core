@@ -1,0 +1,16 @@
+name: "esp32-epaper-lab"
+chip: "../../configs/chips/esp32.yaml"
+external_devices:
+  - id: "epaper"
+    type: "ssd1680_tricolor_290"
+    connection: "spi3"
+    config:
+      cs_pin: "GPIO5"
+board_io:
+  - id: "epaper"
+    kind: "spi_device"
+    peripheral: "spi3"
+    pin: 5
+    signal: "input"
+    active_high: true
+    device_type: "ssd1680_tricolor_290"
