@@ -14,7 +14,7 @@ use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::components::Ssd1680Tricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
-use labwired_core::{Cpu, Machine};
+use labwired_core::{Bus, Cpu, Machine};
 use std::path::PathBuf;
 
 #[test]
@@ -50,18 +50,33 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     // Real silicon's BROM leaves SP near the top of DRAM (0x3FFE_0000);
     // we don't run BROM in sim so seed SP ourselves.
     machine.cpu.set_sp(0x3FFE_0000);
+    // Fake the APP_CPU bringup handshake: `start_other_core` spins waiting
+    // for `s_cpu_up[1]` to be set by the second core. We don't model the
+    // second core, so pre-write 1 to its slot so the loop exits.
+    let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
 
     // Generous step budget — Arduino-ESP32 + GxEPD2 boot is much heavier
     // than our hand-rolled Rust firmware. ~500M steps is comfortable
     // headroom for "show me what we get."
-    const MAX_STEPS: u64 = 500_000_000;
+    // Sample PC every N steps for a coarse heat map of where the firmware
+    // spends its time. Helps locate infinite loops without full tracing.
+    const MAX_STEPS: u64 = 30_000_000;
+    const SAMPLE_EVERY: u64 = 100_000;
     let mut last_pc = 0u32;
     let mut wfi_streak = 0u32;
     let mut step_count = 0u64;
     let mut pc_trail: [u32; 16] = [0; 16];
     let mut trail_idx = 0usize;
+    let mut samples: Vec<(u64, u32)> = Vec::new();
     for _ in 0..MAX_STEPS {
         step_count += 1;
+        // Re-write s_cpu_up[1] every 10k steps. xtensa-lx-rt's Reset zeroes
+        // .bss BEFORE start_other_core polls this byte, so a one-shot write
+        // before stepping gets clobbered. Periodic re-write keeps it set
+        // until start_other_core's spin loop reads it.
+        if step_count % 10_000 == 0 {
+            let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
+        }
         if let Err(e) = machine.step() {
             eprintln!(
                 "[agentdeck-sim] CPU error after {step_count} steps: \
@@ -78,6 +93,9 @@ fn agentdeck_firmware_drives_panel_in_sim() {
         let pc = machine.cpu.get_pc();
         pc_trail[trail_idx] = pc;
         trail_idx = (trail_idx + 1) % 16;
+        if step_count % SAMPLE_EVERY == 0 {
+            samples.push((step_count, pc));
+        }
         if pc == last_pc {
             wfi_streak += 1;
             if wfi_streak > 100_000 {
@@ -88,6 +106,10 @@ fn agentdeck_firmware_drives_panel_in_sim() {
             wfi_streak = 0;
             last_pc = pc;
         }
+    }
+    eprintln!("[agentdeck-sim] last 10 PC samples:");
+    for &(s, p) in samples.iter().rev().take(10) {
+        eprintln!("    step {s:>10}: pc=0x{p:08x}");
     }
 
     // Snapshot the panel.

@@ -112,53 +112,64 @@ pub fn decode_narrow(halfword: u16) -> Instruction {
 
 /// Decode op0=0xC group: MOVI.N, BEQZ.N, BNEZ.N.
 ///
-/// Dispatch by bit 7 and bit 6 of the halfword (= s[3] and s[2]):
-/// - s < 8 (bit 7 = 0): MOVI.N
-/// - s >= 8 with bit6=0 (s & 0xF in {8..11}): BEQZ.N
-/// - s >= 8 with bit6=1 (s & 0xF in {12..15}): BNEZ.N
+/// Dispatch on bits[7:6] of the halfword (the "op1" sub-field of the narrow
+/// encoding per ISA RM §5.4):
+///   bits[7:6] == 0 or 1 → MOVI.N
+///   bits[7:6] == 2       → BEQZ.N
+///   bits[7:6] == 3       → BNEZ.N
+///
+/// The original code dispatched on `s & 0x8` (bit 11) — that worked only
+/// for the specific MOVI.N test inputs in its HW-oracle comments. Real
+/// firmware uses BEQZ.N encodings (e.g. 0x079c) where bits[11:8]=0x7
+/// gives `s & 0x8 == 0`, mis-routing it to MOVI.N. Discovered when
+/// AgentDeck firmware's memset jumped to a wrong offset.
 fn decode_narrow_c(hw: u16, r: u8, s: u8, t: u8) -> Instruction {
-    if s & 0x8 == 0 {
-        // MOVI.N  at, imm7
-        // at = t (bits[11:8])
-        // imm7 raw = (s<<4)|r, sign rule: if raw >= 96 then imm = raw - 128 else imm = raw
-        // Range: -32..=95 (128 values, not standard 2's complement)
-        // Verified: movi.n a3,5 → 0x530c → t=3=at, s=0, r=5, raw7=5 → imm=5
-        //           movi.n a3,-32 → 0x036c → t=3=at, s=6, r=0, raw7=96 → imm=-32
-        //           movi.n a3,95 → 0xf35c → t=3=at, s=5, r=15, raw7=95 → imm=95 (positive!)
-        let raw7 = ((s as u32) << 4) | (r as u32);
+    // Field naming note: the narrow extractor uses LOCAL field names that
+    // DON'T match the wide decoder's positions. In this file:
+    //   s = bits[7:4]   (== wide's t)
+    //   t = bits[11:8]  (== wide's s)
+    //   r = bits[15:12] (== wide's t for narrow ops)
+    // So "as_ register" (bits[11:8] per ISA RM) is `t` here, not `s`,
+    // and offset[3:0] (bits[15:12]) is `r` here.
+    let op1 = ((hw >> 6) & 0x3) as u8;
+    if op1 < 2 {
+        // MOVI.N at, imm7. Encoding (HW-oracle verified):
+        //   at  = bits[11:8] = t
+        //   raw = bit6<<6 | bit5<<5 | bit4<<4 | bits[15:12]=r
+        //         (7-bit value, sign rule: raw>=96 → imm = raw-128, else imm=raw)
+        // Verified: movi.n a3,5  → 0x530c (raw=5,  imm=5)
+        //           movi.n a3,-32→ 0x036c (raw=96, imm=-32)
+        //           movi.n a3,95 → 0xf35c (raw=95, imm=95)
+        let bit4 = ((hw >> 4) & 1) as u32;
+        let bit5 = ((hw >> 5) & 1) as u32;
+        let bit6 = ((hw >> 6) & 1) as u32;
+        let raw7 = (bit6 << 6) | (bit5 << 5) | (bit4 << 4) | (r as u32);
         let imm = movi_n_sext(raw7);
         Instruction::Movi { at: t, imm }
-    } else if s & 0x4 == 0 {
-        // BEQZ.N  as_, offset
-        // as_ = t (bits[11:8])
-        // bit4 = bit 4 of the 16-bit halfword = s[0] = (hw >> 4) & 1
-        // offset = ((bit4 << 4) | r) + 4
-        // Range: 4..=35 bytes, forward-only, relative to PC (exec does pc += offset).
-        // HW-oracle verified (xtensa-esp32s3-elf-as):
-        //   beqz.n a3,+4  → 0x038c: r=0,  b4=0 → ((0<<4)|0)+4  = 4
-        //   beqz.n a3,+6  → 0x238c: r=2,  b4=0 → ((0<<4)|2)+4  = 6
-        //   beqz.n a3,+18 → 0xe38c: r=14, b4=0 → ((0<<4)|14)+4 = 18
-        //   beqz.n a3,+21 → 0x139c: r=1,  b4=1 → ((1<<4)|1)+4  = 21
-        //   beqz.n a3,+35 → 0xf39c: r=15, b4=1 → ((1<<4)|15)+4 = 35
-        let b4 = ((hw >> 4) & 1) as u32;
-        let offset = ((b4 << 4) | r as u32) + 4;
+    } else if op1 == 2 {
+        // BEQZ.N as_, offset
+        // Per Xtensa ISA RM §5.4: 6-bit unsigned offset (PC+4 to PC+67).
+        //   as_    = bits[11:8] = t (in narrow's naming)
+        //   offset = (bit5 << 5) | (bit4 << 4) | bits[15:12]=r, then + 4
+        let bit4 = ((hw >> 4) & 1) as u32;
+        let bit5 = ((hw >> 5) & 1) as u32;
+        let offset = ((bit5 << 5) | (bit4 << 4) | (r as u32)) + 4;
         Instruction::Beqz {
             as_: t,
             offset: offset as i32,
         }
     } else {
-        // BNEZ.N  as_, offset
-        // Same offset formula as BEQZ.N; BNEZ.N has s[2]=1 (s & 0x4 != 0).
-        // HW-oracle verified (xtensa-esp32s3-elf-as):
-        //   bnez.n a3,+4  → 0x03cc: r=0,  b4=0 → ((0<<4)|0)+4  = 4
-        //   bnez.n a3,+35 → 0xf3dc: r=15, b4=1 → ((1<<4)|15)+4 = 35
-        let b4 = ((hw >> 4) & 1) as u32;
-        let offset = ((b4 << 4) | r as u32) + 4;
+        // BNEZ.N — same offset/register layout as BEQZ.N.
+        let bit4 = ((hw >> 4) & 1) as u32;
+        let bit5 = ((hw >> 5) & 1) as u32;
+        let offset = ((bit5 << 5) | (bit4 << 4) | (r as u32)) + 4;
         Instruction::Bnez {
             as_: t,
             offset: offset as i32,
         }
     }
+    // (`s` is bits[7:4] in narrow — unused for these op0=C instructions
+    // since the immediate bits 4/5/6 already cover that range.)
 }
 
 /// Decode op0=0xD group: MOV.N and zero/minimal operand misc ops.

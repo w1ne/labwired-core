@@ -265,6 +265,113 @@ pub fn rom_memmove(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     Ok(())
 }
 
+/// Helper: read a 64-bit value from `a[n+lo]:a[n+hi]` (low half:high half),
+/// where `n = callinc * 4`.
+fn read_u64_args(cpu: &XtensaLx7, lo: u8, hi: u8) -> u64 {
+    let n = cpu.ps.callinc() * 4;
+    let l = cpu.regs.read_logical(n + lo) as u64;
+    let h = cpu.regs.read_logical(n + hi) as u64;
+    (h << 32) | l
+}
+
+/// Helper: write a 64-bit return value to `a[n+2]:a[n+3]` and jump back.
+fn return_u64(cpu: &mut XtensaLx7, v: u64) {
+    let n = cpu.ps.callinc() * 4;
+    cpu.regs.write_logical(n + 3, (v >> 32) as u32);
+    RomThunkBank::return_with(cpu, v as u32);
+}
+
+/// `__ashldi3(u64 v, i32 count) -> u64` — left shift.
+/// Args: a2:a3 = v lo:hi, a4 = count.
+pub fn rom_ashldi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = read_u64_args(cpu, 2, 3);
+    let n = cpu.ps.callinc() * 4;
+    let count = cpu.regs.read_logical(n + 4) & 0x3F;
+    return_u64(cpu, v.wrapping_shl(count));
+    Ok(())
+}
+
+/// `__ashrdi3(i64 v, i32 count) -> i64` — arithmetic right shift.
+pub fn rom_ashrdi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = read_u64_args(cpu, 2, 3) as i64;
+    let n = cpu.ps.callinc() * 4;
+    let count = cpu.regs.read_logical(n + 4) & 0x3F;
+    return_u64(cpu, v.wrapping_shr(count) as u64);
+    Ok(())
+}
+
+/// `__lshrdi3(u64 v, i32 count) -> u64` — logical right shift.
+pub fn rom_lshrdi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = read_u64_args(cpu, 2, 3);
+    let n = cpu.ps.callinc() * 4;
+    let count = cpu.regs.read_logical(n + 4) & 0x3F;
+    return_u64(cpu, v.wrapping_shr(count));
+    Ok(())
+}
+
+/// `__divdi3(i64, i64) -> i64` — signed 64-bit divide.
+pub fn rom_divdi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = read_u64_args(cpu, 2, 3) as i64;
+    let d = read_u64_args(cpu, 4, 5) as i64;
+    let q = n.checked_div(d).unwrap_or(i64::MIN);
+    return_u64(cpu, q as u64);
+    Ok(())
+}
+
+/// `__moddi3(i64, i64) -> i64` — signed 64-bit mod.
+pub fn rom_moddi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = read_u64_args(cpu, 2, 3) as i64;
+    let d = read_u64_args(cpu, 4, 5) as i64;
+    let r = n.checked_rem(d).unwrap_or(0);
+    return_u64(cpu, r as u64);
+    Ok(())
+}
+
+/// `__umoddi3(u64, u64) -> u64`.
+pub fn rom_umoddi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = read_u64_args(cpu, 2, 3);
+    let d = read_u64_args(cpu, 4, 5);
+    let r = n.checked_rem(d).unwrap_or(0);
+    return_u64(cpu, r);
+    Ok(())
+}
+
+/// `__clzsi2(u32) -> i32` — leading zero count for u32.
+pub fn rom_clzsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let v = cpu.regs.read_logical(n + 2);
+    RomThunkBank::return_with(cpu, v.leading_zeros());
+    Ok(())
+}
+
+/// `__ctzsi2(u32) -> i32` — trailing zero count for u32.
+pub fn rom_ctzsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let v = cpu.regs.read_logical(n + 2);
+    RomThunkBank::return_with(cpu, if v == 0 { 32 } else { v.trailing_zeros() });
+    Ok(())
+}
+
+/// `__bswapsi2(u32) -> u32` — GCC runtime byte-swap u32.
+pub fn rom_bswapsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let v = cpu.regs.read_logical(n + 2);
+    RomThunkBank::return_with(cpu, v.swap_bytes());
+    Ok(())
+}
+
+/// `__bswapdi2(u64) -> u64` — byte-swap u64.
+pub fn rom_bswapdi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let lo = cpu.regs.read_logical(n + 2) as u64;
+    let hi = cpu.regs.read_logical(n + 3) as u64;
+    let v = (hi << 32) | lo;
+    let s = v.swap_bytes();
+    cpu.regs.write_logical(n + 3, (s >> 32) as u32);
+    RomThunkBank::return_with(cpu, s as u32);
+    Ok(())
+}
+
 /// `memcmp(a, b, n) -> i32` — lexicographic byte compare.
 pub fn rom_memcmp(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;

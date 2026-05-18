@@ -927,7 +927,12 @@ impl XtensaLx7 {
             }
             // BBSI: taken if bit `bit` (0..=31) of as_ is SET
             Bbsi { as_, bit, offset } => {
-                let cond = (self.regs.read_logical(as_) >> bit) & 1 == 1;
+                let val = self.regs.read_logical(as_);
+                let cond = (val >> bit) & 1 == 1;
+                if std::env::var_os("LABWIRED_TRACE_BBSI").is_some() && self.pc == 0x400ed00d {
+                    eprintln!("[trace] BBSI at pc=0x{:08x} as_=a{} val=0x{:08x} bit={} cond={}",
+                        self.pc, as_, val, bit, cond);
+                }
                 self.branch(offset, len, cond);
             }
             // BEQZ: taken if as_ == 0

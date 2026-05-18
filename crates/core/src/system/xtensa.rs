@@ -204,6 +204,28 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // the AgentDeck Arduino-ESP32 binary in sim. All no-ops because the
     // sim's flash XIP peripheral is a flat RamPeripheral, no MMU model.
     rom_bank.register(0x4000_95a4, rom_thunks::nop_return_zero); // mmu_init
+    // libgcc helpers — Arduino-ESP32 links against ROM copies for
+    // hot paths (flash header parsing reads big-endian values).
+    rom_bank.register(0x4006_4ae0, rom_thunks::rom_bswapsi2);    // __bswapsi2
+    rom_bank.register(0x4006_4b08, rom_thunks::rom_bswapdi2);    // __bswapdi2
+    // libgcc 64-bit math helpers (in BROM at 0x4000c8xx).
+    rom_bank.register(0x4000_c818, rom_thunks::rom_ashldi3);   // __ashldi3
+    rom_bank.register(0x4000_c830, rom_thunks::rom_ashrdi3);   // __ashrdi3
+    rom_bank.register(0x4000_c84c, rom_thunks::rom_lshrdi3);   // __lshrdi3
+    rom_bank.register(0x4000_ca84, rom_thunks::rom_divdi3);    // __divdi3
+    rom_bank.register(0x4000_cd4c, rom_thunks::rom_moddi3);    // __moddi3
+    rom_bank.register(0x4000_c7e8, rom_thunks::rom_clzsi2);    // __clzsi2
+    rom_bank.register(0x4000_c7f0, rom_thunks::rom_ctzsi2);    // __ctzsi2
+    // SPI flash / eFuse helpers — used by Arduino-ESP32's flash init.
+    rom_bank.register(0x4000_8658, rom_thunks::nop_return_zero);
+    // _xtos_set_intlevel(level) -> prev. Returns 0 (= "ints were enabled").
+    // Our sim doesn't dispatch interrupts during these boot paths.
+    rom_bank.register(0x4000_bfdc, rom_thunks::nop_return_zero);
+    // Interrupt-matrix + APP_CPU setup helpers (ESP32-classic BROM).
+    // We don't model the second core or the interrupt matrix in this sim,
+    // so noop-return is safe.
+    rom_bank.register(0x4000_681c, rom_thunks::nop_return_zero); // intr_matrix_set / esp_rom_route_intr_matrix
+    rom_bank.register(0x4000_689c, rom_thunks::nop_return_zero); // ets_set_appcpu_boot_addr
     bus.add_peripheral(
         "rom",
         0x4000_0000,
@@ -221,20 +243,26 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     );
 
     // SPI0 / SPI1 — flash SPI controllers used by the BROM during boot.
-    // Sim doesn't model the flash MMU so these are round-trip stubs.
+    // Sim doesn't model the flash MMU, but Arduino-ESP32's
+    // `bootloader_flash_execute_command_common` polls SPI_CMD_REG until
+    // it clears (real hardware does this asynchronously). Reusing our
+    // Esp32Spi controller gives us the same auto-clear CMD.USR
+    // semantics, even with no attached devices — bytes streamed into
+    // the FIFO just go nowhere, which is fine since we don't model
+    // flash content reads.
     bus.add_peripheral(
         "spi0",
         0x3FF4_3000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        Box::new(crate::peripherals::esp32::spi::Esp32Spi::new()),
     );
     bus.add_peripheral(
         "spi1",
         0x3FF4_2000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        Box::new(crate::peripherals::esp32::spi::Esp32Spi::new()),
     );
 
     // GPIO controller (TRM §4.10). The e-paper lab routes CS/RST/DC/BUSY
@@ -267,12 +295,20 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     //
     // Sized 64 KiB to cover the full DPORT + analog AHB regions
     // (0x3FF00000-0x3FF1FFFF) that Arduino-ESP32's startup touches.
+    //
+    // Unwritten reads return ZERO (vs `with_unwritten_ones`) — Arduino-ESP32's
+    // `system_early_init` reads DPORT_APPCPU_CTRL_B at 0x3FF00030 to decide
+    // whether to bring up the second core. If we return all-ones, the
+    // firmware enters `start_other_core` which spins forever waiting on a
+    // shared flag (`s_cpu_up`) that only the APP_CPU sets — and we don't
+    // model APP_CPU. Reading zero means "APP_CPU clock not enabled", so
+    // the firmware skips the whole second-core bringup path.
     bus.add_peripheral(
         "dport",
         0x3FF0_0000,
         0x20000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
     );
 
     // IO_MUX (TRM §4.11). Firmware configures pin function + drive strength

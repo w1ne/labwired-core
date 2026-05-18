@@ -628,6 +628,15 @@ fn decode_qrst(w: u32) -> Instruction {
                     }
                     _ => decode_st3_shiftsetup(w, r, s, t),
                 },
+                0x5 => {
+                    // RST5 group: MMU / TLB instructions (RITLB / WITLB / WDTLB /
+                    // PITLB / PDTLB / etc per ISA RM §A.6, MMU Option). We don't
+                    // model the MMU; treat the whole sub-group as no-op so that
+                    // Arduino-ESP32's mpu_hal_set_region_access doesn't fault
+                    // mid-boot. Real silicon executes them to populate the
+                    // address-translation TLBs — irrelevant to our flat memory.
+                    Instruction::Nop
+                }
                 0x6 => match s {
                     0x0 => Instruction::Neg { ar: r, at: t },
                     0x1 => Instruction::Abs { ar: r, at: t },
