@@ -210,17 +210,21 @@ export function diagnoseDiagram(diagram: Diagram): Diagnostic[] {
     }
     mcuPinAssignments.set(mcuEndpoint.pin, partId);
   }
+  // BOARDIO_MULTIPLE_WIRES only meaningful for simple GPIO components
+  // (LED, button). SPI/I2C/UART devices need multiple wires by design
+  // (e.g. an SPI display has MOSI/SCK/CS plus DC/RST + power).
+  const SINGLE_WIRE_KINDS = new Set(['led', 'button', 'adc_input', 'pwm_output']);
   for (const [partId, count] of componentMcuWireCount) {
-    if (count > 1) {
-      const part = diagram.parts.find((p) => p.id === partId);
-      const def = part ? COMPONENT_REGISTRY.get(part.type) : null;
-      out.push({
-        severity: 'error',
-        code: 'BOARDIO_MULTIPLE_WIRES',
-        message: `${def?.label ?? partId} has ${count} MCU connections; expected exactly one for board_io.`,
-        location: { part_id: partId },
-      });
-    }
+    if (count <= 1) continue;
+    const part = diagram.parts.find((p) => p.id === partId);
+    const def = part ? COMPONENT_REGISTRY.get(part.type) : null;
+    if (!def?.boardIoKind || !SINGLE_WIRE_KINDS.has(def.boardIoKind)) continue;
+    out.push({
+      severity: 'error',
+      code: 'BOARDIO_MULTIPLE_WIRES',
+      message: `${def?.label ?? partId} has ${count} MCU connections; expected exactly one for board_io.`,
+      location: { part_id: partId },
+    });
   }
 
   // 3. Diagram-level warnings.

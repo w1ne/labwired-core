@@ -235,17 +235,20 @@ export function diagnoseDiagram(diagram: ValidateDiagram): Diagnostic[] {
     }
     mcuPinAssignments.set(mcuEndpoint.pin, partId);
   }
+  // Only flag multiple MCU wires for simple-GPIO components — SPI/I2C/UART
+  // devices legitimately need multiple wires (MOSI/SCK/CS + control + power).
+  const SINGLE_WIRE_KINDS = new Set(['led', 'button', 'adc_input', 'pwm_output']);
   for (const [partId, count] of componentMcuWireCount) {
-    if (count > 1) {
-      const part = diagram.parts.find((p) => p.id === partId);
-      const meta = part ? getComponentMeta(part.type) : null;
-      out.push({
-        severity: 'error',
-        code: 'BOARDIO_MULTIPLE_WIRES',
-        message: `${meta?.label ?? partId} has ${count} MCU connections; expected exactly one for board_io.`,
-        location: { part_id: partId },
-      });
-    }
+    if (count <= 1) continue;
+    const part = diagram.parts.find((p) => p.id === partId);
+    const meta = part ? getComponentMeta(part.type) : null;
+    if (!meta?.boardIoKind || !SINGLE_WIRE_KINDS.has(meta.boardIoKind)) continue;
+    out.push({
+      severity: 'error',
+      code: 'BOARDIO_MULTIPLE_WIRES',
+      message: `${meta?.label ?? partId} has ${count} MCU connections; expected exactly one for board_io.`,
+      location: { part_id: partId },
+    });
   }
 
   const hasMcu = diagram.parts.some((p) => {
