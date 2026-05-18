@@ -157,6 +157,44 @@ pub trait Cpu: Send {
     }
 }
 
+// Forwarding impl so `Machine<Box<dyn Cpu>>` is valid — used by the WASM
+// runtime to hold an arch-dispatched CPU without making WasmSimulator
+// generic over C: Cpu (wasm-bindgen can't expose a generic struct).
+impl Cpu for Box<dyn Cpu> {
+    fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
+        (**self).reset(bus)
+    }
+    fn step(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+    ) -> SimResult<()> {
+        (**self).step(bus, observers, config)
+    }
+    fn step_batch(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        (**self).step_batch(bus, observers, config, max_count)
+    }
+    fn set_pc(&mut self, val: u32) { (**self).set_pc(val) }
+    fn get_pc(&self) -> u32 { (**self).get_pc() }
+    fn set_sp(&mut self, val: u32) { (**self).set_sp(val) }
+    fn set_exception_pending(&mut self, n: u32) { (**self).set_exception_pending(n) }
+    fn get_register(&self, id: u8) -> u32 { (**self).get_register(id) }
+    fn set_register(&mut self, id: u8, val: u32) { (**self).set_register(id, val) }
+    fn snapshot(&self) -> snapshot::CpuSnapshot { (**self).snapshot() }
+    fn apply_snapshot(&mut self, s: &snapshot::CpuSnapshot) { (**self).apply_snapshot(s) }
+    fn get_register_names(&self) -> Vec<String> { (**self).get_register_names() }
+    fn index_of_register(&self, name: &str) -> Option<u8> { (**self).index_of_register(name) }
+    fn inject_fault(&mut self, target: &str) -> SimResult<()> { (**self).inject_fault(target) }
+    fn get_energy_consumption(&self) -> f64 { (**self).get_energy_consumption() }
+}
+
 /// Trait representing a memory-mapped peripheral
 pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;

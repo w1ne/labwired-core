@@ -1,85 +1,32 @@
-use labwired_config::{BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, SystemManifest};
+use labwired_config::{Arch, BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::cpu::CortexM;
+// CortexM and XtensaLx7 are used via Box<dyn Cpu>; the concrete types are
+// only constructed inside the configure_* fns and immediately boxed.
 use labwired_core::decoder::arm::{decode_thumb_16, decode_thumb_32};
 use labwired_core::memory::LinearMemory;
 use labwired_core::peripherals::adc::Adc;
 use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::Bus;
 use labwired_core::{Cpu, Machine};
 use labwired_loader::load_elf_bytes;
 use wasm_bindgen::prelude::*;
 
-use gdbstub::conn::{Connection, ConnectionExt};
-use gdbstub::stub::{BaseStopReason, GdbStub};
-use labwired_gdbstub::LabwiredTarget;
-use std::cell::RefCell;
+// GDB-over-WASM scaffolding (`WasmGdbConn`, `WasmGdbEventLoop`, etc.) was
+// removed when `WasmSimulator` switched to `Machine<Box<dyn Cpu>>` — the
+// `gdbstub::target::Target` impl in `labwired-gdbstub` is concrete per arch.
+// Restore once a dyn-aware Target wrapper exists.
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug)]
-pub struct WasmGdbError;
-impl std::fmt::Display for WasmGdbError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmGdbError")
-    }
-}
-impl std::error::Error for WasmGdbError {}
-
-// Thread-local output buffer that WasmGdbConn writes into, allowing retrieval after
-// GdbStub consumes the connection.
-thread_local! {
-    static GDB_OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
-}
-
-struct WasmGdbConn {
-    input: VecDeque<u8>,
-    peeked: Option<u8>,
-}
-
-impl WasmGdbConn {
-    fn new(packet: &[u8]) -> Self {
-        GDB_OUTPUT.with(|o| o.borrow_mut().clear());
-        WasmGdbConn {
-            input: packet.iter().copied().collect(),
-            peeked: None,
-        }
-    }
-}
-
-impl Connection for WasmGdbConn {
-    type Error = WasmGdbError;
-    fn write(&mut self, byte: u8) -> Result<(), Self::Error> {
-        GDB_OUTPUT.with(|o| o.borrow_mut().push(byte));
-        Ok(())
-    }
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-}
-
-impl ConnectionExt for WasmGdbConn {
-    fn read(&mut self) -> Result<u8, Self::Error> {
-        if let Some(b) = self.peeked.take() {
-            return Ok(b);
-        }
-        self.input.pop_front().ok_or(WasmGdbError)
-    }
-
-    fn peek(&mut self) -> Result<Option<u8>, Self::Error> {
-        if self.peeked.is_none() {
-            self.peeked = self.input.front().copied();
-        }
-        Ok(self.peeked)
-    }
-}
-
 #[wasm_bindgen]
 pub struct WasmSimulator {
-    machine: Option<Machine<CortexM>>,
+    machine: Option<Machine<Box<dyn Cpu>>>,
     board_io: Vec<BoardIoBinding>,
     uart_sink: Arc<Mutex<Vec<u8>>>,
     uart_rx_bufs: Vec<Arc<Mutex<VecDeque<u8>>>>,
+    #[allow(dead_code)]
+    arch: Arch,
 }
 
 #[wasm_bindgen]
@@ -98,7 +45,8 @@ impl WasmSimulator {
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let (cpu, _nvic) = configure_cortex_m(&mut bus);
-        let mut machine = Machine::new(cpu, bus);
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let mut machine = Machine::new(boxed, bus);
 
         let program_image = load_elf_bytes(firmware)
             .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
@@ -111,10 +59,20 @@ impl WasmSimulator {
             board_io: Vec::new(),
             uart_sink,
             uart_rx_bufs,
+            arch: Arch::Arm,
         })
     }
 
     /// Config-driven constructor: initialize from system YAML, chip YAML, and firmware ELF.
+    ///
+    /// Dispatches on `chip.arch`:
+    ///   * `Arm` → `SystemBus::from_config` + `configure_cortex_m` (existing path).
+    ///   * `Xtensa` → `configure_xtensa_esp32` + inline external-device attach.
+    ///     ESP32 chip YAMLs declare RAM banks (IRAM/DRAM/flash XIP/ROM) via
+    ///     `peripherals: [{type: ram, ...}]`, which `from_config` doesn't
+    ///     understand — it'd stub them out and break instruction fetch. So
+    ///     ESP32 takes the dedicated path that explicitly registers those
+    ///     banks before attaching SPI / I²C external devices.
     #[wasm_bindgen]
     pub fn new_from_config(
         system_yaml: &str,
@@ -126,7 +84,18 @@ impl WasmSimulator {
         let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml)
             .map_err(|e| JsValue::from_str(&format!("Chip YAML error: {}", e)))?;
 
-        let mut bus = SystemBus::from_config(&chip, &manifest)
+        match chip.arch {
+            Arch::Arm | Arch::RiscV | Arch::Unknown => Self::new_from_config_arm(&chip, &manifest, firmware),
+            Arch::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
+        }
+    }
+
+    fn new_from_config_arm(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        firmware: &[u8],
+    ) -> Result<WasmSimulator, JsValue> {
+        let mut bus = SystemBus::from_config(chip, manifest)
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
 
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
@@ -134,7 +103,8 @@ impl WasmSimulator {
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let (cpu, _nvic) = configure_cortex_m(&mut bus);
-        let mut machine = Machine::new(cpu, bus);
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let mut machine = Machine::new(boxed, bus);
 
         let program_image = load_elf_bytes(firmware)
             .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
@@ -149,15 +119,119 @@ impl WasmSimulator {
             board_io,
             uart_sink,
             uart_rx_bufs,
+            arch: Arch::Arm,
         })
     }
 
-    fn machine(&mut self) -> &mut Machine<CortexM> {
+    /// ESP32-classic (Xtensa LX6) bus setup. `configure_xtensa_esp32` adds
+    /// IRAM / DRAM / flash XIP / ROM / UART0; external device attach
+    /// (SSD1680 e-paper etc) is handled inline below since this code path
+    /// doesn't go through `SystemBus::from_config`.
+    fn new_from_config_xtensa_esp32(
+        manifest: &SystemManifest,
+        firmware: &[u8],
+    ) -> Result<WasmSimulator, JsValue> {
+        let mut bus = SystemBus::new();
+        let cpu = configure_xtensa_esp32(&mut bus);
+
+        let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        Self::attach_esp32_external_devices(&mut bus, manifest)
+            .map_err(|e| JsValue::from_str(&format!("ESP32 external_devices: {:#}", e)))?;
+        bus.refresh_peripheral_index();
+
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let mut machine = Machine::new(boxed, bus);
+
+        let program_image = load_elf_bytes(firmware)
+            .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
+        machine
+            .load_firmware(&program_image)
+            .map_err(|e| JsValue::from_str(&format!("Simulation Error: {}", e)))?;
+        // XtensaLx7::reset() defaults PC to 0x40000400 (BROM reset vector).
+        // We skip BROM emulation and jump straight to the ELF's app entry,
+        // matching where a 2nd-stage bootloader would land.
+        machine.cpu.set_pc(program_image.entry_point as u32);
+
+        let board_io = manifest.board_io.clone();
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io,
+            uart_sink,
+            uart_rx_bufs,
+            arch: Arch::Xtensa,
+        })
+    }
+
+    /// Attach external devices declared in `manifest.external_devices` to the
+    /// ESP32 bus. Currently supports `ssd1680_tricolor_290`; other types are
+    /// logged and skipped (so a future labs adding I²C sensors don't crash).
+    fn attach_esp32_external_devices(
+        bus: &mut SystemBus,
+        manifest: &SystemManifest,
+    ) -> anyhow::Result<()> {
+        for ext in &manifest.external_devices {
+            match ext.r#type.as_str() {
+                "ssd1680_tricolor_290" | "epd-2in9-tricolor" => {
+                    let cs_pin = ext
+                        .config
+                        .get("cs_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("GPIO5")
+                        .to_string();
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.connection
+                            )
+                        })?;
+                    let any = bus.peripherals[idx]
+                        .dev
+                        .as_any_mut()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' connection '{}' cannot be downcast",
+                                ext.id,
+                                ext.connection
+                            )
+                        })?;
+                    let spi = any
+                        .downcast_mut::<labwired_core::peripherals::esp32::spi::Esp32Spi>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
+                                ext.id,
+                                ext.connection
+                            )
+                        })?;
+                    spi.attach(Box::new(
+                        labwired_core::peripherals::components::Ssd1680Tricolor290::new(cs_pin),
+                    ));
+                }
+                other => {
+                    tracing::warn!(
+                        "ESP32 external_devices: unsupported type '{}' on '{}'; skipping",
+                        other,
+                        ext.id
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn machine(&mut self) -> &mut Machine<Box<dyn Cpu>> {
         self.machine.as_mut().unwrap()
     }
 
     /// Read the output state of a board_io binding using peripheral snapshot.
-    fn read_board_io_state(&self, machine: &Machine<CortexM>, binding: &BoardIoBinding) -> bool {
+    fn read_board_io_state(&self, machine: &Machine<Box<dyn Cpu>>, binding: &BoardIoBinding) -> bool {
         let idx = match machine
             .bus
             .find_peripheral_index_by_name(&binding.peripheral)
@@ -186,21 +260,17 @@ impl WasmSimulator {
         }
     }
 
+    /// Browser-side GDB stub entry point.
+    ///
+    /// Disabled in this build: the GdbStub `Target` impl in `labwired-gdbstub`
+    /// is concrete on `LabwiredTarget<CortexM>` / `LabwiredTarget<RiscV>`,
+    /// but `WasmSimulator` now holds `Machine<Box<dyn Cpu>>` so the bound
+    /// isn't satisfied. The playground has no JS caller for this method,
+    /// so we return an empty packet rather than refactor `labwired-gdbstub`
+    /// to be dyn-aware. Track via the v0.6 plan.
     #[wasm_bindgen]
-    pub fn gdb_process_packet(&mut self, packet: &[u8]) -> Vec<u8> {
-        // Take the machine out of self and put it into a target
-        let machine = self.machine.take().unwrap();
-        let mut target = LabwiredTarget::new(machine);
-
-        let conn = WasmGdbConn::new(packet);
-        let gdb = GdbStub::new(conn);
-        let _ = gdb.run_blocking::<WasmGdbEventLoop>(&mut target);
-
-        // Put the machine back
-        self.machine = Some(target.machine);
-
-        // Retrieve the output from the thread-local buffer
-        GDB_OUTPUT.with(|o| o.borrow().clone())
+    pub fn gdb_process_packet(&mut self, _packet: &[u8]) -> Vec<u8> {
+        Vec::new()
     }
 
     #[wasm_bindgen]
@@ -1324,32 +1394,6 @@ impl WasmSimulator {
     }
 }
 
-struct WasmGdbEventLoop;
-
-impl gdbstub::stub::run_blocking::BlockingEventLoop for WasmGdbEventLoop {
-    type Target = LabwiredTarget<CortexM>;
-    type Connection = WasmGdbConn;
-    type StopReason = BaseStopReason<(), u32>;
-
-    fn wait_for_stop_reason(
-        _target: &mut Self::Target,
-        _conn: &mut Self::Connection,
-    ) -> Result<
-        gdbstub::stub::run_blocking::Event<Self::StopReason>,
-        gdbstub::stub::run_blocking::WaitForStopReasonError<
-            <Self::Target as gdbstub::target::Target>::Error,
-            <Self::Connection as Connection>::Error,
-        >,
-    > {
-        // Signal stopped — gdbstub will send reply packets via write()
-        Ok(gdbstub::stub::run_blocking::Event::TargetStopped(
-            BaseStopReason::Signal(gdbstub::common::Signal::SIGTRAP),
-        ))
-    }
-
-    fn on_interrupt(
-        _target: &mut Self::Target,
-    ) -> Result<Option<Self::StopReason>, <Self::Target as gdbstub::target::Target>::Error> {
-        Ok(None)
-    }
-}
+// WasmGdbEventLoop removed — see `gdb_process_packet` above for the rationale.
+// Restoring this requires `LabwiredTarget` to be implemented for an arch-erased
+// CPU type, which is the follow-up tracked alongside Phase 1.

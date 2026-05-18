@@ -178,6 +178,53 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(Uart::new()),
     );
 
+    // GPIO controller (TRM §4.10). The e-paper lab routes CS/RST/DC/BUSY
+    // through this peripheral; SCK/MOSI flow through SPI3 below.
+    bus.add_peripheral(
+        "gpio",
+        0x3FF4_4000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::gpio::Esp32Gpio::new()),
+    );
+
+    // SPI3 / VSPI (TRM §7). Default pinmux puts SCK on GPIO18, MOSI on
+    // GPIO23, CS on GPIO5 — matches the Waveshare e-paper module wiring.
+    // We don't model the IO_MUX/GPIO matrix routing; bytes flowing through
+    // the SPI3 controller go straight to its attached devices.
+    bus.add_peripheral(
+        "spi3",
+        0x3FF6_5000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::spi::Esp32Spi::new()),
+    );
+
+    // DPORT register stub (TRM §3). Firmware writes to PERIP_CLK_EN_REG /
+    // PERIP_RST_EN_REG to ungate VSPI + GPIO; sim ignores the values
+    // (peripherals are always live) but absorbs the writes so they don't
+    // fault. with_unwritten_ones() means any status-bit busy-wait reads
+    // back high — same trick as the S3 system_stub.
+    bus.add_peripheral(
+        "dport",
+        0x3FF0_0000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
+    );
+
+    // IO_MUX (TRM §4.11). Firmware configures pin function + drive strength
+    // here before VSPI/GPIO signals reach the package pins. Sim doesn't
+    // route through IO_MUX — SPI bytes go straight to attached devices —
+    // so we just round-trip writes.
+    bus.add_peripheral(
+        "io_mux",
+        0x3FF4_9000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+    );
+
     XtensaLx7::new()
 }
 
