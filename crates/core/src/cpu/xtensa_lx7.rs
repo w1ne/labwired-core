@@ -271,6 +271,34 @@ impl XtensaLx7 {
             Nop | Memw | Extw | Isync | Rsync | Esync | Dsync => {
                 self.pc = self.pc.wrapping_add(len);
             }
+            Moveqz { ar, as_, at } => {
+                if self.regs.read_logical(at) == 0 {
+                    let v = self.regs.read_logical(as_);
+                    self.regs.write_logical(ar, v);
+                }
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Movnez { ar, as_, at } => {
+                if self.regs.read_logical(at) != 0 {
+                    let v = self.regs.read_logical(as_);
+                    self.regs.write_logical(ar, v);
+                }
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Movltz { ar, as_, at } => {
+                if (self.regs.read_logical(at) as i32) < 0 {
+                    let v = self.regs.read_logical(as_);
+                    self.regs.write_logical(ar, v);
+                }
+                self.pc = self.pc.wrapping_add(len);
+            }
+            Movgez { ar, as_, at } => {
+                if (self.regs.read_logical(at) as i32) >= 0 {
+                    let v = self.regs.read_logical(as_);
+                    self.regs.write_logical(ar, v);
+                }
+                self.pc = self.pc.wrapping_add(len);
+            }
             Waiti { level } => {
                 // Set PS.INTLEVEL = level (real silicon does this before
                 // entering wait state). We don't model the actual wait —

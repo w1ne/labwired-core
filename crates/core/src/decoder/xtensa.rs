@@ -499,6 +499,11 @@ pub enum Instruction {
         as_: u8,
         offset: i32,
     },
+    // Conditional moves (op0=0, op1=3, op2=8..=B). All take 3 registers.
+    Moveqz { ar: u8, as_: u8, at: u8 },
+    Movnez { ar: u8, as_: u8, at: u8 },
+    Movltz { ar: u8, as_: u8, at: u8 },
+    Movgez { ar: u8, as_: u8, at: u8 },
     // -- Misc --
     Nop,
     Break {
@@ -853,6 +858,16 @@ fn decode_qrst(w: u32) -> Instruction {
                     as_: s,
                     at: t,
                 },
+                // Conditional moves (op0=0, op1=3, op2=8..=B). RRR encoding,
+                // ar = bits[15:12], as_ = bits[11:8], at = bits[7:4].
+                // MOVEQZ ar, as, at: if at == 0 then ar = as.
+                // MOVNEZ ar, as, at: if at != 0 then ar = as.
+                // MOVLTZ ar, as, at: if (i32) at  < 0 then ar = as.
+                // MOVGEZ ar, as, at: if (i32) at >= 0 then ar = as.
+                0x8 => Instruction::Moveqz { ar: r, as_: s, at: t },
+                0x9 => Instruction::Movnez { ar: r, as_: s, at: t },
+                0xA => Instruction::Movltz { ar: r, as_: s, at: t },
+                0xB => Instruction::Movgez { ar: r, as_: s, at: t },
                 0xE => {
                     let ur = ((s as u16) << 4) | (t as u16);
                     Instruction::Rur { ar: r, ur }
@@ -1034,12 +1049,24 @@ fn decode_st3_shiftsetup(w: u32, r: u8, s: u8, t: u8) -> Instruction {
 fn decode_l32r(w: u32) -> Instruction {
     let at = ((w >> 4) & 0xF) as u8;
     let imm16 = (w >> 8) & 0xFFFF;
-    // Sign-extend 16-bit value (2's complement), interpret as word-count.
-    let sext = ((imm16 ^ 0x8000).wrapping_sub(0x8000)) as i32;
-    let pc_rel_byte_offset = sext * 4;
+    // Per Xtensa ISA RM §A.2 (L32R Format): the 16-bit immediate is NOT
+    // a regular two's-complement value. The literal pool always lives
+    // BELOW the instruction, and the encoding sign-extends imm16 by
+    // forcing bits[31:16]=0xFFFF before the *4 shift. So a raw imm16
+    // value 0x770E produces a negative byte offset, not positive.
+    //
+    // EA = ((PC + 3) & ~3) + ((imm16 | 0xFFFF_0000) << 2)
+    //
+    // The wrapping-shift produces a 32-bit two's-complement byte offset.
+    // Earlier this routine sign-extended via (imm16 ^ 0x8000)-0x8000,
+    // which treats imm16 < 0x8000 as positive — breaking every l32r whose
+    // literal sits more than 64 KiB above the instruction. Discovered
+    // booting Arduino-ESP32 firmware: rtc_init's callx8 went to PC=0
+    // because the literal-pool load resolved to the wrong address.
+    let offset_bytes = ((imm16 | 0xFFFF_0000) << 2) as i32;
     Instruction::L32r {
         at,
-        pc_rel_byte_offset,
+        pc_rel_byte_offset: offset_bytes,
     }
 }
 fn decode_lsai(w: u32) -> Instruction {
@@ -1648,6 +1675,10 @@ impl Instruction {
             // Loop / misc
             Loop { as_, .. } | Loopnez { as_, .. } | Loopgtz { as_, .. } => as_,
             Nop | Break { .. } | Syscall | Waiti { .. } | Ill | Memw | Extw | Isync | Rsync | Esync | Dsync => 0,
+            Moveqz { ar, as_, at }
+            | Movnez { ar, as_, at }
+            | Movltz { ar, as_, at }
+            | Movgez { ar, as_, at } => ar.max(as_).max(at),
             Rsil { at, .. } => at,
             Extui { ar, at, .. } => ar.max(at),
             Unknown(_) => 0,

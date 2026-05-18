@@ -58,6 +58,8 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     let mut last_pc = 0u32;
     let mut wfi_streak = 0u32;
     let mut step_count = 0u64;
+    let mut pc_trail: [u32; 16] = [0; 16];
+    let mut trail_idx = 0usize;
     for _ in 0..MAX_STEPS {
         step_count += 1;
         if let Err(e) = machine.step() {
@@ -66,9 +68,16 @@ fn agentdeck_firmware_drives_panel_in_sim() {
                  last_pc=0x{last_pc:08x} current_pc=0x{:08x} — {e}",
                 machine.cpu.get_pc()
             );
+            eprintln!("[agentdeck-sim] last 16 PCs (most-recent first):");
+            for i in 0..16 {
+                let idx = (trail_idx + 15 - i) % 16;
+                eprintln!("    #{i:2}: 0x{:08x}", pc_trail[idx]);
+            }
             break;
         }
         let pc = machine.cpu.get_pc();
+        pc_trail[trail_idx] = pc;
+        trail_idx = (trail_idx + 1) % 16;
         if pc == last_pc {
             wfi_streak += 1;
             if wfi_streak > 100_000 {

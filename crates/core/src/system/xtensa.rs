@@ -137,13 +137,16 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x20000)),
     );
-    // DRAM (SRAM2, 192 KiB to cover the data region the linker uses).
+    // DRAM (SRAM2, 200 KiB) — full SRAM2 range 0x3FFAE000–0x3FFE0000.
+    // Arduino-ESP32's startup zeroes .bss starting at 0x3FFAE291 (within
+    // SRAM2 but below the 0x3FFB0000 region our hand-rolled Rust
+    // firmware uses), so we map the wider region to keep both happy.
     bus.add_peripheral(
         "dram",
-        0x3FFB_0000,
-        0x30000,
+        0x3FFA_E000,
+        0x32000,
         None,
-        Box::new(RamPeripheral::new(0x30000)),
+        Box::new(RamPeripheral::new(0x32000)),
     );
     // Flash XIP, instruction window (4 MiB).
     bus.add_peripheral(
@@ -197,6 +200,10 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // directly without IO_MUX-state enforcement).
     rom_bank.register(0x4000_9edc, rom_thunks::nop_return_zero); // esp_rom_gpio_connect_in_signal
     rom_bank.register(0x4000_9fdc, rom_thunks::nop_return_zero); // esp_rom_gpio_pad_select_gpio
+    // MMU / cache setup helpers — discovered iteratively while booting
+    // the AgentDeck Arduino-ESP32 binary in sim. All no-ops because the
+    // sim's flash XIP peripheral is a flat RamPeripheral, no MMU model.
+    rom_bank.register(0x4000_95a4, rom_thunks::nop_return_zero); // mmu_init
     bus.add_peripheral(
         "rom",
         0x4000_0000,
@@ -211,6 +218,23 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x100,
         None,
         Box::new(Uart::new()),
+    );
+
+    // SPI0 / SPI1 — flash SPI controllers used by the BROM during boot.
+    // Sim doesn't model the flash MMU so these are round-trip stubs.
+    bus.add_peripheral(
+        "spi0",
+        0x3FF4_3000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+    );
+    bus.add_peripheral(
+        "spi1",
+        0x3FF4_2000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
     );
 
     // GPIO controller (TRM §4.10). The e-paper lab routes CS/RST/DC/BUSY
@@ -240,10 +264,13 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // (peripherals are always live) but absorbs the writes so they don't
     // fault. with_unwritten_ones() means any status-bit busy-wait reads
     // back high — same trick as the S3 system_stub.
+    //
+    // Sized 64 KiB to cover the full DPORT + analog AHB regions
+    // (0x3FF00000-0x3FF1FFFF) that Arduino-ESP32's startup touches.
     bus.add_peripheral(
         "dport",
         0x3FF0_0000,
-        0x1000,
+        0x20000,
         None,
         Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
     );
