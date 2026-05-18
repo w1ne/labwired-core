@@ -1289,6 +1289,7 @@ dependencies = [
 name = "labwired-wasm"
 version = "0.14.0"
 dependencies = [
+ "anyhow",
  "cortex-m",
  "gdbstub",
  "gdbstub_arch",
@@ -1300,6 +1301,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "serde_yaml",
+ "tracing",
  "wasm-bindgen",
 ]
 

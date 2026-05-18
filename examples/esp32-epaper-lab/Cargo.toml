@@ -1,0 +1,26 @@
+[package]
+name = "esp32-epaper-lab"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team <team@labwired.io>"]
+license = "MIT"
+description = "ESP32-WROOM-32 + SSD1680 tri-color 2.9\" e-paper. Same ELF runs in the LabWired sim and on real ESP32 hardware."
+
+# We use esp-hal's linker scripts (linkall.x) and #[main] entry macro but
+# access GPIO + SPI3 registers directly via core::ptr::write_volatile. That
+# keeps the firmware's behaviour transparent to the LabWired ESP32-classic
+# bus model: every byte we send is observable in the sim's Esp32Spi /
+# Esp32Gpio peripherals without needing to model the entire esp-hal stack.
+[dependencies]
+esp-hal       = { version = "1.1", features = ["esp32", "unstable"] }
+esp-backtrace = { version = "0.19", features = ["esp32", "panic-handler", "println"] }
+esp-println   = { version = "0.17", default-features = false, features = ["esp32", "uart", "critical-section"] }
+
+[profile.dev.package.xtensa-lx-rt]
+opt-level = "z"
+
+[profile.release]
+opt-level     = "s"
+lto           = "thin"
+codegen-units = 1
+debug         = true  # keep DWARF so the LabWired sim resolves symbols
