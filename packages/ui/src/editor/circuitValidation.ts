@@ -19,7 +19,11 @@ function getRole(diagram: Diagram, endpoint: WireEndpoint) {
   };
 }
 
+/** Power-rail pin names every board has — bypass alt-function checks. */
+const POWER_PINS = new Set(['VCC', 'GND', '3V3', '5V', 'VIN', 'VBUS', 'VDD', 'VSS']);
+
 function validateBoardIoPinCompatibility(board: string, mcuPin: string, kind: string): string | null {
+  if (POWER_PINS.has(mcuPin.toUpperCase())) return null;
   const pin = getPinMapping(board, mcuPin);
   if (!pin) {
     return `Pin ${mcuPin} is not available on this board model.`;

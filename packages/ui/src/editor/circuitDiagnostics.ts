@@ -58,7 +58,13 @@ function getRole(diagram: Diagram, endpoint: WireEndpoint) {
 }
 
 /** Check a single MCU pin / boardIoKind compatibility. */
+/** Power-rail pins are universal — every chip has VCC + GND. Decorative wires
+ *  for these don't carry signal that needs alt-function support, so they
+ *  bypass pin compatibility checks. */
+const POWER_PINS = new Set(['VCC', 'GND', '3V3', '5V', 'VIN', 'VBUS', 'VDD', 'VSS']);
+
 function pinCompatibilityDiag(board: string, mcuPin: string, kind: string, partId?: string): Diagnostic | null {
+  if (POWER_PINS.has(mcuPin.toUpperCase())) return null;
   const pin = getPinMapping(board, mcuPin);
   if (!pin) {
     return {

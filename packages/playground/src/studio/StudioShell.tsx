@@ -62,19 +62,12 @@ export function StudioShell({
         authSlot={authSlot}
         projectSlot={projectSlot}
       />
-      {layout.mobile && (
-        <div className="absolute top-11 inset-x-0 z-30 bg-warning/10 border-b border-warning/30 px-4 py-2 text-warning text-[12px] text-center">
-          View only on mobile — open on desktop to edit.
-        </div>
-      )}
-      {!layout.mobile && (
-        <PaletteDrawer
-          components={paletteComponents}
-          open={layout.paletteOpen}
-          onOpenChange={layout.setPaletteOpen}
-          onDragStart={(type) => onPaletteDrag?.(type)}
-        />
-      )}
+      <PaletteDrawer
+        components={paletteComponents}
+        open={layout.paletteOpen}
+        onOpenChange={layout.setPaletteOpen}
+        onDragStart={(type) => onPaletteDrag?.(type)}
+      />
       <main role="main" aria-label="Canvas" className="absolute inset-0 pt-11 bg-bg-canvas">
         {children}
         {inspector}

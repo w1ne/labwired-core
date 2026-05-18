@@ -78,12 +78,17 @@ function getRole(diagram: ValidateDiagram, endpoint: WireEndpoint): Role {
   };
 }
 
+/** Power-rail pin names that every board has. Decorative power wires for
+ *  these bypass the alt-function check — they're not signal pins. */
+const POWER_PINS = new Set(['VCC', 'GND', '3V3', '5V', 'VIN', 'VBUS', 'VDD', 'VSS']);
+
 function pinCompatibilityDiag(
   board: string,
   mcuPin: string,
   kind: string,
   partId?: string,
 ): Diagnostic | null {
+  if (POWER_PINS.has(mcuPin.toUpperCase())) return null;
   const pin = getPinMapping(board, mcuPin);
   if (!pin) {
     return {
