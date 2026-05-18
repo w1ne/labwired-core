@@ -129,7 +129,7 @@ export function WatchOverlay({ sessionId }: { sessionId: string }) {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-px bg-border">
+      <div className="flex-1 overflow-hidden grid grid-cols-[280px_1fr] gap-px bg-border">
         {/* Agent activity sidebar */}
         <div className="bg-bg-base overflow-auto p-4 text-[12px]">
           <div className="text-fg-tertiary text-[10px] uppercase tracking-wider mb-1">Board</div>
