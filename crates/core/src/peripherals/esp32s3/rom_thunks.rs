@@ -352,6 +352,18 @@ pub fn rom_ctzsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     Ok(())
 }
 
+/// `ets_get_cpu_frequency() -> u32` — returns 240 (MHz).
+pub fn rom_cpu_freq_240mhz(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 240);
+    Ok(())
+}
+
+/// `ets_get_detected_xtal_freq() -> u32` — returns 40 (MHz).
+pub fn rom_xtal_freq_40mhz(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 40);
+    Ok(())
+}
+
 /// `__bswapsi2(u32) -> u32` — GCC runtime byte-swap u32.
 pub fn rom_bswapsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;

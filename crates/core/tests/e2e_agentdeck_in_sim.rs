@@ -60,6 +60,26 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     // must be equal AND not -1/-2, encoding (freq_mhz << 1). For 40 MHz
     // XTAL → value = 0x0050_0050.
     let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
+    // Fake the app image header at 0x3F400000 (start of flash dcache view).
+    // On real silicon, the 2nd-stage bootloader places this header before
+    // the app's first segment. esp_image_header_t (24 bytes):
+    //   magic=0xE9, segment_count=1, spi_mode=0, spi_speed_size=0,
+    //   entry_addr=<elf entry>, wp_pin=0xEE, spi_pin_drv=[0,0,0],
+    //   chip_id=0 (ESP32), min_chip_rev=0, reserved=[0;8], hash_appended=0
+    let entry = 0x40081bf0_u32; // matches AgentDeck ELF entry
+    let header: [u8; 24] = [
+        0xE9, 0x01, 0x00, 0x00,
+        (entry & 0xFF) as u8, ((entry >> 8) & 0xFF) as u8,
+        ((entry >> 16) & 0xFF) as u8, ((entry >> 24) & 0xFF) as u8,
+        0xEE, 0, 0, 0,
+        0, 0, // chip_id = 0 (ESP32)
+        0,    // min_chip_rev
+        0, 0, 0, 0, 0, 0, 0, 0, // reserved
+        0,    // hash_appended
+    ];
+    for (i, &b) in header.iter().enumerate() {
+        let _ = machine.bus.write_u8(0x3F40_0000 + i as u64, b);
+    }
 
     // Generous step budget — Arduino-ESP32 + GxEPD2 boot is much heavier
     // than our hand-rolled Rust firmware. ~500M steps is comfortable
@@ -71,7 +91,7 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     let mut last_pc = 0u32;
     let mut wfi_streak = 0u32;
     let mut step_count = 0u64;
-    let mut pc_trail: [u32; 16] = [0; 16];
+    let mut pc_trail: [u32; 64] = [0; 64];
     let mut trail_idx = 0usize;
     let mut samples: Vec<(u64, u32)> = Vec::new();
     for _ in 0..MAX_STEPS {
@@ -81,6 +101,43 @@ fn agentdeck_firmware_drives_panel_in_sim() {
         }
         // Diagnostic: catch __assert_func entry and print its args
         // (filename, line, function, expr).
+        // Trace esp_chip_info return: what byte got stored at offset 10
+        // (the cores field).
+        if machine.cpu.get_pc() == 0x400ecfaa {
+            let sp = machine.cpu.get_register(1);
+            let cores = machine.bus.read_u8((sp + 34) as u64).unwrap_or(0xff);
+            let model = machine.bus.read_u32(sp as u64 + 24).unwrap_or(0);
+            let features = machine.bus.read_u32(sp as u64 + 28).unwrap_or(0);
+            let revision = machine.bus.read_u16(sp as u64 + 32).unwrap_or(0);
+            eprintln!(
+                "[agentdeck-sim] esp_chip_info returned: model={model} features=0x{features:08x} revision={revision} cores={cores}"
+            );
+        }
+        // Trap on abort() entry — dump the 8 PCs immediately before it
+        // (the call chain leading to the abort).
+        if machine.cpu.get_pc() == 0x40091f60 {
+            let caller_a0 = machine.cpu.get_register(0);
+            eprintln!("[agentdeck-sim] abort() entry at step {step_count}. caller_a0=0x{caller_a0:08x}");
+            eprintln!("  last 8 PCs leading here:");
+            for i in 0..8 {
+                let off = ((trail_idx + 64) - 1 - i) % 64;
+                eprintln!("    -{:>2}: 0x{:08x}", i+1, pc_trail[off]);
+            }
+        }
+        if machine.cpu.get_pc() == 0x4008bc54 {
+            let read_string = |addr: u32, bus: &SystemBus| -> String {
+                let mut out = String::new();
+                for i in 0..256u32 {
+                    let b = bus.read_u8(addr.wrapping_add(i) as u64).unwrap_or(0);
+                    if b == 0 { break; }
+                    out.push(b as char);
+                }
+                out
+            };
+            let msg_addr = machine.cpu.get_register(2);
+            let msg = read_string(msg_addr, &machine.bus);
+            eprintln!("[agentdeck-sim] esp_system_abort: \"{msg}\" (step {step_count})");
+        }
         if machine.cpu.get_pc() == 0x40091fe4 {
             // Inside the caller's window, args are a10..a13.
             // Find them by checking PS.callinc and reading the AR file.
@@ -108,16 +165,16 @@ fn agentdeck_firmware_drives_panel_in_sim() {
                  last_pc=0x{last_pc:08x} current_pc=0x{:08x} — {e}",
                 machine.cpu.get_pc()
             );
-            eprintln!("[agentdeck-sim] last 16 PCs (most-recent first):");
-            for i in 0..16 {
-                let idx = (trail_idx + 15 - i) % 16;
+            eprintln!("[agentdeck-sim] last 64 PCs (most-recent first):");
+            for i in 0..64 {
+                let idx = (trail_idx + 63 - i) % 64;
                 eprintln!("    #{i:2}: 0x{:08x}", pc_trail[idx]);
             }
             break;
         }
         let pc = machine.cpu.get_pc();
         pc_trail[trail_idx] = pc;
-        trail_idx = (trail_idx + 1) % 16;
+        trail_idx = (trail_idx + 1) % 64;
         if step_count % SAMPLE_EVERY == 0 {
             samples.push((step_count, pc));
         }

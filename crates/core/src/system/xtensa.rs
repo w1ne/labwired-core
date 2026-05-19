@@ -148,6 +148,17 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x32000)),
     );
+
+    // SRAM1 (128 KiB, data-view) — Arduino-ESP32 places its initial stack
+    // near 0x3FFE_0000 and overflows back into SRAM2 from there. Maps
+    // 0x3FFE_0000–0x4000_0000 (the whole SRAM1 data-view window).
+    bus.add_peripheral(
+        "sram1",
+        0x3FFE_0000,
+        0x20000,
+        None,
+        Box::new(RamPeripheral::new(0x20000)),
+    );
     // Flash XIP, instruction window (4 MiB).
     bus.add_peripheral(
         "flash_icache",
@@ -185,6 +196,17 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // our sim doesn't enforce IO_MUX pre-state.
     rom_bank.register(0x4000_8534, rom_thunks::nop_return_zero); // ets_delay_us
     rom_bank.register(0x4000_8550, rom_thunks::nop_return_zero); // ets_update_cpu_frequency
+    // ets_get_cpu_frequency() — returns CPU freq in MHz. We don't model
+    // clock-tree changes so return the post-init default of 240 MHz.
+    rom_bank.register(0x4000_855c, rom_thunks::rom_cpu_freq_240mhz);
+    // ets_get_detected_xtal_freq() — returns XTAL freq in MHz. Return
+    // 40 (matches the RTC_APB_FREQ_REG fake we pre-write in the test).
+    rom_bank.register(0x4000_8588, rom_thunks::rom_xtal_freq_40mhz);
+    // ets_printf — formats and writes to UART. Reuse the S3 thunk.
+    rom_bank.register(0x4000_7d54, rom_thunks::ets_printf);
+    // esp_rom_spiflash_config_clk — configures flash SPI clock divider.
+    // No-op in sim; returns 0 (success).
+    rom_bank.register(0x4006_2bc8, rom_thunks::nop_return_zero);
     rom_bank.register(0x4000_9200, rom_thunks::nop_return_zero); // (unnamed esp32_init helper)
     rom_bank.register(0x4000_4348, rom_thunks::nop_return_zero); // rom_i2c_writeReg vicinity
     rom_bank.register(0x4000_41a4, rom_thunks::nop_return_zero); // rom_i2c_writeReg
@@ -336,30 +358,22 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32s3::system_stub::RtcCntlStub::new()),
     );
 
-    // TIMG0 (timer group 0). Two roles:
-    //   1. Watchdog regs (WDTCONFIG0..WDTWPROTECT) — round-trip writes
-    //      are enough; esp-hal pokes them to disable the WDT.
-    //   2. RTC clock calibration (RTCCALICFG at 0x68, RTCCALICFG1 at 0x6c).
-    //      Arduino-ESP32's `rtc_clk_cal_internal` writes RTCCALICFG with
-    //      START set, then polls RTCCALICFG1 bit 0 (RDY) and reads the
-    //      cycle count from bits[31:7]. With `with_unwritten_ones()` the
-    //      RDY bit reads as 1 immediately and the cycle count returns
-    //      0xFFFFFE0 — enough to satisfy the calibration loop.
+    // TIMG0 / TIMG1 — TimgStub auto-asserts RTC_CALI_RDY (bit 15 of
+    // RTCCALICFG at 0x68) so `rtc_clk_wait_for_slow_cycle` and friends
+    // complete in one iteration. Watchdog regs round-trip normally.
     bus.add_peripheral(
         "timg0",
         0x3FF5_F000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
+        Box::new(crate::peripherals::esp32s3::system_stub::TimgStub::new()),
     );
-
-    // TIMG1 — same shape as TIMG0.
     bus.add_peripheral(
         "timg1",
         0x3FF6_0000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
+        Box::new(crate::peripherals::esp32s3::system_stub::TimgStub::new()),
     );
 
     // EFUSE — esp-hal reads MAC / chip-revision bits during init.
@@ -379,6 +393,37 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
     );
+
+    // Catch-all stubs for the rest of the APB peripheral block
+    // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
+    // (RTC_IO, SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
+    // LEDC, etc). Most are touched briefly during esp-idf init; round-
+    // trip stubs satisfy the access pattern even without modeling
+    // any specific peripheral semantics.
+    for (name, base) in [
+        ("sdio_host", 0x3FF4_A000u64),
+        ("rtcio",     0x3FF4_8400),  // sub-range of RTC_CNTL window, leave 4 KiB span
+        ("sar_adc",   0x3FF4_C000),
+        ("i2s0",      0x3FF4_F000),
+        ("uart1",     0x3FF5_0000),
+        ("i2c0",      0x3FF5_3000),
+        ("uhci0",     0x3FF5_4000),
+        ("i2s1",      0x3FF6_D000),
+        ("uart2",     0x3FF6_E000),
+        ("pwm0",      0x3FF5_E000),
+        ("ledc",      0x3FF5_9000),
+        ("ledc2",     0x3FF6_8000),
+        ("rmt",       0x3FF5_6000),
+        ("pcnt",      0x3FF5_7000),
+    ] {
+        bus.add_peripheral(
+            name,
+            base,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        );
+    }
 
     // RTC slow memory (8 KiB at 0x5000_0000). Arduino-ESP32 stores
     // sleep-mode reference counts and bootloader state here.

@@ -142,6 +142,52 @@ impl Peripheral for RtcCntlStub {
     }
 }
 
+/// ESP32-classic TIMG (Timer Group) stub. Round-trips writes like
+/// `SystemStub` but auto-asserts `RTC_CALI_RDY` (bit 15 of RTCCALICFG
+/// at offset 0x68) when read, plus a non-zero cycle count in
+/// RTCCALICFG1 at 0x6C, so `rtc_clk_wait_for_slow_cycle` and
+/// `rtc_clk_cal_internal` complete in one polling iteration.
+///
+/// Reference: ESP32 TRM §16 (Timer Group). The watchdog regs
+/// (WDTCONFIG0..WDTWPROTECT at 0x48..0x64) work as plain round-trip
+/// — esp-hal pokes them once to disable the WDT.
+#[derive(Debug, Default)]
+pub struct TimgStub {
+    words: HashMap<u64, u32>,
+}
+
+impl TimgStub {
+    pub fn new() -> Self {
+        Self { words: HashMap::new() }
+    }
+}
+
+impl Peripheral for TimgStub {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let word_off = offset & !3;
+        let byte_off = (offset & 3) * 8;
+        let mut word = self.words.get(&word_off).copied().unwrap_or(0);
+        match word_off {
+            // RTCCALICFG at 0x68 — RDY at bit 15 (firmware spins until set).
+            0x68 => word |= 1 << 15,
+            // RTCCALICFG1 at 0x6C — bit 0 = RDY, bits[31:7] = cycle count.
+            // Report 0x1000 cycles ≈ a plausible calibration result.
+            0x6C => word |= (0x1000 << 7) | 1,
+            _ => {}
+        }
+        Ok(((word >> byte_off) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let word_off = offset & !3;
+        let byte_off = (offset & 3) * 8;
+        let entry = self.words.entry(word_off).or_insert(0);
+        *entry &= !(0xFFu32 << byte_off);
+        *entry |= (value as u32) << byte_off;
+        Ok(())
+    }
+    fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self) }
+}
+
 /// EFUSE peripheral stub.  Returns canned MAC + chip-rev for the fields
 /// esp-hal reads at boot.
 ///
