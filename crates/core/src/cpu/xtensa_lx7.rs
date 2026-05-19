@@ -149,14 +149,20 @@ impl XtensaLx7 {
     fn spill_shadow_on_call(&mut self, callinc: u8) {
         let wb_old = self.regs.windowbase();
         let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
-        // Callee's window covers logical a0..a15 = AR[wb_new*4..wb_new*4+15],
-        // i.e., the 4 WS slots wb_new, wb_new+1, wb_new+2, wb_new+3. For each
-        // of those slots that is currently live (WS bit set), save its
-        // a0..a3 (= AR[slot*4..slot*4+3]) so the matching RETW can restore.
-        // This covers BOTH the CALL{n} clobber of caller's a{n*4} (which
-        // lands in AR[wb_new*4 + 0] = displaced frame's a0) AND callee's
-        // body using a4..a15 as scratch (which collides with deeper WS slots
-        // when the call chain has wrapped around the 64-AR file).
+        // Caller's preserved area: slots wb_old..wb_old+n-1. Xtensa C ABI
+        // says caller's a0..a{n*4 - 1} survive the call. These are saved
+        // UNCONDITIONALLY so the matching RETW can restore them after the
+        // deeper chain potentially wraps back into this range.
+        for k in 0..callinc {
+            let slot = wb_old.wrapping_add(k) & 0x0F;
+            self.regs.push_shadow(slot);
+        }
+        // Displaced-frame protection: slots wb_new..wb_new+3 (the callee's
+        // window range). If WS[slot] is set, another live frame's a0..a3
+        // live here — CALL{n}+ENTRY+body will clobber them, so save first.
+        // Conditional on WS bit so we don't push stale data and don't
+        // clobber the return value (caller's a{n*4 + 2} = slot wb_new's a2)
+        // on RETW when no actual displacement occurred.
         for k in 0..4u8 {
             let slot = wb_new.wrapping_add(k) & 0x0F;
             if self.regs.windowstart_bit(slot) {
@@ -878,24 +884,25 @@ impl XtensaLx7 {
 
                 // Normal RETW path (destination frame is live).
                 let target_pc = (a0 & 0x3FFF_FFFF) | (self.pc & 0xC000_0000);
+                self.regs.set_windowstart_bit(wb_cur, false);
                 self.regs.set_windowbase(wb_dest);
                 self.pc = target_pc;
-                // Sim-level transparent restore for all slots the callee's
-                // window overlapped (wb_cur, wb_cur+1, wb_cur+2, wb_cur+3).
-                // The matching CALL{n} pushed one entry per live slot. For
-                // any slot we successfully pop, the displaced frame is now
-                // back in AR — its WS bit must be set. For wb_cur itself
-                // with no shadow pop, clear WS (normal RETW behavior — the
-                // just-returned frame is gone). For k>0 with no pop, leave
-                // WS unchanged (callee didn't own that slot).
+                // Restore mirror of `spill_shadow_on_call`, in reverse order:
+                // 1) callee's window range (slots wb_cur..wb_cur+3) —
+                //    pop_shadow is a no-op when no push happened, so this
+                //    only fires for WS-conditional pushes. If popped, set
+                //    WS bit (displaced frame is now back).
+                // 2) caller's preserved area (slots wb_dest..wb_dest+n-1) —
+                //    pop and restore caller's a0..a{n*4-1}.
                 for k in 0..4u8 {
                     let slot = wb_cur.wrapping_add(k) & 0x0F;
-                    let restored = self.regs.pop_shadow(slot);
-                    if restored {
+                    if self.regs.pop_shadow(slot) {
                         self.regs.set_windowstart_bit(slot, true);
-                    } else if k == 0 {
-                        self.regs.set_windowstart_bit(slot, false);
                     }
+                }
+                for k in 0..n {
+                    let slot = wb_dest.wrapping_add(k) & 0x0F;
+                    self.regs.pop_shadow(slot);
                 }
             }
 
