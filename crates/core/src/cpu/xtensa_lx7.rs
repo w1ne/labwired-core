@@ -887,6 +887,16 @@ impl XtensaLx7 {
                 self.regs.set_windowstart_bit(wb_cur, false);
                 self.regs.set_windowbase(wb_dest);
                 self.pc = target_pc;
+                // The callee just placed its return value in its a2 =
+                // AR[wb_cur*4 + 2] = caller's a{n*4 + 2} after rotation.
+                // Save it before the pops below — pop_shadow(wb_cur) would
+                // restore stale data into AR[wb_cur*4 + 2] and clobber the
+                // return value otherwise.
+                let return_value = if n > 0 {
+                    Some(self.regs.read_logical(n * 4 + 2))
+                } else {
+                    None
+                };
                 // Restore mirror of `spill_shadow_on_call`, in reverse order:
                 // 1) callee's window range (slots wb_cur..wb_cur+3) —
                 //    pop_shadow is a no-op when no push happened, so this
@@ -903,6 +913,9 @@ impl XtensaLx7 {
                 for k in 0..n {
                     let slot = wb_dest.wrapping_add(k) & 0x0F;
                     self.regs.pop_shadow(slot);
+                }
+                if let Some(rv) = return_value {
+                    self.regs.write_logical(n * 4 + 2, rv);
                 }
             }
 

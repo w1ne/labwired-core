@@ -123,11 +123,14 @@ impl RomThunkBank {
             let raw = cpu.regs.read_logical(n);
             cpu.regs.write_logical(n + 2, value);
             cpu.pc = (raw & 0x3FFF_FFFF) | (cpu.pc & 0xC000_0000);
-            // Thunks skip ENTRY/RETW, so they also bypass the sim-level
-            // shadow spill that CALL{n} performs (caller's preserved area
-            // + WS-conditional displaced-frame pushes for callee's window).
-            // Pop both ranges in reverse-push order. WB hasn't rotated for
-            // thunks, so wb_caller = current windowbase.
+            // Thunks skip ENTRY/RETW, so they bypass the sim-level shadow
+            // spill that CALL{n} performs (caller's preserved + WS-conditional
+            // callee window). Pop those entries to keep stacks balanced.
+            // We pop AFTER setting the return value so the pop's restore can
+            // safely clobber the return-value AR slot — write_logical above
+            // already saved it into the AR, but the pop will undo that for
+            // slot wb_callee's a2 position. To preserve the return value,
+            // re-write it after the pops.
             let wb_caller = cpu.regs.windowbase();
             let wb_callee = wb_caller.wrapping_add(callinc) & 0x0F;
             for k in 0..4u8 {
@@ -138,6 +141,7 @@ impl RomThunkBank {
                 let slot = wb_caller.wrapping_add(k) & 0x0F;
                 cpu.regs.pop_shadow(slot);
             }
+            cpu.regs.write_logical(n + 2, value);
         }
     }
 }
