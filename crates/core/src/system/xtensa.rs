@@ -175,6 +175,18 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x400000)),
     );
+
+    // External SRAM (PSRAM) data view at 0x3F800000-0x3FC00000.
+    // Arduino-ESP32's startup probes this region during PSRAM
+    // detection — accesses should be tolerable even on chips without
+    // PSRAM (reads back 0). 4 MiB stub.
+    bus.add_peripheral(
+        "psram",
+        0x3F80_0000,
+        0x400000,
+        None,
+        Box::new(RamPeripheral::new(0x400000)),
+    );
     // ROM0 (Espressif boot ROM, 448 KiB). RomThunkBank — same backing
     // store as a RamPeripheral but lets us pre-fill specific addresses
     // with BREAK 1,14 so the CPU's BREAK exec arm dispatches a Rust thunk

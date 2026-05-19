@@ -97,10 +97,23 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     for _ in 0..MAX_STEPS {
         step_count += 1;
         if step_count % 10_000 == 0 {
+            // s_cpu_up[1] — APP_CPU is "running" so start_other_core exits.
             let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
+            // s_cpu_inited[0..=1] — both CPUs have completed init so the
+            // do_other_cpu_settings tail-loop at 0x400ed12d-17c exits.
+            let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
+            let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
         }
         // Diagnostic: catch __assert_func entry and print its args
         // (filename, line, function, expr).
+        // Trace the spin-loop at 0x400ed12d once to learn where a7 points.
+        if machine.cpu.get_pc() == 0x400ed12d && step_count > 1_000_000 && step_count < 1_000_100 {
+            eprintln!("[agentdeck-sim] spin@400ed12d: a7=0x{:08x} a6=0x{:08x} sp=0x{:08x}",
+                machine.cpu.get_register(7),
+                machine.cpu.get_register(6),
+                machine.cpu.get_register(1),
+            );
+        }
         // Trace esp_chip_info return: what byte got stored at offset 10
         // (the cores field).
         if machine.cpu.get_pc() == 0x400ecfaa {
