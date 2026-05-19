@@ -92,6 +92,12 @@ pub struct XtensaLx7 {
     /// commonly-used IDs are THREADPTR (231), FCR (232), FSR (233).
     pub ur: [u32; 256],
     pub pc: u32,
+    /// Set by the branch helper when a conditional branch's predicate
+    /// fires. Read by the ZOL post-step check to distinguish a branch
+    /// that happened to land at LEND (exit, no loop-back) from natural
+    /// fall-through to LEND from the last body instruction (loop-back).
+    /// Cleared at the start of every step.
+    pub branched: bool,
 }
 
 impl XtensaLx7 {
@@ -104,6 +110,7 @@ impl XtensaLx7 {
             sr: XtensaSrFile::new(),
             ur: [0u32; 256],
             pc: 0x4000_0400,
+            branched: false,
         }
     }
 
@@ -358,21 +365,33 @@ impl XtensaLx7 {
             Loop { as_, offset } | Loopnez { as_, offset } | Loopgtz { as_, offset } => {
                 use crate::cpu::xtensa_sr::{LBEG, LCOUNT, LEND};
                 let count = self.regs.read_logical(as_);
+                // ISA RM §7.4: LOOPNEZ/LOOPGTZ skip body when count is
+                // 0/non-positive. LOOP always enters the body. The post-LEND
+                // check decrements LCOUNT and branches back while LCOUNT > 0.
                 let take = match ins {
-                    Loop { .. } => count != 0,
+                    Loop { .. } => true,
                     Loopnez { .. } => count != 0,
                     Loopgtz { .. } => (count as i32) > 0,
                     _ => unreachable!(),
                 };
                 let after = self.pc.wrapping_add(len);
-                let lend = (after as i32).wrapping_add(offset) as u32;
+                // ISA RM §7.4.1: LEND = LOOP_PC + 4 + imm8. Decoder produces
+                // `offset = imm8 + 4`, so LEND = PC + offset (not PC+len+offset).
+                let lend = (self.pc as i32).wrapping_add(offset) as u32;
                 if take {
                     self.sr.write(LBEG, after);
                     self.sr.write(LEND, lend);
+                    // LCOUNT = count - 1 (wrapping). With post-LEND check
+                    // `if LCOUNT > 0 { LCOUNT--; PC = LBEG; }`, body runs
+                    // exactly count times for count > 0. For LOOP-with-
+                    // count=0, LCOUNT wraps to 0xFFFFFFFF so the body
+                    // iterates ~unbounded — terminated only by the body's
+                    // own internal branches (this is how strlen sweeps for
+                    // a null byte without a fixed upper bound).
                     self.sr.write(LCOUNT, count.wrapping_sub(1));
                     self.pc = after; // fall through to loop body
                 } else {
-                    // Skip the body — branch past LEND.
+                    // LOOPNEZ/LOOPGTZ with non-positive count: skip body.
                     self.sr.write(LCOUNT, 0);
                     self.pc = lend;
                 }
@@ -1552,6 +1571,7 @@ impl XtensaLx7 {
     fn branch(&mut self, offset: i32, len: u32, cond: bool) {
         if cond {
             self.pc = self.pc.wrapping_add(offset as u32);
+            self.branched = true;
         } else {
             self.pc = self.pc.wrapping_add(len);
         }
@@ -1745,16 +1765,23 @@ impl Cpu for XtensaLx7 {
             let w = bus.read_u32(pc as u64)?;
             xtensa::decode(w)
         };
+        self.branched = false;
+        let fall_through_pc = pc.wrapping_add(len);
         self.execute(ins, bus, len)?;
 
-        // Zero Overhead Loop post-instruction check: if we've just executed
-        // the last instruction of a ZOL body, LCOUNT > 0 means branch back
-        // to LBEG. ISA RM §4.3.2 — the implicit branch is checked AFTER PC
-        // is updated by the last body instruction. Our `pc` now points to
-        // (LEND - len) + len = LEND, the instruction after the loop body.
+        // Zero Overhead Loop post-instruction check (ISA RM §7.4.3 "Loop
+        // and Branch Interaction"): the implicit branch back to LBEG
+        // fires when the PREVIOUS instruction's natural fall-through path
+        // reaches LEND. A taken branch that happens to land at LEND from
+        // inside the body must NOT trigger loop-back — strlen relies on
+        // this: it ends the loop body with `bnone …, LEND` to exit early,
+        // expecting LEND to be the post-loop epilogue. The `branched` flag
+        // (set inside `branch()` when a conditional branch fires) tells
+        // us whether the last step took a branch or fell through.
         use crate::cpu::xtensa_sr::{LBEG, LCOUNT, LEND};
         let lcount = self.sr.read(LCOUNT);
-        if lcount > 0 && self.pc == self.sr.read(LEND) {
+        let lend = self.sr.read(LEND);
+        if lcount > 0 && self.pc == lend && fall_through_pc == lend && !self.branched {
             self.sr.write(LCOUNT, lcount - 1);
             self.pc = self.sr.read(LBEG);
         }
