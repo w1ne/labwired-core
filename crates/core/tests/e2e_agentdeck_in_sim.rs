@@ -60,12 +60,21 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     // must be equal AND not -1/-2, encoding (freq_mhz << 1). For 40 MHz
     // XTAL → value = 0x0050_0050.
     let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
-    // DIAGNOSTIC: zero out the reserved_regions table in flash so
-    // soc_get_available_memory_regions doesn't filter out everything.
-    // If this changes count from 1 to >1, the issue is the reserved data.
-    for i in 0..0x70u64 {
-        let _ = machine.bus.write_u8(0x3F45B6DC + i, 0);
-    }
+    // Install sim-side heap allocator thunks. ESP-IDF's heap_caps_init
+    // can't bootstrap multi_heap state in our sim (chicken-and-egg with
+    // the static heap allocator), so we replace the heap-caps API surface
+    // with a bump allocator over a fixed 64 KiB pool in SRAM2.
+    use labwired_core::peripherals::esp32s3::rom_thunks;
+    machine.bus.install_flash_thunk(0x400e_e3b0, rom_thunks::esp_idf_heap_caps_init)
+        .expect("install heap_caps_init thunk");
+    machine.bus.install_flash_thunk(0x4008_2904, rom_thunks::esp_idf_heap_caps_malloc)
+        .expect("install heap_caps_malloc thunk");
+    machine.bus.install_flash_thunk(0x4008_2a70, rom_thunks::esp_idf_heap_caps_calloc)
+        .expect("install heap_caps_calloc thunk");
+    machine.bus.install_flash_thunk(0x4008_25dc, rom_thunks::esp_idf_heap_caps_free)
+        .expect("install heap_caps_free thunk");
+    machine.bus.install_flash_thunk(0x4008_29f0, rom_thunks::esp_idf_heap_caps_realloc)
+        .expect("install heap_caps_realloc thunk");
     // Fake the app image header at 0x3F400000 (start of flash dcache view).
     // On real silicon, the 2nd-stage bootloader places this header before
     // the app's first segment. esp_image_header_t (24 bytes):

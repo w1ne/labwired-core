@@ -123,6 +123,16 @@ impl RomThunkBank {
             let raw = cpu.regs.read_logical(n);
             cpu.regs.write_logical(n + 2, value);
             cpu.pc = (raw & 0x3FFF_FFFF) | (cpu.pc & 0xC000_0000);
+            // Thunks skip ENTRY/RETW, so they also bypass the sim-level
+            // shadow spill that CALL{n} performs for the 4 WS slots in
+            // the callee's window range. Pop the matching shadow entries
+            // so the stack stays balanced. Empty slots are harmless.
+            let wb_old = cpu.regs.windowbase();
+            let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
+            for k in 0..4u8 {
+                let slot = wb_new.wrapping_add(k) & 0x0F;
+                cpu.regs.pop_shadow(slot);
+            }
         }
     }
 }
@@ -349,6 +359,99 @@ pub fn rom_ctzsi2(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;
     let v = cpu.regs.read_logical(n + 2);
     RomThunkBank::return_with(cpu, if v == 0 { 32 } else { v.trailing_zeros() });
+    Ok(())
+}
+
+/// ESP-IDF `heap_caps_init(void)` — initializes the heap allocator on real
+/// silicon. We model the heap via a sim-side bump allocator (see
+/// `heap_caps_malloc`), so `heap_caps_init` itself is a no-op.
+pub fn esp_idf_heap_caps_init(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// State for the sim-side bump allocator backing `heap_caps_malloc`. Holds
+/// the next-free pointer within a DRAM region we reserve for heap use.
+/// Persisted across calls via a static. Single-threaded sim — no atomic.
+static mut HEAP_BUMP_PTR: u32 = 0x3FFD_0000;
+const HEAP_BUMP_END: u32 = 0x3FFE_0000; // 64 KiB pool, top of SRAM2
+
+/// ESP-IDF `heap_caps_malloc(size: size_t, caps: u32) -> void*`.
+///
+/// Real silicon walks `registered_heaps[]` looking for a multi_heap with
+/// matching capabilities (MALLOC_CAP_INTERNAL, MALLOC_CAP_DMA, etc) and
+/// calls multi_heap_malloc on the first match. We don't model multi_heap;
+/// instead, we serve all allocations from a fixed bump pool in DRAM
+/// regardless of caps. Returns NULL when the pool is exhausted.
+///
+/// Args (Xtensa C-ABI post-rotation):
+///   a[n+2] = size, a[n+3] = caps  (caps ignored)
+/// Return: a[n+2] = pointer (or 0 on OOM)
+pub fn esp_idf_heap_caps_malloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let size = cpu.regs.read_logical(n + 2);
+    // Align size to 16 bytes (matches multi_heap's block alignment).
+    let aligned = (size + 15) & !15;
+    let ptr = unsafe {
+        let start = HEAP_BUMP_PTR;
+        let next = start.wrapping_add(aligned);
+        if next > HEAP_BUMP_END || aligned > 1 << 20 {
+            0 // OOM
+        } else {
+            HEAP_BUMP_PTR = next;
+            start
+        }
+    };
+    RomThunkBank::return_with(cpu, ptr);
+    Ok(())
+}
+
+/// `heap_caps_calloc(n, size, caps) -> void*` — malloc-and-zero.
+pub fn esp_idf_heap_caps_calloc(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let nn = cpu.ps.callinc() * 4;
+    let count = cpu.regs.read_logical(nn + 2);
+    let size = cpu.regs.read_logical(nn + 3);
+    let total = count.wrapping_mul(size);
+    let aligned = (total + 15) & !15;
+    let ptr = unsafe {
+        let start = HEAP_BUMP_PTR;
+        let next = start.wrapping_add(aligned);
+        if next > HEAP_BUMP_END || aligned > 1 << 20 {
+            0
+        } else {
+            HEAP_BUMP_PTR = next;
+            for i in 0..aligned {
+                bus.write_u8(start.wrapping_add(i) as u64, 0)?;
+            }
+            start
+        }
+    };
+    RomThunkBank::return_with(cpu, ptr);
+    Ok(())
+}
+
+/// `heap_caps_free(void*) -> void` — bump allocator can't free.
+pub fn esp_idf_heap_caps_free(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `heap_caps_realloc(void*, new_size, caps) -> void*` — degrades to malloc.
+pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let new_size = cpu.regs.read_logical(n + 3);
+    let aligned = (new_size + 15) & !15;
+    let ptr = unsafe {
+        let start = HEAP_BUMP_PTR;
+        let next = start.wrapping_add(aligned);
+        if next > HEAP_BUMP_END {
+            0
+        } else {
+            HEAP_BUMP_PTR = next;
+            start
+        }
+    };
+    RomThunkBank::return_with(cpu, ptr);
     Ok(())
 }
 

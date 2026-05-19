@@ -6,11 +6,20 @@
 
 /// 64-entry physical AR file indexed via WindowBase. Logical registers
 /// a0..a15 map to physical[(WindowBase*4 + idx) mod 64].
+///
+/// `shadow` is a sim-level transparent spill area. When CALL{n} would
+/// overwrite a slot that already holds a live frame (i.e., WS[wb_new]=1
+/// when the chain wraps around the 64-AR file), the displaced frame's
+/// a0..a3 are pushed here before the CALL writes the return address.
+/// The corresponding RETW pops and restores. This avoids relying on
+/// the firmware's OF/UF vector handlers — which need a primed
+/// `[SP - 12]` save chain that isn't set up on a cold first wrap.
 #[derive(Debug, Clone)]
 pub struct ArFile {
     phys: [u32; 64],
     window_base: u8,   // 0..15
     window_start: u16, // 16 bits
+    shadow: [Vec<[u32; 4]>; 16],
 }
 
 impl Default for ArFile {
@@ -26,7 +35,41 @@ impl ArFile {
             phys: [0; 64],
             window_base: 0,
             window_start: 0x1,
+            shadow: Default::default(),
         }
+    }
+
+    /// Push the current AR[wb*4..wb*4+3] onto the shadow stack for slot `wb`.
+    /// Used by CALL{n} when about to overwrite a live frame's registers.
+    pub fn push_shadow(&mut self, wb: u8) {
+        let base = (wb as usize & 0xF) * 4;
+        let regs = [
+            self.phys[base],
+            self.phys[base + 1],
+            self.phys[base + 2],
+            self.phys[base + 3],
+        ];
+        self.shadow[wb as usize & 0xF].push(regs);
+    }
+
+    /// Pop the most-recently-saved frame for slot `wb` and restore
+    /// AR[wb*4..wb*4+3]. Returns true if a value was popped.
+    pub fn pop_shadow(&mut self, wb: u8) -> bool {
+        let i = wb as usize & 0xF;
+        if let Some(regs) = self.shadow[i].pop() {
+            let base = i * 4;
+            self.phys[base] = regs[0];
+            self.phys[base + 1] = regs[1];
+            self.phys[base + 2] = regs[2];
+            self.phys[base + 3] = regs[3];
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn shadow_depth(&self, wb: u8) -> usize {
+        self.shadow[wb as usize & 0xF].len()
     }
 
     pub fn windowbase(&self) -> u8 {

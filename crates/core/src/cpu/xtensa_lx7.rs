@@ -134,6 +134,37 @@ impl XtensaLx7 {
         }
     }
 
+    /// Sim-level transparent spill on CALL{n}. Before CALL{n} writes the
+    /// return address into the caller's logical a{n*4}, the AR slot we'd
+    /// land on (the future callee's a0..a3) may already hold a live frame's
+    /// registers — this happens when the call chain wraps around the 64-AR
+    /// file (8 CALL8s, 16 CALL4s, etc). Real silicon raises WindowOverflow
+    /// and runs OF8/OF12 handlers that spill to a stack save chain — but
+    /// that chain isn't primed on a cold first wrap, so the canonical
+    /// `l32e a0, a1, -12` reads garbage. We sidestep by pushing the
+    /// displaced frame's a0..a3 to a per-WB shadow stack here, and popping
+    /// it back in RETW. WS bits remain consistent: the displaced frame's
+    /// WS bit stays set (its data is just temporarily shadowed); on RETW
+    /// from the callee we restore those four ARs.
+    fn spill_shadow_on_call(&mut self, callinc: u8) {
+        let wb_old = self.regs.windowbase();
+        let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
+        // Callee's window covers logical a0..a15 = AR[wb_new*4..wb_new*4+15],
+        // i.e., the 4 WS slots wb_new, wb_new+1, wb_new+2, wb_new+3. For each
+        // of those slots that is currently live (WS bit set), save its
+        // a0..a3 (= AR[slot*4..slot*4+3]) so the matching RETW can restore.
+        // This covers BOTH the CALL{n} clobber of caller's a{n*4} (which
+        // lands in AR[wb_new*4 + 0] = displaced frame's a0) AND callee's
+        // body using a4..a15 as scratch (which collides with deeper WS slots
+        // when the call chain has wrapped around the 64-AR file).
+        for k in 0..4u8 {
+            let slot = wb_new.wrapping_add(k) & 0x0F;
+            if self.regs.windowstart_bit(slot) {
+                self.regs.push_shadow(slot);
+            }
+        }
+    }
+
     fn execute(&mut self, ins: xtensa::Instruction, bus: &mut dyn Bus, len: u32) -> SimResult<()> {
         use xtensa::Instruction::*;
         // F5: Per-instruction Window Overflow check (Xtensa LX ISA RM §4.7).
@@ -647,6 +678,7 @@ impl XtensaLx7 {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (1 << 30);
                 let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
+                self.spill_shadow_on_call(1);
                 self.regs.write_logical(4, ret_pc);
                 self.ps.set_callinc(1);
                 self.pc = target;
@@ -655,6 +687,7 @@ impl XtensaLx7 {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (2 << 30);
                 let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
+                self.spill_shadow_on_call(2);
                 self.regs.write_logical(8, ret_pc);
                 self.ps.set_callinc(2);
                 self.pc = target;
@@ -663,6 +696,7 @@ impl XtensaLx7 {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (3 << 30);
                 let target = (self.pc.wrapping_add(4) & !3u32).wrapping_add(offset as u32);
+                self.spill_shadow_on_call(3);
                 self.regs.write_logical(12, ret_pc);
                 self.ps.set_callinc(3);
                 self.pc = target;
@@ -674,6 +708,7 @@ impl XtensaLx7 {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (1 << 30);
                 let target = self.regs.read_logical(as_);
+                self.spill_shadow_on_call(1);
                 self.regs.write_logical(4, ret_pc);
                 self.ps.set_callinc(1);
                 self.pc = target;
@@ -682,6 +717,7 @@ impl XtensaLx7 {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (2 << 30);
                 let target = self.regs.read_logical(as_);
+                self.spill_shadow_on_call(2);
                 self.regs.write_logical(8, ret_pc);
                 self.ps.set_callinc(2);
                 self.pc = target;
@@ -690,6 +726,7 @@ impl XtensaLx7 {
                 let raw_ret = self.pc.wrapping_add(3);
                 let ret_pc = (raw_ret & 0x3FFF_FFFF) | (3 << 30);
                 let target = self.regs.read_logical(as_);
+                self.spill_shadow_on_call(3);
                 self.regs.write_logical(12, ret_pc);
                 self.ps.set_callinc(3);
                 self.pc = target;
@@ -736,60 +773,22 @@ impl XtensaLx7 {
                 let wb_old = self.regs.windowbase();
                 let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
 
-                // F3: Window overflow check — check the frame AHEAD of wb_new.
-                // ISA RM: if WindowStart[(wb_new + 1) mod 16] == 1, overflow.
-                let check_idx = wb_new.wrapping_add(1) & 0x0F;
-                if self.regs.windowstart_bit(check_idx) {
-                    // Window overflow path — implements the canonical Xtensa
-                    // exception entry per QEMU `target/xtensa/win_helper.c`
-                    // `HELPER(window_check)`:
-                    //
-                    //   1. n = ctz of WS-bits-ahead-of-WB + 1
-                    //      (= distance to nearest set WS bit ahead, inclusive).
-                    //   2. PS.OWB ← WB              (saved for RFWO restore)
-                    //   3. WB ← WB + n              (rotate so the handler runs
-                    //                                with the displaced frame
-                    //                                as its current window)
-                    //   4. PS.EXCM ← 1
-                    //   5. EPC1 ← PC of the faulting ENTRY
-                    //   6. PC ← VECBASE + offset    (OF4/OF8/OF12 chosen by
-                    //                                further WS-bit gaps)
-                    //
-                    // The standard xtensa-lx-rt `_WindowOverflow4` handler
-                    // (`s32e a0, a5, -16; ...; rfwo`) relies on this rotation:
-                    // its `a0..a3` map to the displaced frame's regs and `a5`
-                    // maps to the SP of the next frame (where the spill area
-                    // lives, per the Xtensa ABI). RFWO clears WS[WB] (= the
-                    // spilled frame's bit), restores WB from OWB, and the
-                    // re-executed ENTRY succeeds.
-                    let _ = callinc; // dispatch is by N and secondary ctz, not CALLINC
-                    let ws_full = self.regs.windowstart() as u32;
-                    let ws_replicated = ws_full | (ws_full << 16);
-                    let ws_ahead = ws_replicated >> ((wb_old as u32) + 1);
-                    let n = ws_ahead.trailing_zeros() + 1;
-                    let wb_handler = wb_old.wrapping_add(n as u8) & 0x0F;
-
-                    // Per QEMU `target/xtensa/win_helper.c::HELPER(window_check)`:
-                    // dispatch = ctz(ws_ahead >> n):
-                    //   0 → OF4  (vec+0x000) — only 1 frame to spill
-                    //   1 → OF8  (vec+0x080) — 2 frames to spill
-                    //   ≥2 → OF12 (vec+0x100) — 3+ frames to spill
-                    let secondary = (ws_ahead >> n).trailing_zeros();
-                    let vec_ofs = match secondary {
-                        0 => 0x000_u32,
-                        1 => 0x080_u32,
-                        _ => 0x100_u32,
-                    };
-                    let vecbase = self.sr.read(VECBASE);
-                    self.sr.write(EPC1, self.pc);
-                    self.ps.set_owb(wb_old);
-                    self.regs.set_windowbase(wb_handler);
-                    self.ps.set_excm(true);
-                    self.pc = vecbase.wrapping_add(vec_ofs);
-                    // CALLINC retained — RFWO doesn't touch it; ENTRY re-execution
-                    // re-reads it. WS bits unchanged on entry.
-                    return Ok(());
-                }
+                // F3: Window overflow detection. Per Xtensa ISA RM §4.7.1.6,
+                // real silicon vectors to OF4/OF8/OF12 handlers that spill the
+                // displaced frame to its stack save area, relying on a chain
+                // of prior spills to know where the parent frame's SP is
+                // (`l32e a0, a1, -12` in OF8/OF12). On a cold call chain that
+                // wraps for the first time, no prior spill has primed that
+                // chain, so the canonical handler reads garbage.
+                //
+                // We sidestep this with sim-level transparent spilling: on
+                // CALL{n}, if the slot we'd land in is already live, save the
+                // displaced frame's a0..a3 to a per-WB shadow stack BEFORE the
+                // CALL clobbers them. On the corresponding RETW, restore.
+                //
+                // The displaced-frame save happens in the CALL{n} exec arms,
+                // not here — by the time we reach ENTRY, the corruption has
+                // already happened. See `spill_to_shadow_on_call` in this file.
 
                 // Per Xtensa ISA RM §8.1.5 ENTRY:
                 //   AR[WB_new*4 + as] = AR[WB_old*4 + as] - imm*8
@@ -879,9 +878,25 @@ impl XtensaLx7 {
 
                 // Normal RETW path (destination frame is live).
                 let target_pc = (a0 & 0x3FFF_FFFF) | (self.pc & 0xC000_0000);
-                self.regs.set_windowstart_bit(wb_cur, false);
                 self.regs.set_windowbase(wb_dest);
                 self.pc = target_pc;
+                // Sim-level transparent restore for all slots the callee's
+                // window overlapped (wb_cur, wb_cur+1, wb_cur+2, wb_cur+3).
+                // The matching CALL{n} pushed one entry per live slot. For
+                // any slot we successfully pop, the displaced frame is now
+                // back in AR — its WS bit must be set. For wb_cur itself
+                // with no shadow pop, clear WS (normal RETW behavior — the
+                // just-returned frame is gone). For k>0 with no pop, leave
+                // WS unchanged (callee didn't own that slot).
+                for k in 0..4u8 {
+                    let slot = wb_cur.wrapping_add(k) & 0x0F;
+                    let restored = self.regs.pop_shadow(slot);
+                    if restored {
+                        self.regs.set_windowstart_bit(slot, true);
+                    } else if k == 0 {
+                        self.regs.set_windowstart_bit(slot, false);
+                    }
+                }
             }
 
             // BANY: taken if (as_ & at) != 0

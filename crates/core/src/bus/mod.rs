@@ -81,6 +81,16 @@ pub struct SystemBus {
     /// peripheral `explicit_irqs` source IDs routed through the registered
     /// intmatrix peripheral. Cleared per slot via `clear_cpu_irq_pending`.
     pub pending_cpu_irqs: u32,
+    /// Bus-level thunk table for addresses outside any `RomThunkBank`.
+    /// Used to intercept calls to firmware functions resident in flash
+    /// (e.g. ESP-IDF's `multi_heap_register` at 0x40194954) so we can
+    /// substitute a sim-side Rust implementation. To install: write
+    /// BREAK 1,14 bytes (`ROM_THUNK_BREAK_BYTES`) at `pc` in flash AND
+    /// `bus.flash_thunks.insert(pc, thunk)`. The CPU's BREAK 1,14
+    /// dispatcher (xtensa_lx7.rs) calls `bus.get_rom_thunk(pc)` which
+    /// checks both this table and any `RomThunkBank` peripherals.
+    pub flash_thunks:
+        std::collections::HashMap<u32, crate::peripherals::esp32s3::rom_thunks::RomThunkFn>,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
 }
@@ -447,6 +457,7 @@ impl SystemBus {
     pub fn new() -> Self {
         // Default initialization for tests
         let mut bus = Self {
+            flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new(1024 * 1024, 0x0),
             ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
             peripherals: vec![
@@ -502,6 +513,7 @@ impl SystemBus {
     /// are zero-sized so they never satisfy a read.
     pub fn empty() -> Self {
         let mut bus = Self {
+            flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new(0, 0),
             ram: LinearMemory::new(0, 0),
             peripherals: Vec::new(),
@@ -554,6 +566,12 @@ impl SystemBus {
         &self,
         pc: u32,
     ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+        // First check the Bus-level flash thunk table (for thunks installed
+        // outside any RomThunkBank's range — typically firmware functions
+        // resident in flash that we want to intercept).
+        if let Some(&thunk) = self.flash_thunks.get(&pc) {
+            return Some(thunk);
+        }
         for p in &self.peripherals {
             let base = p.base as u32;
             let end = base.wrapping_add(p.size as u32);
@@ -568,6 +586,24 @@ impl SystemBus {
             }
         }
         None
+    }
+
+    /// Install a thunk for `pc` outside any `RomThunkBank`. Writes
+    /// `BREAK 1,14` at `pc` so instruction fetch dispatches to the
+    /// CPU's break-handler path, where `get_rom_thunk(pc)` returns the
+    /// supplied closure. Used to intercept firmware functions resident
+    /// in flash (e.g. ESP-IDF's `multi_heap_register`).
+    pub fn install_flash_thunk(
+        &mut self,
+        pc: u32,
+        thunk: crate::peripherals::esp32s3::rom_thunks::RomThunkFn,
+    ) -> SimResult<()> {
+        let bytes = crate::peripherals::esp32s3::rom_thunks::ROM_THUNK_BREAK_BYTES;
+        for (i, b) in bytes.iter().enumerate() {
+            self.write_u8(pc as u64 + i as u64, *b)?;
+        }
+        self.flash_thunks.insert(pc, thunk);
+        Ok(())
     }
 
     /// Plan 3: look up the cpu0 IRQ slot the registered intmatrix has bound
@@ -622,6 +658,7 @@ impl SystemBus {
         let ram_size = parse_size(&chip.ram.size)?;
 
         let mut bus = Self {
+            flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new(flash_size as usize, chip.flash.base),
             ram: LinearMemory::new(ram_size as usize, chip.ram.base),
             peripherals: Vec::new(),
@@ -2145,6 +2182,7 @@ mod tests {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
             pending_cpu_irqs: 0,
+            flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -2189,6 +2227,7 @@ mod tests {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
             pending_cpu_irqs: 0,
+            flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
@@ -2236,6 +2275,7 @@ mod tests {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
             pending_cpu_irqs: 0,
+            flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
         };
