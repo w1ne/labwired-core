@@ -261,6 +261,15 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // so noop-return is safe.
     rom_bank.register(0x4000_681c, rom_thunks::nop_return_zero); // intr_matrix_set / esp_rom_route_intr_matrix
     rom_bank.register(0x4000_689c, rom_thunks::nop_return_zero); // ets_set_appcpu_boot_addr
+
+    // ESP-IDF partition-table verification uses ROM MD5. Stubbing all three
+    // entry points as no-ops makes verify_data_checksum() compute a zero
+    // hash; partitions with `verify_checksum=false` (default for the standard
+    // factory partition table) sail through. Real silicon: BROM at these
+    // addresses per esp32.rom.ld.
+    rom_bank.register(0x4005_da7c, rom_thunks::nop_return_zero); // esp_rom_md5_init
+    rom_bank.register(0x4005_da9c, rom_thunks::nop_return_zero); // esp_rom_md5_update
+    rom_bank.register(0x4005_db1c, rom_thunks::nop_return_zero); // esp_rom_md5_final
     bus.add_peripheral(
         "rom",
         0x4000_0000,

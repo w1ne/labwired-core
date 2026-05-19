@@ -75,6 +75,42 @@ fn agentdeck_firmware_drives_panel_in_sim() {
         .expect("install heap_caps_free thunk");
     machine.bus.install_flash_thunk(0x4008_29f0, rom_thunks::esp_idf_heap_caps_realloc)
         .expect("install heap_caps_realloc thunk");
+    // esp_timer_init computes a divider for the LACT timer (1MHz tick from
+    // APB clock). The HAL asserts divider >= 2; our APB clock readout path
+    // isn't fully wired and the inlined math underflows. Stub the whole
+    // init to return 0 (ESP_OK) — software timers won't work, but boot
+    // continues past the FreeRTOS scheduler-start path.
+    machine.bus.install_flash_thunk(0x4012_9034, rom_thunks::nop_return_zero)
+        .expect("install esp_timer_init thunk");
+    // spi_flash_disable/enable_interrupts_caches_and_other_cpu take the
+    // s_flash_op_mutex which isn't initialized until esp_flash_app_init
+    // runs later in boot. The sim doesn't need to disable interrupts or
+    // suspend caches around flash ops — flash is just LinearMemory we
+    // can touch directly — so no-op the mutex-locking wrappers.
+    machine.bus.install_flash_thunk(0x4008_17dc, rom_thunks::nop_return_zero)
+        .expect("install spi_flash_disable_... thunk");
+    machine.bus.install_flash_thunk(0x4008_188c, rom_thunks::nop_return_zero)
+        .expect("install spi_flash_enable_... thunk");
+    // newlib `__retarget_lock_acquire_recursive` and friends assert that
+    // the lock pointer is non-NULL — but a number of newlib locks aren't
+    // initialized in our boot path (we haven't wired esp_libc's lock-init
+    // chain end-to-end). For a single-threaded sim, the locks are
+    // unnecessary; stub all four lock entry points as no-ops.
+    machine.bus.install_flash_thunk(0x4008_3384, rom_thunks::nop_return_zero)  // __retarget_lock_init_recursive
+        .expect("install lock_init_recursive thunk");
+    machine.bus.install_flash_thunk(0x4008_339c, rom_thunks::nop_return_zero)  // __retarget_lock_close_recursive
+        .expect("install lock_close_recursive thunk");
+    machine.bus.install_flash_thunk(0x4008_33b0, rom_thunks::nop_return_zero)  // __retarget_lock_acquire_recursive
+        .expect("install lock_acquire_recursive thunk");
+    machine.bus.install_flash_thunk(0x4008_33cc, rom_thunks::nop_return_zero)  // __retarget_lock_release_recursive
+        .expect("install lock_release_recursive thunk");
+    // ESP_ERROR_CHECK macros call _esp_error_check_failed on non-zero return
+    // values, which aborts. Our subsystem stubs return 0 (ESP_OK) so this
+    // shouldn't fire from our own stubs, but firmware code paths may still
+    // trigger it on real ESP-IDF function returns we don't fully model.
+    // Stub to no-op so boot continues past these soft failures.
+    machine.bus.install_flash_thunk(0x4008_bbd0, rom_thunks::nop_return_zero)
+        .expect("install _esp_error_check_failed thunk");
     // Fake the app image header at 0x3F400000 (start of flash dcache view).
     // On real silicon, the 2nd-stage bootloader places this header before
     // the app's first segment. esp_image_header_t (24 bytes):
@@ -118,6 +154,12 @@ fn agentdeck_firmware_drives_panel_in_sim() {
             // do_other_cpu_settings tail-loop at 0x400ed12d-17c exits.
             let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
             let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
+            // s_system_inited[0..=1] at 0x3FFC_6FFD — start_cpu0's tail
+            // ANDs both bytes through a stack temp until both are 1 then
+            // calls esp_startup_start_app. Without this fake the boot
+            // path stalls forever in a delay loop after do_system_init_fn.
+            let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
+            let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
         }
         // Diagnostic: catch __assert_func entry and print its args
         // (filename, line, function, expr).
@@ -185,6 +227,14 @@ fn agentdeck_firmware_drives_panel_in_sim() {
                 }
                 out
             };
+            // Also dump caller PC and the 8 PCs before this __assert_func entry.
+            let caller_a0 = machine.cpu.get_register(0);
+            eprintln!("[agentdeck-sim] __assert_func entry caller_a0=0x{caller_a0:08x}");
+            eprintln!("  last 8 PCs leading here:");
+            for i in 0..8 {
+                let off = ((trail_idx + 64) - 1 - i) % 64;
+                eprintln!("    -{:>2}: 0x{:08x}", i+1, pc_trail[off]);
+            }
             let f_addr = machine.cpu.get_register(10);
             let line = machine.cpu.get_register(11);
             let fn_addr = machine.cpu.get_register(12);

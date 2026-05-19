@@ -193,7 +193,13 @@ impl XtensaLx7 {
         // Skipped under PS.EXCM (handlers run with EXCM=1 and use S32E/L32E
         // for windowed access without further overflow checks). ENTRY has its
         // own check inside the instruction body. WOE=0 disables windowing.
-        if self.ps.woe() && !self.ps.excm() && !matches!(ins, Entry { .. }) {
+        // F5 per-instruction overflow check disabled: our sim-level shadow
+        // spill on CALL{n} already preserves caller's a0..a{n*4-1} across
+        // window wrap-around, so vectoring to the firmware's OF handler
+        // here just causes a double-fault (the handler's `l32e a0, a1, -12`
+        // reads uninitialized stack with a1=0 on freshly-created task
+        // frames). Leaving WOE+EXCM check gated to `false` skips the vector.
+        if false && self.ps.woe() && !self.ps.excm() && !matches!(ins, Entry { .. }) {
             let max_reg = ins.max_logical_reg();
             if max_reg >= 4 {
                 let w = (max_reg / 4) as u32; // slots ahead that need to be free
