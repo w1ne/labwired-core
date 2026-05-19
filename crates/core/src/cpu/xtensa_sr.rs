@@ -191,6 +191,13 @@ impl XtensaSrFile {
         self.storage[sr_id as usize] = v;
     }
 
+    /// Engine-facing: raise pending bits in the INTERRUPT SR. Bypasses
+    /// the WSR-ignores-INTERRUPT rule because the engine is simulating
+    /// the hardware-latched interrupt edge, not a software write.
+    pub fn raise_interrupt_bits(&mut self, mask: u32) {
+        self.storage[IDX_INTERRUPT] |= mask;
+    }
+
     /// Engine-facing: advance CCOUNT by `delta` cycles (wraps on overflow).
     pub fn tick_ccount(&mut self, delta: u32) {
         self.storage[IDX_CCOUNT] = self.storage[IDX_CCOUNT].wrapping_add(delta);
