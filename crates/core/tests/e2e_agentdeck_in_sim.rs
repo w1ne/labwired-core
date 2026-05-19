@@ -160,6 +160,30 @@ fn agentdeck_firmware_drives_panel_in_sim() {
             // path stalls forever in a delay loop after do_system_init_fn.
             let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
             let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
+            // s_other_cpu_startup_done at 0x3FFC_7190 — main_task spins on
+            // this byte waiting for CPU1's startup. We're single-core in the
+            // sim, so pretend CPU1 is up by force-setting it.
+            let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
+        }
+        // Boot waypoint traces — one-shot logs of where we got to.
+        for (pc, label) in [
+            (0x4008ce2cu32, "xPortStartScheduler"),
+            (0x4008d244, "_frxt_tick_timer_init (arms CCOMPARE0)"),
+            (0x4008d260, "_frxt_dispatch (first task switch)"),
+            (0x400e90c0, "app_main"),
+        ] {
+            if machine.cpu.get_pc() == pc {
+                static mut HITS: [bool; 4] = [false; 4];
+                let idx = match pc {
+                    0x4008ce2c => 0, 0x4008d244 => 1, 0x4008d260 => 2, 0x400e90c0 => 3, _ => 4,
+                };
+                unsafe {
+                    if idx < 4 && !HITS[idx] {
+                        HITS[idx] = true;
+                        eprintln!("[agentdeck-sim] {label} reached @step {step_count}");
+                    }
+                }
+            }
         }
         // Diagnostic: catch __assert_func entry and print its args
         // (filename, line, function, expr).
