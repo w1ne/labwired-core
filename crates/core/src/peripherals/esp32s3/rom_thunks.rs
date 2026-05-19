@@ -124,13 +124,18 @@ impl RomThunkBank {
             cpu.regs.write_logical(n + 2, value);
             cpu.pc = (raw & 0x3FFF_FFFF) | (cpu.pc & 0xC000_0000);
             // Thunks skip ENTRY/RETW, so they also bypass the sim-level
-            // shadow spill that CALL{n} performs for the 4 WS slots in
-            // the callee's window range. Pop the matching shadow entries
-            // so the stack stays balanced. Empty slots are harmless.
-            let wb_old = cpu.regs.windowbase();
-            let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
+            // shadow spill that CALL{n} performs (caller's preserved area
+            // + WS-conditional displaced-frame pushes for callee's window).
+            // Pop both ranges in reverse-push order. WB hasn't rotated for
+            // thunks, so wb_caller = current windowbase.
+            let wb_caller = cpu.regs.windowbase();
+            let wb_callee = wb_caller.wrapping_add(callinc) & 0x0F;
             for k in 0..4u8 {
-                let slot = wb_new.wrapping_add(k) & 0x0F;
+                let slot = wb_callee.wrapping_add(k) & 0x0F;
+                cpu.regs.pop_shadow(slot);
+            }
+            for k in 0..callinc {
+                let slot = wb_caller.wrapping_add(k) & 0x0F;
                 cpu.regs.pop_shadow(slot);
             }
         }
