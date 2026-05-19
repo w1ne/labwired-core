@@ -447,6 +447,19 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(RamPeripheral::new(0x2000)),
     );
 
+    // WiFi MAC / PHY / RNG block (0x6000_0000..0x6004_3000 on real silicon).
+    // The only register esp_random() touches at boot is RNG_DATA_REG at
+    // 0x6003_5144 — a read returns 32 random bits. A round-tripping stub
+    // satisfies the access; reads return zero (deterministic, but legal
+    // — RNG semantics permit any value including all-zero).
+    bus.add_peripheral(
+        "wifi_mac_phy",
+        0x6000_0000,
+        0x4_3000,
+        None,
+        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+    );
+
     // RTC fast memory (8 KiB at 0x3FF8_0000) — alias for instruction view.
     bus.add_peripheral(
         "rtc_fast",
