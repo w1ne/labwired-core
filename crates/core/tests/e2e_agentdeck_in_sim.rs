@@ -157,6 +157,13 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     // specific time, so stub it to no-op.
     machine.bus.install_flash_thunk(0x400e_5c28, rom_thunks::nop_return_zero)
         .expect("install Arduino delay() thunk");
+    // WifiWsLink::begin pulls in the entire ESP-IDF WiFi + lwip stack,
+    // which calls sys_arch_mbox_fetch on uninitialized mailboxes in our
+    // sim (we don't model the WiFi driver tasks). Stubbing lets setup()
+    // proceed past the network init into the rest of the panel-relevant
+    // code (input handler, USB link, eventual loop()).
+    machine.bus.install_flash_thunk(0x400d_de98, rom_thunks::nop_return_zero)
+        .expect("install WifiWsLink::begin thunk");
     // Fake the app image header at 0x3F400000 (start of flash dcache view).
     // On real silicon, the 2nd-stage bootloader places this header before
     // the app's first segment. esp_image_header_t (24 bytes):
@@ -299,9 +306,11 @@ fn agentdeck_firmware_drives_panel_in_sim() {
             (0x400df452, "setup: after delay(50)"),
             (0x400df45a, "setup: at Serial.println"),
             (0x400df463, "setup: at getEfuseMac"),
+            (0x400e1674, "Display::begin entry"),
+            (0x400dcf34, "GxEPD2_EPD::init entry"),
         ] {
             if machine.cpu.get_pc() == pc {
-                static mut HITS: [bool; 39] = [false; 39];
+                static mut HITS: [bool; 41] = [false; 41];
                 let idx = match pc {
                     0x4008ce2c => 0, 0x4008d244 => 1, 0x4008d260 => 2,
                     0x4008d272 => 3, 0x4008d278 => 4, 0x4008d28b => 5,
@@ -317,10 +326,11 @@ fn agentdeck_firmware_drives_panel_in_sim() {
                     0x400e5c28 => 32, 0x400e2280 => 33,
                     0x400df421 => 34, 0x400df44a => 35, 0x400df452 => 36,
                     0x400df45a => 37, 0x400df463 => 38,
-                    _ => 39,
+                    0x400e1674 => 39, 0x400dcf34 => 40,
+                    _ => 41,
                 };
                 unsafe {
-                    if idx < 39 && !HITS[idx] {
+                    if idx < 41 && !HITS[idx] {
                         HITS[idx] = true;
                         let a0 = machine.cpu.get_register(0);
                         let a1 = machine.cpu.get_register(1);

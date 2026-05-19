@@ -486,6 +486,21 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(RamPeripheral::new(0x2000)),
     );
 
+    // BROM data view (0x3FF9_0000-0x3FF9_FFFF on real silicon). Holds
+    // newlib's `_ctype_` table at 0x3FF9_6354, used by isalnum / isspace /
+    // tolower / toupper / etc. Without the table mapped, the firmware
+    // faults when GxEPD2's logging or Arduino-ESP32's parsing calls into
+    // ctype.h functions. Empty RAM region — uninitialized reads give 0,
+    // so all characters classify as "not alnum / not space" which is wrong
+    // but doesn't fault. Real silicon's BROM has the canonical table here.
+    bus.add_peripheral(
+        "brom_data",
+        0x3FF9_0000,
+        0x10000,
+        None,
+        Box::new(RamPeripheral::new(0x10000)),
+    );
+
     XtensaLx7::new()
 }
 
