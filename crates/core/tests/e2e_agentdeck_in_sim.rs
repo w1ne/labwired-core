@@ -165,22 +165,99 @@ fn agentdeck_firmware_drives_panel_in_sim() {
             // sim, so pretend CPU1 is up by force-setting it.
             let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
         }
-        // Boot waypoint traces — one-shot logs of where we got to.
+        // Count key function invocations.
+        for (pc, name) in [
+            (0x4008d260u32, "_frxt_dispatch"),
+            (0x4008d2c4, "vPortYield"),
+            (0x4008de44, "vTaskSwitchContext"),
+            (0x4008dbc4, "xTaskIncrementTick"),
+            (0x4008d4f0, "xPortSysTickHandler"),
+            (0x40083a10, "_xt_user_exc"),
+            (0x40083c98, "_xt_lowint1"),
+            (0x40080340, "_UserExceptionVector"),
+            (0x40080300, "_KernelExceptionVector"),
+        ] {
+            if machine.cpu.get_pc() == pc {
+                static mut COUNTS: [u32; 9] = [0; 9];
+                let idx = match pc {
+                    0x4008d260 => 0, 0x4008d2c4 => 1, 0x4008de44 => 2,
+                    0x4008dbc4 => 3, 0x4008d4f0 => 4,
+                    0x40083a10 => 5, 0x40083c98 => 6,
+                    0x40080340 => 7, 0x40080300 => 8,
+                    _ => 9,
+                };
+                unsafe {
+                    if idx < 9 {
+                        COUNTS[idx] += 1;
+                        let c = COUNTS[idx];
+                        if c <= 3 || c % 100 == 0 {
+                            eprintln!("[agentdeck-sim] {name} #{c} @step {step_count}");
+                        }
+                    }
+                }
+            }
+        }
+        // Boot waypoint traces.
         for (pc, label) in [
             (0x4008ce2cu32, "xPortStartScheduler"),
             (0x4008d244, "_frxt_tick_timer_init (arms CCOMPARE0)"),
             (0x4008d260, "_frxt_dispatch (first task switch)"),
+            (0x4008d272, "_frxt_dispatch loaded SP from TCB"),
+            (0x4008d278, "_frxt_dispatch loaded flag a2"),
+            (0x4008d28b, "_frxt_dispatch retw.n (short path)"),
+            (0x4008d2ba, "_frxt_dispatch _xt_context_restore (long path)"),
             (0x400e90c0, "app_main"),
+            (0x401943fc, "main_task entry"),
+            (0x4008d2bd, "_frxt_dispatch post-context-restore"),
+            (0x4008d2c0, "_frxt_dispatch loading a0 from stack"),
+            (0x4008d2c2, "_frxt_dispatch ret.n to task"),
+            (0x40083aac, "_xt_user_exit entry"),
+            (0x40083abd, "_xt_user_exit rfe"),
+            (0x40083ab1, "_xt_user_exit load EPC"),
+            (0x4008ce04, "vPortTaskWrapper"),
+            (0x4008ce07, "vPortTaskWrapper post-ENTRY"),
+            (0x4008ce09, "vPortTaskWrapper callx8 to task"),
+            (0x4008197c, "ipc_task entry"),
+            (0x4008e858, "xTaskGetSchedulerState"),
+            (0x4008cf3d, "xPortEnterCriticalTimeout body"),
+            (0x400819ba, "ipc_task blocking on NotifyTake"),
+            (0x4008eeb8, "ulTaskGenericNotifyTake entry"),
+            (0x400ed360, "esp_ipc_isr_init entry"),
         ] {
             if machine.cpu.get_pc() == pc {
-                static mut HITS: [bool; 4] = [false; 4];
+                static mut HITS: [bool; 24] = [false; 24];
                 let idx = match pc {
-                    0x4008ce2c => 0, 0x4008d244 => 1, 0x4008d260 => 2, 0x400e90c0 => 3, _ => 4,
+                    0x4008ce2c => 0, 0x4008d244 => 1, 0x4008d260 => 2,
+                    0x4008d272 => 3, 0x4008d278 => 4, 0x4008d28b => 5,
+                    0x4008d2ba => 6, 0x400e90c0 => 7, 0x401943fc => 8,
+                    0x4008d2bd => 9, 0x4008d2c0 => 10, 0x4008d2c2 => 11,
+                    0x40083aac => 12, 0x40083abd => 13, 0x40083ab1 => 14,
+                    0x4008ce04 => 15, 0x4008ce07 => 16, 0x4008ce09 => 17,
+                    0x4008197c => 18, 0x4008e858 => 19, 0x4008cf3d => 20,
+                    0x400819ba => 21, 0x4008eeb8 => 22, 0x400ed360 => 23,
+                    _ => 24,
                 };
                 unsafe {
-                    if idx < 4 && !HITS[idx] {
+                    if idx < 24 && !HITS[idx] {
                         HITS[idx] = true;
-                        eprintln!("[agentdeck-sim] {label} reached @step {step_count}");
+                        let a0 = machine.cpu.get_register(0);
+                        let a1 = machine.cpu.get_register(1);
+                        let a2 = machine.cpu.get_register(2);
+                        let a3 = machine.cpu.get_register(3);
+                        eprintln!("[agentdeck-sim] {label} @step {step_count} a0=0x{a0:08x} a1=0x{a1:08x} a2=0x{a2:08x} a3=0x{a3:08x}");
+                        if pc == 0x40083aac || pc == 0x4008d260 {
+                            // At _xt_user_exit entry or _frxt_dispatch start — peek
+                            // at the full saved frame.
+                            let sp = if pc == 0x40083aac { a1 } else { 0u32 };
+                            if sp != 0 {
+                                let mut row = String::new();
+                                for off in (0..=40).step_by(4) {
+                                    let v = machine.bus.read_u32(sp as u64 + off).unwrap_or(0xDEADBEEF);
+                                    row.push_str(&format!("[+{off}]={v:#010x} "));
+                                }
+                                eprintln!("[agentdeck-sim]   frame@{sp:#x}: {row}");
+                            }
+                        }
                     }
                 }
             }

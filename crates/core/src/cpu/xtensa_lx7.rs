@@ -1635,11 +1635,23 @@ impl XtensaLx7 {
         let vector_offset = IRQ_VECTOR_OFFSETS[level.min(7) as usize];
 
         if level == 1 {
-            // Level-1 interrupt: kernel vector, EXCM=1, no EPS1.
+            // Level-1 interrupt: vectors to the GENERAL EXCEPTION handler
+            // chosen by PS.UM (user-mode bit, PS[5]):
+            //   PS.UM = 0 → KernelExceptionVector at VECBASE + 0x300
+            //   PS.UM = 1 → UserExceptionVector   at VECBASE + 0x340
+            // Most ESP-IDF task/interrupt code runs in user mode (PS.UM = 1),
+            // and only that vector has the actual dispatch logic that branches
+            // to `_xt_lowint1` for EXCCAUSE=4. The kernel vector starts with a
+            // `break 1,0` panic trap — using it when PS.UM=1 would deadlock.
             self.sr.write(EPC1, entry_pc);
             self.sr.write(EXCCAUSE, EXCCAUSE_LEVEL1_INTERRUPT as u32);
             self.ps.set_excm(true);
-            self.pc = vecbase.wrapping_add(vector_offset);
+            let level1_offset = if (self.ps.as_raw() >> 5) & 1 == 1 {
+                0x340 // User
+            } else {
+                0x300 // Kernel
+            };
+            self.pc = vecbase.wrapping_add(level1_offset);
         } else {
             // Level 2..7: dedicated interrupt vector.
             // Save PC and PS into EPC[level]/EPS[level].
@@ -1650,16 +1662,15 @@ impl XtensaLx7 {
             self.sr.write(epc_sr[l], entry_pc);
             self.sr.write(eps_sr[l], saved_ps);
 
-            // Update PS: set INTLEVEL to the dispatched level.
-            // For medium-priority (level <= EXCM_LEVEL): also set EXCM=1.
-            // For high-priority (level > EXCM_LEVEL): clear EXCM.
+            // Update PS: set INTLEVEL to the dispatched level. Always set
+            // PS.EXCM=1 — high-priority interrupt handlers on ESP32 (e.g.,
+            // `xt_highint5`) use S32E/L32E for the window-spill prologue,
+            // and those instructions require PS.EXCM=1 to avoid raising a
+            // GeneralException (cause 0). RFI restores the original PS so
+            // this isn't load-bearing after the handler returns.
             let mut new_ps = self.ps;
             new_ps.set_intlevel(level);
-            if level <= EXCM_LEVEL {
-                new_ps.set_excm(true);
-            } else {
-                new_ps.set_excm(false);
-            }
+            new_ps.set_excm(true);
             self.ps = new_ps;
             self.pc = vecbase.wrapping_add(vector_offset);
         }
@@ -1746,14 +1757,16 @@ impl Cpu for XtensaLx7 {
         // monotonic). When CCOUNT crosses CCOMPARE0, raise the timer-0
         // interrupt (bit 6 in INTERRUPT SR = ESP32 internal timer 0, level 1).
         // FreeRTOS-on-Xtensa uses this as its tick source via `_xt_int6`.
-        use crate::cpu::xtensa_sr::{CCOMPARE0, CCOUNT, INTERRUPT};
+        use crate::cpu::xtensa_sr::{CCOMPARE0, CCOUNT, INTENABLE, INTERRUPT};
         let ccount_before = self.sr.read(CCOUNT);
         let ccount_after = ccount_before.wrapping_add(1);
         self.sr.write(CCOUNT, ccount_after);
         let ccompare0 = self.sr.read(CCOMPARE0);
         if ccompare0 != 0 && ccount_before < ccompare0 && ccount_after >= ccompare0 {
-            // Edge-triggered: raise pending bit 6 in INTERRUPT.
-            self.sr.write(INTERRUPT, self.sr.read(INTERRUPT) | (1 << 6));
+            // Edge-triggered: raise pending bit 6 in INTERRUPT. Use the
+            // engine-facing helper because WSR.INTERRUPT writes are ignored
+            // (the SR is hardware-latched — INTSET/INTCLEAR is the SW path).
+            self.sr.raise_interrupt_bits(1 << 6);
         }
 
         if !self.ps.excm() {
