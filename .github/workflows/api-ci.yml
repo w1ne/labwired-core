@@ -13,16 +13,17 @@ on:
       - 'foundry/backend/**'
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: ./foundry/backend
-
 jobs:
   test:
     name: go-test-api
     runs-on: [self-hosted, ci]
     container: ubuntu:22.04
     steps:
+      # Note: cannot use job-level `defaults.run.working-directory: ./foundry/backend`
+      # because the first step (Install baseline tools) runs BEFORE checkout
+      # and the foundry/ directory doesn't yet exist in the workspace — the
+      # container fails to chdir and exits 127. Set working-directory per
+      # step instead, only on the steps that need it.
       - name: Install baseline tools
         run: |
           apt-get update
@@ -38,4 +39,5 @@ jobs:
           cache-dependency-path: foundry/backend/go.sum
 
       - name: Run Tests
+        working-directory: ./foundry/backend
         run: go test -v -short ./...

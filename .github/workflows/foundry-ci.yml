@@ -22,11 +22,12 @@ jobs:
     name: foundry-backend-ci
     runs-on: [self-hosted, ci]
     container: ubuntu:22.04
-    defaults:
-      run:
-        working-directory: foundry/backend
 
     steps:
+      # Note: cannot use job-level `defaults.run.working-directory: foundry/backend`
+      # because the first step (Install baseline tools) runs BEFORE checkout
+      # — foundry/ doesn't exist yet in the workspace and the container
+      # fails to chdir, exiting 127. Set per-step instead.
       - name: Install baseline tools
         run: |
           apt-get update
@@ -41,12 +42,15 @@ jobs:
           go-version-file: foundry/backend/go.mod
 
       - name: Go test
+        working-directory: foundry/backend
         run: go test ./cmd/... ./internal/...
 
       - name: Build server
+        working-directory: foundry/backend
         run: go build -o foundry-server ./cmd/server
 
       - name: Backend smoke (health endpoint)
+        working-directory: foundry/backend
         env:
           PORT: "18080"
           APP_ENV: "development"
@@ -79,11 +83,9 @@ jobs:
     name: foundry-frontend-ci
     runs-on: [self-hosted, ci]
     container: ubuntu:22.04
-    defaults:
-      run:
-        working-directory: foundry/frontend
 
     steps:
+      # Same rationale as `backend` above — checkout precedes any directory.
       - name: Install baseline tools
         run: |
           apt-get update
@@ -100,13 +102,17 @@ jobs:
           cache-dependency-path: foundry/frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: foundry/frontend
         run: npm ci
 
       - name: Test
+        working-directory: foundry/frontend
         run: npm test -- --run
 
       - name: Lint
+        working-directory: foundry/frontend
         run: npm run lint
 
       - name: Build
+        working-directory: foundry/frontend
         run: npm run build
