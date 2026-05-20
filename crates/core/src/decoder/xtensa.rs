@@ -699,11 +699,15 @@ fn decode_qrst(w: u32) -> Instruction {
             }
             // SRAI: 5-bit shift amount; direct encoding (no complement).
             // ISA RM §8: shamt = ((op2 & 1) << 4) | t.
+            // SOURCE register is `s` (the standard at-position for shift ops);
+            // `t` is repurposed for shamt[3:0]. Reading `at: t` was a copy-paste
+            // bug — drawPixel's `srai a12, a12, 3` was reading a3 instead of a12,
+            // producing wrong byte indices in any framebuffer using rotation.
             0x2 | 0x3 => {
                 let shamt = ((op2 & 0x1) << 4) | t;
                 Instruction::Srai {
                     ar: r,
-                    at: t,
+                    at: s,
                     shamt,
                 }
             }
