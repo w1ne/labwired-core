@@ -704,13 +704,15 @@ export function App() {
     [editor.state.diagram.parts],
   );
 
-  // Drive the simulation loop. AgentDeck needs ~30M cycles to reach the
-  // first Display::render, so we pump 10× the default batch size when its
-  // quirks are armed. Lab demos get the normal 100k batch.
+  // Drive the simulation loop. useSimulationLoop auto-tunes the per-frame
+  // cycle batch to keep stepBatch under a ~14 ms budget — small for fast
+  // firmware (Rust no_std blinky), big for heavy firmware (AgentDeck needs
+  // ~30 M cycles to reach Display::render). Seed slightly higher than the
+  // hook's default so the first frame on heavy firmware isn't tiny.
   const { state: simState, stepOnce, clearUart } = useSimulationLoop({
     bridge,
     running,
-    cyclesPerFrame: selectedBoard.simQuirks === 'agentdeck' ? 1_000_000 : 100_000,
+    cyclesPerFrame: 100_000,
     displays,
   });
 

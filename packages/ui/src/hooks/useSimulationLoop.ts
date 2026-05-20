@@ -29,11 +29,25 @@ export interface UseSimulationLoopOptions {
   bridge: SimulatorBridge | null;
   /** Whether the simulation is running. */
   running: boolean;
-  /** Cycles to execute per animation frame. Default: 5000. */
+  /**
+   * Initial cycles-per-frame batch size. The loop auto-tunes from this seed
+   * toward a 14 ms wall-clock budget per frame (target 60 fps with 2 ms of
+   * headroom for `pollState` + paint). Min clamp 1 000 cycles, max 4 000 000;
+   * the auto-tune doubles when frame time is under 8 ms and halves when it
+   * goes over 14 ms. Default seed: 50 000 — fast-enough first-frame response
+   * on lab demos, scales up automatically on heavier firmware like AgentDeck.
+   */
   cyclesPerFrame?: number;
   /** Display devices to poll per frame (generation-gated). */
   displays?: DisplayBinding[];
 }
+
+/** Auto-tune bounds. */
+const CYCLES_MIN = 1_000;
+const CYCLES_MAX = 4_000_000;
+/** Frame-budget targets (ms). Under LOW: scale up. Over HIGH: scale down. */
+const FRAME_BUDGET_LOW = 8;
+const FRAME_BUDGET_HIGH = 14;
 
 export interface UseSimulationLoopResult {
   state: SimulationState;
@@ -59,7 +73,7 @@ const INITIAL_STATE: SimulationState = {
 export function useSimulationLoop(
   options: UseSimulationLoopOptions,
 ): UseSimulationLoopResult {
-  const { bridge, running, cyclesPerFrame = 5000, displays } = options;
+  const { bridge, running, cyclesPerFrame = 50_000, displays } = options;
   const [state, setState] = useState<SimulationState>(INITIAL_STATE);
   const uartBufferRef = useRef('');
   const rafRef = useRef<number>(0);
@@ -67,6 +81,10 @@ export function useSimulationLoop(
   // when the panel actually refreshed, so polling 60fps doesn't thrash wasm.
   const displayGenRef = useRef<Record<string, number>>({});
   const displayBufRef = useRef<Record<string, DisplayBuffer>>({});
+  // Auto-tune batch size. Initial value is the prop; the loop adjusts based
+  // on measured stepBatch wall time. Ref so the closure picks up the latest
+  // value without re-running the effect.
+  const batchRef = useRef<number>(cyclesPerFrame);
 
   const pollState = useCallback(
     (b: SimulatorBridge) => {
@@ -112,16 +130,34 @@ export function useSimulationLoop(
     [displays],
   );
 
+  // Reset the auto-tune seed when the prop changes (e.g., new board).
+  useEffect(() => {
+    batchRef.current = cyclesPerFrame;
+  }, [cyclesPerFrame]);
+
   useEffect(() => {
     if (!bridge || !running) return;
 
     function tick() {
       if (!bridge) return;
+      const t0 = performance.now();
       try {
-        bridge.stepBatch(cyclesPerFrame);
+        bridge.stepBatch(batchRef.current);
       } catch {
         // Simulation error - stop the loop
         return;
+      }
+      const elapsed = performance.now() - t0;
+      // Adaptive batch sizing — keep stepBatch under the frame budget. The
+      // 2× / 0.5× swing is intentionally aggressive: the inner cost is
+      // dominated by Xtensa decode/execute, which is roughly linear in
+      // cycles, so a too-small batch wastes the RAF call overhead and a
+      // too-big batch starves the UI. Bound the next-frame batch to the
+      // hard limits so a single slow tick can't permanently tank or peg us.
+      if (elapsed < FRAME_BUDGET_LOW) {
+        batchRef.current = Math.min(CYCLES_MAX, batchRef.current * 2);
+      } else if (elapsed > FRAME_BUDGET_HIGH) {
+        batchRef.current = Math.max(CYCLES_MIN, Math.floor(batchRef.current / 2));
       }
       pollState(bridge);
       rafRef.current = requestAnimationFrame(tick);
@@ -134,7 +170,7 @@ export function useSimulationLoop(
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [bridge, running, cyclesPerFrame, pollState]);
+  }, [bridge, running, pollState]);
 
   // Poll initial state when bridge first becomes available
   useEffect(() => {
