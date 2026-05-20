@@ -110,10 +110,13 @@ export interface WasmSimulatorInstance {
   step_single(): void;
   step_batch(max_cycles: number): number;
 
-  // AgentDeck firmware glue: install heap/timer/lock/Wifi/sendHello thunks,
-  // fake the dual-core handshake, seed SP, etc. Idempotent — calling on
-  // non-AgentDeck firmware is a no-op aside from a few SRAM byte writes
-  // that the firmware doesn't read.
+  // Arduino-ESP32 bootstrap glue: install heap/timer/lock/Wifi/sendHello
+  // thunks, fake the dual-core handshake, seed SP, etc. Idempotent — calling
+  // on non-Arduino-ESP32 firmware is a no-op aside from a few SRAM byte
+  // writes that the firmware doesn't read.
+  install_esp32_arduino_quirks(): void;
+  /** @deprecated Renamed to `install_esp32_arduino_quirks`. Kept for backwards
+   *  compatibility with the standalone /agentdeck.html page. */
   apply_agentdeck_quirks(): void;
   // Steps the firmware plus refreshes the dual-core handshake bytes every
   // ~10k cycles so the FreeRTOS scheduler sees CPU1 as "up". Returns
@@ -199,26 +202,39 @@ export interface WasmModule {
 export class SimulatorBridge {
   private sim: WasmSimulatorInstance;
   private _cycles = 0;
-  private _agentdeckQuirks = false;
+  private _esp32ArduinoQuirks = false;
 
   private constructor(sim: WasmSimulatorInstance) {
     this.sim = sim;
   }
 
-  /** Whether `applyAgentdeckQuirks` has been invoked on this bridge. */
+  /** Whether `installEsp32ArduinoQuirks` has been invoked on this bridge. */
+  get hasEsp32ArduinoQuirks(): boolean {
+    return this._esp32ArduinoQuirks;
+  }
+
+  /** @deprecated Renamed to `hasEsp32ArduinoQuirks`. */
   get hasAgentdeckQuirks(): boolean {
-    return this._agentdeckQuirks;
+    return this._esp32ArduinoQuirks;
   }
 
   /**
-   * Install AgentDeck-specific thunks (heap/timer/lock/wifi/sendHello) and
-   * fake the dual-core bringup. Idempotent. Once applied, `stepBatch`
-   * routes through `step_with_esp32_aids` so the dual-core handshake bytes
-   * stay alive across iterations.
+   * Install the Arduino-ESP32 bootstrap thunks (heap-caps, esp_timer, locks,
+   * setCpuFrequencyMhz, esp_ota_*, HardwareSerial, delay, WifiWsLink::begin,
+   * WifiWsLink::loop, sendHello, esp_crc8, etc.) and fake the dual-core
+   * bringup handshake. Idempotent. Once applied, `stepBatch` routes through
+   * `step_with_esp32_aids` so the dual-core handshake bytes stay alive across
+   * iterations.
    */
+  installEsp32ArduinoQuirks(): void {
+    this.sim.install_esp32_arduino_quirks();
+    this._esp32ArduinoQuirks = true;
+  }
+
+  /** @deprecated Renamed to `installEsp32ArduinoQuirks`. The bootstrap is
+   *  generic Arduino-ESP32 glue, not AgentDeck-specific. */
   applyAgentdeckQuirks(): void {
-    this.sim.apply_agentdeck_quirks();
-    this._agentdeckQuirks = true;
+    this.installEsp32ArduinoQuirks();
   }
 
   /** Initialize from YAML config + firmware ELF bytes. */
@@ -250,7 +266,7 @@ export class SimulatorBridge {
   stepBatch(maxCycles: number): number {
     // Route ESP32-classic firmware that needs the dual-core handshake
     // refresh through the aided step function — keeps loopTask alive.
-    const executed = this._agentdeckQuirks
+    const executed = this._esp32ArduinoQuirks
       ? this.sim.step_with_esp32_aids(maxCycles)
       : this.sim.step_batch(maxCycles);
     this._cycles += executed;

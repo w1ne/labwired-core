@@ -271,6 +271,12 @@ export class WasmSimulator {
         const ret = wasm.wasmsimulator_get_uart_device_states(this.__wbg_ptr);
         return ret;
     }
+    install_esp32_arduino_quirks() {
+        const ret = wasm.wasmsimulator_install_esp32_arduino_quirks(this.__wbg_ptr);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
     /**
      * Re-write the dual-core handshake bytes. Call every ~10k steps from JS
      * — firmware boot code revisits these and we need them to stay 1.
@@ -491,8 +497,8 @@ export class WasmSimulator {
      * registers, raises the corresponding INTERRUPT bit, and clears the
      * trigger so the next write re-edges. The dual-core handshake bytes
      * are re-applied every 10k cycles (matching the e2e test cadence).
-     * Falls back to plain `step` if `apply_agentdeck_quirks` hasn't been
-     * called yet.
+     * Falls back to plain `step` if `install_esp32_arduino_quirks` hasn't
+     * been called yet.
      * @param {number} cycles
      */
     step_with_esp32_aids(cycles) {

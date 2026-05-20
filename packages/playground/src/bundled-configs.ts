@@ -31,6 +31,7 @@ import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/sy
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
+import systemAgentDeck from '../../../core/configs/systems/agentdeck.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
@@ -68,7 +69,7 @@ export interface BoardConfig {
    * heap-caps / timer / lock / WiFi / sendHello / esp_crc8 thunks plus the
    * dual-core handshake refresh that the production AgentDeck Arduino-ESP32
    * firmware needs to reach `Display::render`. See
-   * `wasm/src/lib.rs::apply_agentdeck_quirks` for the canonical list.
+   * `wasm/src/lib.rs::install_esp32_arduino_quirks` for the canonical list.
    */
   simQuirks?: 'agentdeck';
 }
@@ -181,13 +182,11 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     // the unstripped binary that flashes to real hardware.
     boardId: 'agentdeck',
     chipId: 'esp32',
-    name: 'AgentDeck (firmware-as-shipped)',
-    description: 'AgentDeck production firmware in WebAssembly. Arduino-ESP32 + GxEPD2 + Adafruit_GFX, the same 22 MB ELF that flashes to the physical ESP32-WROOM-32U module. Renders the IDLE splash with ATTACH / DECIDE / STOP labels in ~28 s of in-browser execution.',
+    name: 'AgentDeck',
+    description: 'Production AgentDeck firmware running unmodified in WebAssembly. Same 22 MB Arduino-ESP32 + GxEPD2 + Adafruit_GFX ELF that flashes to the physical ESP32-WROOM-32U module via espflash. Renders the IDLE splash with ATTACH / DECIDE / STOP labels in ~28 s of in-browser execution.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
-    // Reuses the esp32-epaper-lab manifest (same chip, same SSD1680 panel
-    // on the same GPIO5 CS pin) — that's exactly the AgentDeck wiring.
-    systemYaml: systemEsp32EpaperLab,
+    systemYaml: systemAgentDeck,
     demoFirmwarePath: `${BASE}wasm/demo-agentdeck.elf`,
     mcuComponentType: 'esp32',
     kind: 'lab',

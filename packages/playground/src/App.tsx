@@ -318,11 +318,17 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     // ELF that espflash'es to the AgentDeck hardware paints the panel
     // here too. AgentDeck reuses this exact wiring (its production
     // firmware uses the same pin map), just with a different demo ELF.
+    //
+    // scale: 2 on the panel — source framebuffer is 296×128 native, but
+    // the component's face renders at 144×48 SVG units; without the upscale
+    // 12-px font glyphs collapse to 4 screen pixels and the rendered
+    // "IDLE / ATTACH / DECIDE / STOP" text is unreadable. 2× restores
+    // legibility at default canvas zoom without crowding the chip.
     return {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
-        { id: 'epaper', type: 'ssd1680_tricolor_290', x: 540, y: 40, rotate: 0, attrs: {} },
+        { id: 'epaper', type: 'ssd1680_tricolor_290', x: 600, y: 20, rotate: 0, scale: 2, attrs: {} },
       ],
       wires: [
         { from: { part: 'mcu', pin: '3V3' },     to: { part: 'epaper', pin: 'VCC'  }, color: '#FF6B6B' },
@@ -580,7 +586,7 @@ export function App() {
     // thunks and fakes the dual-core handshake. stepBatch will then route
     // through step_with_esp32_aids to keep the handshake bytes refreshed.
     if (config.simQuirks === 'agentdeck') {
-      nextBridge.applyAgentdeckQuirks();
+      nextBridge.installEsp32ArduinoQuirks();
     }
     setActiveSimulationConfig(config);
     setBridge(nextBridge);
@@ -1428,7 +1434,11 @@ export function App() {
       {showRunHint && (
         <div className="px-3 py-1.5 rounded-pill bg-accent/15 border border-accent/40 text-accent text-[11px] font-medium flex items-center gap-1.5 shadow-[0_6px_18px_-6px_rgba(91,157,255,0.45)]">
           <span aria-hidden>▶</span>
-          Click Run to start — the LED should blink
+          {selectedBoard.simQuirks === 'agentdeck'
+            ? 'Click Run to boot the firmware — panel renders after ~30M cycles'
+            : selectedBoard.kind === 'lab'
+              ? 'Click Run to start the simulation'
+              : 'Click Run to start — the LED should blink'}
         </div>
       )}
       <SimDock
