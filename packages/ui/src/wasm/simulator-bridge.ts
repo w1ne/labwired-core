@@ -110,6 +110,16 @@ export interface WasmSimulatorInstance {
   step_single(): void;
   step_batch(max_cycles: number): number;
 
+  // AgentDeck firmware glue: install heap/timer/lock/Wifi/sendHello thunks,
+  // fake the dual-core handshake, seed SP, etc. Idempotent — calling on
+  // non-AgentDeck firmware is a no-op aside from a few SRAM byte writes
+  // that the firmware doesn't read.
+  apply_agentdeck_quirks(): void;
+  // Steps the firmware plus refreshes the dual-core handshake bytes every
+  // ~10k cycles so the FreeRTOS scheduler sees CPU1 as "up". Returns
+  // executed cycles, same as step_batch.
+  step_with_esp32_aids(max_cycles: number): number;
+
   // CPU state
   get_pc(): number;
   get_register(id: number): number;
@@ -189,9 +199,26 @@ export interface WasmModule {
 export class SimulatorBridge {
   private sim: WasmSimulatorInstance;
   private _cycles = 0;
+  private _agentdeckQuirks = false;
 
   private constructor(sim: WasmSimulatorInstance) {
     this.sim = sim;
+  }
+
+  /** Whether `applyAgentdeckQuirks` has been invoked on this bridge. */
+  get hasAgentdeckQuirks(): boolean {
+    return this._agentdeckQuirks;
+  }
+
+  /**
+   * Install AgentDeck-specific thunks (heap/timer/lock/wifi/sendHello) and
+   * fake the dual-core bringup. Idempotent. Once applied, `stepBatch`
+   * routes through `step_with_esp32_aids` so the dual-core handshake bytes
+   * stay alive across iterations.
+   */
+  applyAgentdeckQuirks(): void {
+    this.sim.apply_agentdeck_quirks();
+    this._agentdeckQuirks = true;
   }
 
   /** Initialize from YAML config + firmware ELF bytes. */
@@ -221,7 +248,11 @@ export class SimulatorBridge {
   }
 
   stepBatch(maxCycles: number): number {
-    const executed = this.sim.step_batch(maxCycles);
+    // Route ESP32-classic firmware that needs the dual-core handshake
+    // refresh through the aided step function — keeps loopTask alive.
+    const executed = this._agentdeckQuirks
+      ? this.sim.step_with_esp32_aids(maxCycles)
+      : this.sim.step_batch(maxCycles);
     this._cycles += executed;
     return executed;
   }

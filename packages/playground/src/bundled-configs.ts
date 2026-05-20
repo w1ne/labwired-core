@@ -63,6 +63,14 @@ export interface BoardConfig {
    * demo firmware ready to Run.
    */
   kind?: 'bare' | 'lab';
+  /**
+   * Firmware-specific simulator quirks. `'agentdeck'` installs the
+   * heap-caps / timer / lock / WiFi / sendHello / esp_crc8 thunks plus the
+   * dual-core handshake refresh that the production AgentDeck Arduino-ESP32
+   * firmware needs to reach `Display::render`. See
+   * `wasm/src/lib.rs::apply_agentdeck_quirks` for the canonical list.
+   */
+  simQuirks?: 'agentdeck';
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -165,6 +173,25 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceEsp32Epaper,
     sourceFilename: 'esp32-epaper-lab/src/main.rs',
     kind: 'lab',
+  },
+  {
+    // The same panel + chip + CS pin as esp32-epaper-lab, but running the
+    // production AgentDeck Arduino-ESP32 firmware. The ELF is stripped (1.3 MB,
+    // down from 22 MB of debug info) — byte-exact identical SPI output to
+    // the unstripped binary that flashes to real hardware.
+    boardId: 'agentdeck',
+    chipId: 'esp32',
+    name: 'AgentDeck (firmware-as-shipped)',
+    description: 'AgentDeck production firmware in WebAssembly. Arduino-ESP32 + GxEPD2 + Adafruit_GFX, the same 22 MB ELF that flashes to the physical ESP32-WROOM-32U module. Renders the IDLE splash with ATTACH / DECIDE / STOP labels in ~28 s of in-browser execution.',
+    arch: 'Xtensa LX6',
+    chipYaml: chipEsp32,
+    // Reuses the esp32-epaper-lab manifest (same chip, same SSD1680 panel
+    // on the same GPIO5 CS pin) — that's exactly the AgentDeck wiring.
+    systemYaml: systemEsp32EpaperLab,
+    demoFirmwarePath: `${BASE}wasm/demo-agentdeck.elf`,
+    mcuComponentType: 'esp32',
+    kind: 'lab',
+    simQuirks: 'agentdeck',
   },
   {
     boardId: 'max31855-thermocouple-lab',

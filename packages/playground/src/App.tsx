@@ -64,6 +64,8 @@ type ActiveSimulationConfig = {
   systemYaml: string;
   chipYaml: string;
   firmware: Uint8Array;
+  /** Firmware-specific simulator quirks; propagated from BoardConfig.simQuirks. */
+  simQuirks?: 'agentdeck';
 };
 
 let partCounter = 0;
@@ -309,12 +311,13 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
-  if (config.boardId === 'esp32-epaper-lab') {
+  if (config.boardId === 'esp32-epaper-lab' || config.boardId === 'agentdeck') {
     // ESP32-WROOM-32 driving the same Waveshare panel via VSPI. Wiring
     // matches AgentDeck (`firmware/src/pins.h`) — BUSY=GPIO4 / RST=GPIO16
     // / DC=GPIO17 / CS=GPIO5 / SCK=GPIO18 / MOSI=GPIO23 — so the same
     // ELF that espflash'es to the AgentDeck hardware paints the panel
-    // here too.
+    // here too. AgentDeck reuses this exact wiring (its production
+    // firmware uses the same pin map), just with a different demo ELF.
     return {
       ...createEmptyDiagram(config.chipId),
       parts: [
@@ -473,9 +476,12 @@ export function App() {
   // Board selection (from catalog + bundled configs)
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<BoardConfig>(() => {
-    // URL param ?lab=<boardId> overrides saved state — lets gallery cards deep-link.
+    // URL params ?lab=<boardId> / ?board=<boardId> override saved state —
+    // lets gallery cards deep-link. Both names accepted; `lab=` is the
+    // historical one, `board=` is the obvious one.
     if (typeof window !== 'undefined') {
-      const labParam = new URLSearchParams(window.location.search).get('lab');
+      const sp = new URLSearchParams(window.location.search);
+      const labParam = sp.get('lab') ?? sp.get('board');
       if (labParam) {
         const fromParam = BOARD_CONFIGS.find((c) => c.boardId === labParam);
         if (fromParam) return fromParam;
@@ -569,6 +575,13 @@ export function App() {
     } catch (e) {
       throw new Error(`Simulator init failed: ${e instanceof Error ? e.message : String(e)}`);
     }
+    // Apply firmware-specific quirks BEFORE we start stepping. For AgentDeck,
+    // this installs the heap-caps / timer / lock / wifi / sendHello / crc8
+    // thunks and fakes the dual-core handshake. stepBatch will then route
+    // through step_with_esp32_aids to keep the handshake bytes refreshed.
+    if (config.simQuirks === 'agentdeck') {
+      nextBridge.applyAgentdeckQuirks();
+    }
     setActiveSimulationConfig(config);
     setBridge(nextBridge);
     setRunning(true);
@@ -657,6 +670,7 @@ export function App() {
         systemYaml,
         chipYaml,
         firmware,
+        simQuirks: selectedBoard.simQuirks,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -684,11 +698,13 @@ export function App() {
     [editor.state.diagram.parts],
   );
 
-  // Drive the simulation loop
+  // Drive the simulation loop. AgentDeck needs ~30M cycles to reach the
+  // first Display::render, so we pump 10× the default batch size when its
+  // quirks are armed. Lab demos get the normal 100k batch.
   const { state: simState, stepOnce, clearUart } = useSimulationLoop({
     bridge,
     running,
-    cyclesPerFrame: 100000,
+    cyclesPerFrame: selectedBoard.simQuirks === 'agentdeck' ? 1_000_000 : 100_000,
     displays,
   });
 
@@ -1100,7 +1116,7 @@ export function App() {
           setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
         }
 
-        await launchSimulation({ systemYaml, chipYaml, firmware });
+        await launchSimulation({ systemYaml, chipYaml, firmware, simQuirks: selectedBoard.simQuirks });
         setCompileOutput((prev) => `${prev}\nUploaded ${file.name} (${firmware.length} bytes). Simulation started.`);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
