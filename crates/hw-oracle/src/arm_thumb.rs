@@ -937,10 +937,13 @@ mod encoder_tests {
 
     #[test]
     fn movw_r0_0xbeef_encoding() {
-        // MOV.W r0, #0xBEEF (T3 encoding).  Cross-checked with:
-        //   echo 'movw r0, #0xBEEF' | arm-none-eabi-as -mthumb -mcpu=cortex-m4 -o /tmp/t.o
-        //   arm-none-eabi-objdump -d /tmp/t.o → 0xf64b 0x00ef
-        // Our encoder returns u32 in hi-then-lo order: hi=0xF64B, lo=0x00EF.
-        assert_eq!(movw_imm16(0, 0xBEEF), 0xF64B_00EF);
+        // MOV.W r0, #0xBEEF (T3 encoding) per ARMv7-M ARM §A6.7.74:
+        //   imm32 = ZeroExtend(imm4:i:imm3:imm8, 32)
+        // For 0xBEEF: imm4=0xB, i=1, imm3=6, imm8=0xEF.
+        //   hi = 0xF240 | (i<<10) | imm4         = 0xF240 | 0x0400 | 0x000B = 0xF64B
+        //   lo = (imm3<<12) | (Rd<<8) | imm8     = 0x6000 | 0x0000 | 0x00EF = 0x60EF
+        // Cross-checked: arm-none-eabi-as `movw r0, #0xBEEF` → 4b f6 ef 60
+        // (LE byte stream: hi=0xF64B, lo=0x60EF).
+        assert_eq!(movw_imm16(0, 0xBEEF), 0xF64B_60EF);
     }
 }
