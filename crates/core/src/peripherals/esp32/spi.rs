@@ -8,12 +8,13 @@
 //! pokes when streaming bytes to a display (e-paper / TFT). Reference:
 //! ESP32 TRM v4.6 §7 (SPI Controller), register layout in Table 7-3.
 //!
-//! Register window is 0x100 bytes wide. The MVP models:
+//! Register window is 0x100 bytes wide. ESP32-classic offsets (NOT ESP32-S3,
+//! whose USER block sits 4 bytes higher). The MVP models:
 //!   * SPI_CMD_REG (0x00)        — write bit 18 (USR) to start; cleared on completion.
-//!   * SPI_USER_REG (0x20)       — round-tripped; USR_MOSI / USR_COMMAND bits inspected.
-//!   * SPI_USER2_REG (0x28)      — round-tripped (command bitlen + value).
-//!   * SPI_MOSI_DLEN_REG (0x2C)  — bit length minus 1; used to size MOSI stream.
-//!   * SPI_MISO_DLEN_REG (0x30)  — round-tripped, unused (write-only display).
+//!   * SPI_USER_REG (0x1C)       — round-tripped; USR_MOSI / USR_COMMAND bits inspected.
+//!   * SPI_USER2_REG (0x24)      — round-tripped (command bitlen + value).
+//!   * SPI_MOSI_DLEN_REG (0x28)  — bit length minus 1; used to size MOSI stream.
+//!   * SPI_MISO_DLEN_REG (0x2C)  — round-tripped, unused (write-only display).
 //!   * SPI_W0..W15 (0x80..0xBC)  — 64-byte FIFO; little-endian byte order.
 //!   * Other offsets             — round-tripped (so firmware's RMW polls don't break).
 //!
@@ -34,10 +35,10 @@ use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::collections::HashMap;
 
 const REG_CMD: u64 = 0x00;
-const REG_USER: u64 = 0x20;
-const REG_USER2: u64 = 0x28;
-const REG_MOSI_DLEN: u64 = 0x2C;
-const REG_MISO_DLEN: u64 = 0x30;
+const REG_USER: u64 = 0x1C;
+const REG_USER2: u64 = 0x24;
+const REG_MOSI_DLEN: u64 = 0x28;
+const REG_MISO_DLEN: u64 = 0x2C;
 const FIFO_START: u64 = 0x80;
 const FIFO_END: u64 = 0xC0; // exclusive — W0..W15 = 64 bytes
 
@@ -56,6 +57,13 @@ pub struct Esp32Spi {
     other: HashMap<u64, u32>,
 
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
+
+    /// Optional capture of every byte streamed via CMD.USR. Off by default;
+    /// enable with `record_bytes()` so tests can inspect the wire trace
+    /// without reaching into the attached device.
+    record_enabled: bool,
+    captured_bytes: Vec<u8>,
+    transactions: u64,
 }
 
 impl std::fmt::Debug for Esp32Spi {
@@ -78,6 +86,22 @@ impl Esp32Spi {
 
     pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
+    }
+
+    /// Enable wire-byte capture. Every byte streamed via CMD.USR after this
+    /// call is appended to an internal buffer; `cap` caps memory by dropping
+    /// older bytes once the buffer reaches that length.
+    pub fn enable_byte_capture(&mut self, cap: usize) {
+        self.record_enabled = true;
+        self.captured_bytes.reserve(cap);
+    }
+
+    pub fn captured_bytes(&self) -> &[u8] {
+        &self.captured_bytes
+    }
+
+    pub fn transactions(&self) -> u64 {
+        self.transactions
     }
 
     fn read_word(&self, off: u64) -> u32 {
@@ -135,9 +159,13 @@ impl Esp32Spi {
         let bits = (self.mosi_dlen & 0x7FF) + 1;
         let byte_count = bits.div_ceil(8) as usize;
 
+        self.transactions += 1;
         for i in 0..byte_count {
             let word = self.fifo[i / 4];
             let byte = ((word >> ((i % 4) * 8)) & 0xFF) as u8;
+            if self.record_enabled {
+                self.captured_bytes.push(byte);
+            }
             for dev in &mut self.attached_devices {
                 dev.transfer(byte);
             }

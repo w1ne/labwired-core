@@ -71,13 +71,14 @@ const IO_MUX_GPIO17_REG: *mut u32 = 0x3FF4_9050 as *mut u32; // DC
 const IO_MUX_GPIO18_REG: *mut u32 = 0x3FF4_9070 as *mut u32; // SCK
 const IO_MUX_GPIO23_REG: *mut u32 = 0x3FF4_908C as *mut u32; // MOSI
 
-// SPI3 (VSPI) at 0x3FF6_5000.
+// SPI3 (VSPI) at 0x3FF6_5000. Offsets per ESP32 TRM v4.6 §7 — USER block
+// sits at 0x1C/0x20/0x24 on ESP32-classic (S3 has it 4 bytes higher).
 const SPI3_CMD_REG:        *mut u32 = 0x3FF6_5000 as *mut u32;
 const SPI3_CLOCK_REG:      *mut u32 = 0x3FF6_5018 as *mut u32;
-const SPI3_USER_REG:       *mut u32 = 0x3FF6_5020 as *mut u32;
+const SPI3_USER_REG:       *mut u32 = 0x3FF6_501C as *mut u32;
 #[allow(dead_code)]
-const SPI3_USER2_REG:      *mut u32 = 0x3FF6_5028 as *mut u32;
-const SPI3_MOSI_DLEN_REG:  *mut u32 = 0x3FF6_502C as *mut u32;
+const SPI3_USER2_REG:      *mut u32 = 0x3FF6_5024 as *mut u32;
+const SPI3_MOSI_DLEN_REG:  *mut u32 = 0x3FF6_5028 as *mut u32;
 const SPI3_PIN_REG:        *mut u32 = 0x3FF6_5034 as *mut u32;
 const SPI3_W0_REG:         *mut u32 = 0x3FF6_5080 as *mut u32;
 
