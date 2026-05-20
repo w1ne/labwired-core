@@ -165,6 +165,21 @@ fn agentdeck_firmware_drives_panel_in_sim() {
     // code (input handler, USB link, eventual loop()).
     machine.bus.install_flash_thunk(0x400d_de98, rom_thunks::nop_return_zero)
         .expect("install WifiWsLink::begin thunk");
+    // WifiWsLink::loop calls ws_.loop() on the WebSocketsClient, which
+    // walks uninitialised TCP/lwIP state when ::begin was stubbed. That
+    // burns infinite cycles in ArduinoJson string-pool lookups and
+    // prevents loop() from ever reaching the `g_dirty` render check.
+    // Stub the loop too so the WiFi path is a true no-op.
+    machine.bus.install_flash_thunk(0x400d_dccc, rom_thunks::nop_return_zero)
+        .expect("install WifiWsLink::loop thunk");
+    // sendHello (anonymous namespace) walks ArduinoJson serialization, which
+    // calls into ObjectData::getMember and StringPool repeatedly. With our
+    // stubbed Serial path the underlying string buffer never drains, and the
+    // serializer keeps re-traversing the JSON tree forever. Skip sendHello —
+    // there's no real daemon to handshake with anyway. The boot-time render
+    // (set by `g_dirty = true` at end of setup()) still fires.
+    machine.bus.install_flash_thunk(0x400e_0034, rom_thunks::nop_return_zero)
+        .expect("install sendHello thunk");
     // Fake the app image header at 0x3F400000 (start of flash dcache view).
     // On real silicon, the 2nd-stage bootloader places this header before
     // the app's first segment. esp_image_header_t (24 bytes):

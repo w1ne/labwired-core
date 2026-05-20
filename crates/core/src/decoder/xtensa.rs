@@ -697,17 +697,22 @@ fn decode_qrst(w: u32) -> Instruction {
                     shamt,
                 }
             }
-            // SRAI: 5-bit shift amount; direct encoding (no complement).
-            // ISA RM §8: shamt = ((op2 & 1) << 4) | t.
-            // SOURCE register is `s` (the standard at-position for shift ops);
-            // `t` is repurposed for shamt[3:0]. Reading `at: t` was a copy-paste
-            // bug — drawPixel's `srai a12, a12, 3` was reading a3 instead of a12,
-            // producing wrong byte indices in any framebuffer using rotation.
+            // SRAI ar, at, sa: arithmetic right shift immediate.
+            // Per Xtensa ISA RM §4.3 SRAI encoding (RRR variant):
+            //   r (15:12) = ar          — destination
+            //   s (11:8)  = sa[3:0]     — shift amount low 4 bits
+            //   t (7:4)   = at          — source register
+            //   op2 bit 0 = sa[4]
+            // HW-oracle: `srai a12, a12, 3` → 0x21c3c0 (s=3, t=12, r=12, op2=2).
+            // Earlier commit e96c2f4 swapped source<->shamt fields — both fields
+            // came out wrong (source from `s`, shamt from `t`). For drawPixel's
+            // `srai a12, a12, 3` that mis-execed as `a12 = a3 >> 12` instead of
+            // `a12 = a12 >> 3`, producing wrong byte indices into the framebuffer.
             0x2 | 0x3 => {
-                let shamt = ((op2 & 0x1) << 4) | t;
+                let shamt = ((op2 & 0x1) << 4) | s;
                 Instruction::Srai {
                     ar: r,
-                    at: s,
+                    at: t,
                     shamt,
                 }
             }
