@@ -221,15 +221,35 @@ fn decode_srli() {
 
 #[test]
 fn decode_srai() {
-    // SRAI ar, at, shamt : op2=0x2, op1=0x1
-    // ISA RM §8 SRAI: shamt = ((op2 & 1) << 4) | t (direct, no complement).
-    let w = rrr(0x2, 0x1, 1, 0, 3);
+    // SRAI ar, at, shamt — op2=0x2 (low bit of shamt = 0), op1=0x1.
+    //
+    // ISA RM §4.3 SRAI encoding (RRR variant):
+    //   r (15:12) = ar (destination)
+    //   s (11:8)  = shamt[3:0]
+    //   t (7:4)   = at (source)
+    //   op2[0]    = shamt[4]
+    //
+    // Verified against `xtensa-esp32-elf-as`:
+    //   srai a12, a12, 3  →  0x21c3c0  (op2=2, op1=1, r=C, s=3, t=C)
+    //
+    // Test with shamt=3 (5-bit value 00011, low bit of op2 = 0):
+    //   rrr(op2=2, op1=1, r=ar=1, s=shamt[3:0]=3, t=at=4)
+    let w = rrr(0x2, 0x1, 1, 3, 4);
     match decode(w) {
         Instruction::Srai { ar, at, shamt } => {
             assert_eq!(ar, 1);
-            assert_eq!(at, 3);
-            // op2=0x2 → op2&1=0; raw = (0<<4)|3 = 3. shamt = 3.
+            assert_eq!(at, 4);
             assert_eq!(shamt, 3);
+        }
+        other => panic!("expected Srai, got {:?}", other),
+    }
+    // shamt=17 spills into op2 bit 0: op2=0x3, s=1 → shamt = 16|1 = 17.
+    let w = rrr(0x3, 0x1, 7, 1, 9);
+    match decode(w) {
+        Instruction::Srai { ar, at, shamt } => {
+            assert_eq!(ar, 7);
+            assert_eq!(at, 9);
+            assert_eq!(shamt, 17);
         }
         other => panic!("expected Srai, got {:?}", other),
     }
@@ -269,7 +289,15 @@ fn decode_l32r() {
 
 #[test]
 fn decode_l32r_positive_imm() {
-    // at=5, imm16 = 0x0001 => signed +1 => offset = +4 bytes
+    // Xtensa L32R always reads its literal from BELOW the instruction —
+    // imm16 is implicitly OR'd with 0xFFFF_0000 before the shift, so EVERY
+    // L32R offset is a negative byte distance from `(PC + 3) & ~3`. A "raw
+    // imm16 = 0x0001" decodes to a byte-offset of -262140 (= 0xFFFC0004
+    // interpreted as i32), NOT +4. Confirmed against xtensa-esp32-elf-as
+    // and ISA RM §A.2 (L32R Format).
+    //
+    // This historical test name ("positive_imm") refers to the unsigned
+    // raw imm16 value, not the resulting byte offset.
     let w = 0x0001u32 | (5u32 << 4) | (0x0001u32 << 8);
     match decode(w) {
         Instruction::L32r {
@@ -277,7 +305,7 @@ fn decode_l32r_positive_imm() {
             pc_rel_byte_offset,
         } => {
             assert_eq!(at, 5);
-            assert_eq!(pc_rel_byte_offset, 4);
+            assert_eq!(pc_rel_byte_offset, -262140);
         }
         other => panic!("expected L32R, got {:?}", other),
     }
