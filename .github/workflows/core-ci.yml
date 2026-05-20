@@ -79,6 +79,15 @@ jobs:
                 'done' \
                 'exec "$HOME/.local/zig/zig" cc "${args[@]}"' \
                 > "$HOME/.local/bin/cc"
+              # cc-rs also drives an archiver. Bridge `ar` and `ranlib` to
+              # zig's bundled subcommands so libring.a et al. can link.
+              printf '%s\n' '#!/usr/bin/env bash' \
+                'exec "$HOME/.local/zig/zig" ar "$@"' \
+                > "$HOME/.local/bin/ar"
+              printf '%s\n' '#!/usr/bin/env bash' \
+                'exec "$HOME/.local/zig/zig" ranlib "$@"' \
+                > "$HOME/.local/bin/ranlib"
+              chmod +x "$HOME/.local/bin/ar" "$HOME/.local/bin/ranlib"
               chmod +x "$HOME/.local/bin/cc"
               echo "$HOME/.local/bin" >> "$GITHUB_PATH"
               echo "Created cc shim to zig cc"
@@ -187,6 +196,15 @@ jobs:
                 'done' \
                 'exec "$HOME/.local/zig/zig" cc "${args[@]}"' \
                 > "$HOME/.local/bin/cc"
+              # cc-rs also drives an archiver. Bridge `ar` and `ranlib` to
+              # zig's bundled subcommands so libring.a et al. can link.
+              printf '%s\n' '#!/usr/bin/env bash' \
+                'exec "$HOME/.local/zig/zig" ar "$@"' \
+                > "$HOME/.local/bin/ar"
+              printf '%s\n' '#!/usr/bin/env bash' \
+                'exec "$HOME/.local/zig/zig" ranlib "$@"' \
+                > "$HOME/.local/bin/ranlib"
+              chmod +x "$HOME/.local/bin/ar" "$HOME/.local/bin/ranlib"
               chmod +x "$HOME/.local/bin/cc"
               echo "$HOME/.local/bin" >> "$GITHUB_PATH"
               echo "Created cc shim to zig cc"
