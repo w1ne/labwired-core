@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LabWired — AgentDeck firmware in browser sim</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui, sans-serif; background: #0c0d10; color: #ddd; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; margin: 0 0 8px; color: #fff; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 16px; }
+  .row { display: flex; gap: 16px; align-items: flex-start; }
+  .col { flex: 1; min-width: 0; }
+  button { background: #2563eb; border: 0; color: #fff; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .panel-frame { background: #1d1f24; border: 1px solid #2a2d33; border-radius: 6px; padding: 16px; }
+  canvas { image-rendering: pixelated; background: #f5f5f0; border: 1px solid #444; display: block; }
+  pre { background: #16181c; border: 1px solid #2a2d33; padding: 12px; border-radius: 4px; font-size: 12px; overflow: auto; max-height: 360px; color: #b8b8b8; }
+  .meta { font-size: 12px; color: #888; margin-top: 8px; }
+  .row.controls { gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<h1>AgentDeck firmware → labwired-core sim → SSD1680 mock panel</h1>
+<div class="sub">
+  Upload the prebuilt <code>firmware.elf</code> from your AgentDeck checkout
+  (<code>~/Projects/AgentDeck/firmware/.pio/build/wroom32u/firmware.elf</code>,
+  ~22 MB). The same ELF that flashes to a real ESP32-WROOM-32U module runs
+  here in WebAssembly.
+</div>
+
+<div class="row controls">
+  <input type="file" id="elf" accept=".elf,.bin">
+  <button id="run" disabled>Run</button>
+  <span id="meta" class="meta"></span>
+</div>
+
+<div class="row">
+  <div class="col panel-frame" style="flex: 0 0 auto;">
+    <canvas id="panel" width="296" height="128"></canvas>
+    <div id="panelmeta" class="meta">panel: waiting…</div>
+  </div>
+  <div class="col">
+    <pre id="log">Pick a firmware.elf to begin.</pre>
+  </div>
+</div>
+
+<script type="module">
+  import init, { WasmSimulator } from './wasm/labwired_wasm.js';
+
+  // Reuse the esp32-epaper-lab manifest: it already wires SPI3 + SSD1680
+  // tri-color panel on GPIO5 CS — identical to AgentDeck's panel attach.
+  const SYSTEM_YAML = `name: "agentdeck-firmware-in-sim"
+chip: "./esp32.yaml"
+external_devices:
+  - id: "epaper"
+    type: "ssd1680_tricolor_290"
+    connection: "spi3"
+    config:
+      cs_pin: "GPIO5"
+board_io:
+  - id: "epaper"
+    kind: "spi_device"
+    peripheral: "spi3"
+    pin: 5
+    signal: "input"
+    active_high: true
+    device_type: "ssd1680_tricolor_290"
+`;
+
+  const CHIP_YAML = `name: "esp32"
+arch: "xtensa-lx6"
+flash:
+  base: 0x400D0000
+  size: "4MiB"
+ram:
+  base: 0x3FFB0000
+  size: "192KiB"
+peripherals: []
+`;
+
+  const logEl = document.getElementById('log');
+  const metaEl = document.getElementById('meta');
+  const panelMetaEl = document.getElementById('panelmeta');
+  const runBtn = document.getElementById('run');
+  const fileEl = document.getElementById('elf');
+  const canvas = document.getElementById('panel');
+  const ctx = canvas.getContext('2d');
+
+  function log(s) {
+    logEl.textContent += '\n' + s;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  let elfBytes = null;
+  fileEl.addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    elfBytes = new Uint8Array(await f.arrayBuffer());
+    metaEl.textContent = `${f.name} — ${(elfBytes.length / 1024 / 1024).toFixed(1)} MiB`;
+    runBtn.disabled = false;
+    logEl.textContent = `Loaded ${f.name} (${elfBytes.length} bytes). Click Run.`;
+  });
+
+  // SSD1680 native dims, GxEPD2 red plane inversion (wire bit 1 = render red).
+  const W = 128, H = 296;
+  function drawPanel(fb) {
+    // fb = 9472 bytes: 4736 black plane, then 4736 red plane.
+    const black = fb.subarray(0, 4736);
+    const red = fb.subarray(4736, 9472);
+    // Render landscape (296 x 128) — same as g_epd.setRotation(1).
+    const img = ctx.createImageData(296, 128);
+    for (let py = 0; py < 128; py++) {
+      for (let px = 0; px < 296; px++) {
+        // Landscape (px, py) maps to native portrait (127 - py, px) under
+        // GxEPD2's setRotation(1) (= 90° CW).
+        const nx = 127 - py, ny = px;
+        const byteIdx = ny * (W / 8) + (nx >> 3);
+        const bitIdx = 7 - (nx & 7);
+        const blackBit = (black[byteIdx] >> bitIdx) & 1;
+        const redBit = (red[byteIdx] >> bitIdx) & 1;
+        let r, g, b;
+        if (redBit === 1) { r = 220; g = 30; b = 40; }
+        else if (blackBit === 0) { r = 0; g = 0; b = 0; }
+        else { r = 245; g = 245; b = 240; }
+        const o = (py * 296 + px) * 4;
+        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  runBtn.addEventListener('click', async () => {
+    if (!elfBytes) return;
+    runBtn.disabled = true;
+    log('Initialising WASM…');
+    await init();
+    log('Constructing sim from esp32-epaper-lab manifest…');
+    let sim;
+    try {
+      sim = WasmSimulator.new_from_config(SYSTEM_YAML, CHIP_YAML, elfBytes);
+    } catch (e) {
+      log('Construct failed: ' + e);
+      runBtn.disabled = false;
+      return;
+    }
+    log('Applying AgentDeck firmware quirks…');
+    sim.apply_agentdeck_quirks();
+    log('Stepping firmware. This takes ~25 seconds on desktop Chrome.');
+
+    const TOTAL = 30_000_000;
+    const BATCH = 100_000;
+    let steps = 0, batchN = 0;
+    const t0 = performance.now();
+    function tick() {
+      try {
+        // step_with_esp32_aids handles the dual-core handshake keep-alive
+        // every 10k cycles internally, so JS only needs to step.
+        sim.step_with_esp32_aids(BATCH);
+      } catch (e) {
+        log('Step error at ~' + steps + ': ' + e);
+        return;
+      }
+      steps += BATCH;
+      batchN += 1;
+      if (batchN % 5 === 0) {
+        // Mid-run preview.
+        try { drawPanel(sim.get_ssd1680_framebuffer('epaper')); } catch (e) { /* device not yet attached */ }
+      }
+      if (steps >= TOTAL) {
+        const dt = ((performance.now() - t0) / 1000).toFixed(1);
+        log(`Done. ${steps} steps in ${dt}s.`);
+        try {
+          const fb = sim.get_ssd1680_framebuffer('epaper');
+          drawPanel(fb);
+          const nonWhite = [...fb.subarray(0, 4736)].filter(b => b !== 0xFF).length;
+          panelMetaEl.textContent =
+            `panel: ${nonWhite} non-white bytes in black plane (of 4736); ` +
+            'see ATTACH / DECIDE / STOP labels at the bottom in landscape.';
+        } catch (e) {
+          log('Panel readback failed: ' + e);
+        }
+        runBtn.disabled = false;
+        return;
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+</script>
+</body>
+</html>

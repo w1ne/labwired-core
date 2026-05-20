@@ -17,6 +17,12 @@ export class WasmSimulator {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmsimulator_free(ptr, 0);
     }
+    apply_agentdeck_quirks() {
+        const ret = wasm.wasmsimulator_apply_agentdeck_quirks(this.__wbg_ptr);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
     /**
      * Drain UART TX output bytes accumulated since the last call.
      * @returns {Uint8Array}
@@ -266,6 +272,13 @@ export class WasmSimulator {
         return ret;
     }
     /**
+     * Re-write the dual-core handshake bytes. Call every ~10k steps from JS
+     * — firmware boot code revisits these and we need them to stay 1.
+     */
+    keep_alive_esp32_dual_core() {
+        wasm.wasmsimulator_keep_alive_esp32_dual_core(this.__wbg_ptr);
+    }
+    /**
      * Legacy constructor: hardcoded STM32F107 Cortex-M3 with 128KB flash + 20KB RAM.
      * Kept for backward compatibility with the existing landing page sandbox.
      * @param {Uint8Array} firmware
@@ -468,6 +481,22 @@ export class WasmSimulator {
     }
     step_single() {
         const ret = wasm.wasmsimulator_step_single(this.__wbg_ptr);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Step `cycles` cycles with the ESP32-classic IPI bridge active. Each
+     * cycle samples the DPORT FROM_CPU intmatrix mapping and trigger
+     * registers, raises the corresponding INTERRUPT bit, and clears the
+     * trigger so the next write re-edges. The dual-core handshake bytes
+     * are re-applied every 10k cycles (matching the e2e test cadence).
+     * Falls back to plain `step` if `apply_agentdeck_quirks` hasn't been
+     * called yet.
+     * @param {number} cycles
+     */
+    step_with_esp32_aids(cycles) {
+        const ret = wasm.wasmsimulator_step_with_esp32_aids(this.__wbg_ptr, cycles);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
