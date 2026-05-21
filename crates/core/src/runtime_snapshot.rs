@@ -39,6 +39,18 @@ pub const RUNTIME_SNAPSHOT_MAGIC: [u8; 4] = *b"LWRS";
 /// no compat burden).
 pub const RUNTIME_SNAPSHOT_VERSION: u32 = 1;
 
+/// Peripherals deliberately excluded from runtime snapshots — their
+/// contents are content-addressable from the ELF (re-applying
+/// `load_firmware` restores them) and including them inflates the blob
+/// by ~12 MiB per snapshot. The snapshot consumer must guarantee the
+/// same firmware ELF is loaded before `apply_runtime_snapshot`.
+pub const RUNTIME_SNAPSHOT_SKIPPED_PERIPHERALS: &[&str] = &[
+    "flash_icache", // 4 MiB ELF .text mirror
+    "flash_dcache", // 4 MiB ELF .rodata mirror
+    "psram",        // 4 MiB stub, probed-only
+    "rom",          // BROM thunks, deterministic from configure_*
+];
+
 /// CPU-arch discriminator inside [`MachineRuntimeSnapshot::cpu_data`].
 /// One byte so the on-disk format stays compact.
 #[repr(u8)]

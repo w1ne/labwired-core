@@ -109,6 +109,51 @@ enum Commands {
     /// Xtensa chips) or UART (for ARM chips) appears on stdout in real
     /// time.
     Run(RunArgs),
+
+    /// Capture a binary runtime snapshot of a firmware mid-flight, for
+    /// fast-replay in the playground. Produces an `.lwrs` blob that
+    /// `WasmSimulator::apply_runtime_snapshot` can restore.
+    Snapshot(SnapshotArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct SnapshotArgs {
+    #[command(subcommand)]
+    pub command: SnapshotCommands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SnapshotCommands {
+    /// Boot a firmware, step N times, write a runtime snapshot blob.
+    Capture(SnapshotCaptureArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct SnapshotCaptureArgs {
+    /// Path to the firmware ELF.
+    #[arg(long)]
+    pub firmware: PathBuf,
+
+    /// Number of cycles to run before taking the snapshot.
+    #[arg(long)]
+    pub steps: u64,
+
+    /// Output `.lwrs` path.
+    #[arg(long)]
+    pub output: PathBuf,
+
+    /// Firmware profile to use. Currently only `agentdeck` is supported —
+    /// installs the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps
+    /// thunks, dual-core handshake fakery, IPI bridge, image header,
+    /// SSD1680 tri-color panel attached to spi3 / GPIO5). Each Arduino-ESP32
+    /// firmware has a different set of thunk PCs, so the profile name maps
+    /// to a hand-curated address list inside the binary.
+    #[arg(long, default_value = "agentdeck")]
+    pub profile: String,
+
+    /// Print a progress line every N steps. 0 = silent.
+    #[arg(long, default_value = "5000000")]
+    pub progress_every: u64,
 }
 
 #[derive(Parser, Debug)]
@@ -626,6 +671,7 @@ fn main() -> ExitCode {
         Some(Commands::Machine(args)) => run_machine(args),
         Some(Commands::Asset(args)) => run_asset(args),
         Some(Commands::Run(args)) => run_firmware(args),
+        Some(Commands::Snapshot(args)) => run_snapshot(args),
         None => run_interactive(cli),
     }
 }
@@ -782,6 +828,288 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     eprintln!(
         "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}",
         cpu.get_pc(),
+    );
+    ExitCode::from(EXIT_PASS)
+}
+
+fn run_snapshot(args: SnapshotArgs) -> ExitCode {
+    match args.command {
+        SnapshotCommands::Capture(a) => run_snapshot_capture(a),
+    }
+}
+
+/// Drive a firmware mid-flight in a headless sim and write a runtime
+/// snapshot blob. The playground reads the same blob to skip cold boot.
+///
+/// The `agentdeck` profile mirrors what
+/// `WasmSimulator::install_esp32_arduino_quirks` + `step_with_esp32_aids`
+/// do on the web side — same configure_xtensa_esp32 bus, same handshake
+/// + thunk setup, same IPI bridge cadence — so the captured state will
+/// resume bit-identically inside the browser.
+fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
+    use labwired_core::bus::SystemBus;
+    use labwired_core::peripherals::components::Ssd1680Tricolor290;
+    use labwired_core::peripherals::esp32::spi::Esp32Spi;
+    use labwired_core::peripherals::esp32s3::rom_thunks;
+    use labwired_core::system::xtensa::configure_xtensa_esp32;
+    use labwired_core::{Machine, SimulationError};
+    use labwired_loader::load_elf_bytes;
+
+    if args.profile != "agentdeck" {
+        eprintln!(
+            "error: unknown profile '{p}' — supported: 'agentdeck'",
+            p = args.profile
+        );
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    let elf_bytes = match std::fs::read(&args.firmware) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "error: cannot read firmware ELF {:?}: {e}",
+                args.firmware
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    // Bus + CPU — same configure_xtensa_esp32 that the WASM uses.
+    let mut bus = SystemBus::new();
+    let cpu = configure_xtensa_esp32(&mut bus);
+
+    // Attach an SSD1680 2.9" tri-color panel to spi3, cs=GPIO5 — the
+    // AgentDeck wiring. Identical to `e2e_agentdeck_in_sim`.
+    let spi3_idx = match bus.find_peripheral_index_by_name("spi3") {
+        Some(i) => i,
+        None => {
+            eprintln!("error: configure_xtensa_esp32 did not register spi3");
+            return ExitCode::from(EXIT_RUNTIME_ERROR);
+        }
+    };
+    if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
+        if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
+            spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+        }
+    }
+    bus.refresh_peripheral_index();
+
+    let boxed: Box<dyn Cpu> = Box::new(cpu);
+    let mut machine = Machine::new(boxed, bus);
+
+    // Load firmware FIRST — load_firmware writes ELF segments into bus
+    // memory, so any bytes we write before this risk being clobbered.
+    // The handshake/header writes and `install_flash_thunk` (which patches
+    // BREAK bytes into flash) must happen AFTER the ELF is in place.
+    let program_image = match load_elf_bytes(&elf_bytes) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: load_elf_bytes: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    if let Err(e) = machine.load_firmware(&program_image) {
+        eprintln!("error: load_firmware: {e}");
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+    // XtensaLx7::reset() leaves PC at the 0x40000400 BROM reset vector.
+    // Skip BROM and jump straight to the ELF's app entry — same as WASM.
+    machine.cpu.set_pc(program_image.entry_point as u32);
+
+    // Arduino-ESP32 bootstrap — keep in sync with
+    // `wasm/src/lib.rs::install_esp32_arduino_quirks` and the e2e test.
+    // Each thunk PC is firmware-specific (resolved from the ELF symbol
+    // table — see e2e_agentdeck_in_sim for per-thunk rationale).
+    let _ = machine.bus.write_u8(0x400E_90DE, 0x08); // loopTask -> PRO_CPU
+    machine.cpu.set_sp(0x3FFE_0000);
+    let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
+    let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
+    let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
+    let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
+    let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
+    let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
+    let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
+
+    let thunks: &[(u32, rom_thunks::RomThunkFn)] = &[
+        (0x400e_e3b0, rom_thunks::esp_idf_heap_caps_init),
+        (0x4008_2904, rom_thunks::esp_idf_heap_caps_malloc),
+        (0x4008_2a70, rom_thunks::esp_idf_heap_caps_calloc),
+        (0x4008_25dc, rom_thunks::esp_idf_heap_caps_free),
+        (0x4008_29f0, rom_thunks::esp_idf_heap_caps_realloc),
+        (0x4012_9034, rom_thunks::nop_return_zero),
+        (0x4008_17dc, rom_thunks::nop_return_zero),
+        (0x4008_188c, rom_thunks::nop_return_zero),
+        (0x4008_3384, rom_thunks::nop_return_zero),
+        (0x4008_339c, rom_thunks::nop_return_zero),
+        (0x4008_33b0, rom_thunks::nop_return_zero),
+        (0x4008_33cc, rom_thunks::nop_return_zero),
+        (0x4008_bbd0, rom_thunks::nop_return_zero),
+        (0x400e_99dc, rom_thunks::nop_return_zero),
+        (0x400e_ae18, rom_thunks::nop_return_fake_ptr),
+        (0x400e_2280, rom_thunks::nop_return_zero),
+        (0x400e_5c28, rom_thunks::nop_return_zero),
+        (0x400d_de98, rom_thunks::nop_return_zero),
+        (0x400d_dccc, rom_thunks::nop_return_zero),
+        (0x400e_0034, rom_thunks::nop_return_zero),
+    ];
+    for &(pc, f) in thunks {
+        if let Err(e) = machine.bus.install_flash_thunk(pc, f) {
+            eprintln!("error: install_flash_thunk @ {:#x}: {e}", pc);
+            return ExitCode::from(EXIT_RUNTIME_ERROR);
+        }
+    }
+
+    // Fake esp_image_header_t (24 bytes) at 0x3F40_0000, entry = ELF entry.
+    let entry: u32 = program_image.entry_point as u32;
+    let header: [u8; 24] = [
+        0xE9,
+        0x01,
+        0x00,
+        0x00,
+        (entry & 0xFF) as u8,
+        ((entry >> 8) & 0xFF) as u8,
+        ((entry >> 16) & 0xFF) as u8,
+        ((entry >> 24) & 0xFF) as u8,
+        0xEE,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    for (i, &b) in header.iter().enumerate() {
+        let _ = machine.bus.write_u8(0x3F40_0000 + i as u64, b);
+    }
+
+    // IPI bridge state — DPORT FROM_CPU intmatrix mapping observed each
+    // cycle, raised on the CPU as an internal interrupt edge.
+    let mut from_cpu_bit0: Option<u8> = None;
+    let mut from_cpu_bit1: Option<u8> = None;
+    let mut last_from_cpu0_val: u32 = 0;
+    let mut last_from_cpu1_val: u32 = 0;
+
+    eprintln!(
+        "labwired-cli snapshot: stepping firmware to cycle {}",
+        args.steps
+    );
+    let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
+    let config = labwired_core::SimulationConfig::default();
+    let mut i: u64 = 0;
+    let progress = args.progress_every;
+    while i < args.steps {
+        if let Ok(v) = machine.bus.read_u32(0x3FF0_0164) {
+            let bit = (v & 0x1F) as u8;
+            if v != 0 && bit < 32 {
+                from_cpu_bit0 = Some(bit);
+            }
+        }
+        if let Ok(v) = machine.bus.read_u32(0x3FF0_0168) {
+            let bit = (v & 0x1F) as u8;
+            if v != 0 && bit < 32 {
+                from_cpu_bit1 = Some(bit);
+            }
+        }
+        if let Ok(v0) = machine.bus.read_u32(0x3FF0_00DC) {
+            if v0 != 0 && v0 != last_from_cpu0_val {
+                if let Some(bit) = from_cpu_bit0 {
+                    machine.cpu.raise_interrupt_bits(1u32 << bit);
+                }
+                let _ = machine.bus.write_u32(0x3FF0_00DC, 0);
+            }
+            last_from_cpu0_val = 0;
+        }
+        if let Ok(v1) = machine.bus.read_u32(0x3FF0_00E0) {
+            if v1 != 0 && v1 != last_from_cpu1_val {
+                if let Some(bit) = from_cpu_bit1 {
+                    machine.cpu.raise_interrupt_bits(1u32 << bit);
+                }
+                let _ = machine.bus.write_u32(0x3FF0_00E0, 0);
+            }
+            last_from_cpu1_val = 0;
+        }
+        if i % 10_000 == 0 {
+            let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
+            let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
+            let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
+            let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
+            let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
+            let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
+        }
+        match machine.cpu.step(&mut machine.bus, &observers, &config) {
+            Ok(()) => {}
+            Err(SimulationError::BreakpointHit(_)) => {}
+            Err(e) => {
+                eprintln!(
+                    "error: sim step at cycle {i} pc=0x{:08x}: {e}",
+                    machine.cpu.get_pc()
+                );
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+        machine.bus.tick_peripherals_with_costs();
+        i += 1;
+        if progress > 0 && i % progress == 0 {
+            eprintln!(
+                "  step {i:>10}  pc=0x{:08x}",
+                machine.cpu.get_pc()
+            );
+        }
+    }
+
+    // Sanity-check the captured state — for an `agentdeck` profile we
+    // expect the SSD1680 panel to have been driven through at least one
+    // refresh cycle by the time the snapshot lands. Print this so the
+    // operator can tell "yes, this snapshot is post-paint" without
+    // re-running the playground.
+    if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
+        if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
+            if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {
+                for attached in &spi3.attached_devices {
+                    if let Some(panel_any) = attached.as_any() {
+                        if let Some(panel) = panel_any.downcast_ref::<Ssd1680Tricolor290>() {
+                            let bp = panel.black_plane();
+                            let non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
+                            eprintln!(
+                                "labwired-cli snapshot: panel state — refresh_generation={}, power_on={}, black-plane non-FF bytes={}/{}",
+                                panel.refresh_generation(),
+                                panel.power_on(),
+                                non_ff,
+                                bp.len(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let snap = machine.take_runtime_snapshot();
+    let bytes = snap.to_bytes();
+
+    if let Some(parent) = args.output.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Err(e) = std::fs::write(&args.output, &bytes) {
+        eprintln!("error: write {:?}: {e}", args.output);
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    eprintln!(
+        "labwired-cli snapshot: wrote {} bytes to {:?} (pc=0x{:08x} after {} cycles)",
+        bytes.len(),
+        args.output,
+        machine.cpu.get_pc(),
+        args.steps,
     );
     ExitCode::from(EXIT_PASS)
 }

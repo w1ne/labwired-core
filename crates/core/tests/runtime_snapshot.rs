@@ -179,6 +179,71 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
     assert_eq!(machine.bus.read_u32(0x3FFB_0200).unwrap(), 0xDEAD_BEEF);
 }
 
+/// Verifies that the offline-captured AgentDeck snapshot file produced by
+/// `labwired-cli snapshot capture` decodes cleanly and restores onto a
+/// freshly-built machine with the panel in its post-paint state.
+///
+/// Skipped unless the snapshot file exists at the conventional path —
+/// running it requires a one-time CLI invocation:
+///   cargo run --release -p labwired-cli -- snapshot capture \
+///     --firmware /tmp/demo-agentdeck.elf \
+///     --steps 30000000 \
+///     --output /tmp/agentdeck-postpaint.lwrs
+#[test]
+fn agentdeck_snapshot_file_restores_post_paint_panel() {
+    let snap_path = std::path::PathBuf::from("/tmp/agentdeck-postpaint.lwrs");
+    if !snap_path.exists() {
+        eprintln!("[skip] {snap_path:?} not present — run `labwired-cli snapshot capture` first");
+        return;
+    }
+    let bytes = std::fs::read(&snap_path).expect("read snapshot file");
+    let snap = MachineRuntimeSnapshot::from_bytes(&bytes).expect("decode snapshot");
+
+    // Build a fresh machine matching the AgentDeck topology.
+    let mut bus = SystemBus::new();
+    let cpu = configure_xtensa_esp32(&mut bus);
+    let spi3_idx = bus
+        .find_peripheral_index_by_name("spi3")
+        .expect("spi3 registered");
+    let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
+    let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
+    spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+    bus.refresh_peripheral_index();
+
+    let boxed: Box<dyn Cpu> = Box::new(cpu);
+    let mut machine = Machine::new(boxed, bus);
+
+    machine.apply_runtime_snapshot(&snap).expect("apply");
+
+    // Re-locate the panel and read its restored state.
+    let spi3_idx = machine
+        .bus
+        .find_peripheral_index_by_name("spi3")
+        .expect("spi3 registered");
+    let any = machine.bus.peripherals[spi3_idx].dev.as_any().unwrap();
+    let spi3 = any.downcast_ref::<Esp32Spi>().unwrap();
+    let panel = spi3
+        .attached_devices
+        .iter()
+        .filter_map(|d| {
+            d.as_any()
+                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
+        })
+        .next()
+        .expect("panel attached");
+
+    assert_eq!(
+        panel.refresh_generation(),
+        1,
+        "snapshot must restore post-first-paint refresh_generation"
+    );
+    let non_ff = panel.black_plane().iter().filter(|&&b| b != 0xFF).count();
+    assert_eq!(
+        non_ff, 782,
+        "snapshot must restore IDLE splash with 782 non-FF bytes on the black plane"
+    );
+}
+
 #[test]
 fn snapshot_magic_and_version_are_enforced() {
     let snap = MachineRuntimeSnapshot::new(CpuKind::XtensaLx7, vec![], vec![]);
