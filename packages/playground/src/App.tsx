@@ -1154,6 +1154,15 @@ export function App() {
         nextStep: simActive ? 'Simulation is running. Press the button component to interact.' : 'Click Run Demo to boot the starter circuit.',
       };
     }
+    if (selectedBoard.simQuirks === 'agentdeck') {
+      return {
+        title: 'AgentDeck reference',
+        description: 'ESP32-WROOM-32 driving a Waveshare 2.9" SSD1680 panel via VSPI — the production AgentDeck wiring.',
+        nextStep: simActive
+          ? 'Simulation is running. The first panel refresh lands after ~30 M Xtensa cycles (~30 s).'
+          : 'Click Run to boot the production firmware — the panel renders after ~30 M cycles.',
+      };
+    }
     return {
       title: `${selectedBoard.name} starter`,
       description: `${componentCount} components and ${wireCount} wires on the canvas.`,
