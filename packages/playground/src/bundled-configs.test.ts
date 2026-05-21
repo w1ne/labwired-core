@@ -69,4 +69,21 @@ describe('BOARD_CONFIGS', () => {
     expect(adxl345?.systemYaml).toContain('kind: "i2c_device"');
     expect(adxl345?.demoFirmwarePath).toContain('demo-adxl345-sensor-lab.elf');
   });
+
+  it('keeps demo-assets.json aligned with BoardConfig.boardId', async () => {
+    // Source of truth for build-time firmware fetches lives in
+    // packages/playground/demo-assets.json (consumed by scripts/fetch-demo-firmware.sh).
+    // Each manifest entry must reference an existing BoardConfig.boardId,
+    // otherwise the fetch script downloads bytes for a demo that doesn't
+    // appear in the BoardPicker.
+    const manifest = (await import('../demo-assets.json')).default;
+    const boardIds = new Set(BOARD_CONFIGS.map((c) => c.boardId));
+    for (const asset of manifest.assets) {
+      expect(boardIds.has(asset.boardId), `demo-assets.json asset '${asset.filename}' references unknown boardId '${asset.boardId}'`).toBe(true);
+      // And the board's demoFirmwarePath must end with the asset's filename
+      // (the fetch script writes into public/wasm/${filename}).
+      const cfg = BOARD_CONFIGS.find((c) => c.boardId === asset.boardId);
+      expect(cfg?.demoFirmwarePath?.endsWith(`/${asset.filename}`), `BoardConfig '${asset.boardId}'.demoFirmwarePath must end with '/${asset.filename}'`).toBe(true);
+    }
+  });
 });
