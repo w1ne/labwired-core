@@ -123,6 +123,13 @@ export interface WasmSimulatorInstance {
   // executed cycles, same as step_batch.
   step_with_esp32_aids(max_cycles: number): number;
 
+  // Restore the machine from a binary runtime snapshot blob (LWRS-framed
+  // bincode) produced by `labwired-cli snapshot capture`. The firmware
+  // must already have been loaded onto the same system manifest.
+  apply_runtime_snapshot(bytes: Uint8Array): void;
+  // Capture the current machine state to a runtime snapshot blob.
+  take_runtime_snapshot(): Uint8Array;
+
   // CPU state
   get_pc(): number;
   get_register(id: number): number;
@@ -235,6 +242,28 @@ export class SimulatorBridge {
    *  generic Arduino-ESP32 glue, not AgentDeck-specific. */
   applyAgentdeckQuirks(): void {
     this.installEsp32ArduinoQuirks();
+  }
+
+  /**
+   * Restore the machine from a binary runtime snapshot blob (LWRS magic,
+   * bincode-framed). The firmware must already have been loaded onto the
+   * same system manifest the snapshot was captured from — typically a
+   * demo's pre-built `.lwrs` file fetched from the GitHub release that
+   * hosts its ELF.
+   *
+   * On failure the WASM call throws; the bridge is left in an undefined
+   * state and callers should treat it as a hard reset.
+   */
+  applyRuntimeSnapshot(bytes: Uint8Array): void {
+    this.sim.apply_runtime_snapshot(bytes);
+  }
+
+  /** Capture the current machine state to a runtime snapshot blob — mirror
+   * of `applyRuntimeSnapshot`. The returned bytes can be persisted (e.g.
+   * `URL.createObjectURL` for download) and later fed back to
+   * `applyRuntimeSnapshot` on a fresh bridge. */
+  takeRuntimeSnapshot(): Uint8Array {
+    return this.sim.take_runtime_snapshot();
   }
 
   /** Initialize from YAML config + firmware ELF bytes. */

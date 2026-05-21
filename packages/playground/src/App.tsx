@@ -64,8 +64,10 @@ type ActiveSimulationConfig = {
   systemYaml: string;
   chipYaml: string;
   firmware: Uint8Array;
-  /** Firmware-specific simulator quirks; propagated from BoardConfig.simQuirks. */
-  simQuirks?: 'agentdeck';
+  /** Firmware-runtime quirks; propagated from BoardConfig.quirks. */
+  quirks?: 'esp32-arduino';
+  /** Optional pre-warmed snapshot URL; applied right after firmware load. */
+  bootSnapshotUrl?: string;
 };
 
 let partCounter = 0;
@@ -319,16 +321,16 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     // here too. AgentDeck reuses this exact wiring (its production
     // firmware uses the same pin map), just with a different demo ELF.
     //
-    // scale: 2 on the panel — source framebuffer is 296×128 native, but
-    // the component's face renders at 144×48 SVG units; without the upscale
-    // 12-px font glyphs collapse to 4 screen pixels and the rendered
-    // "IDLE / ATTACH / DECIDE / STOP" text is unreadable. 2× restores
-    // legibility at default canvas zoom without crowding the chip.
+    // `panelScale` from BoardConfig — the SSD1680 face renders at 144×48
+    // SVG units; without an upscale 12-px font glyphs collapse to ~4
+    // screen pixels and the rendered IDLE/ATTACH/DECIDE/STOP text is
+    // unreadable. AgentDeck sets 2; the bare e-paper-lab leaves it 1.
+    const panelScale = config.panelScale ?? 1;
     return {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
-        { id: 'epaper', type: 'ssd1680_tricolor_290', x: 600, y: 20, rotate: 0, scale: 2, attrs: {} },
+        { id: 'epaper', type: 'ssd1680_tricolor_290', x: 600, y: 20, rotate: 0, scale: panelScale, attrs: {} },
       ],
       wires: [
         { from: { part: 'mcu', pin: '3V3' },     to: { part: 'epaper', pin: 'VCC'  }, color: '#FF6B6B' },
@@ -581,12 +583,28 @@ export function App() {
     } catch (e) {
       throw new Error(`Simulator init failed: ${e instanceof Error ? e.message : String(e)}`);
     }
-    // Apply firmware-specific quirks BEFORE we start stepping. For AgentDeck,
-    // this installs the heap-caps / timer / lock / wifi / sendHello / crc8
-    // thunks and fakes the dual-core handshake. stepBatch will then route
-    // through step_with_esp32_aids to keep the handshake bytes refreshed.
-    if (config.simQuirks === 'agentdeck') {
+    // Apply firmware-runtime quirks BEFORE we step. For Arduino-ESP32
+    // boards this installs the heap-caps / timer / lock / wifi / sendHello
+    // / crc8 thunks and fakes the dual-core handshake. stepBatch then
+    // routes through step_with_esp32_aids to keep the handshake refreshed.
+    if (config.quirks === 'esp32-arduino') {
       nextBridge.installEsp32ArduinoQuirks();
+    }
+    // If the board ships a pre-warmed boot snapshot, fetch it and apply
+    // right after the quirks (which restore the thunk PCs into flash that
+    // the snapshot expects). Drops AgentDeck's first-paint time from
+    // ~30 s to under a second.
+    if (config.bootSnapshotUrl) {
+      try {
+        const resp = await fetch(config.bootSnapshotUrl);
+        if (!resp.ok) {
+          throw new Error(`snapshot fetch ${resp.status}`);
+        }
+        const blob = new Uint8Array(await resp.arrayBuffer());
+        nextBridge.applyRuntimeSnapshot(blob);
+      } catch (e) {
+        console.warn('[LabWired] boot snapshot failed, falling back to cold boot:', e);
+      }
     }
     setActiveSimulationConfig(config);
     setBridge(nextBridge);
@@ -676,7 +694,8 @@ export function App() {
         systemYaml,
         chipYaml,
         firmware,
-        simQuirks: selectedBoard.simQuirks,
+        quirks: selectedBoard.quirks ?? (selectedBoard.simQuirks === 'agentdeck' ? 'esp32-arduino' : undefined),
+        bootSnapshotUrl: selectedBoard.bootSnapshotUrl,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1124,7 +1143,13 @@ export function App() {
           setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
         }
 
-        await launchSimulation({ systemYaml, chipYaml, firmware, simQuirks: selectedBoard.simQuirks });
+        await launchSimulation({
+          systemYaml,
+          chipYaml,
+          firmware,
+          quirks: selectedBoard.quirks ?? (selectedBoard.simQuirks === 'agentdeck' ? 'esp32-arduino' : undefined),
+          bootSnapshotUrl: selectedBoard.bootSnapshotUrl,
+        });
         setCompileOutput((prev) => `${prev}\nUploaded ${file.name} (${firmware.length} bytes). Simulation started.`);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -1140,6 +1165,17 @@ export function App() {
   const boardSummary = useMemo(() => {
     const componentCount = Math.max(editor.state.diagram.parts.length - 1, 0);
     const wireCount = editor.state.diagram.wires.length;
+    // Boards may carry a hand-crafted summary in BoardConfig — use it
+    // verbatim. `nextStepRunning` (optional) is swapped in when the sim
+    // is active. Falls through to a generic "Click Run" hint otherwise.
+    if (selectedBoard.summary) {
+      const s = selectedBoard.summary;
+      return {
+        title: s.title,
+        description: s.description,
+        nextStep: simActive ? (s.nextStepRunning ?? s.nextStep) : s.nextStep,
+      };
+    }
     if (selectedBoard.boardId === 'stm32f103-blinky') {
       return {
         title: 'STM32 demo circuit',
@@ -1152,15 +1188,6 @@ export function App() {
         title: 'LED + button starter',
         description: 'PA5 drives the LED and PC13 is wired to the user button.',
         nextStep: simActive ? 'Simulation is running. Press the button component to interact.' : 'Click Run Demo to boot the starter circuit.',
-      };
-    }
-    if (selectedBoard.simQuirks === 'agentdeck') {
-      return {
-        title: 'AgentDeck reference',
-        description: 'ESP32-WROOM-32 driving a Waveshare 2.9" SSD1680 panel via VSPI — the production AgentDeck wiring.',
-        nextStep: simActive
-          ? 'Simulation is running. The first panel refresh lands after ~30 M Xtensa cycles (~30 s).'
-          : 'Click Run to boot the production firmware — the panel renders after ~30 M cycles.',
       };
     }
     return {
@@ -1445,11 +1472,10 @@ export function App() {
       {showRunHint && (
         <div className="px-3 py-1.5 rounded-pill bg-accent/15 border border-accent/40 text-accent text-[11px] font-medium flex items-center gap-1.5 shadow-[0_6px_18px_-6px_rgba(91,157,255,0.45)]">
           <span aria-hidden>▶</span>
-          {selectedBoard.simQuirks === 'agentdeck'
-            ? 'Click Run to boot the firmware — panel renders after ~30M cycles'
-            : selectedBoard.kind === 'lab'
+          {selectedBoard.runHint
+            ?? (selectedBoard.kind === 'lab'
               ? 'Click Run to start the simulation'
-              : 'Click Run to start — the LED should blink'}
+              : 'Click Run to start — the LED should blink')}
         </div>
       )}
       <SimDock

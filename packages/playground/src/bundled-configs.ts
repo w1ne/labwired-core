@@ -44,6 +44,19 @@ import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs
 import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
 import sourceEsp32Epaper from '../../../core/examples/esp32-epaper-lab/src/main.rs?raw';
 
+/**
+ * Board-summary tooltip the playground shows above the canvas. `nextStep`
+ * is rendered when the simulation is idle; `nextStepRunning` (optional) is
+ * swapped in once the sim is active. Used by every demo — when omitted the
+ * playground falls back to a generic "Click Run to start" hint.
+ */
+export interface BoardSummary {
+  title: string;
+  description: string;
+  nextStep: string;
+  nextStepRunning?: string;
+}
+
 export interface BoardConfig {
   boardId: string;
   chipId: string;
@@ -65,11 +78,35 @@ export interface BoardConfig {
    */
   kind?: 'bare' | 'lab';
   /**
-   * Firmware-specific simulator quirks. `'agentdeck'` installs the
-   * heap-caps / timer / lock / WiFi / sendHello / esp_crc8 thunks plus the
-   * dual-core handshake refresh that the production AgentDeck Arduino-ESP32
-   * firmware needs to reach `Display::render`. See
-   * `wasm/src/lib.rs::install_esp32_arduino_quirks` for the canonical list.
+   * Firmware-runtime quirks the simulator needs to apply before the first
+   * `step`. `'esp32-arduino'` installs the heap-caps / timer / lock / WiFi /
+   * sendHello / esp_crc8 thunks plus the dual-core handshake refresh that
+   * every Arduino-ESP32 (ESP-IDF + Arduino core) firmware needs to reach
+   * `app_main`. See `wasm/src/lib.rs::install_esp32_arduino_quirks` for the
+   * canonical list.
+   */
+  quirks?: 'esp32-arduino';
+  /**
+   * Optional URL of a pre-warmed runtime snapshot (`.lwrs`). When set, the
+   * playground fetches this blob right after loading the firmware ELF and
+   * calls `simulator.applyRuntimeSnapshot` to skip the cold boot —
+   * AgentDeck's 30 s warm-up collapses to one HTTP round-trip plus a few
+   * ms of bincode decode. Produce with `labwired-cli snapshot capture`.
+   */
+  bootSnapshotUrl?: string;
+  /**
+   * Default scale factor for the lab's main display component (e.g. the
+   * SSD1680 e-paper face). Used by `App.tsx` when seeding the diagram —
+   * 2x for tiny-font OLED/e-paper panels so text glyphs stay legible.
+   */
+  panelScale?: number;
+  /** Board-aware summary tooltip shown above the canvas. */
+  summary?: BoardSummary;
+  /** Board-aware "Click Run to start" hint shown next to the SimDock. */
+  runHint?: string;
+  /**
+   * @deprecated Renamed to `quirks: 'esp32-arduino'`. Removed once all
+   * callers stop reading this. The runtime treats both as equivalent.
    */
   simQuirks?: 'agentdeck';
 }
@@ -180,17 +217,31 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     // production AgentDeck Arduino-ESP32 firmware. The ELF is stripped (1.3 MB,
     // down from 22 MB of debug info) — byte-exact identical SPI output to
     // the unstripped binary that flashes to real hardware.
+    //
+    // The `bootSnapshotUrl` short-circuits the 30 M-cycle cold boot: the
+    // playground loads the ELF, applies the prebuilt LWRS snapshot
+    // captured by `labwired-cli snapshot capture`, and the panel paints
+    // in < 1 s instead of ~30 s.
     boardId: 'agentdeck',
     chipId: 'esp32',
     name: 'AgentDeck',
-    description: 'Production AgentDeck firmware running unmodified in WebAssembly. Same 22 MB Arduino-ESP32 + GxEPD2 + Adafruit_GFX ELF that flashes to the physical ESP32-WROOM-32U module via espflash. Renders the IDLE splash with ATTACH / DECIDE / STOP labels in ~28 s of in-browser execution.',
+    description: 'Production AgentDeck firmware running unmodified in WebAssembly. Same 22 MB Arduino-ESP32 + GxEPD2 + Adafruit_GFX ELF that flashes to the physical ESP32-WROOM-32U module via espflash. Boots through a pre-warmed snapshot, so the IDLE splash with ATTACH / DECIDE / STOP labels renders in under a second.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
     systemYaml: systemAgentDeck,
     demoFirmwarePath: `${BASE}wasm/demo-agentdeck.elf`,
     mcuComponentType: 'esp32',
     kind: 'lab',
-    simQuirks: 'agentdeck',
+    quirks: 'esp32-arduino',
+    bootSnapshotUrl: 'https://github.com/w1ne/labwired-core/releases/download/firmware-demos-v1/demo-agentdeck-postpaint.lwrs',
+    panelScale: 2,
+    summary: {
+      title: 'AgentDeck reference',
+      description: 'ESP32-WROOM-32 driving a Waveshare 2.9" SSD1680 panel via VSPI — the production AgentDeck wiring.',
+      nextStep: 'Click Run to boot the production firmware — the snapshot lands the panel in < 1 s.',
+      nextStepRunning: 'Simulation is running. The panel restored from a pre-warmed snapshot.',
+    },
+    runHint: 'Click Run to boot the firmware — pre-warmed snapshot paints the panel instantly',
   },
   {
     boardId: 'max31855-thermocouple-lab',

@@ -24,6 +24,26 @@ export class WasmSimulator {
         }
     }
     /**
+     * Apply a binary `MachineRuntimeSnapshot` (LWRS-framed bincode blob,
+     * produced by `labwired-cli snapshot capture` or `Machine::take_runtime_snapshot`)
+     * to the currently-loaded machine. Bypasses the cold boot — the firmware
+     * resumes mid-flight from the captured CPU + peripheral state.
+     *
+     * Must be called after firmware has been loaded onto the same system
+     * manifest (peripheral names + CPU arch must match the snapshot). On
+     * mismatch the call returns an error and the machine state is left
+     * partially overwritten — callers should treat that as a hard reset.
+     * @param {Uint8Array} bytes
+     */
+    apply_runtime_snapshot(bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_apply_runtime_snapshot(this.__wbg_ptr, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * Drain UART TX output bytes accumulated since the last call.
      * @returns {Uint8Array}
      */
@@ -506,6 +526,22 @@ export class WasmSimulator {
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
+    }
+    /**
+     * Capture the current machine state as a binary `MachineRuntimeSnapshot`
+     * (LWRS-framed bincode blob). Mirror of `apply_runtime_snapshot` —
+     * returned bytes can be fed back to `apply_runtime_snapshot` on a fresh
+     * `WasmSimulator` with the same firmware + bus topology.
+     * @returns {Uint8Array}
+     */
+    take_runtime_snapshot() {
+        const ret = wasm.wasmsimulator_take_runtime_snapshot(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
     }
 }
 if (Symbol.dispose) WasmSimulator.prototype[Symbol.dispose] = WasmSimulator.prototype.free;
