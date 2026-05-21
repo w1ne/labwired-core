@@ -496,6 +496,7 @@ impl WasmSimulator {
 
     /// Set the simulated 6-DoF sample on an MPU6050 attached to an I2C peripheral.
     #[wasm_bindgen]
+    #[allow(clippy::too_many_arguments)]
     pub fn set_i2c_sensor_sample_6dof(
         &mut self,
         device_id: &str,
@@ -758,7 +759,7 @@ impl WasmSimulator {
                 ))
             })?;
 
-        let channel = binding.pin as u8;
+        let channel = binding.pin;
 
         // Build a temporary NTC model to compute the millivolt output — all math in core.
         let mut ntc = NtcThermistor::new(channel, temperature_c);
@@ -834,7 +835,7 @@ impl WasmSimulator {
                 // Instead, we just expose the raw ADC count and mV here; the UI shows them.
                 // Temperature is the authoritative value set via set_ntc_temperature.
                 // Use a 25 °C default NTC to compute nominal values for display.
-                let channel = binding.pin as u8;
+                let channel = binding.pin;
                 // Try to recover the last-injected mV from channel_inputs.
                 let injected_mv = if (channel as usize) < 18 {
                     // Access via snapshot to avoid mutable borrow; use the divider_mv we computed.
@@ -1548,12 +1549,49 @@ impl WasmSimulator {
     // thin wrapper so the standalone /agentdeck.html page (and any other
     // pre-rename caller) keeps working.
     #[wasm_bindgen]
+    #[allow(deprecated)]
     #[deprecated(
         note = "Renamed to install_esp32_arduino_quirks — the bootstrap is generic Arduino-ESP32 glue, not AgentDeck-specific."
     )]
     pub fn apply_agentdeck_quirks(&mut self) -> Result<(), JsValue> {
         #[allow(deprecated)]
         self.install_esp32_arduino_quirks()
+    }
+
+    /// Apply a binary `MachineRuntimeSnapshot` (LWRS-framed bincode blob,
+    /// produced by `labwired-cli snapshot capture` or `Machine::take_runtime_snapshot`)
+    /// to the currently-loaded machine. Bypasses the cold boot — the firmware
+    /// resumes mid-flight from the captured CPU + peripheral state.
+    ///
+    /// Must be called after firmware has been loaded onto the same system
+    /// manifest (peripheral names + CPU arch must match the snapshot). On
+    /// mismatch the call returns an error and the machine state is left
+    /// partially overwritten — callers should treat that as a hard reset.
+    #[wasm_bindgen]
+    pub fn apply_runtime_snapshot(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        let machine = self
+            .machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("no machine"))?;
+        let snap = labwired_core::runtime_snapshot::MachineRuntimeSnapshot::from_bytes(bytes)
+            .map_err(|e| JsValue::from_str(&format!("snapshot decode: {e}")))?;
+        machine
+            .apply_runtime_snapshot(&snap)
+            .map_err(|e| JsValue::from_str(&format!("snapshot apply: {e}")))?;
+        Ok(())
+    }
+
+    /// Capture the current machine state as a binary `MachineRuntimeSnapshot`
+    /// (LWRS-framed bincode blob). Mirror of `apply_runtime_snapshot` —
+    /// returned bytes can be fed back to `apply_runtime_snapshot` on a fresh
+    /// `WasmSimulator` with the same firmware + bus topology.
+    #[wasm_bindgen]
+    pub fn take_runtime_snapshot(&self) -> Result<Vec<u8>, JsValue> {
+        let machine = self
+            .machine
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("no machine"))?;
+        Ok(machine.take_runtime_snapshot().to_bytes())
     }
 
     /// Re-write the dual-core handshake bytes. Call every ~10k steps from JS

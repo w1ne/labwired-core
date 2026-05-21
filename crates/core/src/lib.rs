@@ -504,6 +504,11 @@ impl<C: Cpu> Machine<C> {
             .bus
             .peripherals
             .iter()
+            .filter(|entry| {
+                !runtime_snapshot::RUNTIME_SNAPSHOT_SKIPPED_PERIPHERALS
+                    .iter()
+                    .any(|skip| *skip == entry.name)
+            })
             .map(|entry| (entry.name.clone(), entry.dev.runtime_snapshot()))
             .collect();
         runtime_snapshot::MachineRuntimeSnapshot::new(cpu_kind, cpu_data, peripherals)
