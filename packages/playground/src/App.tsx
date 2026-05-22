@@ -1493,12 +1493,17 @@ export function App() {
   const simDockNode = (
     <div className="flex flex-col items-center gap-2">
       {showRunHint && (
-        <div className="px-3 py-1.5 rounded-pill bg-accent/15 border border-accent/40 text-accent text-[11px] font-medium flex items-center gap-1.5 shadow-[0_6px_18px_-6px_rgba(91,157,255,0.45)]">
-          <span aria-hidden>▶</span>
-          {selectedBoard.runHint
-            ?? (selectedBoard.kind === 'lab'
-              ? 'Click Run to start the simulation'
-              : 'Click Run to start — the LED should blink')}
+        <div
+          // Narrow viewports get a wrapped two-line pill instead of overflowing.
+          className="max-w-[92vw] sm:max-w-none px-3 py-1.5 rounded-2xl sm:rounded-pill bg-accent/15 border border-accent/40 text-accent text-[11px] font-medium flex items-start sm:items-center gap-1.5 shadow-[0_6px_18px_-6px_rgba(91,157,255,0.45)] text-center sm:text-left leading-snug"
+        >
+          <span aria-hidden className="mt-0.5 sm:mt-0">▶</span>
+          <span className="break-words">
+            {selectedBoard.runHint
+              ?? (selectedBoard.kind === 'lab'
+                ? 'Click Run to start the simulation'
+                : 'Click Run to start — the LED should blink')}
+          </span>
         </div>
       )}
       <SimDock

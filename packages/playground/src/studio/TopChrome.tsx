@@ -18,7 +18,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
   return (
     <header
       role="banner"
-      className="absolute top-0 inset-x-0 z-30 flex items-center gap-3 h-11 px-3 bg-[rgba(13,14,18,0.6)] backdrop-blur"
+      className="absolute top-0 inset-x-0 z-30 flex items-center gap-2 sm:gap-3 h-11 px-2 sm:px-3 bg-[rgba(13,14,18,0.6)] backdrop-blur overflow-hidden"
     >
       <GlobalLogo variant="dark" />
       <span
@@ -30,10 +30,10 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         <span aria-hidden className="text-success/40 hidden xl:inline">·</span>
         Cycle-accurate
       </span>
-      <span className="text-fg-tertiary shrink-0" aria-hidden>›</span>
-      <span className="text-fg-secondary truncate max-w-[24ch]">{boardName}</span>
+      <span className="text-fg-tertiary shrink-0 hidden sm:inline" aria-hidden>›</span>
+      <span className="text-fg-secondary truncate max-w-[14ch] sm:max-w-[24ch]">{boardName}</span>
 
-      <div className="flex-1 max-w-[360px] mx-auto min-w-0">
+      <div className="flex-1 max-w-[360px] mx-auto min-w-0 hidden md:block">
         <button
           type="button"
           onClick={onOpenCommand}
@@ -45,6 +45,9 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
           <span className="flex-1 text-fg-tertiary text-[12px] truncate">Search components, boards, examples…</span>
         </button>
       </div>
+
+      {/* Mobile spacer — when search box is hidden, push the controls to the right edge. */}
+      <div className="flex-1 md:hidden" />
 
       {onUploadFirmware && (
         <>
@@ -64,7 +67,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
             onClick={() => uploadInputRef.current?.click()}
             aria-label="Upload firmware ELF"
             title="Upload your compiled firmware (.elf / .bin / .hex)"
-            className="h-7 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-secondary hover:bg-white/[0.10] hover:text-fg-primary transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 flex items-center gap-1.5 shrink-0"
+            className="hidden sm:flex h-7 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-secondary hover:bg-white/[0.10] hover:text-fg-primary transition-colors duration-micro border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 items-center gap-1.5 shrink-0"
           >
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M8 2v9M5 5l3-3 3 3M3 12v2h10v-2" />
@@ -81,7 +84,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         title={devMode ? 'Hide code editor' : 'Show code editor'}
         onClick={onToggleDev}
         className={clsx(
-          'h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-micro shrink-0 flex items-center gap-1.5',
+          'hidden sm:flex h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-micro shrink-0 items-center gap-1.5',
           devMode
             ? 'bg-accent-soft text-accent border border-accent/40'
             : 'bg-bg-surface/60 text-fg-secondary border border-border hover:text-fg-primary'
@@ -92,15 +95,29 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
         </svg>
         Code
       </button>
-      <GlobalNav active="playground" variant="dark" />
-      {projectSlot}
+      <div className="hidden sm:flex items-center gap-1">
+        <GlobalNav active="playground" variant="dark" />
+      </div>
+      <div className="hidden sm:contents">{projectSlot}</div>
       {authSlot}
       <button
         type="button"
         onClick={onShare}
-        className="h-7 px-3 rounded-pill text-xs font-medium bg-accent text-bg-base hover:bg-accent-hover transition-colors duration-micro shrink-0"
+        className="hidden sm:flex h-7 px-3 rounded-pill text-xs font-medium bg-accent text-bg-base hover:bg-accent-hover transition-colors duration-micro shrink-0 items-center"
       >
         Share
+      </button>
+      {/* Mobile-only command palette opener (replaces the wide ⌘K search box) */}
+      <button
+        type="button"
+        onClick={onOpenCommand}
+        aria-label="Open command palette"
+        className="md:hidden flex items-center justify-center h-9 w-9 rounded-pill bg-white/[0.05] text-fg-secondary hover:bg-white/[0.10] shrink-0"
+      >
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="m10.5 10.5 3 3" />
+        </svg>
       </button>
     </header>
   );

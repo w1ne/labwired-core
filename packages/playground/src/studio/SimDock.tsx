@@ -78,7 +78,8 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
 
   return (
     <div
-      className="lw-glass h-12 px-4 flex items-center gap-3 min-w-[560px]"
+      // Mobile: no min-width, smaller padding, allow shrink. ≥sm: original 560px-min toolbar.
+      className="lw-glass h-12 px-3 sm:px-4 flex items-center gap-2 sm:gap-3 max-w-[96vw] sm:max-w-none sm:min-w-[560px]"
       role="toolbar"
       aria-label="Simulation controls"
     >
@@ -87,8 +88,9 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
         onClick={isRunning ? onPause : onRun}
         aria-label={isRunning ? 'Pause' : 'Run'}
         style={{ borderRadius: 999 }}
+        // Mobile: larger tap target (h-10 = 40px instead of 32px) with the same label.
         className={clsx(
-          'h-8 px-4 font-medium text-[13px] transition-all duration-micro flex items-center gap-2 outline-none',
+          'h-10 sm:h-8 px-5 sm:px-4 font-medium text-[14px] sm:text-[13px] transition-all duration-micro flex items-center gap-2 outline-none shrink-0',
           isRunning ? 'bg-magenta text-bg-base hover:opacity-90' : 'bg-accent text-bg-base hover:bg-accent-hover'
         )}
       >
@@ -101,7 +103,7 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
         disabled={!isPaused}
         aria-label="Step"
         style={{ borderRadius: 999 }}
-        className="h-8 w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary disabled:opacity-40 disabled:cursor-not-allowed outline-none border-0"
+        className="h-10 w-10 sm:h-8 sm:w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary disabled:opacity-40 disabled:cursor-not-allowed outline-none border-0 shrink-0"
       >
         ⏵
       </button>
@@ -110,14 +112,17 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
         onClick={onReset}
         aria-label="Reset"
         style={{ borderRadius: 999 }}
-        className="h-8 w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary outline-none border-0"
+        className="h-10 w-10 sm:h-8 sm:w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary outline-none border-0 shrink-0"
       >
         ↻
       </button>
       <div className="flex-1" />
+      {/* Telemetry labels (runtime, PC, cycles) — hidden on narrow viewports
+          to keep the toolbar from overflowing on phones. The state pill on
+          the right stays visible at every width. */}
       {showRuntime && (
         <span
-          className="text-fg-tertiary font-mono text-[11px]"
+          className="hidden sm:inline text-fg-tertiary font-mono text-[11px]"
           title="Wall-clock runtime since this simulation started"
         >
           <span className="text-fg-secondary">{formatRuntime(runtimeMs)}</span>
@@ -125,9 +130,9 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
       )}
       {showPc && (
         <>
-          {showRuntime && <div className="w-px h-4 bg-border" aria-hidden />}
+          {showRuntime && <div className="hidden sm:block w-px h-4 bg-border" aria-hidden />}
           <span
-            className="text-fg-tertiary font-mono text-[11px]"
+            className="hidden sm:inline text-fg-tertiary font-mono text-[11px]"
             title="Program counter — exact silicon-parity instruction address"
           >
             PC <span className="text-fg-secondary">{formatPc(pc!)}</span>
@@ -136,9 +141,9 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
       )}
       {showCycles && (
         <>
-          <div className="w-px h-4 bg-border" aria-hidden />
+          <div className="hidden sm:block w-px h-4 bg-border" aria-hidden />
           <span
-            className="text-fg-tertiary font-mono text-[11px]"
+            className="hidden sm:inline text-fg-tertiary font-mono text-[11px]"
             title="Cycles executed — deterministic, reproducible across runs"
           >
             <span className="text-fg-secondary">{formatCycles(cycles!)}</span> cycles
