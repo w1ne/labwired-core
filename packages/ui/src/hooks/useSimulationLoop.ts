@@ -7,6 +7,17 @@ import type { DisplayBuffer } from '../editor/types';
 export interface DisplayBinding {
   partId: string;
   kind: 'ssd1680_tricolor_290';
+  /**
+   * GxEPD2 (the de-facto Arduino-ESP32 SSD1680 library, used by AgentDeck)
+   * inverts the source bitmap before SPI write — its "no red" source byte
+   * (0xFF) lands as 0x00 in the sim's red plane. The hand-rolled Rust
+   * firmware in `examples/epaper-tricolor-lab/` skips that inversion and
+   * writes the un-inverted form directly. The React SSD1680 component is
+   * tuned to the un-inverted convention (bit 0 == red), so GxEPD2 boards
+   * need this flag to XOR the red plane back to the renderer's expected
+   * polarity. Defaults to false.
+   */
+  invertRedPlane?: boolean;
 }
 
 export interface SimulationState {
@@ -105,11 +116,20 @@ export function useSimulationLoop(
             if (last !== undefined && last === gen) continue;
             const data = b.getSsd1680Framebuffer(d.partId);
             if (data === null) continue;
+            // Flip the red-plane polarity back to the renderer's convention
+            // when the firmware uses GxEPD2's inverted convention. Black
+            // plane is unaffected (both conventions agree there). See the
+            // `invertRedPlane` doc above for the why.
+            let bytes = data;
+            if (d.invertRedPlane && data.length >= 9472) {
+              bytes = new Uint8Array(data);
+              for (let i = 4736; i < 9472; i++) bytes[i] = data[i] ^ 0xff;
+            }
             displayGenRef.current[d.partId] = gen;
             displayBufRef.current[d.partId] = {
               kind: 'ssd1680_tricolor_290',
               generation: gen,
-              data,
+              data: bytes,
             };
             displaysChanged = true;
           }

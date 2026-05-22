@@ -722,8 +722,16 @@ export function App() {
     () =>
       editor.state.diagram.parts
         .filter((p) => p.type === 'ssd1680_tricolor_290')
-        .map((p) => ({ partId: p.id, kind: 'ssd1680_tricolor_290' as const })),
-    [editor.state.diagram.parts],
+        .map((p) => ({
+          partId: p.id,
+          kind: 'ssd1680_tricolor_290' as const,
+          // Arduino-ESP32 boards drive the panel via GxEPD2 which inverts
+          // red-plane bytes before SPI write; the un-inverted Rust labs
+          // do not. The DisplayBinding's `invertRedPlane` flips the
+          // polarity back to the renderer's expected convention.
+          invertRedPlane: selectedBoard.quirks === 'esp32-arduino',
+        })),
+    [editor.state.diagram.parts, selectedBoard.quirks],
   );
 
   // Drive the simulation loop. useSimulationLoop auto-tunes the per-frame
@@ -1324,14 +1332,22 @@ export function App() {
   const [accountOpen, setAccountOpen] = useState(false);
 
   // Sign-in gate: anonymous browse is fine, but Run / Step (anything that
-  // consumes simulator cycles) requires a Clerk account. This is the primary
-  // conversion lever — users come in, browse, hit Run, sign in, become users.
+  // consumes simulator cycles) requires a Clerk account on production. This
+  // is the primary conversion lever — users come in, browse, hit Run, sign
+  // in, become users.
+  //
+  // Fail-open when Clerk hasn't loaded: in local dev (and the rare prod
+  // outage) the production publishable key rejects non-labwired.com
+  // origins with HTTP 400, so `isLoaded` stays false forever. Previously
+  // `if (!clerkLoaded) return;` silently swallowed every Run click —
+  // looked like "click does nothing." Treat unloaded Clerk as
+  // anonymous-but-allowed so the simulator is usable; the production
+  // domain still gets the real gate because Clerk loads successfully there.
   const { isSignedIn, isLoaded: clerkLoaded } = useUser();
   const { openSignIn } = useClerk();
   const requireAuth = useCallback(
     (action: () => void) => {
-      if (!clerkLoaded) return;
-      if (!isSignedIn) {
+      if (clerkLoaded && !isSignedIn) {
         openSignIn({});
         return;
       }
