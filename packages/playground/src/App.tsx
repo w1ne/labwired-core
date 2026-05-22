@@ -1672,7 +1672,7 @@ export function App() {
                 // LabWired team to wire CI into the user's existing
                 // GitHub repo. Same Calendly link the /ci landing page
                 // uses for enterprise inquiries.
-                window.open('https://calendly.com/labwired/enterprise-intro', '_blank', 'noopener,noreferrer');
+                window.open('https://cal.com/andriishylenko/30min', '_blank', 'noopener,noreferrer');
               }}
               title="Already have a repo? Book 30 min — we wire LabWired CI into your existing pipeline."
             >

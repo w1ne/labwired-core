@@ -10,7 +10,7 @@ import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 //   • Calendly             → personal link at https://calendly.com/<you>/intro
 //   • Formspree            → free 50/mo form endpoint, or replace with mailto:
 // ──────────────────────────────────────────────────────────────────────────
-const CALENDLY_ENTERPRISE = 'https://calendly.com/labwired/enterprise-intro';
+const CALENDLY_ENTERPRISE = 'https://cal.com/andriishylenko/30min';
 const WAITLIST_FORM_ACTION = 'mailto:andrii@shylenko.com'; // swap for https://formspree.io/f/<id> when ready
 const GITHUB_REPO = 'https://github.com/w1ne/labwired-core';
 
