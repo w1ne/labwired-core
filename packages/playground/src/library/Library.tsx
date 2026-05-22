@@ -6,6 +6,8 @@
  * Token overrides live in ../ci/ci-light.css, imported via library.entry.tsx.
  */
 
+import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
+
 interface SupportedBoard {
   chip: string;
   family: string;
@@ -211,29 +213,12 @@ export function Library() {
   return (
     <div className="min-h-screen bg-bg-base text-fg-primary font-sans">
       <header className="lw-chrome">
-        <a href="https://labwired.com" className="flex items-center gap-2 text-fg-primary font-bold tracking-tight shrink-0" title="LabWired home">
-          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-            <path d="M11 2 4 12h4l-1 6 8-10h-4l1-6z" fill="currentColor" />
-          </svg>
-          LabWired
-        </a>
+        <GlobalLogo />
         <span className="text-fg-tertiary text-[12px] hidden md:inline tracking-[0.01em]">
           Deterministic firmware simulation
         </span>
         <div className="flex-1" />
-        <nav className="flex items-center gap-5 text-[14px]">
-          <a href="./" className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150">Playground</a>
-          <a href="library.html" aria-current="page" className="text-fg-primary font-semibold transition-colors duration-150">Library</a>
-          <a href="ci.html" className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150">For CI</a>
-          <a
-            href="https://github.com/w1ne/labwired-core"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150"
-          >
-            GitHub
-          </a>
-        </nav>
+        <GlobalNav active="library" />
       </header>
 
       <section className="px-6 pt-20 pb-12 max-w-[1120px] mx-auto">
