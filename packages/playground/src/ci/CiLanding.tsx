@@ -99,7 +99,7 @@ export function CiLanding() {
     <div className="min-h-screen bg-bg-base text-fg-primary font-sans">
       {/* Top chrome — sticky, translucent white, hard bottom border */}
       <header className="lw-chrome">
-        <a href="/" className="flex items-center gap-2 text-fg-primary font-bold tracking-tight shrink-0">
+        <a href="https://labwired.com" className="flex items-center gap-2 text-fg-primary font-bold tracking-tight shrink-0" title="LabWired home">
           <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
             <path d="M11 2 4 12h4l-1 6 8-10h-4l1-6z" fill="currentColor" />
           </svg>
@@ -110,9 +110,9 @@ export function CiLanding() {
         </span>
         <div className="flex-1" />
         <nav className="flex items-center gap-5 text-[14px]">
-          <a href="/" className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150">
-            Playground
-          </a>
+          <a href="/" className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150">Playground</a>
+          <a href="library.html" className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150">Library</a>
+          <a href="ci.html" aria-current="page" className="text-fg-primary font-semibold transition-colors duration-150">For CI</a>
           <a
             href="https://github.com/w1ne/labwired-core"
             target="_blank"
@@ -120,12 +120,6 @@ export function CiLanding() {
             className="text-fg-secondary hover:text-fg-primary font-medium transition-colors duration-150"
           >
             GitHub
-          </a>
-          <a
-            href="#waitlist"
-            className="inline-flex items-center px-3.5 py-1.5 rounded-pill text-[13px] font-semibold bg-[#1a1a1a] text-white border-2 border-[#1a1a1a] shadow-[3px_3px_0_#0056b3] hover:shadow-[4px_4px_0_#0056b3] hover:-translate-x-[1px] hover:-translate-y-[1px] transition-all duration-150"
-          >
-            Get access
           </a>
         </nav>
       </header>
@@ -456,6 +450,75 @@ export function CiLanding() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="px-6 py-24">
+        <div className="max-w-[1120px] mx-auto">
+          <div className="lw-kicker-pill mb-6">
+            <span className="lw-kicker-dot" />
+            Pricing
+          </div>
+          <h2 className="text-[32px] md:text-[40px] font-bold tracking-tight mb-4 text-fg-primary max-w-[20ch]">
+            Simulator's free. Wiring it into your CI is where we earn our keep.
+          </h2>
+          <p className="text-fg-secondary text-[18px] leading-[1.5] max-w-[58ch] mb-12">
+            Start with the open-source CLI on your own GitHub Actions runner. Bring us in when you
+            want a custom firmware build pipeline, custom assertions, hosted sim runs, or a real
+            engineer staring at the regression with you.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Open Source tier */}
+            <div className="border-2 border-border rounded-2xl p-8 bg-bg-base flex flex-col">
+              <div className="flex items-baseline justify-between mb-2">
+                <h3 className="text-[22px] font-bold text-fg-primary">Open Source</h3>
+                <span className="text-fg-tertiary text-[13px]">MIT licensed</span>
+              </div>
+              <div className="text-[40px] font-bold tracking-tight text-fg-primary mb-1">$0</div>
+              <p className="text-fg-secondary text-[14px] mb-6">Self-host. Run forever.</p>
+              <ul className="space-y-3 text-fg-secondary text-[14px] mb-8 flex-1">
+                <li className="flex gap-2"><span className="text-success">✓</span> The full deterministic simulator (Xtensa LX6, ARM Cortex-M, RISC-V)</li>
+                <li className="flex gap-2"><span className="text-success">✓</span> <code className="text-[13px] bg-bg-surface px-1.5 py-0.5 rounded">labwired-cli</code> for local + CI runs</li>
+                <li className="flex gap-2"><span className="text-success">✓</span> The <code className="text-[13px] bg-bg-surface px-1.5 py-0.5 rounded">labwired-lab-template</code> GitHub repo template</li>
+                <li className="flex gap-2"><span className="text-success">✓</span> Every built-in lab board (Blinky, e-paper, OLED, IMUs, GPS…)</li>
+                <li className="flex gap-2"><span className="text-success">✓</span> Community support via GitHub Issues</li>
+              </ul>
+              <a
+                href="https://github.com/w1ne/labwired-core"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-pill text-[14px] font-semibold bg-bg-surface text-fg-primary border border-border hover:border-fg-secondary transition-colors duration-150"
+              >
+                Get it on GitHub
+              </a>
+            </div>
+            {/* Custom CI tier */}
+            <div className="border-2 border-fg-primary rounded-2xl p-8 bg-fg-primary text-bg-base flex flex-col relative">
+              <span className="absolute -top-3 right-6 px-2.5 py-1 rounded-pill text-[11px] font-semibold bg-accent text-bg-base uppercase tracking-wider">Most teams</span>
+              <div className="flex items-baseline justify-between mb-2">
+                <h3 className="text-[22px] font-bold text-bg-base">Custom CI</h3>
+                <span className="text-bg-base/60 text-[13px]">Per engagement</span>
+              </div>
+              <div className="text-[40px] font-bold tracking-tight text-bg-base mb-1">Talk to us</div>
+              <p className="text-bg-base/70 text-[14px] mb-6">Your repo. Your firmware. Your green check.</p>
+              <ul className="space-y-3 text-bg-base/80 text-[14px] mb-8 flex-1">
+                <li className="flex gap-2"><span className="text-accent">✓</span> We wire LabWired CI into your existing GitHub repo, custom firmware build steps, custom assertions</li>
+                <li className="flex gap-2"><span className="text-accent">✓</span> Bring-up for your chip / board if it's not in the built-in library yet</li>
+                <li className="flex gap-2"><span className="text-accent">✓</span> A real engineer on-call during your regression hunt</li>
+                <li className="flex gap-2"><span className="text-accent">✓</span> Hosted simulation runs (priority queue, persistent artifacts)</li>
+                <li className="flex gap-2"><span className="text-accent">✓</span> Direct Slack / email channel with the LabWired team</li>
+              </ul>
+              <a
+                href={CALENDLY_ENTERPRISE}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-pill text-[14px] font-semibold bg-accent text-bg-base hover:bg-accent-hover transition-colors duration-150"
+              >
+                Book 30 min →
+              </a>
+            </div>
           </div>
         </div>
       </section>

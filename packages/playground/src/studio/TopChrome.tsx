@@ -19,7 +19,11 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
       role="banner"
       className="absolute top-0 inset-x-0 z-30 flex items-center gap-3 h-11 px-3 bg-[rgba(13,14,18,0.6)] backdrop-blur"
     >
-      <a href="/" className="flex items-center gap-2 text-fg-primary font-semibold tracking-tight shrink-0">
+      <a
+        href="https://labwired.com"
+        className="flex items-center gap-2 text-fg-primary font-semibold tracking-tight shrink-0"
+        title="LabWired home"
+      >
         <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
           <path d="M11 2 4 12h4l-1 6 8-10h-4l1-6z" fill="currentColor" />
         </svg>
@@ -98,20 +102,26 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
       </button>
       <a
         href="../library.html"
-        className="hidden lg:flex h-7 px-3 rounded-pill text-xs font-medium text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] transition-colors duration-micro items-center shrink-0"
+        className="flex h-7 px-3 rounded-pill text-xs font-medium text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] transition-colors duration-micro items-center shrink-0"
         title="Browse supported boards and featured labs"
       >
         Library
       </a>
       <a
         href="../ci.html"
-        className="hidden xl:flex h-7 px-3 rounded-pill text-xs font-medium bg-magenta-soft text-magenta hover:bg-magenta/20 border border-magenta/30 transition-colors duration-micro items-center gap-1.5 shrink-0"
+        className="flex h-7 px-3 rounded-pill text-xs font-medium text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] transition-colors duration-micro items-center shrink-0"
         title="Use LabWired in your CI pipeline"
       >
-        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M2 6h12M2 10h12M5 2v12M11 2v12" />
-        </svg>
         For CI
+      </a>
+      <a
+        href="https://github.com/w1ne/labwired-core"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex h-7 px-3 rounded-pill text-xs font-medium text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] transition-colors duration-micro items-center shrink-0"
+        title="LabWired core repo on GitHub"
+      >
+        GitHub
       </a>
       {projectSlot}
       {authSlot}
