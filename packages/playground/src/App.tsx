@@ -1644,6 +1644,22 @@ export function App() {
             <button className="toolbar-btn toolbar-btn-primary" onClick={() => requireAuth(handleRun)} disabled={compiling || loading}>
               <UploadIcon size={14} /> {selectedBoard.demoFirmwarePath ? 'Run Demo' : 'Run Circuit'}
             </button>
+            <button
+              className="toolbar-btn toolbar-btn-primary"
+              onClick={() => {
+                // Open GitHub's "Create from template" page with the lab
+                // name pre-filled. The template repo
+                // (w1ne/labwired-lab-template) ships a CI workflow that
+                // runs the LabWired simulator on every push — same
+                // firmware that paints the panel here paints in CI too.
+                const repoName = `labwired-${selectedBoard.boardId}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+                const url = `https://github.com/new?template_owner=w1ne&template_name=labwired-lab-template&name=${encodeURIComponent(repoName)}&description=${encodeURIComponent(`${selectedBoard.name} lab gated by the LabWired simulator in CI`)}`;
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }}
+              title="Create a GitHub repo from the LabWired CI template — runs the simulator on every push as a merge gate"
+            >
+              <UploadIcon size={14} /> Deploy to CI
+            </button>
             <button className="toolbar-btn toolbar-btn-ghost" onClick={handleResetDemo} title="Reset starter workspace">
               Reset Demo
             </button>
