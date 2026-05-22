@@ -74,16 +74,21 @@ describe('BOARD_CONFIGS', () => {
     // Source of truth for build-time firmware fetches lives in
     // packages/playground/demo-assets.json (consumed by scripts/fetch-demo-firmware.sh).
     // Each manifest entry must reference an existing BoardConfig.boardId,
-    // otherwise the fetch script downloads bytes for a demo that doesn't
-    // appear in the BoardPicker.
+    // and the matching field on BoardConfig must end with the asset's
+    // filename so the fetch mirror lands at the URL the browser requests.
+    //   * default (firmware ELF) → demoFirmwarePath
+    //   * kind: 'snapshot' (LWRS boot snapshot) → bootSnapshotUrl
     const manifest = (await import('../demo-assets.json')).default;
     const boardIds = new Set(BOARD_CONFIGS.map((c) => c.boardId));
     for (const asset of manifest.assets) {
       expect(boardIds.has(asset.boardId), `demo-assets.json asset '${asset.filename}' references unknown boardId '${asset.boardId}'`).toBe(true);
-      // And the board's demoFirmwarePath must end with the asset's filename
-      // (the fetch script writes into public/wasm/${filename}).
       const cfg = BOARD_CONFIGS.find((c) => c.boardId === asset.boardId);
-      expect(cfg?.demoFirmwarePath?.endsWith(`/${asset.filename}`), `BoardConfig '${asset.boardId}'.demoFirmwarePath must end with '/${asset.filename}'`).toBe(true);
+      const kind = (asset as { kind?: string }).kind ?? 'firmware';
+      if (kind === 'snapshot') {
+        expect(cfg?.bootSnapshotUrl?.endsWith(`/${asset.filename}`), `BoardConfig '${asset.boardId}'.bootSnapshotUrl must end with '/${asset.filename}'`).toBe(true);
+      } else {
+        expect(cfg?.demoFirmwarePath?.endsWith(`/${asset.filename}`), `BoardConfig '${asset.boardId}'.demoFirmwarePath must end with '/${asset.filename}'`).toBe(true);
+      }
     }
   });
 });

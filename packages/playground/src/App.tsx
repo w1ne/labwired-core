@@ -598,12 +598,15 @@ export function App() {
       try {
         const resp = await fetch(config.bootSnapshotUrl);
         if (!resp.ok) {
-          throw new Error(`snapshot fetch ${resp.status}`);
+          throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
         }
         const blob = new Uint8Array(await resp.arrayBuffer());
         nextBridge.applyRuntimeSnapshot(blob);
+        console.info(`[LabWired] applied ${blob.byteLength}B boot snapshot from ${config.bootSnapshotUrl}`);
       } catch (e) {
-        console.warn('[LabWired] boot snapshot failed, falling back to cold boot:', e);
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[LabWired] boot snapshot failed, falling back to cold boot:', e);
+        setToast(`Snapshot fetch failed (${msg}) — falling back to cold boot. First paint will take ~30 s.`);
       }
     }
     setActiveSimulationConfig(config);

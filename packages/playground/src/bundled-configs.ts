@@ -233,7 +233,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'esp32',
     kind: 'lab',
     quirks: 'esp32-arduino',
-    bootSnapshotUrl: 'https://github.com/w1ne/labwired-core/releases/download/firmware-demos-v1/demo-agentdeck-postpaint.lwrs',
+    bootSnapshotUrl: `${BASE}wasm/demo-agentdeck-postpaint.lwrs`,
     panelScale: 2,
     summary: {
       title: 'AgentDeck reference',
