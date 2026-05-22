@@ -15,14 +15,15 @@ import clsx from 'clsx';
 
 export const LABWIRED_HOME_URL = 'https://labwired.com';
 
+// app.labwired.com is JUST the demo (the running simulator). Library, For
+// CI, pricing — every marketing/discovery surface — lives on labwired.com.
+// All four nav items below are external URLs so the playground always
+// exits back to the marketing domain when the user clicks anything except
+// the brand logo (which already goes to https://labwired.com).
 export const NAV_ITEMS = [
   { id: 'playground', label: 'Playground', href: '/' },
-  // Library is canonically a marketing surface — hosted on the
-  // labwired.com static site, NOT inside the playground bundle.
-  // Always link absolute so the playground (app.labwired.com) exits
-  // back to the marketing domain.
   { id: 'library', label: 'Library', href: 'https://labwired.com/library.html', external: true },
-  { id: 'ci', label: 'For CI', href: 'ci.html' },
+  { id: 'ci', label: 'For CI', href: 'https://labwired.com/ci.html', external: true },
   { id: 'github', label: 'GitHub', href: 'https://github.com/w1ne/labwired-core', external: true },
 ] as const;
 
