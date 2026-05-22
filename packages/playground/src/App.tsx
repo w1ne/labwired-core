@@ -39,6 +39,7 @@ import {
   type ComponentState,
 } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
+import { MobileDemoView } from './MobileDemoView';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
@@ -1572,6 +1573,40 @@ export function App() {
       }}
     />
   );
+
+  // Mobile-only demo shell: the desktop canvas editor is unusable on a phone.
+  // Render a focused single-screen view (board name → big e-paper preview →
+  // big Run button) below the md breakpoint instead of squeezing the editor.
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  if (isMobile) {
+    const ereaderBuffer = simState.displayBuffers['epaper'];
+    return (
+      <MobileDemoView
+        selectedBoard={selectedBoard}
+        panelPlanes={ereaderBuffer?.kind === 'ssd1680_tricolor_290' ? ereaderBuffer.data : undefined}
+        panelGeneration={ereaderBuffer?.generation}
+        running={running}
+        cycles={simState.cycles ?? 0}
+        runtimeMs={runtimeMs}
+        loading={loading}
+        onRun={() => requireAuth(onSimRun)}
+        onPause={handlePause}
+        onReset={handleReset}
+        toast={toast ? <div className="px-4 py-2 rounded-lg bg-magenta text-bg-base text-[13px] font-medium shadow-lg">{toast}</div> : null}
+      />
+    );
+  }
 
   return (
     <StudioShell
