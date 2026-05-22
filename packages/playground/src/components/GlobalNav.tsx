@@ -1,3 +1,7 @@
+// Build marker 2026-05-22T16:15 — force a content hash bump so Cloudflare
+// Pages re-uploads this chunk (a prior failed deploy left the old hash
+// registered in CF's dedupe with broken content; only a new hash bypasses).
+//
 // Shared top-level navigation for every LabWired page. One source of
 // truth for the four nav links — Playground, Library, For CI, GitHub —
 // plus the LabWired wordmark that links back to the marketing domain.
