@@ -313,7 +313,11 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
-  if (config.boardId === 'esp32-epaper-lab' || config.boardId === 'agentdeck') {
+  if (
+    config.boardId === 'esp32-epaper-lab' ||
+    config.boardId === 'agentdeck' ||
+    config.boardId === 'ereader'
+  ) {
     // ESP32-WROOM-32 driving the same Waveshare panel via VSPI. Wiring
     // matches AgentDeck (`firmware/src/pins.h`) — BUSY=GPIO4 / RST=GPIO16
     // / DC=GPIO17 / CS=GPIO5 / SCK=GPIO18 / MOSI=GPIO23 — so the same
