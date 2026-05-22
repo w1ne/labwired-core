@@ -1647,8 +1647,8 @@ export function App() {
             <button
               className="toolbar-btn toolbar-btn-primary"
               onClick={() => {
-                // Open GitHub's "Create from template" page with the lab
-                // name pre-filled. The template repo
+                // Self-serve path: open GitHub's "Create from template"
+                // page with the lab name pre-filled. The template repo
                 // (w1ne/labwired-lab-template) ships a CI workflow that
                 // runs the LabWired simulator on every push — same
                 // firmware that paints the panel here paints in CI too.
@@ -1659,6 +1659,20 @@ export function App() {
               title="Create a GitHub repo from the LabWired CI template — runs the simulator on every push as a merge gate"
             >
               <UploadIcon size={14} /> Deploy to CI
+            </button>
+            <button
+              className="toolbar-btn toolbar-btn-ghost"
+              onClick={() => {
+                // Consulting path: existing repo / custom firmware
+                // build / custom assertions. Books a call with the
+                // LabWired team to wire CI into the user's existing
+                // GitHub repo. Same Calendly link the /ci landing page
+                // uses for enterprise inquiries.
+                window.open('https://calendly.com/labwired/enterprise-intro', '_blank', 'noopener,noreferrer');
+              }}
+              title="Already have a repo? Book 30 min — we wire LabWired CI into your existing pipeline."
+            >
+              Connect existing repo →
             </button>
             <button className="toolbar-btn toolbar-btn-ghost" onClick={handleResetDemo} title="Reset starter workspace">
               Reset Demo
