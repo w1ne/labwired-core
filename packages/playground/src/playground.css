@@ -331,12 +331,23 @@ html, body, #root {
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
   background: #1e1e2e;
+  /* Mobile: let the tab strip scroll horizontally instead of overflowing
+     the viewport. Touch users can swipe the tab bar to reveal the YAML /
+     Memory / Source tabs that get cut off at 360-414px viewport widths. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
+}
+.bottom-tabs::-webkit-scrollbar {
+  display: none; /* Chromium / Safari — keep the bar visually clean */
 }
 
 .bottom-tab {
   font-family: var(--lw-font-mono);
   font-size: 0.7rem;
   padding: 5px 14px;
+  flex-shrink: 0; /* don't squash tabs when the bar is scrollable */
   border: none;
   background: transparent;
   color: var(--lw-gray, #888);
