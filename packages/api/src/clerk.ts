@@ -24,7 +24,7 @@ export async function verifyClerkRequest(
   try {
     state = await client.authenticateRequest(request, {
       jwtKey: env.CLERK_JWT_KEY || undefined,
-      authorizedParties: ['https://foundry.labwired.com', 'https://labwired.com'],
+      authorizedParties: ['https://app.labwired.com', 'https://labwired.com'],
     });
   } catch {
     return null;

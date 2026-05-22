@@ -34,7 +34,7 @@ LabWired runs ARM Cortex-M / RISC-V / Xtensa firmware against a cycle-accurate, 
 
 | Tool | What it does |
 |---|---|
-| `labwired_create_session` | Open a watch session; returns a `watch_url` like `https://foundry.labwired.com/?watch=<id>`. Subsequent runs mirror to it automatically over WebSocket. |
+| `labwired_create_session` | Open a watch session; returns a `watch_url` like `https://app.labwired.com/?watch=<id>`. Subsequent runs mirror to it automatically over WebSocket. |
 | `labwired_set_diagram` | Push the current circuit (parts + wires) to the watch session. |
 | `labwired_set_source` | Push the current source code to the watch session. |
 | `labwired_end_session` | Close the watch session. |
@@ -100,7 +100,7 @@ Shipped:
 
 - **v0.1** — `labwired_catalog` / `labwired_simulate` / `labwired_validate_system` (raw chip + YAML workflow).
 - **v0.2** — high-level board-centric workflow: `labwired_list_boards` / `labwired_run_lab` / `labwired_inspect_run`. ELF-in only — agents compile locally.
-- **v0.3** — live agent → browser bridge: `labwired_create_session` / `labwired_set_diagram` / `labwired_set_source` / `labwired_end_session`. Runs stream over WebSocket to `https://foundry.labwired.com/?watch=<id>`.
+- **v0.3** — live agent → browser bridge: `labwired_create_session` / `labwired_set_diagram` / `labwired_set_source` / `labwired_end_session`. Runs stream over WebSocket to `https://app.labwired.com/?watch=<id>`.
 - **v0.4** — `labwired_validate_diagram` with machine-readable diagnostics (pin/wire/bus errors + suggested fixes).
 
 Next:

@@ -114,8 +114,8 @@ enough until we outgrow KV (see §8).
 
 ## 4. URL scheme
 
-Decision: **`foundry.labwired.com/p/<projectId>`** for private/unlisted, and
-**`foundry.labwired.com/p/<projectId>/<slug>`** as the canonical form for
+Decision: **`app.labwired.com/p/<projectId>`** for private/unlisted, and
+**`app.labwired.com/p/<projectId>/<slug>`** as the canonical form for
 public projects (slug is decorative; the id is the source of truth).
 
 Reasoning:

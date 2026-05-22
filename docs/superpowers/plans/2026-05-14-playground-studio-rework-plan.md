@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rebuild the playground at `foundry.labwired.com/playground/` as a polished, Tinkered.ai-inspired "Studio" shell with a dark visual system, hero command bar, slide-out palette, glass inspector, floating sim dock, and opt-in Dev drawer — while preserving the existing simulator core, WASM bridge, and editor canvas primitives.
+**Goal:** Rebuild the playground at `app.labwired.com/playground/` as a polished, Tinkered.ai-inspired "Studio" shell with a dark visual system, hero command bar, slide-out palette, glass inspector, floating sim dock, and opt-in Dev drawer — while preserving the existing simulator core, WASM bridge, and editor canvas primitives.
 
 **Architecture:** New shell components live under `packages/playground/src/studio/`. Tailwind + design tokens replace the bespoke `playground.css`. `framer-motion` drives panel animations. `cmdk` powers the ⌘K palette. The existing `useEditorState` hook, `EditorCanvas`, wire router, validation, and simulator bridge survive untouched.
 

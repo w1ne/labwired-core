@@ -38,9 +38,9 @@ function randomSessionId(): string {
 }
 
 function watchUrl(env: Env, sessionId: string): string {
-  // Default to foundry.labwired.com — this is the playground origin a human
+  // Default to app.labwired.com — this is the playground origin a human
   // would open. Override per env if needed in the future.
-  return `https://foundry.labwired.com/?watch=${sessionId}`;
+  return `https://app.labwired.com/?watch=${sessionId}`;
   void env;
 }
 

@@ -41,7 +41,7 @@ User chose "docs + disable auto-deploy + archive Stripe" — not full infra tear
 2. SSH in and `docker compose -f /home/w1ne/labwired/foundry/deploy/docker-compose.prod.yml down`.
 3. Snapshot the SQLite DB (`foundry/backend/foundry_*.db`) somewhere safe before destroying — it's the audit trail.
 4. Cancel the Hetzner project in the Hetzner Cloud console.
-5. Remove DNS records for the Foundry subdomain(s) in Cloudflare (likely `foundry.labwired.com` / `foundry.labwired.dev` — confirm in Cloudflare DNS panel).
+5. Remove DNS records for the Foundry subdomain(s) in Cloudflare (likely `app.labwired.com` / `foundry.labwired.dev` — confirm in Cloudflare DNS panel).
 
 ### 3. CI workflows — currently kept
 

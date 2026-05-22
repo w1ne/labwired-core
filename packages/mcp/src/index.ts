@@ -270,7 +270,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'labwired_create_session',
       description:
         'Create a live watch session. Returns a watch_url like ' +
-        'https://foundry.labwired.com/?watch=<id> that a human can open to see your runs ' +
+        'https://app.labwired.com/?watch=<id> that a human can open to see your runs ' +
         'unfold in real time — diagram, source, and simulation state stream to the browser ' +
         'via WebSocket. After this call, subsequent labwired_run_lab / labwired_set_diagram / ' +
         'labwired_set_source calls automatically mirror to the session. Anonymous; the URL is ' +

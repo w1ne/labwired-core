@@ -10,7 +10,7 @@
 
 ## 1. Problem
 
-Today's playground at `foundry.labwired.com/playground/` is functionally rich (drag-drop canvas, 24 components, wire routing, code editor, multi-tab debug surfaces, sharing, embedding) but visually feels prototype-grade and is not differentiated against Wokwi or Tinkered.ai. The user verdict: *"UI needs rework — first class, fast, pretty, usable, copy from the best."*
+Today's playground at `app.labwired.com/playground/` is functionally rich (drag-drop canvas, 24 components, wire routing, code editor, multi-tab debug surfaces, sharing, embedding) but visually feels prototype-grade and is not differentiated against Wokwi or Tinkered.ai. The user verdict: *"UI needs rework — first class, fast, pretty, usable, copy from the best."*
 
 The implementation cost of the Device Library Phase 1 work landing on the current shell would mean shipping new devices into a UI that already feels off. We rebuild the shell now so every new device thereafter inherits the production-grade chrome.
 
@@ -424,8 +424,8 @@ Wins come from: Tailwind purge (vs. 700 lines of hand CSS), code-splitting the W
 ## 13. Migration & rollout
 
 - One PR. No feature flag.
-- The current playground entry point (`landing_page/playground/index.html` → `foundry.labwired.com/playground/`) gets swapped in atomically.
-- Keep the old shell at `foundry.labwired.com/playground/legacy/` for two weeks as escape hatch; remove after.
+- The current playground entry point (`landing_page/playground/index.html` → `app.labwired.com/playground/`) gets swapped in atomically.
+- Keep the old shell at `app.labwired.com/playground/legacy/` for two weeks as escape hatch; remove after.
 - All saved drafts in `localStorage` keyed by `labwired-{diagram,source}:<boardId>` are forward-compatible (no schema change).
 - Embed URLs (`?embed=1&lab=...`) keep working — Studio's empty state shows only the lab, no chrome.
 

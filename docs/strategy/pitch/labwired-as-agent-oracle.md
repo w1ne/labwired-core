@@ -89,7 +89,7 @@ queue. No "I think this is right."
 
 ## Why the playground matters for agent-generated work
 
-`foundry.labwired.com/playground/` is a browser-based React playground —
+`app.labwired.com/playground/` is a browser-based React playground —
 nine working firmware labs across eight boards, no install. Today it is a
 human-facing surface. The direction we are taking it: every board + firmware +
 system manifest the agent produces via MCP becomes a shareable playground URL.

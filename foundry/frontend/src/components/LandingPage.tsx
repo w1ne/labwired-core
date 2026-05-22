@@ -1,7 +1,7 @@
 import { apiUrl, STRIPE_PAYMENT_LINK, hasLiveStripePaymentLink } from '../api';
 import { UserButton, useAuth, useClerk } from '@clerk/react';
 
-const CURL_SNIPPET = `curl -X POST https://foundry.labwired.com/v1/models/verify \\
+const CURL_SNIPPET = `curl -X POST https://app.labwired.com/v1/models/verify \\
   -H "Authorization: Bearer lw_sk_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"chip_yaml": "device: ADXL345\\nregisters: ..."}'`;
