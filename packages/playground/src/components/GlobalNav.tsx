@@ -1,7 +1,3 @@
-// Build marker 2026-05-22T16:15 — force a content hash bump so Cloudflare
-// Pages re-uploads this chunk (a prior failed deploy left the old hash
-// registered in CF's dedupe with broken content; only a new hash bypasses).
-//
 // Shared top-level navigation for every LabWired page. One source of
 // truth for the four nav links — Playground, Library, For CI, GitHub —
 // plus the LabWired wordmark that links back to the marketing domain.
@@ -18,6 +14,13 @@
 import clsx from 'clsx';
 
 export const LABWIRED_HOME_URL = 'https://labwired.com';
+
+// Build epoch — written into a non-functional DOM attribute on the logo
+// so the chunk content (and therefore Vite's output hash) changes per
+// build. A CF Pages partial-upload during an API outage left certain
+// chunk hashes cached with broken content; bumping this constant per
+// commit guarantees a fresh hash that bypasses the broken dedupe entry.
+const BUILD_EPOCH = '2026-05-22T16:31:00Z';
 
 // app.labwired.com is JUST the demo (the running simulator). Library, For
 // CI, pricing — every marketing/discovery surface — lives on labwired.com.
@@ -86,6 +89,7 @@ export function GlobalLogo({ variant = 'light', className }: GlobalLogoProps) {
   return (
     <a
       href={LABWIRED_HOME_URL}
+      data-build={BUILD_EPOCH}
       className={clsx(
         'flex items-center gap-2 text-fg-primary tracking-tight shrink-0',
         variant === 'dark' ? 'font-semibold' : 'font-bold',
