@@ -17,7 +17,11 @@ export const LABWIRED_HOME_URL = 'https://labwired.com';
 
 export const NAV_ITEMS = [
   { id: 'playground', label: 'Playground', href: '/' },
-  { id: 'library', label: 'Library', href: 'library.html' },
+  // Library is canonically a marketing surface — hosted on the
+  // labwired.com static site, NOT inside the playground bundle.
+  // Always link absolute so the playground (app.labwired.com) exits
+  // back to the marketing domain.
+  { id: 'library', label: 'Library', href: 'https://labwired.com/library.html', external: true },
   { id: 'ci', label: 'For CI', href: 'ci.html' },
   { id: 'github', label: 'GitHub', href: 'https://github.com/w1ne/labwired-core', external: true },
 ] as const;
