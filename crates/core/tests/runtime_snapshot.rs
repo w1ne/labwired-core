@@ -237,9 +237,17 @@ fn agentdeck_snapshot_file_restores_post_paint_panel() {
         1,
         "snapshot must restore post-first-paint refresh_generation"
     );
-    let non_ff = panel.black_plane().iter().filter(|&&b| b != 0xFF).count();
+    let bp = panel.black_plane();
+    let rp = panel.red_plane();
+    let black_non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
+    let red_non_ff = rp.iter().filter(|&&b| b != 0xFF).count();
+    let red_zero = rp.iter().filter(|&&b| b == 0x00).count();
+    eprintln!(
+        "panel @ refresh_generation=1: black non-FF={}/{}, red non-FF={}/{}, red 0x00={}/{}",
+        black_non_ff, bp.len(), red_non_ff, rp.len(), red_zero, rp.len(),
+    );
     assert_eq!(
-        non_ff, 782,
+        black_non_ff, 782,
         "snapshot must restore IDLE splash with 782 non-FF bytes on the black plane"
     );
 }
