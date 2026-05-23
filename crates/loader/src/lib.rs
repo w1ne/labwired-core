@@ -92,10 +92,52 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // ── Optional markers. ────────────────────────────────────────────────
         "app_main",
         "loopTask",
-        // ── Panic / abort path — stubbed to no-op so the firmware doesn't
-        //    deadlock at BREAK 1,15 when one of the upstream init
-        //    functions has nothing to model in sim.
+        // ── Panic / abort / assert path — stubbed to no-op so the firmware
+        //    doesn't double-fault when an init-time assertion (esp_reent_init,
+        //    multi_heap, etc.) fires and the assert handler itself re-enters
+        //    stdio which re-asserts. Real silicon has the panic vector wired
+        //    to a reboot; our sim has no reboot, so without a stub we loop
+        //    forever between __assert_func and __sfp / __getreent / __utoa.
         "panic_abort",
+        "__assert_func",
+        "abort",
+        "__assert",
+        "__cxa_pure_virtual",
+        "__cxa_throw",
+        // ── newlib stdio init — looping forever in __sfp / __swsetup_r /
+        //    __srefill_r / __sinit because esp_reent_init didn't construct
+        //    a valid reent struct (it would on real silicon via FreeRTOS
+        //    task-local storage we don't model). The sketch doesn't use
+        //    stdio on the panel-render path, so stubbing the lot is fine.
+        "__sinit",
+        "__sfp",
+        "__sfp_lock_acquire",
+        "__sfp_lock_release",
+        "__sflags",
+        "__swsetup_r",
+        "__srefill_r",
+        "__sread",
+        "__swrite",
+        "__seek",
+        "__sclose",
+        "esp_reent_init",
+        "_fflush_r",
+        "_fclose_r",
+        "_fwrite_r",
+        // ── more FreeRTOS / panic / pthread bring-up the sim can't model.
+        //    All stubbed to no-op or fake-ptr; consumers that don't actually
+        //    use the returned data (which is most setup() / loop() code on
+        //    the sketch's render path) get to keep running.
+        "__getreent",            // returns a DRAM pointer (zeroed reent struct)
+        "esp_panic_handler",     // we don't want to enter the panic path at all
+        "esp_panic_handler_reconfigure_wdts",
+        "xTaskGetCurrentTaskHandle",
+        "pthread_key_create",
+        "pthread_setspecific",
+        "pthread_getspecific",
+        "pthread_mutex_init",
+        "pthread_mutex_lock",
+        "pthread_mutex_unlock",
         // ── ESP-IDF clock/efuse/cache init — sim has no real silicon
         //    behind these, stubbing them out lets call_start_cpu0 fall
         //    through to esp_startup_start_app.

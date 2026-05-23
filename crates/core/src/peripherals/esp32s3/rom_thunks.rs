@@ -285,6 +285,20 @@ pub fn nop_return_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult
     Ok(())
 }
 
+/// `__getreent()` / newlib reentrancy: real Xtensa+FreeRTOS returns the
+/// per-task `_reent` struct stored in task-local storage. Our single-task
+/// sim has no task struct — return a pointer to a fixed DRAM region
+/// (0x3FFB_F000) which is part of the SRAM2 (`dram`) peripheral we
+/// always provision in `configure_xtensa_esp32`. The 4 KB region is
+/// initialized to zero by `RamPeripheral::new`, which matches newlib's
+/// `_REENT_INIT_ZERO` — `errno` reads as 0, all FILE* slots are null,
+/// no allocator state. Adequate for sketches that don't actually use
+/// stdio/errno on the panel-render path.
+pub fn getreent_dram_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 0x3FFB_F000);
+    Ok(())
+}
+
 /// `esp_chip_info(esp_chip_info_t *out)` — fill the output struct with a
 /// plausible-looking ESP32 chip ID, then return.
 ///

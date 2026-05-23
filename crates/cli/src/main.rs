@@ -1011,6 +1011,36 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // symbol is present in the ELF (Arduino-ESP32 profile).
     for sym in &[
         "panic_abort",
+        "__assert_func",   // newlib: catches double-fault on assert during reent init
+        "abort",
+        "__assert",
+        "__cxa_pure_virtual",
+        "__cxa_throw",
+        // newlib stdio init — sketch doesn't use stdio on render path
+        "__sinit",
+        "__sfp",
+        "__sfp_lock_acquire",
+        "__sfp_lock_release",
+        "__sflags",
+        "__swsetup_r",
+        "__srefill_r",
+        "__sread",
+        "__swrite",
+        "__seek",
+        "__sclose",
+        "esp_reent_init",
+        "_fflush_r",
+        "_fclose_r",
+        "_fwrite_r",
+        "esp_panic_handler",
+        "esp_panic_handler_reconfigure_wdts",
+        "xTaskGetCurrentTaskHandle",
+        "pthread_key_create",
+        "pthread_setspecific",
+        "pthread_getspecific",
+        "pthread_mutex_init",
+        "pthread_mutex_lock",
+        "pthread_mutex_unlock",
         "esp_clk_init",
         "esp_perip_clk_init",
         "core_intr_matrix_clear",
@@ -1033,6 +1063,15 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // assert passes.
     if let Some(&pc) = symbol_addrs.get("esp_chip_info") {
         thunks.push((pc, rom_thunks::esp_chip_info_stub));
+    }
+    // __getreent must return a non-NULL pointer to a zeroed reent struct.
+    // Real silicon's per-task reent is set up by FreeRTOS task local
+    // storage which we don't model — return a fixed pointer into DRAM
+    // (always zeroed by RamPeripheral::new). ESP32-classic-specific
+    // address; an `esp32s3` profile (if/when added) would need its own
+    // version of this thunk pointing at S3's DRAM range.
+    if let Some(&pc) = symbol_addrs.get("__getreent") {
+        thunks.push((pc, rom_thunks::getreent_dram_fake_ptr));
     }
     // AgentDeck-only WiFi + sendHello thunks. Only install for that profile
     // — sketches without those symbols wouldn't trip them anyway.
