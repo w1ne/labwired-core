@@ -92,6 +92,7 @@ fn rmw32_mask(ptr: *mut u32, clear: u32, set: u32) {
 #[inline(always)]
 fn semihost_writec(byte: u8) {
     let p = core::ptr::addr_of!(byte);
+    #[cfg(target_arch = "arm")]
     unsafe {
         core::arch::asm!(
             "bkpt #0xAB",
@@ -99,6 +100,10 @@ fn semihost_writec(byte: u8) {
             in("r1") p,
             options(preserves_flags, nostack),
         );
+    }
+    #[cfg(not(target_arch = "arm"))]
+    {
+        let _ = (byte, p);
     }
 }
 
@@ -210,7 +215,7 @@ pub extern "C" fn Reset() -> ! {
     // Issue START to a nonexistent slave (AHT20's nominal address; no
     // chip wired on this Discovery). Sim with `external_devices: []`
     // should also see no match.
-    unsafe { rmw32(I2C1_CR1, 1 << 8) };
+    rmw32(I2C1_CR1, 1 << 8);
     brief_spin();
     uart_puts(b"I2C START\r\n");
     print_reg(b"SR1", I2C1_SR1);
@@ -224,7 +229,7 @@ pub extern "C" fn Reset() -> ! {
     print_reg(b"SR2", I2C1_SR2);
 
     // STOP.
-    unsafe { rmw32(I2C1_CR1, 1 << 9) };
+    rmw32(I2C1_CR1, 1 << 9);
     brief_spin();
     uart_puts(b"I2C STOP\r\n");
     print_reg(b"SR1", I2C1_SR1);

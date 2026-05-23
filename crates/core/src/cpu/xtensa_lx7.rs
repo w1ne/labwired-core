@@ -1936,12 +1936,7 @@ impl Cpu for XtensaLx7 {
         }
     }
 
-    fn runtime_snapshot(
-        &self,
-    ) -> (
-        crate::runtime_snapshot::CpuKind,
-        Vec<u8>,
-    ) {
+    fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
         use crate::runtime_snapshot::XtensaLx7RuntimeSnapshot;
         let snap = XtensaLx7RuntimeSnapshot {
             pc: self.pc,
@@ -1949,7 +1944,7 @@ impl Cpu for XtensaLx7 {
             phys: self.regs.phys_slice().to_vec(),
             window_base: self.regs.windowbase(),
             window_start: self.regs.windowstart(),
-            shadow: self.regs.shadow_stacks().iter().cloned().collect(),
+            shadow: self.regs.shadow_stacks().to_vec(),
             sr: self.sr.raw_storage().to_vec(),
         };
         let bytes = bincode::serialize(&snap).expect("bincode serialize XtensaLx7RuntimeSnapshot");
@@ -1967,8 +1962,9 @@ impl Cpu for XtensaLx7 {
                 "apply_runtime_snapshot: kind {kind:?} given to XtensaLx7"
             )));
         }
-        let snap: XtensaLx7RuntimeSnapshot = bincode::deserialize(bytes)
-            .map_err(|e| SimulationError::NotImplemented(format!("XtensaLx7 snapshot decode: {e}")))?;
+        let snap: XtensaLx7RuntimeSnapshot = bincode::deserialize(bytes).map_err(|e| {
+            SimulationError::NotImplemented(format!("XtensaLx7 snapshot decode: {e}"))
+        })?;
         if snap.phys.len() != 64 {
             return Err(SimulationError::NotImplemented(
                 "XtensaLx7 snapshot phys must be 64 entries".into(),

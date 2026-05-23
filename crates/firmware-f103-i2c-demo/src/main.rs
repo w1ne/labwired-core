@@ -23,7 +23,7 @@
 
 #![no_std]
 #![no_main]
-#![allow(clippy::empty_loop)]
+#![allow(clippy::empty_loop, clippy::identity_op, clippy::needless_range_loop)]
 
 use core::ptr::{read_volatile, write_volatile};
 

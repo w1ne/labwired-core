@@ -18,8 +18,8 @@ pub mod multi_core;
 pub mod network;
 pub mod peripherals;
 pub mod physics;
-pub mod signals;
 pub mod runtime_snapshot;
+pub mod signals;
 pub mod snapshot;
 pub mod system;
 pub mod trace;
@@ -654,8 +654,7 @@ impl<C: Cpu> Machine<C> {
             // the secondary CPU's PC, and unhalt so the next round-robin
             // tick starts executing from that address.
             if let Some(boot_addr) =
-                crate::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR
-                    .with(|s| s.take())
+                crate::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.take())
             {
                 cpu1.set_pc(boot_addr);
                 cpu1.unhalt();

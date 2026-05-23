@@ -842,9 +842,9 @@ fn run_snapshot(args: SnapshotArgs) -> ExitCode {
 /// snapshot blob. The playground reads the same blob to skip cold boot.
 ///
 /// The `agentdeck` profile mirrors what
-/// `WasmSimulator::install_esp32_arduino_quirks` + `step_with_esp32_aids`
-/// do on the web side — same configure_xtensa_esp32 bus, same handshake
-/// + thunk setup, same IPI bridge cadence — so the captured state will
+/// `WasmSimulator::install_esp32_arduino_quirks` plus `step_with_esp32_aids`
+/// do on the web side — same configure_xtensa_esp32 bus, same handshake,
+/// same thunk setup, same IPI bridge cadence — so the captured state will
 /// resume bit-identically inside the browser.
 fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     use labwired_core::bus::SystemBus;
@@ -866,10 +866,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     let elf_bytes = match std::fs::read(&args.firmware) {
         Ok(b) => b,
         Err(e) => {
-            eprintln!(
-                "error: cannot read firmware ELF {:?}: {e}",
-                args.firmware
-            );
+            eprintln!("error: cannot read firmware ELF {:?}: {e}", args.firmware);
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
@@ -928,9 +925,8 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // Resolve every Arduino-ESP32 symbol we know how to patch / thunk.
     // Empty for AgentDeck (stripped) — those fall back to hardcoded PCs.
     let symbol_addrs = extract_arduino_esp32_thunks(&elf_bytes);
-    let resolve_data = |sym: &str, fallback: u32| -> u32 {
-        symbol_addrs.get(sym).copied().unwrap_or(fallback)
-    };
+    let resolve_data =
+        |sym: &str, fallback: u32| -> u32 { symbol_addrs.get(sym).copied().unwrap_or(fallback) };
     // APP_CPU initial stack — read once, used on cpu1 unhalt.
     // ESP-IDF puts the boot stack at `port_IntStackTop`; if the symbol
     // is missing (stripped ELF), fall back to a safe high-DRAM addr.
@@ -1044,25 +1040,75 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // sim-side rom_thunks function. For unstripped ELFs we use the
     // already-parsed symbol map above; AgentDeck's fully stripped ELF
     // falls back to the hand-curated address list.
-    let resolve = |sym: &str, fallback: u32| -> u32 {
-        symbol_addrs.get(sym).copied().unwrap_or(fallback)
-    };
+    let resolve =
+        |sym: &str, fallback: u32| -> u32 { symbol_addrs.get(sym).copied().unwrap_or(fallback) };
     let mut thunks: Vec<(u32, rom_thunks::RomThunkFn)> = vec![
-        (resolve("heap_caps_init", 0x400e_e3b0), rom_thunks::esp_idf_heap_caps_init),
-        (resolve("heap_caps_malloc", 0x4008_2904), rom_thunks::esp_idf_heap_caps_malloc),
-        (resolve("heap_caps_calloc", 0x4008_2a70), rom_thunks::esp_idf_heap_caps_calloc),
-        (resolve("heap_caps_free", 0x4008_25dc), rom_thunks::esp_idf_heap_caps_free),
-        (resolve("heap_caps_realloc", 0x4008_29f0), rom_thunks::esp_idf_heap_caps_realloc),
-        (resolve("esp_timer_init", 0x4012_9034), rom_thunks::nop_return_zero),
-        (resolve("spi_flash_disable_interrupts_caches_and_other_cpu", 0x4008_17dc), rom_thunks::nop_return_zero),
-        (resolve("spi_flash_enable_interrupts_caches_and_other_cpu", 0x4008_188c), rom_thunks::nop_return_zero),
-        (resolve("__retarget_lock_init_recursive", 0x4008_3384), rom_thunks::nop_return_zero),
-        (resolve("__retarget_lock_close_recursive", 0x4008_339c), rom_thunks::nop_return_zero),
-        (resolve("__retarget_lock_acquire_recursive", 0x4008_33b0), rom_thunks::nop_return_zero),
-        (resolve("__retarget_lock_release_recursive", 0x4008_33cc), rom_thunks::nop_return_zero),
-        (resolve("_esp_error_check_failed", 0x4008_bbd0), rom_thunks::nop_return_zero),
-        (resolve("setCpuFrequencyMhz", 0x400e_99dc), rom_thunks::nop_return_zero),
-        (resolve("esp_ota_get_running_partition", 0x400e_ae18), rom_thunks::nop_return_fake_ptr),
+        (
+            resolve("heap_caps_init", 0x400e_e3b0),
+            rom_thunks::esp_idf_heap_caps_init,
+        ),
+        (
+            resolve("heap_caps_malloc", 0x4008_2904),
+            rom_thunks::esp_idf_heap_caps_malloc,
+        ),
+        (
+            resolve("heap_caps_calloc", 0x4008_2a70),
+            rom_thunks::esp_idf_heap_caps_calloc,
+        ),
+        (
+            resolve("heap_caps_free", 0x4008_25dc),
+            rom_thunks::esp_idf_heap_caps_free,
+        ),
+        (
+            resolve("heap_caps_realloc", 0x4008_29f0),
+            rom_thunks::esp_idf_heap_caps_realloc,
+        ),
+        (
+            resolve("esp_timer_init", 0x4012_9034),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve(
+                "spi_flash_disable_interrupts_caches_and_other_cpu",
+                0x4008_17dc,
+            ),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve(
+                "spi_flash_enable_interrupts_caches_and_other_cpu",
+                0x4008_188c,
+            ),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve("__retarget_lock_init_recursive", 0x4008_3384),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve("__retarget_lock_close_recursive", 0x4008_339c),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve("__retarget_lock_acquire_recursive", 0x4008_33b0),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve("__retarget_lock_release_recursive", 0x4008_33cc),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve("_esp_error_check_failed", 0x4008_bbd0),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve("setCpuFrequencyMhz", 0x400e_99dc),
+            rom_thunks::nop_return_zero,
+        ),
+        (
+            resolve("esp_ota_get_running_partition", 0x400e_ae18),
+            rom_thunks::nop_return_fake_ptr,
+        ),
         (resolve("delay", 0x400e_5c28), rom_thunks::nop_return_zero),
     ];
     // HardwareSerial::begin only exists when the sketch called Serial.begin().
@@ -1411,7 +1457,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         // "up." AgentDeck path: byte-for-byte mirror of the original
         // install_esp32_arduino_quirks. Auto-discovery path: write to
         // each resolved symbol's [0]+[1] slots.
-        if i % 10_000 == 0 {
+        if i.is_multiple_of(10_000) {
             if args.profile == "agentdeck" {
                 let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
                 let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
@@ -1458,8 +1504,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         // S32C1I is atomic within step() so spinlocks work correctly.
         if let Some(cpu1) = machine.cpu_secondary.as_mut() {
             if let Some(boot_addr) =
-                labwired_core::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR
-                    .with(|s| s.take())
+                labwired_core::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.take())
             {
                 cpu1.set_pc(boot_addr);
                 cpu1.set_sp(appcpu_initial_sp);
@@ -1484,7 +1529,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         }
         machine.bus.tick_peripherals_with_costs();
         i += 1;
-        if progress > 0 && i % progress == 0 {
+        if progress > 0 && i.is_multiple_of(progress) {
             let cpu1_state = match machine.cpu_secondary.as_ref() {
                 Some(cpu1) => format!("  cpu1=0x{:08x}", cpu1.get_pc()),
                 None => String::new(),
@@ -1497,28 +1542,42 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
             // LABWIRED_DEBUG_LIST=1 to enable. Shows cpu intlevel,
             // xTaskQueueMutex state, pxList walk, and newItem state.
             if std::env::var("LABWIRED_DEBUG_LIST").is_ok() {
-                eprintln!("    cpu0 intlevel={} a0=0x{:08x} a1=0x{:08x}",
+                eprintln!(
+                    "    cpu0 intlevel={} a0=0x{:08x} a1=0x{:08x}",
                     machine.cpu.intlevel(),
                     machine.cpu.get_register(0),
-                    machine.cpu.get_register(1));
+                    machine.cpu.get_register(1)
+                );
                 let mux_owner = machine.bus.read_u32(0x3ffbf3b8).unwrap_or(0xDEAD);
                 let mux_count = machine.bus.read_u32(0x3ffbf3bc).unwrap_or(0xDEAD);
                 eprintln!("    xTaskQueueMutex.owner=0x{mux_owner:08x} .count={mux_count}");
                 if let Some(cpu1) = machine.cpu_secondary.as_ref() {
-                    eprintln!("    cpu1 intlevel={} a0=0x{:08x} a1=0x{:08x}",
+                    eprintln!(
+                        "    cpu1 intlevel={} a0=0x{:08x} a1=0x{:08x}",
                         cpu1.intlevel(),
                         cpu1.get_register(0),
-                        cpu1.get_register(1));
+                        cpu1.get_register(1)
+                    );
                 }
                 let px_list = machine.cpu.get_register(2);
-                let r = |off: u32| machine.bus.read_u32((px_list + off) as u64).unwrap_or(0xDEAD);
+                let r = |off: u32| {
+                    machine
+                        .bus
+                        .read_u32((px_list + off) as u64)
+                        .unwrap_or(0xDEAD)
+                };
                 eprintln!(
                     "    cpu0 pxList=0x{px_list:08x} num={} idx=0x{:08x} end.val=0x{:08x} end.next=0x{:08x} end.prev=0x{:08x}",
                     r(0), r(4), r(8), r(12), r(16)
                 );
                 if let Some(cpu1) = machine.cpu_secondary.as_ref() {
                     let px_list1 = cpu1.get_register(2);
-                    let r1 = |off: u32| machine.bus.read_u32((px_list1 + off) as u64).unwrap_or(0xDEAD);
+                    let r1 = |off: u32| {
+                        machine
+                            .bus
+                            .read_u32((px_list1 + off) as u64)
+                            .unwrap_or(0xDEAD)
+                    };
                     eprintln!(
                         "    cpu1 pxList=0x{px_list1:08x} num={} idx=0x{:08x} end.val=0x{:08x} end.next=0x{:08x} end.prev=0x{:08x}",
                         r1(0), r1(4), r1(8), r1(12), r1(16)
@@ -1537,7 +1596,12 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                     iter = item_next;
                 }
                 let new_item = machine.cpu.get_register(3);
-                let ri = |off: u32| machine.bus.read_u32((new_item + off) as u64).unwrap_or(0xDEAD);
+                let ri = |off: u32| {
+                    machine
+                        .bus
+                        .read_u32((new_item + off) as u64)
+                        .unwrap_or(0xDEAD)
+                };
                 eprintln!(
                     "    cpu0 newItem=0x{new_item:08x} item.val=0x{:08x} item.next=0x{:08x} item.prev=0x{:08x} item.owner=0x{:08x}",
                     ri(0), ri(4), ri(8), ri(12)

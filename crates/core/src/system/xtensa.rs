@@ -267,8 +267,8 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // so noop-return is safe.
     rom_bank.register(0x4000_681c, rom_thunks::esp_rom_route_intr_matrix); // intr_matrix_set / esp_rom_route_intr_matrix
     rom_bank.register(0x4000_689c, rom_thunks::ets_set_appcpu_boot_addr); // releases APP_CPU
-    // UART putc / printf install hooks — called by call_start_cpu1 to
-    // wire CPU 1's stdout. We don't model UART output, so no-op.
+                                                                          // UART putc / printf install hooks — called by call_start_cpu1 to
+                                                                          // wire CPU 1's stdout. We don't model UART output, so no-op.
     rom_bank.register(0x4000_7d18, rom_thunks::nop_return_zero); // ets_install_putc1
     rom_bank.register(0x4000_7d28, rom_thunks::nop_return_zero); // ets_install_uart_printf
     rom_bank.register(0x4000_7d38, rom_thunks::nop_return_zero); // ets_install_putc2
@@ -282,9 +282,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4005_a917, rom_thunks::nop_return_zero); // Cache_Flush
     rom_bank.register(0x4005_aa10, rom_thunks::nop_return_zero); // Cache_Read_Enable
     rom_bank.register(0x4005_a888, rom_thunks::nop_return_zero); // esp_rom_spiflash_attach
-    // intr_matrix_set is at 0x4000_681c (above); cpu1 calls intr_matrix_set
-    // for its own intr table — same thunk works since we don't model the
-    // interrupt matrix per-CPU.
+                                                                 // intr_matrix_set is at 0x4000_681c (above); cpu1 calls intr_matrix_set
+                                                                 // for its own intr table — same thunk works since we don't model the
+                                                                 // interrupt matrix per-CPU.
                                                                  // GPIO matrix routing helpers — used by Arduino's spiAttach{SCK,MOSI,MISO}
                                                                  // and HardwareSerial pin attach. We don't model the GPIO matrix; signals
                                                                  // routed via SPI3 controller flow directly to attached SPI devices.
