@@ -99,6 +99,46 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // single-CPU render path.
         "esp_ipc_init",
         "esp_ipc_isr_init",
+        // Arduino Print/Stream/HardwareSerial — sketch doesn't depend on
+        // serial output reaching real bytes; stubbing all of these as
+        // nop_return_zero lets setup() reach drawPage() without spinning
+        // in uartAvailable polling or Print::println string formatting.
+        "_ZN5Print7printlnEv",
+        "_ZN5Print7printlnEPKc",
+        "_ZN5Print7printlnEmi",
+        "_ZN5Print5printEPKc",
+        "_ZN5Print5printEmi",
+        "_ZN5Print11printNumberEmh",
+        "_ZN5Print5writeEPKc",
+        "_ZN5Print5writeEPKhj",
+        "_ZN5Print5writeEh",
+        "_ZN5Print5flushEv",
+        "_ZN5Print17availableForWriteEv",
+        "_ZN14HardwareSerial5writeEh",
+        "_ZN14HardwareSerial5writeEPKhj",
+        "_ZN14HardwareSerial9availableEv",
+        "_ZN14HardwareSerial5flushEv",
+        "_ZN14HardwareSerial9readBytesEPcj",
+        "_ZN14HardwareSerial9readBytesEPhj",
+        "_ZN6Stream9readBytesEPhj",
+        "_ZN6Stream9readBytesEPcj",
+        "_ZN6Stream10readStringEv",
+        "_ZN6Stream9timedReadEv",
+        "_ZN6Stream10getTimeoutEv",
+        "uartAvailable",
+        "uartAvailableForWrite",
+        "uartWrite",
+        "uartWriteBuf",
+        "_Z14serialEventRunv",
+        // SPI bus init — real impl needs DPORT clock-enable we don't
+        // model, so it returns NULL → SPIClass._spi = NULL → all
+        // downstream spiTransferByte calls bail without touching the SPI
+        // peripheral. Custom thunk returns a fake spi_t with dev = SPI3.
+        "spiStartBus",
+        // The Arduino SPI global. We resolve it for diagnostics; lazy
+        // init happens via the SPIClass::beginTransaction thunk.
+        "SPI",
+        "_ZN8SPIClass16beginTransactionE11SPISettings",
         "_esp_error_check_failed",
         "setCpuFrequencyMhz",
         "esp_ota_get_running_partition", // fake non-null ptr

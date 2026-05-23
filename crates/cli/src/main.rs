@@ -1182,6 +1182,37 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         // single-CPU render path.
         "esp_ipc_init",
         "esp_ipc_isr_init",
+        // Arduino Print/Stream/HardwareSerial — sketches don't depend on
+        // bytes reaching real serial. Stubbing the whole tree lets setup()
+        // get past `Serial.println(...)` chains without spinning in
+        // uartAvailable polling.
+        "_ZN5Print7printlnEv",
+        "_ZN5Print7printlnEPKc",
+        "_ZN5Print7printlnEmi",
+        "_ZN5Print5printEPKc",
+        "_ZN5Print5printEmi",
+        "_ZN5Print11printNumberEmh",
+        "_ZN5Print5writeEPKc",
+        "_ZN5Print5writeEPKhj",
+        "_ZN5Print5writeEh",
+        "_ZN5Print5flushEv",
+        "_ZN5Print17availableForWriteEv",
+        "_ZN14HardwareSerial5writeEh",
+        "_ZN14HardwareSerial5writeEPKhj",
+        "_ZN14HardwareSerial9availableEv",
+        "_ZN14HardwareSerial5flushEv",
+        "_ZN14HardwareSerial9readBytesEPcj",
+        "_ZN14HardwareSerial9readBytesEPhj",
+        "_ZN6Stream9readBytesEPhj",
+        "_ZN6Stream9readBytesEPcj",
+        "_ZN6Stream10readStringEv",
+        "_ZN6Stream9timedReadEv",
+        "_ZN6Stream10getTimeoutEv",
+        "uartAvailable",
+        "uartAvailableForWrite",
+        "uartWrite",
+        "uartWriteBuf",
+        "_Z14serialEventRunv",
         // FreeRTOS recursive mutexes used by newlib stdio locks — same
         // null-queue assertion problem. Stub since sim is effectively
         // single-threaded on the panel-render path. xQueueCreateMutexStatic
@@ -1267,6 +1298,21 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     }
     if let Some(&pc) = symbol_addrs.get("xQueueGenericSend") {
         thunks.push((pc, rom_thunks::return_pd_true));
+    }
+    if let Some(&pc) = symbol_addrs.get("spiStartBus") {
+        thunks.push((pc, rom_thunks::spi_start_bus_fake));
+    }
+    // Pre-initialize the Arduino global SPI object's _spi field. The
+    // sketch never calls SPI.begin() — GxEPD2 just assumes SPI is up.
+    // SPIClass layout: offset 0 = _spi_num (u8), offset 4 = _spi (spi_t*).
+    // Our fake spi_t lives at 0x3FFDF020 with dev=0x3FF65000 (SPI3 base);
+    // see rom_thunks::spi_start_bus_fake.
+    // SPIClass::beginTransaction lazy-init: the sketch never calls
+    // SPI.begin() so SPI._spi is NULL at first use. The thunk replaces
+    // beginTransaction with one that lazy-allocates a fake spi_t pointing
+    // at the correct SPI peripheral base, then returns pdTRUE.
+    if let Some(&pc) = symbol_addrs.get("_ZN8SPIClass16beginTransactionE11SPISettings") {
+        thunks.push((pc, rom_thunks::spi_class_begin_transaction));
     }
     // Optional debug: install vListInsert short-circuit thunk that dumps
     // list state for first 20 calls. Used to diagnose SMP race issues in

@@ -380,6 +380,95 @@ pub fn return_pd_true(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> 
     Ok(())
 }
 
+/// `spi_t *spiStartBus(uint8_t spi_num, ...)` — Arduino-ESP32's SPI bus
+/// initializer. Real impl allocates a `spi_t`, programs DPORT clock-enable
+/// registers, configures the SPI peripheral. We skip the DPORT/peripheral
+/// dance and hand back a tiny static `spi_t` whose only populated field is
+/// `dev` (offset 0) — the SPI peripheral base address. Downstream callers
+/// (`spiTransferByte`) read `spi->dev` and write the peripheral registers
+/// directly, which our `spi3` peripheral catches.
+///
+/// `spi_num` maps to the peripheral base:
+///   0 → SPI0 (flash, not modelled): return NULL
+///   1 → SPI1 (flash, not modelled): return NULL
+///   2 → HSPI/SPI2 (0x3FF64000)
+///   3 → VSPI/SPI3 (0x3FF65000) — the default Arduino `SPI` instance
+///
+/// The `spi_t` blob is per-num and lives in DRAM at a reserved address.
+pub fn spi_start_bus_fake(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let spi_num = cpu.regs.read_logical(n + 2) & 0xFF;
+    let (dev, fake_spi_t) = fake_spi_for_num(spi_num);
+    if fake_spi_t == 0 {
+        RomThunkBank::return_with(cpu, 0);
+        return Ok(());
+    }
+    // Populate spi_t: dev at offset 0, lock at offset 4 (NULL, our stubs
+    // ignore it), num at offset 8. Remaining fields zeroed.
+    bus.write_u32(fake_spi_t as u64, dev)?;
+    bus.write_u32(fake_spi_t as u64 + 4, 0)?;
+    bus.write_u32(fake_spi_t as u64 + 8, spi_num)?;
+    RomThunkBank::return_with(cpu, fake_spi_t);
+    Ok(())
+}
+
+fn fake_spi_for_num(spi_num: u32) -> (u32, u32) {
+    match spi_num {
+        2 => (0x3FF6_4000, 0x3FFD_F000),
+        3 => (0x3FF6_5000, 0x3FFD_F020),
+        _ => (0, 0),
+    }
+}
+
+/// Wraps SPIClass::beginTransaction so the first call lazily initializes
+/// `this->_spi` to a fake spi_t pointing at the matching SPI peripheral
+/// base. The sketch never calls SPI.begin() explicitly — GxEPD2 just
+/// assumes the bus is up — so without this hook spiTransferByte's
+/// `if (spi == NULL) return` short-circuits every transfer and no bytes
+/// reach the panel.
+///
+/// After ensuring _spi is non-NULL, we return pdTRUE to satisfy the
+/// caller's `bnei a10, 1, retry` check (it expects a take to succeed).
+pub fn spi_class_begin_transaction(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let this = cpu.regs.read_logical(n + 2);
+    // SPIClass layout: offset 0 = _spi_num (u8), offset 4 = _spi (spi_t*).
+    let spi_num = bus.read_u32(this as u64)? & 0xFF;
+    let cur_spi = bus.read_u32(this as u64 + 4)?;
+    if cur_spi == 0 {
+        let (dev, fake_spi_t) = fake_spi_for_num(spi_num);
+        if fake_spi_t != 0 {
+            bus.write_u32(fake_spi_t as u64, dev)?;
+            bus.write_u32(fake_spi_t as u64 + 4, 0)?;
+            bus.write_u32(fake_spi_t as u64 + 8, spi_num)?;
+            bus.write_u32(this as u64 + 4, fake_spi_t)?;
+        }
+    }
+    // The real `spiStartBus` programs the SPI peripheral's USER register
+    // to enable the MOSI-output phase (bit 27 = USR_MOSI). We skipped
+    // that, so the first `spiTransferByte` writes data into the FIFO and
+    // sets the CMD.USR start bit but the peripheral never strobes bytes
+    // out to attached devices (kick_user_transaction returns early when
+    // USR_MOSI is clear). Set it once here so subsequent transfers fire.
+    let cur_spi = bus.read_u32(this as u64 + 4)?;
+    if cur_spi != 0 {
+        let dev = bus.read_u32(cur_spi as u64)?;
+        if dev != 0 {
+            const USER_REG_OFFSET: u64 = 0x1C;
+            const USER_USR_MOSI: u32 = 1 << 27;
+            let cur_user = bus.read_u32(dev as u64 + USER_REG_OFFSET)?;
+            if cur_user & USER_USR_MOSI == 0 {
+                bus.write_u32(dev as u64 + USER_REG_OFFSET, cur_user | USER_USR_MOSI)?;
+            }
+        }
+    }
+    // Mark _inTransaction = 1 (offset 24) so endTransaction's take/give
+    // bookkeeping stays consistent.
+    bus.write_u8(this as u64 + 24, 1)?;
+    RomThunkBank::return_with(cpu, 1);
+    Ok(())
+}
+
 /// Debug thunk for `vListInsert(List_t *pxList, ListItem_t *pxNewListItem)`.
 /// Dumps the list state for the first few calls, then returns without
 /// performing the insertion. Used to diagnose infinite-loop bugs in the
