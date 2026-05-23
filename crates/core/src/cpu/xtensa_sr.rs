@@ -206,7 +206,7 @@ impl XtensaSrFile {
                 // boot is slower than the divisor), so the firmware never
                 // gets a tick, never yields, and IPC tasks spin in
                 // xQueueReceive corrupting wait lists.
-                if idx == 240 /* CCOMPARE0 */ {
+                if idx == CCOMPARE0 as usize {
                     self.storage[IDX_INTERRUPT] &= !(1 << 6);
                     if v != 0 && self.storage[IDX_CCOUNT] >= v {
                         self.storage[IDX_INTERRUPT] |= 1 << 6;

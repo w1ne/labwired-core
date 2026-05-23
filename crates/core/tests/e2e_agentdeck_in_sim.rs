@@ -17,8 +17,16 @@ use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Bus, Cpu, Machine};
 use std::path::PathBuf;
 
+/// Baseline byte counts captured 2026-05-23. Bumped intentionally only after
+/// reviewing the diff vs the prior baseline — drift signals a sim regression
+/// (or, less often, a genuine improvement). Tolerances allow ±0.5% on the
+/// SPI transaction count and ±10 bytes on the black-plane bitmap to absorb
+/// benign ordering noise (e.g. tick alignment) without missing real changes.
+const AGENTDECK_BASELINE_SPI3_TXNS: u32 = 19031;
+const AGENTDECK_BASELINE_BLACK_NONFF: usize = 782;
+
 #[test]
-#[ignore = "loads ~22 MB AgentDeck firmware ELF; only meaningful when the AgentDeck repo is checked out alongside labwired."]
+#[ignore = "loads ~22 MB AgentDeck firmware ELF; only meaningful when the AgentDeck repo is checked out alongside labwired. Run with `cargo test -- --ignored agentdeck_firmware_drives_panel_in_sim`."]
 fn agentdeck_firmware_drives_panel_in_sim() {
     let elf =
         PathBuf::from("/home/andrii/Projects/AgentDeck/firmware/.pio/build/wroom32u/firmware.elf");
@@ -769,4 +777,21 @@ fn agentdeck_firmware_drives_panel_in_sim() {
             out_path.display()
         );
     }
+
+    // Regression bounds. Fires only when the ignored test is invoked
+    // explicitly with the AgentDeck firmware ELF available — locks in the
+    // sim's known-good byte signature against silent drift.
+    let txns = spi.transactions() as i64;
+    let baseline_txns = AGENTDECK_BASELINE_SPI3_TXNS as i64;
+    let txn_tolerance = (baseline_txns / 200).max(50); // ±0.5% or ±50 txns
+    assert!(
+        (baseline_txns - txn_tolerance..=baseline_txns + txn_tolerance).contains(&txns),
+        "AgentDeck SPI3 transaction count drift: got {txns}, baseline {baseline_txns} (±{txn_tolerance})"
+    );
+    let baseline_black = AGENTDECK_BASELINE_BLACK_NONFF as i64;
+    let black_signed = non_white_black as i64;
+    assert!(
+        (baseline_black - 10..=baseline_black + 10).contains(&black_signed),
+        "AgentDeck black-plane non-FF byte count drift: got {non_white_black}, baseline {baseline_black} (±10)"
+    );
 }

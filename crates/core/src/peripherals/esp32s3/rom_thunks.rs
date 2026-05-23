@@ -375,7 +375,21 @@ thread_local! {
 /// `xQueueCreateMutex` returned NULL for. Real silicon would dereference
 /// pxQueue and crash too — this fakes a recursive-mutex held-by-current
 /// state, which is fine for the single-CPU sim render path.
+///
+/// Emits a one-time `tracing::warn!` on first call so silent activation is
+/// loud in logs; this stub will hide future regressions where a take
+/// *should* block (e.g. when a second consumer is added).
 pub fn return_pd_true(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    if !WARNED.swap(true, Ordering::Relaxed) {
+        tracing::warn!(
+            target: "labwired_core::esp32s3",
+            "return_pd_true stub active: xQueueSemaphoreTake / xQueueGenericSend will \
+             unconditionally succeed on stubbed mutexes. Any test that depends on a \
+             take blocking will silently pass."
+        );
+    }
     RomThunkBank::return_with(cpu, 1);
     Ok(())
 }
@@ -403,19 +417,35 @@ pub fn spi_start_bus_fake(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
         RomThunkBank::return_with(cpu, 0);
         return Ok(());
     }
-    // Populate spi_t: dev at offset 0, lock at offset 4 (NULL, our stubs
-    // ignore it), num at offset 8. Remaining fields zeroed.
-    bus.write_u32(fake_spi_t as u64, dev)?;
-    bus.write_u32(fake_spi_t as u64 + 4, 0)?;
-    bus.write_u32(fake_spi_t as u64 + 8, spi_num)?;
+    // Populate spi_t: dev (offset 0), lock (offset 4, NULL — our stubs
+    // ignore it), num (offset 8). Remaining fields zeroed.
+    bus.write_u32(fake_spi_t as u64 + SPI_T_DEV_OFFSET, dev)?;
+    bus.write_u32(fake_spi_t as u64 + SPI_T_LOCK_OFFSET, 0)?;
+    bus.write_u32(fake_spi_t as u64 + SPI_T_NUM_OFFSET, spi_num)?;
     RomThunkBank::return_with(cpu, fake_spi_t);
     Ok(())
 }
 
+// `spi_t` field offsets matching Arduino-ESP32's struct layout.
+const SPI_T_DEV_OFFSET: u64 = 0;
+const SPI_T_LOCK_OFFSET: u64 = 4;
+const SPI_T_NUM_OFFSET: u64 = 8;
+// SPIClass field offsets.
+const SPI_CLASS_SPI_NUM_OFFSET: u64 = 0;
+const SPI_CLASS_SPI_PTR_OFFSET: u64 = 4;
+const SPI_CLASS_IN_TRANSACTION_OFFSET: u64 = 24;
+// Reserved sim-only scratch region for fake `spi_t` blobs. Sits at the
+// top of SRAM1 (0x3FFE_0000–0x4000_0000), well above Arduino-ESP32's
+// initial stack (near 0x3FFE_0000, growing downward into DRAM) and any
+// plausible heap allocation. DRAM proper (0x3FFA_E000–0x3FFE_0000) is
+// off-limits because the firmware allocator can reach the upper pages.
+const SIM_FAKE_SPI_T_SPI2: u32 = 0x3FFF_FF00;
+const SIM_FAKE_SPI_T_SPI3: u32 = 0x3FFF_FF20;
+
 fn fake_spi_for_num(spi_num: u32) -> (u32, u32) {
     match spi_num {
-        2 => (0x3FF6_4000, 0x3FFD_F000),
-        3 => (0x3FF6_5000, 0x3FFD_F020),
+        2 => (0x3FF6_4000, SIM_FAKE_SPI_T_SPI2),
+        3 => (0x3FF6_5000, SIM_FAKE_SPI_T_SPI3),
         _ => (0, 0),
     }
 }
@@ -430,41 +460,40 @@ fn fake_spi_for_num(spi_num: u32) -> (u32, u32) {
 /// After ensuring _spi is non-NULL, we return pdTRUE to satisfy the
 /// caller's `bnei a10, 1, retry` check (it expects a take to succeed).
 pub fn spi_class_begin_transaction(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    use crate::peripherals::esp32::spi::{REG_USER, USER_USR_MOSI_BIT};
+
     let n = cpu.ps.callinc() * 4;
     let this = cpu.regs.read_logical(n + 2);
-    // SPIClass layout: offset 0 = _spi_num (u8), offset 4 = _spi (spi_t*).
-    let spi_num = bus.read_u32(this as u64)? & 0xFF;
-    let cur_spi = bus.read_u32(this as u64 + 4)?;
+    let spi_num = bus.read_u32(this as u64 + SPI_CLASS_SPI_NUM_OFFSET)? & 0xFF;
+    let cur_spi = bus.read_u32(this as u64 + SPI_CLASS_SPI_PTR_OFFSET)?;
     if cur_spi == 0 {
         let (dev, fake_spi_t) = fake_spi_for_num(spi_num);
         if fake_spi_t != 0 {
-            bus.write_u32(fake_spi_t as u64, dev)?;
-            bus.write_u32(fake_spi_t as u64 + 4, 0)?;
-            bus.write_u32(fake_spi_t as u64 + 8, spi_num)?;
-            bus.write_u32(this as u64 + 4, fake_spi_t)?;
+            bus.write_u32(fake_spi_t as u64 + SPI_T_DEV_OFFSET, dev)?;
+            bus.write_u32(fake_spi_t as u64 + SPI_T_LOCK_OFFSET, 0)?;
+            bus.write_u32(fake_spi_t as u64 + SPI_T_NUM_OFFSET, spi_num)?;
+            bus.write_u32(this as u64 + SPI_CLASS_SPI_PTR_OFFSET, fake_spi_t)?;
         }
     }
     // The real `spiStartBus` programs the SPI peripheral's USER register
-    // to enable the MOSI-output phase (bit 27 = USR_MOSI). We skipped
-    // that, so the first `spiTransferByte` writes data into the FIFO and
-    // sets the CMD.USR start bit but the peripheral never strobes bytes
-    // out to attached devices (kick_user_transaction returns early when
-    // USR_MOSI is clear). Set it once here so subsequent transfers fire.
-    let cur_spi = bus.read_u32(this as u64 + 4)?;
+    // to enable the MOSI-output phase. We skipped that, so the first
+    // `spiTransferByte` writes data into the FIFO and sets the CMD.USR
+    // start bit but the peripheral never strobes bytes out to attached
+    // devices (kick_user_transaction returns early when USR_MOSI is
+    // clear). Set it once here so subsequent transfers fire.
+    let cur_spi = bus.read_u32(this as u64 + SPI_CLASS_SPI_PTR_OFFSET)?;
     if cur_spi != 0 {
-        let dev = bus.read_u32(cur_spi as u64)?;
+        let dev = bus.read_u32(cur_spi as u64 + SPI_T_DEV_OFFSET)?;
         if dev != 0 {
-            const USER_REG_OFFSET: u64 = 0x1C;
-            const USER_USR_MOSI: u32 = 1 << 27;
-            let cur_user = bus.read_u32(dev as u64 + USER_REG_OFFSET)?;
-            if cur_user & USER_USR_MOSI == 0 {
-                bus.write_u32(dev as u64 + USER_REG_OFFSET, cur_user | USER_USR_MOSI)?;
+            let cur_user = bus.read_u32(dev as u64 + REG_USER)?;
+            if cur_user & USER_USR_MOSI_BIT == 0 {
+                bus.write_u32(dev as u64 + REG_USER, cur_user | USER_USR_MOSI_BIT)?;
             }
         }
     }
-    // Mark _inTransaction = 1 (offset 24) so endTransaction's take/give
-    // bookkeeping stays consistent.
-    bus.write_u8(this as u64 + 24, 1)?;
+    // Mark _inTransaction so endTransaction's take/give bookkeeping stays
+    // consistent.
+    bus.write_u8(this as u64 + SPI_CLASS_IN_TRANSACTION_OFFSET, 1)?;
     RomThunkBank::return_with(cpu, 1);
     Ok(())
 }
@@ -535,8 +564,7 @@ thread_local! {
 /// (steps of 1000 per call) so callers polling for timeout deadlines
 /// actually make progress instead of looping forever.
 pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
-    static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 =
-        core::sync::atomic::AtomicU32::new(0);
+    static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
     let v = MONOTONIC_TICKS.fetch_add(1000, core::sync::atomic::Ordering::Relaxed);
     RomThunkBank::return_with(cpu, v);
     Ok(())
@@ -569,8 +597,8 @@ pub fn esp_chip_info_stub(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
         let bytes: [u8; 16] = [
             0x01, 0x00, 0x00, 0x00, // model = ESP32
             0x00, 0x00, 0x00, 0x00, // features
-            0x03, 0x00,             // revision = 3
-            0x02,                   // cores = 2
+            0x03, 0x00, // revision = 3
+            0x02, // cores = 2
             0x03, 0x00, 0x00, 0x00, 0x00, // full_revision + pad
         ];
         for (i, &b) in bytes.iter().enumerate() {

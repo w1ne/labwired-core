@@ -35,7 +35,7 @@ use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::collections::HashMap;
 
 const REG_CMD: u64 = 0x00;
-const REG_USER: u64 = 0x1C;
+pub const REG_USER: u64 = 0x1C;
 const REG_USER2: u64 = 0x24;
 const REG_MOSI_DLEN: u64 = 0x28;
 const REG_MISO_DLEN: u64 = 0x2C;
@@ -43,7 +43,7 @@ const FIFO_START: u64 = 0x80;
 const FIFO_END: u64 = 0xC0; // exclusive — W0..W15 = 64 bytes
 
 const CMD_USR_BIT: u32 = 1 << 18;
-const USER_USR_MOSI_BIT: u32 = 1 << 27;
+pub const USER_USR_MOSI_BIT: u32 = 1 << 27;
 
 #[derive(Default)]
 pub struct Esp32Spi {
