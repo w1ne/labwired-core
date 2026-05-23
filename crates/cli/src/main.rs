@@ -1155,6 +1155,14 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(&pc) = symbol_addrs.get("esp_timer_impl_get_counter_reg") {
         thunks.push((pc, rom_thunks::monotonic_counter_32));
     }
+    // Optional debug: install vListInsert short-circuit thunk that dumps
+    // list state for first 20 calls. Used to diagnose SMP race issues in
+    // the FreeRTOS scheduler. Enable with `LABWIRED_DEBUG_VLIST=1`.
+    if std::env::var("LABWIRED_DEBUG_VLIST").is_ok() {
+        if let Some(&pc) = symbol_addrs.get("vListInsert") {
+            thunks.push((pc, rom_thunks::vlist_insert_debug));
+        }
+    }
     // AgentDeck-only WiFi + sendHello thunks. Only install for that profile
     // — sketches without those symbols wouldn't trip them anyway.
     if args.profile == "agentdeck" {
@@ -1303,6 +1311,14 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         // appcpu-release + cpu1.step loop has to live here too. Drain
         // the APPCPU_BOOT_ADDR slot first (PRO_CPU may have just hit
         // ets_set_appcpu_boot_addr), then step the secondary CPU.
+        //
+        // Coarse interleaving (CPU1_STEP_DIVISOR): step CPU 1 only once
+        // per N CPU-0 instructions. Per-instruction round-robin loses
+        // races on FreeRTOS spinlocks — once CPU 0 acquires a mux, CPU 1
+        // spinning equal cycles can't make progress, but worse, ESP-IDF
+        // FreeRTOS expects long critical sections to complete with bounded
+        // latency. Coarser batching simulates that.
+        const CPU1_STEP_DIVISOR: u64 = 16;
         if let Some(cpu1) = machine.cpu_secondary.as_mut() {
             if let Some(boot_addr) =
                 labwired_core::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR
@@ -1312,15 +1328,17 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                 cpu1.set_sp(appcpu_initial_sp);
                 cpu1.unhalt();
             }
-            match cpu1.step(&mut machine.bus, &observers, &config) {
-                Ok(()) => {}
-                Err(SimulationError::BreakpointHit(_)) => {}
-                Err(e) => {
-                    eprintln!(
-                        "error: sim step cpu1 at cycle {i} pc=0x{:08x}: {e}",
-                        cpu1.get_pc()
-                    );
-                    return ExitCode::from(EXIT_RUNTIME_ERROR);
+            if i % CPU1_STEP_DIVISOR == 0 {
+                match cpu1.step(&mut machine.bus, &observers, &config) {
+                    Ok(()) => {}
+                    Err(SimulationError::BreakpointHit(_)) => {}
+                    Err(e) => {
+                        eprintln!(
+                            "error: sim step cpu1 at cycle {i} pc=0x{:08x}: {e}",
+                            cpu1.get_pc()
+                        );
+                        return ExitCode::from(EXIT_RUNTIME_ERROR);
+                    }
                 }
             }
         }

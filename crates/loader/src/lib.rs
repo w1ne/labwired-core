@@ -202,6 +202,7 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // `port_IntStackTop`. The cli reads this symbol and seeds a1
         // before unhalting cpu_secondary.
         "port_IntStackTop",
+        "vListInsert",
         // RNG — esp_random does an APB-clock-divisor computation that
         // div0s in the sim. We don't need real entropy; nop_return_zero
         // is fine (callers use it for jitter, never as a primary key).

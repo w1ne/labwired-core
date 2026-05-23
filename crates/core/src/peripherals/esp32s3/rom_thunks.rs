@@ -295,6 +295,36 @@ pub fn nop_return_zero(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()>
     Ok(())
 }
 
+/// Debug thunk for `vListInsert(List_t *pxList, ListItem_t *pxNewListItem)`.
+/// Dumps the list state for the first few calls, then returns without
+/// performing the insertion. Used to diagnose infinite-loop bugs in the
+/// FreeRTOS scheduler list walker (typically caused by an uninitialised
+/// list lacking the `xListEnd` sentinel with `xItemValue == portMAX_DELAY`).
+pub fn vlist_insert_debug(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    use core::sync::atomic::{AtomicU32, Ordering};
+    static CALLS: AtomicU32 = AtomicU32::new(0);
+    let n = CALLS.fetch_add(1, Ordering::Relaxed);
+    if n < 20 {
+        // Args under CALL8 windowing: pxList in a2, pxNewListItem in a3
+        // (post-rotation logical slots a2/a3 since the caller used call8).
+        let callinc = cpu.ps.callinc();
+        let base = if callinc == 0 { 0 } else { callinc * 4 };
+        let px_list = cpu.regs.read_logical(base + 2);
+        let px_item = cpu.regs.read_logical(base + 3);
+        let item_value = bus.read_u32(px_item as u64).unwrap_or(0xDEAD_BEEF);
+        let list_num = bus.read_u32(px_list as u64).unwrap_or(0xDEAD_BEEF); // uxNumberOfItems
+        let list_idx = bus.read_u32(px_list as u64 + 4).unwrap_or(0xDEAD_BEEF); // pxIndex
+        let end_val = bus.read_u32(px_list as u64 + 8).unwrap_or(0xDEAD_BEEF); // xListEnd.xItemValue
+        let end_next = bus.read_u32(px_list as u64 + 12).unwrap_or(0xDEAD_BEEF);
+        let end_prev = bus.read_u32(px_list as u64 + 16).unwrap_or(0xDEAD_BEEF);
+        eprintln!(
+            "[vListInsert #{n:>3}] pxList=0x{px_list:08x} num={list_num} idx=0x{list_idx:08x} end.value=0x{end_val:08x} end.next=0x{end_next:08x} end.prev=0x{end_prev:08x} | item=0x{px_item:08x} item.value=0x{item_value:08x}"
+        );
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// Generic thunk that returns a fixed dummy pointer (0x3F40_0100, inside
 /// the flash dcache window we populate with the app-image header). Used
 /// for functions that must return a non-NULL "found it" pointer to avoid
