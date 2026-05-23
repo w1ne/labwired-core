@@ -299,6 +299,18 @@ pub fn getreent_dram_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimRes
     Ok(())
 }
 
+/// Monotonic-counter thunk for `esp_timer_impl_get_counter_reg()` and
+/// similar 32-bit time-source readers. Returns an ever-increasing value
+/// (steps of 1000 per call) so callers polling for timeout deadlines
+/// actually make progress instead of looping forever.
+pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 =
+        core::sync::atomic::AtomicU32::new(0);
+    let v = MONOTONIC_TICKS.fetch_add(1000, core::sync::atomic::Ordering::Relaxed);
+    RomThunkBank::return_with(cpu, v);
+    Ok(())
+}
+
 /// `esp_chip_info(esp_chip_info_t *out)` — fill the output struct with a
 /// plausible-looking ESP32 chip ID, then return.
 ///

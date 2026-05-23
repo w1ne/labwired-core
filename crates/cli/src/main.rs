@@ -1041,6 +1041,30 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         "pthread_mutex_init",
         "pthread_mutex_lock",
         "pthread_mutex_unlock",
+        // FreeRTOS critical sections / sync
+        "xPortEnterCriticalTimeout",
+        "vPortExitCritical",
+        "vPortEnterCritical",
+        "xPortInIsrContext",
+        "vPortYield",
+        "vPortYieldFromISR",
+        "vPortYieldOtherCore",
+        "spinlock_acquire",
+        "spinlock_release",
+        "vTaskDelay",
+        "vTaskSuspendAll",
+        "xTaskResumeAll",
+        "xQueueGenericCreate",
+        "xQueueGenericSend",
+        "xQueueReceive",
+        "xSemaphoreCreateBinary",
+        "xSemaphoreTake",
+        "xSemaphoreGive",
+        "esp_pthread_init",
+        "esp_task_wdt_reset",
+        "esp_task_wdt_init",
+        "esp_task_wdt_add",
+        "esp_task_wdt_delete",
         "esp_clk_init",
         "esp_perip_clk_init",
         "core_intr_matrix_clear",
@@ -1053,6 +1077,57 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         "esp_mspi_pin_init",
         "spi_flash_init_chip_state",
         "esp_log_timestamp",
+        // SPI-flash HAL — see loader::extract_arduino_esp32_thunks for why.
+        "spi_flash_hal_configure_host_io_mode",
+        "spi_flash_chip_generic_config_host_io_mode",
+        "spi_flash_chip_generic_get_io_mode",
+        "spi_flash_chip_generic_set_io_mode",
+        "spi_flash_chip_generic_probe",
+        "spi_flash_chip_generic_detect_size",
+        "spi_flash_chip_generic_read",
+        "spi_flash_chip_generic_yield",
+        "spi_flash_chip_gd_probe",
+        "spi_flash_chip_gd_detect_size",
+        "spi_flash_chip_gd_get_io_mode",
+        "spi_flash_chip_gd_set_io_mode",
+        "spi_flash_init",
+        "spi_flash_hal_init",
+        "spi_flash_hal_supports_direct_write",
+        "spi_flash_hal_supports_direct_read",
+        "esp_flash_app_enable_os_functions",
+        "esp_flash_app_disable_os_functions",
+        "esp_flash_app_init",
+        "esp_flash_init_main",
+        "esp_flash_init_default_chip",
+        "esp_flash_init",
+        "esp_random",
+        "esp_fill_random",
+        "esp_log_early_timestamp",
+        "esp_log_writev",
+        "esp_log_write",
+        "esp_log_buffer_hex_internal",
+        "esp_log_buffer_char_internal",
+        "esp_log_buffer_hexdump_internal",
+        "__sfvwrite_r",
+        "__swsetup_r",
+        "__sflush_r",
+        "_printf_r",
+        "_fprintf_r",
+        "_vfprintf_r",
+        "_vprintf_r",
+        "printf",
+        "fprintf",
+        "vfprintf",
+        "vprintf",
+        "puts",
+        "fputs",
+        "fputc",
+        "putchar",
+        "_puts_r",
+        "_fputs_r",
+        "_putchar_r",
+        "_write_r",
+        "write",
     ] {
         if let Some(&pc) = symbol_addrs.get(*sym) {
             thunks.push((pc, rom_thunks::nop_return_zero));
@@ -1072,6 +1147,12 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // version of this thunk pointing at S3's DRAM range.
     if let Some(&pc) = symbol_addrs.get("__getreent") {
         thunks.push((pc, rom_thunks::getreent_dram_fake_ptr));
+    }
+    // esp_timer_impl_get_counter_reg must return a monotonically increasing
+    // value, otherwise polling-loop callers (esp-idf flash HAL, FreeRTOS
+    // timeout helpers) spin forever.
+    if let Some(&pc) = symbol_addrs.get("esp_timer_impl_get_counter_reg") {
+        thunks.push((pc, rom_thunks::monotonic_counter_32));
     }
     // AgentDeck-only WiFi + sendHello thunks. Only install for that profile
     // — sketches without those symbols wouldn't trip them anyway.
