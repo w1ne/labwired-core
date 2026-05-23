@@ -138,6 +138,21 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         "pthread_mutex_init",
         "pthread_mutex_lock",
         "pthread_mutex_unlock",
+        // ── FreeRTOS port-layer critical sections.  Single-task sim has no
+        //    concurrent access to guard, no other core to interrupt, no
+        //    other task to preempt — return success immediately.  Real
+        //    silicon's RSIL+spinlock spin forever if the lock owner is
+        //    a CPU we don't model.
+        // Dual-core sim: real FreeRTOS primitives are used now that
+        // cpu_secondary runs. Only esp_pthread_init stays stubbed —
+        // per-task pthread TLS isn't modeled.
+        "esp_pthread_init",
+        // ── Watchdog refresh — sketches loop fast in sim so the WDT-feed
+        //    matters less, but stub it to avoid any extra cycles burned.
+        "esp_task_wdt_reset",
+        "esp_task_wdt_init",
+        "esp_task_wdt_add",
+        "esp_task_wdt_delete",
         // ── ESP-IDF clock/efuse/cache init — sim has no real silicon
         //    behind these, stubbing them out lets call_start_cpu0 fall
         //    through to esp_startup_start_app.
@@ -154,6 +169,74 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         "spi_flash_init_chip_state",
         "esp_chip_info",
         "esp_log_timestamp",
+        // SPI-flash HAL — host io-mode config polls a flash-controller status
+        // bit the sim does not model. No-op out so spi_flash_init completes.
+        "spi_flash_hal_configure_host_io_mode",
+        "spi_flash_chip_generic_config_host_io_mode",
+        "spi_flash_chip_generic_get_io_mode",
+        "spi_flash_chip_generic_set_io_mode",
+        "spi_flash_chip_generic_probe",
+        "spi_flash_chip_generic_detect_size",
+        "spi_flash_chip_generic_read",
+        "spi_flash_chip_generic_yield",
+        "spi_flash_chip_gd_probe",
+        "spi_flash_chip_gd_detect_size",
+        "spi_flash_chip_gd_get_io_mode",
+        "spi_flash_chip_gd_set_io_mode",
+        "spi_flash_init",
+        "spi_flash_hal_init",
+        "spi_flash_hal_supports_direct_write",
+        "spi_flash_hal_supports_direct_read",
+        "esp_flash_app_enable_os_functions",
+        "esp_flash_app_disable_os_functions",
+        "esp_flash_app_init",
+        "esp_flash_init_main",
+        "esp_flash_init_default_chip",
+        "esp_flash_init",
+        // Time sources — must return monotonically increasing values, so
+        // resolved here and routed to a dedicated thunk in the cli (not
+        // the nop_return_zero list).
+        "esp_timer_impl_get_counter_reg",
+        // APP_CPU initial stack — call_start_cpu1 starts with `entry a1, 32`
+        // assuming a valid stack. ESP-IDF puts the boot stack at
+        // `port_IntStackTop`. The cli reads this symbol and seeds a1
+        // before unhalting cpu_secondary.
+        "port_IntStackTop",
+        "vListInsert",
+        // RNG — esp_random does an APB-clock-divisor computation that
+        // div0s in the sim. We don't need real entropy; nop_return_zero
+        // is fine (callers use it for jitter, never as a primary key).
+        "esp_random",
+        "esp_fill_random",
+        // Newlib stdio output — sketches don't depend on serial output
+        // for correctness; stubbing avoids div0s deep in fvwrite.c when
+        // the underlying FILE* refers to our zeroed fake reent struct.
+        "esp_log_early_timestamp",
+        "esp_log_writev",
+        "esp_log_write",
+        "esp_log_buffer_hex_internal",
+        "esp_log_buffer_char_internal",
+        "esp_log_buffer_hexdump_internal",
+        "__sfvwrite_r",
+        "__swsetup_r",
+        "__sflush_r",
+        "_printf_r",
+        "_fprintf_r",
+        "_vfprintf_r",
+        "_vprintf_r",
+        "printf",
+        "fprintf",
+        "vfprintf",
+        "vprintf",
+        "puts",
+        "fputs",
+        "fputc",
+        "putchar",
+        "_puts_r",
+        "_fputs_r",
+        "_putchar_r",
+        "_write_r",
+        "write",
     ];
     let mut out = HashMap::new();
     let Ok(object) = object::File::parse(buffer) else {

@@ -211,9 +211,28 @@ pub fn rom_config_instruction_cache_mode(cpu: &mut XtensaLx7, _bus: &mut dyn Bus
     Ok(())
 }
 
-/// `ets_set_appcpu_boot_addr(addr: u32) -> u32` — NOP, returns 0
-/// (cpu1 is not modelled in Plan 2).
+/// `ets_set_appcpu_boot_addr(addr: u32) -> u32` — real silicon: stores
+/// the address PRO_CPU wants APP_CPU to start executing at, then
+/// releases APP_CPU from reset-hold. In dual-core sim configs we stash
+/// the boot_addr in a thread-local that `Machine::step` reads on its
+/// next tick to unhalt `cpu_secondary` with PC = boot_addr. Single-core
+/// configs ignore the stash (no secondary CPU to wake), so the thunk
+/// stays safe for either configuration.
 pub fn ets_set_appcpu_boot_addr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    // Argument register: a2 (CALL0), or a[N*4+2] under CALLn windowing.
+    let arg_slot = if cpu.ps.callinc() == 0 {
+        2
+    } else {
+        cpu.ps.callinc() * 4 + 2
+    };
+    let boot_addr = cpu.regs.read_logical(arg_slot);
+    // Only release APP_CPU on a real entry-point write. ESP-IDF's
+    // `esp_cpu_stall` path also calls this with addr=0 to reset the
+    // shadow register before re-stalling — treat that as a no-op (we
+    // don't model APP_CPU stall/resume cycles, just the initial wake).
+    if boot_addr != 0 {
+        APPCPU_BOOT_ADDR.with(|slot| slot.set(Some(boot_addr)));
+    }
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
@@ -276,6 +295,36 @@ pub fn nop_return_zero(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()>
     Ok(())
 }
 
+/// Debug thunk for `vListInsert(List_t *pxList, ListItem_t *pxNewListItem)`.
+/// Dumps the list state for the first few calls, then returns without
+/// performing the insertion. Used to diagnose infinite-loop bugs in the
+/// FreeRTOS scheduler list walker (typically caused by an uninitialised
+/// list lacking the `xListEnd` sentinel with `xItemValue == portMAX_DELAY`).
+pub fn vlist_insert_debug(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    use core::sync::atomic::{AtomicU32, Ordering};
+    static CALLS: AtomicU32 = AtomicU32::new(0);
+    let n = CALLS.fetch_add(1, Ordering::Relaxed);
+    if n < 20 {
+        // Args under CALL8 windowing: pxList in a2, pxNewListItem in a3
+        // (post-rotation logical slots a2/a3 since the caller used call8).
+        let callinc = cpu.ps.callinc();
+        let base = if callinc == 0 { 0 } else { callinc * 4 };
+        let px_list = cpu.regs.read_logical(base + 2);
+        let px_item = cpu.regs.read_logical(base + 3);
+        let item_value = bus.read_u32(px_item as u64).unwrap_or(0xDEAD_BEEF);
+        let list_num = bus.read_u32(px_list as u64).unwrap_or(0xDEAD_BEEF); // uxNumberOfItems
+        let list_idx = bus.read_u32(px_list as u64 + 4).unwrap_or(0xDEAD_BEEF); // pxIndex
+        let end_val = bus.read_u32(px_list as u64 + 8).unwrap_or(0xDEAD_BEEF); // xListEnd.xItemValue
+        let end_next = bus.read_u32(px_list as u64 + 12).unwrap_or(0xDEAD_BEEF);
+        let end_prev = bus.read_u32(px_list as u64 + 16).unwrap_or(0xDEAD_BEEF);
+        eprintln!(
+            "[vListInsert #{n:>3}] pxList=0x{px_list:08x} num={list_num} idx=0x{list_idx:08x} end.value=0x{end_val:08x} end.next=0x{end_next:08x} end.prev=0x{end_prev:08x} | item=0x{px_item:08x} item.value=0x{item_value:08x}"
+        );
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// Generic thunk that returns a fixed dummy pointer (0x3F40_0100, inside
 /// the flash dcache window we populate with the app-image header). Used
 /// for functions that must return a non-NULL "found it" pointer to avoid
@@ -296,6 +345,26 @@ pub fn nop_return_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult
 /// stdio/errno on the panel-render path.
 pub fn getreent_dram_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0x3FFB_F000);
+    Ok(())
+}
+
+thread_local! {
+    /// Set by [`set_appcpu_boot_addr`], drained by [`Machine::step`].
+    /// Thread-local because the sim is single-threaded within any one
+    /// `Machine`; concurrent machines on parallel threads each get their
+    /// own slot. Cleared to None after Machine reads it.
+    pub static APPCPU_BOOT_ADDR: core::cell::Cell<Option<u32>> = const { core::cell::Cell::new(None) };
+}
+
+/// Monotonic-counter thunk for `esp_timer_impl_get_counter_reg()` and
+/// similar 32-bit time-source readers. Returns an ever-increasing value
+/// (steps of 1000 per call) so callers polling for timeout deadlines
+/// actually make progress instead of looping forever.
+pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 =
+        core::sync::atomic::AtomicU32::new(0);
+    let v = MONOTONIC_TICKS.fetch_add(1000, core::sync::atomic::Ordering::Relaxed);
+    RomThunkBank::return_with(cpu, v);
     Ok(())
 }
 

@@ -896,6 +896,15 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
 
     let boxed: Box<dyn Cpu> = Box::new(cpu);
     let mut machine = Machine::new(boxed, bus);
+    // Arduino-ESP32 sketches reach `xTaskCreatePinnedToCore(..., 1)`
+    // for `loopTask` and others — without an APP_CPU to schedule onto,
+    // FreeRTOS spins in `vListInsert` forever. Attach a secondary CPU
+    // (PRID=0xABAB, halted at construction, released by
+    // `ets_set_appcpu_boot_addr` during PRO_CPU boot).
+    if args.profile == "arduino-esp32" {
+        let cpu1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+        machine.cpu_secondary = Some(Box::new(cpu1));
+    }
 
     // Load firmware FIRST — load_firmware writes ELF segments into bus
     // memory, so any bytes we write before this risk being clobbered.
@@ -922,6 +931,13 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     let resolve_data = |sym: &str, fallback: u32| -> u32 {
         symbol_addrs.get(sym).copied().unwrap_or(fallback)
     };
+    // APP_CPU initial stack — read once, used on cpu1 unhalt.
+    // ESP-IDF puts the boot stack at `port_IntStackTop`; if the symbol
+    // is missing (stripped ELF), fall back to a safe high-DRAM addr.
+    let appcpu_initial_sp: u32 = symbol_addrs
+        .get("port_IntStackTop")
+        .copied()
+        .unwrap_or(0x3FFB_F3A0);
 
     // Arduino-ESP32 bootstrap — keep in sync with
     // `wasm/src/lib.rs::install_esp32_arduino_quirks` and the e2e test.
@@ -1041,6 +1057,15 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         "pthread_mutex_init",
         "pthread_mutex_lock",
         "pthread_mutex_unlock",
+        // Dual-core sim: with cpu_secondary actually running, FreeRTOS
+        // primitives can use their real implementations — stubbing them
+        // would defeat the purpose. Only esp_pthread_init stays stubbed
+        // (it depends on per-task TLS we don't model).
+        "esp_pthread_init",
+        "esp_task_wdt_reset",
+        "esp_task_wdt_init",
+        "esp_task_wdt_add",
+        "esp_task_wdt_delete",
         "esp_clk_init",
         "esp_perip_clk_init",
         "core_intr_matrix_clear",
@@ -1053,6 +1078,57 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         "esp_mspi_pin_init",
         "spi_flash_init_chip_state",
         "esp_log_timestamp",
+        // SPI-flash HAL — see loader::extract_arduino_esp32_thunks for why.
+        "spi_flash_hal_configure_host_io_mode",
+        "spi_flash_chip_generic_config_host_io_mode",
+        "spi_flash_chip_generic_get_io_mode",
+        "spi_flash_chip_generic_set_io_mode",
+        "spi_flash_chip_generic_probe",
+        "spi_flash_chip_generic_detect_size",
+        "spi_flash_chip_generic_read",
+        "spi_flash_chip_generic_yield",
+        "spi_flash_chip_gd_probe",
+        "spi_flash_chip_gd_detect_size",
+        "spi_flash_chip_gd_get_io_mode",
+        "spi_flash_chip_gd_set_io_mode",
+        "spi_flash_init",
+        "spi_flash_hal_init",
+        "spi_flash_hal_supports_direct_write",
+        "spi_flash_hal_supports_direct_read",
+        "esp_flash_app_enable_os_functions",
+        "esp_flash_app_disable_os_functions",
+        "esp_flash_app_init",
+        "esp_flash_init_main",
+        "esp_flash_init_default_chip",
+        "esp_flash_init",
+        "esp_random",
+        "esp_fill_random",
+        "esp_log_early_timestamp",
+        "esp_log_writev",
+        "esp_log_write",
+        "esp_log_buffer_hex_internal",
+        "esp_log_buffer_char_internal",
+        "esp_log_buffer_hexdump_internal",
+        "__sfvwrite_r",
+        "__swsetup_r",
+        "__sflush_r",
+        "_printf_r",
+        "_fprintf_r",
+        "_vfprintf_r",
+        "_vprintf_r",
+        "printf",
+        "fprintf",
+        "vfprintf",
+        "vprintf",
+        "puts",
+        "fputs",
+        "fputc",
+        "putchar",
+        "_puts_r",
+        "_fputs_r",
+        "_putchar_r",
+        "_write_r",
+        "write",
     ] {
         if let Some(&pc) = symbol_addrs.get(*sym) {
             thunks.push((pc, rom_thunks::nop_return_zero));
@@ -1072,6 +1148,20 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // version of this thunk pointing at S3's DRAM range.
     if let Some(&pc) = symbol_addrs.get("__getreent") {
         thunks.push((pc, rom_thunks::getreent_dram_fake_ptr));
+    }
+    // esp_timer_impl_get_counter_reg must return a monotonically increasing
+    // value, otherwise polling-loop callers (esp-idf flash HAL, FreeRTOS
+    // timeout helpers) spin forever.
+    if let Some(&pc) = symbol_addrs.get("esp_timer_impl_get_counter_reg") {
+        thunks.push((pc, rom_thunks::monotonic_counter_32));
+    }
+    // Optional debug: install vListInsert short-circuit thunk that dumps
+    // list state for first 20 calls. Used to diagnose SMP race issues in
+    // the FreeRTOS scheduler. Enable with `LABWIRED_DEBUG_VLIST=1`.
+    if std::env::var("LABWIRED_DEBUG_VLIST").is_ok() {
+        if let Some(&pc) = symbol_addrs.get("vListInsert") {
+            thunks.push((pc, rom_thunks::vlist_insert_debug));
+        }
     }
     // AgentDeck-only WiFi + sendHello thunks. Only install for that profile
     // — sketches without those symbols wouldn't trip them anyway.
@@ -1217,11 +1307,50 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         }
+        // Dual-core: snapshot capture bypasses Machine::step, so the
+        // appcpu-release + cpu1.step loop has to live here too. Drain
+        // the APPCPU_BOOT_ADDR slot first (PRO_CPU may have just hit
+        // ets_set_appcpu_boot_addr), then step the secondary CPU.
+        //
+        // Coarse interleaving (CPU1_STEP_DIVISOR): step CPU 1 only once
+        // per N CPU-0 instructions. Per-instruction round-robin loses
+        // races on FreeRTOS spinlocks — once CPU 0 acquires a mux, CPU 1
+        // spinning equal cycles can't make progress, but worse, ESP-IDF
+        // FreeRTOS expects long critical sections to complete with bounded
+        // latency. Coarser batching simulates that.
+        const CPU1_STEP_DIVISOR: u64 = 16;
+        if let Some(cpu1) = machine.cpu_secondary.as_mut() {
+            if let Some(boot_addr) =
+                labwired_core::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR
+                    .with(|s| s.take())
+            {
+                cpu1.set_pc(boot_addr);
+                cpu1.set_sp(appcpu_initial_sp);
+                cpu1.unhalt();
+            }
+            if i % CPU1_STEP_DIVISOR == 0 {
+                match cpu1.step(&mut machine.bus, &observers, &config) {
+                    Ok(()) => {}
+                    Err(SimulationError::BreakpointHit(_)) => {}
+                    Err(e) => {
+                        eprintln!(
+                            "error: sim step cpu1 at cycle {i} pc=0x{:08x}: {e}",
+                            cpu1.get_pc()
+                        );
+                        return ExitCode::from(EXIT_RUNTIME_ERROR);
+                    }
+                }
+            }
+        }
         machine.bus.tick_peripherals_with_costs();
         i += 1;
         if progress > 0 && i % progress == 0 {
+            let cpu1_state = match machine.cpu_secondary.as_ref() {
+                Some(cpu1) => format!("  cpu1=0x{:08x}", cpu1.get_pc()),
+                None => String::new(),
+            };
             eprintln!(
-                "  step {i:>10}  pc=0x{:08x}",
+                "  step {i:>10}  pc=0x{:08x}{cpu1_state}",
                 machine.cpu.get_pc()
             );
         }
