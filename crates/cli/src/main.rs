@@ -1196,6 +1196,10 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
         if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
             if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {
+                eprintln!(
+                    "labwired-cli snapshot: spi3 transactions={}",
+                    spi3.transactions(),
+                );
                 for attached in &spi3.attached_devices {
                     if let Some(panel_any) = attached.as_any() {
                         if let Some(panel) = panel_any.downcast_ref::<Ssd1680Tricolor290>() {
