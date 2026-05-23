@@ -203,6 +203,10 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // before unhalting cpu_secondary.
         "port_IntStackTop",
         "vListInsert",
+        // app_main — start of patching window for the loopTask xCoreID
+        // arg-clobber. We scan ~64 bytes forward looking for the
+        // movi.n + s32i.n a14, a1, 0 pattern.
+        "app_main",
         // RNG — esp_random does an APB-clock-divisor computation that
         // div0s in the sim. We don't need real entropy; nop_return_zero
         // is fine (callers use it for jitter, never as a primary key).
