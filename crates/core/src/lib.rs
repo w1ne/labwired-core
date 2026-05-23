@@ -187,6 +187,15 @@ pub trait Cpu: Send {
     fn halt(&mut self) {}
     /// Release a previously-halted CPU; pairs with [`Self::halt`].
     fn unhalt(&mut self) {}
+
+    /// Current interrupt-mask level. Used by dual-core schedulers to
+    /// serialize critical sections — when one CPU has intlevel > 0
+    /// (typically because portENTER_CRITICAL raised it to 3 to hold a
+    /// spinlock), the sim runs that CPU solo until it drops back to 0.
+    /// Default returns 0 so single-core CPUs need no implementation.
+    fn intlevel(&self) -> u8 {
+        0
+    }
 }
 
 // Forwarding impl so `Machine<Box<dyn Cpu>>` is valid — used by the WASM
@@ -267,6 +276,9 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn unhalt(&mut self) {
         (**self).unhalt()
+    }
+    fn intlevel(&self) -> u8 {
+        (**self).intlevel()
     }
 }
 

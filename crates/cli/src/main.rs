@@ -1357,17 +1357,10 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
             }
         }
         // Dual-core: snapshot capture bypasses Machine::step, so the
-        // appcpu-release + cpu1.step loop has to live here too. Drain
-        // the APPCPU_BOOT_ADDR slot first (PRO_CPU may have just hit
-        // ets_set_appcpu_boot_addr), then step the secondary CPU.
-        //
-        // Coarse interleaving (CPU1_STEP_DIVISOR): step CPU 1 only once
-        // per N CPU-0 instructions. Per-instruction round-robin loses
-        // races on FreeRTOS spinlocks — once CPU 0 acquires a mux, CPU 1
-        // spinning equal cycles can't make progress, but worse, ESP-IDF
-        // FreeRTOS expects long critical sections to complete with bounded
-        // latency. Coarser batching simulates that.
-        const CPU1_STEP_DIVISOR: u64 = 16;
+        // appcpu-release + cpu1.step loop has to live here too. Plain
+        // round-robin per-instruction interleaving — matches the chip's
+        // true parallelism within the granularity of one instruction.
+        // S32C1I is atomic within step() so spinlocks work correctly.
         if let Some(cpu1) = machine.cpu_secondary.as_mut() {
             if let Some(boot_addr) =
                 labwired_core::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR
@@ -1375,24 +1368,17 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
             {
                 cpu1.set_pc(boot_addr);
                 cpu1.set_sp(appcpu_initial_sp);
-                // Keep cpu1 halted while loopTask is patched to PRO_CPU
-                // (avoids SMP race on shared FreeRTOS lists until DC7).
-                // Set LABWIRED_DUALCORE_RUN=1 to also run cpu1.
-                if std::env::var("LABWIRED_DUALCORE_RUN").is_ok() {
-                    cpu1.unhalt();
-                }
+                cpu1.unhalt();
             }
-            if i % CPU1_STEP_DIVISOR == 0 {
-                match cpu1.step(&mut machine.bus, &observers, &config) {
-                    Ok(()) => {}
-                    Err(SimulationError::BreakpointHit(_)) => {}
-                    Err(e) => {
-                        eprintln!(
-                            "error: sim step cpu1 at cycle {i} pc=0x{:08x}: {e}",
-                            cpu1.get_pc()
-                        );
-                        return ExitCode::from(EXIT_RUNTIME_ERROR);
-                    }
+            match cpu1.step(&mut machine.bus, &observers, &config) {
+                Ok(()) => {}
+                Err(SimulationError::BreakpointHit(_)) => {}
+                Err(e) => {
+                    eprintln!(
+                        "error: sim step cpu1 at cycle {i} pc=0x{:08x}: {e}",
+                        cpu1.get_pc()
+                    );
+                    return ExitCode::from(EXIT_RUNTIME_ERROR);
                 }
             }
         }
@@ -1407,6 +1393,48 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                 "  step {i:>10}  pc=0x{:08x}{cpu1_state}",
                 machine.cpu.get_pc()
             );
+            // Optional DC7 debug: dump vListInsert state on spin. Set
+            // LABWIRED_DEBUG_LIST=1 to enable. Shows cpu intlevel,
+            // xTaskQueueMutex state, pxList walk, and newItem state.
+            if std::env::var("LABWIRED_DEBUG_LIST").is_ok() {
+                eprintln!("    cpu0 intlevel={} a0=0x{:08x} a1=0x{:08x}",
+                    machine.cpu.intlevel(),
+                    machine.cpu.get_register(0),
+                    machine.cpu.get_register(1));
+                let mux_owner = machine.bus.read_u32(0x3ffbf3b8).unwrap_or(0xDEAD);
+                let mux_count = machine.bus.read_u32(0x3ffbf3bc).unwrap_or(0xDEAD);
+                eprintln!("    xTaskQueueMutex.owner=0x{mux_owner:08x} .count={mux_count}");
+                if let Some(cpu1) = machine.cpu_secondary.as_ref() {
+                    eprintln!("    cpu1 intlevel={} a0=0x{:08x} a1=0x{:08x}",
+                        cpu1.intlevel(),
+                        cpu1.get_register(0),
+                        cpu1.get_register(1));
+                }
+                let px_list = machine.cpu.get_register(2);
+                let r = |off: u32| machine.bus.read_u32((px_list + off) as u64).unwrap_or(0xDEAD);
+                eprintln!(
+                    "    cpu0 pxList=0x{px_list:08x} num={} idx=0x{:08x} end.val=0x{:08x} end.next=0x{:08x} end.prev=0x{:08x}",
+                    r(0), r(4), r(8), r(12), r(16)
+                );
+                let mut iter = r(12);
+                let end_addr = px_list + 8;
+                for hop in 0..6 {
+                    if iter == end_addr {
+                        eprintln!("      [hop {hop}] -> xListEnd (terminator)");
+                        break;
+                    }
+                    let item_next = machine.bus.read_u32((iter + 4) as u64).unwrap_or(0xDEAD);
+                    let item_val = machine.bus.read_u32(iter as u64).unwrap_or(0xDEAD);
+                    eprintln!("      [hop {hop}] item=0x{iter:08x} val=0x{item_val:08x} next=0x{item_next:08x}");
+                    iter = item_next;
+                }
+                let new_item = machine.cpu.get_register(3);
+                let ri = |off: u32| machine.bus.read_u32((new_item + off) as u64).unwrap_or(0xDEAD);
+                eprintln!(
+                    "    cpu0 newItem=0x{new_item:08x} item.val=0x{:08x} item.next=0x{:08x} item.prev=0x{:08x} item.owner=0x{:08x}",
+                    ri(0), ri(4), ri(8), ri(12)
+                );
+            }
         }
     }
 

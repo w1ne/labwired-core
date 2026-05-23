@@ -1778,6 +1778,9 @@ impl Cpu for XtensaLx7 {
     fn unhalt(&mut self) {
         self.halted = false;
     }
+    fn intlevel(&self) -> u8 {
+        self.ps.intlevel()
+    }
 
     fn step(
         &mut self,
