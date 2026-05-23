@@ -143,27 +143,9 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         //    other task to preempt — return success immediately.  Real
         //    silicon's RSIL+spinlock spin forever if the lock owner is
         //    a CPU we don't model.
-        "xPortEnterCriticalTimeout",
-        "vPortExitCritical",
-        "vPortEnterCritical",
-        "xPortInIsrContext",
-        "vPortYield",
-        "vPortYieldFromISR",
-        "vPortYieldOtherCore",
-        "spinlock_acquire",
-        "spinlock_release",
-        // ── FreeRTOS task / sched primitives the single-task sim noops out.
-        //    setup() runs synchronously from loopTask; no other tasks
-        //    actually exist.
-        "vTaskDelay",
-        "vTaskSuspendAll",
-        "xTaskResumeAll",
-        "xQueueGenericCreate",
-        "xQueueGenericSend",
-        "xQueueReceive",
-        "xSemaphoreCreateBinary",
-        "xSemaphoreTake",
-        "xSemaphoreGive",
+        // Dual-core sim: real FreeRTOS primitives are used now that
+        // cpu_secondary runs. Only esp_pthread_init stays stubbed —
+        // per-task pthread TLS isn't modeled.
         "esp_pthread_init",
         // ── Watchdog refresh — sketches loop fast in sim so the WDT-feed
         //    matters less, but stub it to avoid any extra cycles burned.
@@ -215,6 +197,11 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // resolved here and routed to a dedicated thunk in the cli (not
         // the nop_return_zero list).
         "esp_timer_impl_get_counter_reg",
+        // APP_CPU initial stack — call_start_cpu1 starts with `entry a1, 32`
+        // assuming a valid stack. ESP-IDF puts the boot stack at
+        // `port_IntStackTop`. The cli reads this symbol and seeds a1
+        // before unhalting cpu_secondary.
+        "port_IntStackTop",
         // RNG — esp_random does an APB-clock-divisor computation that
         // div0s in the sim. We don't need real entropy; nop_return_zero
         // is fine (callers use it for jitter, never as a primary key).

@@ -179,6 +179,14 @@ pub trait Cpu: Send {
     /// cross-core IPI bridge in the host runtime can synthesise edges
     /// without owning the SR file directly.
     fn raise_interrupt_bits(&mut self, _mask: u32) {}
+
+    /// Halt this CPU: subsequent `step()` calls are no-ops until
+    /// `unhalt()`. Models reset-hold for dual-core SoCs where one core
+    /// is held in reset until the bootstrap CPU releases it. Default
+    /// no-op so single-core CPUs need no implementation.
+    fn halt(&mut self) {}
+    /// Release a previously-halted CPU; pairs with [`Self::halt`].
+    fn unhalt(&mut self) {}
 }
 
 // Forwarding impl so `Machine<Box<dyn Cpu>>` is valid — used by the WASM
@@ -253,6 +261,12 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn raise_interrupt_bits(&mut self, mask: u32) {
         (**self).raise_interrupt_bits(mask)
+    }
+    fn halt(&mut self) {
+        (**self).halt()
+    }
+    fn unhalt(&mut self) {
+        (**self).unhalt()
     }
 }
 
@@ -464,6 +478,13 @@ pub enum StopReason {
 
 pub struct Machine<C: Cpu> {
     pub cpu: C,
+    /// Secondary CPU instance — for dual-core SoCs (ESP32, ESP32-S3).
+    /// When `Some`, `step()` interleaves CPU 0 and CPU 1 instructions
+    /// over a shared bus. `None` for everything else (Cortex-M, RP2040,
+    /// pre-existing single-core Xtensa configs that don't opt in).
+    /// Snapshot/restore APIs currently track only the primary CPU —
+    /// callers that need full dual-core snapshots must extend the format.
+    pub cpu_secondary: Option<C>,
     pub bus: bus::SystemBus,
     pub observers: Vec<Arc<dyn SimulationObserver>>,
 
@@ -478,6 +499,7 @@ impl<C: Cpu> Machine<C> {
     pub fn new(cpu: C, bus: bus::SystemBus) -> Self {
         Self {
             cpu,
+            cpu_secondary: None,
             bus,
             observers: Vec::new(),
             breakpoints: HashSet::new(),
@@ -485,6 +507,15 @@ impl<C: Cpu> Machine<C> {
             total_cycles: 0,
             config: SimulationConfig::default(),
         }
+    }
+
+    /// Enable dual-core mode by attaching a secondary CPU instance.
+    /// The secondary CPU shares the same bus and steps in lockstep with
+    /// the primary (one instruction each per `Machine::step()`). Used by
+    /// ESP32 configs to model APP_CPU alongside PRO_CPU.
+    pub fn with_secondary_cpu(mut self, cpu1: C) -> Self {
+        self.cpu_secondary = Some(cpu1);
+        self
     }
 
     /// Take a binary mid-flight runtime snapshot of the entire machine —
@@ -589,13 +620,36 @@ impl<C: Cpu> Machine<C> {
     }
 
     pub fn reset(&mut self) -> SimResult<()> {
-        self.cpu.reset(&mut self.bus)
+        self.cpu.reset(&mut self.bus)?;
+        if let Some(cpu1) = self.cpu_secondary.as_mut() {
+            cpu1.reset(&mut self.bus)?;
+        }
+        Ok(())
     }
 
     pub fn step(&mut self) -> SimResult<()> {
         self.total_cycles += 1;
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
+        // Dual-core: step the secondary CPU one instruction per
+        // primary-CPU instruction (round-robin). Cycle counter only
+        // advances for the primary CPU — keeps observer/snapshot
+        // semantics stable. Errors on CPU 1 bubble up the same way.
+        if let Some(cpu1) = self.cpu_secondary.as_mut() {
+            // CPU 0 may have just called `ets_set_appcpu_boot_addr` to
+            // release APP_CPU from reset-hold. The thunk stashed the
+            // boot address in a thread-local; drain it here, apply to
+            // the secondary CPU's PC, and unhalt so the next round-robin
+            // tick starts executing from that address.
+            if let Some(boot_addr) =
+                crate::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR
+                    .with(|s| s.take())
+            {
+                cpu1.set_pc(boot_addr);
+                cpu1.unhalt();
+            }
+            cpu1.step(&mut self.bus, &self.observers, &self.config)?;
+        }
 
         if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
             // Propagate peripherals

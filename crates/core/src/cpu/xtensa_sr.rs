@@ -82,8 +82,13 @@ pub const CCOMPARE2: u16 = 242;
 
 // ── Reset values ─────────────────────────────────────────────────────────────
 
-/// Fixed PRID for ESP32-S3 LX7 PRO core simulation.
+/// Fixed PRID for ESP32 LX6/LX7 PRO core (CPU 0). Real silicon value;
+/// ESP-IDF `xPortGetCoreID()` returns `(PRID >> 13) & 1` → 0.
 pub const PRID_RESET_VALUE: u32 = 0xCDCD;
+
+/// PRID for the APP core (CPU 1) on dual-core ESP32 / ESP32-S3.
+/// `(0xABAB >> 13) & 1` → 1, so `xPortGetCoreID()` returns 1 on this CPU.
+pub const PRID_APP_CPU_VALUE: u32 = 0xABAB;
 
 /// VECBASE reset value for ESP32-S3 (ROM vector table base).
 pub const VECBASE_RESET_VALUE: u32 = 0x4000_0000;
@@ -122,6 +127,16 @@ impl XtensaSrFile {
         };
         s.storage[IDX_VECBASE] = VECBASE_RESET_VALUE;
         s.storage[IDX_PRID] = PRID_RESET_VALUE;
+        s
+    }
+
+    /// Like [`Self::new`] but seeds PRID with the APP-core value
+    /// ([`PRID_APP_CPU_VALUE`]). Used by dual-core configs when
+    /// constructing the secondary CPU's SR file so RSR.PRID reads
+    /// 0xABAB and `xPortGetCoreID` returns 1.
+    pub fn new_app_cpu() -> Self {
+        let mut s = Self::new();
+        s.storage[IDX_PRID] = PRID_APP_CPU_VALUE;
         s
     }
 

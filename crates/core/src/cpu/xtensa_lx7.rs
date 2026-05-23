@@ -99,6 +99,11 @@ pub struct XtensaLx7 {
     /// fall-through to LEND from the last body instruction (loop-back).
     /// Cleared at the start of every step.
     pub branched: bool,
+    /// When true, `Cpu::step` is a no-op for this instance — used by
+    /// dual-core configs to keep APP_CPU parked until PRO_CPU writes the
+    /// app-cpu boot address (mirrors real silicon's reset-hold). Default
+    /// false; ESP32 dual-core setup sets it on cpu_secondary at boot.
+    pub halted: bool,
 }
 
 impl XtensaLx7 {
@@ -112,7 +117,18 @@ impl XtensaLx7 {
             ur: [0u32; 256],
             pc: 0x4000_0400,
             branched: false,
+            halted: false,
         }
+    }
+
+    /// Construct an APP_CPU instance: PRID reads as 0xABAB (so
+    /// `xPortGetCoreID()` returns 1) and the CPU starts halted —
+    /// waiting for PRO_CPU to release it via `ets_set_appcpu_boot_addr`.
+    pub fn new_app_cpu() -> Self {
+        let mut cpu = Self::new();
+        cpu.sr = XtensaSrFile::new_app_cpu();
+        cpu.halted = true;
+        cpu
     }
 
     /// Read an SR by ID, with special routing for PS / WINDOWBASE / WINDOWSTART
@@ -1741,13 +1757,26 @@ impl Default for XtensaLx7 {
 
 impl Cpu for XtensaLx7 {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
+        let was_halted = self.halted;
         self.regs = ArFile::new();
         // HW-verified: PS reset = 0x1F (EXCM=1, INTLEVEL=0xF — all ints masked).
         // Confirmed via OpenOCD `reset halt` on real S3-Zero: ps = 0x0000001f.
         self.ps = Ps::from_raw(0x1F);
         self.sr = XtensaSrFile::new(); // sets VECBASE=0x40000000, PRID=0xCDCD
         self.pc = 0x4000_0400;
+        // Preserve halted state across reset — a CPU configured as
+        // APP_CPU (halted at construction) must stay halted through the
+        // Machine::load_firmware reset, otherwise it'd race PRO_CPU
+        // through the firmware entry point.
+        self.halted = was_halted;
         Ok(())
+    }
+
+    fn halt(&mut self) {
+        self.halted = true;
+    }
+    fn unhalt(&mut self) {
+        self.halted = false;
     }
 
     fn step(
@@ -1756,6 +1785,14 @@ impl Cpu for XtensaLx7 {
         _observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
+        // Dual-core: a halted CPU contributes nothing — skip the entire
+        // step (no CCOUNT advance, no fetch, no IRQ dispatch). Real
+        // silicon's APP_CPU sits in reset until PRO_CPU releases it; we
+        // model that by leaving `halted=true` until the boot-addr thunk
+        // captures the entry point and unhalts the secondary CPU.
+        if self.halted {
+            return Ok(());
+        }
         // ── Pre-fetch interrupt check ─────────────────────────────────────────
         // Per Xtensa ISA RM §4.4.1: check for pending interrupts before fetching
         // the next instruction.

@@ -211,9 +211,28 @@ pub fn rom_config_instruction_cache_mode(cpu: &mut XtensaLx7, _bus: &mut dyn Bus
     Ok(())
 }
 
-/// `ets_set_appcpu_boot_addr(addr: u32) -> u32` — NOP, returns 0
-/// (cpu1 is not modelled in Plan 2).
+/// `ets_set_appcpu_boot_addr(addr: u32) -> u32` — real silicon: stores
+/// the address PRO_CPU wants APP_CPU to start executing at, then
+/// releases APP_CPU from reset-hold. In dual-core sim configs we stash
+/// the boot_addr in a thread-local that `Machine::step` reads on its
+/// next tick to unhalt `cpu_secondary` with PC = boot_addr. Single-core
+/// configs ignore the stash (no secondary CPU to wake), so the thunk
+/// stays safe for either configuration.
 pub fn ets_set_appcpu_boot_addr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    // Argument register: a2 (CALL0), or a[N*4+2] under CALLn windowing.
+    let arg_slot = if cpu.ps.callinc() == 0 {
+        2
+    } else {
+        cpu.ps.callinc() * 4 + 2
+    };
+    let boot_addr = cpu.regs.read_logical(arg_slot);
+    // Only release APP_CPU on a real entry-point write. ESP-IDF's
+    // `esp_cpu_stall` path also calls this with addr=0 to reset the
+    // shadow register before re-stalling — treat that as a no-op (we
+    // don't model APP_CPU stall/resume cycles, just the initial wake).
+    if boot_addr != 0 {
+        APPCPU_BOOT_ADDR.with(|slot| slot.set(Some(boot_addr)));
+    }
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
@@ -297,6 +316,14 @@ pub fn nop_return_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult
 pub fn getreent_dram_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0x3FFB_F000);
     Ok(())
+}
+
+thread_local! {
+    /// Set by [`set_appcpu_boot_addr`], drained by [`Machine::step`].
+    /// Thread-local because the sim is single-threaded within any one
+    /// `Machine`; concurrent machines on parallel threads each get their
+    /// own slot. Cleared to None after Machine reads it.
+    pub static APPCPU_BOOT_ADDR: core::cell::Cell<Option<u32>> = const { core::cell::Cell::new(None) };
 }
 
 /// Monotonic-counter thunk for `esp_timer_impl_get_counter_reg()` and

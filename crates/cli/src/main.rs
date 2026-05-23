@@ -896,6 +896,15 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
 
     let boxed: Box<dyn Cpu> = Box::new(cpu);
     let mut machine = Machine::new(boxed, bus);
+    // Arduino-ESP32 sketches reach `xTaskCreatePinnedToCore(..., 1)`
+    // for `loopTask` and others — without an APP_CPU to schedule onto,
+    // FreeRTOS spins in `vListInsert` forever. Attach a secondary CPU
+    // (PRID=0xABAB, halted at construction, released by
+    // `ets_set_appcpu_boot_addr` during PRO_CPU boot).
+    if args.profile == "arduino-esp32" {
+        let cpu1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+        machine.cpu_secondary = Some(Box::new(cpu1));
+    }
 
     // Load firmware FIRST — load_firmware writes ELF segments into bus
     // memory, so any bytes we write before this risk being clobbered.
@@ -922,6 +931,13 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     let resolve_data = |sym: &str, fallback: u32| -> u32 {
         symbol_addrs.get(sym).copied().unwrap_or(fallback)
     };
+    // APP_CPU initial stack — read once, used on cpu1 unhalt.
+    // ESP-IDF puts the boot stack at `port_IntStackTop`; if the symbol
+    // is missing (stripped ELF), fall back to a safe high-DRAM addr.
+    let appcpu_initial_sp: u32 = symbol_addrs
+        .get("port_IntStackTop")
+        .copied()
+        .unwrap_or(0x3FFB_F3A0);
 
     // Arduino-ESP32 bootstrap — keep in sync with
     // `wasm/src/lib.rs::install_esp32_arduino_quirks` and the e2e test.
@@ -1041,25 +1057,10 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         "pthread_mutex_init",
         "pthread_mutex_lock",
         "pthread_mutex_unlock",
-        // FreeRTOS critical sections / sync
-        "xPortEnterCriticalTimeout",
-        "vPortExitCritical",
-        "vPortEnterCritical",
-        "xPortInIsrContext",
-        "vPortYield",
-        "vPortYieldFromISR",
-        "vPortYieldOtherCore",
-        "spinlock_acquire",
-        "spinlock_release",
-        "vTaskDelay",
-        "vTaskSuspendAll",
-        "xTaskResumeAll",
-        "xQueueGenericCreate",
-        "xQueueGenericSend",
-        "xQueueReceive",
-        "xSemaphoreCreateBinary",
-        "xSemaphoreTake",
-        "xSemaphoreGive",
+        // Dual-core sim: with cpu_secondary actually running, FreeRTOS
+        // primitives can use their real implementations — stubbing them
+        // would defeat the purpose. Only esp_pthread_init stays stubbed
+        // (it depends on per-task TLS we don't model).
         "esp_pthread_init",
         "esp_task_wdt_reset",
         "esp_task_wdt_init",
@@ -1298,11 +1299,40 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         }
+        // Dual-core: snapshot capture bypasses Machine::step, so the
+        // appcpu-release + cpu1.step loop has to live here too. Drain
+        // the APPCPU_BOOT_ADDR slot first (PRO_CPU may have just hit
+        // ets_set_appcpu_boot_addr), then step the secondary CPU.
+        if let Some(cpu1) = machine.cpu_secondary.as_mut() {
+            if let Some(boot_addr) =
+                labwired_core::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR
+                    .with(|s| s.take())
+            {
+                cpu1.set_pc(boot_addr);
+                cpu1.set_sp(appcpu_initial_sp);
+                cpu1.unhalt();
+            }
+            match cpu1.step(&mut machine.bus, &observers, &config) {
+                Ok(()) => {}
+                Err(SimulationError::BreakpointHit(_)) => {}
+                Err(e) => {
+                    eprintln!(
+                        "error: sim step cpu1 at cycle {i} pc=0x{:08x}: {e}",
+                        cpu1.get_pc()
+                    );
+                    return ExitCode::from(EXIT_RUNTIME_ERROR);
+                }
+            }
+        }
         machine.bus.tick_peripherals_with_costs();
         i += 1;
         if progress > 0 && i % progress == 0 {
+            let cpu1_state = match machine.cpu_secondary.as_ref() {
+                Some(cpu1) => format!("  cpu1=0x{:08x}", cpu1.get_pc()),
+                None => String::new(),
+            };
             eprintln!(
-                "  step {i:>10}  pc=0x{:08x}",
+                "  step {i:>10}  pc=0x{:08x}{cpu1_state}",
                 machine.cpu.get_pc()
             );
         }
