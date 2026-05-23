@@ -939,6 +939,55 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         .copied()
         .unwrap_or(0x3FFB_F3A0);
 
+    // loopTask xCoreID arg-clobber: Arduino-ESP32's app_main calls
+    // xTaskCreateUniversal(loopTask, ..., xCoreID=1) which pins loopTask
+    // to APP_CPU. The 7th arg goes on the stack as `s32i.n a14, a1, 0`
+    // where a14=1 (reused from priority). Until DC7 fixes the FreeRTOS
+    // SMP race blocking cpu1 from running, we patch loopTask to land on
+    // PRO_CPU instead by swapping the last two instructions:
+    //
+    // Before: ... e9 01 0d 0c ...  (s32i.n a14,a1,0 then movi.n a13,0)
+    // After:  ... 0d 0c d9 01 ...  (movi.n a13,0 then s32i.n a13,a1,0)
+    //
+    // a14 (= priority 1) stays untouched. a13 is set to 0 first, then
+    // stored to SP+0 (= xCoreID arg). Same 4 bytes, same memory layout.
+    if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
+        const SCAN_BYTES: u32 = 64;
+        let mut window: Vec<u8> = Vec::with_capacity(SCAN_BYTES as usize);
+        for off in 0..SCAN_BYTES {
+            match machine.bus.read_u8((app_main_addr + off) as u64) {
+                Ok(b) => window.push(b),
+                Err(_) => break,
+            }
+        }
+        // Find the 4-byte sequence `E9 01 0C 0D` (s32i.n a14,a1,0
+        // followed by movi.n a13,0). Memory layout (LE) for each
+        // 16-bit narrow instruction is empirically encoded as
+        // `e9 01` for s32i.n a14,a1,0 and `0c 0d` for movi.n a13,0.
+        let target = [0xE9, 0x01, 0x0C, 0x0D];
+        let swap = [0x0C, 0x0D, 0xD9, 0x01];
+        let hit = window
+            .windows(4)
+            .enumerate()
+            .find(|(_, w)| *w == target)
+            .map(|(i, _)| i);
+        if let Some(i) = hit {
+            let patch_addr = (app_main_addr + i as u32) as u64;
+            let mut ok = true;
+            for (j, b) in swap.iter().enumerate() {
+                if machine.bus.write_u8(patch_addr + j as u64, *b).is_err() {
+                    ok = false;
+                    break;
+                }
+            }
+            if ok {
+                eprintln!(
+                    "labwired-cli snapshot: patched loopTask xCoreID at 0x{patch_addr:08x} (1→0, loopTask runs on PRO_CPU)"
+                );
+            }
+        }
+    }
+
     // Arduino-ESP32 bootstrap — keep in sync with
     // `wasm/src/lib.rs::install_esp32_arduino_quirks` and the e2e test.
     machine.cpu.set_sp(0x3FFE_0000);
@@ -1326,7 +1375,12 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
             {
                 cpu1.set_pc(boot_addr);
                 cpu1.set_sp(appcpu_initial_sp);
-                cpu1.unhalt();
+                // Keep cpu1 halted while loopTask is patched to PRO_CPU
+                // (avoids SMP race on shared FreeRTOS lists until DC7).
+                // Set LABWIRED_DUALCORE_RUN=1 to also run cpu1.
+                if std::env::var("LABWIRED_DUALCORE_RUN").is_ok() {
+                    cpu1.unhalt();
+                }
             }
             if i % CPU1_STEP_DIVISOR == 0 {
                 match cpu1.step(&mut machine.bus, &observers, &config) {
