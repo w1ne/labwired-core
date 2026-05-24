@@ -412,7 +412,7 @@ pub fn spi_class_transfer(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
     let callinc = cpu.ps.callinc();
     let n = callinc * 4;
     let this = cpu.regs.read_logical(n + 2);
-    let byte = (cpu.regs.read_logical(n + 3) & 0xFF) as u32;
+    let byte = cpu.regs.read_logical(n + 3) & 0xFF;
 
     // Resolve SPI peripheral base. Prefer firmware's `_spi->dev` when
     // populated; fall back to SPI3 (the bus our SSD1680 model is
