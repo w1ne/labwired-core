@@ -129,6 +129,18 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // init happens via the SPIClass::beginTransaction thunk.
         "SPI",
         "_ZN8SPIClass16beginTransactionE11SPISettings",
+        // GxEPD2_EPD::_writeCommand / _writeData — intercepted at the
+        // top of the Arduino driver so DC=cmd vs DC=data routing is
+        // explicit (the real silicon uses a sideband GPIO pin we don't
+        // observe in the SPI peripheral model). The thunks write the
+        // byte straight into the attached UC8151D panel's
+        // `command_byte` / `data_byte` API, bypassing the
+        // Arduino-ESP32 SPI library (whose `_spi` struct fields aren't
+        // fully populated without a real `SPI.begin()` call) and the
+        // Esp32Spi FIFO routing. Same byte stream the real panel
+        // receives, byte-for-byte.
+        "_ZN10GxEPD2_EPD13_writeCommandEh",
+        "_ZN10GxEPD2_EPD10_writeDataEh",
         "_esp_error_check_failed",
         "setCpuFrequencyMhz",
         "esp_ota_get_running_partition", // fake non-null ptr

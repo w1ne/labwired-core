@@ -295,6 +295,145 @@ pub fn nop_return_zero(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()>
     Ok(())
 }
 
+/// Thunk for `GxEPD2_EPD::_writeCommand(uint8_t)`.
+///
+/// Reaches directly into the [`Uc8151dTricolor290`] panel attached to
+/// `spi3` and calls `command_byte(byte)`. This bypasses the full
+/// firmware-side path through the Arduino-ESP32 SPI library, which on
+/// our sim's incomplete `_spi` struct produces wrong MOSI_DLEN values
+/// that mangle the SSD1680/UC8151D protocol stream. Routing CMD vs
+/// DATA at the GxEPD2 entry point is the cleanest place to inject DC
+/// state — real silicon uses the DC GPIO pin; we use the calling
+/// function identity.
+pub fn gxepd_write_command(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let callinc = cpu.ps.callinc();
+    let n = callinc * 4;
+    let byte = (cpu.regs.read_logical(n + 3) & 0xFF) as u8;
+    if let Some(bus_any) = bus.as_any_mut() {
+        if let Some(sys_bus) = bus_any.downcast_mut::<crate::bus::SystemBus>() {
+            if let Some(spi3_idx) = sys_bus.find_peripheral_index_by_name("spi3") {
+                if let Some(any) = sys_bus.peripherals[spi3_idx].dev.as_any_mut() {
+                    if let Some(spi3) =
+                        any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
+                    {
+                        for attached in &mut spi3.attached_devices {
+                            if let Some(panel_any) = attached.as_any_mut() {
+                                if let Some(panel) = panel_any.downcast_mut::<
+                                    crate::peripherals::components::Uc8151dTricolor290,
+                                >() {
+                                    panel.command_byte(byte);
+                                }
+                            }
+                        }
+                        // Record the byte in capture for diagnostics.
+                        spi3.push_captured_byte(byte);
+                    }
+                }
+            }
+        }
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// Thunk for `GxEPD2_EPD::_writeData(uint8_t)`. See
+/// [`gxepd_write_command`] for context — same routing, but invokes
+/// `panel.data_byte(byte)` for the DC=high path.
+pub fn gxepd_write_data(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let callinc = cpu.ps.callinc();
+    let n = callinc * 4;
+    let byte = (cpu.regs.read_logical(n + 3) & 0xFF) as u8;
+    if let Some(bus_any) = bus.as_any_mut() {
+        if let Some(sys_bus) = bus_any.downcast_mut::<crate::bus::SystemBus>() {
+            if let Some(spi3_idx) = sys_bus.find_peripheral_index_by_name("spi3") {
+                if let Some(any) = sys_bus.peripherals[spi3_idx].dev.as_any_mut() {
+                    if let Some(spi3) =
+                        any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
+                    {
+                        for attached in &mut spi3.attached_devices {
+                            if let Some(panel_any) = attached.as_any_mut() {
+                                if let Some(panel) = panel_any.downcast_mut::<
+                                    crate::peripherals::components::Uc8151dTricolor290,
+                                >() {
+                                    panel.data_byte(byte);
+                                }
+                            }
+                        }
+                        spi3.push_captured_byte(byte);
+                    }
+                }
+            }
+        }
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// Thunk for `SPIClass::transfer(uint8_t)` (and the underlying
+/// `spiTransferByteNL` / `spiTransferByte`).
+///
+/// In real Arduino-ESP32 the call chain is:
+///   `SPIClass::transfer(byte)` →
+///   `spiTransferByteNL(spi, byte)` →
+///   writes `MOSI_DLEN = 7`, writes byte to W0, sets `CMD.USR = 1`,
+///   spins on `CMD.USR`, reads back W0 as the received byte.
+///
+/// In sim, the firmware's `_spi` struct is populated by our
+/// [`spi_class_begin_transaction`] thunk but doesn't carry every field
+/// the real library expects (`_spi->lock`, `_spi->cur_freq`, …). When
+/// `spiTransferByteNL` reads from `_spi->dev` and finds a fake-but-
+/// well-aligned peripheral base address, it computes a `MOSI_DLEN`
+/// value from data we never populated and the resulting bytes-on-the-
+/// wire don't match what the panel expects (`01 28 50 77 04` instead
+/// of `01 27 01 00` for `DRIVER_OUTPUT_CONTROL`).
+///
+/// Cleanest fix: intercept at `SPIClass::transfer(byte)` and write the
+/// byte directly to the right `Esp32Spi` peripheral's registers using
+/// the bus. We use the same offsets the real library would (MOSI_DLEN
+/// = 7, W0 = byte, CMD.USR = 1) — our peripheral then drains the byte
+/// to the attached SSD1680 model exactly as if the firmware's driver
+/// had done it correctly.
+///
+/// Argument convention: a2 = `this` (`SPIClass*`), a3 = byte (low 8
+/// bits). The thunk reads `_spi` (at `this+4`) → `dev` (at `_spi+0`)
+/// to find the peripheral base, defaulting to SPI3 (0x3FF6_5000) when
+/// the firmware hasn't populated `_spi` yet (some code paths reach
+/// `transfer` before `beginTransaction`).
+///
+/// Returns 0 (the SSD1680 protocol is write-only on the panel-render
+/// path; GxEPD2 ignores the byte read back from `SPI.transfer`).
+pub fn spi_class_transfer(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    use crate::peripherals::esp32::spi::{REG_USER, USER_USR_MOSI_BIT};
+    const REG_CMD: u64 = 0x00;
+    const REG_MOSI_DLEN: u64 = 0x28;
+    const FIFO_W0: u64 = 0x80;
+    const CMD_USR_BIT: u32 = 1 << 18;
+
+    let callinc = cpu.ps.callinc();
+    let n = callinc * 4;
+    let this = cpu.regs.read_logical(n + 2);
+    let byte = (cpu.regs.read_logical(n + 3) & 0xFF) as u32;
+
+    // Resolve SPI peripheral base. Prefer firmware's `_spi->dev` when
+    // populated; fall back to SPI3 (the bus our SSD1680 model is
+    // attached to) when `_spi` is NULL or unmapped.
+    let spi_t_ptr = bus.read_u32(this as u64 + 4).unwrap_or(0);
+    let dev_base = if spi_t_ptr != 0 {
+        bus.read_u32(spi_t_ptr as u64).unwrap_or(0x3FF6_5000)
+    } else {
+        0x3FF6_5000
+    };
+    let dev = dev_base as u64;
+
+    bus.write_u32(dev + REG_MOSI_DLEN, 7)?; // 8 bits = 1 byte
+    bus.write_u32(dev + FIFO_W0, byte)?;
+    bus.write_u32(dev + REG_USER, USER_USR_MOSI_BIT)?;
+    bus.write_u32(dev + REG_CMD, CMD_USR_BIT)?; // kick — peripheral drains synchronously
+
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// Custom thunk for `xthal_window_spill_nw` / `xthal_window_spill`.
 ///
 /// The Xtensa HAL routine walks the AR file and for each live AR slot
@@ -349,7 +488,13 @@ pub fn xthal_window_spill_thunk(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimRe
         let _ = bus.write_u32(sp - 8, a2);
         let _ = bus.write_u32(sp - 4, a3);
     }
-    // Plain RET.N: PC ← a0. We bypass PS.CALLINC routing entirely.
+    // Plain RET.N: PC ← a0. The function's actual terminal instruction
+    // is `ret.n` (0x0d 0xf0) regardless of how it was entered, so
+    // emulating that directly is correct for both the `_nw` (CALL0)
+    // entry and the wrapper (CALL{n} which does its own ENTRY). We
+    // bypass PS.CALLINC routing because some firmware code paths reach
+    // the spill via `j` (jump), leaving CALLINC stale from an
+    // unrelated outer frame.
     cpu.pc = cpu.regs.read_logical(0);
     Ok(())
 }

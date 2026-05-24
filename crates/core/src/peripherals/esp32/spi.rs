@@ -100,6 +100,16 @@ impl Esp32Spi {
         &self.captured_bytes
     }
 
+    /// Append one byte to the capture buffer. Intended for ROM thunks
+    /// that bypass the FIFO/CMD.USR path (e.g. GxEPD2 `_writeCommand` /
+    /// `_writeData` thunks) but still want bytes visible to diagnostic
+    /// dumps.
+    pub fn push_captured_byte(&mut self, byte: u8) {
+        if self.record_enabled {
+            self.captured_bytes.push(byte);
+        }
+    }
+
     pub fn transactions(&self) -> u64 {
         self.transactions
     }
