@@ -30,7 +30,7 @@ Same firmware ELF runs on a real STM32H563ZI Nucleo and on the simulator. UART o
 Pinned release (recommended):
 
 ```sh
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.14.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.15.0 sh
 labwired --version
 ```
 
@@ -39,7 +39,7 @@ Prefer to read the script first:
 ```sh
 curl -fsSL https://labwired.com/install.sh -o install.sh
 # review install.sh, then:
-LABWIRED_VERSION=v0.14.0 sh install.sh
+LABWIRED_VERSION=v0.15.0 sh install.sh
 ```
 
 Supported host environments:
@@ -49,7 +49,7 @@ Supported host environments:
 
 Install options:
 
-- `LABWIRED_VERSION=v0.14.0` pins a release (omit for latest).
+- `LABWIRED_VERSION=v0.15.0` pins a release (omit for latest).
 - `LABWIRED_FROM_SOURCE=1` forces source build.
 - `LABWIRED_INSTALL_DIR=~/.local/bin` overrides install dir.
 

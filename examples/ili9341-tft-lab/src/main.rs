@@ -5,8 +5,8 @@
 //!   2. ILI9341 init sequence (SLPOUT → COLMOD → DISPON)
 //!   3. CASET / PASET window set + RAMWR pixel write
 //!   4. Two 240×16 horizontal colour bands visible in the canvas widget:
-//!        Row 0..15  — eight equal-width vertical colour bars (EBU test pattern)
-//!        Row 16..31 — solid bright red (0xF800)
+//!      - Row 0..15  — eight equal-width vertical colour bars (EBU test pattern)
+//!      - Row 16..31 — solid bright red (0xF800)
 //!   5. Continuous loop printing "frame done" to UART
 //!
 //! Pin mapping (SPI1 on STM32F103):
@@ -180,9 +180,9 @@ fn draw_colour_bars(row_start: u16) {
     cs_low();
     spi_write(0x2C); // RAMWR
     for _row in 0..ROWS {
-        for bar_idx in 0..8usize {
+        for &color in &colours {
             for _px in 0..BAR_W {
-                tft_pixel(colours[bar_idx]);
+                tft_pixel(color);
             }
         }
     }

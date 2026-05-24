@@ -1328,29 +1328,6 @@ impl SystemBus {
     }
 
     pub fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
-        // Debug: catch FreeRTOS list-item self-reference (item.pxNext = &item).
-        // ListItem_t layout has pxNext at offset 4; writing item-pointer P to
-        // address P+4 means item references itself. Gated by env var so the
-        // check is zero-cost in normal runs.
-        if std::env::var_os("LABWIRED_TRACE_LIST_CORRUPTION").is_some() {
-            if (addr as u32).wrapping_sub(value) == 4
-                && value >= 0x3FF8_0000
-                && value < 0x4000_0000
-            {
-                eprintln!(
-                    "[bus-watch] self-ref write: addr=0x{:08x} value=0x{:08x}",
-                    addr as u32, value
-                );
-            }
-            // Also trace any write near the suspected corrupted item region
-            if let Ok(target) = std::env::var("LABWIRED_WATCH_ADDR") {
-                if let Some(t) = target.strip_prefix("0x").and_then(|h| u32::from_str_radix(h, 16).ok()) {
-                    if (addr as u32) >= t && (addr as u32) < t + 16 {
-                        eprintln!("[bus-watch] write addr=0x{:08x} value=0x{:08x}", addr as u32, value);
-                    }
-                }
-            }
-        }
         if self.config.optimized_bus_access && self.ram.write_u32(addr, value) {
             return Ok(());
         }

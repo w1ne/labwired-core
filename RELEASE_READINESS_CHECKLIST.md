@@ -1,31 +1,34 @@
-# Release Readiness Checklist (v0.14.0)
+# Release Readiness Checklist (v0.15.0)
 
-**Date**: 2026-05-12
-**Version**: 0.14.0
+**Date**: 2026-05-23
+**Version**: 0.15.0
 **Coordinator**: @w1ne
 
 ## 1. Documentation Audit
-- [x] **Changelog Updated**: `CHANGELOG.md` captures major changes since the previous release.
-- [x] **Install Docs Updated**: `README.md` pinned install examples reference `v0.14.0`.
-- [x] **Process Docs Updated**: `RELEASE_PROCESS.md` uses neutral version examples instead of stale historical versions.
+- [ ] **Changelog Updated**: `CHANGELOG.md` captures major changes since the previous release.
+- [ ] **Install Docs Updated**: `README.md` pinned install examples reference `v0.15.0`.
+- [ ] **Process Docs Updated**: `RELEASE_PROCESS.md` uses neutral version examples.
+- [ ] **Roadmap Updated**: `ROADMAP.md` has a `v0.15.0` section reflecting what shipped, and the previous version is no longer marked `(Current)`.
 
 ## 2. Codebase Integrity
-- [x] **Cargo Check**: `cargo check` passes after the workspace version bump.
-- [x] **Tests Passing**: `cargo test --workspace` passes outside the sandbox; the sandboxed run cannot bind the GDB E2E localhost socket.
-- [x] **Formatting**: `cargo fmt --all -- --check` passes.
-- [x] **Diff Hygiene**: `git diff --check` reports no whitespace errors.
+- [ ] **Cargo Check**: `cargo check --workspace` passes after the workspace version bump.
+- [ ] **Tests Passing**: `cargo test --workspace` passes.
+- [ ] **Formatting**: `cargo fmt --all -- --check` passes.
+- [ ] **Lints**: `cargo clippy --workspace --all-targets -- -D warnings` passes.
+- [ ] **Diff Hygiene**: `git diff --check` reports no whitespace errors.
 
 ## 3. Artifacts & Packaging
-- [x] **Version Bump**: `Cargo.toml` and `Cargo.lock` resolve workspace-managed crates to `0.14.0`.
-- [x] **Generated Output Cleanup**: Tracked `out/**` run artifacts and accidental build products are removed; committed test fixtures remain.
-- [x] **Release Notes Prepared**: `CHANGELOG.md` `0.14.0` section is ready to publish as the GitHub release body.
+- [ ] **Version Bump**: `[workspace.package].version` in root `Cargo.toml` updated; `Cargo.lock` regenerated.
+- [ ] **Generated Output Cleanup**: Tracked `out/**` run artifacts and accidental build products are removed; committed test fixtures remain.
+- [ ] **Release Notes Prepared**: `CHANGELOG.md` `0.15.0` section is ready to publish as the GitHub release body.
 
 ## 4. Final Review
-- [x] **Working Tree Reviewed**: Release-prep diff contains expected metadata, documentation, generated-output cleanup, formatter changes, and the stale I2C fidelity test fix.
-- [x] **Release Notes Reviewed**: GitHub release body matches the `CHANGELOG.md` `0.14.0` section.
+- [ ] **Working Tree Reviewed**: Release-prep diff contains expected metadata, documentation, generated-output cleanup, formatter changes.
+- [ ] **Release Notes Reviewed**: GitHub release body matches the `CHANGELOG.md` `0.15.0` section.
 
 ---
-**Status**: [x] READY FOR RELEASE
+**Status**: [ ] READY FOR RELEASE
 
-## Known Issues (v0.14.0)
-- No release-blocking known issues documented at prep time.
+## Known Issues (v0.15.0)
+- `crates/core/tests/e2e_agentdeck_in_sim.rs` remains `#[ignore]`-gated on a 22 MB external firmware ELF that lives outside the repo. Regression assertions are present but only fire when invoked explicitly with `cargo test -- --ignored`.
+- The Arduino-ESP32 / FreeRTOS path uses stub mutexes (`return_pd_true`) that unconditionally succeed; a future release should wire real queue semantics. The stub emits a one-time `tracing::warn!` on first call.

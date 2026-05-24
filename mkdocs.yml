@@ -1,6 +1,6 @@
 site_name: LabWired Core
 site_url: https://labwired.com/docs/
-repo_url: https://github.com/w1ne/libwired-core
+repo_url: https://github.com/w1ne/labwired-core
 repo_name: w1ne/labwired-core
 
 theme:
@@ -57,7 +57,7 @@ nav:
   - Home: index.md
   - Architecture Overview: architecture.md
   - Hardware-Sim Parity: golden_reference.md
-  - Hardware Matrix: SUPPORTED_DEVICES.md
+  - Hardware Matrix: supported_devices.md
   - AI Agent Manual: agents.md
 
   - Tutorials:
@@ -80,14 +80,12 @@ nav:
     
   - Operations:
     - Release Strategy: release_strategy.md
-    - Verification Audit: verification_audit.md
-    - Supported Devices: supported_devices.md
+    - Verification Audit: labwired_audit_protocol.md
     - Safety & Guardrails: safety.md
     - Demos: demos.md
     - Advanced Peripherals: advanced_peripherals.md
     - Case Study (STM32): case_study_stm32.md
     - Debugging: debugging.md
-    - Git Flow: development/git_flow.md
     
   - Explanation:
     - Architecture Overview: architecture.md

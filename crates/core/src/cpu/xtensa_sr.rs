@@ -64,7 +64,8 @@ pub const EXCSAVE5: u16 = 213;
 pub const EXCSAVE6: u16 = 214;
 pub const EXCSAVE7: u16 = 215;
 pub const CPENABLE: u16 = 224; // 0xE0
-pub const INTERRUPT: u16 = 226; // 0xE2 (read-only from SW)
+pub const INTERRUPT: u16 = 226; // 0xE2 (RSR: read INTERRUPT)
+pub const INTSET: u16 = 226; // 0xE2 (WSR: sets bits in INTERRUPT — same SR id as INTERRUPT, ISA-distinguished by RSR vs WSR direction)
 pub const INTCLEAR: u16 = 227; // 0xE3 (write-clears INTERRUPT bits)
 pub const INTENABLE: u16 = 228; // 0xE4
 pub const PS: u16 = 230; // 0xE6
@@ -155,7 +156,10 @@ impl XtensaSrFile {
     ///
     /// Special dispatch:
     /// - `INTCLEAR (227)`: clears bits in `INTERRUPT` — `interrupt &= !v`.
-    /// - `INTERRUPT (226)`: direct SW writes ignored (hardware-latched).
+    /// - `INTSET (226)`: sets bits in `INTERRUPT` — `interrupt |= v`. INTSET
+    ///   and INTERRUPT share SR id 226 in the Xtensa LX ISA; RSR reads the
+    ///   pending-IRQ status, WSR (this path) is the software-trigger entry
+    ///   point used by FreeRTOS `portYIELD()` (BIT(7) → SOFTWARE0).
     /// - `PRID (235)`: writes ignored (read-only).
     /// - `SAR (3)`: masked to 6 bits per Xtensa LX ISA.
     pub fn write(&mut self, sr_id: u16, v: u32) {
@@ -169,8 +173,12 @@ impl XtensaSrFile {
                 self.storage[IDX_INTERRUPT] &= !v;
             }
             IDX_INTERRUPT => {
-                // Direct SW writes to INTERRUPT are ignored (hardware-latched)
-                tracing::trace!("WSR: direct write to INTERRUPT (id=226) ignored");
+                // WSR.INTSET (shares SR id 226 with INTERRUPT): set bits in
+                // INTERRUPT. This is the SW-IRQ trigger path that FreeRTOS
+                // `portYIELD()` rides on — without it, scheduler yields are
+                // silently dropped and tasks calling xQueueReceive on empty
+                // queues spin without ever blocking, corrupting wait lists.
+                self.storage[IDX_INTERRUPT] |= v;
             }
             IDX_PRID => {
                 // PRID is read-only hardware register
@@ -182,6 +190,28 @@ impl XtensaSrFile {
             }
             idx => {
                 self.storage[idx] = v;
+                // Xtensa CCOMPARE0 semantics: writing CCOMPARE0 acknowledges
+                // the previous timer-0 interrupt (clears bit 6 in INTERRUPT)
+                // AND, if the new value is already <= CCOUNT, immediately
+                // raises bit 6 again so the next tick fires on the cycle the
+                // comparator is met.
+                //
+                // Without the acknowledge half of this, the bit stays high
+                // after the ISR returns and dispatches again, causing a
+                // tight ISR re-entry loop.
+                //
+                // Without the raise half, FreeRTOS's `_frxt_tick_timer_init`
+                // sets CCOMPARE0 = CCOUNT + divisor at scheduler-start time
+                // — but our CCOUNT has already overrun (bump-allocator-backed
+                // boot is slower than the divisor), so the firmware never
+                // gets a tick, never yields, and IPC tasks spin in
+                // xQueueReceive corrupting wait lists.
+                if idx == CCOMPARE0 as usize {
+                    self.storage[IDX_INTERRUPT] &= !(1 << 6);
+                    if v != 0 && self.storage[IDX_CCOUNT] >= v {
+                        self.storage[IDX_INTERRUPT] |= 1 << 6;
+                    }
+                }
             }
         }
     }

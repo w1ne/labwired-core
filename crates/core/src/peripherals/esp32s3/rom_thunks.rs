@@ -295,6 +295,209 @@ pub fn nop_return_zero(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()>
     Ok(())
 }
 
+/// Thunk for `__assert_func` / `panic_abort` / `abort` — functions that
+/// real-silicon C convention treats as `noreturn`. Stubbing them as
+/// nop_return_zero would silently return into the caller, which on the
+/// FreeRTOS xQueue assertion paths produces a tight loop:
+/// `assert → return → check failed cond → jump back to assert`.
+///
+/// Instead, halt the calling CPU and print the assertion arguments so the
+/// operator sees what blew up.  The caller never re-runs, so the loop
+/// breaks.  The OTHER CPU (if dual-core) keeps running.
+pub fn abort_halt(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    use core::sync::atomic::{AtomicU32, Ordering};
+    static FIRST_PRINT: AtomicU32 = AtomicU32::new(0);
+    if FIRST_PRINT.fetch_add(1, Ordering::Relaxed) < 5 {
+        let n = cpu.ps.callinc() * 4;
+        let core_id = (cpu.sr.read(crate::cpu::xtensa_sr::PRID) >> 13) & 1;
+        eprintln!(
+            "[abort_halt] core={core_id} pc=0x{:08x} a0=0x{:08x} a10=0x{:08x} a11=0x{:08x} a12=0x{:08x} a13=0x{:08x}",
+            cpu.pc,
+            cpu.regs.read_logical(0),
+            cpu.regs.read_logical(n + 2),
+            cpu.regs.read_logical(n + 3),
+            cpu.regs.read_logical(n + 4),
+            cpu.regs.read_logical(n + 5)
+        );
+    }
+    cpu.halted = true;
+    Ok(())
+}
+
+/// `xQueueCreateMutexStatic(uint8_t ucQueueType, StaticQueue_t *pxStaticQueue)
+/// -> QueueHandle_t` — on real silicon the returned handle IS the static
+/// buffer (an identity cast). Returning 0 makes `esp_newlib_locks_init`'s
+/// "got the static handle back" assertion fire. We echo arg 1 (the
+/// caller-allocated buffer pointer).
+pub fn x_queue_create_mutex_static_echo(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let static_buf = cpu.regs.read_logical(n + 3);
+    RomThunkBank::return_with(cpu, static_buf);
+    Ok(())
+}
+
+/// `xTaskGetCurrentTaskHandle() -> TaskHandle_t` — returns `pxCurrentTCB[core]`.
+///
+/// The previous nop_return_zero stub broke `vTaskDelete(NULL)`: vTaskDelete
+/// looks up the current task via this getter when called with a NULL arg,
+/// then passes it to prvDeleteTLS/prvDeleteTCB which assert non-NULL.
+/// Arduino-ESP32's main_task self-deletes after app_main returns, tripping
+/// this path right after the scheduler starts.
+///
+/// `pxCurrentTCB` is a per-core array at a firmware-specific address; the
+/// auto-discovered symbol resolves on the Arduino-ESP32 profile. Without
+/// the symbol (AgentDeck profile, stripped ELF), we fall back to returning
+/// 0 to preserve the previous behaviour.
+pub fn x_task_get_current_task_handle(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let core_id = (cpu.sr.read(crate::cpu::xtensa_sr::PRID) >> 13) & 1;
+    let pxcurrenttcb_addr = PX_CURRENT_TCB_ADDR.with(|s| s.get()).unwrap_or(0);
+    let handle = if pxcurrenttcb_addr != 0 {
+        bus.read_u32(pxcurrenttcb_addr as u64 + (core_id as u64 * 4))
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    RomThunkBank::return_with(cpu, handle);
+    Ok(())
+}
+
+thread_local! {
+    /// Set by the cli once the `pxCurrentTCB` symbol is resolved from the
+    /// firmware ELF. Read by [`x_task_get_current_task_handle`].
+    pub static PX_CURRENT_TCB_ADDR: std::cell::Cell<Option<u32>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Stub for queue/semaphore APIs whose real impl asserts `pxQueue != NULL`.
+/// We return `pdTRUE` (1) to signal "operation succeeded" without touching
+/// any queue state. Used for SPIClass / wire-library calls into
+/// `xQueueSemaphoreTake` / `xQueueSemaphoreGive` on a mutex that our stubbed
+/// `xQueueCreateMutex` returned NULL for. Real silicon would dereference
+/// pxQueue and crash too — this fakes a recursive-mutex held-by-current
+/// state, which is fine for the single-CPU sim render path.
+///
+/// Emits a one-time `tracing::warn!` on first call so silent activation is
+/// loud in logs; this stub will hide future regressions where a take
+/// *should* block (e.g. when a second consumer is added).
+pub fn return_pd_true(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    if !WARNED.swap(true, Ordering::Relaxed) {
+        tracing::warn!(
+            target: "labwired_core::esp32s3",
+            "return_pd_true stub active: xQueueSemaphoreTake / xQueueGenericSend will \
+             unconditionally succeed on stubbed mutexes. Any test that depends on a \
+             take blocking will silently pass."
+        );
+    }
+    RomThunkBank::return_with(cpu, 1);
+    Ok(())
+}
+
+/// `spi_t *spiStartBus(uint8_t spi_num, ...)` — Arduino-ESP32's SPI bus
+/// initializer. Real impl allocates a `spi_t`, programs DPORT clock-enable
+/// registers, configures the SPI peripheral. We skip the DPORT/peripheral
+/// dance and hand back a tiny static `spi_t` whose only populated field is
+/// `dev` (offset 0) — the SPI peripheral base address. Downstream callers
+/// (`spiTransferByte`) read `spi->dev` and write the peripheral registers
+/// directly, which our `spi3` peripheral catches.
+///
+/// `spi_num` maps to the peripheral base:
+///   0 → SPI0 (flash, not modelled): return NULL
+///   1 → SPI1 (flash, not modelled): return NULL
+///   2 → HSPI/SPI2 (0x3FF64000)
+///   3 → VSPI/SPI3 (0x3FF65000) — the default Arduino `SPI` instance
+///
+/// The `spi_t` blob is per-num and lives in DRAM at a reserved address.
+pub fn spi_start_bus_fake(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let spi_num = cpu.regs.read_logical(n + 2) & 0xFF;
+    let (dev, fake_spi_t) = fake_spi_for_num(spi_num);
+    if fake_spi_t == 0 {
+        RomThunkBank::return_with(cpu, 0);
+        return Ok(());
+    }
+    // Populate spi_t: dev (offset 0), lock (offset 4, NULL — our stubs
+    // ignore it), num (offset 8). Remaining fields zeroed.
+    bus.write_u32(fake_spi_t as u64 + SPI_T_DEV_OFFSET, dev)?;
+    bus.write_u32(fake_spi_t as u64 + SPI_T_LOCK_OFFSET, 0)?;
+    bus.write_u32(fake_spi_t as u64 + SPI_T_NUM_OFFSET, spi_num)?;
+    RomThunkBank::return_with(cpu, fake_spi_t);
+    Ok(())
+}
+
+// `spi_t` field offsets matching Arduino-ESP32's struct layout.
+const SPI_T_DEV_OFFSET: u64 = 0;
+const SPI_T_LOCK_OFFSET: u64 = 4;
+const SPI_T_NUM_OFFSET: u64 = 8;
+// SPIClass field offsets.
+const SPI_CLASS_SPI_NUM_OFFSET: u64 = 0;
+const SPI_CLASS_SPI_PTR_OFFSET: u64 = 4;
+const SPI_CLASS_IN_TRANSACTION_OFFSET: u64 = 24;
+// Reserved sim-only scratch region for fake `spi_t` blobs. Sits at the
+// top of SRAM1 (0x3FFE_0000–0x4000_0000), well above Arduino-ESP32's
+// initial stack (near 0x3FFE_0000, growing downward into DRAM) and any
+// plausible heap allocation. DRAM proper (0x3FFA_E000–0x3FFE_0000) is
+// off-limits because the firmware allocator can reach the upper pages.
+const SIM_FAKE_SPI_T_SPI2: u32 = 0x3FFF_FF00;
+const SIM_FAKE_SPI_T_SPI3: u32 = 0x3FFF_FF20;
+
+fn fake_spi_for_num(spi_num: u32) -> (u32, u32) {
+    match spi_num {
+        2 => (0x3FF6_4000, SIM_FAKE_SPI_T_SPI2),
+        3 => (0x3FF6_5000, SIM_FAKE_SPI_T_SPI3),
+        _ => (0, 0),
+    }
+}
+
+/// Wraps SPIClass::beginTransaction so the first call lazily initializes
+/// `this->_spi` to a fake spi_t pointing at the matching SPI peripheral
+/// base. The sketch never calls SPI.begin() explicitly — GxEPD2 just
+/// assumes the bus is up — so without this hook spiTransferByte's
+/// `if (spi == NULL) return` short-circuits every transfer and no bytes
+/// reach the panel.
+///
+/// After ensuring _spi is non-NULL, we return pdTRUE to satisfy the
+/// caller's `bnei a10, 1, retry` check (it expects a take to succeed).
+pub fn spi_class_begin_transaction(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    use crate::peripherals::esp32::spi::{REG_USER, USER_USR_MOSI_BIT};
+
+    let n = cpu.ps.callinc() * 4;
+    let this = cpu.regs.read_logical(n + 2);
+    let spi_num = bus.read_u32(this as u64 + SPI_CLASS_SPI_NUM_OFFSET)? & 0xFF;
+    let cur_spi = bus.read_u32(this as u64 + SPI_CLASS_SPI_PTR_OFFSET)?;
+    if cur_spi == 0 {
+        let (dev, fake_spi_t) = fake_spi_for_num(spi_num);
+        if fake_spi_t != 0 {
+            bus.write_u32(fake_spi_t as u64 + SPI_T_DEV_OFFSET, dev)?;
+            bus.write_u32(fake_spi_t as u64 + SPI_T_LOCK_OFFSET, 0)?;
+            bus.write_u32(fake_spi_t as u64 + SPI_T_NUM_OFFSET, spi_num)?;
+            bus.write_u32(this as u64 + SPI_CLASS_SPI_PTR_OFFSET, fake_spi_t)?;
+        }
+    }
+    // The real `spiStartBus` programs the SPI peripheral's USER register
+    // to enable the MOSI-output phase. We skipped that, so the first
+    // `spiTransferByte` writes data into the FIFO and sets the CMD.USR
+    // start bit but the peripheral never strobes bytes out to attached
+    // devices (kick_user_transaction returns early when USR_MOSI is
+    // clear). Set it once here so subsequent transfers fire.
+    let cur_spi = bus.read_u32(this as u64 + SPI_CLASS_SPI_PTR_OFFSET)?;
+    if cur_spi != 0 {
+        let dev = bus.read_u32(cur_spi as u64 + SPI_T_DEV_OFFSET)?;
+        if dev != 0 {
+            let cur_user = bus.read_u32(dev as u64 + REG_USER)?;
+            if cur_user & USER_USR_MOSI_BIT == 0 {
+                bus.write_u32(dev as u64 + REG_USER, cur_user | USER_USR_MOSI_BIT)?;
+            }
+        }
+    }
+    // Mark _inTransaction so endTransaction's take/give bookkeeping stays
+    // consistent.
+    bus.write_u8(this as u64 + SPI_CLASS_IN_TRANSACTION_OFFSET, 1)?;
+    RomThunkBank::return_with(cpu, 1);
+    Ok(())
+}
+
 /// Debug thunk for `vListInsert(List_t *pxList, ListItem_t *pxNewListItem)`.
 /// Dumps the list state for the first few calls, then returns without
 /// performing the insertion. Used to diagnose infinite-loop bugs in the
@@ -361,8 +564,7 @@ thread_local! {
 /// (steps of 1000 per call) so callers polling for timeout deadlines
 /// actually make progress instead of looping forever.
 pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
-    static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 =
-        core::sync::atomic::AtomicU32::new(0);
+    static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
     let v = MONOTONIC_TICKS.fetch_add(1000, core::sync::atomic::Ordering::Relaxed);
     RomThunkBank::return_with(cpu, v);
     Ok(())
@@ -395,8 +597,8 @@ pub fn esp_chip_info_stub(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
         let bytes: [u8; 16] = [
             0x01, 0x00, 0x00, 0x00, // model = ESP32
             0x00, 0x00, 0x00, 0x00, // features
-            0x03, 0x00,             // revision = 3
-            0x02,                   // cores = 2
+            0x03, 0x00, // revision = 3
+            0x02, // cores = 2
             0x03, 0x00, 0x00, 0x00, 0x00, // full_revision + pad
         ];
         for (i, &b) in bytes.iter().enumerate() {
@@ -681,6 +883,17 @@ pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> Sim
 /// `ets_get_cpu_frequency() -> u32` — returns 240 (MHz).
 pub fn rom_cpu_freq_240mhz(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 240);
+    Ok(())
+}
+
+/// `esp_clk_cpu_freq() -> u32` — returns 240_000_000 (Hz).
+///
+/// FreeRTOS's `_frxt_tick_timer_init` uses this to compute
+/// `_xt_tick_divisor = cpu_freq / configTICK_RATE_HZ`. Without it (or with
+/// the stubbed esp_clk_init returning 0), the divisor is 0 and the timer
+/// ISR can never advance CCOMPARE0 — every CCOUNT cycle re-fires the tick.
+pub fn esp_clk_cpu_freq_240mhz(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    RomThunkBank::return_with(cpu, 240_000_000);
     Ok(())
 }
 

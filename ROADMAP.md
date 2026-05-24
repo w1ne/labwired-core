@@ -2,7 +2,13 @@
 
 This roadmap outlines the planned evolution of LabWired Core as we move towards a production-ready ecosystem for professional firmware simulation.
 
-## 🟢 v0.14.0: Hardware-Validated Multi-Architecture Coverage (Current)
+## 🟢 v0.15.0: Dual-Core ESP32 + Arduino-ESP32 Bring-Up (Current)
+- **Dual-Core ESP32 Simulation**: PRO_CPU / APP_CPU round-robin step loop, PRID register, cross-core IPI bridge for FreeRTOS yield.
+- **Arduino-ESP32 / FreeRTOS Runtime**: ROM thunks for `xQueueCreateMutex*`, `xTaskGetCurrentTaskHandle`, `esp_clk_cpu_freq`, IPC-task no-ops, and SPIClass lazy `spi_t` init with USR_MOSI auto-enable — enough to boot a GxEPD2 sketch end-to-end through `setup()` → `drawPage()` → SSD1680 panel paint.
+- **Runtime Snapshot Subsystem**: `Machine::{take,apply}_runtime_snapshot`, CLI `snapshot capture` subcommand, WASM `apply_runtime_snapshot` — cold-boot collapses from 30 s to ~0.5 s in the playground.
+- **Xtensa Scheduler Fidelity**: `WSR.INTSET` raises pending IRQ bits so `portYIELD()` fires; `WSR.CCOMPARE0` acks-and-rearms so timer ticks land when CCOUNT has already overrun.
+
+## 🟢 v0.14.0: Hardware-Validated Multi-Architecture Coverage
 - **Hardware-Validated Parity**: STM32H563, STM32L476, and STM32F407 validation lanes with committed traces and oracle fixtures.
 - **Multi-Architecture**: ARM Cortex-M, RISC-V RV32I/RV32A, and ESP32-S3 Xtensa LX7 execution paths.
 - **Expanded Peripheral Coverage**: STM32 L4/F4 peripherals, ESP32-S3 GPIO/SYSTIMER/I2C support, and virtual I2C components.

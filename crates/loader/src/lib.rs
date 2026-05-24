@@ -74,6 +74,55 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         "__retarget_lock_close_recursive",
         "__retarget_lock_acquire_recursive",
         "__retarget_lock_release_recursive",
+        // Newlib-stdio-driven mutex API. Real silicon backs these via
+        // FreeRTOS recursive mutexes whose handles live in (uninitialised
+        // in our sim) static memory; calling the real impl asserts on
+        // pcHead != NULL. Stub to no-op since the sim is effectively
+        // single-threaded on the render path.
+        "xQueueGiveMutexRecursive",
+        "xQueueTakeMutexRecursive",
+        "xQueueCreateMutex",
+        "xQueueCreateMutexStatic",
+        // xQueueCreateMutex returns NULL (stubbed), so SPIClass and friends
+        // end up storing NULL as their internal mutex. We force these to
+        // return pdTRUE so the call path proceeds; real silicon would only
+        // reach this on a held mutex anyway in the single-task render flow.
+        "xQueueSemaphoreTake",
+        // SPIClass::endTransaction calls xQueueGenericSend (the give side
+        // of xSemaphoreGive) on the same NULL mutex. Force success too.
+        "xQueueGenericSend",
+        // esp_ipc_init creates the per-core IPC task which spin-blocks on
+        // an empty semaphore. With our take-returns-pdTRUE stub above,
+        // that "block" becomes a tight loop — never yielding, never
+        // letting loopTask run. Stub esp_ipc_init out and skip the IPC
+        // task altogether; cross-core IPC isn't needed on the
+        // single-CPU render path.
+        "esp_ipc_init",
+        "esp_ipc_isr_init",
+        // HardwareSerial-only stubs — leave Print/Stream alone so virtual
+        // dispatch through Print::print → Adafruit_GFX::write → drawPixel
+        // (the display.print path) keeps working. The original spin was
+        // in HardwareSerial::write's buffer-available wait, not in Print.
+        "_ZN14HardwareSerial5writeEh",
+        "_ZN14HardwareSerial5writeEPKhj",
+        "_ZN14HardwareSerial9availableEv",
+        "_ZN14HardwareSerial5flushEv",
+        "_ZN14HardwareSerial9readBytesEPcj",
+        "_ZN14HardwareSerial9readBytesEPhj",
+        "uartAvailable",
+        "uartAvailableForWrite",
+        "uartWrite",
+        "uartWriteBuf",
+        "_Z14serialEventRunv",
+        // SPI bus init — real impl needs DPORT clock-enable we don't
+        // model, so it returns NULL → SPIClass._spi = NULL → all
+        // downstream spiTransferByte calls bail without touching the SPI
+        // peripheral. Custom thunk returns a fake spi_t with dev = SPI3.
+        "spiStartBus",
+        // The Arduino SPI global. We resolve it for diagnostics; lazy
+        // init happens via the SPIClass::beginTransaction thunk.
+        "SPI",
+        "_ZN8SPIClass16beginTransactionE11SPISettings",
         "_esp_error_check_failed",
         "setCpuFrequencyMhz",
         "esp_ota_get_running_partition", // fake non-null ptr
@@ -158,6 +207,7 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         //    through to esp_startup_start_app.
         "esp_clk_init",
         "esp_perip_clk_init",
+        "esp_clk_cpu_freq",
         "core_intr_matrix_clear",
         "esp_efuse_check_errors",
         "esp_dport_access_stall_other_cpu_start",
@@ -217,6 +267,16 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // the underlying FILE* refers to our zeroed fake reent struct.
         "esp_log_early_timestamp",
         "esp_log_writev",
+        "esp_log_impl_lock",
+        "esp_log_impl_lock_timeout",
+        "esp_log_impl_unlock",
+        // Backs `xTaskGetCurrentTaskHandle()` — per-core array of TCB
+        // pointers. Address is firmware-dependent; resolving the symbol
+        // lets the thunk return a real handle so `vTaskDelete(NULL)`
+        // (used by Arduino-ESP32's main_task self-delete) doesn't pass
+        // NULL into prvDeleteTLS.
+        "pxCurrentTCB",
+        "xTaskGetCurrentTaskHandle",
         "esp_log_write",
         "esp_log_buffer_hex_internal",
         "esp_log_buffer_char_internal",

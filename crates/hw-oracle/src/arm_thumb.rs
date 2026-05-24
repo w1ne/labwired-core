@@ -1,3 +1,5 @@
+#![allow(clippy::identity_op)] // Thumb encoder keeps `0x0000 |` to make opcode prefix bits explicit
+
 //! ARM Thumb / Cortex-M oracle harness (STM32 family).
 //!
 //! Parallel to `riscv` (ESP32-C3) and the Xtensa harness in `lib.rs`, but

@@ -77,6 +77,7 @@ fn rmw32_mask(ptr: *mut u32, clear: u32, set: u32) {
 #[inline(always)]
 fn semihost_writec(byte: u8) {
     let p = core::ptr::addr_of!(byte);
+    #[cfg(target_arch = "arm")]
     unsafe {
         core::arch::asm!(
             "bkpt #0xAB",
@@ -84,6 +85,10 @@ fn semihost_writec(byte: u8) {
             in("r1") p,
             options(preserves_flags, nostack),
         );
+    }
+    #[cfg(not(target_arch = "arm"))]
+    {
+        let _ = (byte, p);
     }
 }
 

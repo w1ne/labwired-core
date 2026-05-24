@@ -40,7 +40,14 @@ wrong init left the panel in a no-op state) — panel goes blank.
 
 ## Sim status (as of 2026-05-23)
 Real hardware: ✅ verified painting.
-LabWired sim: ❌ stuck in newlib `__sflags` at 200M cycles, never
-reaches `setup()`. Tracked as #115 — needs more thunk coverage for
-the libc stdio init path the reader sketch triggers but AgentDeck did
-not.
+LabWired sim (v0.15.0): ✅ reaches `setup()` → `drawPage()` → SSD1680
+panel paint. Latest run: 19,039 SPI3 transactions across 3 full
+refresh cycles; black plane contains 1,429 / 4,736 non-FF bytes (the
+text glyph pixels are visible in the panel snapshot). The newlib
+stdio init path that previously hung at 200M cycles is now covered by
+the v0.15.0 ROM thunk + INTSET / CCOMPARE0 fixes.
+
+Loaded directly the sim still needs a 12 MB ELF outside this repo;
+the `agentdeck` snapshot-capture profile in
+`labwired snapshot capture --profile agentdeck` ships a
+post-paint state blob that the playground replays in ~0.5 s.

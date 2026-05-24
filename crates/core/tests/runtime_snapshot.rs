@@ -110,7 +110,10 @@ fn ssd1680_runtime_snapshot_roundtrips_panel_planes() {
     panel.cs_release();
 
     let blob = SpiDevice::runtime_snapshot(&panel);
-    assert!(blob.len() >= 9472, "snapshot must include both 4736-byte planes");
+    assert!(
+        blob.len() >= 9472,
+        "snapshot must include both 4736-byte planes"
+    );
 
     // Build a fresh panel; verify it starts blank, restore, verify state
     // matches the original.
@@ -141,11 +144,17 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
     // something nontrivial to restore.
     machine.cpu.set_pc(0x400D_0042);
     machine.cpu.set_register(5, 0x1234_5678);
-    machine.bus.write_u32(0x3FFB_0200, 0xDEAD_BEEF).expect("dram write");
+    machine
+        .bus
+        .write_u32(0x3FFB_0200, 0xDEAD_BEEF)
+        .expect("dram write");
 
     let snap = machine.take_runtime_snapshot();
     let bytes = snap.to_bytes();
-    assert!(bytes.len() > 1000, "machine snapshot blob should be substantial");
+    assert!(
+        bytes.len() > 1000,
+        "machine snapshot blob should be substantial"
+    );
 
     // Round-trip via bytes (proving the on-disk format survives).
     let decoded = MachineRuntimeSnapshot::from_bytes(&bytes).expect("from_bytes");
@@ -168,10 +177,7 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
     // Clobber and restore on the same machine.
     machine.cpu.set_pc(0);
     machine.cpu.set_register(5, 0);
-    machine
-        .bus
-        .write_u32(0x3FFB_0200, 0)
-        .expect("dram clobber");
+    machine.bus.write_u32(0x3FFB_0200, 0).expect("dram clobber");
 
     machine.apply_runtime_snapshot(&decoded).expect("apply");
     assert_eq!(machine.cpu.get_pc(), 0x400D_0042);
@@ -244,7 +250,12 @@ fn agentdeck_snapshot_file_restores_post_paint_panel() {
     let red_zero = rp.iter().filter(|&&b| b == 0x00).count();
     eprintln!(
         "panel @ refresh_generation=1: black non-FF={}/{}, red non-FF={}/{}, red 0x00={}/{}",
-        black_non_ff, bp.len(), red_non_ff, rp.len(), red_zero, rp.len(),
+        black_non_ff,
+        bp.len(),
+        red_non_ff,
+        rp.len(),
+        red_zero,
+        rp.len(),
     );
     assert_eq!(
         black_non_ff, 782,

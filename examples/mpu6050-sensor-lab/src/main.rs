@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![allow(clippy::identity_op)]
 
 use cortex_m_rt::entry;
 use panic_halt as _;

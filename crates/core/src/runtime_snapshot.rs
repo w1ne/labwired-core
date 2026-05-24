@@ -92,8 +92,8 @@ impl MachineRuntimeSnapshot {
 
     /// Parse from a byte blob, validating magic + version.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, RuntimeSnapshotError> {
-        let snap: Self = bincode::deserialize(bytes)
-            .map_err(|e| RuntimeSnapshotError::Decode(e.to_string()))?;
+        let snap: Self =
+            bincode::deserialize(bytes).map_err(|e| RuntimeSnapshotError::Decode(e.to_string()))?;
         if snap.magic != RUNTIME_SNAPSHOT_MAGIC {
             return Err(RuntimeSnapshotError::BadMagic(snap.magic));
         }

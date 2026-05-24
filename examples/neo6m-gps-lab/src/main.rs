@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![allow(clippy::identity_op)]
 
 use cortex_m_rt::entry;
 use panic_halt as _;
@@ -81,15 +82,12 @@ fn main() -> ! {
     uart2_str("Reading NMEA stream from UART1...\r\n");
 
     let mut sentence_buf = [0u8; 128];
-    let mut count = 0u32;
 
     loop {
         let len = read_nmea_sentence(&mut sentence_buf);
         if len == 0 {
             continue;
         }
-
-        count += 1;
 
         // Echo the raw NMEA sentence to UART2 with a prefix
         uart2_str("[GPS] ");
