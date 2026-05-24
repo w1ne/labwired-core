@@ -5,12 +5,12 @@
   "assets": [
     {
       "filename": "demo-agentdeck.elf",
-      "boardId": "ereader",
+      "boardId": "agentdeck",
       "minSizeBytes": 1000000
     },
     {
       "filename": "demo-agentdeck-postpaint.lwrs",
-      "boardId": "ereader",
+      "boardId": "agentdeck",
       "minSizeBytes": 500000,
       "kind": "snapshot"
     }

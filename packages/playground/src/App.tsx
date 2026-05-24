@@ -316,8 +316,7 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
 
   if (
     config.boardId === 'esp32-epaper-lab' ||
-    config.boardId === 'agentdeck' ||
-    config.boardId === 'ereader'
+    config.boardId === 'agentdeck'
   ) {
     // ESP32-WROOM-32 driving the same Waveshare panel via VSPI. Wiring
     // matches AgentDeck (`firmware/src/pins.h`) — BUSY=GPIO4 / RST=GPIO16
@@ -1590,12 +1589,12 @@ export function App() {
   }, []);
 
   if (isMobile) {
-    const ereaderBuffer = simState.displayBuffers['epaper'];
+    const epaperBuffer = simState.displayBuffers['epaper'];
     return (
       <MobileDemoView
         selectedBoard={selectedBoard}
-        panelPlanes={ereaderBuffer?.kind === 'ssd1680_tricolor_290' ? ereaderBuffer.data : undefined}
-        panelGeneration={ereaderBuffer?.generation}
+        panelPlanes={epaperBuffer?.kind === 'ssd1680_tricolor_290' ? epaperBuffer.data : undefined}
+        panelGeneration={epaperBuffer?.generation}
         running={running}
         cycles={simState.cycles ?? 0}
         runtimeMs={runtimeMs}

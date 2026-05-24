@@ -213,18 +213,18 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     kind: 'lab',
   },
   {
-    // ESP32-WROOM-32 + Waveshare 2.9" SSD1680 tri-color e-paper — a
-    // simple e-reader page running a real Arduino-ESP32 firmware.
+    // ESP32-WROOM-32U + Waveshare 2.9" SSD1680 tri-color e-paper — the
+    // AgentDeck agent-approval appliance firmware (real production binary
+    // that ships on the physical hardware).
     //
-    // Same binary that flashes to the physical hardware via espflash;
-    // the playground loads the ELF, applies a pre-warmed LWRS snapshot
-    // captured by `labwired-cli snapshot capture`, and the e-reader
-    // page paints in under a second instead of taking ~30 s for the
-    // cold ESP-IDF boot.
-    boardId: 'ereader',
+    // Same ELF that flashes via espflash; the playground loads it, applies
+    // a pre-warmed LWRS snapshot captured by `labwired-cli snapshot
+    // capture`, and the panel paints in under a second instead of taking
+    // ~30 s for the cold ESP-IDF boot.
+    boardId: 'agentdeck',
     chipId: 'esp32',
-    name: 'E-Reader',
-    description: 'ESP32-WROOM-32 + Waveshare 2.9" tri-color e-paper. Real Arduino-ESP32 + GxEPD2 + Adafruit_GFX firmware — same ELF flashes to the physical hardware via espflash. The playground restores a pre-warmed boot snapshot so the page paints in under a second.',
+    name: 'AgentDeck',
+    description: 'ESP32-WROOM-32U + Waveshare 2.9" tri-color e-paper. Real AgentDeck agent-approval appliance firmware (Arduino-ESP32 + GxEPD2 + Adafruit_GFX) — same ELF flashes to the physical hardware via espflash. The playground restores a pre-warmed boot snapshot so the panel paints in under a second.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
     systemYaml: systemAgentDeck,
@@ -235,12 +235,12 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     bootSnapshotUrl: `${BASE}wasm/demo-agentdeck-postpaint.lwrs`,
     panelScale: 2,
     summary: {
-      title: 'ESP32 e-reader',
-      description: 'ESP32-WROOM-32 driving a Waveshare 2.9" SSD1680 panel via VSPI. The same firmware ELF flashes to physical hardware via espflash and runs unmodified in this browser.',
-      nextStep: 'Click Run to boot the firmware — the snapshot lands the e-reader page in < 1 s.',
-      nextStepRunning: 'Simulation is running. Page restored from a pre-warmed snapshot.',
+      title: 'AgentDeck',
+      description: 'ESP32-WROOM-32U driving a Waveshare 2.9" SSD1680 panel via VSPI. The same AgentDeck firmware ELF flashes to physical hardware via espflash and runs unmodified in this browser.',
+      nextStep: 'Click Run to boot the firmware — the snapshot lands the AgentDeck panel in < 1 s.',
+      nextStepRunning: 'Simulation is running. Panel restored from a pre-warmed snapshot.',
     },
-    runHint: 'Click Run to boot the firmware — pre-warmed snapshot paints the page instantly',
+    runHint: 'Click Run to boot the firmware — pre-warmed snapshot paints the panel instantly',
   },
   {
     boardId: 'max31855-thermocouple-lab',
