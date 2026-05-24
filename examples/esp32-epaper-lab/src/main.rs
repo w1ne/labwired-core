@@ -1,11 +1,12 @@
-//! ESP32-WROOM-32 + SSD1680 tri-color 2.9" e-paper.
+//! ESP32-WROOM-32 + SSD1680 tri-color 2.9" e-paper — LabWired E-Reader demo.
 //!
 //! Drives the Waveshare 2.9" tri-color e-paper module (SSD1680 / GDEM029C90)
-//! over VSPI + four GPIO sidebands. Draws three full-width horizontal bands —
-//! WHITE on top, BLACK in the middle, RED on the bottom — and triggers one
-//! full refresh. Mirrors the byte sequence emitted by the AgentDeck firmware
-//! (`GxEPD2_290_C90c`) and the LabWired STM32 e-paper lab, so the simulated
-//! SSD1680 model decodes both paths identically.
+//! over VSPI + four GPIO sidebands. Paints the same content as the Arduino
+//! `examples/labwired-ereader-arduino/labwired-ereader.ino` sketch — title,
+//! body paragraph, and a red "Page 1" accent — using pre-rendered bitmap
+//! planes embedded as static arrays (see `ereader_bitmap.rs`, regenerated
+//! by `scripts/gen-ereader-bitmap.py`). Same firmware ELF runs unmodified
+//! in the LabWired simulator and on physical ESP32 hardware via espflash.
 //!
 //! Pin mapping (Waveshare default, AgentDeck-compatible):
 //!   GPIO5  — CS                     GPIO output push-pull
@@ -33,6 +34,8 @@ use esp_backtrace as _;
 // bootloader (and `espflash flash`) reads to identify the app. Doesn't
 // affect sim behaviour; pure metadata.
 esp_bootloader_esp_idf::esp_app_desc!();
+
+mod ereader_bitmap;
 
 // STATUS — sim-side WIP:
 //   * Firmware builds cleanly for `xtensa-esp32-none-elf` (espflash-ready).
@@ -237,7 +240,23 @@ fn ep_init() {
     ep_cmd_data(0x4F, &[0x00, 0x00]);
 }
 
-fn ep_stream_plane<F: Fn(u16) -> u8>(cmd: u8, byte_for_row: F) {
+fn ep_refresh() {
+    ep_cmd_data(0x22, &[0xF7]);
+    ep_cmd(0x20);
+    wait_idle();
+}
+
+// ----- Pre-rendered ereader bitmap streaming -----------------------------
+//
+// `ep_stream_plane` (above) walks rows 0..HEIGHT, asking
+// `byte_for_row(row)` for ONE byte that gets replicated across all 16
+// bytes of the row. That fits the original color-band test pattern but
+// not arbitrary bitmaps where each of the 16 column bytes differs.
+//
+// `ep_stream_bitmap_plane` is the bitmap-aware variant: same SSD1680
+// command sequence, but streams the embedded plane verbatim, 32 bytes
+// at a time (max FIFO is 64; 32 keeps headroom).
+fn ep_stream_bitmap_plane(cmd: u8, plane: &[u8; 4736]) {
     ep_cmd_data(0x4E, &[0x00]);
     ep_cmd_data(0x4F, &[0x00, 0x00]);
 
@@ -245,47 +264,13 @@ fn ep_stream_plane<F: Fn(u16) -> u8>(cmd: u8, byte_for_row: F) {
     cs_low();
     spi_write(&[cmd]);
     dc_high();
-    // Stream the plane in 32-byte chunks (2 rows × 16 bytes-per-row).
-    // FIFO max is 64 bytes per spi_write; 32 keeps things simple.
-    let mut buf = [0u8; 32];
-    let mut row: u16 = 0;
-    while row < HEIGHT {
-        let mut idx = 0usize;
-        let mut next_row = row;
-        while idx + (WIDTH_BYTES as usize) <= buf.len() && next_row < HEIGHT {
-            let v = byte_for_row(next_row);
-            for _ in 0..(WIDTH_BYTES as usize) {
-                buf[idx] = v;
-                idx += 1;
-            }
-            next_row += 1;
-        }
-        spi_write(&buf[..idx]);
-        row = next_row;
+    let mut offset = 0usize;
+    while offset < plane.len() {
+        let end = core::cmp::min(offset + 32, plane.len());
+        spi_write(&plane[offset..end]);
+        offset = end;
     }
     cs_high();
-}
-
-fn ep_refresh() {
-    ep_cmd_data(0x22, &[0xF7]);
-    ep_cmd(0x20);
-    wait_idle();
-}
-
-// ----- Test pattern -------------------------------------------------------
-
-fn black_plane_byte(row: u16) -> u8 {
-    match row {
-        99..=197 => 0x00,
-        _ => 0xFF,
-    }
-}
-
-fn red_plane_byte(row: u16) -> u8 {
-    match row {
-        198..=295 => 0x00,
-        _ => 0xFF,
-    }
 }
 
 // ----- IO_MUX / GPIO_MATRIX setup ----------------------------------------
@@ -436,11 +421,11 @@ fn main() -> ! {
     ep_init();
     esp_println::println!("[lab] panel init done");
 
-    ep_stream_plane(0x24, black_plane_byte);
-    esp_println::println!("[lab] black plane streamed");
+    ep_stream_bitmap_plane(0x24, &ereader_bitmap::EREADER_BLACK_PLANE);
+    esp_println::println!("[lab] black plane streamed (ereader text)");
 
-    ep_stream_plane(0x26, red_plane_byte);
-    esp_println::println!("[lab] red plane streamed");
+    ep_stream_bitmap_plane(0x26, &ereader_bitmap::EREADER_RED_PLANE);
+    esp_println::println!("[lab] red plane streamed (red accent)");
 
     ep_refresh();
     esp_println::println!("[lab] refresh done");
