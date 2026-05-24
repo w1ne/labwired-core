@@ -209,22 +209,15 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     kind: 'lab',
   },
   {
-    // The bit-identical Arduino path: `labwired-ereader.ino` compiled
-    // against Arduino-ESP32 + GxEPD2 + Adafruit_GFX. Same .elf that
-    // espflash'es to a real ESP32-WROOM-32 + Waveshare 2.9" tri-color
-    // panel runs unmodified here in the LabWired simulator.
-    //
-    // Uses the `arduino-esp32-autodiscover` quirks pipeline — resolves
-    // the dozens of Arduino-ESP32 / GxEPD2 / FreeRTOS / Xtensa-HAL thunk
-    // PCs at runtime from the ELF symbol table (vs the AgentDeck
-    // pipeline's hand-curated hardcoded PCs). Routes GxEPD2 cmd/data
-    // bytes directly into a Uc8151D-family panel model — the SSD1680
-    // model used by the Rust lab above doesn't understand
-    // `0x04 PON / 0x10 DTM1 / 0x12 DRF / 0x13 DTM2`.
+    // `labwired-ereader.ino` compiled against Arduino-ESP32 + GxEPD2 +
+    // Adafruit_GFX. Same .elf espflash'es to a real ESP32-WROOM-32 +
+    // Waveshare 2.9" tri-color panel; runs unmodified in the sim via the
+    // `arduino-esp32-autodiscover` quirks pipeline (resolves thunk PCs
+    // from ELF symbols at runtime; attaches a UC8151D panel model).
     boardId: 'labwired-ereader',
     chipId: 'esp32',
-    name: 'ESP32 E-Reader (Arduino, bit-identical)',
-    description: 'ESP32-WROOM-32 + Waveshare 2.9" tri-color e-paper. Arduino-ESP32 + GxEPD2 + Adafruit_GFX. The SAME .elf that espflash\'es to physical hardware runs here in the browser — bit-identical: identical instruction stream, identical SPI byte stream, identical pixel pattern on the panel.',
+    name: 'ESP32 E-Reader',
+    description: 'ESP32-WROOM-32 + Waveshare 2.9" tri-color e-paper. Arduino sketch (GxEPD2 + Adafruit_GFX) — same .elf flashes to physical hardware.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
     systemYaml: systemAgentDeck,
@@ -236,12 +229,12 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     quirks: 'arduino-esp32-autodiscover',
     panelScale: 2,
     summary: {
-      title: 'ESP32 E-Reader — bit-identical',
-      description: 'Real Arduino sketch (`labwired-ereader.ino`) running through the full Arduino-ESP32 + GxEPD2 + FreeRTOS stack inside the simulator. Same .elf that flashes to physical ESP32 hardware via espflash.',
-      nextStep: 'Click Run — boots the firmware bit-identically. Panel paints "LabWired Reader" page over ~30 s of simulated cold-boot.',
-      nextStepRunning: 'Bit-identical sim of the labwired-ereader sketch. Same byte stream as the real WROOM.',
+      title: 'ESP32 E-Reader',
+      description: 'Arduino sketch running through the Arduino-ESP32 + GxEPD2 + FreeRTOS stack. Same .elf that flashes to physical hardware via espflash.',
+      nextStep: 'Click Run — panel paints over ~30 s of cold-boot.',
+      nextStepRunning: 'Running.',
     },
-    runHint: 'Click Run — boots the bit-identical Arduino firmware. Page paints over ~30 s of simulated cold-boot.',
+    runHint: 'Click Run — panel paints over ~30 s of cold-boot.',
   },
   {
     boardId: 'max31855-thermocouple-lab',
