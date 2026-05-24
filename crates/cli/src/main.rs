@@ -887,6 +887,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
         if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
             spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+            spi3.enable_byte_capture(512);
         }
     }
     bus.refresh_peripheral_index();
@@ -1637,6 +1638,25 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                     "labwired-cli snapshot: spi3 transactions={}",
                     spi3.transactions(),
                 );
+                let cap = spi3.captured_bytes();
+                if !cap.is_empty() {
+                    let head_n = cap.len().min(120);
+                    let head_hex: Vec<String> =
+                        cap[..head_n].iter().map(|b| format!("{b:02x}")).collect();
+                    eprintln!(
+                        "labwired-cli snapshot: first {head_n} spi3 bytes: {}",
+                        head_hex.join(" ")
+                    );
+                    if cap.len() > 240 {
+                        let tail = &cap[cap.len() - 120..];
+                        let tail_hex: Vec<String> =
+                            tail.iter().map(|b| format!("{b:02x}")).collect();
+                        eprintln!(
+                            "labwired-cli snapshot: last 120 spi3 bytes: {}",
+                            tail_hex.join(" ")
+                        );
+                    }
+                }
                 for attached in &spi3.attached_devices {
                     if let Some(panel_any) = attached.as_any() {
                         if let Some(panel) = panel_any.downcast_ref::<Ssd1680Tricolor290>() {
