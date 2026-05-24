@@ -168,7 +168,7 @@ impl Uc8151dTricolor290 {
             }
             0x16 | 0x17 => self.await_params(cmd, 1), // AUTO
             0x20 => self.await_params(cmd, 44),       // LUT_VCOM
-            0x21 | 0x22 | 0x23 | 0x24 => self.await_params(cmd, 42), // LUT_WW/BW/WB/BB
+            0x21..=0x24 => self.await_params(cmd, 42), // LUT_WW/BW/WB/BB
             0x30 => self.await_params(cmd, 1),        // PLL
             0x40 => self.state = ProtoState::Idle, // TSC — temperature sensor calibration (0 data)
             0x41 => self.await_params(cmd, 1),     // TSE — temperature sensor enable
@@ -178,7 +178,7 @@ impl Uc8151dTricolor290 {
             0x61 => self.await_params(cmd, 3),     // TRES — resolution (HRES, VRES_MSB, VRES_LSB)
             0x65 => self.await_params(cmd, 4),     // GSST — gate/source start setting
             0x70 | 0x71 => self.state = ProtoState::Idle, // REV / FLG read (0 data on the in path)
-            0x80 | 0x81 | 0x82 => self.await_params(cmd, 1), // AMV / VV / VDCS
+            0x80..=0x82 => self.await_params(cmd, 1), // AMV / VV / VDCS
             0x90 => self.await_params(cmd, 7),     // PartialWindow
             0x91 | 0x92 => self.state = ProtoState::Idle, // PartialIn / PartialOut
             _ => {
