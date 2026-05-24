@@ -65,8 +65,11 @@ type ActiveSimulationConfig = {
   systemYaml: string;
   chipYaml: string;
   firmware: Uint8Array;
-  /** Firmware-runtime quirks; propagated from BoardConfig.quirks. */
-  quirks?: 'esp32-arduino';
+  /** Firmware-runtime quirks; propagated from BoardConfig.quirks.
+   *  - `esp32-arduino`: AgentDeck-style install with hardcoded thunk PCs.
+   *  - `arduino-esp32-autodiscover`: resolves thunk PCs from the firmware
+   *    ELF symbol table — works for any GxEPD2 sketch (labwired-ereader). */
+  quirks?: 'esp32-arduino' | 'arduino-esp32-autodiscover';
   /** Optional pre-warmed snapshot URL; applied right after firmware load. */
   bootSnapshotUrl?: string;
 };
@@ -586,6 +589,13 @@ export function App() {
     // routes through step_with_esp32_aids to keep the handshake refreshed.
     if (config.quirks === 'esp32-arduino') {
       nextBridge.installEsp32ArduinoQuirks();
+    } else if (config.quirks === 'arduino-esp32-autodiscover') {
+      // Auto-discovery flavor — works for any GxEPD2 sketch (labwired-ereader)
+      // whose ELF symbols are intact. Resolves thunk PCs at runtime from the
+      // firmware's symbol table; also attaches the UC8151D panel model (which
+      // decodes the GxEPD2_290_C90c byte stream — the SSD1680 default panel
+      // doesn't understand those opcodes).
+      nextBridge.installArduinoEsp32QuirksAutodiscover(config.firmware);
     }
     // If the board ships a pre-warmed boot snapshot, fetch it and apply
     // right after the quirks (which restore the thunk PCs into flash that
@@ -726,7 +736,9 @@ export function App() {
           // red-plane bytes before SPI write; the un-inverted Rust labs
           // do not. The DisplayBinding's `invertRedPlane` flips the
           // polarity back to the renderer's expected convention.
-          invertRedPlane: selectedBoard.quirks === 'esp32-arduino',
+          invertRedPlane:
+            selectedBoard.quirks === 'esp32-arduino' ||
+            selectedBoard.quirks === 'arduino-esp32-autodiscover',
         })),
     [editor.state.diagram.parts, selectedBoard.quirks],
   );

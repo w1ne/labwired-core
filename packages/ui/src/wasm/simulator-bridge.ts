@@ -115,6 +115,13 @@ export interface WasmSimulatorInstance {
   // on non-Arduino-ESP32 firmware is a no-op aside from a few SRAM byte
   // writes that the firmware doesn't read.
   install_esp32_arduino_quirks(): void;
+  /** Auto-discovery counterpart for sketches whose ELF symbols are intact —
+   *  resolves Arduino-ESP32 thunk PCs from the symbol table instead of
+   *  hand-curated hardcoded addresses. Works for any GxEPD2 sketch (e.g.
+   *  labwired-ereader) without knowing its binary layout in advance.
+   *  Caller must pass the same ELF bytes that were used to construct the
+   *  simulator. */
+  install_arduino_esp32_quirks(elf_bytes: Uint8Array): void;
   /** @deprecated Renamed to `install_esp32_arduino_quirks`. Kept for backwards
    *  compatibility with the standalone /agentdeck.html page. */
   apply_agentdeck_quirks(): void;
@@ -235,6 +242,16 @@ export class SimulatorBridge {
    */
   installEsp32ArduinoQuirks(): void {
     this.sim.install_esp32_arduino_quirks();
+    this._esp32ArduinoQuirks = true;
+  }
+
+  /** Auto-discovery quirks installer — pass the firmware ELF bytes so
+   *  thunks resolve to actual PCs from the symbol table. Use this for
+   *  arbitrary GxEPD2 / Arduino-ESP32 sketches (e.g. labwired-ereader);
+   *  the original `installEsp32ArduinoQuirks` uses AgentDeck-specific
+   *  hardcoded PCs that won't match other binaries. */
+  installArduinoEsp32QuirksAutodiscover(elfBytes: Uint8Array): void {
+    this.sim.install_arduino_esp32_quirks(elfBytes);
     this._esp32ArduinoQuirks = true;
   }
 

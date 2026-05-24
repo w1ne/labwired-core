@@ -42,6 +42,8 @@ import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/m
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
 import sourceEsp32Epaper from '../../../core/examples/esp32-epaper-lab/src/main.rs?raw';
+import systemAgentDeck from '../../../core/configs/systems/agentdeck.yaml?raw';
+import sourceLabwiredEreader from '../../../core/examples/labwired-ereader-arduino/labwired-ereader.ino?raw';
 
 /**
  * Board-summary tooltip the playground shows above the canvas. `nextStep`
@@ -84,7 +86,7 @@ export interface BoardConfig {
    * `app_main`. See `wasm/src/lib.rs::install_esp32_arduino_quirks` for the
    * canonical list.
    */
-  quirks?: 'esp32-arduino';
+  quirks?: 'esp32-arduino' | 'arduino-esp32-autodiscover';
   /**
    * Optional URL of a pre-warmed runtime snapshot (`.lwrs`). When set, the
    * playground fetches this blob right after loading the firmware ELF and
@@ -195,8 +197,8 @@ export const BOARD_CONFIGS: BoardConfig[] = [
   {
     boardId: 'esp32-epaper-lab',
     chipId: 'esp32',
-    name: 'ESP32 E-Reader',
-    description: 'ESP32-WROOM-32 + Waveshare 2.9" SSD1680 tri-color e-paper over simulated VSPI. Same Rust no_std ELF flashes to a real ESP32 module via espflash for side-by-side digital-twin verification.',
+    name: 'ESP32 + E-Paper (Rust)',
+    description: 'ESP32-WROOM-32 + Waveshare 2.9" SSD1680 tri-color e-paper over simulated VSPI. Pure-Rust no_std implementation. Same ELF flashes to a real ESP32 module via espflash for side-by-side digital-twin verification.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
     systemYaml: systemEsp32EpaperLab,
@@ -205,6 +207,41 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceEsp32Epaper,
     sourceFilename: 'esp32-epaper-lab/src/main.rs',
     kind: 'lab',
+  },
+  {
+    // The bit-identical Arduino path: `labwired-ereader.ino` compiled
+    // against Arduino-ESP32 + GxEPD2 + Adafruit_GFX. Same .elf that
+    // espflash'es to a real ESP32-WROOM-32 + Waveshare 2.9" tri-color
+    // panel runs unmodified here in the LabWired simulator.
+    //
+    // Uses the `arduino-esp32-autodiscover` quirks pipeline — resolves
+    // the dozens of Arduino-ESP32 / GxEPD2 / FreeRTOS / Xtensa-HAL thunk
+    // PCs at runtime from the ELF symbol table (vs the AgentDeck
+    // pipeline's hand-curated hardcoded PCs). Routes GxEPD2 cmd/data
+    // bytes directly into a Uc8151D-family panel model — the SSD1680
+    // model used by the Rust lab above doesn't understand
+    // `0x04 PON / 0x10 DTM1 / 0x12 DRF / 0x13 DTM2`.
+    boardId: 'labwired-ereader',
+    chipId: 'esp32',
+    name: 'ESP32 E-Reader (Arduino, bit-identical)',
+    description: 'ESP32-WROOM-32 + Waveshare 2.9" tri-color e-paper. Arduino-ESP32 + GxEPD2 + Adafruit_GFX. The SAME .elf that espflash\'es to physical hardware runs here in the browser — bit-identical: identical instruction stream, identical SPI byte stream, identical pixel pattern on the panel.',
+    arch: 'Xtensa LX6',
+    chipYaml: chipEsp32,
+    systemYaml: systemAgentDeck,
+    demoFirmwarePath: `${BASE}wasm/demo-labwired-ereader.elf`,
+    mcuComponentType: 'esp32',
+    sourceCode: sourceLabwiredEreader,
+    sourceFilename: 'labwired-ereader-arduino/labwired-ereader.ino',
+    kind: 'lab',
+    quirks: 'arduino-esp32-autodiscover',
+    panelScale: 2,
+    summary: {
+      title: 'ESP32 E-Reader — bit-identical',
+      description: 'Real Arduino sketch (`labwired-ereader.ino`) running through the full Arduino-ESP32 + GxEPD2 + FreeRTOS stack inside the simulator. Same .elf that flashes to physical ESP32 hardware via espflash.',
+      nextStep: 'Click Run — boots the firmware bit-identically. Panel paints "LabWired Reader" page over ~30 s of simulated cold-boot.',
+      nextStepRunning: 'Bit-identical sim of the labwired-ereader sketch. Same byte stream as the real WROOM.',
+    },
+    runHint: 'Click Run — boots the bit-identical Arduino firmware. Page paints over ~30 s of simulated cold-boot.',
   },
   {
     boardId: 'max31855-thermocouple-lab',

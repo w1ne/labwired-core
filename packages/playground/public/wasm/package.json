@@ -1,0 +1,15 @@
+{
+  "name": "labwired-wasm",
+  "type": "module",
+  "version": "0.15.0",
+  "files": [
+    "labwired_wasm_bg.wasm",
+    "labwired_wasm.js",
+    "labwired_wasm.d.ts"
+  ],
+  "main": "labwired_wasm.js",
+  "types": "labwired_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -291,6 +291,34 @@ export class WasmSimulator {
         const ret = wasm.wasmsimulator_get_uart_device_states(this.__wbg_ptr);
         return ret;
     }
+    /**
+     * Auto-discovery counterpart to [`Self::install_esp32_arduino_quirks`].
+     *
+     * Mirrors the CLI's `arduino-esp32` snapshot-capture profile —
+     * resolves Arduino-ESP32 thunk PCs from the ELF symbol table instead
+     * of hand-curated hardcoded addresses. Works for any GxEPD2-class
+     * sketch (labwired-ereader, future user sketches) without needing
+     * to know its binary layout in advance.
+     *
+     * Caller must pass the same ELF bytes that were loaded via
+     * `load_firmware`. The thunks are installed as flash patches over
+     * the resolved PCs; calling this without the matching ELF is a no-op
+     * (symbols don't resolve → no thunks installed).
+     *
+     * Also attaches a `Uc8151dTricolor290` panel to spi3 (the SSD1680
+     * panel attached by default doesn't decode UC8151D opcodes
+     * `0x00 PSR` / `0x04 PON` / `0x10 DTM1` / `0x12 DRF` / `0x13 DTM2`
+     * that GxEPD2_290_C90c / Z13c emits).
+     * @param {Uint8Array} elf_bytes
+     */
+    install_arduino_esp32_quirks(elf_bytes) {
+        const ptr0 = passArray8ToWasm0(elf_bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_install_arduino_esp32_quirks(this.__wbg_ptr, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
     install_esp32_arduino_quirks() {
         const ret = wasm.wasmsimulator_install_esp32_arduino_quirks(this.__wbg_ptr);
         if (ret[1]) {

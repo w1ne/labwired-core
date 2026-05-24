@@ -6,6 +6,11 @@ repos:
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
     -   id: check-added-large-files
+        # Bumped from default 500 KB to 1 MB so demo firmware ELFs in
+        # packages/playground/public/wasm/ commit cleanly. The biggest
+        # so far is labwired-ereader (~640 KB stripped — full
+        # Arduino-ESP32 + GxEPD2 + Adafruit_GFX + FreeRTOS stack).
+        args: ['--maxkb=1024']
 
 -   repo: local
     hooks:
