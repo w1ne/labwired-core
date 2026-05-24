@@ -2,6 +2,7 @@
 name = "labwired-wasm"
 version.workspace = true
 edition = "2021"
+license.workspace = true
 publish = false
 
 [lib]
