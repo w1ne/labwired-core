@@ -195,7 +195,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
   {
     boardId: 'esp32-epaper-lab',
     chipId: 'esp32',
-    name: 'ESP32 + E-Paper 2.9" Tri-color',
+    name: 'ESP32 E-Reader',
     description: 'ESP32-WROOM-32 + Waveshare 2.9" SSD1680 tri-color e-paper over simulated VSPI. Same Rust no_std ELF flashes to a real ESP32 module via espflash for side-by-side digital-twin verification.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
