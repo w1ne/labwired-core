@@ -848,7 +848,7 @@ fn run_snapshot(args: SnapshotArgs) -> ExitCode {
 /// resume bit-identically inside the browser.
 fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     use labwired_core::bus::SystemBus;
-    use labwired_core::peripherals::components::Ssd1680Tricolor290;
+    use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
     use labwired_core::peripherals::esp32::spi::Esp32Spi;
     use labwired_core::peripherals::esp32s3::rom_thunks;
     use labwired_core::system::xtensa::configure_xtensa_esp32;
@@ -886,7 +886,17 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     };
     if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
         if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
-            spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+            if args.profile == "arduino-esp32" {
+                // GxEPD2_290_C90c / Z13c firmware drives the panel with
+                // UC8151D commands (PSR/PWR/PON/DTM1/DTM2/DRF/…) which
+                // conflict with SSD1680 at multiple opcodes; we need the
+                // UC8151D panel model. AgentDeck firmware uses SSD1680
+                // and stays on the old model below.
+                spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
+            } else {
+                spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+            }
+            spi3.enable_byte_capture(512);
         }
     }
     bus.refresh_peripheral_index();
@@ -1304,6 +1314,24 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(&pc) = symbol_addrs.get("esp_clk_cpu_freq") {
         thunks.push((pc, rom_thunks::esp_clk_cpu_freq_240mhz));
     }
+    // Xtensa HAL register-window-file spill. The HAL impl walks WS bits
+    // and spills each live slot's a0..a3 to its stack save area — but
+    // our sim's transparent shadow-spill on CALL{n} leaves WS=1 on
+    // displaced slots while the AR file has the callee's data, so the
+    // HAL walk reads garbage (callee's a1 is often 0 → store to
+    // 0xfffffff0 traps). The custom thunk emulates the spill using
+    // shadow-stack snapshots when available. Only wired for
+    // arduino-esp32 profile — agentdeck's call path doesn't hit the
+    // crash, and replacing the real function with the thunk regresses
+    // a working flow (spill writes valid save-area data the callee
+    // later reads).
+    if args.profile == "arduino-esp32" {
+        for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
+            if let Some(&pc) = symbol_addrs.get(*sym) {
+                thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
+            }
+        }
+    }
     // xQueueCreateMutexStatic returns the caller's static buffer as the
     // handle. Callers (esp_newlib_locks_init in particular) assert that the
     // returned handle equals the buffer they passed in — a nop_return_zero
@@ -1330,6 +1358,16 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(&pc) = symbol_addrs.get("xQueueGenericSend") {
         thunks.push((pc, rom_thunks::return_pd_true));
     }
+    // ulTaskGenericNotifyTake — gated to arduino-esp32 only.
+    // AgentDeck has its own well-modeled lock-acquire path that
+    // expects a proper "block-then-wake" semantic; stubbing it to
+    // return pdTRUE causes the lock-acquire to skip its setup and
+    // later trip __assert_func inside lock_acquire_generic.
+    if args.profile == "arduino-esp32" {
+        if let Some(&pc) = symbol_addrs.get("ulTaskGenericNotifyTake") {
+            thunks.push((pc, rom_thunks::return_pd_true));
+        }
+    }
     if let Some(&pc) = symbol_addrs.get("spiStartBus") {
         thunks.push((pc, rom_thunks::spi_start_bus_fake));
     }
@@ -1344,6 +1382,23 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // at the correct SPI peripheral base, then returns pdTRUE.
     if let Some(&pc) = symbol_addrs.get("_ZN8SPIClass16beginTransactionE11SPISettings") {
         thunks.push((pc, rom_thunks::spi_class_begin_transaction));
+    }
+    // GxEPD2_EPD::_writeCommand / _writeData — route directly into the
+    // attached UC8151D panel's `command_byte` / `data_byte` API,
+    // bypassing the Arduino-ESP32 SPI library and the SPI peripheral
+    // entirely. Same byte stream the real silicon receives, with
+    // explicit DC=cmd / DC=data routing (which we can't infer from
+    // pure FIFO bytes without observing the DC GPIO). Only wired for
+    // the arduino-esp32 profile — agentdeck profile attaches an
+    // SSD1680 panel that uses byte-counting through `transfer()` and
+    // doesn't need the explicit CMD/DATA split.
+    if args.profile == "arduino-esp32" {
+        if let Some(&pc) = symbol_addrs.get("_ZN10GxEPD2_EPD13_writeCommandEh") {
+            thunks.push((pc, rom_thunks::gxepd_write_command));
+        }
+        if let Some(&pc) = symbol_addrs.get("_ZN10GxEPD2_EPD10_writeDataEh") {
+            thunks.push((pc, rom_thunks::gxepd_write_data));
+        }
     }
     // Optional debug: install vListInsert short-circuit thunk that dumps
     // list state for first 20 calls. Used to diagnose SMP race issues in
@@ -1622,18 +1677,81 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                     "labwired-cli snapshot: spi3 transactions={}",
                     spi3.transactions(),
                 );
+                let cap = spi3.captured_bytes();
+                if !cap.is_empty() {
+                    let head_n = cap.len().min(120);
+                    let head_hex: Vec<String> =
+                        cap[..head_n].iter().map(|b| format!("{b:02x}")).collect();
+                    eprintln!(
+                        "labwired-cli snapshot: first {head_n} spi3 bytes: {}",
+                        head_hex.join(" ")
+                    );
+                    if cap.len() > 240 {
+                        let tail = &cap[cap.len() - 120..];
+                        let tail_hex: Vec<String> =
+                            tail.iter().map(|b| format!("{b:02x}")).collect();
+                        eprintln!(
+                            "labwired-cli snapshot: last 120 spi3 bytes: {}",
+                            tail_hex.join(" ")
+                        );
+                    }
+                }
                 for attached in &spi3.attached_devices {
                     if let Some(panel_any) = attached.as_any() {
                         if let Some(panel) = panel_any.downcast_ref::<Ssd1680Tricolor290>() {
                             let bp = panel.black_plane();
                             let non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
                             eprintln!(
-                                "labwired-cli snapshot: panel state — refresh_generation={}, power_on={}, black-plane non-FF bytes={}/{}",
+                                "labwired-cli snapshot: panel (ssd1680) state — refresh_generation={}, power_on={}, black-plane non-FF bytes={}/{}",
                                 panel.refresh_generation(),
                                 panel.power_on(),
                                 non_ff,
                                 bp.len(),
                             );
+                        } else if let Some(panel) = panel_any.downcast_ref::<Uc8151dTricolor290>() {
+                            let bp = panel.black_plane();
+                            let non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
+                            let rp = panel.red_plane();
+                            let non_ff_red = rp.iter().filter(|&&b| b != 0xFF).count();
+                            eprintln!(
+                                "labwired-cli snapshot: panel (uc8151d) state — refresh_generation={}, power_on={}, black-plane non-FF bytes={}/{}, red-plane non-FF bytes={}/{}",
+                                panel.refresh_generation(),
+                                panel.power_on(),
+                                non_ff,
+                                bp.len(),
+                                non_ff_red,
+                                rp.len(),
+                            );
+                            // Render the panel as a PPM next to the
+                            // snapshot output so an operator can visually
+                            // confirm "yes, this looks like the real-HW
+                            // panel image" before shipping the snapshot.
+                            let (w, h) = panel.dimensions();
+                            let stride = w / 8;
+                            let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
+                            for y in 0..h {
+                                for x in 0..w {
+                                    let idx = y * stride + x / 8;
+                                    let bit = 7 - (x % 8);
+                                    let black_bit = (bp[idx] >> bit) & 1;
+                                    let red_bit = (rp[idx] >> bit) & 1;
+                                    let (r, g, b) = if red_bit == 0 {
+                                        (220u8, 30u8, 40u8)
+                                    } else if black_bit == 0 {
+                                        (0u8, 0u8, 0u8)
+                                    } else {
+                                        (245u8, 245u8, 240u8)
+                                    };
+                                    ppm.extend_from_slice(&[r, g, b]);
+                                }
+                            }
+                            let ppm_path = args.output.with_extension("ppm");
+                            if std::fs::write(&ppm_path, &ppm).is_ok() {
+                                eprintln!(
+                                    "labwired-cli snapshot: panel PPM written to {}",
+                                    ppm_path.display()
+                                );
+                            }
                         }
                     }
                 }
