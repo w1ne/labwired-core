@@ -42,7 +42,7 @@ import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/m
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
 import sourceEsp32Epaper from '../../../core/examples/esp32-epaper-lab/src/main.rs?raw';
-import systemAgentDeck from '../../../core/configs/systems/agentdeck.yaml?raw';
+import systemEsp32WroomEpaper from '../../../core/configs/systems/esp32-wroom-epaper.yaml?raw';
 import sourceLabwiredEreader from '../../../core/examples/labwired-ereader-arduino/labwired-ereader.ino?raw';
 
 /**
@@ -220,7 +220,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     description: 'ESP32-WROOM-32 + Waveshare 2.9" tri-color e-paper. Arduino sketch (GxEPD2 + Adafruit_GFX) — same .elf flashes to physical hardware.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
-    systemYaml: systemAgentDeck,
+    systemYaml: systemEsp32WroomEpaper,
     demoFirmwarePath: `${BASE}wasm/demo-labwired-ereader.elf`,
     mcuComponentType: 'esp32',
     sourceCode: sourceLabwiredEreader,

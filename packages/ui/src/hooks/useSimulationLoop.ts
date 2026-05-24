@@ -8,7 +8,7 @@ export interface DisplayBinding {
   partId: string;
   kind: 'ssd1680_tricolor_290';
   /**
-   * GxEPD2 (the de-facto Arduino-ESP32 SSD1680 library, used by AgentDeck)
+   * GxEPD2 (the de-facto Arduino-ESP32 SSD1680 library)
    * inverts the source bitmap before SPI write — its "no red" source byte
    * (0xFF) lands as 0x00 in the sim's red plane. The hand-rolled Rust
    * firmware in `examples/epaper-tricolor-lab/` skips that inversion and
@@ -46,7 +46,7 @@ export interface UseSimulationLoopOptions {
    * headroom for `pollState` + paint). Min clamp 1 000 cycles, max 4 000 000;
    * the auto-tune doubles when frame time is under 8 ms and halves when it
    * goes over 14 ms. Default seed: 50 000 — fast-enough first-frame response
-   * on lab demos, scales up automatically on heavier firmware like AgentDeck.
+   * on lab demos, scales up automatically on heavier Arduino-ESP32 firmware.
    */
   cyclesPerFrame?: number;
   /** Display devices to poll per frame (generation-gated). */

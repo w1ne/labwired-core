@@ -123,7 +123,7 @@ export interface WasmSimulatorInstance {
    *  simulator. */
   install_arduino_esp32_quirks(elf_bytes: Uint8Array): void;
   /** @deprecated Renamed to `install_esp32_arduino_quirks`. Kept for backwards
-   *  compatibility with the standalone /agentdeck.html page. */
+   *  compatibility with the legacy standalone preset-PC entry point. */
   apply_agentdeck_quirks(): void;
   // Steps the firmware plus refreshes the dual-core handshake bytes every
   // ~10k cycles so the FreeRTOS scheduler sees CPU1 as "up". Returns
@@ -248,7 +248,7 @@ export class SimulatorBridge {
   /** Auto-discovery quirks installer — pass the firmware ELF bytes so
    *  thunks resolve to actual PCs from the symbol table. Use this for
    *  arbitrary GxEPD2 / Arduino-ESP32 sketches (e.g. labwired-ereader);
-   *  the original `installEsp32ArduinoQuirks` uses AgentDeck-specific
+   *  the original `installEsp32ArduinoQuirks` uses preset-PC
    *  hardcoded PCs that won't match other binaries. */
   installArduinoEsp32QuirksAutodiscover(elfBytes: Uint8Array): void {
     this.sim.install_arduino_esp32_quirks(elfBytes);
@@ -256,7 +256,7 @@ export class SimulatorBridge {
   }
 
   /** @deprecated Renamed to `installEsp32ArduinoQuirks`. The bootstrap is
-   *  generic Arduino-ESP32 glue, not AgentDeck-specific. */
+   *  generic Arduino-ESP32 glue, not firmware-specific. */
   applyAgentdeckQuirks(): void {
     this.installEsp32ArduinoQuirks();
   }

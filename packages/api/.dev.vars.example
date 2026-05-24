@@ -15,3 +15,12 @@ STRIPE_WEBHOOK_SECRET=whsec_REPLACE_ME
 
 # Clerk backend secret key (https://dashboard.clerk.com → API Keys → Secret keys)
 CLERK_SECRET_KEY=sk_test_REPLACE_ME
+
+# Cloudflare DNS edit token — only needed if the Worker performs DNS
+# automation at runtime. Scope: Zone → DNS → Edit on the target zone.
+CF_DNS_TOKEN=REPLACE_ME
+
+# npm publish token — only needed by automation jobs that publish from
+# the Worker. ROTATE IMMEDIATELY if exposed since it can ship
+# malicious package versions.
+NPM_TOKEN=REPLACE_ME

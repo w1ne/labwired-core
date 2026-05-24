@@ -222,7 +222,7 @@ export function MobileDemoView({
 
         <p className="text-fg-tertiary text-[12px] text-center max-w-[40ch] leading-snug px-4">
           The same firmware ELF that flashes to your physical board runs here in your browser.
-          Cycle-accurate. Bit-identical. <a className="text-accent" href="https://labwired.com/ci.html">Use in CI →</a>
+          Cycle-accurate. Deterministic. <a className="text-accent" href="https://labwired.com/ci.html">Use in CI →</a>
         </p>
       </main>
 

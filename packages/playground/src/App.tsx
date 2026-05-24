@@ -66,7 +66,7 @@ type ActiveSimulationConfig = {
   chipYaml: string;
   firmware: Uint8Array;
   /** Firmware-runtime quirks; propagated from BoardConfig.quirks.
-   *  - `esp32-arduino`: AgentDeck-style install with hardcoded thunk PCs.
+   *  - `esp32-arduino`: preset-PC install with hardcoded thunk addresses for a specific firmware build.
    *  - `arduino-esp32-autodiscover`: resolves thunk PCs from the firmware
    *    ELF symbol table — works for any GxEPD2 sketch (labwired-ereader). */
   quirks?: 'esp32-arduino' | 'arduino-esp32-autodiscover';

@@ -22,7 +22,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
     >
       <GlobalLogo variant="dark" />
       <span
-        title="LabWired runs your firmware cycle-accurately and bit-identical across runs — the same .elf produces the same output every time. Drop it into CI for regression tests."
+        title="LabWired runs your firmware deterministically — the same .elf produces the same output every run. Drop it into CI for regression tests."
         className="hidden md:inline-flex items-center gap-1.5 h-6 px-2 rounded-pill bg-success/10 border border-success/30 text-success text-[10.5px] font-medium tracking-[0.02em] shrink-0"
       >
         <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(61,214,140,0.7)]" />
