@@ -31,7 +31,6 @@ import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/sy
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
-import systemAgentDeck from '../../../core/configs/systems/agentdeck.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
@@ -89,9 +88,9 @@ export interface BoardConfig {
   /**
    * Optional URL of a pre-warmed runtime snapshot (`.lwrs`). When set, the
    * playground fetches this blob right after loading the firmware ELF and
-   * calls `simulator.applyRuntimeSnapshot` to skip the cold boot —
-   * AgentDeck's 30 s warm-up collapses to one HTTP round-trip plus a few
-   * ms of bincode decode. Produce with `labwired-cli snapshot capture`.
+   * calls `simulator.applyRuntimeSnapshot` to skip the cold boot — a
+   * 30 s warm-up collapses to one HTTP round-trip plus a few ms of
+   * bincode decode. Produce with `labwired-cli snapshot capture`.
    */
   bootSnapshotUrl?: string;
   /**
@@ -104,11 +103,6 @@ export interface BoardConfig {
   summary?: BoardSummary;
   /** Board-aware "Click Run to start" hint shown next to the SimDock. */
   runHint?: string;
-  /**
-   * @deprecated Renamed to `quirks: 'esp32-arduino'`. Removed once all
-   * callers stop reading this. The runtime treats both as equivalent.
-   */
-  simQuirks?: 'agentdeck';
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -202,7 +196,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     boardId: 'esp32-epaper-lab',
     chipId: 'esp32',
     name: 'ESP32 + E-Paper 2.9" Tri-color',
-    description: 'ESP32-WROOM-32 + Waveshare 2.9" SSD1680 tri-color e-paper over simulated VSPI. Same Rust no_std ELF flashes to a real ESP32 module via espflash for side-by-side digital-twin verification with the AgentDeck hardware pin map.',
+    description: 'ESP32-WROOM-32 + Waveshare 2.9" SSD1680 tri-color e-paper over simulated VSPI. Same Rust no_std ELF flashes to a real ESP32 module via espflash for side-by-side digital-twin verification.',
     arch: 'Xtensa LX6',
     chipYaml: chipEsp32,
     systemYaml: systemEsp32EpaperLab,
@@ -211,36 +205,6 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceEsp32Epaper,
     sourceFilename: 'esp32-epaper-lab/src/main.rs',
     kind: 'lab',
-  },
-  {
-    // ESP32-WROOM-32U + Waveshare 2.9" SSD1680 tri-color e-paper — the
-    // AgentDeck agent-approval appliance firmware (real production binary
-    // that ships on the physical hardware).
-    //
-    // Same ELF that flashes via espflash; the playground loads it, applies
-    // a pre-warmed LWRS snapshot captured by `labwired-cli snapshot
-    // capture`, and the panel paints in under a second instead of taking
-    // ~30 s for the cold ESP-IDF boot.
-    boardId: 'agentdeck',
-    chipId: 'esp32',
-    name: 'AgentDeck',
-    description: 'ESP32-WROOM-32U + Waveshare 2.9" tri-color e-paper. Real AgentDeck agent-approval appliance firmware (Arduino-ESP32 + GxEPD2 + Adafruit_GFX) — same ELF flashes to the physical hardware via espflash. The playground restores a pre-warmed boot snapshot so the panel paints in under a second.',
-    arch: 'Xtensa LX6',
-    chipYaml: chipEsp32,
-    systemYaml: systemAgentDeck,
-    demoFirmwarePath: `${BASE}wasm/demo-agentdeck.elf`,
-    mcuComponentType: 'esp32',
-    kind: 'lab',
-    quirks: 'esp32-arduino',
-    bootSnapshotUrl: `${BASE}wasm/demo-agentdeck-postpaint.lwrs`,
-    panelScale: 2,
-    summary: {
-      title: 'AgentDeck',
-      description: 'ESP32-WROOM-32U driving a Waveshare 2.9" SSD1680 panel via VSPI. The same AgentDeck firmware ELF flashes to physical hardware via espflash and runs unmodified in this browser.',
-      nextStep: 'Click Run to boot the firmware — the snapshot lands the AgentDeck panel in < 1 s.',
-      nextStepRunning: 'Simulation is running. Panel restored from a pre-warmed snapshot.',
-    },
-    runHint: 'Click Run to boot the firmware — pre-warmed snapshot paints the panel instantly',
   },
   {
     boardId: 'max31855-thermocouple-lab',

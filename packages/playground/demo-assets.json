@@ -2,17 +2,5 @@
   "_comment": "Source of truth for demo assets fetched from the public GitHub Release at build time. Each entry mirrors one file from labwired-core/releases/{release_tag}/ into public/wasm/. Bash side: packages/playground/scripts/fetch-demo-firmware.sh. TS side: packages/playground/src/bundled-configs.ts (which validates that every demoFirmwarePath has a matching entry here). Add a new demo by appending an entry below AND adding the matching BoardConfig.",
   "release_tag": "firmware-demos-v1",
   "release_base_url": "https://github.com/w1ne/labwired-core/releases/download",
-  "assets": [
-    {
-      "filename": "demo-agentdeck.elf",
-      "boardId": "agentdeck",
-      "minSizeBytes": 1000000
-    },
-    {
-      "filename": "demo-agentdeck-postpaint.lwrs",
-      "boardId": "agentdeck",
-      "minSizeBytes": 500000,
-      "kind": "snapshot"
-    }
-  ]
+  "assets": []
 }

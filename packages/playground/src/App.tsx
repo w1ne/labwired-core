@@ -314,21 +314,14 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
-  if (
-    config.boardId === 'esp32-epaper-lab' ||
-    config.boardId === 'agentdeck'
-  ) {
-    // ESP32-WROOM-32 driving the same Waveshare panel via VSPI. Wiring
-    // matches AgentDeck (`firmware/src/pins.h`) — BUSY=GPIO4 / RST=GPIO16
-    // / DC=GPIO17 / CS=GPIO5 / SCK=GPIO18 / MOSI=GPIO23 — so the same
-    // ELF that espflash'es to the AgentDeck hardware paints the panel
-    // here too. AgentDeck reuses this exact wiring (its production
-    // firmware uses the same pin map), just with a different demo ELF.
+  if (config.boardId === 'esp32-epaper-lab') {
+    // ESP32-WROOM-32 driving a Waveshare 2.9" tri-color e-paper via VSPI.
+    // Wiring: BUSY=GPIO4 / RST=GPIO16 / DC=GPIO17 / CS=GPIO5 /
+    // SCK=GPIO18 / MOSI=GPIO23.
     //
     // `panelScale` from BoardConfig — the SSD1680 face renders at 144×48
     // SVG units; without an upscale 12-px font glyphs collapse to ~4
-    // screen pixels and the rendered IDLE/ATTACH/DECIDE/STOP text is
-    // unreadable. AgentDeck sets 2; the bare e-paper-lab leaves it 1.
+    // screen pixels and the rendered text is unreadable.
     const panelScale = config.panelScale ?? 1;
     return {
       ...createEmptyDiagram(config.chipId),
@@ -596,7 +589,7 @@ export function App() {
     }
     // If the board ships a pre-warmed boot snapshot, fetch it and apply
     // right after the quirks (which restore the thunk PCs into flash that
-    // the snapshot expects). Drops AgentDeck's first-paint time from
+    // the snapshot expects). Drops heavy-firmware first-paint time from
     // ~30 s to under a second.
     if (config.bootSnapshotUrl) {
       try {
@@ -701,7 +694,7 @@ export function App() {
         systemYaml,
         chipYaml,
         firmware,
-        quirks: selectedBoard.quirks ?? (selectedBoard.simQuirks === 'agentdeck' ? 'esp32-arduino' : undefined),
+        quirks: selectedBoard.quirks,
         bootSnapshotUrl: selectedBoard.bootSnapshotUrl,
       });
     } catch (e) {
@@ -740,9 +733,9 @@ export function App() {
 
   // Drive the simulation loop. useSimulationLoop auto-tunes the per-frame
   // cycle batch to keep stepBatch under a ~14 ms budget — small for fast
-  // firmware (Rust no_std blinky), big for heavy firmware (AgentDeck needs
-  // ~30 M cycles to reach Display::render). Seed slightly higher than the
-  // hook's default so the first frame on heavy firmware isn't tiny.
+  // firmware (Rust no_std blinky), big for heavy firmware (Arduino-ESP32
+  // sketches need ~30 M cycles to reach Display::render). Seed slightly
+  // higher than the hook's default so the first frame isn't tiny.
   const { state: simState, stepOnce, clearUart } = useSimulationLoop({
     bridge,
     running,
@@ -1162,7 +1155,7 @@ export function App() {
           systemYaml,
           chipYaml,
           firmware,
-          quirks: selectedBoard.quirks ?? (selectedBoard.simQuirks === 'agentdeck' ? 'esp32-arduino' : undefined),
+          quirks: selectedBoard.quirks,
           bootSnapshotUrl: selectedBoard.bootSnapshotUrl,
         });
         setCompileOutput((prev) => `${prev}\nUploaded ${file.name} (${firmware.length} bytes). Simulation started.`);
