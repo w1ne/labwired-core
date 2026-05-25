@@ -124,6 +124,18 @@ export class WasmSimulator {
      */
     get_uart_device_states(): any;
     /**
+     * Same shape as [`get_ssd1680_framebuffer`] but for the UC8151D-family
+     * tri-color panel attached by [`install_arduino_esp32_quirks`]. The
+     * board_io binding type may say `ssd1680_tricolor_290` (since system
+     * YAMLs were authored before the UC8151D split); we ignore that and
+     * just find a `Uc8151dTricolor290` on the named SPI peripheral.
+     */
+    get_uc8151d_framebuffer(device_id: string): Uint8Array;
+    /**
+     * Cheap accessor returning just the UC8151D refresh-generation counter.
+     */
+    get_uc8151d_refresh_generation(device_id: string): number;
+    /**
      * Auto-discovery counterpart to [`Self::install_esp32_arduino_quirks`].
      *
      * Mirrors the CLI's `arduino-esp32` snapshot-capture profile —
@@ -264,6 +276,8 @@ export interface InitOutput {
     readonly wasmsimulator_get_ssd1680_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
     readonly wasmsimulator_get_ssd1680_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
     readonly wasmsimulator_get_uart_device_states: (a: number) => any;
+    readonly wasmsimulator_get_uc8151d_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly wasmsimulator_get_uc8151d_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
     readonly wasmsimulator_install_arduino_esp32_quirks: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_install_esp32_arduino_quirks: (a: number) => [number, number];
     readonly wasmsimulator_keep_alive_esp32_dual_core: (a: number) => void;

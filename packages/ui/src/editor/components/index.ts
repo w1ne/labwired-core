@@ -32,6 +32,7 @@ import { oledSsd1306Component } from './oled-ssd1306';
 import { ledMatrixComponent } from './led-matrix';
 import { ili9341TftComponent } from './ili9341-tft';
 import { epdSsd1680TricolorComponent } from './epd-ssd1680-tricolor';
+import { epdUc8151dTricolorComponent } from './epd-uc8151d-tricolor';
 // Passives
 import { capacitorComponent } from './capacitor';
 import { diodeComponent } from './diode';
@@ -96,6 +97,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [ledMatrixComponent.type, ledMatrixComponent],
   [ili9341TftComponent.type, ili9341TftComponent],
   [epdSsd1680TricolorComponent.type, epdSsd1680TricolorComponent],
+  [epdUc8151dTricolorComponent.type, epdUc8151dTricolorComponent],
   // Passives
   [resistorComponent.type, resistorComponent],
   [capacitorComponent.type, capacitorComponent],

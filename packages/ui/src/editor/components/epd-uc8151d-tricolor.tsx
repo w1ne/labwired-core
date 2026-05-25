@@ -1,0 +1,194 @@
+// UC8151D-family tri-color 2.9" e-paper panel (Waveshare 2.9" Z90c / C90c /
+// Z13c — controller varies by panel revision). Same physical 296×128 face
+// and same plane-byte layout as SSD1680, so the SVG silkscreen + rendering
+// pipeline are intentionally identical. The split exists because GxEPD2
+// emits UC8151D opcodes (PSR / PON / DTM1 / DRF / DTM2) which the SSD1680
+// peripheral model can't decode — see core/crates/wasm install_arduino_esp32_quirks.
+
+import { useMemo } from 'react';
+import type { ComponentDef, DisplayBuffer } from '../types';
+
+const W = 160;
+const H = 78;
+const FACE_X = 8;
+const FACE_Y = 6;
+const FACE_W = W - 16;
+const FACE_H = H - 30;
+const PANEL_W = 128;
+const PANEL_H = 296;
+const PANEL_W_BYTES = PANEL_W / 8;
+const PLANE_BYTES = PANEL_W_BYTES * PANEL_H;
+const LANDSCAPE_W = PANEL_H;
+const LANDSCAPE_H = PANEL_W;
+
+function composeRgba(planes: Uint8Array): Uint8ClampedArray | null {
+  if (planes.length !== PLANE_BYTES * 2) return null;
+  const out = new Uint8ClampedArray(LANDSCAPE_W * LANDSCAPE_H * 4);
+  for (let nativeY = 0; nativeY < PANEL_H; nativeY++) {
+    for (let nativeXByte = 0; nativeXByte < PANEL_W_BYTES; nativeXByte++) {
+      const idx = nativeY * PANEL_W_BYTES + nativeXByte;
+      const blackByte = planes[idx];
+      const redByte = planes[PLANE_BYTES + idx];
+      for (let bit = 0; bit < 8; bit++) {
+        const nativeX = nativeXByte * 8 + bit;
+        const mask = 1 << (7 - bit);
+        const blackBit = (blackByte & mask) !== 0;
+        const redBit = (redByte & mask) !== 0;
+        const lx = nativeY;
+        const ly = (PANEL_W - 1) - nativeX;
+        const off = (ly * LANDSCAPE_W + lx) * 4;
+        if (!redBit) {
+          out[off] = 196; out[off + 1] = 30; out[off + 2] = 30; out[off + 3] = 255;
+        } else if (!blackBit) {
+          out[off] = 30; out[off + 1] = 30; out[off + 2] = 30; out[off + 3] = 255;
+        } else {
+          out[off] = 244; out[off + 1] = 241; out[off + 2] = 232; out[off + 3] = 255;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function rgbaToPngDataUrl(rgba: Uint8ClampedArray): string | null {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = LANDSCAPE_W;
+  canvas.height = LANDSCAPE_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const img = ctx.createImageData(LANDSCAPE_W, LANDSCAPE_H);
+  img.data.set(rgba);
+  ctx.putImageData(img, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+function PanelPixels({ buffer }: { buffer: DisplayBuffer }) {
+  const dataUrl = useMemo(() => {
+    if (buffer.kind !== 'uc8151d_tricolor_290') return null;
+    const rgba = composeRgba(buffer.data);
+    if (!rgba) return null;
+    return rgbaToPngDataUrl(rgba);
+  }, [buffer.kind, buffer.generation, buffer.data]);
+
+  if (!dataUrl) return null;
+  return (
+    <image
+      href={dataUrl}
+      x={FACE_X}
+      y={FACE_Y}
+      width={FACE_W}
+      height={FACE_H}
+      preserveAspectRatio="none"
+      style={{ imageRendering: 'pixelated' }}
+    />
+  );
+}
+
+export const epdUc8151dTricolorComponent: ComponentDef = {
+  type: 'uc8151d_tricolor_290',
+  label: 'E-Paper 2.9" tri-color (UC8151D)',
+  category: 'display',
+  width: W,
+  height: H,
+  pins: [
+    { id: 'VCC',  x: 24,  y: H, side: 'bottom', label: 'VCC' },
+    { id: 'GND',  x: 40,  y: H, side: 'bottom', label: 'GND' },
+    { id: 'DIN',  x: 56,  y: H, side: 'bottom', label: 'DIN' },
+    { id: 'CLK',  x: 72,  y: H, side: 'bottom', label: 'CLK' },
+    { id: 'CS',   x: 88,  y: H, side: 'bottom', label: 'CS' },
+    { id: 'DC',   x: 104, y: H, side: 'bottom', label: 'DC' },
+    { id: 'RST',  x: 120, y: H, side: 'bottom', label: 'RST' },
+    { id: 'BUSY', x: 136, y: H, side: 'bottom', label: 'BUSY' },
+  ],
+  defaultAttrs: {},
+  boardIoKind: 'spi_device',
+  attrFields: [],
+  render: (_attrs, state) => {
+    const selected = !!state?.selected;
+    const active = !!state?.active;
+    const buffer = state?.displayBuffer;
+
+    return (
+      <g>
+        <defs>
+          <linearGradient id="uc-pcb" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#1a4a1a" />
+            <stop offset="1" stopColor="#0e2e0e" />
+          </linearGradient>
+          <linearGradient id="uc-paper" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#f4f1e8" />
+            <stop offset="1" stopColor="#e6e1d3" />
+          </linearGradient>
+          <linearGradient id="uc-pad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#FFE680" />
+            <stop offset="1" stopColor="#B0871A" />
+          </linearGradient>
+        </defs>
+
+        <ellipse cx={W / 2} cy={H + 4} rx={W / 2 - 8} ry={3.5} fill="#000" opacity={0.3} />
+        <rect width={W} height={H} rx={3} fill="url(#uc-pcb)" stroke={selected ? '#F062B8' : '#0a1f0a'} strokeWidth={selected ? 2.5 : 1} />
+
+        <circle cx={4}     cy={4}      r={1.6} fill="#0a1f0a" />
+        <circle cx={W - 4} cy={4}      r={1.6} fill="#0a1f0a" />
+        <circle cx={4}     cy={H - 16} r={1.6} fill="#0a1f0a" />
+        <circle cx={W - 4} cy={H - 16} r={1.6} fill="#0a1f0a" />
+
+        <rect
+          x={FACE_X}
+          y={FACE_Y}
+          width={FACE_W}
+          height={FACE_H}
+          rx={1}
+          fill="url(#uc-paper)"
+          stroke="#bcb6a3"
+          strokeWidth={0.6}
+        />
+
+        {buffer ? (
+          <PanelPixels buffer={buffer} />
+        ) : active ? (
+          <text x={W / 2} y={H / 2 - 5} textAnchor="middle" fill="#1a1a1a" fontFamily="'JetBrains Mono', monospace" fontSize={5.5} fontWeight={600}>
+            waiting for first refresh...
+          </text>
+        ) : (
+          <>
+            <text x={W / 2} y={H / 2 - 9} textAnchor="middle" fill="#a8a290" fontFamily="'Outfit', sans-serif" fontSize={6} fontWeight={500} letterSpacing="0.04em">
+              2.9" tri-color e-paper
+            </text>
+            <text x={W / 2} y={H / 2 - 1} textAnchor="middle" fill="#bcb6a3" fontFamily="'JetBrains Mono', monospace" fontSize={5}>
+              296 × 128 · UC8151D
+            </text>
+          </>
+        )}
+
+        <text x={W / 2} y={H - 18} textAnchor="middle" fill="rgba(180,255,180,0.5)" fontFamily="'Outfit', sans-serif" fontSize={5} fontWeight={600} letterSpacing="0.08em">
+          B / W / R · SPI · 3.3V
+        </text>
+
+        {[
+          { x: 24,  label: 'VCC',  color: '#FF6B6B' },
+          { x: 40,  label: 'GND',  color: '#aaa' },
+          { x: 56,  label: 'DIN',  color: '#B07BFF' },
+          { x: 72,  label: 'CLK',  color: '#5BD8FF' },
+          { x: 88,  label: 'CS',   color: '#3DD68C' },
+          { x: 104, label: 'DC',   color: '#5B9DFF' },
+          { x: 120, label: 'RST',  color: '#F5B642' },
+          { x: 136, label: 'BUSY', color: '#FFE680' },
+        ].map((pad) => (
+          <g key={pad.label}>
+            <rect x={pad.x - 4} y={H - 12} width={8} height={10} fill="url(#uc-pad)" stroke="#7a5a1a" strokeWidth={0.3} />
+            <circle cx={pad.x} cy={H - 7} r={1.4} fill="#0a1f0a" />
+            <text x={pad.x} y={H - 14} textAnchor="middle" fill={pad.color} fontFamily="'JetBrains Mono', monospace" fontSize={4.5} fontWeight={600}>
+              {pad.label}
+            </text>
+          </g>
+        ))}
+
+        {selected && (
+          <rect width={W} height={H} rx={3} fill="none" stroke="#F062B8" strokeWidth={2.5} opacity={0.85} />
+        )}
+      </g>
+    );
+  },
+};

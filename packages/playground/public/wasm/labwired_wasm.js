@@ -292,6 +292,40 @@ export class WasmSimulator {
         return ret;
     }
     /**
+     * Same shape as [`get_ssd1680_framebuffer`] but for the UC8151D-family
+     * tri-color panel attached by [`install_arduino_esp32_quirks`]. The
+     * board_io binding type may say `ssd1680_tricolor_290` (since system
+     * YAMLs were authored before the UC8151D split); we ignore that and
+     * just find a `Uc8151dTricolor290` on the named SPI peripheral.
+     * @param {string} device_id
+     * @returns {Uint8Array}
+     */
+    get_uc8151d_framebuffer(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_uc8151d_framebuffer(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
+     * Cheap accessor returning just the UC8151D refresh-generation counter.
+     * @param {string} device_id
+     * @returns {number}
+     */
+    get_uc8151d_refresh_generation(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_uc8151d_refresh_generation(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
      * Auto-discovery counterpart to [`Self::install_esp32_arduino_quirks`].
      *
      * Mirrors the CLI's `arduino-esp32` snapshot-capture profile —

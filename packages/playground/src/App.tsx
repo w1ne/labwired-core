@@ -324,15 +324,24 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     // pinout (BUSY=GPIO4 / RST=GPIO16 / DC=GPIO17 / CS=GPIO5 / SCK=GPIO18 /
     // MOSI=GPIO23) so the diagram seed is identical.
     //
-    // `panelScale` from BoardConfig — the SSD1680 face renders at 144×48
+    // Panel type differs by firmware: Rust no_std drives the SSD1680
+    // controller directly, while the Arduino sketch uses GxEPD2 which
+    // emits UC8151D opcodes — autodiscover quirks attach a UC8151D model
+    // and we render from that panel's framebuffer.
+    //
+    // `panelScale` from BoardConfig — the panel face renders at 144×48
     // SVG units; without an upscale 12-px font glyphs collapse to ~4
     // screen pixels and the rendered text is unreadable.
     const panelScale = config.panelScale ?? 1;
+    const panelType =
+      config.boardId === 'labwired-ereader'
+        ? 'uc8151d_tricolor_290'
+        : 'ssd1680_tricolor_290';
     return {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
-        { id: 'epaper', type: 'ssd1680_tricolor_290', x: 600, y: 20, rotate: 0, scale: panelScale, attrs: {} },
+        { id: 'epaper', type: panelType, x: 600, y: 20, rotate: 0, scale: panelScale, attrs: {} },
       ],
       wires: [
         { from: { part: 'mcu', pin: '3V3' },     to: { part: 'epaper', pin: 'VCC'  }, color: '#FF6B6B' },
@@ -730,10 +739,14 @@ export function App() {
   const displays = useMemo(
     () =>
       editor.state.diagram.parts
-        .filter((p) => p.type === 'ssd1680_tricolor_290')
+        .filter(
+          (p) =>
+            p.type === 'ssd1680_tricolor_290' ||
+            p.type === 'uc8151d_tricolor_290',
+        )
         .map((p) => ({
           partId: p.id,
-          kind: 'ssd1680_tricolor_290' as const,
+          kind: p.type as 'ssd1680_tricolor_290' | 'uc8151d_tricolor_290',
           // Arduino-ESP32 boards drive the panel via GxEPD2 which inverts
           // red-plane bytes before SPI write; the un-inverted Rust labs
           // do not. The DisplayBinding's `invertRedPlane` flips the

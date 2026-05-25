@@ -6,7 +6,7 @@ import type { DisplayBuffer } from '../editor/types';
  *  diagram part id AND the `board_io.id` in the system YAML. */
 export interface DisplayBinding {
   partId: string;
-  kind: 'ssd1680_tricolor_290';
+  kind: 'ssd1680_tricolor_290' | 'uc8151d_tricolor_290';
   /**
    * GxEPD2 (the de-facto Arduino-ESP32 SSD1680 library)
    * inverts the source bitmap before SPI write — its "no red" source byte
@@ -128,6 +128,25 @@ export function useSimulationLoop(
             displayGenRef.current[d.partId] = gen;
             displayBufRef.current[d.partId] = {
               kind: 'ssd1680_tricolor_290',
+              generation: gen,
+              data: bytes,
+            };
+            displaysChanged = true;
+          } else if (d.kind === 'uc8151d_tricolor_290') {
+            const gen = b.getUc8151dRefreshGeneration(d.partId);
+            if (gen === null) continue;
+            const last = displayGenRef.current[d.partId];
+            if (last !== undefined && last === gen) continue;
+            const data = b.getUc8151dFramebuffer(d.partId);
+            if (data === null) continue;
+            let bytes = data;
+            if (d.invertRedPlane && data.length >= 9472) {
+              bytes = new Uint8Array(data);
+              for (let i = 4736; i < 9472; i++) bytes[i] = data[i] ^ 0xff;
+            }
+            displayGenRef.current[d.partId] = gen;
+            displayBufRef.current[d.partId] = {
+              kind: 'uc8151d_tricolor_290',
               generation: gen,
               data: bytes,
             };

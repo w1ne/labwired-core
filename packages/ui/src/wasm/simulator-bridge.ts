@@ -177,6 +177,11 @@ export interface WasmSimulatorInstance {
   get_ssd1680_framebuffer(device_id: string): Uint8Array;
   get_ssd1680_refresh_generation(device_id: string): number;
 
+  // UC8151D tri-color e-paper framebuffer (same shape as SSD1680;
+  // attached by install_arduino_esp32_quirks for GxEPD2 sketches).
+  get_uc8151d_framebuffer(device_id: string): Uint8Array;
+  get_uc8151d_refresh_generation(device_id: string): number;
+
   // SPI devices
   get_spi_device_states(): SpiDeviceState[];
   set_max31855_temperature(device_id: string, tc_c: number, internal_c: number): void;
@@ -464,6 +469,24 @@ export class SimulatorBridge {
   getSsd1680RefreshGeneration(deviceId: string): number | null {
     try {
       return this.sim.get_ssd1680_refresh_generation(deviceId);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Same shape as SSD1680 — UC8151D panel attached by `install_arduino_esp32_quirks`. */
+  getUc8151dFramebuffer(deviceId: string): Uint8Array | null {
+    try {
+      const fb = this.sim.get_uc8151d_framebuffer(deviceId);
+      return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  getUc8151dRefreshGeneration(deviceId: string): number | null {
+    try {
+      return this.sim.get_uc8151d_refresh_generation(deviceId);
     } catch {
       return null;
     }

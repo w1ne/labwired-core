@@ -25,6 +25,8 @@ export const wasmsimulator_get_ssd1306_framebuffer: (a: number, b: number, c: nu
 export const wasmsimulator_get_ssd1680_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
 export const wasmsimulator_get_ssd1680_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
 export const wasmsimulator_get_uart_device_states: (a: number) => any;
+export const wasmsimulator_get_uc8151d_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+export const wasmsimulator_get_uc8151d_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
 export const wasmsimulator_install_arduino_esp32_quirks: (a: number, b: number, c: number) => [number, number];
 export const wasmsimulator_install_esp32_arduino_quirks: (a: number) => [number, number];
 export const wasmsimulator_keep_alive_esp32_dual_core: (a: number) => void;
