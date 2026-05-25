@@ -1230,10 +1230,14 @@ name = "labwired-hw-oracle"
 version = "0.15.0"
 dependencies = [
  "anyhow",
+ "clap",
  "goblin",
  "labwired-core",
  "labwired-hw-oracle-macros",
+ "labwired-loader",
  "libc",
+ "serde",
+ "serde_json",
  "serialport",
  "thiserror 1.0.69",
  "tracing",
