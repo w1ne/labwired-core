@@ -351,26 +351,43 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32::spi::Esp32Spi::new()),
     );
 
-    // DPORT register stub (TRM §3). Firmware writes to PERIP_CLK_EN_REG /
-    // PERIP_RST_EN_REG to ungate VSPI + GPIO; sim ignores the values
-    // (peripherals are always live) but absorbs the writes so they don't
-    // fault. with_unwritten_ones() means any status-bit busy-wait reads
-    // back high — same trick as the S3 system_stub.
+    // DPORT (TRM v5.0 §6 + §7). Real ESP32-classic peripheral — seeds
+    // PERIP_CLK_EN with all bits set (we treat every peripheral as live;
+    // simpler than tracking gating), PERIP_RST_EN with 0 (nothing in
+    // reset), and CPU_PER_CONF with 0 (undivided CPU clock — matches
+    // silicon reset value). Every other offset reads as zero until
+    // written, including DPORT_APPCPU_CTRL_B at 0x3FF0_0030 — Arduino-ESP32's
+    // `system_early_init` checks that register to decide whether to bring
+    // up the second core, and zero means "skip the bringup path" (which
+    // is what we want, since APP_CPU isn't modeled and the bringup loop
+    // would spin forever waiting on `s_cpu_up`).
     //
-    // Sized 64 KiB to cover the full DPORT + analog AHB regions
-    // (0x3FF00000-0x3FF1FFFF) that Arduino-ESP32's startup touches.
+    // Writes to the cross-core IPI region (CPU_INTR_FROM_CPU_0..3 at
+    // 0xDC..0xE8 and PRO/APP_INTR_FROM_CPU_0..3 at 0x164..0x174) are
+    // observable on subsequent reads — the WASM IPI bridge in
+    // `crates/wasm/src/lib.rs::step_with_esp32_aids` depends on that
+    // contract.
     //
-    // Unwritten reads return ZERO (vs `with_unwritten_ones`) — Arduino-ESP32's
-    // `system_early_init` reads DPORT_APPCPU_CTRL_B at 0x3FF00030 to decide
-    // whether to bring up the second core. If we return all-ones, the
-    // firmware enters `start_other_core` which spins forever waiting on a
-    // shared flag (`s_cpu_up`) that only the APP_CPU sets — and we don't
-    // model APP_CPU. Reading zero means "APP_CPU clock not enabled", so
-    // the firmware skips the whole second-core bringup path.
+    // MUST register BEFORE the analog-AHB catch-all stub below: SystemBus
+    // dispatches by first-registered-wins on overlapping ranges, and we
+    // want the 4 KiB DPORT window to win over any wider stub.
     bus.add_peripheral(
         "dport",
-        0x3FF0_0000,
-        0x20000,
+        crate::peripherals::esp32::dport::Dport::BASE as u64,
+        crate::peripherals::esp32::dport::Dport::SIZE as u64,
+        None,
+        Box::new(crate::peripherals::esp32::dport::Dport::new()),
+    );
+
+    // Analog AHB / reserved region immediately above DPORT
+    // (0x3FF0_1000..0x3FF1_FFFF, 60 KiB). Arduino-ESP32's startup touches
+    // a handful of analog calibration registers in this window; nothing
+    // here has documented semantics in scope for the model, so a plain
+    // read-as-zero round-trip stub satisfies the access pattern.
+    bus.add_peripheral(
+        "dport_analog_ahb",
+        0x3FF0_1000,
+        0x1_F000,
         None,
         Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
     );
