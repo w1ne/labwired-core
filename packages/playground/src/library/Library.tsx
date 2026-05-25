@@ -195,6 +195,33 @@ const FEATURED_LABS: FeaturedLab[] = [
     accent: '#0056b3',
     icon: '🔵',
   },
+  {
+    id: 'labwired-ereader',
+    name: 'ESP32 E-Reader',
+    chip: 'ESP32-WROOM-32 · Xtensa LX6',
+    description: 'Arduino sketch driving a Waveshare 2.9" tri-color e-paper panel.',
+    detail: 'GxEPD2 + Adafruit_GFX + FreeRTOS on dual-core Xtensa. The exact same .elf flashes to physical hardware via espflash.',
+    accent: '#d63384',
+    icon: '📖',
+  },
+  {
+    id: 'esp32-epaper-lab',
+    name: 'ESP32 E-Paper (Rust)',
+    chip: 'ESP32-WROOM-32 · Xtensa LX6',
+    description: 'Pure-Rust no_std driver for a Waveshare 2.9" SSD1680 tri-color panel.',
+    detail: 'ESP32 VSPI to SSD1680 with full controller state machine. Same ELF runs in the sim and flashes to a real ESP32 module.',
+    accent: '#7e3ff2',
+    icon: '🖼',
+  },
+  {
+    id: 'epaper-tricolor-lab',
+    name: 'STM32 E-Paper Tri-color',
+    chip: 'STM32F103 · Cortex-M3',
+    description: 'Bluepill driving the same Waveshare 2.9" SSD1680 panel over SPI.',
+    detail: 'Same SSD1680 model as the ESP32 lab, exercised from a different MCU + arch. Side-by-side digital-twin verification.',
+    accent: '#27c93f',
+    icon: '📰',
+  },
 ];
 
 const STATUS_LABEL: Record<SupportedBoard['status'], string> = {
