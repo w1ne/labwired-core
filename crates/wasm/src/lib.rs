@@ -1853,7 +1853,12 @@ impl WasmSimulator {
             "esp_flash_chip_driver_initialized",
             "do_core_init",
             "do_secondary_init",
-            "esp_startup_start_app",
+            // NB: `esp_startup_start_app` is intentionally NOT stubbed —
+            // its real impl calls `vTaskStartScheduler()` which never
+            // returns. Stubbing makes `start_cpu0` fall into the `j .`
+            // safety-loop at its tail and the FreeRTOS scheduler never
+            // takes over (loopTask / setup() never run). Required for the
+            // labwired-ereader Arduino sketch to actually paint.
             "esp_partition_main_flash_region_safe",
             "spi_flash_init",
             "spi_flash_init_chip_state",
@@ -1876,6 +1881,13 @@ impl WasmSimulator {
             "_ZN14HardwareSerial5flushEv",
             "_ZN14HardwareSerial9readBytesEPcj",
             "_ZN14HardwareSerial9readBytesEPhj",
+            // HardwareSerial::begin — Arduino-ESP32's serial init walks
+            // through _get_effective_baudrate which divides by
+            // getApbFrequency(). Our sim returns 0 → divide-by-zero
+            // exception. Skip the whole begin() rather than emulate the
+            // baud calculation; we don't model UART output anyway.
+            "_ZN14HardwareSerial5beginEmjaabmh",
+            "_get_effective_baudrate",
             "uartAvailable",
             "uartAvailableForWrite",
             "uartWrite",
