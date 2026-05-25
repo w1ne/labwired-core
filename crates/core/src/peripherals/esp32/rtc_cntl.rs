@@ -40,8 +40,15 @@ use std::collections::HashMap;
 
 /// RTC_CNTL_OPTIONS0_REG — bit 31 = sw_sys_rst trigger; bits[1:0] = sw_stall_*.
 pub const RTC_CNTL_OPTIONS0_OFFSET: u64 = 0x00;
-/// RTC_CNTL_TIME_UPDATE_REG — bit 31 = TIME_UPDATE (write 1 to snapshot).
+/// RTC_CNTL_TIME_UPDATE_REG — bit 31 = TIME_UPDATE (write 1 to snapshot),
+/// bit 30 = TIME_VALID (RO, set by hardware once the snapshot has landed).
 pub const RTC_CNTL_TIME_UPDATE_OFFSET: u64 = 0x0C;
+/// RTC_CNTL_TIME_VALID — read-only ACK bit (bit 30). ESP-IDF's
+/// `rtc_time_get` writes TIME_UPDATE (bit 31), then polls TIME_VALID
+/// (bit 30) before reading TIME0/TIME1. We set this synchronously when
+/// bit 31 is written so the poll exits immediately (real silicon takes
+/// ~3 RTC slow-clock cycles; we model it as instant).
+pub const RTC_CNTL_TIME_VALID_BIT: u32 = 1 << 30;
 /// RTC_CNTL_TIME0_REG — low 32 bits of the 48-bit slow-counter snapshot.
 pub const RTC_CNTL_TIME0_OFFSET: u64 = 0x10;
 /// RTC_CNTL_TIME1_REG — high 16 bits (bits[15:0]) of slow-counter snapshot.
@@ -176,16 +183,19 @@ impl RtcCntl {
 
     fn write_word(&mut self, word_off: u32, value: u32) {
         // TIME_UPDATE handshake: bit 31 set → snapshot the live counter
-        // into TIME0/TIME1 entries and clear the trigger immediately
-        // (real silicon takes ~3 RTC cycles; we model it as instant).
+        // into TIME0/TIME1 entries, clear the trigger, and set the
+        // TIME_VALID ACK bit so the firmware's `bbci a8, 30, loop`
+        // poll exits. Real silicon takes ~3 RTC slow-clock cycles; we
+        // model it as instant.
         if u64::from(word_off) == RTC_CNTL_TIME_UPDATE_OFFSET && (value & (1 << 31)) != 0 {
             let snap = self.slow_counter;
             self.regs
                 .insert(RTC_CNTL_TIME0_OFFSET as u32, (snap & 0xFFFF_FFFF) as u32);
             self.regs
                 .insert(RTC_CNTL_TIME1_OFFSET as u32, ((snap >> 32) & 0xFFFF) as u32);
-            // Clear TIME_UPDATE trigger (write back without bit 31).
-            self.regs.insert(word_off, value & !(1u32 << 31));
+            // Clear TIME_UPDATE trigger and set TIME_VALID (bit 30) ACK.
+            self.regs
+                .insert(word_off, (value & !(1u32 << 31)) | RTC_CNTL_TIME_VALID_BIT);
             return;
         }
         // SW_SYS_RST: latch the request and clear the trigger bit in
@@ -363,6 +373,28 @@ mod tests {
         write_u32_at(&mut p, RTC_CNTL_TIME_UPDATE_OFFSET, 1 << 31);
         let trig = read_u32_at(&p, RTC_CNTL_TIME_UPDATE_OFFSET);
         assert_eq!(trig & (1 << 31), 0, "TIME_UPDATE bit must auto-clear");
+    }
+
+    #[test]
+    fn time_update_handshake_sets_time_valid_ack() {
+        // ESP-IDF's `rtc_time_get` (esp_hw_support/port/esp32/rtc_time.c)
+        // writes TIME_UPDATE (bit 31) then polls TIME_VALID (bit 30):
+        //
+        //   WRITE_PERI_REG(RTC_CNTL_TIME_UPDATE_REG, RTC_CNTL_TIME_UPDATE);
+        //   while (GET_PERI_REG_MASK(RTC_CNTL_TIME_UPDATE_REG,
+        //                            RTC_CNTL_TIME_VALID) == 0) {
+        //       esp_rom_delay_us(1);
+        //   }
+        //
+        // Without the ACK the loop runs forever — exactly the stall the
+        // labwired-ereader e2e test hit before this fix.
+        let mut p = RtcCntl::new();
+        write_u32_at(&mut p, RTC_CNTL_TIME_UPDATE_OFFSET, 1 << 31);
+        let v = read_u32_at(&p, RTC_CNTL_TIME_UPDATE_OFFSET);
+        assert!(
+            v & RTC_CNTL_TIME_VALID_BIT != 0,
+            "TIME_VALID (bit 30) must be set after TIME_UPDATE write"
+        );
     }
 
     #[test]
