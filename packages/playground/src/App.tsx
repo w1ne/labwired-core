@@ -405,6 +405,18 @@ function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: st
       // Fall back to the starter when the saved diagram has been emptied — visitors should
       // always land on a running-ready circuit, not a blank canvas.
       diagram = nonMcuParts.length === 0 ? makeStarterDiagram(config) : parsed;
+      // Migrate stale saves: ereader's 'epaper' part used to be typed as
+      // ssd1680_tricolor_290 before the UC8151D split. The firmware emits
+      // GxEPD2's UC8151D opcode stream so the SSD1680 buffer never gets
+      // written; the saved (stale) type made the panel render solid red.
+      // Discard the saved diagram in that case so the fresh UC8151D
+      // starter takes over.
+      if (
+        config.boardId === 'labwired-ereader' &&
+        diagram.parts?.some((p) => p.id === 'epaper' && p.type === 'ssd1680_tricolor_290')
+      ) {
+        diagram = makeStarterDiagram(config);
+      }
     } catch {
       diagram = makeStarterDiagram(config);
     }
