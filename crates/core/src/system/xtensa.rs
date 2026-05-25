@@ -436,7 +436,24 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32s3::system_stub::EfuseStub::new()),
     );
 
-    // APB_CTRL — clock source select etc. Read/write stub.
+    // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
+    // SARADC_CTRL, FRONT_END_MEM_PD, and the RND_DATA TRNG output the BROM
+    // samples. Seeds TICK_CONF with XTAL_TICK_NUM=39 (40 MHz / 1 MHz - 1)
+    // and SYSCLK_CONF with the XTAL-selected reset value (0). Sits at the
+    // first 0x100 bytes of the 0x1000-byte APB-CTRL window; remaining
+    // 0x100..0xFFF offsets fall through to the apb_ctrl stub registered
+    // below (registration order wins on overlap — see bus.rs).
+    bus.add_peripheral(
+        "syscon",
+        0x3FF6_6000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32::syscon::Syscon::new()),
+    );
+
+    // APB_CTRL — clock source select etc. Read/write stub. Covers the
+    // 0x3FF6_6100..0x3FF6_6FFF tail of the APB-CTRL window; the 0x100
+    // header is handled by the SYSCON peripheral above.
     bus.add_peripheral(
         "apb_ctrl",
         0x3FF6_6000,

@@ -17,4 +17,5 @@
 pub mod gpio;
 pub mod rtc_cntl;
 pub mod spi;
+pub mod syscon;
 pub mod timg;
