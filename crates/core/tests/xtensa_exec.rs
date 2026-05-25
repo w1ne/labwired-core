@@ -5457,3 +5457,47 @@ fn test_exec_break_n_halts_with_pc() {
     // PC must not have advanced (exception halts before advance).
     assert_eq!(cpu.get_pc(), TEST_PC, "PC must not advance on BREAK.N");
 }
+
+/// G5: ILL.N (narrow illegal-instruction trap) raises EXCCAUSE=0 and re-vectors
+/// the PC to the kernel exception vector (VECBASE + 0x300).
+///
+/// Per Xtensa ISA RM §3.5.7 the ILL.N opcode is defined to raise
+/// IllegalInstructionCause (EXCCAUSE=0). It is emitted by GCC/clang as the
+/// trailing "should never reach here" trap after sequences that must reset or
+/// halt the core (e.g. the `memw; ill.n` pair that follows a write to
+/// RTC_CNTL_OPTIONS0 in the ESP32 BROM `_rtc_trigger_sw_system_reset`).
+///
+/// HW-oracle (xtensa-esp32s3-elf-as + objdump):
+///   ill.n → 0xf06d (16-bit; write_narrow emits bytes 6d f0).
+///
+/// Regression for labwired-core#105: before this arm existed, the executor
+/// reported "not implemented: exec: Ill" and the BROM smoke test stalled at
+/// PC=0x4000fdd3.
+#[test]
+fn test_exec_ill_n_raises_exccause_0() {
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.set_pc(TEST_PC);
+
+    // ILL.N (0xf06d): r=0xF, t-field=6, s=0.
+    write_narrow(&mut bus, TEST_PC as u64, 0xf06d);
+
+    let err = cpu
+        .step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .unwrap_err();
+    match err {
+        SimulationError::ExceptionRaised { cause, pc } => {
+            assert_eq!(cause, 0, "ILL.N must raise EXCCAUSE=0");
+            assert_eq!(pc, TEST_PC, "EPC1 must point at the faulting ILL.N");
+        }
+        other => panic!("expected ExceptionRaised{{cause:0,..}}, got {:?}", other),
+    }
+    // Handler PC = VECBASE + 0x300. Reset value of VECBASE is 0x40000000.
+    let expected_handler = cpu.sr.read(VECBASE_ID).wrapping_add(0x300);
+    assert_eq!(
+        cpu.get_pc(),
+        expected_handler,
+        "PC must re-vector to kernel exception vector"
+    );
+}

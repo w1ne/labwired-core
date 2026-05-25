@@ -1589,6 +1589,25 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
 
+            // ILL / ILL.N — illegal instruction (intentional trap).
+            //
+            // Xtensa ISA RM §3.5.7 "ILL.N" and §3.5.6 "ILL": these encodings
+            // are defined to raise an IllegalInstructionCause exception
+            // (EXCCAUSE=0, vector = VECBASE+0x300). They're emitted by the
+            // toolchain as "should never reach here" safety nets — most
+            // commonly the `memw; ill.n` sequence that follows a write to a
+            // RTC_CNTL reset register, where on real silicon the chip resets
+            // before the ILL.N is fetched. Without this arm, the simulator's
+            // executor falls through to NotImplemented and reports
+            // "exec: Ill", which masks the fact that the firmware reached
+            // the trap deliberately.
+            //
+            // Encoding (HW-oracle verified, see decoder/xtensa_narrow.rs):
+            //   ILL.N  → 16-bit `6d f0` (op0=0xD, r=0xF, t-field=6, s=0)
+            //   ILL    → 24-bit `00 00 00` (routed via Unknown today; same
+            //             EXCCAUSE=0 semantics, so leaving the alias).
+            Ill => return self.raise_general_exception(0),
+
             // Unknown opcode: raise IllegalInstruction (EXCCAUSE=0).
             //
             // Xtensa LX7 ISA RM §5.2: executing an instruction not defined in the
