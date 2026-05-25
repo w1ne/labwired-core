@@ -427,13 +427,21 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32::timg::Timg::new(0x3FF6_0000)),
     );
 
-    // EFUSE — esp-hal reads MAC / chip-revision bits during init.
+    // EFUSE — ESP32 BROM and esp-hal read BLK0 (MAC + chip_revision)
+    // during reset-handler init. Returning a coherent rev3 + non-zero
+    // MAC unblocks the ILL.N stall at PC 0x4000fdd3 on cold boot.
+    //
+    // Documented register range ends at DEC_STATUS (0x11C in
+    // ESP-IDF's efuse_reg.h), but the address-decode window is the
+    // standard 4 KiB peripheral page — BROM probes beyond 0x100 and
+    // a smaller size triggers a "memory access violation". Keep the
+    // full 4 KiB so unmapped offsets read as 0 (== unblown fuse).
     bus.add_peripheral(
         "efuse",
         0x3FF5_A000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::EfuseStub::new()),
+        Box::new(crate::peripherals::esp32::efuse::Efuse::new()),
     );
 
     // APB_CTRL — clock source select etc. Read/write stub.
