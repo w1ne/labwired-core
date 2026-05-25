@@ -107,9 +107,13 @@ impl Esp32Gpio {
             0x28 => self.enable,
             // ENABLE1 bank — not modeled.
             0x2C | 0x30 | 0x34 => 0,
-            // STRAP register (TRM §4.10.4). Surface 0 — boot strapping pins
-            // are pulled to default modes which read as 0 on most variants.
-            0x38 => 0,
+            // STRAP register (TRM §4.10.4). Boot strap latch read by the
+            // BROM to pick boot mode. We return 0x33 to emulate a stock
+            // WROOM-32: GPIO0=1 (SPI flash boot), GPIO2=1 (don't care),
+            // GPIO4=0, GPIO5=1, GPIO12=1 (1.8V flash select), GPIO15=0.
+            // Concretely we just need GPIO0=1 so the BROM doesn't fall
+            // into DOWNLOAD_BOOT and wait on UART/SDIO forever.
+            0x38 => 0x33,
             // IN (GPIO0..31).
             0x3C => self.in_data,
             // IN1 — not modeled.

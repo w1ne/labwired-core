@@ -137,6 +137,46 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x20000)),
     );
+    // BROM `.data` region (SRAM2 lower window). The Espressif BROM ELF
+    // places ~1.3 KiB of `.data` at 0x3FFADAFC, just below the firmware
+    // DRAM base. Mapping this keeps BROM init from bus-faulting on its
+    // own globals before it touches firmware DRAM. (The 0x3FF9_xxxx data
+    // alias of BROM rodata is mapped further down as `brom_data`.)
+    bus.add_peripheral(
+        "brom_low_data",
+        0x3FFA_0000,
+        0xE000,
+        None,
+        Box::new(RamPeripheral::new(0xE000)),
+    );
+
+    // SDIO slave block — SLC + HOST_SLC + SDMMC host. The ESP32 BROM's
+    // `slc_init_attach` / `slc_set_host_io_max_window` touch these regs
+    // during early init regardless of whether SDIO is actually used. We
+    // don't model SDIO; plain RAM stubs catch the writes, and HOST_SLC
+    // uses a smart stub that auto-sets its FSM-done bit so the BROM's
+    // poll loop on offset 0x40 exits on the first read.
+    bus.add_peripheral(
+        "slc",
+        0x3FF4_B000,
+        0x1000,
+        None,
+        Box::new(RamPeripheral::new(0x1000)),
+    );
+    bus.add_peripheral(
+        "host_slc",
+        0x3FF5_8000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::sdio_stub::HostSlc::new()),
+    );
+    bus.add_peripheral(
+        "sdmmc_host",
+        0x3FF5_5000,
+        0x1000,
+        None,
+        Box::new(RamPeripheral::new(0x1000)),
+    );
     // DRAM (SRAM2, 200 KiB) — full SRAM2 range 0x3FFAE000–0x3FFE0000.
     // Arduino-ESP32's startup zeroes .bss starting at 0x3FFAE291 (within
     // SRAM2 but below the 0x3FFB0000 region our hand-rolled Rust

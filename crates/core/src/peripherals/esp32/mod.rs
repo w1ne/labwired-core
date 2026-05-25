@@ -18,6 +18,7 @@ pub mod dport;
 pub mod efuse;
 pub mod gpio;
 pub mod rtc_cntl;
+pub mod sdio_stub;
 pub mod spi;
 pub mod syscon;
 pub mod timg;
