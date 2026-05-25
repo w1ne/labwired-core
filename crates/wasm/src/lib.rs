@@ -1687,12 +1687,16 @@ impl WasmSimulator {
             .as_mut()
             .ok_or_else(|| JsValue::from_str("no machine"))?;
 
-        // Attach the UC8151D panel to spi3. The default configure step
-        // doesn't attach any panel; this is the panel-class-specific bit
-        // that the the reference firmware quirks installer covered with SSD1680.
+        // Attach the UC8151D panel to spi3. Replace any pre-attached
+        // device (the system YAML may have wired an SSD1680 placeholder
+        // from when the ereader board's panel class was misidentified —
+        // GxEPD2's ereader actually drives UC8151D, and a stale SSD1680
+        // confuses both runtime decoding and snapshot restore (the spi3
+        // blob layout depends on attached-device count + types)).
         if let Some(spi3_idx) = machine.bus.find_peripheral_index_by_name("spi3") {
             if let Some(any) = machine.bus.peripherals[spi3_idx].dev.as_any_mut() {
                 if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
+                    spi3.attached_devices.clear();
                     spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
                 }
             }
