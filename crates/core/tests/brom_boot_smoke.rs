@@ -115,24 +115,61 @@ fn esp32_brom_loads_and_executes() {
     // garbage (= probable peripheral-state bug).
     let start_pc = machine.cpu.get_pc();
     eprintln!("[BROM] starting execution at PC=0x{:08x}", start_pc);
-    let mut step_err = None;
+    // Tolerate Xtensa general exceptions (ExceptionRaised): the simulator
+    // already mutates PC → VECBASE+0x300 on exception entry, so the next
+    // step() lands in the kernel exception vector. Real silicon delivers
+    // ILL.N / unimplemented-opcode traps to the same vector, and the BROM
+    // hands them off to `panic_helper`/`reset`. Stop only when the same PC
+    // repeats too many times (handler is stuck spinning) or when we hit a
+    // NotImplemented / bus error (genuine simulator gap).
+    let mut step_err: Option<(usize, String)> = None;
+    let mut last_pc = machine.cpu.get_pc();
+    let mut same_pc_streak = 0usize;
     for i in 0..50_000 {
-        if let Err(e) = machine.step() {
-            step_err = Some((i, e));
-            break;
+        match machine.step() {
+            Ok(()) => {
+                let pc = machine.cpu.get_pc();
+                if pc == last_pc {
+                    same_pc_streak += 1;
+                    if same_pc_streak > 64 {
+                        step_err = Some((i, format!("PC stuck at 0x{:08x}", pc)));
+                        break;
+                    }
+                } else {
+                    same_pc_streak = 0;
+                    last_pc = pc;
+                }
+            }
+            Err(labwired_core::SimulationError::ExceptionRaised { cause, pc }) => {
+                // Soft exception: log + continue. The CPU has already
+                // re-pointed PC at the kernel exception vector.
+                eprintln!(
+                    "[BROM] EXCCAUSE={} raised at cycle {}, faulting PC=0x{:08x} (handler at 0x{:08x})",
+                    cause,
+                    i,
+                    pc,
+                    machine.cpu.get_pc()
+                );
+                last_pc = machine.cpu.get_pc();
+                same_pc_streak = 0;
+            }
+            Err(e) => {
+                step_err = Some((i, format!("{}", e)));
+                break;
+            }
         }
     }
     let final_pc = machine.cpu.get_pc();
     match step_err {
         Some((cycle, err)) => {
             eprintln!(
-                "[BROM] CPU exception at cycle {}, PC=0x{:08x}: {}",
+                "[BROM] simulator stalled at cycle {}, PC=0x{:08x}: {}",
                 cycle, final_pc, err
             );
         }
         None => {
             eprintln!(
-                "[BROM] 50000 steps completed without exception, final PC=0x{:08x}",
+                "[BROM] 50000 steps completed without fatal error, final PC=0x{:08x}",
                 final_pc
             );
         }
