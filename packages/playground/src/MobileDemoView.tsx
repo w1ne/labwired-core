@@ -1,13 +1,21 @@
 // Purpose-built mobile demo shell. NOT a responsive squeeze of the desktop
 // playground — a different layout that surfaces just the things a phone
-// visitor cares about: the device's name, what its panel is currently
-// showing, and a big Run button. No wiring canvas, no inspector, no
-// bottom tabs, no command palette. The desktop editor isn't usable on a
-// phone anyway; pretending it is just makes the page look amateur.
+// visitor cares about. The desktop editor isn't usable on a phone anyway;
+// pretending it is just makes the page look amateur.
+//
+// What gets shown depends on the board:
+//   - E-paper boards (ereader / esp32-epaper-lab / epaper-tricolor-lab)
+//     get the panel preview as the hero.
+//   - Boards with firmware but no panel (every sensor lab, blinky, etc.)
+//     get a live serial monitor as the hero — works for any board that
+//     printlns and is the universal fallback.
+//   - Bare boards (no demo firmware) get an "open on desktop" CTA, since
+//     uploading + wiring an ELF isn't a phone-friendly task.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { GlobalLogo, GlobalNav } from './components/GlobalNav';
 import type { BoardConfig } from './bundled-configs';
+import type { BoardIoState } from '@labwired/ui';
 
 const SSD1680_LANDSCAPE_W = 296;
 const SSD1680_LANDSCAPE_H = 128;
@@ -31,8 +39,6 @@ function composePanelDataUrl(planes: Uint8Array | null | undefined): string | nu
       const blackBit = (black[i] >>> bit) & 1;
       const redBit = (red[i] >>> bit) & 1;
       const o = (y * w + x) * 4;
-      // Match the desktop SSD1680 component: red dominates when its bit
-      // is 0 (Waveshare/GxEPD2 convention).
       if (!redBit) {
         rgba[o] = 220; rgba[o + 1] = 30; rgba[o + 2] = 40; rgba[o + 3] = 255;
       } else if (!blackBit) {
@@ -53,11 +59,24 @@ function composePanelDataUrl(planes: Uint8Array | null | undefined): string | nu
   return canvas.toDataURL('image/png');
 }
 
+type PrimarySurface = 'epaper' | 'serial' | 'bare';
+
+function pickPrimarySurface(b: BoardConfig): PrimarySurface {
+  const id = b.boardId;
+  if (id.includes('ereader') || id.includes('epaper') || id.includes('agentdeck')) return 'epaper';
+  if (b.demoFirmwarePath) return 'serial';
+  return 'bare';
+}
+
 export interface MobileDemoViewProps {
   selectedBoard: BoardConfig;
   /** Optional pre-composed display buffer from the running sim. */
   panelPlanes?: Uint8Array;
   panelGeneration?: number;
+  /** Accumulated UART/serial output for non-panel boards. */
+  uartOutput?: string;
+  /** Board IO states (LED on/off). */
+  boardIoStates?: BoardIoState[];
   /** Sim state */
   running: boolean;
   cycles: number;
@@ -84,6 +103,8 @@ export function MobileDemoView({
   selectedBoard,
   panelPlanes,
   panelGeneration,
+  uartOutput,
+  boardIoStates,
   running,
   cycles,
   runtimeMs,
@@ -93,14 +114,16 @@ export function MobileDemoView({
   loading,
   toast,
 }: MobileDemoViewProps) {
-  // Re-compose only when the panel actually refreshed.
   const panelDataUrl = useMemo(() => {
     return composePanelDataUrl(panelPlanes);
   }, [panelPlanes, panelGeneration]);
 
-  const [showNav, setShowNav] = useState(false);
+  const surface = pickPrimarySurface(selectedBoard);
+  const hasPaint = !!panelDataUrl;
+  const summary = selectedBoard.summary;
+  const activeLeds = (boardIoStates ?? []).filter((s) => s.active);
 
-  // Close the nav drawer on Escape or backdrop click.
+  const [showNav, setShowNav] = useState(false);
   const navRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!showNav) return;
@@ -111,12 +134,14 @@ export function MobileDemoView({
     return () => document.removeEventListener('keydown', onKey);
   }, [showNav]);
 
-  const hasPaint = !!panelDataUrl;
-  const summary = selectedBoard.summary;
+  const serialRef = useRef<HTMLPreElement | null>(null);
+  useLayoutEffect(() => {
+    if (surface !== 'serial' || !serialRef.current) return;
+    serialRef.current.scrollTop = serialRef.current.scrollHeight;
+  }, [uartOutput, surface]);
 
   return (
     <div className="min-h-screen bg-bg-base text-fg-primary flex flex-col">
-      {/* Top chrome — minimal */}
       <header className="sticky top-0 z-30 flex items-center justify-between gap-3 h-12 px-3 bg-[rgba(13,14,18,0.9)] backdrop-blur border-b border-white/[0.06]">
         <div className="flex items-center gap-2 min-w-0">
           <GlobalLogo variant="dark" />
@@ -135,7 +160,6 @@ export function MobileDemoView({
         </button>
       </header>
 
-      {/* Hero / device card */}
       <main className="flex-1 flex flex-col items-center px-4 py-6 gap-6">
         <div className="w-full max-w-md text-center">
           <div className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-success/10 border border-success/30 text-success text-[10.5px] font-semibold uppercase tracking-[0.1em]">
@@ -143,82 +167,137 @@ export function MobileDemoView({
             Deterministic · Cycle-accurate
           </div>
           <h1 className="text-[26px] font-bold tracking-tight text-fg-primary mt-3">{selectedBoard.name}</h1>
-          {summary?.description && (
-            <p className="text-fg-secondary text-[13.5px] leading-snug mt-2 max-w-[32ch] mx-auto">
-              {summary.description}
-            </p>
-          )}
+          <p className="text-fg-secondary text-[13.5px] leading-snug mt-2 max-w-[32ch] mx-auto">
+            {summary?.description ?? selectedBoard.description}
+          </p>
         </div>
 
-        {/* Panel preview — the star of the show */}
-        <div
-          className="w-full max-w-md rounded-2xl border-2 border-white/[0.06] bg-[#0d0e12] shadow-[0_8px_24px_rgba(0,0,0,0.45)] overflow-hidden"
-          aria-label="E-paper display preview"
-        >
-          {/* Aspect-ratio-preserved frame around the SSD1680 296×128 native res */}
-          <div className="relative bg-[#16181f] p-3">
-            <div
-              className="w-full rounded-md overflow-hidden border border-white/[0.08]"
-              style={{ aspectRatio: '296 / 128', background: '#e6e1d3' }}
-            >
-              {hasPaint ? (
-                <img
-                  src={panelDataUrl}
-                  alt="E-paper panel state"
-                  className="block w-full h-full"
-                  style={{ imageRendering: 'pixelated' }}
+        {surface === 'epaper' && (
+          <div
+            className="w-full max-w-md rounded-2xl border-2 border-white/[0.06] bg-[#0d0e12] shadow-[0_8px_24px_rgba(0,0,0,0.45)] overflow-hidden"
+            aria-label="E-paper display preview"
+          >
+            <div className="relative bg-[#16181f] p-3">
+              <div
+                className="w-full rounded-md overflow-hidden border border-white/[0.08]"
+                style={{ aspectRatio: '296 / 128', background: '#e6e1d3' }}
+              >
+                {hasPaint ? (
+                  <img
+                    src={panelDataUrl}
+                    alt="E-paper panel state"
+                    className="block w-full h-full"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[#999] text-[12px]">
+                    {running ? 'Booting firmware…' : 'Tap Run to paint the panel'}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-white/[0.06] flex items-center justify-between gap-3 text-[11.5px] text-fg-tertiary font-mono">
+              <span className="flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    running ? 'bg-magenta animate-pulse' : hasPaint ? 'bg-success' : 'bg-fg-tertiary'
+                  }`}
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#999] text-[12px]">
-                  {running ? 'Booting firmware…' : 'Tap Run to paint the panel'}
-                </div>
+                <span className="text-fg-secondary">
+                  {running ? 'Running' : hasPaint ? 'Painted' : 'Idle'}
+                </span>
+              </span>
+              <span>{formatRuntime(runtimeMs)}</span>
+              {cycles > 0 && (
+                <span title="Cycles executed">{cycles.toLocaleString()} cy</span>
               )}
             </div>
           </div>
-          <div className="px-4 py-3 border-t border-white/[0.06] flex items-center justify-between gap-3 text-[11.5px] text-fg-tertiary font-mono">
-            <span className="flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className={`w-1.5 h-1.5 rounded-full ${
-                  running ? 'bg-magenta animate-pulse' : hasPaint ? 'bg-success' : 'bg-fg-tertiary'
-                }`}
-              />
-              <span className="text-fg-secondary">
-                {running ? 'Running' : hasPaint ? 'Painted' : 'Idle'}
-              </span>
-            </span>
-            <span>{formatRuntime(runtimeMs)}</span>
-            {cycles > 0 && (
-              <span title="Cycles executed">{cycles.toLocaleString()} cy</span>
-            )}
-          </div>
-        </div>
+        )}
 
-        {/* Big sticky run button */}
-        <div className="w-full max-w-md flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={running ? onPause : onRun}
-            disabled={loading}
-            className={`h-14 w-full rounded-full font-bold text-[16px] flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98] disabled:opacity-60 ${
-              running
-                ? 'bg-magenta text-bg-base'
-                : 'bg-accent text-bg-base shadow-[0_10px_28px_-10px_rgba(91,157,255,0.6)]'
-            }`}
+        {surface === 'serial' && (
+          <div
+            className="w-full max-w-md rounded-2xl border-2 border-white/[0.06] bg-[#0d0e12] shadow-[0_8px_24px_rgba(0,0,0,0.45)] overflow-hidden"
+            aria-label="Serial monitor"
           >
-            <span aria-hidden className="text-[18px]">{running ? '⏸' : '▶'}</span>
-            <span>{loading ? 'Loading…' : running ? 'Pause' : 'Run'}</span>
-          </button>
-          {hasPaint && (
+            <div className="px-4 py-2 border-b border-white/[0.06] flex items-center justify-between text-[11px] text-fg-tertiary font-mono">
+              <span className="uppercase tracking-[0.1em] font-semibold">Serial monitor</span>
+              {activeLeds.length > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_6px_rgba(61,214,140,0.7)]" />
+                  <span>{activeLeds.length} LED{activeLeds.length === 1 ? '' : 's'} on</span>
+                </span>
+              )}
+            </div>
+            <pre
+              ref={serialRef}
+              className="m-0 px-4 py-3 text-[11.5px] font-mono text-fg-primary bg-[#0a0b10] overflow-auto whitespace-pre-wrap break-all"
+              style={{ minHeight: '11rem', maxHeight: '18rem' }}
+            >
+              {uartOutput && uartOutput.length > 0
+                ? uartOutput
+                : (running ? 'Booting firmware…\n' : 'Tap Run to start the firmware.\nSerial output streams here.')}
+            </pre>
+            <div className="px-4 py-3 border-t border-white/[0.06] flex items-center justify-between gap-3 text-[11.5px] text-fg-tertiary font-mono">
+              <span className="flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    running ? 'bg-magenta animate-pulse' : (uartOutput?.length ?? 0) > 0 ? 'bg-success' : 'bg-fg-tertiary'
+                  }`}
+                />
+                <span className="text-fg-secondary">
+                  {running ? 'Running' : (uartOutput?.length ?? 0) > 0 ? 'Output ready' : 'Idle'}
+                </span>
+              </span>
+              <span>{formatRuntime(runtimeMs)}</span>
+              {cycles > 0 && (
+                <span title="Cycles executed">{cycles.toLocaleString()} cy</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {surface === 'bare' && (
+          <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d0e12] p-6 text-center flex flex-col gap-3">
+            <div className="text-[36px]" aria-hidden>🖥️</div>
+            <h2 className="text-fg-primary font-semibold text-[15px]">Bring your own firmware</h2>
+            <p className="text-fg-secondary text-[13px] leading-snug">
+              This is a bare board — uploading and wiring an ELF isn't a phone-friendly task.
+              Open the playground on a laptop to flash custom firmware, browse memory and registers,
+              and step through the simulator.
+            </p>
+            <p className="text-fg-tertiary text-[12px] mt-2">Or pick a working lab from the menu:</p>
+          </div>
+        )}
+
+        {surface !== 'bare' && (
+          <div className="w-full max-w-md flex flex-col gap-3">
             <button
               type="button"
-              onClick={onReset}
-              className="h-11 w-full rounded-full font-medium text-[14px] text-fg-secondary bg-white/[0.05] border border-white/[0.08]"
+              onClick={running ? onPause : onRun}
+              disabled={loading}
+              className={`h-14 w-full rounded-full font-bold text-[16px] flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98] disabled:opacity-60 ${
+                running
+                  ? 'bg-magenta text-bg-base'
+                  : 'bg-accent text-bg-base shadow-[0_10px_28px_-10px_rgba(91,157,255,0.6)]'
+              }`}
             >
-              ↻ Reset demo
+              <span aria-hidden className="text-[18px]">{running ? '⏸' : '▶'}</span>
+              <span>{loading ? 'Loading…' : running ? 'Pause' : 'Run'}</span>
             </button>
-          )}
-        </div>
+            {(hasPaint || (uartOutput?.length ?? 0) > 0) && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="h-11 w-full rounded-full font-medium text-[14px] text-fg-secondary bg-white/[0.05] border border-white/[0.08]"
+              >
+                ↻ Reset demo
+              </button>
+            )}
+          </div>
+        )}
 
         <p className="text-fg-tertiary text-[12px] text-center max-w-[40ch] leading-snug px-4">
           The same firmware ELF that flashes to your physical board runs here in your browser.
@@ -226,7 +305,6 @@ export function MobileDemoView({
         </p>
       </main>
 
-      {/* Slide-in nav drawer */}
       {showNav && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur"
@@ -258,7 +336,6 @@ export function MobileDemoView({
         </div>
       )}
 
-      {/* Toast slot */}
       {toast && (
         <div className="fixed bottom-4 inset-x-4 z-40">{toast}</div>
       )}

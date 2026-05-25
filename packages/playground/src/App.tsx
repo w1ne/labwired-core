@@ -1600,6 +1600,8 @@ export function App() {
         selectedBoard={selectedBoard}
         panelPlanes={epaperBuffer?.kind === 'ssd1680_tricolor_290' ? epaperBuffer.data : undefined}
         panelGeneration={epaperBuffer?.generation}
+        uartOutput={simState.uartOutput}
+        boardIoStates={simState.boardIoStates}
         running={running}
         cycles={simState.cycles ?? 0}
         runtimeMs={runtimeMs}
