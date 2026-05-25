@@ -35,6 +35,7 @@
 //! 256-byte window is unused on a first-boot probe.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
+use std::cell::Cell;
 use std::collections::HashMap;
 
 // ── Register offsets (per ESP32 TRM v5.0 §20.4 and ESP-IDF
@@ -64,11 +65,23 @@ pub const EFUSE_BLK2_RDATA0_OFFSET: u64 = 0x058;
 /// BLK3_RDATA0..7 — user-programmable.
 pub const EFUSE_BLK3_RDATA0_OFFSET: u64 = 0x078;
 
-/// CONF / CMD / INT_* / DAC_CONF / DEC_STATUS control window.
-pub const EFUSE_CONF_OFFSET: u64 = 0x0F0;
-pub const EFUSE_CMD_OFFSET: u64 = 0x0F4;
-pub const EFUSE_INT_RAW_OFFSET: u64 = 0x0F8;
-pub const EFUSE_INT_ST_OFFSET: u64 = 0x0FC;
+/// Clock control (CLK_REG). Read-as-zero on stock parts.
+pub const EFUSE_CLK_OFFSET: u64 = 0x0F8;
+/// Magic-write enable (CONF_REG, accepts 0x5AA5 as the write-enable code).
+pub const EFUSE_CONF_OFFSET: u64 = 0x0FC;
+/// Read-only status (STATUS_REG).
+pub const EFUSE_STATUS_OFFSET: u64 = 0x100;
+/// Operation trigger (CMD_REG). Write 1 to bit 0 to trigger a read
+/// operation; HW clears the bit when the operation completes. Our model
+/// treats EFUSE operations as instantaneous and auto-clears the bit on
+/// the *first* read after the write (see `Efuse::cmd_pending`).
+pub const EFUSE_CMD_OFFSET: u64 = 0x104;
+pub const EFUSE_INT_RAW_OFFSET: u64 = 0x108;
+pub const EFUSE_INT_ST_OFFSET: u64 = 0x10C;
+pub const EFUSE_INT_ENA_OFFSET: u64 = 0x110;
+pub const EFUSE_INT_CLR_OFFSET: u64 = 0x114;
+pub const EFUSE_DAC_CONF_OFFSET: u64 = 0x118;
+pub const EFUSE_DEC_STATUS_OFFSET: u64 = 0x11C;
 
 // ── Chip revision encoding (per task spec + ESP32 TRM v5.0 §20.3.1.3) ────
 
@@ -99,6 +112,11 @@ pub struct Efuse {
     base: u32,
     /// Backing word store. Indexed by 4-byte-aligned offset.
     regs: HashMap<u32, u32>,
+    /// One-shot pending CMD value. Set by `write_word_32` of EFUSE_CMD;
+    /// returned by the next `read_u32` and then cleared. Mirrors the
+    /// hardware behaviour where CMD bit clears after the eFuse FSM
+    /// finishes its read/program cycle (effectively immediately in sim).
+    cmd_pending: Cell<u32>,
 }
 
 impl Default for Efuse {
@@ -145,6 +163,7 @@ impl Efuse {
         Self {
             base: Self::BASE,
             regs,
+            cmd_pending: Cell::new(0),
         }
     }
 
@@ -190,8 +209,43 @@ impl Peripheral for Efuse {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = (offset & !3) as u32;
         let byte_off = (offset & 3) * 8;
-        let word = self.regs.get(&word_off).copied().unwrap_or(0);
+        // EFUSE_CMD: one-shot pending value is returned on the next read
+        // (mirrors HW where the trigger bit clears after the eFuse FSM
+        // finishes — instantaneous in sim). Cleared by `read_u32` on the
+        // last byte so the four byte-reads of one u32 see a coherent value.
+        let word = if word_off as u64 == EFUSE_CMD_OFFSET {
+            let pending = self.cmd_pending.get();
+            if pending != 0 {
+                pending
+            } else {
+                self.regs.get(&word_off).copied().unwrap_or(0)
+            }
+        } else {
+            self.regs.get(&word_off).copied().unwrap_or(0)
+        };
         Ok(((word >> byte_off) & 0xFF) as u8)
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        let word_off = (offset & !3) as u32;
+        let word = if word_off as u64 == EFUSE_CMD_OFFSET {
+            let pending = self.cmd_pending.get();
+            // Clear the one-shot now so the next read returns 0 — the
+            // signal HW uses to tell the BROM the eFuse op finished.
+            self.cmd_pending.set(0);
+            if pending != 0 {
+                pending
+            } else {
+                self.regs.get(&word_off).copied().unwrap_or(0)
+            }
+        } else {
+            self.regs.get(&word_off).copied().unwrap_or(0)
+        };
+        // The bus calls into here directly for aligned u32 loads; we
+        // already short-circuited the pending one-shot above, so just
+        // return the word verbatim. Going back through `read()` four
+        // times would drain the Cell prematurely.
+        Ok(word)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
@@ -202,6 +256,19 @@ impl Peripheral for Efuse {
         word &= !(0xFFu32 << byte_off);
         word |= (value as u32) << byte_off;
         self.regs.insert(word_off, word);
+        Ok(())
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        let word_off = (offset & !3) as u32;
+        // EFUSE_CMD trigger: latch the value into the one-shot Cell so
+        // the *next* read returns it (the BROM polls expecting non-zero,
+        // then waits for the bit to clear).
+        if word_off as u64 == EFUSE_CMD_OFFSET {
+            self.cmd_pending.set(value);
+            return Ok(());
+        }
+        self.regs.insert(word_off, value);
         Ok(())
     }
 
@@ -388,5 +455,31 @@ mod tests {
     fn base_is_esp32_classic_canonical_address() {
         let p = Efuse::new();
         assert_eq!(p.base(), 0x3FF5_A000);
+    }
+
+    #[test]
+    fn cmd_register_one_shot_clears_on_first_read() {
+        // ESP32 BROM `_reload_efuses_and_check` writes 1 to CMD then
+        // polls until the bit clears. Real silicon clears the trigger
+        // bit after the eFuse FSM finishes; our model auto-clears on
+        // the first read. Without this the BROM either spins forever or
+        // (if CMD read-as-zero) branches to `_rtc_trigger_sw_system_reset`.
+        let mut p = Efuse::new();
+        // Trigger.
+        p.write_u32(EFUSE_CMD_OFFSET, 1).unwrap();
+        // First read must observe the trigger.
+        assert_eq!(
+            p.read_u32(EFUSE_CMD_OFFSET).unwrap(),
+            1,
+            "first CMD read after write must return the trigger value"
+        );
+        // Second read must return 0 — the signal the FSM is done.
+        assert_eq!(
+            p.read_u32(EFUSE_CMD_OFFSET).unwrap(),
+            0,
+            "second CMD read must return 0 (HW clears bit after op)"
+        );
+        // Idle reads stay at 0.
+        assert_eq!(p.read_u32(EFUSE_CMD_OFFSET).unwrap(), 0);
     }
 }

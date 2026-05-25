@@ -137,6 +137,17 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x20000)),
     );
+    // BROM data region (SRAM2 lower window) — the Espressif BROM ELF
+    // places ~1.3 KiB of `.data` at 0x3FFADAFC, just below the firmware
+    // DRAM base. Mapping this keeps BROM init from bus-faulting on its
+    // own globals before it touches firmware DRAM.
+    bus.add_peripheral(
+        "brom_data",
+        0x3FFA_0000,
+        0xE000,
+        None,
+        Box::new(RamPeripheral::new(0xE000)),
+    );
     // DRAM (SRAM2, 200 KiB) — full SRAM2 range 0x3FFAE000–0x3FFE0000.
     // Arduino-ESP32's startup zeroes .bss starting at 0x3FFAE291 (within
     // SRAM2 but below the 0x3FFB0000 region our hand-rolled Rust
