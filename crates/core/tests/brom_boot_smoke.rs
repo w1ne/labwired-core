@@ -255,7 +255,7 @@ fn esp32_brom_loads_and_executes() {
     }
     eprintln!("[BROM] hot PC buckets (4 KiB) by cycles:");
     let mut buckets: Vec<(u32, usize)> = visited_funcs.into_iter().collect();
-    buckets.sort_by(|a, b| b.1.cmp(&a.1));
+    buckets.sort_by_key(|b| std::cmp::Reverse(b.1));
     for (pc, count) in buckets.iter().take(10) {
         eprintln!("  0x{:08x}: {} cycles", pc, count);
     }
