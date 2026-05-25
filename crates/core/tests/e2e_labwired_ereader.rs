@@ -157,16 +157,19 @@ fn labwired_ereader_runs_to_panel_paint() {
     // Build the thunk list — by-symbol lookups; missing symbols are
     // silently skipped (the sketch doesn't pull in that path).
     let mut thunks: Vec<(u32, rom_thunks::RomThunkFn)> = Vec::new();
-    let push_named = |list: &mut Vec<(u32, rom_thunks::RomThunkFn)>,
-                      sym: &str,
-                      f: rom_thunks::RomThunkFn| {
-        if let Some(&pc) = symbol_addrs.get(sym) {
-            list.push((pc, f));
-        }
-    };
+    let push_named =
+        |list: &mut Vec<(u32, rom_thunks::RomThunkFn)>, sym: &str, f: rom_thunks::RomThunkFn| {
+            if let Some(&pc) = symbol_addrs.get(sym) {
+                list.push((pc, f));
+            }
+        };
 
     // Heap caps suite (bump allocator).
-    push_named(&mut thunks, "heap_caps_init", rom_thunks::esp_idf_heap_caps_init);
+    push_named(
+        &mut thunks,
+        "heap_caps_init",
+        rom_thunks::esp_idf_heap_caps_init,
+    );
     push_named(
         &mut thunks,
         "heap_caps_malloc",
@@ -177,7 +180,11 @@ fn labwired_ereader_runs_to_panel_paint() {
         "heap_caps_calloc",
         rom_thunks::esp_idf_heap_caps_calloc,
     );
-    push_named(&mut thunks, "heap_caps_free", rom_thunks::esp_idf_heap_caps_free);
+    push_named(
+        &mut thunks,
+        "heap_caps_free",
+        rom_thunks::esp_idf_heap_caps_free,
+    );
     push_named(
         &mut thunks,
         "heap_caps_realloc",
@@ -316,7 +323,11 @@ fn labwired_ereader_runs_to_panel_paint() {
 
     // Custom-return thunks.
     push_named(&mut thunks, "esp_chip_info", rom_thunks::esp_chip_info_stub);
-    push_named(&mut thunks, "__getreent", rom_thunks::getreent_dram_fake_ptr);
+    push_named(
+        &mut thunks,
+        "__getreent",
+        rom_thunks::getreent_dram_fake_ptr,
+    );
     push_named(
         &mut thunks,
         "esp_timer_impl_get_counter_reg",

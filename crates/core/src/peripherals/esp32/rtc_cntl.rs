@@ -194,10 +194,8 @@ impl RtcCntl {
             self.regs
                 .insert(RTC_CNTL_TIME1_OFFSET as u32, ((snap >> 32) & 0xFFFF) as u32);
             // Clear TIME_UPDATE trigger and set TIME_VALID (bit 30) ACK.
-            self.regs.insert(
-                word_off,
-                (value & !(1u32 << 31)) | RTC_CNTL_TIME_VALID_BIT,
-            );
+            self.regs
+                .insert(word_off, (value & !(1u32 << 31)) | RTC_CNTL_TIME_VALID_BIT);
             return;
         }
         // SW_SYS_RST: latch the request and clear the trigger bit in
