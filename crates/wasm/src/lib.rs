@@ -1806,7 +1806,6 @@ impl WasmSimulator {
             "delay",
             "xQueueGiveMutexRecursive",
             "xQueueTakeMutexRecursive",
-            "xQueueCreateMutex",
             "esp_ipc_init",
             "esp_ipc_isr_init",
             "esp_log_impl_lock",
@@ -1841,6 +1840,21 @@ impl WasmSimulator {
             "esp_clk_init",
             "esp_perip_clk_init",
             "core_intr_matrix_clear",
+            "esp_flash_init",
+            "esp_flash_init_default_chip",
+            "esp_flash_init_main",
+            "esp_flash_app_init",
+            "esp_flash_app_enable_os_functions",
+            "esp_flash_app_disable_protect",
+            "esp_flash_app_disable_os_functions",
+            "esp_flash_read_chip_id",
+            "esp_flash_chip_driver_initialized",
+            "do_core_init",
+            "do_secondary_init",
+            "esp_startup_start_app",
+            "esp_partition_main_flash_region_safe",
+            "spi_flash_init",
+            "spi_flash_init_chip_state",
             "esp_efuse_check_errors",
             "esp_dport_access_stall_other_cpu_start",
             "esp_dport_access_stall_other_cpu_end",
@@ -1876,6 +1890,32 @@ impl WasmSimulator {
             "esp_ota_get_running_partition",
             rom_thunks::nop_return_fake_ptr,
         );
+        // Return a non-NULL fake handle so callers' `assert(mutex != NULL)`
+        // passes. Mutex semantics aren't modeled — the firmware will treat
+        // the returned pointer as opaque and pass it to xSemaphoreTake/Give
+        // which are already stubbed to "success".
+        for sym in &[
+            "xQueueCreateMutex",
+            "xQueueCreateMutexStatic",
+            "xQueueGenericCreate",
+            "xSemaphoreCreateMutex",
+            "xSemaphoreCreateBinary",
+            "xSemaphoreCreateCounting",
+            "xQueueCreateCountingSemaphore",
+            "xEventGroupCreate",
+        ] {
+            push_named(&mut thunks, sym, rom_thunks::nop_return_fake_ptr);
+        }
+        // Stub spi_flash_init_lock — the real impl creates a mutex via
+        // xSemaphoreCreateMutex and asserts non-NULL; we don't need real
+        // flash-op locking in the single-task sim.
+        for sym in &[
+            "spi_flash_init_lock",
+            "spi_flash_op_lock",
+            "spi_flash_op_unlock",
+        ] {
+            push_named(&mut thunks, sym, rom_thunks::nop_return_zero);
+        }
         push_named(&mut thunks, "esp_chip_info", rom_thunks::esp_chip_info_stub);
         push_named(
             &mut thunks,
