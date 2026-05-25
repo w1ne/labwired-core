@@ -1,0 +1,372 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
+//! DPORT (data port / system controller) peripheral for ESP32-classic.
+//!
+//! Per ESP32 TRM v5.0 §6 (system control) and §7 (interrupt matrix). The
+//! DPORT block sits at base `0x3FF0_0000`, spans 4 KiB, and owns the
+//! cross-cutting plumbing the rest of the chip leans on at boot:
+//!
+//!   * Peripheral clock gating (`PERIP_CLK_EN`) and per-peripheral reset
+//!     control (`PERIP_RST_EN`). ESP-IDF and Arduino-ESP32 hammer these
+//!     during early init to ungate VSPI, GPIO, the timer groups, etc.
+//!   * The dual-core handshake: PRO_CPU stalls APP_CPU through
+//!     `APPCPU_CTRL_*` until `s_cpu_up` flips, and uses
+//!     `CPU_PER_CONF` to set the per-core clock divider.
+//!   * Cache-control plumbing (`PRO_CACHE_CTRL`, `APP_CACHE_CTRL`,
+//!     `PRO_DCACHE_DBUG0..9`, `APP_DCACHE_DBUG0..9`,
+//!     `PRO_CACHE_LOCK_0_ADDR..3`) the cache driver pokes before flash-XIP
+//!     reads work. We don't model cache behavior — round-trip the writes
+//!     so the configure-then-read-back sequences settle.
+//!   * The AHB-Lite MPU table (`AHBLITE_MPU_TABLE_x`). Touched at boot;
+//!     no enforcement modeled.
+//!   * Per-core interrupt-matrix mapping registers
+//!     (`PRO_*_INTR_MAP_REG` at `0x3FF0_0100..`, `APP_*_INTR_MAP_REG` at
+//!     `0x3FF0_0200..`). These map peripheral source IDs to one of 32
+//!     CPU IRQ slots — equivalent in spirit to the ESP32-S3 `intmatrix`
+//!     peripheral, but at a different address and with a different
+//!     layout. We round-trip every write so firmware probes see what
+//!     they wrote; actual interrupt delivery is handled out-of-band
+//!     by the WASM IPI bridge today (see
+//!     `crates/wasm/src/lib.rs::step_with_esp32_aids`).
+//!   * Cross-core software interrupt triggers
+//!     (`CPU_INTR_FROM_CPU_0..3` at `0x3FF0_00DC..0x3FF0_00E8`) and
+//!     their corresponding PRO/APP mapping registers
+//!     (`PRO_INTR_FROM_CPU_0..3` at `0x3FF0_0164..0x3FF0_0170`,
+//!     `APP_INTR_FROM_CPU_0..3` at `0x3FF0_0168..0x3FF0_0174`). The WASM
+//!     IPI bridge polls these every cycle — it expects writes to be
+//!     directly observable on the next read, which our plain HashMap
+//!     storage satisfies.
+//!
+//! ## What's intentionally NOT modeled
+//!
+//!   * No interrupt firing or side effects on writes to the FROM_CPU
+//!     trigger registers. The WASM IPI bridge is the policy layer that
+//!     observes those writes and raises the corresponding CPU INTERRUPT
+//!     bits; this peripheral is the storage layer.
+//!   * No clock-gate enforcement. PERIP_CLK_EN is seeded all-ones at
+//!     construction so any code that consults the bitmap before writing
+//!     it (rare, but it happens in vendor headers gated behind
+//!     `DPORT_REG_READ`) sees "everything's on" instead of "everything's
+//!     off" — easier than tracking per-peripheral gating.
+//!   * APP_CPU bringup logic. `APPCPU_CTRL_B` at offset 0x30 reads as
+//!     zero (HashMap default), matching the existing behavior that
+//!     keeps Arduino-ESP32's `system_early_init` from spinning forever
+//!     in `start_other_core`.
+//!
+//! ## Why this is a new peripheral instead of a stub
+//!
+//! Until this lands, the DPORT range was covered by `SystemStub` (the
+//! ESP32-S3 catch-all). That works for register reads/writes that just
+//! need to settle, but it (a) doesn't pre-seed PERIP_CLK_EN with a
+//! "peripherals are live" bitmap and (b) bundles the analog AHB
+//! region (0x3FF0_1000..0x3FF1_FFFF) into the same stub, making it
+//! harder to inspect DPORT-specific state from tests and observers.
+//! Splitting DPORT into its own peripheral gives Phase 2 a documented
+//! surface to grow real semantics on (clock-gate tracking, IPI
+//! delivery) without churning the rest of the catch-all.
+
+use crate::{Peripheral, SimResult};
+use std::collections::HashMap;
+
+// ── Register offsets (per ESP32 TRM v5.0 §6 + §7) ───────────────────────────
+
+/// DPORT_CPU_PER_CONF — bits[1:0] = CPU clock divider per core.
+pub const DPORT_CPU_PER_CONF_OFFSET: u32 = 0x003C;
+/// DPORT_PRO_CACHE_CTRL — PRO_CPU cache control word.
+pub const DPORT_PRO_CACHE_CTRL_OFFSET: u32 = 0x0040;
+/// DPORT_APP_CACHE_CTRL — APP_CPU cache control word.
+pub const DPORT_APP_CACHE_CTRL_OFFSET: u32 = 0x0044;
+/// DPORT_PRO_DCACHE_DBUG0..9 — PRO_CPU dcache debug words (0x50..0x74).
+pub const DPORT_PRO_DCACHE_DBUG_BASE: u32 = 0x0050;
+/// DPORT_APP_DCACHE_DBUG0..9 — APP_CPU dcache debug words (0x78..0x9C).
+pub const DPORT_APP_DCACHE_DBUG_BASE: u32 = 0x0078;
+/// DPORT_PERIP_CLK_EN — peripheral clock-gate bitmap.
+pub const DPORT_PERIP_CLK_EN_OFFSET: u32 = 0x00C0;
+/// DPORT_PERIP_RST_EN — peripheral reset bitmap.
+pub const DPORT_PERIP_RST_EN_OFFSET: u32 = 0x00C4;
+/// DPORT_AHBLITE_MPU_TABLE_x — AHB-Lite MPU table (0xC8..0xF8).
+pub const DPORT_AHBLITE_MPU_TABLE_BASE: u32 = 0x00C8;
+/// DPORT_PRO_CACHE_LOCK_0_ADDR..3 — PRO_CPU cache lock address words (0xD8..0xE4).
+pub const DPORT_PRO_CACHE_LOCK_BASE: u32 = 0x00D8;
+/// DPORT_CPU_INTR_FROM_CPU_0..3 — cross-core IPI triggers (0xDC..0xE8).
+///
+/// The WASM IPI bridge polls these every cycle expecting plain
+/// last-write-wins semantics, so writes must round-trip verbatim.
+pub const DPORT_CPU_INTR_FROM_CPU_0_OFFSET: u32 = 0x00DC;
+pub const DPORT_CPU_INTR_FROM_CPU_1_OFFSET: u32 = 0x00E0;
+pub const DPORT_CPU_INTR_FROM_CPU_2_OFFSET: u32 = 0x00E4;
+pub const DPORT_CPU_INTR_FROM_CPU_3_OFFSET: u32 = 0x00E8;
+/// DPORT_PRO_MAC_INTR_MAP_REG — first PRO_CPU intmatrix source entry.
+/// Subsequent peripheral source IDs are at +4 byte strides up to
+/// roughly `0x3FF0_0160`. Round-trips through `regs` like every other word.
+pub const DPORT_PRO_MAC_INTR_MAP_REG_OFFSET: u32 = 0x0100;
+/// DPORT_PRO_INTR_FROM_CPU_0..3 — PRO_CPU bindings for the FROM_CPU
+/// triggers above. The WASM bridge reads these to learn which CPU
+/// INTERRUPT bit to raise when a trigger fires.
+pub const DPORT_PRO_INTR_FROM_CPU_0_OFFSET: u32 = 0x0164;
+pub const DPORT_PRO_INTR_FROM_CPU_1_OFFSET: u32 = 0x0168;
+pub const DPORT_PRO_INTR_FROM_CPU_2_OFFSET: u32 = 0x016C;
+pub const DPORT_PRO_INTR_FROM_CPU_3_OFFSET: u32 = 0x0170;
+/// DPORT_APP_INTR_FROM_CPU_0..3 — APP_CPU bindings for FROM_CPU triggers.
+pub const DPORT_APP_INTR_FROM_CPU_0_OFFSET: u32 = 0x0168;
+pub const DPORT_APP_INTR_FROM_CPU_1_OFFSET: u32 = 0x016C;
+pub const DPORT_APP_INTR_FROM_CPU_2_OFFSET: u32 = 0x0170;
+pub const DPORT_APP_INTR_FROM_CPU_3_OFFSET: u32 = 0x0174;
+
+/// DPORT peripheral.
+///
+/// Word-granular sparse storage keeps the model compact — most of the
+/// 4 KiB DPORT window is unused at any given moment. Read/write are
+/// plain last-write-wins so the WASM IPI bridge (which reads back its
+/// own writes) keeps working.
+#[derive(Debug)]
+pub struct Dport {
+    /// Base MMIO address (informational; bus dispatches by offset).
+    base: u32,
+    /// Backing word store. Indexed by 4-byte-aligned offset within DPORT.
+    regs: HashMap<u32, u32>,
+}
+
+impl Default for Dport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Dport {
+    /// Canonical MMIO base address on ESP32-classic.
+    pub const BASE: u32 = 0x3FF0_0000;
+    /// DPORT window size (4 KiB per TRM).
+    pub const SIZE: u32 = 0x1000;
+
+    /// Construct a freshly-powered DPORT block.
+    ///
+    /// Seeds:
+    ///   * `PERIP_CLK_EN` = 0xFFFF_FFFF — treat all peripherals as
+    ///     clock-enabled (we don't model gating).
+    ///   * `PERIP_RST_EN` = 0 — no peripheral is held in reset.
+    ///   * `CPU_PER_CONF` = 0 — undivided CPU clock; matches the
+    ///     real silicon reset value.
+    ///   * Every other offset reads back 0 until written.
+    pub fn new() -> Self {
+        let mut regs = HashMap::new();
+        regs.insert(DPORT_PERIP_CLK_EN_OFFSET, 0xFFFF_FFFF);
+        regs.insert(DPORT_PERIP_RST_EN_OFFSET, 0);
+        regs.insert(DPORT_CPU_PER_CONF_OFFSET, 0);
+        Self {
+            base: Self::BASE,
+            regs,
+        }
+    }
+
+    /// Base MMIO address (informational).
+    pub fn base(&self) -> u32 {
+        self.base
+    }
+
+    fn read_word(&self, word_off: u32) -> u32 {
+        self.regs.get(&word_off).copied().unwrap_or(0)
+    }
+
+    fn write_word(&mut self, word_off: u32, value: u32) {
+        self.regs.insert(word_off, value);
+    }
+}
+
+impl Peripheral for Dport {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let word_off = (offset & !3) as u32;
+        let byte_off = (offset & 3) * 8;
+        let word = self.read_word(word_off);
+        Ok(((word >> byte_off) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let word_off = (offset & !3) as u32;
+        let byte_off = (offset & 3) * 8;
+        // Read-modify-write so partial-byte writes don't clobber the
+        // other three bytes of the word. PERIP_CLK_EN's all-ones seed
+        // survives a single-byte poke this way.
+        let mut word = self.regs.get(&word_off).copied().unwrap_or(0);
+        word &= !(0xFFu32 << byte_off);
+        word |= (value as u32) << byte_off;
+        self.write_word(word_off, word);
+        Ok(())
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Snap {
+            regs: Vec<(u32, u32)>,
+        }
+        let snap = Snap {
+            regs: self.regs.iter().map(|(k, v)| (*k, *v)).collect(),
+        };
+        bincode::serialize(&snap).expect("bincode serialize Dport")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Snap {
+            regs: Vec<(u32, u32)>,
+        }
+        let snap: Snap = bincode::deserialize(bytes).map_err(|e| {
+            crate::SimulationError::NotImplemented(format!("Dport snapshot decode: {e}"))
+        })?;
+        self.regs = snap.regs.into_iter().collect();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read_u32_at(p: &Dport, offset: u64) -> u32 {
+        let mut v = 0u32;
+        for i in 0..4u64 {
+            v |= (p.read(offset + i).unwrap() as u32) << (i * 8);
+        }
+        v
+    }
+
+    fn write_u32_at(p: &mut Dport, offset: u64, value: u32) {
+        for i in 0..4u64 {
+            p.write(offset + i, ((value >> (i * 8)) & 0xFF) as u8)
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn fresh_dport_reports_all_peripherals_clock_enabled() {
+        let p = Dport::new();
+        assert_eq!(
+            read_u32_at(&p, DPORT_PERIP_CLK_EN_OFFSET as u64),
+            0xFFFF_FFFF,
+            "PERIP_CLK_EN must be seeded all-ones so firmware that consults \
+             the gating bitmap before writing sees everything as live."
+        );
+    }
+
+    #[test]
+    fn fresh_dport_reports_no_peripheral_in_reset() {
+        let p = Dport::new();
+        assert_eq!(read_u32_at(&p, DPORT_PERIP_RST_EN_OFFSET as u64), 0);
+    }
+
+    #[test]
+    fn fresh_dport_reports_undivided_cpu_clock() {
+        let p = Dport::new();
+        assert_eq!(read_u32_at(&p, DPORT_CPU_PER_CONF_OFFSET as u64), 0);
+    }
+
+    #[test]
+    fn fresh_dport_reports_zero_at_appcpu_ctrl_b() {
+        // APPCPU_CTRL_B is at offset 0x30. Reading 0 keeps Arduino-ESP32's
+        // `system_early_init` from spinning forever in `start_other_core`
+        // (the bringup path is only entered when this reads non-zero).
+        let p = Dport::new();
+        assert_eq!(read_u32_at(&p, 0x30), 0);
+    }
+
+    #[test]
+    fn cpu_intr_from_cpu_0_round_trips() {
+        // The WASM IPI bridge polls this register every cycle and expects
+        // last-write-wins semantics — its detect-and-clear loop depends on
+        // reading back exactly what it wrote.
+        let mut p = Dport::new();
+        write_u32_at(&mut p, DPORT_CPU_INTR_FROM_CPU_0_OFFSET as u64, 0x0000_0001);
+        assert_eq!(
+            read_u32_at(&p, DPORT_CPU_INTR_FROM_CPU_0_OFFSET as u64),
+            0x0000_0001
+        );
+        // And clearing it back to 0 sticks.
+        write_u32_at(&mut p, DPORT_CPU_INTR_FROM_CPU_0_OFFSET as u64, 0);
+        assert_eq!(read_u32_at(&p, DPORT_CPU_INTR_FROM_CPU_0_OFFSET as u64), 0);
+    }
+
+    #[test]
+    fn pro_intr_from_cpu_0_round_trips() {
+        // PRO_INTR_FROM_CPU_0 lives in the intmatrix-style mapping region
+        // (0x100..0x180). The WASM bridge reads this to discover which
+        // CPU INTERRUPT bit to raise — must round-trip verbatim.
+        let mut p = Dport::new();
+        write_u32_at(&mut p, DPORT_PRO_INTR_FROM_CPU_0_OFFSET as u64, 0x0000_001F);
+        assert_eq!(
+            read_u32_at(&p, DPORT_PRO_INTR_FROM_CPU_0_OFFSET as u64),
+            0x0000_001F
+        );
+    }
+
+    #[test]
+    fn perip_clk_en_byte_writes_dont_clobber_seeded_ones() {
+        // Writing one byte must read-modify-write the word so the other
+        // three bytes (all 0xFF from the seed) are preserved.
+        let mut p = Dport::new();
+        p.write(DPORT_PERIP_CLK_EN_OFFSET as u64, 0x00).unwrap();
+        let v = read_u32_at(&p, DPORT_PERIP_CLK_EN_OFFSET as u64);
+        assert_eq!(v, 0xFFFF_FF00, "byte 0 cleared, bytes 1..3 preserved");
+    }
+
+    #[test]
+    fn pro_mac_intr_map_round_trips_a_slot_binding() {
+        // The intmatrix region: PRO_MAC_INTR_MAP_REG = 0x100, write slot
+        // 13 → read back 13.
+        let mut p = Dport::new();
+        write_u32_at(&mut p, DPORT_PRO_MAC_INTR_MAP_REG_OFFSET as u64, 13);
+        assert_eq!(
+            read_u32_at(&p, DPORT_PRO_MAC_INTR_MAP_REG_OFFSET as u64),
+            13
+        );
+    }
+
+    #[test]
+    fn unwritten_offsets_read_as_zero() {
+        let p = Dport::new();
+        // Any random unmodeled offset in the DPORT window reads 0.
+        assert_eq!(read_u32_at(&p, 0x200), 0);
+        assert_eq!(read_u32_at(&p, 0x3FC), 0);
+        assert_eq!(read_u32_at(&p, 0xABC), 0);
+    }
+
+    #[test]
+    fn runtime_snapshot_round_trip_preserves_state() {
+        let mut p = Dport::new();
+        write_u32_at(&mut p, DPORT_CPU_INTR_FROM_CPU_0_OFFSET as u64, 0x0000_0001);
+        write_u32_at(&mut p, DPORT_PRO_INTR_FROM_CPU_0_OFFSET as u64, 0x0000_001F);
+        write_u32_at(&mut p, DPORT_PERIP_RST_EN_OFFSET as u64, 0xAAAA_5555);
+        let snap = p.runtime_snapshot();
+
+        let mut restored = Dport::new();
+        restored.restore_runtime_snapshot(&snap).unwrap();
+        assert_eq!(
+            read_u32_at(&restored, DPORT_CPU_INTR_FROM_CPU_0_OFFSET as u64),
+            0x0000_0001
+        );
+        assert_eq!(
+            read_u32_at(&restored, DPORT_PRO_INTR_FROM_CPU_0_OFFSET as u64),
+            0x0000_001F
+        );
+        assert_eq!(
+            read_u32_at(&restored, DPORT_PERIP_RST_EN_OFFSET as u64),
+            0xAAAA_5555
+        );
+    }
+
+    #[test]
+    fn base_is_esp32_classic_canonical_address() {
+        let p = Dport::new();
+        assert_eq!(p.base(), 0x3FF0_0000);
+        assert_eq!(Dport::SIZE, 0x1000);
+    }
+}
