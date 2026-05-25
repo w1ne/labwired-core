@@ -14,6 +14,7 @@
 //!   - IO_MUX base  0x3FF49000 (S3: 0x60009000)
 //!   - GPIOs 0..39 (S3: 0..48 with USB-Serial-JTAG hardware)
 
+pub mod efuse;
 pub mod gpio;
 pub mod rtc_cntl;
 pub mod spi;
