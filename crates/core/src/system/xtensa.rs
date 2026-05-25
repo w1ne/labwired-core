@@ -892,6 +892,47 @@ impl crate::Peripheral for RamPeripheral {
         Ok(())
     }
 
+    // Word/halfword bulk paths. The default trait impl decomposes each
+    // multi-byte access into N byte calls — for Xtensa every instruction
+    // fetch (read_u32 of IRAM) hits this 4 times per instruction, each
+    // taking a fresh RefCell::borrow() + Vec bounds check. The single-shot
+    // slice path here cuts each fetch from 4 borrows to 1.
+    // See labwired-core#119 (JIT roadmap Phase 1.1).
+    fn read_u16(&self, offset: u64) -> crate::SimResult<u16> {
+        let d = self.data.borrow();
+        let off = offset as usize;
+        let bytes = d.get(off..off + 2);
+        Ok(match bytes {
+            Some(b) => u16::from_le_bytes([b[0], b[1]]),
+            None => 0, // out-of-range reads return 0 to match the byte path
+        })
+    }
+    fn read_u32(&self, offset: u64) -> crate::SimResult<u32> {
+        let d = self.data.borrow();
+        let off = offset as usize;
+        let bytes = d.get(off..off + 4);
+        Ok(match bytes {
+            Some(b) => u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+            None => 0,
+        })
+    }
+    fn write_u16(&mut self, offset: u64, value: u16) -> crate::SimResult<()> {
+        let mut d = self.data.borrow_mut();
+        let off = offset as usize;
+        if let Some(slot) = d.get_mut(off..off + 2) {
+            slot.copy_from_slice(&value.to_le_bytes());
+        }
+        Ok(())
+    }
+    fn write_u32(&mut self, offset: u64, value: u32) -> crate::SimResult<()> {
+        let mut d = self.data.borrow_mut();
+        let off = offset as usize;
+        if let Some(slot) = d.get_mut(off..off + 4) {
+            slot.copy_from_slice(&value.to_le_bytes());
+        }
+        Ok(())
+    }
+
     /// Dump the backing buffer verbatim. Snapshot stays compact (a 200 KiB
     /// DRAM round-trips as 200 KiB on disk — bincode adds an 8-byte length
     /// prefix and that's it).
