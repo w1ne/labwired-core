@@ -212,7 +212,8 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
                                                                  // clock-tree changes so return the post-init default of 240 MHz.
     rom_bank.register(0x4000_855c, rom_thunks::rom_cpu_freq_240mhz);
     // ets_get_detected_xtal_freq() — returns XTAL freq in MHz. Return
-    // 40 (matches the RTC_APB_FREQ_REG fake we pre-write in the test).
+    // 40 (matches the RTC_APB_FREQ_REG 0x0050_0050 encoding the RtcCntl
+    // peripheral seeds at construction).
     rom_bank.register(0x4000_8588, rom_thunks::rom_xtal_freq_40mhz);
     // ets_printf — formats and writes to UART. Reuse the S3 thunk.
     rom_bank.register(0x4000_7d54, rom_thunks::ets_printf);
@@ -386,16 +387,23 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
     );
 
-    // RTC_CNTL (TRM §31). esp_hal::init touches WDTCONFIG / WDTWPROTECT
-    // registers here to disable the RTC watchdog. The S3 RtcCntlStub
-    // round-trips writes and seeds PLL_LOCK as locked — same model fits
-    // ESP32-classic since the firmware only reads back what it wrote.
+    // RTC_CNTL (TRM §13). Real ESP32-classic peripheral — seeds POWERON_RESET
+    // for both cores at construction, pre-loads RTC_APB_FREQ_REG with the
+    // 40 MHz encoding (0x0050_0050) so Arduino-ESP32's XTAL probe finds a
+    // sane value without needing a wasm-layer fake-write, and exposes the
+    // monotonic slow-counter via TIME0/TIME1 reads. STORE0..3 round-trip
+    // as retention scratch words; ANA_CONF / DIG_PWC / BIAS_CONF accept
+    // any value (no analog domain modeled).
+    //
+    // Size 0x200 covers the documented register window 0x3FF4_8000..0x3FF4_80FC
+    // plus the OPTIONS alias range up to 0x3FF4_8200. RTC_IO at 0x3FF4_8400
+    // is registered separately by the catch-all stub block below.
     bus.add_peripheral(
         "rtc_cntl",
         0x3FF4_8000,
-        0x1000,
+        0x200,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::RtcCntlStub::new()),
+        Box::new(crate::peripherals::esp32::rtc_cntl::RtcCntl::new()),
     );
 
     // TIMG0 / TIMG1 — ESP32-classic Timer Group (TRM §16). Per-group

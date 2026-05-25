@@ -15,5 +15,6 @@
 //!   - GPIOs 0..39 (S3: 0..48 with USB-Serial-JTAG hardware)
 
 pub mod gpio;
+pub mod rtc_cntl;
 pub mod spi;
 pub mod timg;

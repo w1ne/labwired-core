@@ -1588,8 +1588,9 @@ impl WasmSimulator {
         let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01); // s_system_inited[1]
         let _ = machine.bus.write_u8(0x3FFC_7190, 0x01); // s_other_cpu_startup_done
 
-        // RTC XTAL-freq probe = 40 MHz (high/low halves equal, shifted-1).
-        let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
+        // RTC_APB_FREQ_REG (0x3FF4_80B0) is now pre-seeded with the 40 MHz
+        // encoding (0x0050_0050) by the RtcCntl peripheral at construction —
+        // no quirk write needed here.
 
         // Fake esp_image_header_t at 0x3F40_0000 (24 bytes), entry = the reference firmware.
         let entry = 0x40081bf0_u32;
@@ -1700,8 +1701,9 @@ impl WasmSimulator {
         // Seed SP — call_start_cpu0 expects BROM to have placed SP near
         // top of DRAM. We skip BROM.
         machine.cpu.set_sp(0x3FFE_0000);
-        // RTC XTAL-freq probe = 40 MHz.
-        let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
+        // RTC_APB_FREQ_REG (0x3FF4_80B0) now comes pre-seeded with the 40 MHz
+        // encoding (0x0050_0050) from the RtcCntl peripheral — no quirk
+        // write needed.
 
         let symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(elf_bytes);
 
