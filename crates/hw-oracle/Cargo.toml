@@ -8,16 +8,30 @@ description = "HW oracle harness: JTAG-driven cross-validation against physical 
 [dependencies]
 labwired-hw-oracle-macros = { path = "../hw-oracle-macros" }
 labwired-core = { path = "../core" }
+labwired-loader = { path = "../loader" }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 libc = { workspace = true }
 goblin = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
 # serialport pulls libudev-sys on Linux which needs libudev-dev system
 # package — not present on CI's hosted runners. The crate is only used by
 # the HW flash/detect path (gated by the `hw-oracle` feature), so make the
 # dep itself optional and activate it through the feature.
 serialport = { workspace = true, optional = true }
+
+# Chip-model HW-vs-sim diff tool (issue #105). Loads a baseline capture
+# produced by `scripts/hw-oracle/esp32_capture.sh`, replays the firmware
+# in the simulator for the same number of cycles, and emits a JSON diff.
+# Always available — does not require the `hw-oracle` feature because the
+# replay side runs purely in sim and only reads files written by the HW
+# capture step.
+[[bin]]
+name = "esp32_replay_in_sim"
+path = "src/bin/esp32_replay_in_sim.rs"
 
 [features]
 default = []
