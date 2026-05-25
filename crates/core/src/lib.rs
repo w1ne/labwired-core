@@ -679,7 +679,43 @@ impl<C: Cpu> Machine<C> {
             }
         }
 
+        // RTC_CNTL software system reset (OPTIONS0 bit 31 / `SW_SYS_RST`).
+        // The ESP32 BROM's `_rtc_trigger_sw_system_reset` writes this bit
+        // and expects execution NOT to return from the store — on real
+        // silicon the CPU restarts at the reset vector. We drain the
+        // request between instructions so neither the CPU nor any
+        // peripheral observes a half-applied state. Reset vector for the
+        // ESP32 rev3 BROM `_ResetVector` is fixed at `0x4000_0400`; SP is
+        // re-seeded to the top of DRAM the BROM uses (`0x3FFE_0000`),
+        // matching the smoke-test cold-boot setup.
+        if self.drain_rtc_cntl_reset_request() {
+            self.cpu.set_pc(0x4000_0400);
+            self.cpu.set_sp(0x3FFE_0000);
+            tracing::debug!("RTC_CNTL SW_SYS_RST: CPU re-pointed at reset vector 0x40000400");
+        }
+
         Ok(())
+    }
+
+    /// Returns true (and clears the latch) if any registered RTC_CNTL
+    /// peripheral has a pending software-system-reset request. Used by
+    /// `step()` to honor OPTIONS0 bit 31 writes at a clean instruction
+    /// boundary. Walks the bus's peripheral list and downcasts; in
+    /// practice there's at most one RTC_CNTL on the bus, so this is O(N)
+    /// over a short vector.
+    fn drain_rtc_cntl_reset_request(&self) -> bool {
+        for p in &self.bus.peripherals {
+            if let Some(any) = p.dev.as_any() {
+                if let Some(rtc) =
+                    any.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>()
+                {
+                    if rtc.drain_reset_request() {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 
     pub fn snapshot(&self) -> snapshot::MachineSnapshot {

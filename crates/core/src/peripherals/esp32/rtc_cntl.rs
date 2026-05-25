@@ -32,6 +32,7 @@
 //! unless previously written, and accept any write.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
+use std::cell::Cell;
 use std::collections::HashMap;
 
 // ── Register offsets (per ESP32 TRM v5.0 §13.5 and ESP-IDF
@@ -57,6 +58,14 @@ pub const RTC_CNTL_STORE3_OFFSET: u64 = 0x58;
 pub const RTC_APB_FREQ_OFFSET: u64 = 0xB0;
 /// 40 MHz XTAL encoding the Arduino-ESP32 boot reads back.
 pub const RTC_APB_FREQ_40MHZ: u32 = 0x0050_0050;
+
+/// `OPTIONS0` bit 31 — `SW_SYS_RST`. Writing 1 triggers a whole-system
+/// software reset on real silicon: the CPU restarts at the reset vector
+/// (`0x4000_0400`) and execution does NOT return from the store. The BROM
+/// relies on this in `_rtc_trigger_sw_system_reset` (called from
+/// `_ResetHandler_efuse_check_patch`); falling through the store hits a
+/// defensive `ILL.N` sentinel.
+pub const RTC_CNTL_OPTIONS0_SW_SYS_RST_BIT: u32 = 1 << 31;
 
 // Reset cause field width per CPU (3 bits in classic ESP32; we mask to 4
 // bits to leave room for the ESP32-S series extension without changing
@@ -89,6 +98,12 @@ pub struct RtcCntl {
     /// RTC slow-clock counter (48-bit on real silicon; we use u64 for
     /// arithmetic ease — only low 48 bits surface through TIME0/TIME1).
     slow_counter: u64,
+    /// Latch set when firmware writes OPTIONS0 bit 31 (`SW_SYS_RST`). The
+    /// machine step loop drains this between instructions and re-points
+    /// the CPU at the reset vector, matching real-silicon semantics where
+    /// the store never returns. Held in a `Cell` so it can be drained via
+    /// the shared `&dyn Peripheral` reference the bus hands out.
+    reset_requested: Cell<bool>,
 }
 
 impl Default for RtcCntl {
@@ -117,7 +132,17 @@ impl RtcCntl {
             base: Self::BASE,
             regs,
             slow_counter: 0,
+            reset_requested: Cell::new(false),
         }
+    }
+
+    /// Returns true (and clears the latch) if firmware has triggered a
+    /// software system reset by writing `OPTIONS0` bit 31 since the last
+    /// drain. Called by the machine step loop between CPU instructions so
+    /// the reset takes effect at a clean boundary — neither the CPU nor
+    /// any peripheral sees a half-applied state.
+    pub fn drain_reset_request(&self) -> bool {
+        self.reset_requested.replace(false)
     }
 
     /// Base MMIO address (informational).
@@ -161,6 +186,19 @@ impl RtcCntl {
                 .insert(RTC_CNTL_TIME1_OFFSET as u32, ((snap >> 32) & 0xFFFF) as u32);
             // Clear TIME_UPDATE trigger (write back without bit 31).
             self.regs.insert(word_off, value & !(1u32 << 31));
+            return;
+        }
+        // SW_SYS_RST: latch the request and clear the trigger bit in
+        // backing store before the machine drains the reset. The CPU is
+        // re-pointed at the reset vector by `Machine::step` between
+        // instructions, so any further bits in `value` (e.g. sw_stall_*
+        // in bits[1:0]) are still observable until the reset lands.
+        if u64::from(word_off) == RTC_CNTL_OPTIONS0_OFFSET
+            && (value & RTC_CNTL_OPTIONS0_SW_SYS_RST_BIT) != 0
+        {
+            self.reset_requested.set(true);
+            self.regs
+                .insert(word_off, value & !RTC_CNTL_OPTIONS0_SW_SYS_RST_BIT);
             return;
         }
         self.regs.insert(word_off, value);
@@ -207,10 +245,12 @@ impl Peripheral for RtcCntl {
         struct Snap {
             regs: Vec<(u32, u32)>,
             slow_counter: u64,
+            reset_requested: bool,
         }
         let snap = Snap {
             regs: self.regs.iter().map(|(k, v)| (*k, *v)).collect(),
             slow_counter: self.slow_counter,
+            reset_requested: self.reset_requested.get(),
         };
         bincode::serialize(&snap).expect("bincode serialize RtcCntl")
     }
@@ -220,12 +260,15 @@ impl Peripheral for RtcCntl {
         struct Snap {
             regs: Vec<(u32, u32)>,
             slow_counter: u64,
+            #[serde(default)]
+            reset_requested: bool,
         }
         let snap: Snap = bincode::deserialize(bytes).map_err(|e| {
             crate::SimulationError::NotImplemented(format!("RtcCntl snapshot decode: {e}"))
         })?;
         self.regs = snap.regs.into_iter().collect();
         self.slow_counter = snap.slow_counter;
+        self.reset_requested.set(snap.reset_requested);
         Ok(())
     }
 }
@@ -340,13 +383,47 @@ mod tests {
     }
 
     #[test]
-    fn options0_round_trips() {
-        // OPTIONS0 has the sw_sys_rst trigger; we don't model the reset
-        // (no firmware in scope writes it for real), but the write must
-        // round-trip so probe-then-readback sequences see the value.
+    fn options0_low_bits_round_trip_without_triggering_reset() {
+        // OPTIONS0 holds the sw_stall_* fields in bits[1:0] alongside the
+        // SW_SYS_RST trigger in bit 31. Writes that leave bit 31 clear
+        // must round-trip verbatim and must NOT latch a reset request.
+        let mut p = RtcCntl::new();
+        write_u32_at(&mut p, RTC_CNTL_OPTIONS0_OFFSET, 0x0000_0003);
+        assert_eq!(read_u32_at(&p, RTC_CNTL_OPTIONS0_OFFSET), 0x0000_0003);
+        assert!(
+            !p.drain_reset_request(),
+            "no reset must be requested without OPTIONS0 bit 31"
+        );
+    }
+
+    #[test]
+    fn options0_sw_sys_rst_bit_latches_reset_and_self_clears() {
+        // Writing OPTIONS0 with bit 31 set models the SW_SYS_RST trigger.
+        // The latch must fire exactly once (drains true on first call,
+        // false afterwards) and the backing register must read back
+        // without bit 31 — real silicon clears the bit as part of the
+        // reset sequence, and the BROM never sees the post-store value
+        // because the store never returns.
         let mut p = RtcCntl::new();
         write_u32_at(&mut p, RTC_CNTL_OPTIONS0_OFFSET, 0x8000_0001);
-        assert_eq!(read_u32_at(&p, RTC_CNTL_OPTIONS0_OFFSET), 0x8000_0001);
+        assert!(p.drain_reset_request(), "first drain must report request");
+        assert!(
+            !p.drain_reset_request(),
+            "second drain must be empty (latch is one-shot)"
+        );
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_OPTIONS0_OFFSET) & RTC_CNTL_OPTIONS0_SW_SYS_RST_BIT,
+            0,
+            "SW_SYS_RST bit must be cleared in backing store after the write"
+        );
+        // Low bits (sw_stall_*) survive the same write.
+        assert_eq!(read_u32_at(&p, RTC_CNTL_OPTIONS0_OFFSET) & 0x3, 0x1);
+    }
+
+    #[test]
+    fn drain_reset_request_is_false_on_fresh_peripheral() {
+        let p = RtcCntl::new();
+        assert!(!p.drain_reset_request());
     }
 
     #[test]
@@ -377,6 +454,25 @@ mod tests {
         assert_eq!(
             read_u32_at(&restored, RTC_APB_FREQ_OFFSET),
             RTC_APB_FREQ_40MHZ
+        );
+    }
+
+    #[test]
+    fn runtime_snapshot_preserves_pending_reset_request() {
+        // If a snapshot is taken between the OPTIONS0 write and the
+        // machine's per-step drain, the pending reset must survive the
+        // round-trip so the restored simulator still re-points the CPU
+        // at the reset vector on its next step.
+        let mut p = RtcCntl::new();
+        write_u32_at(&mut p, RTC_CNTL_OPTIONS0_OFFSET, 0x8000_0000);
+        // Latch is set; serialize WITHOUT draining.
+        let snap = p.runtime_snapshot();
+
+        let mut restored = RtcCntl::new();
+        restored.restore_runtime_snapshot(&snap).unwrap();
+        assert!(
+            restored.drain_reset_request(),
+            "restored peripheral must carry the pending reset"
         );
     }
 
