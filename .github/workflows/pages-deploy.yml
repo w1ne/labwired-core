@@ -19,6 +19,11 @@ on:
       - "packages/playground/**"
       - "packages/ui/**"
       - "core/**"
+      # Bare `core` matches the submodule gitlink itself — `core/**` only
+      # matches files INSIDE the submodule, so without this entry a plain
+      # `git submodule update; git commit core` bump (which is the normal
+      # way wasm changes ship) doesn't trigger the deploy.
+      - "core"
       - ".github/workflows/pages-deploy.yml"
   workflow_dispatch:
 
