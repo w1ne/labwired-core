@@ -153,6 +153,14 @@ fn esp32_brom_loads_and_executes() {
         skipped_segments.len()
     );
 
+    // (Skipped probe: patching `ets_unpack_flash_code_legacy_patch` at
+    // 0x4000fb78 had no effect because the BROM never reaches that
+    // function — the boot-mode-index bounds check in `main`
+    // (~0x400078fd: `bgeu a4=15, a2=boot_index-1`) fails first when our
+    // synthesized strap value maps to an out-of-range index, sending PC
+    // straight to the "ets_main.c 404" trap. Fix belongs upstream of the
+    // unpack call, not here. Tracked as labwired-core#2h-followup.)
+
     let mut machine = Machine::new(cpu, bus);
 
     // Verify what's actually in the bus at the reset vector.
@@ -185,6 +193,8 @@ fn esp32_brom_loads_and_executes() {
     // repeats too many times (handler is stuck spinning) or when we hit a
     // NotImplemented / bus error (genuine simulator gap).
     let mut step_err: Option<(usize, String)> = None;
+    let mut last_distinct_trail: std::collections::VecDeque<u32> =
+        std::collections::VecDeque::new();
     let mut last_pc = machine.cpu.get_pc();
     let mut same_pc_streak = 0usize;
     let mut visited_funcs: std::collections::BTreeMap<u32, usize> =
@@ -207,12 +217,20 @@ fn esp32_brom_loads_and_executes() {
                 if pc == last_pc {
                     same_pc_streak += 1;
                     if same_pc_streak > 64 {
+                        eprintln!("[BROM] last 32 distinct PCs before stall at 0x{:08x}:", pc);
+                        for p in last_distinct_trail.iter() {
+                            eprintln!("  0x{:08x}", p);
+                        }
                         step_err = Some((i, format!("PC stuck at 0x{:08x}", pc)));
                         break;
                     }
                 } else {
                     same_pc_streak = 0;
                     last_pc = pc;
+                    last_distinct_trail.push_back(pc);
+                    if last_distinct_trail.len() > 32 {
+                        last_distinct_trail.pop_front();
+                    }
                 }
             }
             Err(labwired_core::SimulationError::ExceptionRaised { cause, pc }) => {
