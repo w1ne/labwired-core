@@ -1163,6 +1163,115 @@ impl WasmSimulator {
         })
     }
 
+    /// Same shape as [`get_ssd1680_framebuffer`] but for the UC8151D-family
+    /// tri-color panel attached by [`install_arduino_esp32_quirks`]. The
+    /// board_io binding type may say `ssd1680_tricolor_290` (since system
+    /// YAMLs were authored before the UC8151D split); we ignore that and
+    /// just find a `Uc8151dTricolor290` on the named SPI peripheral.
+    #[wasm_bindgen]
+    pub fn get_uc8151d_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
+        use labwired_core::peripherals::components::Uc8151dTricolor290;
+        use labwired_core::peripherals::esp32::spi::Esp32Spi;
+        let machine = self.machine.as_ref().unwrap();
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id)
+            .ok_or_else(|| JsValue::from_str(&format!("No board_io binding '{}'", device_id)))?;
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "SPI peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+        let panel_bytes =
+            if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
+                spi.attached_devices.iter().find_map(|dev| {
+                    dev.as_any()
+                        .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                        .map(|p| (p.black_plane().to_vec(), p.red_plane().to_vec()))
+                })
+            } else if let Some(spi) = any.downcast_ref::<Esp32Spi>() {
+                spi.attached_devices.iter().find_map(|dev| {
+                    dev.as_any()
+                        .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                        .map(|p| (p.black_plane().to_vec(), p.red_plane().to_vec()))
+                })
+            } else {
+                return Err(JsValue::from_str(&format!(
+                    "Peripheral '{}' is not an SPI controller",
+                    binding.peripheral
+                )));
+            };
+        let (black, red) = panel_bytes.ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "UC8151D device not found on SPI peripheral '{}'",
+                binding.peripheral
+            ))
+        })?;
+        let mut combined = Vec::with_capacity(black.len() + red.len());
+        combined.extend_from_slice(&black);
+        combined.extend_from_slice(&red);
+        Ok(combined.into_boxed_slice())
+    }
+
+    /// Cheap accessor returning just the UC8151D refresh-generation counter.
+    #[wasm_bindgen]
+    pub fn get_uc8151d_refresh_generation(&self, device_id: &str) -> Result<u32, JsValue> {
+        use labwired_core::peripherals::components::Uc8151dTricolor290;
+        use labwired_core::peripherals::esp32::spi::Esp32Spi;
+        let machine = self.machine.as_ref().unwrap();
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id)
+            .ok_or_else(|| JsValue::from_str(&format!("No board_io binding '{}'", device_id)))?;
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "SPI peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+        let gen = if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any()
+                    .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                    .map(|p| p.refresh_generation())
+            })
+        } else if let Some(spi) = any.downcast_ref::<Esp32Spi>() {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any()
+                    .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                    .map(|p| p.refresh_generation())
+            })
+        } else {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' is not an SPI controller",
+                binding.peripheral
+            )));
+        };
+        gen.ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "UC8151D device not found on SPI peripheral '{}'",
+                binding.peripheral
+            ))
+        })
+    }
+
     /// Read back the current state of each SPI sensor declared in `board_io`.
     /// Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
     #[wasm_bindgen]
