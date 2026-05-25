@@ -317,10 +317,12 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
-  if (config.boardId === 'esp32-epaper-lab') {
+  if (config.boardId === 'esp32-epaper-lab' || config.boardId === 'labwired-ereader') {
     // ESP32-WROOM-32 driving a Waveshare 2.9" tri-color e-paper via VSPI.
-    // Wiring: BUSY=GPIO4 / RST=GPIO16 / DC=GPIO17 / CS=GPIO5 /
-    // SCK=GPIO18 / MOSI=GPIO23.
+    // Same VSPI wiring for both: the Rust no_std `esp32-epaper-lab` firmware
+    // and the Arduino `labwired-ereader` sketch both drive the same physical
+    // pinout (BUSY=GPIO4 / RST=GPIO16 / DC=GPIO17 / CS=GPIO5 / SCK=GPIO18 /
+    // MOSI=GPIO23) so the diagram seed is identical.
     //
     // `panelScale` from BoardConfig — the SSD1680 face renders at 144×48
     // SVG units; without an upscale 12-px font glyphs collapse to ~4
