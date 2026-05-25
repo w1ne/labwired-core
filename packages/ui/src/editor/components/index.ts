@@ -47,6 +47,9 @@ import { esp32S3ZeroComponent } from './boards/esp32-s3-zero';
 import { rpiPicoComponent } from './boards/rpi-pico';
 import { nrf52840DkComponent } from './boards/nrf52840-dk';
 import { stm32DevComponent } from './boards/stm32-dev';
+import { nucleoH563ziComponent } from './boards/nucleo-h563zi';
+import { nucleoF401reComponent } from './boards/nucleo-f401re';
+import { stm32BlackpillComponent } from './boards/stm32-blackpill';
 
 /** All available component definitions, keyed by type. */
 export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
@@ -54,6 +57,9 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [mcuComponent.type, mcuComponent],
   [arduinoUnoComponent.type, arduinoUnoComponent],
   [stm32DevComponent.type, stm32DevComponent],
+  [nucleoH563ziComponent.type, nucleoH563ziComponent],
+  [nucleoF401reComponent.type, nucleoF401reComponent],
+  [stm32BlackpillComponent.type, stm32BlackpillComponent],
   [esp32Component.type, esp32Component],
   [esp32C3SuperMiniComponent.type, esp32C3SuperMiniComponent],
   [esp32S3ZeroComponent.type, esp32S3ZeroComponent],

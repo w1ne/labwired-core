@@ -300,7 +300,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipStm32f401,
     systemYaml: systemNucleoF401re,
     demoFirmwarePath: `${BASE}wasm/demo-nucleo-f401.elf`,
-    mcuComponentType: 'stm32-dev',
+    mcuComponentType: 'nucleo-f401re',
   },
   {
     boardId: 'stm32f401cdu6-blackpill',
@@ -310,7 +310,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     arch: 'ARM Cortex-M4',
     chipYaml: chipStm32f401cdu6,
     systemYaml: systemStm32f401cdu6Blackpill,
-    mcuComponentType: 'stm32-dev',
+    mcuComponentType: 'stm32-blackpill',
   },
   {
     boardId: 'nucleo-h563zi',
@@ -320,7 +320,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     arch: 'ARM Cortex-M33',
     chipYaml: chipStm32h563,
     systemYaml: systemNucleoH563zi,
-    mcuComponentType: 'stm32-dev',
+    mcuComponentType: 'nucleo-h563zi',
   },
   {
     boardId: 'esp32c3-supermini',
