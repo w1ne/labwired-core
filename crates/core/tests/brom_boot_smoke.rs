@@ -17,6 +17,24 @@ use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Bus, Cpu, Machine};
 use std::path::PathBuf;
 
+/// Re-parse the ELF directly with goblin to recover (vaddr, paddr) pairs
+/// — `labwired_loader::load_elf` only surfaces `p_paddr` (LMA), which is
+/// usually what flash programming wants. The ESP32 BROM has rodata
+/// segments where VMA (0x3FF96000-range, data-bus view) differs from
+/// LMA (0x40066000-range, instruction-bus view) because the ROM is
+/// dual-mapped in hardware. Returning (vaddr, paddr) here lets the test
+/// load each segment at both addresses so BROM code that reads its own
+/// rodata via the data-bus alias finds the bytes.
+fn brom_segment_addr_pairs(elf_bytes: &[u8]) -> Vec<(u64, u64)> {
+    use goblin::elf::program_header::PT_LOAD;
+    let elf = goblin::elf::Elf::parse(elf_bytes).expect("parse BROM ELF for VMA pairs");
+    elf.program_headers
+        .iter()
+        .filter(|ph| ph.p_type == PT_LOAD && ph.p_filesz > 0)
+        .map(|ph| (ph.p_vaddr, ph.p_paddr))
+        .collect()
+}
+
 #[test]
 fn esp32_brom_loads_and_executes() {
     let elf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/esp32_brom.elf");
@@ -29,6 +47,11 @@ fn esp32_brom_loads_and_executes() {
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
     let image = labwired_loader::load_elf(&elf_path).expect("parse BROM ELF");
+    let elf_bytes = std::fs::read(&elf_path).expect("read BROM ELF for vaddr lookup");
+    let vaddr_for_paddr: std::collections::HashMap<u64, u64> = brom_segment_addr_pairs(&elf_bytes)
+        .into_iter()
+        .map(|(vaddr, paddr)| (paddr, vaddr))
+        .collect();
 
     // Load BROM segments. For segments inside the ROM bank (RomThunkBank
     // — silently drops writes via `write()`), use the `preload_bytes`
@@ -84,6 +107,45 @@ fn esp32_brom_loads_and_executes() {
             );
         }
     }
+
+    // ESP32 dual-maps ROM at both an execution address (LMA, 0x4006xxxx)
+    // and a data-bus alias (VMA, 0x3FF9xxxx) so code can both run from
+    // and read constants out of the same physical bits. Our loader hands
+    // us only the LMA. For segments where VMA != LMA, mirror the bytes
+    // at the VMA too — otherwise things like the gpio_pad_unhold jump
+    // table at 0x3FF9C174 read as zeros and the BROM `jx a8` lands at PC=0.
+    let mut mirrored = 0;
+    for segment in &image.segments {
+        let paddr = segment.start_addr;
+        let Some(&vaddr) = vaddr_for_paddr.get(&paddr) else {
+            continue;
+        };
+        if vaddr == paddr || vaddr == 0 {
+            continue;
+        }
+        let mut ok = true;
+        for (i, &byte) in segment.data.iter().enumerate() {
+            if bus.write_u8(vaddr + i as u64, byte).is_err() {
+                ok = false;
+                break;
+            }
+        }
+        if ok {
+            mirrored += 1;
+            eprintln!(
+                "[BROM] mirrored ROM rodata to VMA 0x{:08x} (LMA was 0x{:08x}, {} bytes)",
+                vaddr,
+                paddr,
+                segment.data.len()
+            );
+        } else {
+            eprintln!(
+                "[BROM] FAILED to mirror segment LMA 0x{:08x} → VMA 0x{:08x}",
+                paddr, vaddr
+            );
+        }
+    }
+    eprintln!("[BROM] mirrored {} VMA-aliased segments", mirrored);
     assert!(loaded_segments > 0, "no BROM segments loaded");
     eprintln!(
         "[BROM] {} loaded, {} skipped",
@@ -125,7 +187,20 @@ fn esp32_brom_loads_and_executes() {
     let mut step_err: Option<(usize, String)> = None;
     let mut last_pc = machine.cpu.get_pc();
     let mut same_pc_streak = 0usize;
-    for i in 0..50_000 {
+    let mut visited_funcs: std::collections::BTreeMap<u32, usize> =
+        std::collections::BTreeMap::new();
+    // Last-N PC ring buffer so we can dump the trail right before any fault.
+    let trail_len = 32usize;
+    let mut pc_trail: std::collections::VecDeque<u32> = std::collections::VecDeque::new();
+    for i in 0..1_000_000 {
+        let pc_now = machine.cpu.get_pc();
+        pc_trail.push_back(pc_now);
+        if pc_trail.len() > trail_len {
+            pc_trail.pop_front();
+        }
+        // Bucket the program counter by 4 KiB to get a rough function map.
+        let bucket = pc_now & !0xFFF;
+        *visited_funcs.entry(bucket).or_insert(0) += 1;
         match machine.step() {
             Ok(()) => {
                 let pc = machine.cpu.get_pc();
@@ -150,6 +225,10 @@ fn esp32_brom_loads_and_executes() {
                     pc,
                     machine.cpu.get_pc()
                 );
+                eprintln!("[BROM] PC trail (last {} steps):", pc_trail.len());
+                for p in pc_trail.iter() {
+                    eprintln!("  PC=0x{:08x}", p);
+                }
                 last_pc = machine.cpu.get_pc();
                 same_pc_streak = 0;
             }
@@ -169,10 +248,16 @@ fn esp32_brom_loads_and_executes() {
         }
         None => {
             eprintln!(
-                "[BROM] 50000 steps completed without fatal error, final PC=0x{:08x}",
+                "[BROM] 1000000 steps completed without fatal error, final PC=0x{:08x}",
                 final_pc
             );
         }
+    }
+    eprintln!("[BROM] hot PC buckets (4 KiB) by cycles:");
+    let mut buckets: Vec<(u32, usize)> = visited_funcs.into_iter().collect();
+    buckets.sort_by(|a, b| b.1.cmp(&a.1));
+    for (pc, count) in buckets.iter().take(10) {
+        eprintln!("  0x{:08x}: {} cycles", pc, count);
     }
 
     // The smoke test passes if we got past the loader; the diagnostic

@@ -137,12 +137,13 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x20000)),
     );
-    // BROM data region (SRAM2 lower window) — the Espressif BROM ELF
+    // BROM `.data` region (SRAM2 lower window). The Espressif BROM ELF
     // places ~1.3 KiB of `.data` at 0x3FFADAFC, just below the firmware
     // DRAM base. Mapping this keeps BROM init from bus-faulting on its
-    // own globals before it touches firmware DRAM.
+    // own globals before it touches firmware DRAM. (The 0x3FF9_xxxx data
+    // alias of BROM rodata is mapped further down as `brom_data`.)
     bus.add_peripheral(
-        "brom_data",
+        "brom_low_data",
         0x3FFA_0000,
         0xE000,
         None,
