@@ -222,12 +222,12 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipEsp32,
     systemYaml: systemEsp32WroomEpaper,
     demoFirmwarePath: `${BASE}wasm/demo-labwired-ereader.elf`,
-    // Pre-warmed runtime snapshot captured at cycle 60M (PC=0x400d4aa2,
-    // refresh_generation=2). Drops first-paint from ~2 min cold boot to
-    // ~1 s. Captured via `labwired-cli snapshot capture --profile
-    // arduino-esp32 …` — same bus + thunks + handshake the playground
-    // installs, so the snapshot resumes bit-identically in browser.
-    bootSnapshotUrl: `${BASE}wasm/ereader-postpaint.lwrs`,
+    // Pre-warmed snapshot disabled — see labwired-core#122. The CLI
+    // snapshot captures the panel in its post-DRF state, which the
+    // ereader firmware fills with white (refresh+clear cycle in
+    // loop()). The live cold-boot path actually paints; snapshot resume
+    // just shows a blank panel until the next paint cycle, which the
+    // sketch doesn't trigger in its idle loop.
     mcuComponentType: 'esp32',
     sourceCode: sourceLabwiredEreader,
     sourceFilename: 'labwired-ereader-arduino/labwired-ereader.ino',
@@ -237,10 +237,10 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     summary: {
       title: 'ESP32 E-Reader',
       description: 'Arduino sketch running through the Arduino-ESP32 + GxEPD2 + FreeRTOS stack. Same .elf that flashes to physical hardware via espflash.',
-      nextStep: 'Click Run — boots from pre-warmed snapshot in ~1 s.',
+      nextStep: 'Click Run — panel paints over ~2 min of cold-boot.',
       nextStepRunning: 'Running.',
     },
-    runHint: 'Click Run — boots from pre-warmed snapshot in ~1 s.',
+    runHint: 'Click Run — panel paints over ~2 min of cold-boot.',
   },
   {
     boardId: 'max31855-thermocouple-lab',
