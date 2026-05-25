@@ -62,6 +62,37 @@ impl RomThunkBank {
         }
     }
 
+    /// Boot-time loader for real ROM contents (e.g. the Espressif ESP32
+    /// BROM ELF). Writes `bytes` into the backing store at the absolute
+    /// address `pc`, bypassing the read-only guard that `write()` enforces
+    /// at runtime. Use only during machine construction; after Run begins,
+    /// the bank is treated as ROM.
+    ///
+    /// `pc` must be within `[base, base + size)`; bytes that would extend
+    /// past `size` are silently truncated and a warning is emitted.
+    pub fn preload_bytes(&mut self, pc: u32, bytes: &[u8]) {
+        let Some(off) = pc.checked_sub(self.base) else {
+            tracing::warn!(
+                "RomThunkBank::preload_bytes: pc 0x{pc:08x} below bank base 0x{:08x}",
+                self.base
+            );
+            return;
+        };
+        let off = off as usize;
+        let end = off.saturating_add(bytes.len()).min(self.backing.len());
+        let n = end.saturating_sub(off);
+        if n < bytes.len() {
+            tracing::warn!(
+                "RomThunkBank::preload_bytes: {} of {} bytes at 0x{pc:08x} truncated to fit bank [0x{:08x}, 0x{:08x})",
+                bytes.len() - n,
+                bytes.len(),
+                self.base,
+                self.base + self.backing.len() as u32,
+            );
+        }
+        self.backing[off..off + n].copy_from_slice(&bytes[..n]);
+    }
+
     /// Register `thunk` at absolute address `pc`.
     ///
     /// The bank pre-fills 3 bytes at `pc` with `ROM_THUNK_BREAK_BYTES` so

@@ -2,7 +2,11 @@
 /target/
 target/
 examples/*/target/
+# Generated test fixtures (build artifacts) — but allow committed reference
+# binaries like the Espressif ESP32 BROM ELF in crates/*/tests/fixtures/.
 fixtures/
+!crates/*/tests/fixtures/
+!crates/*/tests/fixtures/**
 /*.rlib
 
 # Local release/test run outputs
