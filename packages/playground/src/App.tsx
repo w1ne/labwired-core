@@ -747,13 +747,16 @@ export function App() {
         .map((p) => ({
           partId: p.id,
           kind: p.type as 'ssd1680_tricolor_290' | 'uc8151d_tricolor_290',
-          // Arduino-ESP32 boards drive the panel via GxEPD2 which inverts
-          // red-plane bytes before SPI write; the un-inverted Rust labs
-          // do not. The DisplayBinding's `invertRedPlane` flips the
-          // polarity back to the renderer's expected convention.
+          // GxEPD2's red-plane inversion only applies on the SSD1680 path
+          // (writeImage emits an inverted bitmap then 0x26 commits). When
+          // GxEPD2 falls through to UC8151D opcodes (DTM1/DTM2) it writes
+          // plane data directly with no inversion. Without this filter the
+          // UC8151D's initial 0xFF / 0xFF state gets flipped to 0xFF / 0x00
+          // and the whole panel renders solid red on first paint.
           invertRedPlane:
-            selectedBoard.quirks === 'esp32-arduino' ||
-            selectedBoard.quirks === 'arduino-esp32-autodiscover',
+            p.type === 'ssd1680_tricolor_290' &&
+            (selectedBoard.quirks === 'esp32-arduino' ||
+              selectedBoard.quirks === 'arduino-esp32-autodiscover'),
         })),
     [editor.state.diagram.parts, selectedBoard.quirks],
   );
