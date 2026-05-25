@@ -398,22 +398,25 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32s3::system_stub::RtcCntlStub::new()),
     );
 
-    // TIMG0 / TIMG1 — TimgStub auto-asserts RTC_CALI_RDY (bit 15 of
-    // RTCCALICFG at 0x68) so `rtc_clk_wait_for_slow_cycle` and friends
-    // complete in one iteration. Watchdog regs round-trip normally.
+    // TIMG0 / TIMG1 — ESP32-classic Timer Group (TRM §16). Per-group
+    // 64-bit T0/T1 general-purpose counters, watchdog, RTC calibration.
+    // Preserves the auto-RDY-on-START behavior of the older `TimgStub`
+    // so `rtc_clk_wait_for_slow_cycle` still completes in one iteration,
+    // and adds monotonic counter reads so ESP-IDF's timer-state probes
+    // see forward progress. Interrupt firing is intentionally deferred.
     bus.add_peripheral(
         "timg0",
         0x3FF5_F000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::TimgStub::new()),
+        Box::new(crate::peripherals::esp32::timg::Timg::new(0x3FF5_F000)),
     );
     bus.add_peripheral(
         "timg1",
         0x3FF6_0000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::TimgStub::new()),
+        Box::new(crate::peripherals::esp32::timg::Timg::new(0x3FF6_0000)),
     );
 
     // EFUSE — esp-hal reads MAC / chip-revision bits during init.
