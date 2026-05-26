@@ -17,7 +17,192 @@ use crate::cpu::xtensa_sr::{
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
+use std::collections::HashMap;
 use std::sync::Arc;
+
+// ── JIT dispatch overhead harness (#124 Phase 3.0) ────────────────────────────
+//
+// A SURROGATE for the JIT dispatch loop. It does NOT emit wasm and is not a
+// real JIT. It measures the floor cost of "BB-entry decision + indirect
+// dispatch" added on top of the interpreter — i.e. the per-BB-entry overhead
+// any real wasm-emit JIT would also pay. The dispatched fn pointer just calls
+// back into the standard interpreter for N instructions, so correctness is
+// unchanged.
+//
+// Modes (selected at construction from env var `LABWIRED_JIT_DISPATCH`):
+//   * `off` (default)  — bypass the harness entirely; `step()` runs the
+//                        unchanged interpreter path. Used for baseline timing
+//                        and by all existing tests (no behavior change).
+//   * `1`              — at every BB entry, count hits. After 1024 hits, mark
+//                        the BB hot. Subsequent entries take the dispatched
+//                        path: hashmap lookup + fn-ptr call → fn runs one
+//                        interpreter step and returns. Models 1-instr blocks.
+//   * `8`              — same, but the fn runs up to 8 interpreter steps per
+//                        dispatch (the BB-entry check happens once per 8).
+//                        Models a realistic JIT block size.
+
+/// Threshold beyond which a BB-entry PC is promoted from "counted" to "hot".
+const JIT_HOT_THRESHOLD: u16 = 1024;
+
+/// Function-pointer signature for a dispatched "hot BB" entry. The harness
+/// shape (hashmap lookup + indirect call) mirrors what a real wasm-emit JIT
+/// would do; the body just calls back into the interpreter.
+type BbDispatchFn = fn(&mut XtensaLx7, &mut dyn Bus) -> SimResult<()>;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum JitDispatchMode {
+    /// Harness disabled — `step()` runs the unchanged interpreter path.
+    Off,
+    /// At every BB entry, look up / count hits. Hot BBs route through a
+    /// fn-ptr that runs `n` interpreter steps before returning.
+    On { n: u8 },
+}
+
+impl JitDispatchMode {
+    fn from_env() -> Self {
+        match std::env::var("LABWIRED_JIT_DISPATCH").as_deref() {
+            Ok("1") => JitDispatchMode::On { n: 1 },
+            Ok("8") => JitDispatchMode::On { n: 8 },
+            Ok(other) if !other.is_empty() && other != "off" => {
+                if let Ok(n) = other.parse::<u8>() {
+                    if n > 0 {
+                        return JitDispatchMode::On { n };
+                    }
+                }
+                JitDispatchMode::Off
+            }
+            _ => JitDispatchMode::Off,
+        }
+    }
+}
+
+/// Surrogate JIT dispatch harness state. See module-level comment for what
+/// this does and (more importantly) what it does NOT do.
+pub struct JitDispatchHarness {
+    pub mode: JitDispatchMode,
+    /// Per-BB-entry-PC hit counter, saturating at `JIT_HOT_THRESHOLD`. After
+    /// promotion to hot, this stops incrementing for that PC — the
+    /// post-promotion count lives in `hot_hits` instead so the top-N
+    /// hottest report stays informative.
+    pub hits: HashMap<u32, u16>,
+    /// PC → dispatched fn for BBs that crossed the hot threshold.
+    pub hot: HashMap<u32, BbDispatchFn>,
+    /// Post-promotion hit count, kept as `u64` so the top-N report doesn't
+    /// saturate. Includes the pre-promotion 1024 hits, so the total
+    /// reflects every BB entry observed at that PC.
+    pub hot_hits: HashMap<u32, u64>,
+    /// True iff the very next `step()` is the first one for this CPU — used
+    /// alongside `branched` to detect BB entries.
+    pub first_step: bool,
+    // ── stats (cheap, always collected when mode != Off) ──
+    pub bb_entries_total: u64,
+    pub bb_dispatches_total: u64,
+}
+
+impl JitDispatchHarness {
+    pub fn new() -> Self {
+        Self {
+            mode: JitDispatchMode::from_env(),
+            hits: HashMap::new(),
+            hot: HashMap::new(),
+            hot_hits: HashMap::new(),
+            first_step: true,
+            bb_entries_total: 0,
+            bb_dispatches_total: 0,
+        }
+    }
+
+    /// `true` when the harness is enabled and should intercept `step()`.
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        !matches!(self.mode, JitDispatchMode::Off)
+    }
+
+    /// Number of distinct BB-entry PCs observed (= `hits.len()`).
+    pub fn distinct_bb_entries(&self) -> usize {
+        self.hits.len()
+    }
+
+    /// Number of BBs that crossed the hot threshold.
+    pub fn hot_bb_count(&self) -> usize {
+        self.hot.len()
+    }
+
+    /// Top-N hottest BBs by hit count, descending. For BBs that crossed
+    /// the hot threshold, returns the post-promotion `u64` count (which
+    /// includes the pre-promotion 1024). For not-yet-hot BBs, returns the
+    /// `u16` counter widened.
+    pub fn top_n_hottest(&self, n: usize) -> Vec<(u32, u64)> {
+        let mut v: Vec<(u32, u64)> = self
+            .hits
+            .iter()
+            .map(|(&pc, &c)| {
+                let count = self.hot_hits.get(&pc).copied().unwrap_or(c as u64);
+                (pc, count)
+            })
+            .collect();
+        v.sort_by_key(|e| std::cmp::Reverse(e.1));
+        v.truncate(n);
+        v
+    }
+}
+
+impl Default for JitDispatchHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for JitDispatchHarness {
+    /// Print the harness stats on drop. Active-mode only — `Off` is silent,
+    /// so existing tests / consumers that construct & drop CPUs aren't
+    /// affected. Output goes to stderr so it interleaves with the CLI's
+    /// other diagnostic prints rather than corrupting the snapshot blob on
+    /// stdout.
+    fn drop(&mut self) {
+        if !self.is_active() {
+            return;
+        }
+        // Don't print for CPUs that never stepped (e.g. dual-core APP_CPU
+        // that stayed halted the whole run).
+        if self.bb_entries_total == 0 {
+            return;
+        }
+        eprintln!(
+            "labwired jit_dispatch: mode={:?} bb_entries={} dispatches={} distinct_bb_pcs={} hot_bbs={}",
+            self.mode,
+            self.bb_entries_total,
+            self.bb_dispatches_total,
+            self.distinct_bb_entries(),
+            self.hot_bb_count(),
+        );
+        let top = self.top_n_hottest(10);
+        if !top.is_empty() {
+            eprintln!("labwired jit_dispatch: top-10 hottest BBs (pc, hits):");
+            for (pc, c) in &top {
+                eprintln!("  0x{pc:08x}  {c}");
+            }
+        }
+    }
+}
+
+// Dispatched "hot BB" body for N=1 — one interpreter step.
+fn dispatch_one(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    cpu.step_interp(bus)
+}
+
+// Dispatched "hot BB" body for N=8 — up to eight interpreter steps without
+// re-checking the BB-entry hashmap. Bails early on a control-flow transfer
+// so we don't blow past the conservative IRQ-check cadence by much.
+fn dispatch_eight(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    for _ in 0..8 {
+        cpu.step_interp(bus)?;
+        if cpu.branched || cpu.halted {
+            break;
+        }
+    }
+    Ok(())
+}
 
 /// Offset of _KernelExceptionVector relative to VECBASE on ESP32-S3 LX7.
 ///
@@ -104,6 +289,10 @@ pub struct XtensaLx7 {
     /// app-cpu boot address (mirrors real silicon's reset-hold). Default
     /// false; ESP32 dual-core setup sets it on cpu_secondary at boot.
     pub halted: bool,
+    /// JIT dispatch overhead surrogate (#124 Phase 3.0). Defaults to `Off`
+    /// (= zero behavior change). Enable via `LABWIRED_JIT_DISPATCH=1|8`.
+    /// See the `JitDispatchHarness` doc-comment for what this measures.
+    pub jit_dispatch: JitDispatchHarness,
 }
 
 impl XtensaLx7 {
@@ -118,6 +307,7 @@ impl XtensaLx7 {
             pc: 0x4000_0400,
             branched: false,
             halted: false,
+            jit_dispatch: JitDispatchHarness::new(),
         }
     }
 
@@ -1634,6 +1824,101 @@ impl XtensaLx7 {
         }
     }
 
+    /// Slow-path interpreter step body. Identical to the historical `Cpu::step`
+    /// implementation; factored out so the #124 Phase 3.0 JIT dispatch harness
+    /// can route through this same code path (no behavior change — the harness
+    /// only changes routing, not work). When the harness is `Off`, `Cpu::step`
+    /// calls this directly with one extra branch.
+    pub fn step_interp(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
+        // Dual-core: a halted CPU contributes nothing — skip the entire
+        // step (no CCOUNT advance, no fetch, no IRQ dispatch). Real
+        // silicon's APP_CPU sits in reset until PRO_CPU releases it; we
+        // model that by leaving `halted=true` until the boot-addr thunk
+        // captures the entry point and unhalts the secondary CPU.
+        if self.halted {
+            return Ok(());
+        }
+        // ── Pre-fetch interrupt check ─────────────────────────────────────────
+        // Per Xtensa ISA RM §4.4.1: check for pending interrupts before fetching
+        // the next instruction.
+        //
+        // Dispatch conditions (all must be true):
+        //   1. PS.EXCM == 0  (if EXCM=1, even high-priority ints are blocked for
+        //                     medium levels; for high-priority levels EXCM is set
+        //                     to 0 on entry, but we still gate on it here to avoid
+        //                     re-entry from within a level-1 handler).
+        //   2. (INTERRUPT & INTENABLE) != 0
+        //   3. highest_pending_level > PS.INTLEVEL
+        //
+        // Note: INTENABLE defaults to 0 at reset, so existing tests are unaffected.
+        // Advance CCOUNT one cycle per executed instruction (rough but
+        // monotonic). When CCOUNT crosses CCOMPARE0, raise the timer-0
+        // interrupt (bit 6 in INTERRUPT SR = ESP32 internal timer 0, level 1).
+        // FreeRTOS-on-Xtensa uses this as its tick source via `_xt_int6`.
+        use crate::cpu::xtensa_sr::{CCOMPARE0, CCOUNT};
+        let ccount_before = self.sr.read(CCOUNT);
+        let ccount_after = ccount_before.wrapping_add(1);
+        self.sr.write(CCOUNT, ccount_after);
+        let ccompare0 = self.sr.read(CCOMPARE0);
+        if ccompare0 != 0 && ccount_before < ccompare0 && ccount_after >= ccompare0 {
+            // Edge-triggered: raise pending bit 6 in INTERRUPT. Use the
+            // engine-facing helper because WSR.INTERRUPT writes are ignored
+            // (the SR is hardware-latched — INTSET/INTCLEAR is the SW path).
+            self.sr.raise_interrupt_bits(1 << 6);
+        }
+
+        if !self.ps.excm() {
+            if let Some(irq_level) = self.pending_irq_level(bus) {
+                if irq_level > self.ps.intlevel() {
+                    return self.dispatch_irq(irq_level, bus);
+                }
+            }
+        }
+
+        let pc = self.pc;
+        let b0 = bus.read_u8(pc as u64)?;
+        let len = xtensa_length::instruction_length(b0);
+
+        // S32E/L32E are 3-byte wide instructions with op0=0 (QRST), op1=9
+        // (LSC4), op2=4/0 — decoded by the standard wide path and dispatched
+        // through QRST. No special predecode needed; byte0 low nibble = 0
+        // (op0=0), so the length predecoder correctly returns 3.
+        //
+        // (An earlier draft routed S32E via op0=9, requiring a special
+        // EXCM-gated predecode here. That decoder agreed with hand-crafted
+        // test inputs but rejected real esp-hal firmware. See Plan 3 Task 10
+        // case study.)
+
+        let ins = if len == 2 {
+            let hw = bus.read_u16(pc as u64)?;
+            xtensa_narrow::decode_narrow(hw)
+        } else {
+            let w = bus.read_u32(pc as u64)?;
+            xtensa::decode(w)
+        };
+        self.branched = false;
+        let fall_through_pc = pc.wrapping_add(len);
+        self.execute(ins, bus, len)?;
+
+        // Zero Overhead Loop post-instruction check (ISA RM §7.4.3 "Loop
+        // and Branch Interaction"): the implicit branch back to LBEG
+        // fires when the PREVIOUS instruction's natural fall-through path
+        // reaches LEND. A taken branch that happens to land at LEND from
+        // inside the body must NOT trigger loop-back — strlen relies on
+        // this: it ends the loop body with `bnone …, LEND` to exit early,
+        // expecting LEND to be the post-loop epilogue. The `branched` flag
+        // (set inside `branch()` when a conditional branch fires) tells
+        // us whether the last step took a branch or fell through.
+        use crate::cpu::xtensa_sr::{LBEG, LCOUNT, LEND};
+        let lcount = self.sr.read(LCOUNT);
+        let lend = self.sr.read(LEND);
+        if lcount > 0 && self.pc == lend && fall_through_pc == lend && !self.branched {
+            self.sr.write(LCOUNT, lcount - 1);
+            self.pc = self.sr.read(LBEG);
+        }
+        Ok(())
+    }
+
     // ── Interrupt dispatch helpers ────────────────────────────────────────────
 
     /// Compute the highest priority level of any pending-and-enabled interrupt.
@@ -1788,6 +2073,11 @@ impl Cpu for XtensaLx7 {
         // Machine::load_firmware reset, otherwise it'd race PRO_CPU
         // through the firmware entry point.
         self.halted = was_halted;
+        // Reset the JIT dispatch harness's first_step flag so the very next
+        // step after reset is correctly classified as a BB entry. Stats and
+        // maps are preserved across reset (the harness only cares about the
+        // post-reset execution path, but holding state is harmless).
+        self.jit_dispatch.first_step = true;
         Ok(())
     }
 
@@ -1807,93 +2097,48 @@ impl Cpu for XtensaLx7 {
         _observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
-        // Dual-core: a halted CPU contributes nothing — skip the entire
-        // step (no CCOUNT advance, no fetch, no IRQ dispatch). Real
-        // silicon's APP_CPU sits in reset until PRO_CPU releases it; we
-        // model that by leaving `halted=true` until the boot-addr thunk
-        // captures the entry point and unhalts the secondary CPU.
-        if self.halted {
-            return Ok(());
-        }
-        // ── Pre-fetch interrupt check ─────────────────────────────────────────
-        // Per Xtensa ISA RM §4.4.1: check for pending interrupts before fetching
-        // the next instruction.
+        // ── JIT dispatch overhead surrogate (#124 Phase 3.0) ──────────────
         //
-        // Dispatch conditions (all must be true):
-        //   1. PS.EXCM == 0  (if EXCM=1, even high-priority ints are blocked for
-        //                     medium levels; for high-priority levels EXCM is set
-        //                     to 0 on entry, but we still gate on it here to avoid
-        //                     re-entry from within a level-1 handler).
-        //   2. (INTERRUPT & INTENABLE) != 0
-        //   3. highest_pending_level > PS.INTLEVEL
+        // When the harness is `Off` (default), this method just calls the
+        // unchanged interpreter — there's a single is-enabled branch in front
+        // of the existing code path, no other cost.
         //
-        // Note: INTENABLE defaults to 0 at reset, so existing tests are unaffected.
-        // Advance CCOUNT one cycle per executed instruction (rough but
-        // monotonic). When CCOUNT crosses CCOMPARE0, raise the timer-0
-        // interrupt (bit 6 in INTERRUPT SR = ESP32 internal timer 0, level 1).
-        // FreeRTOS-on-Xtensa uses this as its tick source via `_xt_int6`.
-        use crate::cpu::xtensa_sr::{CCOMPARE0, CCOUNT};
-        let ccount_before = self.sr.read(CCOUNT);
-        let ccount_after = ccount_before.wrapping_add(1);
-        self.sr.write(CCOUNT, ccount_after);
-        let ccompare0 = self.sr.read(CCOMPARE0);
-        if ccompare0 != 0 && ccount_before < ccompare0 && ccount_after >= ccompare0 {
-            // Edge-triggered: raise pending bit 6 in INTERRUPT. Use the
-            // engine-facing helper because WSR.INTERRUPT writes are ignored
-            // (the SR is hardware-latched — INTSET/INTCLEAR is the SW path).
-            self.sr.raise_interrupt_bits(1 << 6);
-        }
-
-        if !self.ps.excm() {
-            if let Some(irq_level) = self.pending_irq_level(bus) {
-                if irq_level > self.ps.intlevel() {
-                    return self.dispatch_irq(irq_level, bus);
+        // When the harness is `On { n }`, BB entries (= `branched` was set on
+        // the previous step, or the very first step) are counted; PCs that
+        // cross the hot threshold get a dispatched fn-ptr that runs `n`
+        // interpreter steps. Routing only — no codegen.
+        if self.jit_dispatch.is_active() && !self.halted {
+            let bb_entry = self.jit_dispatch.first_step || self.branched;
+            self.jit_dispatch.first_step = false;
+            if bb_entry {
+                self.jit_dispatch.bb_entries_total += 1;
+                let pc = self.pc;
+                if let Some(&dispatch_fn) = self.jit_dispatch.hot.get(&pc) {
+                    self.jit_dispatch.bb_dispatches_total += 1;
+                    // Track post-promotion hits so the top-N report stays
+                    // informative once everything has saturated at 1024.
+                    *self.jit_dispatch.hot_hits.entry(pc).or_insert(0) += 1;
+                    return dispatch_fn(self, bus);
+                }
+                let count = self.jit_dispatch.hits.entry(pc).or_insert(0);
+                if *count < JIT_HOT_THRESHOLD {
+                    *count += 1;
+                    if *count == JIT_HOT_THRESHOLD {
+                        let f: BbDispatchFn = match self.jit_dispatch.mode {
+                            JitDispatchMode::On { n } if n >= 8 => dispatch_eight,
+                            _ => dispatch_one,
+                        };
+                        self.jit_dispatch.hot.insert(pc, f);
+                        // Seed post-promotion counter with the pre-promotion
+                        // tally so the report reflects every observed entry.
+                        self.jit_dispatch
+                            .hot_hits
+                            .insert(pc, JIT_HOT_THRESHOLD as u64);
+                    }
                 }
             }
         }
-
-        let pc = self.pc;
-        let b0 = bus.read_u8(pc as u64)?;
-        let len = xtensa_length::instruction_length(b0);
-
-        // S32E/L32E are 3-byte wide instructions with op0=0 (QRST), op1=9
-        // (LSC4), op2=4/0 — decoded by the standard wide path and dispatched
-        // through QRST. No special predecode needed; byte0 low nibble = 0
-        // (op0=0), so the length predecoder correctly returns 3.
-        //
-        // (An earlier draft routed S32E via op0=9, requiring a special
-        // EXCM-gated predecode here. That decoder agreed with hand-crafted
-        // test inputs but rejected real esp-hal firmware. See Plan 3 Task 10
-        // case study.)
-
-        let ins = if len == 2 {
-            let hw = bus.read_u16(pc as u64)?;
-            xtensa_narrow::decode_narrow(hw)
-        } else {
-            let w = bus.read_u32(pc as u64)?;
-            xtensa::decode(w)
-        };
-        self.branched = false;
-        let fall_through_pc = pc.wrapping_add(len);
-        self.execute(ins, bus, len)?;
-
-        // Zero Overhead Loop post-instruction check (ISA RM §7.4.3 "Loop
-        // and Branch Interaction"): the implicit branch back to LBEG
-        // fires when the PREVIOUS instruction's natural fall-through path
-        // reaches LEND. A taken branch that happens to land at LEND from
-        // inside the body must NOT trigger loop-back — strlen relies on
-        // this: it ends the loop body with `bnone …, LEND` to exit early,
-        // expecting LEND to be the post-loop epilogue. The `branched` flag
-        // (set inside `branch()` when a conditional branch fires) tells
-        // us whether the last step took a branch or fell through.
-        use crate::cpu::xtensa_sr::{LBEG, LCOUNT, LEND};
-        let lcount = self.sr.read(LCOUNT);
-        let lend = self.sr.read(LEND);
-        if lcount > 0 && self.pc == lend && fall_through_pc == lend && !self.branched {
-            self.sr.write(LCOUNT, lcount - 1);
-            self.pc = self.sr.read(LBEG);
-        }
-        Ok(())
+        self.step_interp(bus)
     }
 
     fn set_pc(&mut self, val: u32) {
