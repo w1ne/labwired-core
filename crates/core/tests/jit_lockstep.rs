@@ -134,3 +134,36 @@ fn lockstep_detects_register_corruption_on_real_firmware() {
     assert_eq!(err.jit.ar[4], 0xDEAD_BEEF);
     assert_ne!(err.interp.ar[4], 0xDEAD_BEEF);
 }
+
+/// Phase 3.6.2 (#124): long-run lockstep on the JIT'd windowed CALL8 at
+/// 0x400d4a99. 500_000 steps is enough for the firmware to reach the
+/// loopTask scheduler tick and dispatch through the JIT'd CALL8 many
+/// times. A divergence here means the windowed-call emit code disagrees
+/// with the LX7 interpreter on register-file or PS state at SOME step.
+///
+/// The test is `#[ignore]`d like the others — runs locally and in CI
+/// when the ereader ELF is available.
+#[test]
+#[ignore = "needs labwired-ereader ELF; run with: \
+            cargo test -p labwired-core --release --features jit \
+            --test jit_lockstep lockstep_windowed_call_long_run -- --ignored --nocapture"]
+fn lockstep_windowed_call_long_run() {
+    let Some(elf_path) = ereader_elf_path() else {
+        eprintln!("[skip] labwired-ereader ELF missing; set LABWIRED_EREADER_ELF to enable");
+        return;
+    };
+    eprintln!("[lockstep] long-run windowed-call check, ELF: {elf_path:?}");
+
+    let factory = || build_ereader_machine(&elf_path);
+    let runner = LockstepRunner::new(factory, 500_000);
+    match runner.run_and_compare() {
+        Ok(report) => {
+            eprintln!(
+                "[lockstep] OK windowed-call: {} steps compared, final pc=0x{:08x}",
+                report.steps_compared,
+                report.interp_final.map(|s| s.pc).unwrap_or(0),
+            );
+        }
+        Err(div) => panic!("windowed-call JIT diverged:\n\n{div}"),
+    }
+}

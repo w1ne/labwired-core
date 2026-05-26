@@ -175,11 +175,15 @@ impl XtensaLx7 {
     fn try_jit_step(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
         use crate::cpu::xtensa_jit::{
             JitCache, FILL_SCREEN_BLOCK_END, FILL_SCREEN_BLOCK_INSTR_COUNT, FILL_SCREEN_BLOCK_PC,
+            LOOPV_CALL8_PC,
         };
         let pc = self.pc;
-        // Hot guard: cheap exact-PC check before we even touch the cache.
-        // Avoids paying the Option<Box> deref + HashMap lookup on every
-        // single interpreter step.
+        // Hot guard: cheap exact-PC check for any of the JIT'd PCs before
+        // we even touch the cache. Avoids paying the Option<Box> deref +
+        // HashMap lookup on every single interpreter step.
+        if pc == LOOPV_CALL8_PC {
+            return self.try_jit_windowed_call(bus);
+        }
         if pc != FILL_SCREEN_BLOCK_PC {
             return Ok(None);
         }
@@ -243,6 +247,80 @@ impl XtensaLx7 {
             }
             other => Err(SimulationError::NotImplemented(format!(
                 "xtensa JIT returned unknown side-exit code {other}"
+            ))),
+        }
+    }
+
+    /// Phase 3.6.2 (issue #124): JIT'd windowed CALL8 dispatch for the
+    /// `_Z4loopv` call at PC 0x400d4a99 — the dominant hot block (~92%
+    /// of all dispatches per Phase 3.0 data).
+    ///
+    /// # Semantics (must match the [`xtensa::Instruction::Call8`] arm
+    /// of [`Self::execute`] byte-for-byte)
+    ///
+    /// 1. `ret_pc = ((PC + 3) & 0x3FFFFFFF) | (CALLINC << 30)`  (CALLINC=2)
+    /// 2. `target = ((PC + 4) & ~3) + offset`
+    /// 3. `spill_shadow_on_call(2)` — preserve caller's a0..a7 across the
+    ///    upcoming window rotation, and conditionally shadow-save the
+    ///    callee's a0..a3 slot if it's already live.
+    /// 4. `write_logical(8, ret_pc)` — store return address in caller's a8
+    ///    (becomes callee's a0 after ENTRY's rotation).
+    /// 5. `PS.CALLINC := 2`
+    /// 6. `PC := target`
+    ///
+    /// Steps 1+2+6 are computed inside the wasm module (all constants for
+    /// the LOOPV PC) and returned as `(ret_pc_encoded, target_pc, callinc)`.
+    /// Steps 3+4+5 happen here on the Rust side — replicating them inside
+    /// wasm would require exposing the full 64-entry AR file plus per-slot
+    /// shadow stacks to the wasm sandbox, with no perf upside.
+    ///
+    /// Returns:
+    /// * `Ok(Some(1))` — JIT handled the step (one Xtensa instr executed,
+    ///   matching the outer step's already-incremented CCOUNT).
+    /// * `Ok(None)` — JIT refused (window-overflow guard or PC drift);
+    ///   caller proceeds to interpreter.
+    /// * `Err` — wasmtime error or unknown exit code.
+    #[cfg(feature = "jit")]
+    fn try_jit_windowed_call(&mut self, _bus: &mut dyn Bus) -> SimResult<Option<u32>> {
+        use crate::cpu::xtensa_jit::{
+            JitCache, EXIT_WINDOWED_REFUSE, LOOPV_CALL8_INSTR_COUNT, WINDOWED_EXIT_TAKEN,
+        };
+        let pc = self.pc;
+        if self.jit.is_none() {
+            self.jit = Some(Box::new(JitCache::new()));
+        }
+        let cache = self.jit.as_mut().expect("jit cache init above");
+        let block = match cache.lookup_or_install_windowed(pc) {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+
+        let result = block
+            .run(pc, self.regs.windowstart(), self.regs.windowbase())
+            .map_err(|e| {
+                SimulationError::NotImplemented(format!("xtensa JIT windowed call: {e:#}"))
+            })?;
+
+        match result.exit_code {
+            x if x == WINDOWED_EXIT_TAKEN => {
+                // Apply the architectural side-effects in the same order
+                // as the Call8 interpreter arm.
+                self.spill_shadow_on_call(result.callinc);
+                self.regs.write_logical(8, result.ret_pc_encoded);
+                self.ps.set_callinc(result.callinc);
+                self.pc = result.target_pc;
+                self.branched = true;
+                // CCOUNT: one Xtensa instr executed; outer step already
+                // bumped CCOUNT by 1, so no further adjustment needed.
+                debug_assert_eq!(LOOPV_CALL8_INSTR_COUNT, 1);
+                Ok(Some(LOOPV_CALL8_INSTR_COUNT))
+            }
+            x if x == EXIT_WINDOWED_REFUSE => {
+                cache.windowed_refusals += 1;
+                Ok(None)
+            }
+            other => Err(SimulationError::NotImplemented(format!(
+                "xtensa windowed-call JIT returned unknown side-exit code {other}"
             ))),
         }
     }

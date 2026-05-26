@@ -58,6 +58,13 @@
 
 #![cfg(feature = "jit")]
 
+mod windowed_call;
+
+pub use windowed_call::{
+    WindowedCallBlock, WindowedCallResult, EXIT_TAKEN as WINDOWED_EXIT_TAKEN, EXIT_WINDOWED_REFUSE,
+    LOOPV_CALL8_INSTR_COUNT, LOOPV_CALL8_NEXT_PC, LOOPV_CALL8_PC, LOOPV_CALL8_TARGET,
+};
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -146,6 +153,14 @@ impl CompiledBlock {
 pub struct JitCache {
     engine: Engine,
     compiled: HashMap<u32, CompiledBlock>,
+    /// Phase 3.6.2: windowed CALL8 block for `_Z4loopv` (PC 0x400d4a99).
+    /// Boxed + lazy so we don't pay wasmtime instantiation cost on every
+    /// `JitCache::new()` (e.g. dual-core configs build two CPUs).
+    pub loopv_call8: Option<Box<WindowedCallBlock>>,
+    /// Phase 3.6.2 instrumentation: track how often the windowed-call
+    /// JIT refused (exit code 5) so the lockstep + bench reports can
+    /// quantify how many CALL8s actually went through the wasm path.
+    pub windowed_refusals: u64,
 }
 
 impl Default for JitCache {
@@ -163,6 +178,8 @@ impl JitCache {
         Self {
             engine,
             compiled: HashMap::new(),
+            loopv_call8: None,
+            windowed_refusals: 0,
         }
     }
 
@@ -192,10 +209,34 @@ impl JitCache {
         None
     }
 
+    /// Lazily compile + return the LOOPV CALL8 block. Returns `None` if
+    /// wasm compilation fails (extremely unlikely — the template is fixed
+    /// and validated at unit-test time, so a runtime failure here points
+    /// at a wasmtime regression rather than a usage bug).
+    pub fn lookup_or_install_windowed(&mut self, pc: u32) -> Option<&mut WindowedCallBlock> {
+        if pc != LOOPV_CALL8_PC {
+            return None;
+        }
+        if self.loopv_call8.is_none() {
+            match WindowedCallBlock::build_loopv(&self.engine) {
+                Ok(b) => self.loopv_call8 = Some(Box::new(b)),
+                Err(e) => {
+                    tracing::warn!(target: "labwired-core::jit",
+                        "windowed CALL8 JIT compile failed for pc=0x{pc:08x}: {e:#}. \
+                         Falling back to interpreter for this PC.");
+                    return None;
+                }
+            }
+        }
+        self.loopv_call8.as_deref_mut()
+    }
+
     /// Total number of times any compiled block has been invoked since
     /// process start. Used by the pilot's CLI-level reporting.
     pub fn total_hits(&self) -> u64 {
-        self.compiled.values().map(|cb| cb.hits).sum()
+        let fillscreen_hits: u64 = self.compiled.values().map(|cb| cb.hits).sum();
+        let windowed_hits = self.loopv_call8.as_ref().map(|b| b.hits).unwrap_or(0);
+        fillscreen_hits + windowed_hits
     }
 
     /// Build the `fillScreen` body block. See module-level docs for the
