@@ -781,7 +781,7 @@ export function App() {
   const { state: simState, stepOnce, clearUart } = useSimulationLoop({
     bridge,
     running,
-    cyclesPerFrame: 100_000,
+    cyclesPerFrame: 1_000_000,
     displays,
   });
 

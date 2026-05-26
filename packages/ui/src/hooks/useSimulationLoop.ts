@@ -55,7 +55,12 @@ export interface UseSimulationLoopOptions {
 
 /** Auto-tune bounds. */
 const CYCLES_MIN = 1_000;
-const CYCLES_MAX = 4_000_000;
+// Bumped 4M → 16M after Phase 1.1+1.2 interpreter speedups (#120, #123)
+// made the per-cycle cost lower. At 4M the auto-tune was clamping before
+// using the new headroom; 16M lets the loop push frames closer to the
+// 14ms budget on faster firmware. Browser RAF caps effective batches at
+// ~16M anyway (anything past stays on the GC path).
+const CYCLES_MAX = 16_000_000;
 /** Frame-budget targets (ms). Under LOW: scale up. Over HIGH: scale down. */
 const FRAME_BUDGET_LOW = 8;
 const FRAME_BUDGET_HIGH = 14;
