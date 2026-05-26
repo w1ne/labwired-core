@@ -196,6 +196,14 @@ pub trait Cpu: Send {
     fn intlevel(&self) -> u8 {
         0
     }
+
+    /// Phase 3.2 JIT pilot (issue #124): total number of times any
+    /// JIT-compiled block on this CPU has been invoked. Default 0 for
+    /// CPUs/builds without JIT support so callers can unconditionally
+    /// query it in reporting paths.
+    fn jit_hit_count(&self) -> u64 {
+        0
+    }
 }
 
 // Forwarding impl so `Machine<Box<dyn Cpu>>` is valid — used by the WASM
@@ -279,6 +287,9 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn intlevel(&self) -> u8 {
         (**self).intlevel()
+    }
+    fn jit_hit_count(&self) -> u64 {
+        (**self).jit_hit_count()
     }
 }
 
