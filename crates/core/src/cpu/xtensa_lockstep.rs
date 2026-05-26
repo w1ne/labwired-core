@@ -132,6 +132,12 @@ pub trait LockstepObservable {
     /// Read special register `sr_id`. Numeric IDs match
     /// `crate::cpu::xtensa_sr` constants.
     fn lockstep_sr(&self, sr_id: u16) -> u32;
+    /// Force-enable or disable the JIT fast-path on this CPU. The harness
+    /// disables it on the `Interpreter` pass so the comparison is
+    /// genuinely interpreter-vs-JIT, not JIT-vs-JIT. Default state
+    /// (after `Cpu::new()`) must be "JIT enabled" so production paths
+    /// keep working with no extra calls.
+    fn set_jit_enabled(&mut self, enabled: bool);
 }
 
 impl LockstepObservable for crate::cpu::XtensaLx7 {
@@ -143,6 +149,14 @@ impl LockstepObservable for crate::cpu::XtensaLx7 {
         // on the AR file, but the lockstep diff only consumes SAR / LBEG
         // / LEND / LCOUNT / CCOUNT which all live on the SR file.
         self.sr.read(sr_id)
+    }
+    fn set_jit_enabled(&mut self, _enabled: bool) {
+        #[cfg(feature = "jit")]
+        {
+            self.jit_enabled = _enabled;
+        }
+        // Without the `jit` feature the field doesn't exist and the
+        // call is a no-op — the harness still works (interp-vs-interp).
     }
 }
 
@@ -205,13 +219,100 @@ impl fmt::Display for DivergenceReport {
     }
 }
 
-/// Compare two traces step-by-step. First mismatch wins. CCOUNT diffs
-/// within `policy.ccount_tolerance` are tolerated; larger gaps fail.
+/// Compare two traces PC-by-PC. Both passes may have different `step`
+/// counts because the JIT can advance multiple Xtensa instructions per
+/// `Machine::step()` call. We walk both traces with two indices `i`
+/// (interp) and `j` (jit), advancing whichever is behind, until both
+/// land on the same PC. At each meeting point, compare ARs / PS / SAR /
+/// LBEG / LEND / LCOUNT exactly. CCOUNT comparison is dropped
+/// here (the JIT's macro-step batches CCOUNT bumps; the per-block
+/// totals match the interp's but the inter-block timing can differ).
 ///
 /// `DivergenceReport` is ~260 bytes so we return it boxed to keep
 /// `Result` discriminant size sensible — callers shouldn't be paying
 /// for an unboxed 260-byte enum on the hot path.
 pub fn compare_traces(
+    interp: &[CpuState],
+    jit: &[CpuState],
+    policy: ComparePolicy,
+) -> Result<(), Box<DivergenceReport>> {
+    // PC-checkpoint mode is the new default; keep the old length-strict
+    // diff available via [`compare_traces_strict`] for tests that need it.
+    compare_traces_pc_sync(interp, jit, policy)
+}
+
+/// PC-synchronised comparison. Walks both traces using two indices and
+/// matches up entries by PC. The first mismatch in ARs / PS / SR at a
+/// matching PC wins.
+pub fn compare_traces_pc_sync(
+    interp: &[CpuState],
+    jit: &[CpuState],
+    policy: ComparePolicy,
+) -> Result<(), Box<DivergenceReport>> {
+    let mut i = 0usize;
+    let mut j = 0usize;
+    while i < interp.len() && j < jit.len() {
+        let a = &interp[i];
+        let b = &jit[j];
+        if a.pc == b.pc {
+            if let Some(field) = first_diff_no_ccount(a, b) {
+                return Err(Box::new(DivergenceReport {
+                    step: i.min(j) as u64,
+                    field,
+                    interp: *a,
+                    jit: *b,
+                    pc_trail: pc_trail(interp, i),
+                }));
+            }
+            i += 1;
+            j += 1;
+        } else {
+            // PCs disagree. The JIT may have macro-stepped past several
+            // interpreter instructions in one Machine::step(), so we
+            // search a generous window in BOTH directions for the next
+            // PC match. The window must be at least
+            //   max_jit_macro_step_len * jit_steps_ahead
+            // — for a Phase 3.6.3 multi-op BB at 8 instrs/step running
+            // for ~100k macro-steps that's ~800k interp entries the
+            // interp pass would need to advance. We cap the search at
+            // 100k to keep the comparator's worst-case O(N) bounded.
+            const WINDOW: usize = 100_000;
+            let mut found = None;
+            for k in 1..=WINDOW {
+                if i + k < interp.len() && interp[i + k].pc == b.pc {
+                    found = Some((i + k, j));
+                    break;
+                }
+                if j + k < jit.len() && jit[j + k].pc == a.pc {
+                    found = Some((i, j + k));
+                    break;
+                }
+            }
+            match found {
+                Some((ni, nj)) => {
+                    i = ni;
+                    j = nj;
+                }
+                None => {
+                    return Err(Box::new(DivergenceReport {
+                        step: i.min(j) as u64,
+                        field: "pc",
+                        interp: *a,
+                        jit: *b,
+                        pc_trail: pc_trail(interp, i),
+                    }));
+                }
+            }
+        }
+    }
+    let _ = policy; // ccount tolerance not used in PC-sync mode
+    Ok(())
+}
+
+/// Original strict length-locked comparator. Useful for the unit tests
+/// that pre-date the JIT macro-step and want to confirm the diff still
+/// fires on hand-crafted state arrays.
+pub fn compare_traces_strict(
     interp: &[CpuState],
     jit: &[CpuState],
     policy: ComparePolicy,
@@ -297,6 +398,42 @@ fn first_diff(a: &CpuState, b: &CpuState, policy: ComparePolicy) -> Option<&'sta
     None
 }
 
+/// Same as [`first_diff`] but skips CCOUNT entirely. Used by the PC-sync
+/// comparator (Phase 3.6.3): the JIT batches multi-op blocks into one
+/// `Machine::step()`, which advances CCOUNT by N at once vs the interp's
+/// 1-at-a-time. The per-instruction CCOUNT view diverges by construction
+/// even when the JIT is correct, so we drop CCOUNT from the PC-sync diff.
+fn first_diff_no_ccount(a: &CpuState, b: &CpuState) -> Option<&'static str> {
+    if a.pc != b.pc {
+        return Some("pc");
+    }
+    if a.ps != b.ps {
+        return Some("ps");
+    }
+    if a.sar != b.sar {
+        return Some("sar");
+    }
+    if a.lbeg != b.lbeg {
+        return Some("lbeg");
+    }
+    if a.lend != b.lend {
+        return Some("lend");
+    }
+    if a.lcount != b.lcount {
+        return Some("lcount");
+    }
+    for (i, (x, y)) in a.ar.iter().zip(b.ar.iter()).enumerate() {
+        if x != y {
+            const NAMES: [&str; 16] = [
+                "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10", "a11", "a12",
+                "a13", "a14", "a15",
+            ];
+            return Some(NAMES[i]);
+        }
+    }
+    None
+}
+
 fn pc_trail(trace: &[CpuState], end: usize) -> Vec<u32> {
     const TRAIL_LEN: usize = 16;
     let start = end.saturating_sub(TRAIL_LEN);
@@ -328,11 +465,25 @@ where
     C: Cpu + LockstepObservable,
     F: FnMut(ExecMode, &mut Machine<C>) -> SimResult<()>,
 {
+    // Toggle the CPU's runtime JIT flag so the `Interpreter` arm
+    // genuinely runs without JIT dispatch. The CPU exposes the toggle
+    // through [`LockstepObservable::set_jit_enabled`] so we don't have
+    // to leak the `jit` cfg knob into the cross-arch trace recorder.
+    //
+    // Phase 3.6.3 caveat: when the JIT batches a multi-op BB into one
+    // `Machine::step()`, the two passes' per-step traces become out of
+    // phase by program-time. The PC-sync comparator widens its window
+    // to compensate, but for very long runs the JIT pass can race ahead
+    // by tens of thousands of instructions. Tests that exercise the
+    // multi-op JIT should either:
+    //   * use the [`bb_multi_lockstep`] focused unit test below
+    //     (program-instruction granularity), or
+    //   * cap `steps` low enough that the JIT trace stays alignable
+    //     with the interp trace (heuristic: `steps` ≤ 8× the longest
+    //     macro-step block the firmware reaches in that window).
+    machine.cpu.set_jit_enabled(matches!(mode, ExecMode::Jit));
     let mut trace = Vec::with_capacity(steps as usize);
     for i in 0..steps {
-        // Today both modes route through the same Machine::step. The
-        // match is preserved so Phase 3.6 can splice JIT dispatch into
-        // the `Jit` arm without touching the trace-capture loop.
         let result = match mode {
             ExecMode::Interpreter => machine.step(),
             ExecMode::Jit => machine.step(),
@@ -568,10 +719,14 @@ mod tests {
         let mut b = empty_state();
         a.ccount = 100;
         b.ccount = 101;
-        assert!(compare_traces(&[a], &[b], ComparePolicy::default()).is_ok());
+        // Test the strict comparator's CCOUNT semantics here — the
+        // default PC-sync mode (Phase 3.6.3) drops CCOUNT entirely
+        // because JIT macro-stepping batches CCOUNT bumps across
+        // multiple Xtensa instrs.
+        assert!(compare_traces_strict(&[a], &[b], ComparePolicy::default()).is_ok());
         // ±2 must trip.
         b.ccount = 102;
-        let err = compare_traces(&[a], &[b], ComparePolicy::default()).unwrap_err();
+        let err = compare_traces_strict(&[a], &[b], ComparePolicy::default()).unwrap_err();
         assert_eq!(err.field, "ccount");
     }
 
@@ -583,8 +738,13 @@ mod tests {
         b.pc = 0x2000;
         a.ar[5] = 0x11;
         b.ar[5] = 0x22;
+        // The default (PC-sync) comparator tries to re-align on PC
+        // within a sliding window; with 1-element traces and no match,
+        // it falls back to flagging `pc`. Both comparators must agree
+        // on the first-diff field for this case.
         let err = compare_traces(&[a], &[b], ComparePolicy::default()).unwrap_err();
-        // PC checked before AR.
+        assert_eq!(err.field, "pc");
+        let err = compare_traces_strict(&[a], &[b], ComparePolicy::default()).unwrap_err();
         assert_eq!(err.field, "pc");
     }
 }
