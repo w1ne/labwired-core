@@ -1777,6 +1777,13 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         machine.cpu.get_pc(),
         args.steps,
     );
+    // Phase 3.2 JIT pilot (issue #124): report block hit count if the
+    // build was compiled with `--features jit-core`. Without the feature
+    // the trait default returns 0 and this line is harmless.
+    let jit_hits = machine.cpu.jit_hit_count();
+    if jit_hits > 0 {
+        eprintln!("labwired-cli snapshot: jit block hits: {jit_hits}");
+    }
     ExitCode::from(EXIT_PASS)
 }
 
