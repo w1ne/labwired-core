@@ -6,6 +6,7 @@
 
 pub mod cortex_m;
 pub mod riscv;
+pub mod xtensa_lockstep;
 pub mod xtensa_lx7;
 pub mod xtensa_regs;
 pub mod xtensa_sr;
