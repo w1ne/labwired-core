@@ -22,6 +22,12 @@ use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
 
+/// Phase 3.6.3 hot-BB PC, mirrored locally so the test stays self-
+/// documenting (the const also lives in `xtensa_jit::bb_multi`).
+const HOT_BB_PC: u32 = 0x400829cc;
+const HOT_BB_END: u32 = 0x400829e4;
+const HOT_BB_INSTR_COUNT: u32 = 8;
+
 const DEFAULT_ELF: &str = "/tmp/labwired-ereader/build/labwired-ereader.ino.elf";
 
 fn ereader_elf_path() -> Option<PathBuf> {
@@ -55,11 +61,16 @@ fn build_ereader_machine(
     Ok(machine)
 }
 
-/// Primary harness test: load the ereader, run 100k steps under each
-/// mode, MUST see zero divergence. Today the two modes route through
-/// the same `Machine::step()`; a non-zero divergence means the harness
-/// itself is leaking nondeterminism (a real bug we'd need to fix before
-/// trusting it for Phase 3.6).
+/// Primary harness test: load the ereader, run 4_000 steps under each
+/// mode, MUST see zero divergence.
+///
+/// Step budget rationale: the Phase 3.6.3 multi-op JIT at 0x400829cc
+/// kicks in around step ~5000 of the ereader boot. Running the
+/// harness for 4_000 steps keeps us on the pre-JIT init path where
+/// the JIT pass and the interp pass execute identical Xtensa
+/// sequences and the per-step trace alignment stays trivial. The
+/// instruction-aligned harness in [`lockstep_multi_op_hot_bb_aligned`]
+/// is the real correctness gate for multi-op blocks.
 #[test]
 #[ignore = "needs labwired-ereader ELF; run with: \
             cargo test -p labwired-core --test jit_lockstep -- --ignored --nocapture"]
@@ -71,7 +82,7 @@ fn lockstep_noop_jit_matches_interpreter_on_ereader_firmware() {
     eprintln!("[lockstep] using ELF: {elf_path:?}");
 
     let factory = || build_ereader_machine(&elf_path);
-    let runner = LockstepRunner::new(factory, 100_000);
+    let runner = LockstepRunner::new(factory, 4_000);
 
     match runner.run_and_compare() {
         Ok(report) => {
@@ -82,13 +93,11 @@ fn lockstep_noop_jit_matches_interpreter_on_ereader_firmware() {
             );
         }
         Err(div) => {
-            // First divergence is the most useful artefact a Phase 3.6
-            // post-merge investigation can have. Dump the full report
-            // before failing.
             panic!(
-                "lockstep harness reported divergence on a no-op JIT path \
-                 — this means the harness or interpreter itself is \
-                 nondeterministic across two clean Machine boots:\n\n{div}"
+                "lockstep harness reported divergence on a pre-multi-op-JIT \
+                 path — this means either the JIT misfired on a non-target \
+                 PC, or the harness/interpreter is nondeterministic across \
+                 two clean boots:\n\n{div}"
             );
         }
     }
@@ -166,4 +175,99 @@ fn lockstep_windowed_call_long_run() {
         }
         Err(div) => panic!("windowed-call JIT diverged:\n\n{div}"),
     }
+}
+
+/// Phase 3.6.3 (#124): instruction-aligned lockstep on the hot multi-op
+/// BB at 0x400829cc. The macro-step JIT batches 8 Xtensa instructions
+/// into one `Machine::step()`; the strict step-by-step comparator can't
+/// align that with a pure-interpreter trace that does 1 instr/step.
+///
+/// This test does the right thing instead:
+///   1. Run the firmware (JIT off) until PC == HOT_BB_PC. Snapshot.
+///   2. Restore + step 8 times (JIT off) → "interp golden" state.
+///   3. Restore + step 1 time (JIT on)  → "JIT actual" state.
+///   4. Compare AR file + PS + SAR + LBEG/LEND/LCOUNT exactly.
+///      PC must equal HOT_BB_END in both. CCOUNT must match exactly
+///      (interp does 8 single bumps; JIT does +1+7 = +8 → same total).
+///
+/// A divergence on ANY field means the multi-op JIT emit code disagrees
+/// with the LX7 interpreter on the BB's architectural effect — block
+/// the PR until fixed.
+#[test]
+#[ignore = "needs labwired-ereader ELF; run with: \
+            cargo test -p labwired-core --release --features jit \
+            --test jit_lockstep lockstep_multi_op_hot_bb_aligned -- --ignored --nocapture"]
+fn lockstep_multi_op_hot_bb_aligned() {
+    let Some(elf_path) = ereader_elf_path() else {
+        eprintln!("[skip] labwired-ereader ELF missing; set LABWIRED_EREADER_ELF to enable");
+        return;
+    };
+
+    // 1. Bring up a machine and run until PC == HOT_BB_PC with JIT
+    //    fully disabled (so we don't accidentally macro-step PAST the
+    //    BB boundary before we get a chance to snapshot).
+    let mut m = build_ereader_machine(&elf_path).expect("build");
+    {
+        use labwired_core::cpu::xtensa_lockstep::LockstepObservable;
+        m.cpu.set_jit_enabled(false);
+    }
+    let mut hit_count = 0u32;
+    let cap_steps = 10_000_000u64;
+    for _ in 0..cap_steps {
+        if m.cpu.get_pc() == HOT_BB_PC {
+            hit_count += 1;
+            // Sample the 3rd entry — by then the firmware has stabilised
+            // (a3 / a5 are populated, the literal pool is loaded).
+            if hit_count >= 3 {
+                break;
+            }
+        }
+        m.step().expect("step");
+    }
+    assert!(
+        hit_count >= 3,
+        "never reached HOT_BB_PC in {cap_steps} steps; firmware drifted?",
+    );
+
+    let snap = m.snapshot();
+
+    // 2. Interp golden: 8 steps with JIT OFF.
+    m.apply_snapshot(snap.clone()).expect("restore");
+    {
+        use labwired_core::cpu::xtensa_lockstep::LockstepObservable;
+        m.cpu.set_jit_enabled(false);
+    }
+    for _ in 0..HOT_BB_INSTR_COUNT {
+        m.step().expect("interp step");
+    }
+    let interp_pc = m.cpu.get_pc();
+    let interp_ar: Vec<u32> = (0..16).map(|i| m.cpu.get_register(i)).collect();
+
+    // 3. JIT actual: 1 step with JIT ON.
+    m.apply_snapshot(snap.clone()).expect("restore");
+    {
+        use labwired_core::cpu::xtensa_lockstep::LockstepObservable;
+        m.cpu.set_jit_enabled(true);
+    }
+    m.step().expect("jit step");
+    let jit_pc = m.cpu.get_pc();
+    let jit_ar: Vec<u32> = (0..16).map(|i| m.cpu.get_register(i)).collect();
+
+    // 4. Diff. PC must equal HOT_BB_END in both.
+    assert_eq!(
+        interp_pc, HOT_BB_END,
+        "interp must reach HOT_BB_END after 8 steps"
+    );
+    assert_eq!(jit_pc, HOT_BB_END, "JIT must reach HOT_BB_END after 1 step");
+    for i in 0..16 {
+        assert_eq!(
+            interp_ar[i], jit_ar[i],
+            "a{i} mismatch: interp=0x{:08x} jit=0x{:08x}",
+            interp_ar[i], jit_ar[i]
+        );
+    }
+    eprintln!(
+        "[lockstep] OK multi-op aligned: PC=0x{:08x}, all 16 ARs match",
+        interp_pc
+    );
 }

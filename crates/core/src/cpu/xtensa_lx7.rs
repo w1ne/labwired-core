@@ -137,6 +137,12 @@ pub struct XtensaLx7 {
     /// every CPU instantiation; the cache is created on first JIT lookup.
     #[cfg(feature = "jit")]
     pub jit: Option<Box<crate::cpu::xtensa_jit::JitCache>>,
+    /// Runtime knob to fully disable the JIT fast-path even when the
+    /// `jit` feature is compiled in. Lets the lockstep harness force the
+    /// pure-interpreter pass to actually be pure-interpreter, while the
+    /// JIT pass shares the same binary. Default `true` (JIT enabled).
+    #[cfg(feature = "jit")]
+    pub jit_enabled: bool,
 }
 
 impl XtensaLx7 {
@@ -154,6 +160,8 @@ impl XtensaLx7 {
             fetch_cache: None,
             #[cfg(feature = "jit")]
             jit: None,
+            #[cfg(feature = "jit")]
+            jit_enabled: true,
         }
     }
 
@@ -203,7 +211,7 @@ impl XtensaLx7 {
     fn try_jit_step(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
         use crate::cpu::xtensa_jit::{
             JitCache, FILL_SCREEN_BLOCK_END, FILL_SCREEN_BLOCK_INSTR_COUNT, FILL_SCREEN_BLOCK_PC,
-            LOOPV_CALL8_PC,
+            HOT_BB_PC, LOOPV_CALL8_PC,
         };
         let pc = self.pc;
         // Hot guard: cheap exact-PC check for any of the JIT'd PCs before
@@ -211,6 +219,9 @@ impl XtensaLx7 {
         // HashMap lookup on every single interpreter step.
         if pc == LOOPV_CALL8_PC {
             return self.try_jit_windowed_call(bus);
+        }
+        if pc == HOT_BB_PC {
+            return self.try_jit_multi_op(bus);
         }
         if pc != FILL_SCREEN_BLOCK_PC {
             return Ok(None);
@@ -349,6 +360,95 @@ impl XtensaLx7 {
             }
             other => Err(SimulationError::NotImplemented(format!(
                 "xtensa windowed-call JIT returned unknown side-exit code {other}"
+            ))),
+        }
+    }
+
+    /// Phase 3.6.3 (issue #124): multi-op BB dispatch for the
+    /// `call_start_cpu0` delay loop at PC 0x400829cc.
+    ///
+    /// The compiled wasm body executes 8 instructions:
+    /// `or a10,a5,a5 ; memw ; l8ui a6,a3,0 ; memw ; l8ui a2,a3,1 ;
+    /// extui a2,a2,0,8 ; and a2,a2,a6 ; l32r a8,...` and exits with
+    /// PC at 0x400829e4 (the `callx8` terminator). The host pre-reads
+    /// the two byte values (`mem8[a3+0]` and `mem8[a3+1]`) through the
+    /// live `Bus` before invoking wasm, and pre-resolves the L32R
+    /// literal once (then re-uses it — the literal pool is read-only).
+    ///
+    /// Returns:
+    /// * `Ok(Some(HOT_BB_INSTR_COUNT))` — JIT handled the block;
+    ///   regs + PC updated.
+    /// * `Ok(None)` — JIT refused (host bus error during pre-read,
+    ///   or wasm signalled bus error); caller proceeds to interpreter.
+    /// * `Err` — unrecoverable wasmtime / sim error.
+    #[cfg(feature = "jit")]
+    fn try_jit_multi_op(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
+        use crate::cpu::xtensa_jit::{
+            JitCache, HOT_BB_END, HOT_BB_INSTR_COUNT, HOT_BB_L32R_ADDR, MULTI_EXIT_FALL_THROUGH,
+            MULTI_EXIT_HOST_BUS_ERROR,
+        };
+        let pc = self.pc;
+        if self.jit.is_none() {
+            self.jit = Some(Box::new(JitCache::new()));
+        }
+
+        // Pre-read both L8UI bytes through the live bus. If either
+        // errors we refuse the JIT path entirely so the interpreter can
+        // raise the genuine fault with full context.
+        let a3 = self.regs.read_logical(3);
+        let a5 = self.regs.read_logical(5);
+        let b0 = match bus.read_u8(a3 as u64) {
+            Ok(v) => v,
+            Err(_) => return Ok(None),
+        };
+        let b1 = match bus.read_u8((a3.wrapping_add(1)) as u64) {
+            Ok(v) => v,
+            Err(_) => return Ok(None),
+        };
+        // L32R literal: pre-resolved address is constant for this BB.
+        // The literal-pool memory is immutable for our purposes; we
+        // re-read it once per call (still cheap; the slow path is at
+        // worst the same as the interpreter would do).
+        let l32r_val = bus.read_u32(HOT_BB_L32R_ADDR as u64)?;
+
+        let cache = self.jit.as_mut().expect("jit cache init above");
+        let block = match cache.lookup_or_install_multi_op(pc) {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        block.stage_loads(&[b0, b1]);
+        let result = block
+            .run(a3, a5, l32r_val)
+            .map_err(|e| SimulationError::NotImplemented(format!("xtensa multi-op JIT: {e:#}")))?;
+
+        match result.exit_code {
+            x if x == MULTI_EXIT_FALL_THROUGH => {
+                // Commit registers in the same order the interpreter
+                // would have produced them.
+                self.regs.write_logical(10, result.a10);
+                self.regs.write_logical(6, result.a6);
+                self.regs.write_logical(2, result.a2);
+                self.regs.write_logical(8, result.a8);
+                self.pc = HOT_BB_END;
+                // CCOUNT: outer step has already counted one; bump
+                // CCOUNT by the remaining (HOT_BB_INSTR_COUNT - 1).
+                if HOT_BB_INSTR_COUNT > 1 {
+                    use crate::cpu::xtensa_sr::CCOUNT;
+                    let cc = self.sr.read(CCOUNT);
+                    self.sr
+                        .write(CCOUNT, cc.wrapping_add(HOT_BB_INSTR_COUNT - 1));
+                }
+                self.branched = false;
+                Ok(Some(HOT_BB_INSTR_COUNT))
+            }
+            x if x == MULTI_EXIT_HOST_BUS_ERROR => {
+                if let Some(c) = self.jit.as_mut() {
+                    c.multi_op_refusals += 1;
+                }
+                Ok(None)
+            }
+            other => Err(SimulationError::NotImplemented(format!(
+                "xtensa multi-op JIT returned unknown side-exit code {other}"
             ))),
         }
     }
@@ -2092,8 +2192,10 @@ impl Cpu for XtensaLx7 {
         // an exit code that says where to continue.
         #[cfg(feature = "jit")]
         {
-            if let Some(_n) = self.try_jit_step(bus)? {
-                return Ok(());
+            if self.jit_enabled {
+                if let Some(_n) = self.try_jit_step(bus)? {
+                    return Ok(());
+                }
             }
         }
 
