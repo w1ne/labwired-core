@@ -2,6 +2,11 @@ use labwired_config::{
     Arch, BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, SystemManifest,
 };
 use labwired_core::bus::SystemBus;
+
+// #124 Phase 4: browser-side JIT prototype. Runs the dominant
+// `0x400829cc` hot block through `js_sys::WebAssembly` instead of the
+// interpreter when `jit_enabled()` has been toggled on from JS.
+mod jit_browser;
 // CortexM and XtensaLx7 are used via Box<dyn Cpu>; the concrete types are
 // only constructed inside the configure_* fns and immediately boxed.
 use labwired_core::decoder::arm::{decode_thumb_16, decode_thumb_32};
@@ -53,6 +58,14 @@ pub struct WasmSimulator {
     /// When `Some`, `step_with_esp32_aids` runs the IPI bridge + dual-core
     /// handshake keep-alives each cycle.
     esp32_ipi: Option<Esp32IpiBridge>,
+    /// #124 Phase 4: browser-side JIT cache. Off by default — flip via
+    /// `set_jit_enabled(true)` from JS. We deliberately don't auto-enable
+    /// until benchmarks confirm a net win, so production playground
+    /// behaviour is unchanged unless the operator opts in.
+    jit_browser_enabled: bool,
+    /// Lazy-init at first JIT-able step. Boxed so the typical "JIT off"
+    /// path pays no per-instance allocation.
+    jit_browser_cache: Option<Box<jit_browser::BrowserJitCache>>,
 }
 
 #[wasm_bindgen]
@@ -87,6 +100,8 @@ impl WasmSimulator {
             uart_rx_bufs,
             arch: Arch::Arm,
             esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
         })
     }
 
@@ -150,6 +165,8 @@ impl WasmSimulator {
             uart_rx_bufs,
             arch: Arch::Arm,
             esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
         })
     }
 
@@ -194,6 +211,8 @@ impl WasmSimulator {
             uart_rx_bufs,
             arch: Arch::Xtensa,
             esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
         })
     }
 
@@ -2092,6 +2111,58 @@ impl WasmSimulator {
         let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
     }
 
+    /// #124 Phase 4: enable/disable the browser-side JIT fast-path. When
+    /// on, `step_with_esp32_aids` short-circuits any pre-fetch step
+    /// whose PC matches the JIT'd hot block (`0x400829cc`) into a wasm
+    /// call constructed via `js_sys::WebAssembly`. Off by default —
+    /// callers opt in from JS once they've benchmarked.
+    #[wasm_bindgen]
+    pub fn set_jit_enabled(&mut self, enabled: bool) {
+        self.jit_browser_enabled = enabled;
+        if !enabled {
+            // Cleanly drop the cached module + closures so the next
+            // enable rebuilds from scratch.
+            self.jit_browser_cache = None;
+        }
+    }
+
+    /// Total number of times the browser JIT has dispatched the hot
+    /// block. Useful for confirming the JIT path actually fired during
+    /// a benchmark.
+    #[wasm_bindgen]
+    pub fn jit_hits(&self) -> u64 {
+        self.jit_browser_cache
+            .as_ref()
+            .and_then(|c| c.hot_bb.as_ref())
+            .map(|b| b.hits)
+            .unwrap_or(0)
+    }
+
+    /// Total number of JIT refusals (host bus errors, JS-side
+    /// dispatch failures). Surfaced for the bench harness so it can
+    /// distinguish "JIT was tried and rejected" from "JIT was never
+    /// hit because PC never reached the block".
+    #[wasm_bindgen]
+    pub fn jit_refusals(&self) -> u64 {
+        self.jit_browser_cache.as_ref().map(|c| c.refusals).unwrap_or(0)
+    }
+
+    /// Bench runner: execute `cycles` `step_with_esp32_aids` iterations
+    /// and return elapsed milliseconds (measured via
+    /// `performance.now()`). The caller drives this twice — once with
+    /// `set_jit_enabled(false)`, once with `set_jit_enabled(true)` —
+    /// and compares the two numbers to quantify JIT speedup.
+    ///
+    /// Returns a `Result<f64, JsValue>`: the `Err` path bubbles step
+    /// errors so the bench harness can show a useful message.
+    #[wasm_bindgen]
+    pub fn bench_jit(&mut self, cycles: u32) -> Result<f64, JsValue> {
+        let t0 = perf_now();
+        self.step_with_esp32_aids(cycles)?;
+        let t1 = perf_now();
+        Ok(t1 - t0)
+    }
+
     /// Step `cycles` cycles with the ESP32-classic IPI bridge active. Each
     /// cycle samples the DPORT FROM_CPU intmatrix mapping and trigger
     /// registers, raises the corresponding INTERRUPT bit, and clears the
@@ -2160,12 +2231,46 @@ impl WasmSimulator {
                     }
                 }
             }
+
+            // #124 Phase 4: browser-side JIT fast-path. Runs BEFORE
+            // `machine.step()` so a successful JIT call advances PC
+            // past the hot block (0x400829cc -> 0x400829e4) and the
+            // regular step picks up at the post-block callx8.
+            // CCOUNT advance happens inside the JIT helper to keep
+            // CCOMPARE0 edge detection honest.
+            if self.jit_browser_enabled {
+                let machine = self.machine.as_mut().unwrap();
+                if self.jit_browser_cache.is_none() {
+                    self.jit_browser_cache =
+                        Some(Box::new(jit_browser::BrowserJitCache::new()));
+                }
+                let cache = self.jit_browser_cache.as_mut().unwrap();
+                if let Some(any) = machine.cpu.as_any_mut() {
+                    if let Some(xt) = any.downcast_mut::<labwired_core::cpu::XtensaLx7>() {
+                        jit_browser::try_browser_jit_step(xt, &mut machine.bus, cache);
+                    }
+                }
+            }
+
             self.machine()
                 .step()
                 .map_err(|e| JsValue::from_str(&format!("Step Error: {e}")))?;
         }
         Ok(())
     }
+}
+
+// ── Browser-side performance.now() shim ────────────────────────────────
+//
+// `web-sys` would bring in a large generated binding tree just to call
+// `performance.now()`. We use an explicit `wasm-bindgen` import instead.
+// Same ABI; ~zero overhead. The matching console.warn shim lives in
+// `jit_browser.rs` to keep its module self-contained.
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance, js_name = now)]
+    fn perf_now() -> f64;
 }
 
 // WasmGdbEventLoop removed — see `gdb_process_packet` above for the rationale.

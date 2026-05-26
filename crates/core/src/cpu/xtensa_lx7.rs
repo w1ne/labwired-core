@@ -2080,6 +2080,10 @@ impl Default for XtensaLx7 {
 }
 
 impl Cpu for XtensaLx7 {
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         let was_halted = self.halted;
         self.regs = ArFile::new();

@@ -10,6 +10,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = "0.2.92"
+# #124 Phase 4: js-sys exposes `js_sys::WebAssembly::{Module, Instance}` used
+# by the browser-side JIT prototype in `src/jit_browser.rs`. Already a
+# transitive dep of `serde-wasm-bindgen`; pinning it here makes the direct
+# usage visible at the dep boundary.
+js-sys = "0.3"
 labwired-core = { path = "../core" }
 labwired-config = { path = "../config" }
 labwired-loader = { path = "../loader" }

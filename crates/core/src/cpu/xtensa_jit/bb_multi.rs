@@ -87,25 +87,16 @@ use wasmtime::{Engine, Func, Instance, Module, Store, TypedFunc};
 use crate::decoder::xtensa::{self, Instruction};
 use crate::decoder::{xtensa_length, xtensa_narrow};
 
-// ── Side-exit codes ───────────────────────────────────────────────────
-
-/// Block ran cleanly to terminator. Caller commits regs + advances PC.
-pub const EXIT_FALL_THROUGH: i32 = 0;
-/// Host L8UI import hit a bus error; caller MUST fall back to interpreter
-/// and re-execute the block from the top.
-pub const EXIT_HOST_BUS_ERROR: i32 = 5;
-
-// ── Phase 3.6.3 target BB ─────────────────────────────────────────────
-
-/// PC of the dominant hot multi-instruction BB (call_start_cpu0 delay loop).
-pub const HOT_BB_PC: u32 = 0x400829cc;
-/// First PC after the JITed range; the interpreter resumes here at `callx8`.
-pub const HOT_BB_END: u32 = 0x400829e4;
-/// Number of Xtensa instructions executed by the JIT body.
-pub const HOT_BB_INSTR_COUNT: u32 = 8;
-/// L32R literal address read by the block: `((0x400829e1 + 3) & ~3) + sext_offset`.
-/// Resolved at compile time from the ELF; matches what the interpreter computes.
-pub const HOT_BB_L32R_ADDR: u32 = 0x4008_0534;
+// ── Side-exit codes + BB constants ─────────────────────────────────────
+//
+// Re-exported from `cpu::xtensa_jit_bytes` (which is always compiled,
+// even without `--features jit`) so the browser-side prototype can use
+// the same values without dragging wasmtime into its dep graph
+// (#124 Phase 4).
+pub use crate::cpu::xtensa_jit_bytes::{
+    EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT, HOT_BB_L32R_ADDR,
+    HOT_BB_PC, HOT_BB_WASM,
+};
 
 // ── Wasm function signature ───────────────────────────────────────────
 
@@ -281,79 +272,23 @@ fn is_supported(ins: &Instruction) -> bool {
     )
 }
 
-// ── WAT emit for the target block ─────────────────────────────────────
-
-/// Emit the WAT body for the 0x400829cc block. This is hand-written for
-/// the specific opcode sequence; future Phase 3.6.4 work will generalise
-/// `emit_op_wat` to walk an arbitrary `DecodedOp` slice.
-///
-/// The wasm module exports `run(a3: i32, a5: i32, l32r_val: i32) ->
-/// (exit_code, a2, a6, a8, a10)`. It calls `host.read_u8(addr)` twice
-/// for the L8UI ops. If either returns -1, exit code is HOST_BUS_ERROR.
-fn emit_hot_bb_wat() -> String {
-    format!(
-        r#"(module
-  (import "host" "read_u8" (func $read_u8 (param i32) (result i32)))
-  (func (export "run")
-        (param $a3 i32) (param $a5 i32) (param $l32r i32)
-        (result i32 i32 i32 i32 i32)
-    (local $a2 i32)
-    (local $a6 i32)
-    (local $a8 i32)
-    (local $a10 i32)
-    (local $tmp i32)
-
-    ;; 1. or a10, a5, a5  -> a10 = a5
-    (local.set $a10 (local.get $a5))
-
-    ;; 2. memw — barrier, semantic no-op in sim
-
-    ;; 3. l8ui a6, a3, 0  -> a6 = read_u8(a3 + 0)
-    (local.set $tmp (call $read_u8 (local.get $a3)))
-    (if (i32.lt_s (local.get $tmp) (i32.const 0))
-      (then
-        (return (i32.const {bus_err}) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
-    (local.set $a6 (i32.and (local.get $tmp) (i32.const 0xFF)))
-
-    ;; 4. memw — barrier
-
-    ;; 5. l8ui a2, a3, 1  -> a2 = read_u8(a3 + 1)
-    (local.set $tmp (call $read_u8 (i32.add (local.get $a3) (i32.const 1))))
-    (if (i32.lt_s (local.get $tmp) (i32.const 0))
-      (then
-        (return (i32.const {bus_err}) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
-    (local.set $a2 (i32.and (local.get $tmp) (i32.const 0xFF)))
-
-    ;; 6. extui a2, a2, 0, 8  -> a2 = (a2 >> 0) & ((1<<8) - 1) = a2 & 0xFF
-    ;;    (already byte after l8ui, but emit for correctness)
-    (local.set $a2 (i32.and (local.get $a2) (i32.const 0xFF)))
-
-    ;; 7. and a2, a2, a6  -> a2 &= a6
-    (local.set $a2 (i32.and (local.get $a2) (local.get $a6)))
-
-    ;; 8. l32r a8, 0x40080534  -> a8 = pre-resolved literal
-    (local.set $a8 (local.get $l32r))
-
-    ;; Exit clean: callx8 a8 is the terminator, interpreter handles it.
-    (i32.const {ok})
-    (local.get $a2)
-    (local.get $a6)
-    (local.get $a8)
-    (local.get $a10)
-  )
-)
-"#,
-        ok = EXIT_FALL_THROUGH,
-        bus_err = EXIT_HOST_BUS_ERROR,
-    )
-}
+// ── Emit: runtime-agnostic byte stream ────────────────────────────────
+//
+// The hot-block wasm body is owned by `hot_bb.wat` and pre-compiled into
+// `xtensa_jit_bytes::HOT_BB_WASM` at crate build time. The native
+// (wasmtime) and browser (`js_sys::WebAssembly`) backends consume that
+// identical byte stream — that's the entire emit/runtime decoupling.
+//
+// `Module::new(engine, bytes)` accepts a `&[u8]` (binary modules) as well
+// as WAT text; passing bytes here exercises the same code path the
+// browser will take, so any encoder-side regression breaks the native
+// tests too.
 
 impl MultiOpBlock {
     /// Build the hot BB module + instance. Failure path bubbles wasmtime
     /// errors; caller logs + falls back to interpreter.
     pub fn build_hot_bb(engine: &Engine) -> wasmtime::Result<Self> {
-        let wat = emit_hot_bb_wat();
-        let module = Module::new(engine, wat)?;
+        let module = Module::new(engine, HOT_BB_WASM)?;
         let mut store: Store<()> = Store::new(engine, ());
 
         let pending_loads: std::sync::Arc<Mutex<Vec<u32>>> =

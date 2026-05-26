@@ -1428,6 +1428,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tracing",
  "wasmtime",
+ "wat",
 ]
 
 [[package]]
@@ -1544,6 +1545,7 @@ dependencies = [
  "cortex-m",
  "gdbstub",
  "gdbstub_arch",
+ "js-sys",
  "labwired-config",
  "labwired-core",
  "labwired-gdbstub",

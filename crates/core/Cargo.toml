@@ -10,6 +10,15 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+# build.rs compiles the JIT hot-block WAT into wasm bytes at compile time
+# so both the native (wasmtime) and browser (`js_sys::WebAssembly`) backends
+# consume identical bytes. See `crates/core/build.rs` and
+# `cpu/xtensa_jit/wasm_bytes.rs` (#124 Phase 4 browser-side JIT prototype).
+build = "build.rs"
+
+[build-dependencies]
+# Used solely by build.rs to pre-compile the hot-block WAT into wasm bytes.
+wat = "1.0"
 
 [dependencies]
 thiserror = { workspace = true }

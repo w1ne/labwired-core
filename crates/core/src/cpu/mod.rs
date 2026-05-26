@@ -17,6 +17,12 @@ pub mod xtensa_sr;
 #[cfg(feature = "jit")]
 pub mod xtensa_jit;
 
+// Phase 4 (#124): pre-compiled wasm bytes + architectural constants for
+// the hot BB, shared between native and browser JIT backends. Always
+// compiled (no feature gate) so the browser crate can use them without
+// pulling in wasmtime.
+pub mod xtensa_jit_bytes;
+
 pub use cortex_m::CortexM;
 pub use riscv::RiscV;
 pub use xtensa_lx7::XtensaLx7;

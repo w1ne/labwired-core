@@ -118,6 +118,14 @@ pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
 /// Trait representing a CPU architecture
 pub trait Cpu: Send {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
+    /// Downcast escape hatch for runtime fast-paths that need the
+    /// concrete CPU type (e.g. the browser-side JIT prototype in
+    /// `labwired-wasm` reaches into `XtensaLx7` for direct register
+    /// access). Default returns `None`, matching the rest of the trait
+    /// surface: only the CPUs that opt in are reachable this way.
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
     fn step(
         &mut self,
         bus: &mut dyn Bus,
