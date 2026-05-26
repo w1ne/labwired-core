@@ -58,8 +58,14 @@
 
 #![cfg(feature = "jit")]
 
+mod bb_multi;
 mod windowed_call;
 
+pub use bb_multi::{
+    walk_bb, DecodedOp, MultiOpBlock, MultiOpResult, EXIT_FALL_THROUGH as MULTI_EXIT_FALL_THROUGH,
+    EXIT_HOST_BUS_ERROR as MULTI_EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
+    HOT_BB_L32R_ADDR, HOT_BB_PC,
+};
 pub use windowed_call::{
     WindowedCallBlock, WindowedCallResult, EXIT_TAKEN as WINDOWED_EXIT_TAKEN, EXIT_WINDOWED_REFUSE,
     LOOPV_CALL8_INSTR_COUNT, LOOPV_CALL8_NEXT_PC, LOOPV_CALL8_PC, LOOPV_CALL8_TARGET,
@@ -161,6 +167,13 @@ pub struct JitCache {
     /// JIT refused (exit code 5) so the lockstep + bench reports can
     /// quantify how many CALL8s actually went through the wasm path.
     pub windowed_refusals: u64,
+    /// Phase 3.6.3: multi-op block for the call_start_cpu0 hot loop at
+    /// PC 0x400829cc. First JIT block expected to deliver net speedup.
+    pub hot_bb: Option<Box<MultiOpBlock>>,
+    /// Phase 3.6.3 instrumentation: count of times the multi-op JIT
+    /// refused (host bus error / staging mismatch) so the bench can
+    /// quantify cache effectiveness.
+    pub multi_op_refusals: u64,
 }
 
 impl Default for JitCache {
@@ -180,6 +193,8 @@ impl JitCache {
             compiled: HashMap::new(),
             loopv_call8: None,
             windowed_refusals: 0,
+            hot_bb: None,
+            multi_op_refusals: 0,
         }
     }
 
@@ -231,12 +246,35 @@ impl JitCache {
         self.loopv_call8.as_deref_mut()
     }
 
+    /// Lazily compile + return the Phase 3.6.3 multi-op block for the
+    /// `call_start_cpu0` delay loop. Returns `None` only if wasm
+    /// compilation fails (which would be a regression — the WAT is
+    /// validated at unit-test time).
+    pub fn lookup_or_install_multi_op(&mut self, pc: u32) -> Option<&mut MultiOpBlock> {
+        if pc != HOT_BB_PC {
+            return None;
+        }
+        if self.hot_bb.is_none() {
+            match MultiOpBlock::build_hot_bb(&self.engine) {
+                Ok(b) => self.hot_bb = Some(Box::new(b)),
+                Err(e) => {
+                    tracing::warn!(target: "labwired-core::jit",
+                        "multi-op JIT compile failed for pc=0x{pc:08x}: {e:#}. \
+                         Falling back to interpreter for this PC.");
+                    return None;
+                }
+            }
+        }
+        self.hot_bb.as_deref_mut()
+    }
+
     /// Total number of times any compiled block has been invoked since
     /// process start. Used by the pilot's CLI-level reporting.
     pub fn total_hits(&self) -> u64 {
         let fillscreen_hits: u64 = self.compiled.values().map(|cb| cb.hits).sum();
         let windowed_hits = self.loopv_call8.as_ref().map(|b| b.hits).unwrap_or(0);
-        fillscreen_hits + windowed_hits
+        let multi_op_hits = self.hot_bb.as_ref().map(|b| b.hits).unwrap_or(0);
+        fillscreen_hits + windowed_hits + multi_op_hits
     }
 
     /// Build the `fillScreen` body block. See module-level docs for the
