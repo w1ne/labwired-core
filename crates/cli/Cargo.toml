@@ -35,3 +35,10 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 vcd = "0.7"
 ureq = { workspace = true }
+
+[features]
+default = []
+# Phase 3.2 JIT pilot (issue #124) — pass-through to labwired-core's `jit`
+# feature. Build with `cargo build --release -p labwired-cli --features
+# jit-core` to enable wasmtime-backed JIT for the fillScreen body block.
+jit-core = ["labwired-core/jit"]
