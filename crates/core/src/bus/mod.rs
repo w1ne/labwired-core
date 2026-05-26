@@ -1807,6 +1807,37 @@ impl crate::Bus for SystemBus {
         Ok(())
     }
 
+    /// Fast-path fetch slice for the CPU instruction-fetch cache
+    /// (#119 Phase 1.2). Returns `Some((base, end, slice))` when `pc`
+    /// lands inside a `RamPeripheral` we can serve directly; falls
+    /// through to `None` (slow path) for any other peripheral kind or
+    /// unmapped addresses.
+    ///
+    /// The returned slice borrows the peripheral's backing buffer for
+    /// the duration of the call. The CPU stashes a raw pointer derived
+    /// from it; the `RamPeripheral` INVARIANT (no resize) keeps that
+    /// pointer valid until the peripheral is dropped, but the CPU MUST
+    /// invalidate the cache on any bus write into the cached range
+    /// and on snapshot restore. Reads from non-RAM peripherals (e.g.
+    /// `RomThunkBank`, GPIO, declarative peripherals) keep going
+    /// through the slow path so side effects fire as before.
+    fn fetch_slice(&self, pc: u64) -> Option<(u64, u64, &[u8])> {
+        let idx = self.find_peripheral_index(pc)?;
+        let entry = self.peripherals.get(idx)?;
+        let any = entry.dev.as_any()?;
+        let ram = any.downcast_ref::<crate::system::xtensa::RamPeripheral>()?;
+        let (ptr, len) = ram.backing_ptr_len();
+        // SAFETY: `RamPeripheral`'s backing `Vec` is fixed-size at
+        // construction (see struct-level INVARIANT in
+        // `system::xtensa::RamPeripheral`). The `&self` borrow on the
+        // bus keeps the peripheral entry alive for the duration of
+        // this borrow. We're only producing a read-only `&[u8]` from
+        // a `*const u8`; no concurrent `borrow_mut` is in flight
+        // because reads don't mutate.
+        let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
+        Some((entry.base, entry.base.saturating_add(entry.size), slice))
+    }
+
     fn execute_dma(&mut self, requests: &[crate::DmaRequest]) -> SimResult<()> {
         for req in requests {
             match req.direction {
