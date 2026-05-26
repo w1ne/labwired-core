@@ -859,18 +859,46 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
 }
 
-// ── RamPeripheral helper (private) ───────────────────────────────────────
+// ── RamPeripheral helper ────────────────────────────────────────────────
 
-/// Flat-array `Peripheral` used for IRAM + DRAM mappings.
-struct RamPeripheral {
+/// Flat-array `Peripheral` used for IRAM + DRAM + flash XIP mappings.
+///
+/// Pub so `SystemBus::fetch_slice` can downcast and hand the CPU a raw
+/// pointer into the backing buffer for the IRAM/flash fetch-cache fast
+/// path (#119 Phase 1.2). The `data` field stays private; access is via
+/// [`backing_ptr_len`] which returns a raw `(*const u8, usize)` pair.
+///
+/// INVARIANT: `data` is allocated once in [`new`] and never re-sized
+/// (no `push`, `extend`, `resize`, `clear`). All read/write paths index
+/// in-place via slice access, and `restore_runtime_snapshot` requires
+/// the new bytes match the existing length. This stability is what makes
+/// it safe to hand a raw `*const u8` to the CPU and re-use it across
+/// many `step()` calls.
+pub struct RamPeripheral {
     data: std::cell::RefCell<Vec<u8>>,
 }
 
 impl RamPeripheral {
-    fn new(size: usize) -> Self {
+    pub fn new(size: usize) -> Self {
         Self {
             data: std::cell::RefCell::new(vec![0u8; size]),
         }
+    }
+
+    /// Return a raw pointer + length to the backing buffer for the
+    /// fetch-cache fast path. The pointer is stable for the lifetime
+    /// of `self` because [`Self::new`] is the only allocation site and
+    /// no path resizes the `Vec` (see struct-level INVARIANT).
+    ///
+    /// Reading through this pointer is safe iff no concurrent
+    /// `borrow_mut()` is live AND `self` is not moved/dropped while
+    /// the pointer is in use. The fetch-cache holds the pointer only
+    /// across read-only `step()` calls; any bus write that lands in
+    /// the cached range MUST invalidate the cache first so we never
+    /// race a fetch against a `borrow_mut()`.
+    pub fn backing_ptr_len(&self) -> (*const u8, usize) {
+        let d = self.data.borrow();
+        (d.as_ptr(), d.len())
     }
 }
 
@@ -952,6 +980,12 @@ impl crate::Peripheral for RamPeripheral {
         d.copy_from_slice(bytes);
         Ok(())
     }
+
+    /// Expose `&dyn Any` so `SystemBus::fetch_slice` can downcast and
+    /// reach `backing_ptr_len` without a virtual-call detour.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
 }
 
 #[cfg(test)]
@@ -982,6 +1016,39 @@ mod tests {
         let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
         bus.write_u8(0x4037_0010, 0xAB).unwrap();
         assert_eq!(bus.read_u8(0x4037_0010).unwrap(), 0xAB);
+    }
+
+    /// Phase 1.2: `fetch_slice` MUST hand back a `&[u8]` that aliases
+    /// the RAM peripheral's backing store, observe writes that go
+    /// through the bus, and only cover RAM-backed regions.
+    #[test]
+    fn fetch_slice_aliases_iram_and_skips_non_ram() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+
+        // IRAM range 0x4037_0000 + 0x40000. fetch_slice should cover
+        // the whole region (~256 KiB) and observe a fresh byte write.
+        let pc = 0x4037_0010u64;
+        bus.write_u8(pc, 0x37).unwrap();
+        let (start, end, slice) = bus.fetch_slice(pc).expect("IRAM fetch_slice");
+        assert!(start <= pc && pc < end, "pc must lie in returned range");
+        let off = (pc - start) as usize;
+        assert_eq!(slice[off], 0x37, "slice must mirror current RAM byte");
+
+        // Writes propagate without invalidating the slice itself —
+        // the consumer is responsible for invalidating its cached
+        // pointer when a write lands in-range. We just need to see
+        // the new value through the same slice (vec is in place).
+        bus.write_u8(pc, 0xA5).unwrap();
+        let (start, _, slice) = bus.fetch_slice(pc).unwrap();
+        assert_eq!(slice[(pc - start) as usize], 0xA5);
+
+        // GPIO at 0x6000_4000 is not a RamPeripheral — slow path
+        // must stay active there.
+        assert!(
+            bus.fetch_slice(0x6000_4000).is_none(),
+            "GPIO must not serve fetch_slice"
+        );
     }
 
     #[test]

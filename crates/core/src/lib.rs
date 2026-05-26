@@ -442,6 +442,22 @@ pub trait Bus {
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
     }
+
+    /// Optional fast-path for instruction fetch: return a contiguous
+    /// `&[u8]` covering `pc`, plus the absolute `[range_start, range_end)`
+    /// it serves. The CPU caches this slice on the side and reads
+    /// instructions directly out of it without round-tripping the bus
+    /// dispatcher, peripheral lookup, or `RefCell` borrow.
+    ///
+    /// Default returns `None`; buses that can serve linear memory
+    /// (e.g. `SystemBus` when `pc` lands in a `RamPeripheral`) should
+    /// return `Some`. Callers MUST treat the slice as read-only and
+    /// invalidate their cached pointer on any bus write that may touch
+    /// the same range and on snapshot restore. See labwired-core#119
+    /// (JIT roadmap Phase 1.2).
+    fn fetch_slice(&self, _pc: u64) -> Option<(u64, u64, &[u8])> {
+        None
+    }
 }
 
 use std::collections::HashSet;

@@ -104,6 +104,33 @@ pub struct XtensaLx7 {
     /// app-cpu boot address (mirrors real silicon's reset-hold). Default
     /// false; ESP32 dual-core setup sets it on cpu_secondary at boot.
     pub halted: bool,
+    /// IRAM/flash instruction-fetch slice cache (#119 Phase 1.2).
+    ///
+    /// `Some((range_start, range_end, ptr))` when the previous fetch
+    /// landed in a `RamPeripheral` (IRAM, DRAM, flash_icache, …). The
+    /// CPU reads bytes for length predecode + body decode directly off
+    /// `ptr`, bypassing `Bus::read_u8/u16/u32` and avoiding the
+    /// peripheral lookup + `RefCell::borrow()` per fetch. `range_end`
+    /// is exclusive.
+    ///
+    /// SAFETY: `ptr` aliases the `RamPeripheral`'s backing `Vec` buffer.
+    /// That buffer is fixed-size at construction (see
+    /// `system::xtensa::RamPeripheral` INVARIANT) and the peripheral is
+    /// kept alive by the bus for the simulation's lifetime, so the
+    /// pointer stays valid. The cache MUST be invalidated to `None`
+    /// whenever:
+    ///   * a bus write may touch the cached range (writes go through
+    ///     `XtensaLx7::store_write_*` helpers which invalidate when EA
+    ///     falls inside `(start..end)`),
+    ///   * a runtime snapshot is restored (memory may be repopulated
+    ///     wholesale),
+    ///   * an IRQ is dispatched (PC jumps far away anyway; a cache
+    ///     miss would refill on the next fetch but invalidating up
+    ///     front keeps the staleness window zero).
+    ///
+    /// Pointer stored as `usize` so `XtensaLx7: Send` (required by the
+    /// `Cpu` trait) still holds without unsafe `Send` impls.
+    fetch_cache: Option<(u64, u64, usize)>,
 }
 
 impl XtensaLx7 {
@@ -118,6 +145,29 @@ impl XtensaLx7 {
             pc: 0x4000_0400,
             branched: false,
             halted: false,
+            fetch_cache: None,
+        }
+    }
+
+    /// Drop the IRAM/flash fetch slice cache. Call when the cached
+    /// peripheral's contents may have changed (bus write into the
+    /// cached range, runtime snapshot restore, IRQ dispatch).
+    #[inline]
+    fn invalidate_fetch_cache(&mut self) {
+        self.fetch_cache = None;
+    }
+
+    /// Invalidate the fetch cache iff `addr` (the start byte of an
+    /// in-flight bus write) falls inside the cached range. Conservative:
+    /// we don't try to be clever about write size — any write into the
+    /// cached PC range drops the cache.
+    #[inline]
+    fn maybe_invalidate_for_write(&mut self, addr: u32) {
+        if let Some((start, end, _)) = self.fetch_cache {
+            let a = addr as u64;
+            if a >= start && a < end {
+                self.fetch_cache = None;
+            }
         }
     }
 
@@ -618,8 +668,9 @@ impl XtensaLx7 {
             // S8I at, as_, imm: EA = as_ + imm; mem8[EA] = at[0:7].
             // imm is the raw byte offset (0..=255); no alignment requirement.
             S8i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                bus.write_u8(ea, (self.regs.read_logical(at) & 0xFF) as u8)?;
+                let ea = self.regs.read_logical(as_).wrapping_add(imm);
+                self.maybe_invalidate_for_write(ea);
+                bus.write_u8(ea as u64, (self.regs.read_logical(at) & 0xFF) as u8)?;
                 self.pc = self.pc.wrapping_add(len);
             }
 
@@ -627,8 +678,9 @@ impl XtensaLx7 {
             // Decoder pre-shifts imm by 1. Requires 2-byte alignment;
             // alignment check deferred to Phase G.
             S16i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                bus.write_u16(ea, (self.regs.read_logical(at) & 0xFFFF) as u16)?;
+                let ea = self.regs.read_logical(as_).wrapping_add(imm);
+                self.maybe_invalidate_for_write(ea);
+                bus.write_u16(ea as u64, (self.regs.read_logical(at) & 0xFFFF) as u16)?;
                 self.pc = self.pc.wrapping_add(len);
             }
 
@@ -636,8 +688,9 @@ impl XtensaLx7 {
             // Decoder pre-shifts imm by 2. Requires 4-byte alignment;
             // alignment check deferred to Phase G.
             S32i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                bus.write_u32(ea, self.regs.read_logical(at))?;
+                let ea = self.regs.read_logical(as_).wrapping_add(imm);
+                self.maybe_invalidate_for_write(ea);
+                bus.write_u32(ea as u64, self.regs.read_logical(at))?;
                 self.pc = self.pc.wrapping_add(len);
             }
 
@@ -1262,11 +1315,12 @@ impl XtensaLx7 {
             // For Plan 1 RAM there are no bus read/write side effects, so the order
             // only matters semantically. SCOMPARE1 is read via the SR dispatcher.
             S32c1i { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                let mem32 = bus.read_u32(ea)?;
+                let ea = self.regs.read_logical(as_).wrapping_add(imm);
+                let mem32 = bus.read_u32(ea as u64)?;
                 let scompare = self.sr.read(SCOMPARE1);
                 if mem32 == scompare {
-                    bus.write_u32(ea, self.regs.read_logical(at))?;
+                    self.maybe_invalidate_for_write(ea);
+                    bus.write_u32(ea as u64, self.regs.read_logical(at))?;
                 }
                 self.regs.write_logical(at, mem32);
                 self.pc = self.pc.wrapping_add(len);
@@ -1290,8 +1344,9 @@ impl XtensaLx7 {
             // The release barrier is a no-op; SMP ordering is deferred to Plan 4.
             // EA = as_ + imm  (decoder pre-shifts imm by 2).
             S32ri { at, as_, imm } => {
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                bus.write_u32(ea, self.regs.read_logical(at))?;
+                let ea = self.regs.read_logical(as_).wrapping_add(imm);
+                self.maybe_invalidate_for_write(ea);
+                bus.write_u32(ea as u64, self.regs.read_logical(at))?;
                 self.pc = self.pc.wrapping_add(len);
             }
 
@@ -1319,8 +1374,9 @@ impl XtensaLx7 {
                 if !self.ps.excm() && self.ps.ring() != 0 {
                     return self.raise_general_exception(0);
                 }
-                let ea = self.regs.read_logical(as_).wrapping_add(imm) as u64;
-                bus.write_u32(ea, self.regs.read_logical(at))?;
+                let ea = self.regs.read_logical(as_).wrapping_add(imm);
+                self.maybe_invalidate_for_write(ea);
+                bus.write_u32(ea as u64, self.regs.read_logical(at))?;
                 self.pc = self.pc.wrapping_add(len);
             }
 
@@ -1681,6 +1737,11 @@ impl XtensaLx7 {
     /// Returns `Ok(())` — unlike `raise_general_exception`, interrupt dispatch
     /// is not an error; the CPU simply redirects to the ISR vector.
     fn dispatch_irq(&mut self, level: u8, bus: &mut dyn Bus) -> SimResult<()> {
+        // PC is about to jump into a vector — drop the IRAM/flash
+        // fetch cache so the first fetch in the handler re-resolves
+        // through the bus (and re-populates the cache for the new
+        // region). #119 Phase 1.2.
+        self.invalidate_fetch_cache();
         let entry_pc = self.pc;
         let vecbase = self.sr.read(VECBASE);
         let vector_offset = IRQ_VECTOR_OFFSETS[level.min(7) as usize];
@@ -1853,8 +1914,68 @@ impl Cpu for XtensaLx7 {
         }
 
         let pc = self.pc;
-        let b0 = bus.read_u8(pc as u64)?;
-        let len = xtensa_length::instruction_length(b0);
+
+        // Fast path: serve the fetch out of the cached IRAM/flash slice
+        // pointer if PC still falls inside the cached peripheral AND we
+        // have enough bytes for the worst-case 4-byte body read. This
+        // dodges the bus dispatcher (peripheral lookup + virtual
+        // `read_u32` + `RefCell::borrow`) entirely for hot loops
+        // (#119 Phase 1.2).
+        let pc_u64 = pc as u64;
+        let cache_hit = match self.fetch_cache {
+            Some((start, end, ptr_addr)) if pc_u64 >= start && pc_u64 + 4 <= end => {
+                Some((start, ptr_addr))
+            }
+            _ => None,
+        };
+
+        let (b0, len, ins) = if let Some((start, ptr_addr)) = cache_hit {
+            // SAFETY: cache was populated by `Bus::fetch_slice`, which
+            // returns a pointer into a `RamPeripheral` backing buffer.
+            // The buffer is fixed-size for the peripheral's lifetime
+            // (see `system::xtensa::RamPeripheral` INVARIANT) and the
+            // CPU invalidates the cache on any bus write that lands in
+            // the cached range, on IRQ dispatch, and on snapshot
+            // restore. We've already bounds-checked `pc + 4 <= end`.
+            let off = (pc_u64 - start) as usize;
+            unsafe {
+                let p = (ptr_addr as *const u8).add(off);
+                let b0 = *p;
+                let len = xtensa_length::instruction_length(b0);
+                let ins = if len == 2 {
+                    let hw = u16::from_le_bytes([*p, *p.add(1)]);
+                    xtensa_narrow::decode_narrow(hw)
+                } else {
+                    let w = u32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]);
+                    xtensa::decode(w)
+                };
+                (b0, len, ins)
+            }
+        } else {
+            // Slow path: ask the bus, then try to populate the cache
+            // for next time. Non-RAM peripherals (RomThunkBank, GPIO,
+            // declarative regs, …) keep returning `None` from
+            // `fetch_slice` and stay on the slow path forever — that's
+            // intentional: side-effect-bearing reads must run through
+            // the bus.
+            let b0 = bus.read_u8(pc_u64)?;
+            let len = xtensa_length::instruction_length(b0);
+            let ins = if len == 2 {
+                let hw = bus.read_u16(pc_u64)?;
+                xtensa_narrow::decode_narrow(hw)
+            } else {
+                let w = bus.read_u32(pc_u64)?;
+                xtensa::decode(w)
+            };
+            if self.fetch_cache.is_none() {
+                if let Some((start, end, slice)) = bus.fetch_slice(pc_u64) {
+                    // Stash pointer-as-usize; see `fetch_cache` doc for
+                    // the Send + lifetime story.
+                    self.fetch_cache = Some((start, end, slice.as_ptr() as usize));
+                }
+            }
+            (b0, len, ins)
+        };
 
         // S32E/L32E are 3-byte wide instructions with op0=0 (QRST), op1=9
         // (LSC4), op2=4/0 — decoded by the standard wide path and dispatched
@@ -1866,13 +1987,7 @@ impl Cpu for XtensaLx7 {
         // test inputs but rejected real esp-hal firmware. See Plan 3 Task 10
         // case study.)
 
-        let ins = if len == 2 {
-            let hw = bus.read_u16(pc as u64)?;
-            xtensa_narrow::decode_narrow(hw)
-        } else {
-            let w = bus.read_u32(pc as u64)?;
-            xtensa::decode(w)
-        };
+        let _ = b0; // retained for documentation parity with the slow path
         self.branched = false;
         let fall_through_pc = pc.wrapping_add(len);
         self.execute(ins, bus, len)?;
@@ -1897,6 +2012,13 @@ impl Cpu for XtensaLx7 {
     }
 
     fn set_pc(&mut self, val: u32) {
+        // External PC override (debug GDB jump, test harness, halt-state
+        // reset): conservatively drop the fetch cache so we don't read
+        // stale bytes if the new PC lives outside the previously cached
+        // range. The PC range check would catch that anyway on the next
+        // step, but doing it here means the cached pointer never points
+        // past a peripheral that was simultaneously freed.
+        self.invalidate_fetch_cache();
         self.pc = val;
     }
 
@@ -1944,6 +2066,10 @@ impl Cpu for XtensaLx7 {
 
     fn apply_snapshot(&mut self, snapshot: &CpuSnapshot) {
         if let CpuSnapshot::XtensaLx7(s) = snapshot {
+            // Memory may be wholesale-replaced underneath us by the
+            // surrounding restore path — drop the fetch cache so the
+            // next step re-resolves through the bus. #119 Phase 1.2.
+            self.invalidate_fetch_cache();
             self.pc = s.pc;
             self.ps = Ps::from_raw(s.ps);
             self.regs.set_windowbase(s.window_base);
@@ -1999,6 +2125,10 @@ impl Cpu for XtensaLx7 {
                 "XtensaLx7 snapshot shadow must be 16 slots".into(),
             ));
         }
+        // Runtime snapshot may swap memory contents underneath us;
+        // drop the fetch cache so the next step re-resolves. #119
+        // Phase 1.2.
+        self.invalidate_fetch_cache();
         self.pc = snap.pc;
         self.ps = Ps::from_raw(snap.ps_raw);
         // Restore order: phys + WB/WS BEFORE shadow stacks so anything that
