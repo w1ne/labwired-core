@@ -104,6 +104,12 @@ pub struct XtensaLx7 {
     /// app-cpu boot address (mirrors real silicon's reset-hold). Default
     /// false; ESP32 dual-core setup sets it on cpu_secondary at boot.
     pub halted: bool,
+    /// JIT cache (Phase 3.2 pilot — issue #124). Lazily initialised; only
+    /// holds compiled blocks when the `jit` feature is enabled. The
+    /// `Option` lets us avoid eagerly constructing a wasmtime `Engine` on
+    /// every CPU instantiation; the cache is created on first JIT lookup.
+    #[cfg(feature = "jit")]
+    pub jit: Option<Box<crate::cpu::xtensa_jit::JitCache>>,
 }
 
 impl XtensaLx7 {
@@ -118,6 +124,8 @@ impl XtensaLx7 {
             pc: 0x4000_0400,
             branched: false,
             halted: false,
+            #[cfg(feature = "jit")]
+            jit: None,
         }
     }
 
@@ -129,6 +137,92 @@ impl XtensaLx7 {
         cpu.sr = XtensaSrFile::new_app_cpu();
         cpu.halted = true;
         cpu
+    }
+
+    /// Phase 3.2 pilot (issue #124): attempt to dispatch the current PC to
+    /// a JIT-compiled block. Returns `Ok(Some(instr_count))` if the JIT
+    /// handled the step (with PC, registers, and CCOUNT already updated),
+    /// `Ok(None)` if the PC isn't JIT-compilable and the caller should
+    /// proceed with the interpreter, or `Err` if the JIT entered a state
+    /// that should propagate as a sim error.
+    ///
+    /// The caller has already bumped CCOUNT by 1 for this step (see the
+    /// pre-fetch block in `step`). When the JIT executes N>1 instructions
+    /// we add the remaining `N - 1` cycles here to keep CCOUNT honest.
+    #[cfg(feature = "jit")]
+    fn try_jit_step(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
+        use crate::cpu::xtensa_jit::{
+            JitCache, FILL_SCREEN_BLOCK_END, FILL_SCREEN_BLOCK_INSTR_COUNT, FILL_SCREEN_BLOCK_PC,
+        };
+        let pc = self.pc;
+        // Hot guard: cheap exact-PC check before we even touch the cache.
+        // Avoids paying the Option<Box> deref + HashMap lookup on every
+        // single interpreter step.
+        if pc != FILL_SCREEN_BLOCK_PC {
+            return Ok(None);
+        }
+        // Lazy-init the cache the first time we see a JIT-able PC.
+        if self.jit.is_none() {
+            self.jit = Some(Box::new(JitCache::new()));
+        }
+        let cache = self.jit.as_mut().expect("jit cache init above");
+        let block = match cache.lookup_or_install(pc) {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+
+        // Marshal register state. The fillScreen block uses a2/a3/a8/a9/a10
+        // and writes back a2/a3/a11 plus zero–two bytes of memory.
+        let a2 = self.regs.read_logical(2);
+        let a3 = self.regs.read_logical(3);
+        let a8 = self.regs.read_logical(8);
+        let a9 = self.regs.read_logical(9);
+        let a10 = self.regs.read_logical(10);
+
+        let (exit, a2_n, a3_n, a11_n, pending) = block
+            .run(a8, a9, a2, a3, a10)
+            .map_err(|e| SimulationError::NotImplemented(format!("xtensa JIT call: {e:#}")))?;
+
+        match exit {
+            0 | 1 => {
+                // Fall-through OR branch-taken: commit stores, write back regs.
+                for (addr, val) in pending {
+                    bus.write_u8(addr as u64, val)?;
+                }
+                self.regs.write_logical(2, a2_n);
+                self.regs.write_logical(3, a3_n);
+                self.regs.write_logical(11, a11_n);
+                self.pc = if exit == 0 {
+                    FILL_SCREEN_BLOCK_END
+                } else {
+                    FILL_SCREEN_BLOCK_PC
+                };
+                // We executed `FILL_SCREEN_BLOCK_INSTR_COUNT` Xtensa
+                // instructions; the outer `step` already counted one, so
+                // bump CCOUNT by the remainder. The CCOMPARE0 edge check
+                // re-runs implicitly via the same logic the next time
+                // `step` is entered (we don't repeat the check here —
+                // CCOUNT advancing across a compare value will fire the
+                // timer interrupt on the very next outer step's pre-fetch).
+                if FILL_SCREEN_BLOCK_INSTR_COUNT > 1 {
+                    use crate::cpu::xtensa_sr::CCOUNT;
+                    let cc = self.sr.read(CCOUNT);
+                    self.sr
+                        .write(CCOUNT, cc.wrapping_add(FILL_SCREEN_BLOCK_INSTR_COUNT - 1));
+                }
+                self.branched = exit == 1;
+                Ok(Some(FILL_SCREEN_BLOCK_INSTR_COUNT))
+            }
+            3 => {
+                // Out-of-range bus address: leave state untouched and let
+                // the interpreter retry the block from the top so the real
+                // bus error surfaces with full fidelity.
+                Ok(None)
+            }
+            other => Err(SimulationError::NotImplemented(format!(
+                "xtensa JIT returned unknown side-exit code {other}"
+            ))),
+        }
     }
 
     /// Read an SR by ID, with special routing for PS / WINDOWBASE / WINDOWSTART
@@ -1852,6 +1946,18 @@ impl Cpu for XtensaLx7 {
             }
         }
 
+        // ── Phase 3.2 JIT fast-path (issue #124) ──────────────────────────────
+        // If the JIT cache holds a compiled block at this PC, run it in lieu
+        // of the per-instruction fetch/decode/execute. The compiled block
+        // covers one full pass of the basic block; control returns here with
+        // an exit code that says where to continue.
+        #[cfg(feature = "jit")]
+        {
+            if let Some(_n) = self.try_jit_step(bus)? {
+                return Ok(());
+            }
+        }
+
         let pc = self.pc;
         let b0 = bus.read_u8(pc as u64)?;
         let len = xtensa_length::instruction_length(b0);
@@ -2037,5 +2143,10 @@ impl Cpu for XtensaLx7 {
             }
         }
         None
+    }
+
+    #[cfg(feature = "jit")]
+    fn jit_hit_count(&self) -> u64 {
+        self.jit.as_ref().map(|c| c.total_hits()).unwrap_or(0)
     }
 }

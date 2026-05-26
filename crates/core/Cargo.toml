@@ -29,6 +29,10 @@ serde_yaml.workspace = true
 memmap2.workspace = true
 pio.workspace = true
 pio-parser.workspace = true
+# Optional: wasmtime is only pulled in when the `jit` feature is enabled.
+# The browser crate (`labwired-wasm`) does NOT enable this feature, so
+# JS/wasm builds keep their lean dependency tree.
+wasmtime = { version = "45", optional = true, default-features = false, features = ["cranelift", "runtime", "std", "wat"] }
 
 [features]
 default = []
@@ -36,6 +40,10 @@ default = []
 # crates. Requires the +esp toolchain. Off by default so the standard
 # workspace `cargo test` does not need the ESP toolchain installed.
 esp32s3-fixtures = []
+# Phase 3.2 pilot (issue #124): JIT-compile hot Xtensa basic blocks to wasm,
+# run via wasmtime native, side-exit on branch. Off by default — the wasm
+# build target and the standard test suite both run on the interpreter.
+jit = ["dep:wasmtime"]
 
 [dev-dependencies]
 labwired-loader = { path = "../loader" }
