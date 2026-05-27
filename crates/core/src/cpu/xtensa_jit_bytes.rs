@@ -39,8 +39,7 @@ pub const EXIT_HOST_BUS_ERROR: i32 = 5;
 /// Hot-block wasm module bytes, pre-compiled at crate build time. Backends
 /// instantiate via either `wasmtime::Module::new` (native) or
 /// `js_sys::WebAssembly::Module::new` (browser) with these exact bytes.
-pub const HOT_BB_WASM: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/xtensa_jit_hot_bb.wasm"));
+pub const HOT_BB_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/xtensa_jit_hot_bb.wasm"));
 
 #[cfg(test)]
 mod tests {
@@ -51,7 +50,11 @@ mod tests {
     /// or otherwise malformed.
     #[test]
     fn baked_wasm_has_magic_header() {
-        assert!(HOT_BB_WASM.len() > 32, "hot_bb.wasm suspiciously small: {} bytes", HOT_BB_WASM.len());
+        assert!(
+            HOT_BB_WASM.len() > 32,
+            "hot_bb.wasm suspiciously small: {} bytes",
+            HOT_BB_WASM.len()
+        );
         // \0asm magic
         assert_eq!(&HOT_BB_WASM[0..4], b"\0asm");
         // wasm version 1
@@ -63,8 +66,10 @@ mod tests {
     #[cfg(feature = "jit")]
     #[test]
     fn constants_agree_with_jit_module() {
-        use crate::cpu::xtensa_jit::{HOT_BB_END as JIT_END, HOT_BB_INSTR_COUNT as JIT_N,
-            HOT_BB_L32R_ADDR as JIT_L32R, HOT_BB_PC as JIT_PC};
+        use crate::cpu::xtensa_jit::{
+            HOT_BB_END as JIT_END, HOT_BB_INSTR_COUNT as JIT_N, HOT_BB_L32R_ADDR as JIT_L32R,
+            HOT_BB_PC as JIT_PC,
+        };
         assert_eq!(HOT_BB_PC, JIT_PC);
         assert_eq!(HOT_BB_END, JIT_END);
         assert_eq!(HOT_BB_INSTR_COUNT, JIT_N);

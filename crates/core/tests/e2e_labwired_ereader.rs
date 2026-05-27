@@ -84,18 +84,7 @@ fn labwired_ereader_runs_to_panel_paint() {
     //       ereader ELF and installs only the thunks for symbols
     //       actually present — silently skips missing ones. Identical
     //       in spirit to the wasm playground's install_arduino_esp32_quirks.
-    let mut symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
-    // Symbols that aren't in the loader's KNOWN list but we need for
-    // this firmware. Resolved directly so we don't have to round-trip
-    // through the loader for one-off additions.
-    for sym in &[
-        "_ZN14HardwareSerial5beginEmjaabmh",
-        "_get_effective_baudrate",
-    ] {
-        if let Some(addr) = labwired_loader::resolve_symbol_in_elf(&elf_bytes, sym) {
-            symbol_addrs.insert(*sym, addr);
-        }
-    }
+    let symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
     eprintln!(
         "[ereader-sim] resolved {} Arduino-ESP32 thunk symbols from ELF",
         symbol_addrs.len()

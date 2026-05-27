@@ -25,13 +25,10 @@ fn main() {
     println!("cargo:rerun-if-changed={WAT_SRC}");
     println!("cargo:rerun-if-changed=build.rs");
 
-    let wat_text = fs::read_to_string(WAT_SRC)
-        .unwrap_or_else(|e| panic!("read {WAT_SRC}: {e}"));
-    let bytes = wat::parse_str(&wat_text)
-        .unwrap_or_else(|e| panic!("parse {WAT_SRC} as WAT: {e}"));
+    let wat_text = fs::read_to_string(WAT_SRC).unwrap_or_else(|e| panic!("read {WAT_SRC}: {e}"));
+    let bytes = wat::parse_str(&wat_text).unwrap_or_else(|e| panic!("parse {WAT_SRC} as WAT: {e}"));
 
     let out_dir = env::var_os("OUT_DIR").expect("OUT_DIR must be set by cargo");
     let dest = PathBuf::from(out_dir).join("xtensa_jit_hot_bb.wasm");
-    fs::write(&dest, &bytes)
-        .unwrap_or_else(|e| panic!("write {}: {e}", dest.display()));
+    fs::write(&dest, &bytes).unwrap_or_else(|e| panic!("write {}: {e}", dest.display()));
 }

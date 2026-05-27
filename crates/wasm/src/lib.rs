@@ -2144,7 +2144,10 @@ impl WasmSimulator {
     /// hit because PC never reached the block".
     #[wasm_bindgen]
     pub fn jit_refusals(&self) -> u64 {
-        self.jit_browser_cache.as_ref().map(|c| c.refusals).unwrap_or(0)
+        self.jit_browser_cache
+            .as_ref()
+            .map(|c| c.refusals)
+            .unwrap_or(0)
     }
 
     /// Bench runner: execute `cycles` `step_with_esp32_aids` iterations
@@ -2241,8 +2244,7 @@ impl WasmSimulator {
             if self.jit_browser_enabled {
                 let machine = self.machine.as_mut().unwrap();
                 if self.jit_browser_cache.is_none() {
-                    self.jit_browser_cache =
-                        Some(Box::new(jit_browser::BrowserJitCache::new()));
+                    self.jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));
                 }
                 let cache = self.jit_browser_cache.as_mut().unwrap();
                 if let Some(any) = machine.cpu.as_any_mut() {

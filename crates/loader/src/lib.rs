@@ -135,6 +135,16 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         "_ZN14HardwareSerial5flushEv",
         "_ZN14HardwareSerial9readBytesEPcj",
         "_ZN14HardwareSerial9readBytesEPhj",
+        // HardwareSerial::begin(unsigned long, unsigned int, signed char,
+        // signed char, bool, unsigned long, unsigned char) — Arduino-ESP32's
+        // serial init walks through `_get_effective_baudrate`, which divides
+        // by `getApbFrequency()`. Our sim doesn't drive that register, so
+        // the division is by zero. Skip the whole begin() rather than emulate
+        // the baud calculation; we don't model UART output anyway. The
+        // demangled placeholder above (`HardwareSerial::begin(...)`) never
+        // matched object's mangled symbol name; the mangled form here does.
+        "_ZN14HardwareSerial5beginEmjaabmh",
+        "_get_effective_baudrate",
         "uartAvailable",
         "uartAvailableForWrite",
         "uartWrite",
@@ -164,7 +174,9 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         "_esp_error_check_failed",
         "setCpuFrequencyMhz",
         "esp_ota_get_running_partition", // fake non-null ptr
-        "HardwareSerial::begin(unsigned long, unsigned int, signed char, signed char, bool, unsigned long, unsigned char)",
+        // NB: HardwareSerial::begin lives above as its mangled symbol
+        // (_ZN14HardwareSerial5beginEmjaabmh) since object/goblin return
+        // mangled names from the symbol table.
         "delay",
         // ── Dual-core handshake bytes (in .bss). ────────────────────────────
         // `call_start_cpu0` busy-waits until various handshake bytes
@@ -215,8 +227,8 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         //    All stubbed to no-op or fake-ptr; consumers that don't actually
         //    use the returned data (which is most setup() / loop() code on
         //    the sketch's render path) get to keep running.
-        "__getreent",            // returns a DRAM pointer (zeroed reent struct)
-        "esp_panic_handler",     // we don't want to enter the panic path at all
+        "__getreent",        // returns a DRAM pointer (zeroed reent struct)
+        "esp_panic_handler", // we don't want to enter the panic path at all
         "esp_panic_handler_reconfigure_wdts",
         "xTaskGetCurrentTaskHandle",
         "pthread_key_create",

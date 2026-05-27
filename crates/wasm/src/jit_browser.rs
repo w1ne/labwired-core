@@ -193,7 +193,12 @@ impl BrowserHotBbJit {
     /// returns map to arrays in the WebAssembly JavaScript API. We
     /// pluck five `i32`s back out via `Reflect::get` + `as_f64()` —
     /// JS numbers cleanly hold any i32 round-trip.
-    pub fn run(&mut self, a3: u32, a5: u32, l32r_val: u32) -> Result<BrowserMultiOpResult, JsValue> {
+    pub fn run(
+        &mut self,
+        a3: u32,
+        a5: u32,
+        l32r_val: u32,
+    ) -> Result<BrowserMultiOpResult, JsValue> {
         let result = self.run.call3(
             &JsValue::NULL,
             &JsValue::from_f64(a3 as i32 as f64),
@@ -209,12 +214,7 @@ impl BrowserHotBbJit {
                 arr.length()
             )));
         }
-        let g = |i: u32| -> i32 {
-            arr.get(i)
-                .as_f64()
-                .map(|f| f as i64 as i32)
-                .unwrap_or(0)
-        };
+        let g = |i: u32| -> i32 { arr.get(i).as_f64().map(|f| f as i64 as i32).unwrap_or(0) };
         self.hits += 1;
         Ok(BrowserMultiOpResult {
             exit_code: g(0),
