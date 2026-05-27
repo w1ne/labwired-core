@@ -6,6 +6,7 @@
 
 use crate::SimResult;
 use std::any::Any;
+use std::str::FromStr;
 
 /// Trait implemented by simulated SPI devices (peripherals attached to an SPI bus).
 ///
@@ -41,9 +42,34 @@ pub trait SpiDevice: Send {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpiRegisterLayout {
+    #[default]
+    Stm32,
+    Nrf52Spim,
+}
+
+impl FromStr for SpiRegisterLayout {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let v = value.trim().to_ascii_lowercase();
+        match v.as_str() {
+            "stm32" | "stm32f1" | "stm32v2" => Ok(Self::Stm32),
+            "nrf52" | "nrf52_spim" | "nrf_spim" | "nordic" => Ok(Self::Nrf52Spim),
+            _ => Err(format!(
+                "unsupported SPI register layout '{}'; supported: stm32, nrf52",
+                value
+            )),
+        }
+    }
+}
+
 /// STM32F1 compatible SPI peripheral
 #[derive(Default, serde::Serialize)]
 pub struct Spi {
+    layout: SpiRegisterLayout,
     cr1: u16,
     cr2: u16,
     sr: u16,
@@ -66,6 +92,21 @@ pub struct Spi {
     /// MISO data — RXNE stays clear, DR reads as 0).
     loopback: bool,
 
+    nrf_events_end: u32,
+    nrf_events_stopped: u32,
+    nrf_enable: u32,
+    nrf_psel_sck: u32,
+    nrf_psel_mosi: u32,
+    nrf_psel_miso: u32,
+    nrf_frequency: u32,
+    nrf_config: u32,
+    nrf_rxd_ptr: u32,
+    nrf_rxd_maxcnt: u32,
+    nrf_rxd_amount: u32,
+    nrf_txd_ptr: u32,
+    nrf_txd_maxcnt: u32,
+    nrf_txd_amount: u32,
+
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
 }
@@ -73,6 +114,7 @@ pub struct Spi {
 impl core::fmt::Debug for Spi {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Spi")
+            .field("layout", &self.layout)
             .field("cr1", &self.cr1)
             .field("sr", &self.sr)
             .field("transfer_in_progress", &self.transfer_in_progress)
@@ -84,7 +126,12 @@ impl core::fmt::Debug for Spi {
 
 impl Spi {
     pub fn new() -> Self {
+        Self::new_with_layout(SpiRegisterLayout::Stm32)
+    }
+
+    pub fn new_with_layout(layout: SpiRegisterLayout) -> Self {
         Self {
+            layout,
             // Reset values verified against real STM32L476RG silicon via
             // SWD register dump on a NUCLEO-L476RG:
             //   CR1 = 0x0000  CR2 = 0x0700  SR = 0x0002  DR = 0x0000
@@ -112,6 +159,9 @@ impl Spi {
     }
 
     fn read_reg(&self, offset: u64) -> u16 {
+        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
+            return self.read_nrf_reg(offset) as u16;
+        }
         match offset {
             0x00 => self.cr1,
             0x04 => self.cr2,
@@ -131,6 +181,10 @@ impl Spi {
     }
 
     fn write_reg(&mut self, offset: u64, value: u16) {
+        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
+            self.write_nrf_reg(offset, value as u32);
+            return;
+        }
         match offset {
             0x00 => {
                 self.cr1 = value;
@@ -172,12 +226,64 @@ impl Spi {
             _ => {}
         }
     }
+
+    fn read_nrf_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x104 => self.nrf_events_stopped,
+            0x118 => self.nrf_events_end,
+            0x500 => self.nrf_enable,
+            0x508 => self.nrf_psel_sck,
+            0x50C => self.nrf_psel_mosi,
+            0x510 => self.nrf_psel_miso,
+            0x524 => self.nrf_frequency,
+            0x534 => self.nrf_rxd_ptr,
+            0x538 => self.nrf_rxd_maxcnt,
+            0x53C => self.nrf_rxd_amount,
+            0x544 => self.nrf_txd_ptr,
+            0x548 => self.nrf_txd_maxcnt,
+            0x54C => self.nrf_txd_amount,
+            0x554 => self.nrf_config,
+            _ => 0,
+        }
+    }
+
+    fn write_nrf_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x010 if value != 0 => {
+                self.nrf_events_end = 1;
+                self.nrf_txd_amount = self.nrf_txd_maxcnt;
+                self.nrf_rxd_amount = self.nrf_rxd_maxcnt;
+            }
+            0x014 if value != 0 => {
+                self.nrf_events_stopped = 1;
+            }
+            0x104 => self.nrf_events_stopped = value,
+            0x118 => self.nrf_events_end = value,
+            0x500 => self.nrf_enable = value,
+            0x508 => self.nrf_psel_sck = value,
+            0x50C => self.nrf_psel_mosi = value,
+            0x510 => self.nrf_psel_miso = value,
+            0x524 => self.nrf_frequency = value,
+            0x534 => self.nrf_rxd_ptr = value,
+            0x538 => self.nrf_rxd_maxcnt = value,
+            0x53C => self.nrf_rxd_amount = value,
+            0x544 => self.nrf_txd_ptr = value,
+            0x548 => self.nrf_txd_maxcnt = value,
+            0x54C => self.nrf_txd_amount = value,
+            0x554 => self.nrf_config = value,
+            _ => {}
+        }
+    }
 }
 
 impl crate::Peripheral for Spi {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
+        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
+            let reg_val = self.read_nrf_reg(reg_offset);
+            return Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8);
+        }
         // Widen to u32 before the shift: SPI registers are u16 but byte
         // accesses at offsets 2 and 3 read the upper byte of the next
         // halfword. The CI release profile has overflow checks on, so
@@ -192,6 +298,15 @@ impl crate::Peripheral for Spi {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
+        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
+            let mut reg_val = self.read_nrf_reg(reg_offset);
+            let mask: u32 = 0xFF << (byte_offset * 8);
+            reg_val &= !mask;
+            reg_val |= (value as u32) << (byte_offset * 8);
+            self.write_nrf_reg(reg_offset, reg_val);
+            return Ok(());
+        }
+
         // Same widen-then-shift dance as read() to avoid u16 shift overflow.
         // Writes to bytes 2..3 are naturally discarded because the final
         // `write_reg(reg_offset, reg_val as u16)` truncates back to u16.
@@ -205,6 +320,11 @@ impl crate::Peripheral for Spi {
     }
 
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
+            self.write(offset, (value & 0xFF) as u8)?;
+            self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+            return Ok(());
+        }
         // SPI DR (offset 0x0C) MUST be atomic — a Thumb `strh` from firmware
         // is one bus access, kicking off a single SPI transfer. The default
         // trait impl byte-splits, which would start two transfers back-to-back

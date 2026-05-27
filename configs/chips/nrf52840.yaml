@@ -13,3 +13,21 @@ peripherals:
     size: "4KB"
     config:
       profile: "nrf52"
+  - id: "spi0"
+    type: "spi"
+    base_address: 0x40003000
+    size: "4KB"
+    config:
+      profile: "nrf52"
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "4KB"
+    config:
+      profile: "nrf52"
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x50001000
+    size: "4KB"
+    config:
+      profile: "nrf52"

@@ -13,6 +13,7 @@ If you are new to LabWired, start here:
   [`stm32h563`](boards/stm32h563.md),
   [`stm32l476` (gold reference)](boards/nucleo-l476rg.md),
   [`nrf52840`](boards/nrf52840.md),
+  [`seeed-xiao-nrf52840-sense`](boards/seeed-xiao-nrf52840-sense.md),
   [`rp2040`](boards/rp2040.md),
   [`esp32c3`](boards/esp32c3.md).
   Check here before pointing firmware at a new chip.

@@ -1,0 +1,28 @@
+name: "seeed-xiao-nrf52840-sense"
+chip: "../chips/nrf52840.yaml"
+external_devices: []
+board_io:
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 26
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 30
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 6
+    signal: "output"
+    active_high: false
+  - id: "spi0_bus"
+    kind: "spi_device"
+    peripheral: "spi0"
+    pin: 5
+    signal: "output"
+    active_high: false

@@ -824,7 +824,15 @@ impl SystemBus {
                     }
                     Box::new(i2c)
                 }
-                "spi" | "stm32spi" => Box::new(crate::peripherals::spi::Spi::new()),
+                "spi" | "stm32spi" => {
+                    let layout: crate::peripherals::spi::SpiRegisterLayout =
+                        if p_cfg.r#type.contains("nrf") {
+                            crate::peripherals::spi::SpiRegisterLayout::Nrf52Spim
+                        } else {
+                            Self::parse_profile_or_default(p_cfg, "SPI")?
+                        };
+                    Box::new(crate::peripherals::spi::Spi::new_with_layout(layout))
+                }
                 "pwr" => Box::new(crate::peripherals::pwr::Pwr::new()),
                 "flash" | "flash_iface" => Box::new(crate::peripherals::flash::Flash::new()),
                 "rng" => Box::new(crate::peripherals::rng::Rng::new()),

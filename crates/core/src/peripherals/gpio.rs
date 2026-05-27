@@ -13,6 +13,7 @@ pub enum GpioRegisterLayout {
     #[default]
     Stm32F1,
     Stm32V2,
+    Nrf52,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -23,8 +24,9 @@ impl FromStr for GpioRegisterLayout {
         match v.as_str() {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
+            "nrf52" | "nordic" => Ok(Self::Nrf52),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52",
                 value
             )),
         }
@@ -46,6 +48,8 @@ pub struct GpioPort {
     lckr: u32,    // 0x18: configuration lock register
     afrl: u32,    // 0x20: alternate function low register (STM32v2)
     afrh: u32,    // 0x24: alternate function high register (STM32v2)
+    dir: u32,     // 0x514: direction register (nRF52)
+    pin_cnf: [u32; 32],
 }
 
 impl GpioPort {
@@ -94,6 +98,16 @@ impl GpioPort {
                 0x1C => self.lckr,
                 0x20 => self.afrl,
                 0x24 => self.afrh,
+                _ => 0,
+            },
+            GpioRegisterLayout::Nrf52 => match offset {
+                0x504 => self.odr,
+                0x510 => self.idr,
+                0x514 => self.dir,
+                0x700..=0x77C if offset % 4 == 0 => {
+                    let idx = ((offset - 0x700) / 4) as usize;
+                    self.pin_cnf[idx]
+                }
                 _ => 0,
             },
         }
@@ -146,6 +160,20 @@ impl GpioPort {
                 }
                 _ => {}
             },
+            GpioRegisterLayout::Nrf52 => match offset {
+                0x504 => self.odr = value,
+                0x508 => self.odr |= value,
+                0x50C => self.odr &= !value,
+                0x510 => self.idr = value,
+                0x514 => self.dir = value,
+                0x518 => self.dir |= value,
+                0x51C => self.dir &= !value,
+                0x700..=0x77C if offset % 4 == 0 => {
+                    let idx = ((offset - 0x700) / 4) as usize;
+                    self.pin_cnf[idx] = value;
+                }
+                _ => {}
+            },
         }
     }
 
@@ -154,6 +182,7 @@ impl GpioPort {
         match self.layout {
             GpioRegisterLayout::Stm32F1 => 0x10,
             GpioRegisterLayout::Stm32V2 => 0x18,
+            GpioRegisterLayout::Nrf52 => 0x508,
         }
     }
 
@@ -162,6 +191,7 @@ impl GpioPort {
         match self.layout {
             GpioRegisterLayout::Stm32F1 => 0x14,
             GpioRegisterLayout::Stm32V2 => 0x28,
+            GpioRegisterLayout::Nrf52 => 0x50C,
         }
     }
 }
