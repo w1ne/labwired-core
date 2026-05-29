@@ -50,6 +50,7 @@
 //!   does, generalising is a Phase 4.1+ follow-up.
 
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
+use labwired_core::cpu::xtensa_jit::emit_core::{self, EmitError, EmittedBlock, PsBits};
 use labwired_core::cpu::xtensa_jit_bytes::{
     EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT, HOT_BB_L32R_ADDR,
     HOT_BB_PC, HOT_BB_WASM,
@@ -233,18 +234,10 @@ impl BrowserHotBbJit {
 /// We keep this thread-local because:
 ///   * The browser sim is single-threaded (wasm32 main thread).
 ///   * `js_sys` types are not `Send`, ruling out global statics.
+#[derive(Default)]
 pub struct BrowserJitCache {
     pub hot_bb: Option<BrowserHotBbJit>,
     pub refusals: u64,
-}
-
-impl Default for BrowserJitCache {
-    fn default() -> Self {
-        Self {
-            hot_bb: None,
-            refusals: 0,
-        }
-    }
 }
 
 impl BrowserJitCache {
@@ -346,6 +339,116 @@ pub fn try_browser_jit_step(
             cache.refusals += 1;
             false
         }
+    }
+}
+
+// ── Phase 4.1 universal install surface (stub) ────────────────────────
+//
+// The path above (`BrowserHotBbJit::compile` / `try_browser_jit_step`)
+// hand-wires the canonical hot block via the pre-baked
+// [`HOT_BB_WASM`] constant. Phase 4.1 introduces a runtime-agnostic
+// emit core in `labwired_core::cpu::xtensa_jit::emit_core`; this stub
+// is the browser-side adapter that Phase 4.2 will flesh out to drive
+// arbitrary blocks through the same surface as the wasmtime path.
+//
+// The native adapter (`bb_multi::MultiOpBlock::build_from_emitted`)
+// already accepts an [`EmittedBlock`] and instantiates it through
+// wasmtime. Phase 4.2 will mirror that here by:
+//   1. Walking the bus from `cpu.pc` via `emit_core::walk_and_emit`.
+//   2. Handing the resulting bytes to `WebAssembly::Module::new` and
+//      installing the host import surface (read_u8 today; load/store
+//      pair + control-flow exits in 4.3/4.4).
+//   3. Caching by `(pc, ps_bits)` per the universal-JIT plan.
+//
+// Today the stub returns `Err(NotYetImplemented)` so callers can
+// already type-check the integration without us pretending the
+// browser runtime is wired.
+
+/// Phase 4.2-and-later install error surface. Mirrors the native
+/// `wasmtime::Error` boundary but stays runtime-agnostic; the browser
+/// path can grow JS-specific variants as Phase 4.2 lands.
+#[allow(
+    dead_code,
+    reason = "Phase 4.1 stub: Phase 4.2 will wire callers (install + cache key)"
+)]
+#[derive(Debug)]
+pub enum BrowserInstallError {
+    /// The emit-core walker refused the PC (unsupported opcode shape,
+    /// PC outside the bus slice, etc).
+    Emit(EmitError),
+    /// Phase 4.2 is not implemented yet. Returned by
+    /// [`BrowserJitCache::install_from_emitted`] so callers can wire
+    /// the integration today and have it light up once Phase 4.2
+    /// replaces this branch with actual `WebAssembly::Module::new`
+    /// instantiation.
+    NotYetImplemented,
+}
+
+impl core::fmt::Display for BrowserInstallError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            BrowserInstallError::Emit(e) => write!(f, "emit_core: {e}"),
+            BrowserInstallError::NotYetImplemented => {
+                f.write_str("browser-side install is not yet implemented (Phase 4.2 stub)")
+            }
+        }
+    }
+}
+
+impl From<EmitError> for BrowserInstallError {
+    fn from(e: EmitError) -> Self {
+        BrowserInstallError::Emit(e)
+    }
+}
+
+impl BrowserJitCache {
+    /// Walk the BB at `pc` via [`emit_core::walk_and_emit`] and (when
+    /// Phase 4.2 lands) instantiate the resulting bytes through
+    /// `js_sys::WebAssembly`. Today this returns
+    /// [`BrowserInstallError::NotYetImplemented`] on the success path
+    /// so callers can already wire the integration end-to-end.
+    ///
+    /// The signature mirrors `bb_multi::MultiOpBlock::build_from_emitted`
+    /// on the native side: both accept the bytes emit-core produced and
+    /// instantiate them via their respective runtime. That's the entire
+    /// emit/runtime decoupling, made explicit in the type system.
+    #[allow(
+        dead_code,
+        reason = "Phase 4.1 stub: Phase 4.2 wires the browser install path"
+    )]
+    pub fn install_from_emitted(
+        &mut self,
+        _emitted: &EmittedBlock,
+    ) -> Result<(), BrowserInstallError> {
+        // Phase 4.2 fills in:
+        //   let buf = Uint8Array::new_with_length(_emitted.wasm_bytes.len() as u32);
+        //   buf.copy_from(&_emitted.wasm_bytes);
+        //   let module = WebAssembly::Module::new(&buf.into())?;
+        //   ... install host imports built from _emitted.side_exit_reasons ...
+        //   let instance = WebAssembly::Instance::new(&module, &imports)?;
+        //   self.hot_bb = Some(BrowserHotBbJit { ... });
+        Err(BrowserInstallError::NotYetImplemented)
+    }
+
+    /// Walk + install for the given PC. Threads through emit_core so
+    /// the API surface is symmetric with the native adapter. Returns
+    /// `Ok(())` once Phase 4.2 wires up the browser runtime; today
+    /// always errors with [`BrowserInstallError::NotYetImplemented`]
+    /// after a successful walk, or [`BrowserInstallError::Emit`] when
+    /// the walker refuses.
+    #[allow(
+        dead_code,
+        reason = "Phase 4.1 stub: Phase 4.2 will drive this from try_browser_jit_step"
+    )]
+    pub fn walk_and_install(
+        &mut self,
+        bus_slice: &[u8],
+        pc: u32,
+        pc_to_offset: impl FnMut(u32) -> Option<usize>,
+        ps_bits: PsBits,
+    ) -> Result<(), BrowserInstallError> {
+        let emitted = emit_core::walk_and_emit(bus_slice, pc, pc_to_offset, ps_bits)?;
+        self.install_from_emitted(&emitted)
     }
 }
 

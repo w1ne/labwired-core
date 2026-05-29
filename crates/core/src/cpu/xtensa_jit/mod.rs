@@ -2,136 +2,128 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Xtensa LX7 JIT pilot — issue #124 Phase 3.2.
+//! Xtensa LX7 JIT pilot — issue #124.
 //!
-//! Compiles a single, hand-picked hot basic block (the inner store loop of
-//! `GxEPD2_290_C90c::fillScreen` at PC `0x400d14b8`) to a WebAssembly module
-//! and runs it through wasmtime in native mode. The pilot proves the
-//! JIT-via-wasm architecture works on a memory-touching block and gives us
-//! an honest per-block call-overhead number to inform Phase 4 scaling.
+//! Owns the JIT pipeline split into:
+//!   * [`emit_core`] — runtime-agnostic BB walker + emit core. Always
+//!     compiled (no wasmtime dep). Both the native and browser
+//!     backends call into it to produce wasm bytes.
+//!   * [`bb_multi`] — wasmtime adapter for the multi-op hot block.
+//!     Feature-gated on `jit` (only built when wasmtime is in the
+//!     dep graph).
+//!   * [`windowed_call`] — wasmtime adapter for the CALL8 windowed
+//!     block. Also `jit`-gated.
 //!
-//! ## Target block disassembly
-//!
-//! Verified against `/tmp/labwired-ereader/build/labwired-ereader.ino.elf`
-//! with the PlatformIO `xtensa-esp32-elf-objdump`:
-//!
-//! ```text
-//! 400d14b8: 00 42 92      s8i    a9, a2, 0     ; mem8[a2 + 0] = a9 & 0xFF
-//! 400d14bb: b2 aa         add.n  a11, a2, a10  ; a11 = a2 + a10
-//! 400d14bd: 00 4b 82      s8i    a8, a11, 0    ; mem8[a11 + 0] = a8 & 0xFF
-//! 400d14c0: 22 1b         addi.n a2, a2, 1
-//! 400d14c2: 33 0b         addi.n a3, a3, -1
-//! 400d14c4: ff 03 56      bnez   a3, 400d14b8  ; loop while a3 != 0
-//! ```
-//!
-//! Block range: `[0x400d14b8, 0x400d14c7)` (15 bytes, 6 instructions).
-//! Reads: a2, a3, a8, a9, a10. Writes: a2, a3, a11, and two bytes of memory.
-//! Terminator: conditional branch back to block start; fall-through is the
-//! `retw.n` at `0x400d14c7`.
+//! The Phase 4.1 refactor pulled the walker + emit allowlist out of
+//! `bb_multi` into [`emit_core`] so the browser-side prototype in
+//! `labwired-wasm` (which can't enable `jit` — wasmtime doesn't compile
+//! for `wasm32-unknown-unknown`) can share the same code.
 //!
 //! ## Side-exit codes (per #124)
 //!
-//! * `0` — natural fall-through; new PC = block end (`0x400d14c7`).
-//! * `1` — branch taken; new PC = block start (`0x400d14b8`). The JIT runs
-//!   one pass through the block in a single wasm call; if the terminating
-//!   `bnez` fires we re-enter via the outer step loop on the next iteration.
-//! * `3` — store address outside the inlined DRAM range; PC reverts to
-//!   block start with **no register/memory mutation** so the interpreter
-//!   can faithfully re-run the block and raise the genuine bus error.
+//! See [`crate::cpu::xtensa_jit_bytes`] and [`emit_core::SideExitReason`]
+//! for the wire-level vocabulary both backends agree on.
 //!
 //! ## Host-side store callback
 //!
-//! Stores are dispatched to a host import (`host.store_u8`) rather than to
-//! a wasm linear memory aliased to host DRAM. Reasoning:
-//!
-//! 1. Linear-memory aliasing across a wasmtime sandbox boundary is
-//!    expensive to set up and breaks abstraction with the `Bus` trait
-//!    (peripherals, traps, observers all live on the host).
-//! 2. The pilot's primary goal is to measure *call overhead*, not to
-//!    optimise byte-store throughput. A host import faithfully exposes the
-//!    same dispatch latency a real per-block JIT would pay for any
-//!    non-trivial memory model.
-//!
-//! Bounds-checking still happens **inside wasm** as the spec requires —
-//! the host import is only invoked once wasm has cleared both stores'
-//! destination addresses against the DRAM range.
+//! Stores / loads are dispatched to host imports rather than to a wasm
+//! linear memory aliased to host DRAM. Reasoning: linear-memory aliasing
+//! across the wasmtime sandbox boundary is expensive to set up and
+//! breaks abstraction with the `Bus` trait (peripherals, traps,
+//! observers all live on the host). The host import is only invoked
+//! once wasm has cleared the store/load address against the inlined
+//! DRAM range.
 
-#![cfg(feature = "jit")]
+// `emit_core` is always compiled — it has no wasmtime dep and is shared
+// with the browser-side JIT in `labwired-wasm`.
+pub mod emit_core;
 
+// Wasmtime-backed adapters live behind the `jit` feature so the browser
+// build doesn't have to drag wasmtime into its dep tree.
+#[cfg(feature = "jit")]
 mod bb_multi;
+#[cfg(feature = "jit")]
 mod windowed_call;
 
+#[cfg(feature = "jit")]
 pub use bb_multi::{
     walk_bb, DecodedOp, MultiOpBlock, MultiOpResult, EXIT_FALL_THROUGH as MULTI_EXIT_FALL_THROUGH,
     EXIT_HOST_BUS_ERROR as MULTI_EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
     HOT_BB_L32R_ADDR, HOT_BB_PC,
 };
+#[cfg(feature = "jit")]
 pub use windowed_call::{
     WindowedCallBlock, WindowedCallResult, EXIT_TAKEN as WINDOWED_EXIT_TAKEN, EXIT_WINDOWED_REFUSE,
     LOOPV_CALL8_INSTR_COUNT, LOOPV_CALL8_NEXT_PC, LOOPV_CALL8_PC, LOOPV_CALL8_TARGET,
 };
 
+#[cfg(feature = "jit")]
 use std::collections::HashMap;
+#[cfg(feature = "jit")]
 use std::sync::Mutex;
 
+#[cfg(feature = "jit")]
 use wasmtime::{Engine, Func, Instance, Module, Store, TypedFunc};
 
-/// PC of the target basic block (see disassembly above).
+// ── Phase 3.2 pilot: hand-crafted fillScreen body block ───────────────
+//
+// Kept for back-compat with `try_jit_step`'s fillScreen branch +
+// existing unit tests. Not exercised by the multi-op JIT path
+// (`HOT_BB_PC` short-circuits first in `xtensa_lx7::try_jit_step`).
+// All of this is `jit`-gated because it pulls in wasmtime directly.
+
+/// PC of the target basic block (see disassembly in `bb_multi`).
+#[cfg(feature = "jit")]
 pub const FILL_SCREEN_BLOCK_PC: u32 = 0x400d14b8;
 /// First PC after the block — fall-through destination.
+#[cfg(feature = "jit")]
 pub const FILL_SCREEN_BLOCK_END: u32 = 0x400d14c7;
 /// Number of Xtensa instructions in the block (used to advance CCOUNT).
+#[cfg(feature = "jit")]
 pub const FILL_SCREEN_BLOCK_INSTR_COUNT: u32 = 6;
 
 /// DRAM bounds inlined into the compiled wasm (must mirror the
 /// `configure_xtensa_esp32` peripheral map: dram = [0x3FFAE000, 0x3FFE0000),
 /// sram1 = [0x3FFE0000, 0x40000000)). We use the union `[0x3FFAE000, 0x40000000)`.
+#[cfg(feature = "jit")]
 const DRAM_LO: u32 = 0x3FFA_E000;
+#[cfg(feature = "jit")]
 const DRAM_HI: u32 = 0x4000_0000;
 
 /// Host-side scratch slot the wasm import drains into. Wrapped in a Mutex so
 /// the closure passed to `Func::wrap` can be `Sync` without us hand-rolling
 /// unsafe pointer aliasing into the wasmtime Store.
-///
-/// Each `run()` call clears this, the wasm guest pushes 0–2 `(addr, val)`
-/// pairs into it via `host.store_u8`, and the caller drains them onto the
-/// bus after wasm returns. We don't dispatch directly from inside the import
-/// because the `Bus` trait object isn't `Send + Sync` and threading it
-/// through wasmtime's host-function ABI would require unsafe self-borrows.
+#[cfg(feature = "jit")]
 type PendingStores = Vec<(u32, u8)>;
 
 /// Wasm function signature for the `fillScreen` block:
 ///   Params:  (a8, a9, a2, a3, a10) — all u32 carried as i32.
 ///   Returns: (exit_code, a2_new, a3_new, a11_new) — all i32.
+#[cfg(feature = "jit")]
 type FillScreenParams = (i32, i32, i32, i32, i32);
+#[cfg(feature = "jit")]
 type FillScreenReturns = (i32, i32, i32, i32);
+#[cfg(feature = "jit")]
 type FillScreenRun = TypedFunc<FillScreenParams, FillScreenReturns>;
 
 /// Outcome of running a compiled block: `(exit_code, new_a2, new_a3,
-/// new_a11, pending_stores)`. See module docs for exit-code semantics.
+/// new_a11, pending_stores)`.
+#[cfg(feature = "jit")]
 type RunResult = (i32, u32, u32, u32, Vec<(u32, u8)>);
 
 /// One compiled block instance.
-///
-/// We hold the `Store`, `Instance`, and the typed `run` function. The block
-/// holds its own per-block scratch buffer (`pending`) so we don't pay the
-/// `Vec` allocation on the hot path.
+#[cfg(feature = "jit")]
 pub struct CompiledBlock {
     store: Store<()>,
-    /// Typed view of the exported `run` function.
     run: FillScreenRun,
-    /// Stores queued by the in-flight wasm call. Drained by `Self::run` after
-    /// `run.call()` returns; the caller copies them onto the live bus.
     pending: std::sync::Arc<Mutex<PendingStores>>,
-    /// Number of times this block has been invoked. Surfaced via
-    /// `JitCache::hit_count` for the pilot benchmark write-up.
     pub hits: u64,
 }
 
+#[cfg(feature = "jit")]
 impl CompiledBlock {
     /// Invoke the compiled block. On success returns
-    /// `(exit_code, a2_new, a3_new, a11_new, pending_stores)`. The caller
-    /// must apply `pending_stores` to the bus iff `exit_code != 3`.
+    /// `(exit_code, a2_new, a3_new, a11_new, pending_stores)`.
     #[inline]
     pub fn run(
         &mut self,
@@ -141,8 +133,6 @@ impl CompiledBlock {
         a3: u32,
         a10: u32,
     ) -> wasmtime::Result<RunResult> {
-        // Clear the scratch buffer. Lock is uncontended on this hot path —
-        // wasm runs synchronously on the same thread.
         self.pending.lock().unwrap().clear();
         let (exit, a2_n, a3_n, a11_n) = self.run.call(
             &mut self.store,
@@ -156,37 +146,31 @@ impl CompiledBlock {
 
 /// Cache of compiled blocks keyed by start PC. Re-uses the shared wasmtime
 /// `Engine` across all blocks so module compilation amortises.
+#[cfg(feature = "jit")]
 pub struct JitCache {
     engine: Engine,
     compiled: HashMap<u32, CompiledBlock>,
     /// Phase 3.6.2: windowed CALL8 block for `_Z4loopv` (PC 0x400d4a99).
-    /// Boxed + lazy so we don't pay wasmtime instantiation cost on every
-    /// `JitCache::new()` (e.g. dual-core configs build two CPUs).
     pub loopv_call8: Option<Box<WindowedCallBlock>>,
-    /// Phase 3.6.2 instrumentation: track how often the windowed-call
-    /// JIT refused (exit code 5) so the lockstep + bench reports can
-    /// quantify how many CALL8s actually went through the wasm path.
+    /// Phase 3.6.2 instrumentation: count windowed-call refusals.
     pub windowed_refusals: u64,
     /// Phase 3.6.3: multi-op block for the call_start_cpu0 hot loop at
-    /// PC 0x400829cc. First JIT block expected to deliver net speedup.
+    /// PC 0x400829cc.
     pub hot_bb: Option<Box<MultiOpBlock>>,
-    /// Phase 3.6.3 instrumentation: count of times the multi-op JIT
-    /// refused (host bus error / staging mismatch) so the bench can
-    /// quantify cache effectiveness.
+    /// Phase 3.6.3 instrumentation: count multi-op refusals.
     pub multi_op_refusals: u64,
 }
 
+#[cfg(feature = "jit")]
 impl Default for JitCache {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "jit")]
 impl JitCache {
     pub fn new() -> Self {
-        // Default wasmtime config: cranelift compiler, native target. We
-        // disable the epoch interruption and fuel features (not used) to
-        // keep call overhead minimal.
         let engine = Engine::default();
         Self {
             engine,
@@ -199,8 +183,7 @@ impl JitCache {
     }
 
     /// If `pc` is a known JIT-compilable block, return a mutable reference
-    /// to its compiled form, building+caching on first sight. Returns
-    /// `None` for any PC we don't know how to compile yet.
+    /// to its compiled form, building+caching on first sight.
     pub fn lookup_or_install(&mut self, pc: u32) -> Option<&mut CompiledBlock> {
         if pc == FILL_SCREEN_BLOCK_PC {
             if !self.compiled.contains_key(&pc) {
@@ -209,9 +192,6 @@ impl JitCache {
                         self.compiled.insert(pc, cb);
                     }
                     Err(e) => {
-                        // Compilation failure: log and never try this PC
-                        // again in this run. The interpreter falls through
-                        // and the test/bench still completes correctly.
                         tracing::warn!(target: "labwired-core::jit",
                             "JIT compile failed for pc=0x{pc:08x}: {e:#}. \
                              Falling back to interpreter for this PC.");
@@ -224,10 +204,7 @@ impl JitCache {
         None
     }
 
-    /// Lazily compile + return the LOOPV CALL8 block. Returns `None` if
-    /// wasm compilation fails (extremely unlikely — the template is fixed
-    /// and validated at unit-test time, so a runtime failure here points
-    /// at a wasmtime regression rather than a usage bug).
+    /// Lazily compile + return the LOOPV CALL8 block.
     pub fn lookup_or_install_windowed(&mut self, pc: u32) -> Option<&mut WindowedCallBlock> {
         if pc != LOOPV_CALL8_PC {
             return None;
@@ -246,10 +223,7 @@ impl JitCache {
         self.loopv_call8.as_deref_mut()
     }
 
-    /// Lazily compile + return the Phase 3.6.3 multi-op block for the
-    /// `call_start_cpu0` delay loop. Returns `None` only if wasm
-    /// compilation fails (which would be a regression — the WAT is
-    /// validated at unit-test time).
+    /// Lazily compile + return the multi-op block for `call_start_cpu0`.
     pub fn lookup_or_install_multi_op(&mut self, pc: u32) -> Option<&mut MultiOpBlock> {
         if pc != HOT_BB_PC {
             return None;
@@ -269,7 +243,7 @@ impl JitCache {
     }
 
     /// Total number of times any compiled block has been invoked since
-    /// process start. Used by the pilot's CLI-level reporting.
+    /// process start.
     pub fn total_hits(&self) -> u64 {
         let fillscreen_hits: u64 = self.compiled.values().map(|cb| cb.hits).sum();
         let windowed_hits = self.loopv_call8.as_ref().map(|b| b.hits).unwrap_or(0);
@@ -277,20 +251,8 @@ impl JitCache {
         fillscreen_hits + windowed_hits + multi_op_hits
     }
 
-    /// Build the `fillScreen` body block. See module-level docs for the
-    /// disassembly and side-exit protocol.
+    /// Build the `fillScreen` body block.
     fn build_fill_screen(&self) -> wasmtime::Result<CompiledBlock> {
-        // Hand-written WAT. wasmtime parses WAT directly via
-        // `Module::new(&engine, wat_str)`. The bounds-check uses unsigned
-        // comparison against the inlined DRAM range, so a2/a11 below
-        // 0x80000000 (their natural i32 sign bit clear range) match the
-        // u32 comparison we'd do in Rust.
-        //
-        // Returns four i32s: (exit_code, a2_new, a3_new, a11_new). Stores
-        // are queued via the `host.store_u8` import; wasm only calls it
-        // after the bounds check passes for BOTH addresses, so an exit=3
-        // path leaves zero side effects (no queued stores, no register
-        // mutation observable to the caller).
         let wat = format!(
             r#"(module
   (import "host" "store_u8" (func $store (param i32 i32)))
@@ -348,13 +310,11 @@ impl JitCache {
         let module = Module::new(&self.engine, wat)?;
         let mut store: Store<()> = Store::new(&self.engine, ());
 
-        // Shared scratch buffer between the host closure and `CompiledBlock`.
         let pending: std::sync::Arc<Mutex<PendingStores>> =
             std::sync::Arc::new(Mutex::new(Vec::with_capacity(2)));
         let pending_for_import = pending.clone();
 
         let store_u8: Func = Func::wrap(&mut store, move |addr: i32, val: i32| {
-            // Wasm sends us i32; reinterpret as u32 unsigned address + u8 byte.
             pending_for_import
                 .lock()
                 .unwrap()
@@ -374,7 +334,7 @@ impl JitCache {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "jit"))]
 mod tests {
     use super::*;
 
@@ -386,8 +346,6 @@ mod tests {
         let block = cache
             .lookup_or_install(FILL_SCREEN_BLOCK_PC)
             .expect("fillScreen JIT must compile");
-        // Pick addresses inside DRAM. a2 = 0x3FFB_0000, a10 = 0x100,
-        // so a11 = 0x3FFB_0100. Both inside [0x3FFAE000, 0x40000000).
         let (exit, a2_n, a3_n, a11_n, pending) = block
             .run(
                 /*a8*/ 0xAA,
@@ -441,14 +399,12 @@ mod tests {
     fn fill_screen_oor_second_store() {
         let mut cache = JitCache::new();
         let block = cache.lookup_or_install(FILL_SCREEN_BLOCK_PC).unwrap();
-        // a2 inside DRAM, a10 huge so a2+a10 overflows above DRAM_HI.
         let (exit, _a2, _a3, _a11, pending) = block.run(0, 0, 0x3FFB_0000, 1, 0x1000_0000).unwrap();
         assert_eq!(exit, 3);
         assert!(pending.is_empty());
     }
 
-    /// `lookup_or_install` returns None for unknown PCs (interpreter falls
-    /// through to existing path).
+    /// `lookup_or_install` returns None for unknown PCs.
     #[test]
     fn unknown_pc_returns_none() {
         let mut cache = JitCache::new();
