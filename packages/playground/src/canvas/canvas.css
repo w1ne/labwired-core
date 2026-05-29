@@ -17,7 +17,8 @@
 
 .lw-canvas-add-chip {
   position: fixed;
-  top: 16px;
+  /* Sit BELOW the global TopChrome (44px) with a small breath. */
+  top: 56px;
   left: 16px;
   z-index: 10000;
   background: #e83e8c;

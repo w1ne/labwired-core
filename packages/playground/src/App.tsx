@@ -43,15 +43,12 @@ import { MobileDemoView } from './MobileDemoView';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
-// Lazy-load the canvas substrate (tldraw is ~500 KB gzip). Only the
-// studio route mounts CanvasShell, so library / landing / CI pages
-// keep their pre-canvas bundle size.
+import { GlobalChrome } from './studio/GlobalChrome';
+// Lazy-load the canvas substrate (React Flow is ~62 KB gzip).
 const CanvasShell = lazy(() => import('./canvas/CanvasShell').then((m) => ({ default: m.CanvasShell })));
-// ChipsProvider is eager — it's just React context (tiny). Lazy-
-// loading it would force ChipBridgeSync into Suspense and lose the
-// active-chip mirror during initial mount.
 import { ChipsProvider } from './canvas/ChipSession';
 import { ChipBridgeSync } from './canvas/ChipBridgeSync';
+import { ChipContentProvider } from './canvas/ChipContent';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1675,19 +1672,12 @@ export function App() {
       }}
     />
     <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }} />}>
-    <CanvasShell>
-    <StudioShell
+    <GlobalChrome
       boardName={activeProjectName ?? selectedBoard.name}
-      isEmpty={isEmpty}
-      onPickLab={handlePickLab}
       onUploadFirmware={handleUploadFirmware}
       onShare={handleShare}
-      toast={toast}
-      onDismissToast={() => setToast(null)}
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
-      inspector={inspectorNode}
-      simDock={simDockNode}
       authSlot={<AuthPill onOpenProjects={() => setProjectsModalOpen(true)} />}
       projectSlot={
         <button
@@ -1701,11 +1691,27 @@ export function App() {
           <span className="truncate">{activeProjectName ?? 'My Projects'}</span>
         </button>
       }
-      renderDevDrawer={renderDevDrawer}
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}
-    >
-    <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
+      toast={toast}
+      onDismissToast={() => setToast(null)}
+    />
+    <ChipContentProvider
+      // Active chip's full per-chip view — the existing StudioShell
+      // body (board canvas + sim controls + dev drawer tabs) renders
+      // INSIDE the active chip-shape on the canvas. No floating
+      // window. Inspector window is hidden.
+      board={
+        <StudioShell
+          chromeMode="body-only"
+          isEmpty={isEmpty}
+          onPickLab={handlePickLab}
+          inspector={inspectorNode}
+          simDock={simDockNode}
+          renderDevDrawer={renderDevDrawer}
+        >
+          <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
+          <div data-legacy-shell="true" className="playground playground--in-chip">
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (
@@ -2058,8 +2064,13 @@ export function App() {
         setActiveProjectName(p.name);
       }}
     />
-    </StudioShell>
-    </CanvasShell>
+          </div>
+        </StudioShell>
+      }
+      inspector={null}
+    >
+      <CanvasShell />
+    </ChipContentProvider>
     </Suspense>
     </ChipsProvider>
   );

@@ -1,15 +1,16 @@
-// Canvas substrate built on React Flow (@xyflow/react). Replaces
-// tldraw to avoid the commercial-license watermark.
+// Canvas substrate built on React Flow. Now hosts compact chip
+// cards only — the active chip's full per-chip view lives in a
+// separate floating <ChipInspectorWindow> rendered above the canvas.
 //
-// Structure:
-//   - One ChipNode per session in ChipsProvider; active chip is
-//     viewport-sized, inactive chips are compact 260x180 tiles
-//     laid out in a column to the right of the active chip.
-//   - One BleAirEdge per pair of nRF52840 chips (auto-spawned).
-//   - "+ add chip" floating action button at top-left.
-//   - Pan/zoom + node drag enabled; persistence in localStorage
-//     (positions + chip-id mapping).
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+// Each ChipCard:
+//   - shows chipId / board / status (running / source-ready / empty)
+//   - is fully draggable (no active-vs-inactive size distinction)
+//   - clicking it makes that chip the active one + reopens the
+//     inspector window for it
+//
+// Auto-edges between nRF52840 chips (BleAirEdge) are spawned by
+// useBleAirEdgesFor; clicking an edge opens the BleTracePanel.
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -22,19 +23,20 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ChipNode, ChipChildrenProvider, type ChipNodeData } from './ChipNode';
+import { ChipNode, type ChipNodeData } from './ChipNode';
 import { BleAirEdge, useBleAirEdgesFor } from './BleAirEdge';
 import { BleTracePanelProvider } from './BleTracePanel';
 import { useChips } from './ChipSession';
 import { useBackgroundChips } from './useBackgroundChips';
+import { GLOBAL_CHROME_HEIGHT } from '../studio/GlobalChrome';
 import './canvas.css';
 
-const COMPACT_W = 260;
-const COMPACT_H = 180;
-const GAP = 40;
-const MIN_ACTIVE_W = 720;
-const MIN_ACTIVE_H = 480;
-const POSITIONS_KEY = 'lw-canvas-positions-v1';
+const CARD_W = 260;
+const CARD_H = 200;
+const ACTIVE_W = 640;
+const ACTIVE_H = 520;
+const GAP = 48;
+const POSITIONS_KEY = 'lw-canvas-positions-v2';
 
 const nodeIdFor = (chipId: string) => `chip-${chipId}`;
 
@@ -61,38 +63,22 @@ function saveSavedPositions(pos: SavedPositions) {
   try {
     window.localStorage.setItem(POSITIONS_KEY, JSON.stringify(pos));
   } catch {
-    /* quota / private — skip */
+    /* quota — skip */
   }
 }
 
-export function CanvasShell({ children }: { children: ReactNode }) {
+export function CanvasShell() {
   return (
     <BleTracePanelProvider>
-      <ChipChildrenProvider content={children}>
-        <ReactFlowProvider>
-          <CanvasInner />
-        </ReactFlowProvider>
-      </ChipChildrenProvider>
+      <ReactFlowProvider>
+        <CanvasInner />
+      </ReactFlowProvider>
     </BleTracePanelProvider>
   );
 }
 
-function useViewportSize() {
-  const [size, setSize] = useState(() => ({
-    w: typeof window === 'undefined' ? 1280 : window.innerWidth,
-    h: typeof window === 'undefined' ? 800 : window.innerHeight,
-  }));
-  useEffect(() => {
-    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-  return size;
-}
-
 function CanvasInner() {
   const { order, activeChipId, addChip } = useChips();
-  const viewport = useViewportSize();
   const { fitView } = useReactFlow();
   useBackgroundChips(true);
 
@@ -100,53 +86,37 @@ function CanvasInner() {
     loadSavedPositions(),
   );
 
-  // Compute the canonical layout (size + default position for each
-  // chip). Inactive chips inherit a slot in the right-column unless
-  // the user has dragged them somewhere — savedPositions takes
-  // precedence.
-  const inactiveCount = Math.max(0, order.length - 1);
-  const reserveForCompact = inactiveCount > 0 ? COMPACT_W + GAP * 2 : 0;
-  const activeW = Math.max(MIN_ACTIVE_W, viewport.w - reserveForCompact - 32);
-  const activeH = Math.max(MIN_ACTIVE_H, viewport.h - 32);
-
+  // Layout: chip cards laid out in a horizontal row across the
+  // canvas, equally spaced. User can drag to reposition;
+  // savedPositions overrides the default.
   const nodes = useMemo<Node<ChipNodeData>[]>(() => {
-    let inactiveIdx = 0;
-    return order.map((chipId) => {
-      const isActive = chipId === activeChipId;
+    return order.map((chipId, idx) => {
       const id = nodeIdFor(chipId);
-      const w = isActive ? activeW : COMPACT_W;
-      const h = isActive ? activeH : COMPACT_H;
-      const defaultX = isActive
-        ? -activeW / 2
-        : activeW / 2 + GAP;
-      const defaultY = isActive
-        ? -activeH / 2
-        : -activeH / 2 + inactiveIdx * (COMPACT_H + GAP);
-      if (!isActive) inactiveIdx += 1;
+      const isActive = chipId === activeChipId;
+      const w = isActive ? ACTIVE_W : CARD_W;
+      const h = isActive ? ACTIVE_H : CARD_H;
+      // Simple row layout: active centred, inactive cards stack to
+      // the right. User can drag any chip to reposition;
+      // savedPositions overrides default.
+      const defaultX = isActive ? -ACTIVE_W / 2 : ACTIVE_W / 2 + GAP + (idx - 1) * (CARD_W + GAP);
+      const defaultY = isActive ? -ACTIVE_H / 2 : -CARD_H / 2;
       const saved = savedPositions.byNodeId[id];
       return {
         id,
         type: 'chip',
         position: saved ?? { x: defaultX, y: defaultY },
-        data: { chipId },
-        // Active chip is positioned by layout, not user-draggable
-        // (its size is viewport-fit so dragging it offscreen would
-        // be confusing). Compact chips are draggable.
-        draggable: !isActive,
-        selectable: !isActive,
-        // Drag handle is the header strip — see ChipNode.
+        data: { chipId, isActive },
         dragHandle: '.lw-chip-node-header',
         width: w,
         height: h,
         style: { width: w, height: h },
+        selected: isActive,
       };
     });
-  }, [order, activeChipId, activeW, activeH, savedPositions]);
+  }, [order, activeChipId, savedPositions]);
 
   const edges = useBleAirEdgesFor(nodes);
 
-  // Capture drags into savedPositions so the layout persists across
-  // chip-list mutations (add/remove/focus) and page reloads.
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     let mutated = false;
     setSavedPositions((prev) => {
@@ -162,25 +132,20 @@ function CanvasInner() {
       saveSavedPositions(result);
       return result;
     });
-    // We don't store the node list ourselves — `nodes` is recomputed
-    // from order + savedPositions every render. But we still need to
-    // run applyNodeChanges on a local copy for React Flow's
-    // intermediate drag rendering. The functional setSavedPositions
-    // above commits the final position.
-    applyNodeChanges(changes, nodes); // returned array unused; here only for type completeness.
+    applyNodeChanges(changes, nodes);
   }, [nodes]);
 
-  // Auto fit-view on chip count change so newly added chips don't
-  // land off-screen the way they did in the tldraw build.
+  // Auto fit-view when the chip count changes so a freshly added
+  // chip doesn't land off-screen.
   useEffect(() => {
     const id = window.setTimeout(() => {
-      fitView({ padding: 0.08, duration: 200 });
+      fitView({ padding: 0.15, duration: 200 });
     }, 50);
     return () => window.clearTimeout(id);
-  }, [order.length, activeChipId, fitView]);
+  }, [order.length, fitView]);
 
   return (
-    <div className="lw-canvas-root">
+    <div className="lw-canvas-root" style={{ top: GLOBAL_CHROME_HEIGHT }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -189,7 +154,7 @@ function CanvasInner() {
         onNodesChange={onNodesChange}
         proOptions={{ hideAttribution: true }}
         fitView
-        minZoom={0.2}
+        minZoom={0.4}
         maxZoom={1.5}
         panOnDrag
         panOnScroll={false}
@@ -199,7 +164,12 @@ function CanvasInner() {
         nodesFocusable={false}
         edgesFocusable={false}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(255,255,255,0.06)" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={1}
+          color="rgba(255,255,255,0.06)"
+        />
         <MiniMap
           nodeColor={(n) => (n.id === nodeIdFor(activeChipId) ? '#e83e8c' : 'rgba(255,255,255,0.35)')}
           nodeStrokeWidth={3}

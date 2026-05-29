@@ -78,6 +78,11 @@ interface ChipsContext {
   /// is a no-op. Removing the currently active chip falls focus
   /// back to chip-default.
   removeChip: (chipId: string) => void;
+  /// Whether the floating inspector window is currently open.
+  /// Lifted into the context so any chip-card click can reopen it
+  /// after the user dismissed it with the X.
+  inspectorOpen: boolean;
+  setInspectorOpen: (open: boolean) => void;
 }
 
 const Ctx = createContext<ChipsContext | null>(null);
@@ -138,6 +143,7 @@ export function ChipsProvider({
     }
     return DEFAULT_CHIP_ID;
   });
+  const [inspectorOpen, setInspectorOpen] = useState<boolean>(true);
 
   // Mirror to localStorage on any structural change.
   useEffect(() => {
@@ -230,8 +236,10 @@ export function ChipsProvider({
       setSession,
       addChip,
       removeChip,
+      inspectorOpen,
+      setInspectorOpen,
     }),
-    [sessions, order, activeChipId, setSession, addChip, removeChip],
+    [sessions, order, activeChipId, setSession, addChip, removeChip, inspectorOpen],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

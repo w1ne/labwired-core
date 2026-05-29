@@ -5,7 +5,8 @@ import { useChips } from './ChipSession';
 import type { ChipSession } from './ChipSession';
 
 export function ChipCard({ session }: { session: ChipSession }) {
-  const { setActiveChipId, removeChip } = useChips();
+  const { setActiveChipId, removeChip, activeChipId } = useChips();
+  const isActive = activeChipId === session.chipId;
   const hasBridge = session.bridge !== null;
   const hasSource = !!session.source;
   return (
@@ -27,7 +28,9 @@ export function ChipCard({ session }: { session: ChipSession }) {
           />
           {hasBridge ? 'running' : hasSource ? 'source ready' : 'empty'}
         </div>
-        <div className="lw-chip-card-hint">click to focus →</div>
+        <div className="lw-chip-card-hint">
+          {isActive ? 'focused — inspector open' : 'click to focus →'}
+        </div>
       </button>
       <button
         type="button"
