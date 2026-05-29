@@ -31,6 +31,19 @@ pub const HOT_BB_INSTR_COUNT: u32 = 8;
 /// `xtensa_jit::bb_multi::HOT_BB_L32R_ADDR`.
 pub const HOT_BB_L32R_ADDR: u32 = 0x4008_0534;
 
+/// PC of the actually-hottest steady-state block: `loopTask` polling loop
+/// (Arduino-ESP32 main scheduler). Decoded as
+/// `L32R → L8UI → BEQZ → CALL8 → L32R → BEQZ → J`. Phase 4.3.5 JIT-compiles
+/// the **prefix** (L32R → L8UI → BEQZ), ending at the first BEQZ side-exit.
+/// Full coverage needs CALL8/RETW (Phase 4.4).
+pub const LOOPTASK_PC: u32 = 0x400d_4a8d;
+/// Number of Xtensa instructions in the loopTask prefix (L32R, L8UI, BEQZ).
+pub const LOOPTASK_PREFIX_INSTR_COUNT: u32 = 3;
+/// First PC after the loopTask prefix — `LOOPTASK_PC + 3 + 3 + 3` (three
+/// 3-byte instructions). Used as the fall-through PC when the BEQZ is not
+/// taken; the interpreter resumes from here.
+pub const LOOPTASK_PREFIX_END: u32 = LOOPTASK_PC + 9;
+
 /// Side-exit: block executed cleanly to the terminator.
 pub const EXIT_FALL_THROUGH: i32 = 0;
 /// Side-exit: a conditional or unconditional branch terminated the BB

@@ -52,7 +52,7 @@
 
 use crate::cpu::xtensa_jit_bytes::{
     EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
-    HOT_BB_PC,
+    HOT_BB_PC, LOOPTASK_PC, LOOPTASK_PREFIX_END, LOOPTASK_PREFIX_INSTR_COUNT,
 };
 use crate::cpu::xtensa_jit::wasm_emit::{
     emit_call, emit_end, emit_i32_and, emit_i32_const, emit_i32_eqz, emit_i32_lt_s, emit_i32_or,
@@ -353,34 +353,51 @@ pub fn is_supported(ins: &Instruction) -> bool {
 pub fn walk_and_emit<F>(
     bus_slice: &[u8],
     pc: u32,
-    pc_to_offset: F,
+    mut pc_to_offset: F,
     _ps_bits: PsBits,
 ) -> Result<EmittedBlock, EmitError>
 where
     F: FnMut(u32) -> Option<usize>,
 {
-    // Cap the walk at `HOT_BB_INSTR_COUNT + 2` — Phase 4.2′ only emits
-    // the 8-op hot block; budget two slack ops so a shape mismatch
-    // surfaces as UnsupportedShape rather than a silent truncation.
+    // Cap the walk at `HOT_BB_INSTR_COUNT + 2` — covers both currently
+    // supported shapes (8-op hot block + 2-op loopTask prefix that ends
+    // at a BEQZ terminator) with slack so a mismatch surfaces as
+    // UnsupportedShape rather than a silent truncation.
     let max_ops = (HOT_BB_INSTR_COUNT as usize) + 2;
-    let ops = walk_bb(pc, pc_to_offset, bus_slice, max_ops).ok_or(EmitError::WalkRefused)?;
+    let ops = walk_bb(pc, &mut pc_to_offset, bus_slice, max_ops)
+        .ok_or(EmitError::WalkRefused)?;
     if ops.is_empty() {
         return Err(EmitError::BlockTooShort);
     }
 
-    if pc != HOT_BB_PC || !matches_hot_bb_shape(&ops) {
-        return Err(EmitError::UnsupportedShape);
+    if pc == HOT_BB_PC && matches_hot_bb_shape(&ops) {
+        return Ok(EmittedBlock {
+            wasm_bytes: build_hot_bb_module(&ops),
+            length_in_instrs: HOT_BB_INSTR_COUNT,
+            end_pc: HOT_BB_END,
+            side_exit_reasons: vec![
+                (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
+                (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
+            ],
+        });
     }
 
-    Ok(EmittedBlock {
-        wasm_bytes: build_hot_bb_module(&ops),
-        length_in_instrs: HOT_BB_INSTR_COUNT,
-        end_pc: HOT_BB_END,
-        side_exit_reasons: vec![
-            (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
-            (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
-        ],
-    })
+    if pc == LOOPTASK_PC {
+        if let Some(prefix) = match_looptask_prefix(&ops, pc, bus_slice, &mut pc_to_offset) {
+            return Ok(EmittedBlock {
+                wasm_bytes: build_looptask_prefix_module(&prefix),
+                length_in_instrs: LOOPTASK_PREFIX_INSTR_COUNT,
+                end_pc: LOOPTASK_PREFIX_END,
+                side_exit_reasons: vec![
+                    (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
+                    (EXIT_BRANCH_TAKEN, SideExitReason::BranchTaken),
+                    (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
+                ],
+            });
+        }
+    }
+
+    Err(EmitError::UnsupportedShape)
 }
 
 // ── Hot-BB runtime emit ───────────────────────────────────────────────
@@ -451,6 +468,13 @@ fn build_hot_bb_module(ops: &[DecodedOp]) -> Vec<u8> {
                     imm,
                     f_read_u8,
                     LOCAL_TMP,
+                    |o| {
+                        emit_i32_const(EXIT_HOST_BUS_ERROR, o);
+                        emit_i32_const(0, o);
+                        emit_i32_const(0, o);
+                        emit_i32_const(0, o);
+                        emit_i32_const(0, o);
+                    },
                     &mut body,
                 );
             }
@@ -560,6 +584,175 @@ fn matches_hot_bb_shape(ops: &[DecodedOp]) -> bool {
         && matches!(ops[7].ins, L32r { at: 8, .. })
 }
 
+// ── loopTask prefix shape (Phase 4.3.5) ───────────────────────────────
+//
+// PC `0x400d4a8d`: L32R → L8UI → BEQZ → ... (CALL8 / L32R / BEQZ / J are
+// Phase 4.4+ work). The prefix we JIT is the first three ops, ending at
+// the BEQZ side-exit. Signature (mirrors hot_bb in spirit but is its own
+// ABI — the wasmtime adapter for this shape is Phase 4.4):
+//
+//   inputs:  (l32r_value: i32, l8ui_base: i32)
+//   results: (exit_code, next_pc, l8ui_at, beqz_target_pc_or_zero)
+//
+// `next_pc` is the resume PC for the interpreter: BEQZ target if taken,
+// LOOPTASK_PREFIX_END if fall-through. The fourth slot carries the
+// branch target PC so consumers can sanity-check the recognizer matched
+// the expected branch destination without re-decoding.
+const LOOPTASK_LOCAL_L32R_PARAM: u32 = 0;
+const LOOPTASK_LOCAL_L8UI_BASE_PARAM: u32 = 1;
+const LOOPTASK_LOCAL_L32R_AT: u32 = 2;
+const LOOPTASK_LOCAL_L8UI_AT: u32 = 3;
+const LOOPTASK_LOCAL_TMP: u32 = 4;
+
+/// Decoded loopTask prefix: the three Xtensa ops + the BEQZ terminator's
+/// branch target PC (the PC the interpreter resumes at when taken).
+struct LoopTaskPrefix {
+    /// L32R destination register (Xtensa `at`).
+    l32r_at: u8,
+    /// L8UI destination register (Xtensa `at`).
+    l8ui_at: u8,
+    /// L8UI immediate (byte offset added to `l8ui_base`).
+    l8ui_imm: u32,
+    /// BEQZ branch target PC (absolute).
+    beqz_target_pc: u32,
+}
+
+/// Recognize the loopTask prefix at `start_pc`: two non-terminator ops
+/// `L32R` then `L8UI` (where the L8UI source equals the L32R destination
+/// — the L8UI dereferences the literal we just loaded), followed by a
+/// `BEQZ` terminator on the L8UI result.
+fn match_looptask_prefix<F>(
+    ops: &[DecodedOp],
+    start_pc: u32,
+    bus_slice: &[u8],
+    mut pc_to_offset: F,
+) -> Option<LoopTaskPrefix>
+where
+    F: FnMut(u32) -> Option<usize>,
+{
+    use Instruction::*;
+    if ops.len() < 2 {
+        return None;
+    }
+    let (l32r_at, _l32r_off) = match ops[0].ins {
+        L32r { at, pc_rel_byte_offset } => (at, pc_rel_byte_offset),
+        _ => return None,
+    };
+    let (l8ui_at, l8ui_as, l8ui_imm) = match ops[1].ins {
+        L8ui { at, as_, imm } => (at, as_, imm),
+        _ => return None,
+    };
+    // The L8UI's base register must be the register the L32R wrote (the
+    // loaded literal IS the pointer the L8UI dereferences).
+    if l8ui_as != l32r_at {
+        return None;
+    }
+    // Peek at the terminator immediately after ops[1] — `walk_bb`
+    // excludes terminators from its result. The BEQZ at this PC tests
+    // the value the L8UI just produced.
+    let after_l8ui_pc = ops[1].pc.wrapping_add(ops[1].len);
+    let off = pc_to_offset(after_l8ui_pc)?;
+    if off + 3 > bus_slice.len() {
+        return None;
+    }
+    let w = u32::from_le_bytes([
+        bus_slice[off],
+        bus_slice[off + 1],
+        bus_slice[off + 2],
+        0,
+    ]);
+    let term = xtensa::decode(w);
+    let (beqz_as, beqz_offset) = match term {
+        Beqz { as_, offset } => (as_, offset),
+        _ => return None,
+    };
+    if beqz_as != l8ui_at {
+        return None;
+    }
+    let beqz_target_pc = after_l8ui_pc.wrapping_add(beqz_offset as u32);
+    // Sanity: the recognized PC range must equal the documented prefix
+    // length (so consumers can use LOOPTASK_PREFIX_END without slicing
+    // the actual ops vector at the call site).
+    if after_l8ui_pc.wrapping_add(3).wrapping_sub(start_pc) != LOOPTASK_PREFIX_INSTR_COUNT * 3 {
+        return None;
+    }
+    Some(LoopTaskPrefix {
+        l32r_at,
+        l8ui_at,
+        l8ui_imm,
+        beqz_target_pc,
+    })
+}
+
+/// Build the wasm module for the loopTask prefix. Uses the runtime emit
+/// primitives (`emit_l32r`, `emit_l8ui`, `emit_beqz`) — the Phase 4.3
+/// branch primitive is now exercised in-line by this builder.
+fn build_looptask_prefix_module(prefix: &LoopTaskPrefix) -> Vec<u8> {
+    let mut m = WasmModule::new();
+    let t_read_u8 = m.add_type(FuncType {
+        params: vec![ValType::I32],
+        results: vec![ValType::I32],
+    });
+    let t_run = m.add_type(FuncType {
+        params: vec![ValType::I32, ValType::I32],
+        results: vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+    });
+    let f_read_u8 = m.add_func_import("host", "read_u8", t_read_u8);
+
+    let mut body = Vec::with_capacity(64);
+    // Locals: 3 × i32 (l32r_at, l8ui_at, tmp). Params 0,1 already account
+    // for the two inputs; locals start at index 2.
+    encode_u32(1, &mut body);
+    emit_locals_run(3, ValType::I32, &mut body);
+
+    // L32R: at_local = l32r_param.
+    emit_l32r(LOOPTASK_LOCAL_L32R_AT, LOOPTASK_LOCAL_L32R_PARAM, &mut body);
+    let _ = prefix.l32r_at; // shape-bound, not needed for emit
+    // L8UI: at_local = read_u8(base_param + imm). Bus-error early-exit
+    // pushes the 4-tuple result (vs HOT_BB's 5-tuple).
+    emit_l8ui(
+        LOOPTASK_LOCAL_L8UI_AT,
+        LOOPTASK_LOCAL_L8UI_BASE_PARAM,
+        prefix.l8ui_imm,
+        f_read_u8,
+        LOOPTASK_LOCAL_TMP,
+        |o| {
+            emit_i32_const(EXIT_HOST_BUS_ERROR, o);
+            emit_i32_const(0, o);
+            emit_i32_const(0, o);
+            emit_i32_const(0, o);
+        },
+        &mut body,
+    );
+    let _ = prefix.l8ui_at;
+
+    // BEQZ on l8ui_at: taken → (EXIT_BRANCH_TAKEN, beqz_target_pc,
+    // l8ui_at, beqz_target_pc); not taken → fall through to epilogue.
+    let target = prefix.beqz_target_pc;
+    emit_beqz(
+        LOOPTASK_LOCAL_L8UI_AT,
+        |o| {
+            emit_i32_const(EXIT_BRANCH_TAKEN, o);
+            emit_i32_const(target as i32, o);
+            emit_local_get(LOOPTASK_LOCAL_L8UI_AT, o);
+            emit_i32_const(target as i32, o);
+        },
+        &mut body,
+    );
+
+    // Fall-through epilogue: (EXIT_FALL_THROUGH, LOOPTASK_PREFIX_END,
+    // l8ui_at, beqz_target_pc).
+    emit_i32_const(EXIT_FALL_THROUGH, &mut body);
+    emit_i32_const(LOOPTASK_PREFIX_END as i32, &mut body);
+    emit_local_get(LOOPTASK_LOCAL_L8UI_AT, &mut body);
+    emit_i32_const(target as i32, &mut body);
+    emit_end(&mut body);
+
+    let f_run = m.add_func(t_run, body);
+    m.add_func_export("run", f_run);
+    m.finish()
+}
+
 // ── Per-opcode emit helpers ───────────────────────────────────────────
 //
 // Phase 4.2′: real wasm-byte emission per Xtensa opcode supported by the
@@ -582,17 +775,21 @@ pub(crate) fn emit_memw(_out: &mut Vec<u8>) {}
 pub(crate) fn emit_nop(_out: &mut Vec<u8>) {}
 
 /// `l8ui at, as, imm` — `at = read_u8(as + imm)`. The host import
-/// returns a negative i32 on bus error; we side-exit early with
-/// `EXIT_HOST_BUS_ERROR` and zeroed-out result locals (matching
-/// `HOT_BB_WASM`).
-pub(crate) fn emit_l8ui(
+/// returns a negative i32 on bus error; we side-exit early via the
+/// caller-supplied `bus_error_exit_body` closure (which pushes the
+/// full result tuple — shape depends on the BB's signature — then
+/// `return` is emitted by us).
+pub(crate) fn emit_l8ui<F>(
     at: u32,
     as_: u32,
     imm: u32,
     read_u8_func: u32,
     tmp: u32,
+    bus_error_exit_body: F,
     out: &mut Vec<u8>,
-) {
+) where
+    F: FnOnce(&mut Vec<u8>),
+{
     emit_local_get(as_, out);
     if imm != 0 {
         emit_i32_const(imm as i32, out);
@@ -605,11 +802,7 @@ pub(crate) fn emit_l8ui(
     emit_i32_const(0, out);
     emit_i32_lt_s(out);
     emit_if_void(out);
-    emit_i32_const(EXIT_HOST_BUS_ERROR, out);
-    emit_i32_const(0, out);
-    emit_i32_const(0, out);
-    emit_i32_const(0, out);
-    emit_i32_const(0, out);
+    bus_error_exit_body(out);
     emit_return(out);
     emit_end(out);
     emit_local_get(tmp, out);
@@ -688,11 +881,6 @@ pub(crate) fn emit_and(ar: u32, as_: u32, at: u32, out: &mut Vec<u8>) {
 /// fall-through path (which, for a BB-final BEQZ, is the function's
 /// own epilogue that returns `EXIT_FALL_THROUGH` with the
 /// post-branch-not-taken PC).
-#[allow(
-    dead_code,
-    reason = "Phase 4.3 primitive — wired in by Phase 4.3.5 BB shape recognizer; \
-              exercised today only by the `feature = jit` lockstep tests."
-)]
 pub(crate) fn emit_beqz<F>(as_local: u32, taken_exit_body: F, out: &mut Vec<u8>)
 where
     F: FnOnce(&mut Vec<u8>),
@@ -1077,6 +1265,131 @@ mod tests {
 
     /// Wire codes for the three currently-known side-exit reasons are
     /// disjoint and round-trip through `SideExitReason::wire_code`.
+    // ── Phase 4.3.5 loopTask prefix dispatch tests ───────────────────
+    //
+    // Synthesized byte sequence for `L32R a2, ... ; L8UI a3, a2, 0 ;
+    // BEQZ a3, +12 ; CALL8`. Constructed from the Xtensa encoding tables
+    // (decode_l32r / decode_lsai / decode_si / decode_calln) so the
+    // bytes round-trip back through the decoder unchanged.
+    //
+    //   L32R  word = 0x_FFFF_21 → bytes 0x21,0xFF,0xFF  (at=2, raw imm16=0xFFFF)
+    //   L8UI  word = 0x_00_03_32 → bytes 0x32,0x03,0x00  (at=3, as=2, imm=0)
+    //   BEQZ  word = 0x_00_83_16 → bytes 0x16,0x83,0x00  (as=3, imm12=8 → offset 12)
+    //   CALL8 word = 0x_00_00_25 → bytes 0x25,0x00,0x00  (terminator)
+    #[cfg(feature = "jit")]
+    const LOOPTASK_PREFIX_BYTES: &[u8] = &[
+        0x21, 0xFF, 0xFF, // L32R a2, ...
+        0x32, 0x02, 0x00, // L8UI a3, a2, 0
+        0x16, 0x83, 0x00, // BEQZ a3, +12
+        0x25, 0x00, 0x00, // CALL8 ... (terminator at end of recognized prefix)
+    ];
+
+    /// End-to-end: `walk_and_emit` at `LOOPTASK_PC` recognizes the
+    /// L32R → L8UI → BEQZ prefix, builds a runnable wasm module, and
+    /// the taken/not-taken paths produce the right `(exit, next_pc)`.
+    #[cfg(feature = "jit")]
+    #[test]
+    fn walk_and_emit_compiles_looptask_prefix_end_to_end() {
+        use crate::cpu::xtensa_jit_bytes::{LOOPTASK_PC, LOOPTASK_PREFIX_END};
+        use wasmtime::{Engine, Func, Instance, Module, Store};
+
+        let emitted = walk_and_emit(
+            LOOPTASK_PREFIX_BYTES,
+            LOOPTASK_PC,
+            |pc| {
+                let off = pc.wrapping_sub(LOOPTASK_PC) as usize;
+                if off < LOOPTASK_PREFIX_BYTES.len() {
+                    Some(off)
+                } else {
+                    None
+                }
+            },
+            PsBits::default(),
+        )
+        .expect("loopTask prefix emits");
+        assert_eq!(emitted.length_in_instrs, LOOPTASK_PREFIX_INSTR_COUNT);
+        assert_eq!(emitted.end_pc, LOOPTASK_PREFIX_END);
+        assert_eq!(
+            emitted.reason_for(EXIT_BRANCH_TAKEN),
+            Some(SideExitReason::BranchTaken)
+        );
+
+        type Params = (i32, i32);
+        type Returns = (i32, i32, i32, i32);
+
+        let engine = Engine::default();
+        let module = Module::new(&engine, &emitted.wasm_bytes).expect("module compiles");
+        let mut store: Store<u32> = Store::new(&engine, 0);
+        // host.read_u8: return the value stored in the Store's `data`
+        // so the test can drive the BEQZ both ways.
+        let read_u8 = Func::wrap(&mut store, |caller: wasmtime::Caller<'_, u32>, _addr: i32| -> i32 {
+            *caller.data() as i32
+        });
+        let inst = Instance::new(&mut store, &module, &[read_u8.into()]).expect("instantiate");
+        let run = inst
+            .get_typed_func::<Params, Returns>(&mut store, "run")
+            .expect("run export");
+
+        // L8UI returns 0 → BEQZ taken → exit=BRANCH_TAKEN, next_pc=target.
+        let beqz_target = LOOPTASK_PC + 3 + 3 + 12; // after_l8ui_pc(=PC+6) + offset(=12)
+        *store.data_mut() = 0;
+        let (exit, next_pc, at_l8ui, target) =
+            run.call(&mut store, (0x4008_0534u32 as i32, 0x3FFB_0000u32 as i32))
+                .expect("call ok");
+        assert_eq!(exit, EXIT_BRANCH_TAKEN, "L8UI=0 → BEQZ taken");
+        assert_eq!(next_pc as u32, beqz_target);
+        assert_eq!(at_l8ui, 0);
+        assert_eq!(target as u32, beqz_target);
+
+        // L8UI returns non-zero → BEQZ falls through.
+        *store.data_mut() = 0x7A;
+        let (exit, next_pc, at_l8ui, _target) =
+            run.call(&mut store, (0x4008_0534u32 as i32, 0x3FFB_0000u32 as i32))
+                .expect("call ok");
+        assert_eq!(exit, EXIT_FALL_THROUGH, "L8UI=0x7A → BEQZ not taken");
+        assert_eq!(next_pc as u32, LOOPTASK_PREFIX_END);
+        assert_eq!(at_l8ui, 0x7A);
+
+        // Host bus error short-circuits with EXIT_HOST_BUS_ERROR.
+        *store.data_mut() = 0xFFFF_FFFF; // returned as -1 → < 0 → bus error
+        let (exit, _next_pc, _at, _t) =
+            run.call(&mut store, (0, 0)).expect("call ok");
+        assert_eq!(exit, EXIT_HOST_BUS_ERROR);
+    }
+
+    /// `walk_and_emit` side-exits cleanly when the terminator is an
+    /// unsupported branch shape (CALL8 instead of BEQZ at the right
+    /// position). The walker stops at CALL8 (terminator excluded from
+    /// `walk_bb`'s output), the shape recognizer rejects the
+    /// `[L32R, L8UI]` head without a recognized branch, and the result
+    /// is `UnsupportedShape` — the JIT cache caller falls back to
+    /// interpreter at the CALL8 boundary.
+    #[test]
+    fn walk_and_emit_side_exits_at_unsupported_terminator() {
+        // L32R a2, ... ; L8UI a3, a2, 0 ; CALL8 ... — no BEQZ between
+        // L8UI and CALL8, so the loopTask prefix recognizer rejects.
+        let text: &[u8] = &[
+            0x21, 0xFF, 0xFF, // L32R a2
+            0x32, 0x02, 0x00, // L8UI a3, a2, 0
+            0x25, 0x00, 0x00, // CALL8 (terminator)
+        ];
+        let err = walk_and_emit(
+            text,
+            crate::cpu::xtensa_jit_bytes::LOOPTASK_PC,
+            |pc| {
+                let off = pc.wrapping_sub(crate::cpu::xtensa_jit_bytes::LOOPTASK_PC) as usize;
+                if off < text.len() {
+                    Some(off)
+                } else {
+                    None
+                }
+            },
+            PsBits::default(),
+        )
+        .unwrap_err();
+        assert_eq!(err, EmitError::UnsupportedShape);
+    }
+
     #[test]
     fn side_exit_wire_codes_are_disjoint() {
         let reasons = [
