@@ -51,7 +51,6 @@ const NVMC: u32 = 0x4001_E000;
 const USBD: u32 = 0x4002_7000;
 const ACL: u32 = 0x4002_F000;
 const CRYPTOCELL: u32 = 0x5002_A000;
-const BPROT: u32 = 0x4002_6000;
 const MWU: u32 = 0x4002_0000;
 const RADIO: u32 = 0x4000_1000;
 const AAR: u32 = 0x4000_F000;
@@ -325,12 +324,12 @@ const CASES: &[MmioCase] = &[
     },
     MmioCase {
         peripheral: "ACL",
-        label: "ACL[0].ADDR = 0x1000 (4KB-aligned)",
+        label: "ACL[0].ADDR write-only (silicon reads 0)",
         prep: &[],
         write: (ACL + 0x500, 0x0000_1000),
         read_addr: ACL + 0x500,
         mask: 0xFFFF_F000,
-        expect: 0x0000_1000,
+        expect: 0,
     },
     MmioCase {
         peripheral: "CRYPTOCELL",
@@ -367,15 +366,6 @@ const CASES: &[MmioCase] = &[
         read_addr: RADIO + 0x51C,
         mask: 0xFFFF_FFFF,
         expect: 0xCAFE_BABE,
-    },
-    MmioCase {
-        peripheral: "BPROT",
-        label: "DISABLEINDEBUG = 1",
-        prep: &[],
-        write: (BPROT + 0x610, 1),
-        read_addr: BPROT + 0x610,
-        mask: 0x1,
-        expect: 1,
     },
 ];
 

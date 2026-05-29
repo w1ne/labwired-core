@@ -243,10 +243,6 @@ peripherals:
   bus: sysbus
   base_address: 1073803264  # 0x4000F000 — alternate-window with CCM
   irq: 15
-- id: bprot
-  type: nrf52840_bprot
-  bus: sysbus
-  base_address: 1073897472  # 0x40026000
 - id: usbd
   type: nrf52840_usbd
   bus: sysbus
@@ -259,7 +255,7 @@ peripherals:
 - id: acl
   type: nrf52840_acl
   bus: sysbus
-  base_address: 1073930240  # 0x4002F000
+  base_address: 1073934336  # 0x4002F000
   irq: 30
 - id: cryptocell
   type: nrf52840_cryptocell

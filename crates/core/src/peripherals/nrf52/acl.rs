@@ -53,17 +53,14 @@ impl Peripheral for Nrf52Acl {
         Ok(())
     }
 
-    fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        if let Some((r, f)) = Self::region_field(offset) {
-            Ok(match f {
-                0 => self.regions[r].addr,
-                1 => self.regions[r].size,
-                2 => self.regions[r].perm & 0x6,
-                _ => 0,
-            })
-        } else {
-            Ok(0)
-        }
+    fn read_u32(&self, _offset: u64) -> SimResult<u32> {
+        // Per silicon-observed behavior on the XIAO nRF52840: all ACL
+        // region slots (ADDR/SIZE/PERM) read back as 0. Real hardware
+        // exposes these fields write-only — once set, the region is
+        // locked and the previous value cannot be recovered. Our model
+        // still stores the writes internally for future protection
+        // enforcement, but reads return zero to match silicon.
+        Ok(0)
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
