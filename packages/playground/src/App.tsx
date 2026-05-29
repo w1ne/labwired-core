@@ -1655,7 +1655,21 @@ export function App() {
 
   return (
     <ChipsProvider initialBoard={selectedBoard}>
-    <ChipBridgeSync bridge={bridge} board={selectedBoard} />
+    <ChipBridgeSync
+      bridge={bridge}
+      board={selectedBoard}
+      source={source}
+      config={activeSimulationConfig}
+      onRestore={(s) => {
+        // Phase 3 chip switch: pull the target chip's saved state
+        // back into App. New chips with no source fall back to the
+        // board's default code so the editor never shows null.
+        setBridge(s.bridge);
+        setSelectedBoard(s.board);
+        setSource(s.source ?? loadBoardWorkspace(s.board).source);
+        setActiveSimulationConfig(s.config as ActiveSimulationConfig | null);
+      }}
+    />
     <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }} />}>
     <CanvasShell>
     <StudioShell

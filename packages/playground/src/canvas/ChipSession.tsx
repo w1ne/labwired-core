@@ -1,15 +1,14 @@
-// Phase 2b: per-chip session registry.
+// Phase 2b + 3: per-chip session registry.
 //
-// Each ChipSession owns one SimulatorBridge (= one WasmSimulator inside
-// the shared WASM module). The registry holds N sessions keyed by
-// chipId; the canvas renders one ChipShape per session.
+// Each ChipSession holds the per-chip state that, when switched into
+// App's local state, makes that chip "active" — its SimulatorBridge,
+// board, source code, and the resolved YAML/firmware config used to
+// instantiate the bridge.
 //
-// The "active" chipId selects which session drives the existing
-// single-chip studio UI (StudioShell, code editor, peripherals). All
-// non-active sessions still tick every frame so that the cross-instance
-// virtual-air registry in the RADIO peripheral (Rust-side `static
-// OnceLock<Mutex<VirtualAir>>`) sees both transmitters — that's the
-// load-bearing semantics for Phase 4's BLE-on-canvas demo.
+// Phase 3 adds focus switching: clicking an inactive ChipCard now
+// pauses the current chip, snapshots its state into the registry, and
+// restores the target chip's state into App. The user keeps both
+// chips' code/firmware while editing only one at a time.
 import {
   createContext,
   useCallback,
@@ -25,6 +24,11 @@ export interface ChipSession {
   chipId: string;
   bridge: SimulatorBridge | null;
   board: BoardConfig;
+  source: string | null;
+  // Opaque sim config blob (yaml + firmware bytes) — used by App.tsx
+  // when re-instantiating a bridge. Kept as `unknown` here so the
+  // registry doesn't depend on the playground's internal types.
+  config: unknown;
 }
 
 interface ChipsContext {
@@ -32,8 +36,7 @@ interface ChipsContext {
   order: string[];
   activeChipId: string;
   setActiveChipId: (id: string) => void;
-  setBridge: (chipId: string, bridge: SimulatorBridge | null) => void;
-  setBoard: (chipId: string, board: BoardConfig) => void;
+  setSession: (chipId: string, partial: Partial<Omit<ChipSession, 'chipId'>>) => void;
   addChip: (chipId?: string, board?: BoardConfig) => string;
 }
 
@@ -49,33 +52,42 @@ export function ChipsProvider({
   initialBoard: BoardConfig;
 }) {
   const [sessions, setSessions] = useState<Record<string, ChipSession>>(() => ({
-    [DEFAULT_CHIP_ID]: { chipId: DEFAULT_CHIP_ID, bridge: null, board: initialBoard },
+    [DEFAULT_CHIP_ID]: {
+      chipId: DEFAULT_CHIP_ID,
+      bridge: null,
+      board: initialBoard,
+      source: null,
+      config: null,
+    },
   }));
   const [order, setOrder] = useState<string[]>(() => [DEFAULT_CHIP_ID]);
   const [activeChipId, setActiveChipId] = useState<string>(DEFAULT_CHIP_ID);
 
-  const setBridge = useCallback((chipId: string, bridge: SimulatorBridge | null) => {
-    setSessions((prev) => {
-      const existing = prev[chipId];
-      if (!existing) return prev;
-      return { ...prev, [chipId]: { ...existing, bridge } };
-    });
-  }, []);
-
-  const setBoard = useCallback((chipId: string, board: BoardConfig) => {
-    setSessions((prev) => {
-      const existing = prev[chipId];
-      if (!existing) return prev;
-      return { ...prev, [chipId]: { ...existing, board } };
-    });
-  }, []);
+  const setSession = useCallback(
+    (chipId: string, partial: Partial<Omit<ChipSession, 'chipId'>>) => {
+      setSessions((prev) => {
+        const existing = prev[chipId];
+        if (!existing) return prev;
+        // Cheap shallow change check so mirror effects that re-write
+        // identical values don't re-render every consumer.
+        let changed = false;
+        for (const k of Object.keys(partial) as Array<keyof typeof partial>) {
+          if (existing[k as keyof ChipSession] !== partial[k]) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) return prev;
+        return { ...prev, [chipId]: { ...existing, ...partial } };
+      });
+    },
+    [],
+  );
 
   const addChip = useCallback(
     (chipId?: string, board?: BoardConfig) => {
       let id = chipId ?? '';
       if (!id) {
-        // Allocate next sequential id (`chip-1`, `chip-2`, …) so the
-        // human-readable label matches creation order.
         let n = 1;
         while (sessions[`chip-${n}`]) n += 1;
         id = `chip-${n}`;
@@ -83,7 +95,13 @@ export function ChipsProvider({
       const resolvedBoard = board ?? BOARD_CONFIGS[0] ?? initialBoard;
       setSessions((prev) => ({
         ...prev,
-        [id]: { chipId: id, bridge: null, board: resolvedBoard },
+        [id]: {
+          chipId: id,
+          bridge: null,
+          board: resolvedBoard,
+          source: null,
+          config: null,
+        },
       }));
       setOrder((prev) => (prev.includes(id) ? prev : [...prev, id]));
       return id;
@@ -92,8 +110,8 @@ export function ChipsProvider({
   );
 
   const value = useMemo<ChipsContext>(
-    () => ({ sessions, order, activeChipId, setActiveChipId, setBridge, setBoard, addChip }),
-    [sessions, order, activeChipId, setBridge, setBoard, addChip],
+    () => ({ sessions, order, activeChipId, setActiveChipId, setSession, addChip }),
+    [sessions, order, activeChipId, setSession, addChip],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
