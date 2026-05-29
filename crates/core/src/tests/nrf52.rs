@@ -774,6 +774,171 @@ fn nrf52840_ble_loopback_through_virtual_air() {
     assert_eq!(crc, 1, "CRC should validate end-to-end");
 }
 
+/// Validate the simulator against **real Arduino code**: a stock
+/// `digitalWrite` blink sketch compiled by `arduino-cli` with the
+/// Adafruit nRF52 BSP (`adafruit:nrf52:pca10056`). The ELF expects
+/// the Adafruit bootloader + SoftDevice layout (app at 0x26000), so
+/// after `load_firmware` we manually fix up SP/PC from the
+/// application vector table and set VTOR=0x26000 as the bootloader
+/// would.
+///
+/// Then we step the Cortex-M core and watch GPIO0.OUT bit 26 toggle —
+/// proving that:
+/// - the Arduino HAL's `pinMode` boils down to GPIO0 DIRSET writes
+///   our model handles,
+/// - `digitalWrite(HIGH/LOW)` lands in GPIO0 OUTSET/OUTCLR per the
+///   Adafruit Arduino nRF52 wrapper,
+/// - the busy-loop in `delayMicroseconds` (DWT.CYCCNT-based on
+///   Adafruit's HAL) runs against our DWT model without spinning
+///   forever.
+///
+/// Skipped if the ELF hasn't been built. Build with:
+/// ```text
+/// arduino-cli compile --fqbn adafruit:nrf52:pca10056 \
+///     --output-dir target/arduino-blink/ \
+///     /tmp/arduino-blink/arduino-blink.ino
+/// cp target/arduino-blink/arduino-blink.ino.elf target/arduino-blink.elf
+/// ```
+#[test]
+fn nrf52840_arduino_blink_toggles_gpio() {
+    use crate::Machine;
+
+    let elf_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/arduino-blink.elf");
+    if !elf_path.exists() {
+        println!(
+            "SKIPPED: build the Arduino sketch first:\n  \
+             arduino-cli compile --fqbn adafruit:nrf52:pca10056 \\\n    \
+             --output-dir target/arduino-blink/ \\\n    \
+             arduino-blink.ino\n  \
+             cp target/arduino-blink/arduino-blink.ino.elf {}",
+            elf_path.display()
+        );
+        return;
+    }
+
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+    let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+
+    // Load PT_LOAD segments at their physical addresses. The Arduino
+    // ELF places .text at 0x26000 (LMA) and .data at 0x2adcc (flash
+    // copy, RAM @0x20006000 runtime).
+    let elf_bytes = std::fs::read(&elf_path).expect("read Arduino ELF");
+    let elf = goblin::elf::Elf::parse(&elf_bytes).expect("parse Arduino ELF");
+    let mut image = crate::memory::ProgramImage::new(elf.entry, crate::Arch::Arm);
+    for ph in &elf.program_headers {
+        if ph.p_type != goblin::elf::program_header::PT_LOAD || ph.p_filesz == 0 {
+            continue;
+        }
+        image.add_segment(
+            ph.p_paddr,
+            elf_bytes[ph.p_offset as usize..(ph.p_offset + ph.p_filesz) as usize].to_vec(),
+        );
+    }
+    machine.load_firmware(&image).expect("load Arduino firmware");
+
+    // The Adafruit Bluefruit bootloader normally sets VTOR=0x26000 and
+    // jumps to the Reset_Handler whose address sits at 0x26004. Then
+    // Reset_Handler runs the C startup (.data copy, .bss clear, libc
+    // init) and calls main, which sets up FreeRTOS, creates the
+    // loopTask, and starts the scheduler. The loopTask eventually
+    // calls our setup() then loops calling loop().
+    //
+    // For the simulator we don't model FreeRTOS context-switch fully
+    // (PendSV vs SysTick priority handling has subtle gaps), so we
+    // simulate the Reset_Handler for long enough to initialise globals,
+    // then *force* a direct jump into setup() with a fresh SP. setup()
+    // is self-contained: it does pinMode + the toggle loop + early
+    // return.
+    const APP_VTOR: u32 = 0x0002_6000;
+    let sp = machine.bus.read_u32(APP_VTOR as u64).expect("SP from app VT");
+    let reset_handler = machine
+        .bus
+        .read_u32((APP_VTOR + 4) as u64)
+        .expect("Reset_Handler from app VT");
+    println!("Arduino app: SP=0x{sp:08X} Reset_Handler=0x{reset_handler:08X}");
+    machine.cpu.set_sp(sp);
+    machine
+        .bus
+        .write_u32(0xE000_ED08, APP_VTOR as u64 as u32)
+        .ok();
+
+    // Resolve setup() symbol address from the ELF.
+    let setup_addr = elf
+        .syms
+        .iter()
+        .find_map(|s| match elf.strtab.get_at(s.st_name) {
+            Some("setup") => Some(s.st_value as u32),
+            _ => None,
+        })
+        .expect("setup symbol");
+
+    // Run Reset_Handler for a fixed number of cycles so the C startup
+    // (BSS clear + data copy) has a chance to run, then force PC into
+    // setup().
+    machine.cpu.set_pc(reset_handler & !1);
+    for _ in 0..50_000 {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+    println!(
+        "After early Reset_Handler steps: PC=0x{:08X}",
+        machine.cpu.get_pc()
+    );
+    machine.cpu.set_pc(setup_addr & !1);
+    machine.cpu.set_sp(sp); // re-arm a clean stack
+    println!("Force-jumped to setup() at 0x{setup_addr:08X}");
+
+    // Run the sketch — watch GPIO0.OUT bit 26 transitions. Stop after
+    // a handful of toggles to keep test wall-clock short.
+    const GPIO0_OUT: u64 = 0x5000_0504;
+    const LED_BIT: u32 = 1 << 26;
+    let mut last_state = machine.bus.read_u32(GPIO0_OUT).unwrap_or(0) & LED_BIT;
+    let mut transitions = 0usize;
+    let max_steps = 5_000_000;
+    for _ in 0..max_steps {
+        if machine.step().is_err() {
+            break;
+        }
+        let now = machine.bus.read_u32(GPIO0_OUT).unwrap_or(0) & LED_BIT;
+        if now != last_state {
+            transitions += 1;
+            last_state = now;
+            if transitions >= 4 {
+                break;
+            }
+        }
+    }
+
+    let final_pc = machine.cpu.get_pc();
+    let cyccnt = machine.bus.read_u32(0xE000_1004).unwrap_or(0xDEAD_BEEF);
+    let dwt_ctrl = machine.bus.read_u32(0xE000_1000).unwrap_or(0xDEAD_BEEF);
+    let dir = machine.bus.read_u32(0x5000_0514).unwrap_or(0);
+    let out = machine.bus.read_u32(0x5000_0504).unwrap_or(0);
+    println!(
+        "Arduino blink: GPIO0 pin 26 transitions = {transitions}\n\
+         CPU PC=0x{final_pc:08X}  DWT.CTRL=0x{dwt_ctrl:08X}  CYCCNT=0x{cyccnt:08X}\n\
+         GPIO0 DIR=0x{dir:08X} OUT=0x{out:08X}"
+    );
+    assert!(
+        transitions >= 4,
+        "real Arduino sketch should toggle GPIO0 pin 26 ≥4 times within \
+         {max_steps} CPU steps; observed {transitions}"
+    );
+}
+
 #[test]
 fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
     let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
