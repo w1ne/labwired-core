@@ -373,7 +373,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
   {
     boardId: 'nrf52840-onboarding',
     chipId: 'nrf52840-onboarding',
-    name: 'nRF52840 (full onboarding)',
+    name: 'nRF52840',
     description: 'Nordic nRF52840 with the full 22-peripheral onboarding surface — TIMER, RTC, RNG, CLOCK, GPIOTE, PPI, WDT, RADIO + Easy DMA, USBD, CRYPTOCELL, FICR, NVMC, and more. Validated against real XIAO nRF52840 silicon (22/22 MODELLED).',
     arch: 'ARM Cortex-M4F',
     chipYaml: chipNrf52840Onboarding,
