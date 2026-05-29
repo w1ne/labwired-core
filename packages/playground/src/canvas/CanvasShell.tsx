@@ -10,6 +10,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Tldraw, type Editor, createShapeId, type TLShapeId } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { ChipShapeUtil, ChipChildrenProvider } from './ChipShape';
+import { BleAirEdgeShapeUtil, useBleAirEdgeSync } from './BleAirEdge';
+import { BleTracePanelProvider } from './BleTracePanel';
 import { useChips } from './ChipSession';
 import { useBackgroundChips } from './useBackgroundChips';
 import './canvas.css';
@@ -25,9 +27,11 @@ const shapeIdFor = (chipId: string): TLShapeId => createShapeId(`chip-${chipId}`
 
 export function CanvasShell({ children }: { children: ReactNode }) {
   return (
-    <ChipChildrenProvider content={children}>
-      <CanvasInner />
-    </ChipChildrenProvider>
+    <BleTracePanelProvider>
+      <ChipChildrenProvider content={children}>
+        <CanvasInner />
+      </ChipChildrenProvider>
+    </BleTracePanelProvider>
   );
 }
 
@@ -35,6 +39,7 @@ function CanvasInner() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const { order, activeChipId, addChip } = useChips();
   useBackgroundChips(true);
+  useBleAirEdgeSync(editor);
 
   useEffect(() => {
     if (!editor) return;
@@ -45,7 +50,7 @@ function CanvasInner() {
     <div className="lw-canvas-root">
       <Tldraw
         hideUi
-        shapeUtils={[ChipShapeUtil]}
+        shapeUtils={[ChipShapeUtil, BleAirEdgeShapeUtil]}
         persistenceKey={PERSISTENCE_KEY}
         onMount={(ed) => {
           setEditor(ed);

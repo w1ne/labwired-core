@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const __wbg_wasmsimulator_free: (a: number, b: number) => void;
+export const wasmsimulator_air_trace_snapshot: (a: number) => any;
 export const wasmsimulator_apply_agentdeck_quirks: (a: number) => [number, number];
 export const wasmsimulator_apply_runtime_snapshot: (a: number, b: number, c: number) => [number, number];
 export const wasmsimulator_bench_jit: (a: number, b: number) => [number, number, number];

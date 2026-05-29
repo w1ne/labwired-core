@@ -17,6 +17,19 @@ export class WasmSimulator {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_wasmsimulator_free(ptr, 0);
     }
+    /**
+     * Snapshot of the shared virtual-air TX trace ring buffer (last
+     * ~200 BLE/proprietary frames pushed by any chip in this WASM
+     * instance, most-recent-first). The playground's BLE-on-canvas
+     * visualization polls this to render the packet trace panel; the
+     * underlying state lives in a Rust static, so any WasmSimulator
+     * can return the same snapshot — pick whichever chip is alive.
+     * @returns {any}
+     */
+    air_trace_snapshot() {
+        const ret = wasm.wasmsimulator_air_trace_snapshot(this.__wbg_ptr);
+        return ret;
+    }
     apply_agentdeck_quirks() {
         const ret = wasm.wasmsimulator_apply_agentdeck_quirks(this.__wbg_ptr);
         if (ret[1]) {
@@ -769,7 +782,7 @@ function __wbg_get_imports() {
             console.warn(getStringFromWasm0(arg0, arg1));
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1764, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1739, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h90cbb89e119fd004);
             return ret;
         },

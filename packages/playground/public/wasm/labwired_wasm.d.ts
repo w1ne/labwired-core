@@ -4,6 +4,15 @@
 export class WasmSimulator {
     free(): void;
     [Symbol.dispose](): void;
+    /**
+     * Snapshot of the shared virtual-air TX trace ring buffer (last
+     * ~200 BLE/proprietary frames pushed by any chip in this WASM
+     * instance, most-recent-first). The playground's BLE-on-canvas
+     * visualization polls this to render the packet trace panel; the
+     * underlying state lives in a Rust static, so any WasmSimulator
+     * can return the same snapshot — pick whichever chip is alive.
+     */
+    air_trace_snapshot(): any;
     apply_agentdeck_quirks(): void;
     /**
      * Apply a binary `MachineRuntimeSnapshot` (LWRS-framed bincode blob,
@@ -285,6 +294,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_wasmsimulator_free: (a: number, b: number) => void;
+    readonly wasmsimulator_air_trace_snapshot: (a: number) => any;
     readonly wasmsimulator_apply_agentdeck_quirks: (a: number) => [number, number];
     readonly wasmsimulator_apply_runtime_snapshot: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_bench_jit: (a: number, b: number) => [number, number, number];
