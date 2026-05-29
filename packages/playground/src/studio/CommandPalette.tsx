@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Command } from 'cmdk';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type CommandBucket = 'Components' | 'Boards' | 'Examples' | 'Actions';
+export type CommandBucket = 'Components' | 'Boards' | 'Examples' | 'Actions' | 'MCU';
 
 export interface CommandItem {
   id: string;

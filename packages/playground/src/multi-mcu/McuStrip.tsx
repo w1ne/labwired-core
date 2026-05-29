@@ -15,7 +15,11 @@ import { McuThumb } from './McuThumb';
 import './mcu-strip.css';
 
 export function McuStrip() {
-  const { order, sessions, activeChipId, setActiveChipId, addChip, removeChip } = useChips();
+  const { order, sessions, activeChipId, setActiveChipId, setPropertiesOpen, removeChip } = useChips();
+  // Hide the strip entirely when there's only one MCU — the chip
+  // is implied. The user picks "Add MCU" via the ⌘K command
+  // palette; the strip surfaces only as a chip switcher.
+  if (order.length <= 1) return null;
   return (
     <div className="lw-mcu-strip" role="toolbar" aria-label="MCU instances">
       {order.map((chipId) => {
@@ -27,20 +31,16 @@ export function McuStrip() {
             key={chipId}
             session={session}
             isActive={isActive}
-            onFocus={() => setActiveChipId(chipId)}
+            onFocus={() => {
+              setActiveChipId(chipId);
+              // Clicking a chip tile = "show me this chip's
+              // properties" — opens the bottom dev drawer.
+              setPropertiesOpen(true);
+            }}
             onRemove={chipId === 'chip-default' ? undefined : () => removeChip(chipId)}
           />
         );
       })}
-      <button
-        type="button"
-        className="lw-mcu-add"
-        onClick={() => addChip()}
-        aria-label="Add MCU"
-        title="Drop another MCU into the session — runs an independent binary, shares BLE air"
-      >
-        +
-      </button>
     </div>
   );
 }

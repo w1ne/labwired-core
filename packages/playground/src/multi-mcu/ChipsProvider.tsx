@@ -35,6 +35,12 @@ interface ChipsContext {
   setSession: (chipId: string, partial: Partial<Omit<ChipSession, 'chipId'>>) => void;
   addChip: (board?: BoardConfig) => string;
   removeChip: (chipId: string) => void;
+  /// True iff the user has explicitly opened the active chip's
+  /// properties (the bottom Serial/Registers/Trace/Memory/Source/
+  /// YAML drawer). Default false — the drawer is hidden until the
+  /// user picks a chip to inspect.
+  propertiesOpen: boolean;
+  setPropertiesOpen: (open: boolean) => void;
 }
 
 const Ctx = createContext<ChipsContext | null>(null);
@@ -123,6 +129,7 @@ export function ChipsProvider({
     }
     return DEFAULT_CHIP_ID;
   });
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
 
   useEffect(() => {
     const boardIdByChip: Record<string, string> = {};
@@ -196,8 +203,10 @@ export function ChipsProvider({
       setSession,
       addChip,
       removeChip,
+      propertiesOpen,
+      setPropertiesOpen,
     }),
-    [sessions, order, activeChipId, setSession, addChip, removeChip],
+    [sessions, order, activeChipId, setSession, addChip, removeChip, propertiesOpen],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

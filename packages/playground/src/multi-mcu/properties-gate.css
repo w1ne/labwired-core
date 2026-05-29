@@ -1,0 +1,39 @@
+.lw-properties-close-row {
+  position: absolute;
+  bottom: 256px; /* sit just above the dev drawer */
+  right: 16px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.lw-properties-close-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(10, 10, 15, 0.85);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.lw-properties-close {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.lw-properties-close:hover {
+  background: rgba(255, 60, 60, 0.6);
+  color: #fff;
+}

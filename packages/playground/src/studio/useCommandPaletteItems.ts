@@ -31,6 +31,9 @@ export interface CommandPaletteContext {
   onShare: () => void;
   onReset: () => void;
   onToggleDev: () => void;
+  /// Drop a new MCU into the multi-chip session. Pass a board to
+  /// pre-select it; otherwise the default (nRF52840) is used.
+  onAddMcu?: (board?: BoardConfig) => void;
 }
 
 export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[] {
@@ -76,6 +79,30 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
       { id: 'act:share', bucket: 'Actions', label: 'Share project', action: ctx.onShare },
       { id: 'act:dev', bucket: 'Actions', label: 'Toggle Dev mode', action: ctx.onToggleDev },
     );
+
+    if (ctx.onAddMcu) {
+      // Multi-chip session: let the user drop another MCU through
+      // the same command-palette flow as everything else, scoped to
+      // the boards already in the catalog.
+      const onAddMcu = ctx.onAddMcu;
+      items.push({
+        id: 'mcu:add-default',
+        bucket: 'MCU',
+        label: 'Add MCU (nRF52840 DK)',
+        hint: 'new bridge',
+        action: () => onAddMcu(),
+      });
+      for (const board of ctx.boards) {
+        items.push({
+          id: `mcu:add-${board.boardId}`,
+          bucket: 'MCU',
+          label: `Add MCU: ${board.name}`,
+          hint: board.arch,
+          icon: getComponentIcon(board.mcuComponentType ?? 'mcu', 'misc'),
+          action: () => onAddMcu(board),
+        });
+      }
+    }
 
     return items;
   }, [ctx]);

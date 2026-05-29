@@ -42,11 +42,12 @@ import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
-import { ChipsProvider } from './multi-mcu/ChipsProvider';
+import { ChipsProvider, useChips } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
 import { McuStrip } from './multi-mcu/McuStrip';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
 import { MobileMultiChipView } from './multi-mcu/MobileMultiChipView';
+import { PropertiesGate } from './multi-mcu/PropertiesGate';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1498,6 +1499,10 @@ export function App() {
     }
   };
 
+  // Bridge so the command palette (defined here, outside the
+  // ChipsProvider tree) can drop a new MCU through the ⌘K flow.
+  const addMcuRef = useRef<((board?: BoardConfig) => void) | null>(null);
+
   // Command palette items
   const commandItems = useCommandPaletteItems({
     boards: BOARD_CONFIGS,
@@ -1516,6 +1521,7 @@ export function App() {
     onShare: handleShare,
     onReset: handleReset,
     onToggleDev: () => { /* no-op: dev toggle is owned by useStudioLayout inside StudioShell; TopChrome's toggle still works */ },
+    onAddMcu: (board) => addMcuRef.current?.(board),
   });
 
   const renderCommandPalette = (open: boolean, closeCommand: () => void, _openCommand: () => void) => (
@@ -1559,6 +1565,7 @@ export function App() {
   );
 
   const renderDevDrawer = (devMode: boolean, leftOffset: number) => (
+    <PropertiesGate>
     <DevDrawer
       devMode={devMode}
       leftOffset={leftOffset}
@@ -1610,6 +1617,7 @@ export function App() {
         ),
       }}
     />
+    </PropertiesGate>
   );
 
   // Mobile-only demo shell: the desktop canvas editor is unusable on a phone.
@@ -1630,6 +1638,7 @@ export function App() {
   if (isMobile) {
     return (
       <ChipsProvider initialBoard={selectedBoard}>
+        <AddMcuRefSync addMcuRef={addMcuRef} />
         <ChipBridgeSync
           bridge={bridge}
           board={selectedBoard}
@@ -1661,6 +1670,7 @@ export function App() {
 
   return (
     <ChipsProvider initialBoard={selectedBoard}>
+    <AddMcuRefSync addMcuRef={addMcuRef} />
     <ChipBridgeSync
       bridge={bridge}
       board={selectedBoard}
@@ -2069,5 +2079,20 @@ export function App() {
 
 function BackgroundChipTicker() {
   useBackgroundChips(true);
+  return null;
+}
+
+/// Bridges the ChipsProvider's addChip to the parent App scope via a
+/// ref so the command palette (defined outside the provider) can drop
+/// a new MCU through the standard ⌘K flow.
+export function AddMcuRefSync({
+  addMcuRef,
+}: {
+  addMcuRef: { current: ((board?: BoardConfig) => void) | null };
+}) {
+  const chips = useChips();
+  addMcuRef.current = (board) => {
+    chips.addChip(board);
+  };
   return null;
 }
