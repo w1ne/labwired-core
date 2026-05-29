@@ -30,6 +30,7 @@ pub mod ppi;
 pub mod pwm;
 pub mod qdec;
 pub mod qspi;
+pub mod radio;
 pub mod rng;
 pub mod rtc;
 pub mod saadc;

@@ -990,6 +990,9 @@ impl SystemBus {
                 "nrf52840_bprot" | "nrf52_bprot" => {
                     Box::new(crate::peripherals::nrf52::bprot::Nrf52Bprot::new())
                 }
+                "nrf52840_radio" | "nrf52_radio" => {
+                    Box::new(crate::peripherals::nrf52::radio::Nrf52Radio::new())
+                }
                 "nrf52840_usbd" | "nrf52_usbd" => {
                     Box::new(crate::peripherals::nrf52::usbd::Nrf52Usbd::new())
                 }
