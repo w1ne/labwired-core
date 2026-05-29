@@ -50,6 +50,19 @@ pub struct CortexM {
     /// exception. cortex-m-rt's DefaultHandler depends on this to
     /// route to the right IRQ branch.
     pub vectactive: Arc<AtomicU32>,
+    /// Shared with SCB: SHPR1 (MemManage/BusFault/UsageFault priority).
+    /// Used by `exception_priority` so dispatch honours real ARM priority
+    /// rules rather than picking by exception number.
+    pub shpr1: Arc<AtomicU32>,
+    /// Shared with SCB: SHPR2 (SVCall priority byte 3).
+    pub shpr2: Arc<AtomicU32>,
+    /// Shared with SCB: SHPR3 (PendSV byte 2, SysTick byte 3). FreeRTOS
+    /// sets PendSV to 0xFF (lowest), which lets the SysTick handler set
+    /// PENDSVSET and only have it dispatch on return-to-thread — the
+    /// load-bearing semantics for context switching.
+    pub shpr3: Arc<AtomicU32>,
+    /// Shared NVIC state for IRQ priority lookups via IPR.
+    pub nvic_state: Option<Arc<crate::peripherals::nvic::NvicState>>,
     pub decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
     /// FPU single-precision register file (VFPv4 single — S0..S31).
     /// Each S register is the IEEE-754 binary32 bit pattern; reads via
@@ -85,6 +98,10 @@ impl Default for CortexM {
             it_state: 0,
             active_exception: 0,
             vectactive: Arc::new(AtomicU32::new(0)),
+            shpr1: Arc::new(AtomicU32::new(0)),
+            shpr2: Arc::new(AtomicU32::new(0)),
+            shpr3: Arc::new(AtomicU32::new(0)),
+            nvic_state: None,
             decode_cache: Box::new([None; 4096]),
             fpu_s: [0u32; 32],
         }
@@ -110,6 +127,76 @@ impl CortexM {
 
     pub fn set_shared_vectactive(&mut self, vectactive: Arc<AtomicU32>) {
         self.vectactive = vectactive;
+    }
+
+    /// Wire the three SHPR atomics shared with the SCB peripheral. Once
+    /// shared, `exception_priority` can read live priorities and the
+    /// dispatch loop honours ARMv7-M priority rules instead of just
+    /// picking the lowest-numbered pending exception.
+    pub fn set_shared_shpr(
+        &mut self,
+        shpr1: Arc<AtomicU32>,
+        shpr2: Arc<AtomicU32>,
+        shpr3: Arc<AtomicU32>,
+    ) {
+        self.shpr1 = shpr1;
+        self.shpr2 = shpr2;
+        self.shpr3 = shpr3;
+    }
+
+    /// Wire the NVIC's shared state so `exception_priority` can read
+    /// IPR bytes for IRQs (exception number ≥ 16).
+    pub fn set_shared_nvic_state(&mut self, state: Arc<crate::peripherals::nvic::NvicState>) {
+        self.nvic_state = Some(state);
+    }
+
+    /// ARMv7-M exception priority. Lower numeric value = higher priority.
+    /// Reset(1) = -3, NMI(2) = -2, HardFault(3) = -1 are fixed. Configurable
+    /// system exceptions read from SHPR1/2/3. IRQs (≥16) read from the
+    /// NVIC IPR byte for that IRQ. Unmapped or unknown exceptions return
+    /// 0xFF (lowest configurable priority).
+    pub fn exception_priority(&self, exc: u32) -> i32 {
+        match exc {
+            0 => 256,
+            1 => -3,
+            2 => -2,
+            3 => -1,
+            4 => ((self.shpr1.load(Ordering::Relaxed) >> 0) & 0xFF) as i32,
+            5 => ((self.shpr1.load(Ordering::Relaxed) >> 8) & 0xFF) as i32,
+            6 => ((self.shpr1.load(Ordering::Relaxed) >> 16) & 0xFF) as i32,
+            11 => ((self.shpr2.load(Ordering::Relaxed) >> 24) & 0xFF) as i32,
+            14 => ((self.shpr3.load(Ordering::Relaxed) >> 16) & 0xFF) as i32,
+            15 => ((self.shpr3.load(Ordering::Relaxed) >> 24) & 0xFF) as i32,
+            n if n >= 16 => {
+                if let Some(nvic) = &self.nvic_state {
+                    nvic.ipr_priority((n - 16) as usize) as i32
+                } else {
+                    0xFF
+                }
+            }
+            _ => 0xFF,
+        }
+    }
+
+    /// Among the pending exceptions, return the one with the highest
+    /// priority (lowest numeric value). Ties break by exception number
+    /// (lower number wins, per ARMv7-M B1.5.4).
+    fn highest_priority_pending(&self) -> Option<u32> {
+        if self.pending_exceptions == 0 {
+            return None;
+        }
+        let mut mask = self.pending_exceptions;
+        let mut best: Option<(i32, u32)> = None;
+        while mask != 0 {
+            let exc = mask.trailing_zeros();
+            mask &= !(1u64 << exc);
+            let prio = self.exception_priority(exc);
+            best = Some(match best {
+                Some((bp, be)) if bp <= prio => (bp, be),
+                _ => (prio, exc),
+            });
+        }
+        best.map(|(_, e)| e)
     }
 
     /// Update both the local field and the SCB.ICSR mirror in one go.
@@ -417,14 +504,15 @@ impl Cpu for CortexM {
 
         if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
             while executed < max_count {
-                // Break early only when there's a takeable exception (higher priority
-                // than the currently active one). Pending exceptions at the same or lower
-                // priority are handled inside step_internal without breaking the batch.
+                // Break the batch only when a takeable exception is pending:
+                // its priority must be strictly higher (smaller number) than
+                // the currently-active one (or 256 = thread mode baseline).
                 if self.pending_exceptions != 0 && !self.primask {
-                    let highest = 63 - self.pending_exceptions.leading_zeros();
-                    let can_take = self.active_exception == 0 || highest < self.active_exception;
-                    if can_take {
-                        break;
+                    if let Some(exc) = self.highest_priority_pending() {
+                        let active_prio = self.exception_priority(self.active_exception);
+                        if self.exception_priority(exc) < active_prio {
+                            break;
+                        }
                     }
                 }
                 let old_pc = self.pc;
@@ -438,10 +526,11 @@ impl Cpu for CortexM {
         } else {
             while executed < max_count {
                 if self.pending_exceptions != 0 && !self.primask {
-                    let highest = 63 - self.pending_exceptions.leading_zeros();
-                    let can_take = self.active_exception == 0 || highest < self.active_exception;
-                    if can_take {
-                        break;
+                    if let Some(exc) = self.highest_priority_pending() {
+                        let active_prio = self.exception_priority(self.active_exception);
+                        if self.exception_priority(exc) < active_prio {
+                            break;
+                        }
                     }
                 }
                 let old_pc = self.pc;
@@ -466,15 +555,18 @@ impl CortexM {
         _observers: &[Arc<dyn SimulationObserver>],
         config: &SimulationConfig,
     ) -> SimResult<()> {
-        // Check for pending exceptions before executing instruction
-        if self.pending_exceptions != 0 && !self.primask {
-            // Find highest priority exception (lowest number = highest priority)
-            let exception_num = 63 - self.pending_exceptions.leading_zeros();
-
-            // Only take the exception if it has strictly higher priority (lower number)
-            // than the currently active exception. This prevents re-entry of the same
-            // or lower-priority exception while one is already being serviced (ARM IABR behavior).
-            let can_take = self.active_exception == 0 || exception_num < self.active_exception;
+        // Check for pending exceptions before executing instruction.
+        // Use real ARMv7-M priority dispatch: pick the highest-priority
+        // pending exception (smallest numeric priority value), and only
+        // take it if its priority is strictly higher than the currently
+        // active exception's. This is the dispatch path that makes
+        // FreeRTOS PendSV-driven context switches behave correctly —
+        // PendSV at priority 0xFF only runs when no other ISR is active.
+        let exception_num = self.highest_priority_pending().unwrap_or(0);
+        if self.pending_exceptions != 0 && !self.primask && exception_num != 0 {
+            let take_prio = self.exception_priority(exception_num);
+            let active_prio = self.exception_priority(self.active_exception);
+            let can_take = take_prio < active_prio;
 
             if can_take {
                 self.pending_exceptions &= !(1u64 << exception_num);
@@ -2621,5 +2713,66 @@ mod tests {
         cpu.r3 = 4;
         run_test_instr(&mut cpu, &mut bus, 0xFA40_F203, true);
         assert_eq!(cpu.r2, 0xFF00_0000, "ASR.W by 4 of 0xF0000000 sign-extends");
+    }
+
+    /// SHPR3-driven priority dispatch: PendSV at lowest priority (0xFF) must
+    /// not preempt an active higher-priority IRQ. This is the load-bearing
+    /// behaviour for FreeRTOS — SysTick (higher prio) pends PendSV which
+    /// only takes once SysTick returns. Once SysTick is no longer active,
+    /// PendSV is takeable from thread mode.
+    #[test]
+    fn shpr3_pendsv_does_not_preempt_active_higher_priority_irq() {
+        let mut cpu = CortexM::new();
+        // Wire SHPR3 with PendSV (byte 2) at 0xFF, SysTick (byte 3) at 0x00.
+        let shpr1 = Arc::new(AtomicU32::new(0));
+        let shpr2 = Arc::new(AtomicU32::new(0));
+        let shpr3 = Arc::new(AtomicU32::new(0x00FF_0000));
+        cpu.set_shared_shpr(shpr1, shpr2, shpr3);
+
+        // PendSV at 0xFF, SysTick at 0x00.
+        assert_eq!(cpu.exception_priority(14), 0xFF);
+        assert_eq!(cpu.exception_priority(15), 0x00);
+
+        // PendSV pending while SysTick is active — must NOT be takeable.
+        cpu.active_exception = 15;
+        cpu.pending_exceptions = 1u64 << 14;
+        assert_eq!(cpu.highest_priority_pending(), Some(14));
+        let active_prio = cpu.exception_priority(cpu.active_exception);
+        let pend_prio = cpu.exception_priority(14);
+        assert!(
+            pend_prio >= active_prio,
+            "PendSV (0xFF) must not preempt active SysTick (0x00)"
+        );
+
+        // SysTick returns; from thread mode PendSV must be takeable.
+        cpu.active_exception = 0;
+        let active_prio = cpu.exception_priority(0);
+        assert!(
+            pend_prio < active_prio,
+            "PendSV at 0xFF must be takeable from thread mode (256)"
+        );
+    }
+
+    /// IRQs read priorities from the shared NVIC IPR. Two pending IRQs
+    /// with different priorities must dispatch by priority, not by IRQ
+    /// number.
+    #[test]
+    fn nvic_ipr_priority_drives_irq_dispatch_order() {
+        let mut cpu = CortexM::new();
+        let nvic = Arc::new(crate::peripherals::nvic::NvicState::default());
+        // IRQ0 priority = 0xC0, IRQ1 priority = 0x40. IRQ1 has higher
+        // priority despite being a larger IRQ number.
+        nvic.ipr[0].store(0x0000_40C0, Ordering::Relaxed);
+        cpu.set_shared_nvic_state(nvic);
+
+        assert_eq!(cpu.exception_priority(16), 0xC0); // IRQ0 → exc 16
+        assert_eq!(cpu.exception_priority(17), 0x40); // IRQ1 → exc 17
+
+        cpu.pending_exceptions = (1u64 << 16) | (1u64 << 17);
+        assert_eq!(
+            cpu.highest_priority_pending(),
+            Some(17),
+            "IRQ1 (prio 0x40) outranks IRQ0 (prio 0xC0)"
+        );
     }
 }

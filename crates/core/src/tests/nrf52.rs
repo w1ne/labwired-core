@@ -848,19 +848,13 @@ fn nrf52840_arduino_blink_toggles_gpio() {
     }
     machine.load_firmware(&image).expect("load Arduino firmware");
 
-    // The Adafruit Bluefruit bootloader normally sets VTOR=0x26000 and
-    // jumps to the Reset_Handler whose address sits at 0x26004. Then
-    // Reset_Handler runs the C startup (.data copy, .bss clear, libc
-    // init) and calls main, which sets up FreeRTOS, creates the
-    // loopTask, and starts the scheduler. The loopTask eventually
-    // calls our setup() then loops calling loop().
-    //
-    // For the simulator we don't model FreeRTOS context-switch fully
-    // (PendSV vs SysTick priority handling has subtle gaps), so we
-    // simulate the Reset_Handler for long enough to initialise globals,
-    // then *force* a direct jump into setup() with a fresh SP. setup()
-    // is self-contained: it does pinMode + the toggle loop + early
-    // return.
+    // The Adafruit Bluefruit bootloader sets VTOR=0x26000 and jumps to
+    // the application Reset_Handler whose address sits at 0x26004. We
+    // pre-arm SP/VTOR and let the simulator run the C startup, main(),
+    // FreeRTOS task creation, and vTaskStartScheduler. With SHPR3-aware
+    // priority dispatch in the CortexM, SysTick at higher priority pends
+    // PendSV (priority 0xFF) which then performs the context switch into
+    // loopTask, which calls setup() once then loops loop().
     const APP_VTOR: u32 = 0x0002_6000;
     let sp = machine.bus.read_u32(APP_VTOR as u64).expect("SP from app VT");
     let reset_handler = machine
@@ -873,33 +867,7 @@ fn nrf52840_arduino_blink_toggles_gpio() {
         .bus
         .write_u32(0xE000_ED08, APP_VTOR as u64 as u32)
         .ok();
-
-    // Resolve setup() symbol address from the ELF.
-    let setup_addr = elf
-        .syms
-        .iter()
-        .find_map(|s| match elf.strtab.get_at(s.st_name) {
-            Some("setup") => Some(s.st_value as u32),
-            _ => None,
-        })
-        .expect("setup symbol");
-
-    // Run Reset_Handler for a fixed number of cycles so the C startup
-    // (BSS clear + data copy) has a chance to run, then force PC into
-    // setup().
     machine.cpu.set_pc(reset_handler & !1);
-    for _ in 0..50_000 {
-        if machine.step().is_err() {
-            break;
-        }
-    }
-    println!(
-        "After early Reset_Handler steps: PC=0x{:08X}",
-        machine.cpu.get_pc()
-    );
-    machine.cpu.set_pc(setup_addr & !1);
-    machine.cpu.set_sp(sp); // re-arm a clean stack
-    println!("Force-jumped to setup() at 0x{setup_addr:08X}");
 
     // Run the sketch — watch GPIO0.OUT bit 26 transitions. Stop after
     // a handful of toggles to keep test wall-clock short.
@@ -907,7 +875,10 @@ fn nrf52840_arduino_blink_toggles_gpio() {
     const LED_BIT: u32 = 1 << 26;
     let mut last_state = machine.bus.read_u32(GPIO0_OUT).unwrap_or(0) & LED_BIT;
     let mut transitions = 0usize;
-    let max_steps = 5_000_000;
+    // FreeRTOS boot path (C startup + main + scheduler bring-up + first
+    // PendSV context switch into loopTask) takes ~20–30M instructions
+    // before setup() begins toggling. Budget generously for headroom.
+    let max_steps = 80_000_000;
     for _ in 0..max_steps {
         if machine.step().is_err() {
             break;

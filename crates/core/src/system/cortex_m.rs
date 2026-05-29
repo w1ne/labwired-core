@@ -8,23 +8,34 @@ use crate::bus::{PeripheralEntry, SystemBus};
 use crate::cpu::CortexM;
 use crate::peripherals::dwt::Dwt;
 use crate::peripherals::nvic::{Nvic, NvicState};
-use crate::peripherals::scb::Scb;
+use crate::peripherals::scb::{Scb, SharedScbState};
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
 pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     let vtor = Arc::new(AtomicU32::new(0));
     let vectactive = Arc::new(AtomicU32::new(0));
+    let shpr1 = Arc::new(AtomicU32::new(0));
+    let shpr2 = Arc::new(AtomicU32::new(0));
+    let shpr3 = Arc::new(AtomicU32::new(0));
     let nvic_state = Arc::new(NvicState::default());
 
     let mut cpu = CortexM::default();
     cpu.set_shared_vtor(vtor.clone());
     cpu.set_shared_vectactive(vectactive.clone());
+    cpu.set_shared_shpr(shpr1.clone(), shpr2.clone(), shpr3.clone());
+    cpu.set_shared_nvic_state(nvic_state.clone());
 
     bus.nvic = Some(nvic_state.clone());
 
-    // Ensure SCB exists (VTOR relocation, ICSR.VECTACTIVE mirror).
-    let scb = Scb::with_vectactive(vtor, vectactive);
+    // Ensure SCB exists (VTOR relocation, ICSR.VECTACTIVE mirror, SHPR1/2/3).
+    let scb = Scb::with_shared(SharedScbState {
+        vtor,
+        vectactive,
+        shpr1,
+        shpr2,
+        shpr3,
+    });
     if let Some(p) = bus
         .peripherals
         .iter_mut()

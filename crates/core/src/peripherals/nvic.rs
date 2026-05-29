@@ -17,6 +17,21 @@ pub struct NvicState {
     pub ipr: [AtomicU32; 240], // Priority registers (simplified)
 }
 
+impl NvicState {
+    /// Read the configured priority byte for an external IRQ
+    /// (`irq` is 0-based — exception_number minus 16).
+    /// Used by CortexM::exception_priority for IRQs ≥ 16.
+    pub fn ipr_priority(&self, irq: usize) -> u8 {
+        let reg = irq / 4;
+        let byte = irq % 4;
+        if reg < self.ipr.len() {
+            ((self.ipr[reg].load(Ordering::Relaxed) >> (byte * 8)) & 0xFF) as u8
+        } else {
+            0xFF
+        }
+    }
+}
+
 impl Default for NvicState {
     fn default() -> Self {
         Self {

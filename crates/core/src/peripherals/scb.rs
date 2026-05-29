@@ -8,6 +8,16 @@ use crate::SimResult;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
+/// Bundle of CortexM-shared SCB fields. Passed to `Scb::with_shared`
+/// when the CPU and SCB are wired by `configure_cortex_m`.
+pub struct SharedScbState {
+    pub vtor: Arc<AtomicU32>,
+    pub vectactive: Arc<AtomicU32>,
+    pub shpr1: Arc<AtomicU32>,
+    pub shpr2: Arc<AtomicU32>,
+    pub shpr3: Arc<AtomicU32>,
+}
+
 /// System Control Block (SCB)
 #[derive(Debug, serde::Serialize)]
 pub struct Scb {
@@ -24,9 +34,21 @@ pub struct Scb {
     pub aircr: u32,
     pub scr: u32,
     pub ccr: u32,
-    pub shpr1: u32,
-    pub shpr2: u32,
-    pub shpr3: u32,
+    #[serde(skip)]
+    /// SHPR1 (offset 0x18) holds priorities for MemManage(4), BusFault(5),
+    /// UsageFault(6). Shared with CortexM so its exception-dispatch path
+    /// can compute ARM-priority-correct preemption decisions.
+    pub shpr1: Arc<AtomicU32>,
+    #[serde(skip)]
+    /// SHPR2 (offset 0x1C) holds priority for SVCall(11) in byte 3.
+    pub shpr2: Arc<AtomicU32>,
+    #[serde(skip)]
+    /// SHPR3 (offset 0x20) holds priorities for PendSV(14) in byte 2 and
+    /// SysTick(15) in byte 3. FreeRTOS configures PendSV to lowest
+    /// priority (0xFF) so the context-switch handler only runs when no
+    /// other interrupt is active — that's the load-bearing semantics
+    /// for `loopTask` to ever get CPU time.
+    pub shpr3: Arc<AtomicU32>,
     /// PendSV exception pend bit. Set by an ICSR.PENDSVSET write
     /// (bit 28); drained into the CPU's pending_exceptions via tick().
     pub pendsv_pending: bool,
@@ -38,21 +60,37 @@ pub struct Scb {
 
 impl Scb {
     pub fn new(vtor: Arc<AtomicU32>) -> Self {
-        Self::with_vectactive(vtor, Arc::new(AtomicU32::new(0)))
+        Self::with_shared(SharedScbState {
+            vtor,
+            vectactive: Arc::new(AtomicU32::new(0)),
+            shpr1: Arc::new(AtomicU32::new(0)),
+            shpr2: Arc::new(AtomicU32::new(0)),
+            shpr3: Arc::new(AtomicU32::new(0)),
+        })
     }
 
     pub fn with_vectactive(vtor: Arc<AtomicU32>, vectactive: Arc<AtomicU32>) -> Self {
-        Self {
-            cpuid: 0x410F_C241, // Cortex-M4 r0p1
-            icsr: 0,
+        Self::with_shared(SharedScbState {
             vtor,
             vectactive,
+            shpr1: Arc::new(AtomicU32::new(0)),
+            shpr2: Arc::new(AtomicU32::new(0)),
+            shpr3: Arc::new(AtomicU32::new(0)),
+        })
+    }
+
+    pub fn with_shared(s: SharedScbState) -> Self {
+        Self {
+            cpuid: 0x410F_C241,
+            icsr: 0,
+            vtor: s.vtor,
+            vectactive: s.vectactive,
             aircr: 0,
             scr: 0,
             ccr: 0,
-            shpr1: 0,
-            shpr2: 0,
-            shpr3: 0,
+            shpr1: s.shpr1,
+            shpr2: s.shpr2,
+            shpr3: s.shpr3,
             pendsv_pending: false,
             systick_pending: false,
             nmi_pending: false,
@@ -72,9 +110,9 @@ impl Scb {
             0x0C => self.aircr,
             0x10 => self.scr,
             0x14 => self.ccr,
-            0x18 => self.shpr1,
-            0x1C => self.shpr2,
-            0x20 => self.shpr3,
+            0x18 => self.shpr1.load(Ordering::Relaxed),
+            0x1C => self.shpr2.load(Ordering::Relaxed),
+            0x20 => self.shpr3.load(Ordering::Relaxed),
             _ => 0,
         }
     }
@@ -112,9 +150,9 @@ impl Scb {
             0x0C => self.aircr = value,
             0x10 => self.scr = value,
             0x14 => self.ccr = value,
-            0x18 => self.shpr1 = value,
-            0x1C => self.shpr2 = value,
-            0x20 => self.shpr3 = value,
+            0x18 => self.shpr1.store(value, Ordering::Relaxed),
+            0x1C => self.shpr2.store(value, Ordering::Relaxed),
+            0x20 => self.shpr3.store(value, Ordering::Relaxed),
             _ => {}
         }
     }
