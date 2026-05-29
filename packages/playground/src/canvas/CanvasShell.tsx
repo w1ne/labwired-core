@@ -1,66 +1,121 @@
-// Phase 1 + 2a of the canvas refactor:
-//   Phase 1 mounted Tldraw with one read-only ChipShape that wrapped the
-//   existing StudioShell.
-//   Phase 2a turns on canvas interactivity — pan/zoom enabled, the chip
-//   is draggable, layout (position + zoom) is persisted across reloads
-//   via tldraw's built-in `persistenceKey` (IndexedDB).
-//
-// The chip's body still renders today's StudioShell via React context.
-// Phase 2b lifts WasmSimulator into a per-chip session so a second
-// ChipShape can run independent firmware.
+// Phase 1+2a+2b canvas shell.
+//   Phase 1 mounted Tldraw with a single read-only chip-shape wrapping
+//   the StudioShell.
+//   Phase 2a turned the canvas interactive (pan/zoom, drag).
+//   Phase 2b makes the canvas multi-chip: it reads `chips.order` from
+//   ChipsProvider and renders one ChipShape per session. The active
+//   chip-shape is full-sized (carries the StudioShell as its body);
+//   inactive chips are compact ChipCard tiles positioned to the right.
 import { useEffect, useState, type ReactNode } from 'react';
-import { Tldraw, type Editor, createShapeId } from 'tldraw';
+import { Tldraw, type Editor, createShapeId, type TLShapeId } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { ChipShapeUtil, ChipChildrenProvider } from './ChipShape';
+import { useChips } from './ChipSession';
+import { useBackgroundChips } from './useBackgroundChips';
 import './canvas.css';
 
-const CHIP_ID = createShapeId('chip-default');
-const CHIP_WIDTH = 1280;
-const CHIP_HEIGHT = 800;
-/// Bump when the canvas layout schema changes incompatibly — clears
-/// stale IndexedDB state instead of restoring broken chip positions.
-const PERSISTENCE_KEY = 'lw-canvas-v1';
+const ACTIVE_W = 1280;
+const ACTIVE_H = 800;
+const COMPACT_W = 260;
+const COMPACT_H = 180;
+const GAP = 40;
+const PERSISTENCE_KEY = 'lw-canvas-v2';
+
+const shapeIdFor = (chipId: string): TLShapeId => createShapeId(`chip-${chipId}`);
 
 export function CanvasShell({ children }: { children: ReactNode }) {
+  return (
+    <ChipChildrenProvider content={children}>
+      <CanvasInner />
+    </ChipChildrenProvider>
+  );
+}
+
+function CanvasInner() {
   const [editor, setEditor] = useState<Editor | null>(null);
+  const { order, activeChipId, addChip } = useChips();
+  useBackgroundChips(true);
 
   useEffect(() => {
     if (!editor) return;
-    const shape = editor.getShape(CHIP_ID);
-    if (!shape) {
-      // tldraw's createShape type is closed over its built-in shape
-      // union; our custom 'chip' shape is registered at runtime via
-      // `shapeUtils` on <Tldraw>, so the cast is safe.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor.createShape as any)({
-        id: CHIP_ID,
-        type: 'chip',
-        x: -CHIP_WIDTH / 2,
-        y: -CHIP_HEIGHT / 2,
-        props: { w: CHIP_WIDTH, h: CHIP_HEIGHT, chipId: 'chip-default' },
-      });
-      editor.zoomToFit({ animation: { duration: 0 } });
-    }
-  }, [editor]);
+    syncShapes(editor, order, activeChipId);
+  }, [editor, order, activeChipId]);
 
   return (
-    <ChipChildrenProvider content={children}>
-      <div className="lw-canvas-root">
-        <Tldraw
-          hideUi
-          shapeUtils={[ChipShapeUtil]}
-          persistenceKey={PERSISTENCE_KEY}
-          onMount={(ed) => {
-            setEditor(ed);
-            // Phase 2a: canvas is interactive but stays in "select" mode
-            // so pinch/wheel = zoom and middle-drag = pan. The chip is
-            // draggable; click-and-hold inside the shape lets the
-            // embedded StudioShell take pointer events (HTMLContainer
-            // with pointerEvents: 'all').
-            ed.setCurrentTool('select');
-          }}
-        />
-      </div>
-    </ChipChildrenProvider>
+    <div className="lw-canvas-root">
+      <Tldraw
+        hideUi
+        shapeUtils={[ChipShapeUtil]}
+        persistenceKey={PERSISTENCE_KEY}
+        onMount={(ed) => {
+          setEditor(ed);
+          ed.setCurrentTool('select');
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => addChip()}
+        className="lw-canvas-add-chip"
+        aria-label="Add chip"
+        title="Add chip"
+      >
+        + add chip
+      </button>
+    </div>
   );
+}
+
+function syncShapes(editor: Editor, order: string[], activeChipId: string) {
+  // Reconcile shapes vs. session list:
+  //   - active chip → full-size box (carries StudioShell)
+  //   - inactive chips → compact cards laid out to the right of active
+  //   - shapes for sessions no longer present → delete
+  let inactiveIndex = 0;
+  for (const chipId of order) {
+    const isActive = chipId === activeChipId;
+    const w = isActive ? ACTIVE_W : COMPACT_W;
+    const h = isActive ? ACTIVE_H : COMPACT_H;
+    const x = isActive
+      ? -ACTIVE_W / 2
+      : ACTIVE_W / 2 + GAP + inactiveIndex * (COMPACT_W + GAP);
+    const y = isActive ? -ACTIVE_H / 2 : -ACTIVE_H / 2;
+    if (!isActive) inactiveIndex += 1;
+
+    const id = shapeIdFor(chipId);
+    const existing = editor.getShape(id);
+    if (!existing) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (editor.createShape as any)({
+        id,
+        type: 'chip',
+        x,
+        y,
+        props: { w, h, chipId },
+      });
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (editor.updateShape as any)({
+        id,
+        type: 'chip',
+        x,
+        y,
+        props: { w, h, chipId },
+      });
+    }
+  }
+
+  // Drop shapes that no longer correspond to a session.
+  const liveIds = new Set(order.map(shapeIdFor));
+  const allChipShapeIds = Array.from(editor.getCurrentPageShapeIds()).filter((id) => {
+    const s = editor.getShape(id);
+    return s && s.type === 'chip';
+  });
+  const stale = allChipShapeIds.filter((id) => !liveIds.has(id as TLShapeId));
+  if (stale.length > 0) editor.deleteShapes(stale);
+
+  // Centre the camera on the active chip whenever its identity changes.
+  const activeShape = editor.getShape(shapeIdFor(activeChipId));
+  if (activeShape) {
+    editor.centerOnPoint({ x: 0, y: 0 }, { animation: { duration: 200 } });
+  }
 }

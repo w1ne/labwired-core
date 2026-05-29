@@ -47,6 +47,11 @@ import { StudioShell } from './studio/StudioShell';
 // studio route mounts CanvasShell, so library / landing / CI pages
 // keep their pre-canvas bundle size.
 const CanvasShell = lazy(() => import('./canvas/CanvasShell').then((m) => ({ default: m.CanvasShell })));
+// ChipsProvider is eager — it's just React context (tiny). Lazy-
+// loading it would force ChipBridgeSync into Suspense and lose the
+// active-chip mirror during initial mount.
+import { ChipsProvider } from './canvas/ChipSession';
+import { ChipBridgeSync } from './canvas/ChipBridgeSync';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1649,6 +1654,8 @@ export function App() {
   }
 
   return (
+    <ChipsProvider initialBoard={selectedBoard}>
+    <ChipBridgeSync bridge={bridge} board={selectedBoard} />
     <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }} />}>
     <CanvasShell>
     <StudioShell
@@ -2036,5 +2043,6 @@ export function App() {
     </StudioShell>
     </CanvasShell>
     </Suspense>
+    </ChipsProvider>
   );
 }

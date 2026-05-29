@@ -14,3 +14,26 @@
 .lw-canvas-root .tl-svg-layer {
   pointer-events: auto;
 }
+
+.lw-canvas-add-chip {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 10000;
+  background: #e83e8c;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 8px 24px rgba(232, 62, 140, 0.25);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.lw-canvas-add-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(232, 62, 140, 0.35);
+}

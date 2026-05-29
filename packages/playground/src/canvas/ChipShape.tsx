@@ -1,7 +1,13 @@
-// Phase 1 of the canvas refactor: a custom tldraw shape that renders
-// arbitrary React children (today's StudioShell) inside its bounds. In
-// Phase 2 the body becomes per-chip tabs (Code | Registers | Peripherals
-// | Logs) driven by useChipSession.
+// Phase 1+2a+2b ChipShape:
+//   - Phase 1 created the shape type.
+//   - Phase 2a turned the canvas interactive.
+//   - Phase 2b makes the shape branch on activeChipId: the active chip
+//     renders the StudioShell (via ChipChildrenContext); inactive chips
+//     render a compact ChipCard that focuses the chip on click.
+//
+// Layout: active chip is a full StudioShell-sized panel; inactive chips
+// are small cards. Sizes are persisted in the shape so users can resize
+// when Phase 3 lands.
 import { createContext, useContext, type ReactNode } from 'react';
 import {
   HTMLContainer,
@@ -10,6 +16,8 @@ import {
   T,
   type TLBaseShape,
 } from 'tldraw';
+import { useChips, useChipSession } from './ChipSession';
+import { ChipCard } from './ChipCard';
 
 export interface ChipShapeProps {
   w: number;
@@ -19,18 +27,14 @@ export interface ChipShapeProps {
 
 export type ChipShape = TLBaseShape<'chip', ChipShapeProps>;
 
-/// Augment tldraw's global shape registry so `TLShape` includes our
-/// custom `'chip'` type — required for `ShapeUtil<ChipShape>` to
-/// satisfy its constraint without `any` casts.
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
     chip: ChipShapeProps;
   }
 }
 
-/// Bridges React children (the full StudioShell tree) into the body of a
-/// tldraw shape without leaking through shape props (which must be
-/// JSON-serializable for the canvas snapshot store).
+/// React content injected into the *active* chip's body. Inactive chips
+/// render <ChipCard> instead, so they don't need this content stream.
 const ChipChildrenContext = createContext<ReactNode>(null);
 
 export function ChipChildrenProvider({
@@ -52,7 +56,7 @@ export class ChipShapeUtil extends ShapeUtil<ChipShape> {
   };
 
   override getDefaultProps(): ChipShape['props'] {
-    return { w: 1024, h: 768, chipId: 'chip-0' };
+    return { w: 1280, h: 800, chipId: 'chip-0' };
   }
 
   override getGeometry(shape: ChipShape) {
@@ -63,8 +67,6 @@ export class ChipShapeUtil extends ShapeUtil<ChipShape> {
     });
   }
 
-  // Phase 2a: chip is draggable but not resizable yet — resize comes
-  // in Phase 2b once multi-chip layouts need it.
   override canResize() {
     return false;
   }
@@ -79,55 +81,7 @@ export class ChipShapeUtil extends ShapeUtil<ChipShape> {
   }
 
   override component(shape: ChipShape) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const children = useContext(ChipChildrenContext);
-    return (
-      <HTMLContainer
-        id={shape.id}
-        style={{
-          width: shape.props.w,
-          height: shape.props.h,
-          // pointerEvents: 'all' — embedded StudioShell takes clicks;
-          // tldraw still gets drag events from the shape outline (the
-          // 4px transparent edge), which is enough to move the chip.
-          pointerEvents: 'all',
-          overflow: 'hidden',
-          background: '#0a0a0f',
-          borderRadius: 12,
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.45)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <div
-          // Drag handle: a 28px-tall header strip at the top. The chip
-          // body below is interactive (Monaco, palette, etc.), so the
-          // strip is the reliable place to grab and reposition the chip.
-          style={{
-            height: 28,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 12px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-            color: 'rgba(255, 255, 255, 0.6)',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontSize: 11,
-            letterSpacing: 0.2,
-            // Forward pointer events to tldraw so the strip is the drag
-            // affordance even though the chip body is interactive.
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          <span style={{ opacity: 0.5 }}>●●●</span>
-          <span style={{ marginLeft: 12 }}>{shape.props.chipId}</span>
-        </div>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div>
-      </HTMLContainer>
-    );
+    return <ChipShapeBody shape={shape} />;
   }
 
   override getIndicatorPath(shape: ChipShape) {
@@ -135,4 +89,60 @@ export class ChipShapeUtil extends ShapeUtil<ChipShape> {
     path.rect(0, 0, shape.props.w, shape.props.h);
     return path;
   }
+}
+
+function ChipShapeBody({ shape }: { shape: ChipShape }) {
+  const children = useContext(ChipChildrenContext);
+  const chips = useChips();
+  const session = useChipSession(shape.props.chipId);
+  const isActive = chips.activeChipId === shape.props.chipId;
+
+  return (
+    <HTMLContainer
+      id={shape.id}
+      style={{
+        width: shape.props.w,
+        height: shape.props.h,
+        pointerEvents: 'all',
+        overflow: 'hidden',
+        background: '#0a0a0f',
+        borderRadius: 12,
+        border: isActive
+          ? '1px solid rgba(232, 62, 140, 0.4)'
+          : '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: isActive
+          ? '0 24px 64px rgba(232, 62, 140, 0.18)'
+          : '0 12px 32px rgba(0, 0, 0, 0.4)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div
+        style={{
+          height: 28,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          background: 'rgba(255, 255, 255, 0.04)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          color: 'rgba(255, 255, 255, 0.6)',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 11,
+          letterSpacing: 0.2,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        <span style={{ opacity: 0.5 }}>●●●</span>
+        <span style={{ marginLeft: 12 }}>{shape.props.chipId}</span>
+        {!isActive && session?.bridge && (
+          <span style={{ marginLeft: 'auto', opacity: 0.5 }}>● running</span>
+        )}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {isActive ? children : session ? <ChipCard session={session} /> : null}
+      </div>
+    </HTMLContainer>
+  );
 }
