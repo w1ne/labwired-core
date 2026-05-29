@@ -1550,6 +1550,27 @@ impl SystemBus {
         let mut costs = Vec::new();
         let mut dma_requests = Vec::new();
         let mut dma_signals_out = Vec::new();
+
+        // ── Pre-tick bus-aware pass ─────────────────────────────────────────
+        // Some peripherals (currently just RADIO) need to read/write the bus
+        // BEFORE their `tick()` runs so the work they schedule (e.g. setting
+        // a bit-rate countdown after reading PACKETPTR-pointed RAM) is
+        // visible to that same tick(). The swap dance below temporarily
+        // removes the peripheral from `self.peripherals` so we can lend
+        // `&mut self` into `tick_with_bus`; a no-op stub stands in for the
+        // duration. `needs_bus_tick` returning false skips this for
+        // everyone else at near-zero cost.
+        for i in 0..self.peripherals.len() {
+            if !self.peripherals[i].dev.needs_bus_tick() {
+                continue;
+            }
+            let placeholder: Box<dyn Peripheral> =
+                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
+            let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
+            dev.tick_with_bus(self);
+            self.peripherals[i].dev = dev;
+        }
+
         // Plan 3: collect ESP32-S3 explicit_irq source IDs during pass 1 so
         // they can be routed through the intmatrix in a follow-up pass that
         // requires `&self` (incompatible with the iter_mut borrow here).
@@ -1687,23 +1708,6 @@ impl SystemBus {
             for p in self.peripherals.iter_mut() {
                 p.dev.observe_gpio_change(&changes);
             }
-        }
-
-        // Bus-aware tick pass: for peripherals that need to read/write the
-        // bus during their tick (Easy DMA on RADIO, currently). We swap each
-        // such peripheral OUT of the vector temporarily so the borrow
-        // checker is happy with `&mut self` passed into `tick_with_bus`.
-        // A no-op for peripherals whose `needs_bus_tick` returns false
-        // (the default for everyone except RADIO).
-        for i in 0..self.peripherals.len() {
-            if !self.peripherals[i].dev.needs_bus_tick() {
-                continue;
-            }
-            let placeholder: Box<dyn Peripheral> =
-                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
-            let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
-            dev.tick_with_bus(self);
-            self.peripherals[i].dev = dev;
         }
 
         (

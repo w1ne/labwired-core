@@ -51,21 +51,33 @@ struct AirFrame {
     /// TX produced and what RX consumes verbatim.
     bytes: Vec<u8>,
     /// Address bytes that travel with the frame so receivers can match
-    /// against RXADDRESSES + BASE/PREFIX. We send the full sender
-    /// logical-address tuple (base, prefix, len).
+    /// against RXADDRESSES + BASE/PREFIX.
     addr_base: u32,
     addr_prefix: u8,
+    #[allow(dead_code)]
     addr_len: u8,
     /// Whitening init the sender used; RX side uses this to de-whiten
     /// when its own DATAWHITEIV matches.
+    #[allow(dead_code)]
     whitening_iv: u8,
     /// CRC init the sender used; RX uses this to verify.
+    #[allow(dead_code)]
     crcinit: u32,
+    /// MODE (and therefore datarate / modulation) the sender used. A
+    /// receiver tuned to a different MODE on the same FREQUENCY can see
+    /// the energy but won't decode — we model that as "frame stays in
+    /// the queue for a mode-matching receiver to consume".
+    mode: u32,
 }
 
 #[derive(Debug, Default)]
 struct VirtualAir {
-    queues: HashMap<(u8, u32), VecDeque<AirFrame>>,
+    /// Per-FREQUENCY queue. Multi-MODE coexistence on the same band is
+    /// handled by RX filtering on `AirFrame.mode == self.mode` rather
+    /// than the queue key, so a BLE_1Mbit TX and an Nrf_1Mbit RX on
+    /// the same FREQUENCY can both share air (RX simply doesn't decode
+    /// the wrong-mode frame).
+    queues: HashMap<u8, VecDeque<AirFrame>>,
 }
 
 fn virtual_air() -> &'static Mutex<VirtualAir> {
@@ -282,7 +294,21 @@ pub struct Nrf52Radio {
     rx_address_mask: u8,
     /// Frame currently being received (popped from virtual air, awaiting
     /// the bit-rate countdown to expire before becoming visible).
+    #[allow(dead_code)]
     rx_in_flight: Option<AirFrame>,
+    /// Bits-counted-since-TASKS_BCSTART. Compared against BCC on every
+    /// RX-completion to fire EVENTS_BCMATCH when the count reaches the
+    /// configured threshold.
+    bit_counter_armed: bool,
+    bit_counter: u32,
+    /// EVENTS_BCMATCH live state.
+    events_bcmatch: u32,
+    /// EVENTS_DEVMATCH live state.
+    events_devmatch: u32,
+    /// EVENTS_DEVMISS live state.
+    events_devmiss: u32,
+    /// Deterministic PRNG state for RSSI sampling.
+    rssi_prng: u32,
 }
 
 impl Nrf52Radio {
@@ -412,6 +438,46 @@ impl Nrf52Radio {
     }
 
     #[allow(dead_code)]  // reserved for future bit-rate model
+    /// DACNF.ENA mask (low 8 bits) determines which of DAB[0..7] /
+    /// DAP[0..7] are active. Returns true if any enabled slot's address
+    /// matches the (base, prefix) on the wire.
+    fn device_match(&self, frame_base: u32, frame_prefix: u8) -> bool {
+        let ena = self.dacnf & 0xFF;
+        if ena == 0 {
+            return false;
+        }
+        for n in 0..8u8 {
+            if ena & (1 << n) == 0 {
+                continue;
+            }
+            // DAB[n] holds the 4-byte BASE; DAP[n] holds the 1-byte
+            // PREFIX (low byte of the register).
+            let cand_base = self.dab[n as usize];
+            let cand_prefix = (self.dap[n as usize] & 0xFF) as u8;
+            if cand_base == frame_base && cand_prefix == frame_prefix {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Simple xorshift32 to give RSSISAMPLE realistic variability without
+    /// pulling in a heavy RNG. Returns a value in 0..=127 (lower = stronger,
+    /// per PS §6.20.12.27).
+    fn next_rssi_sample(&mut self) -> u32 {
+        if self.rssi_prng == 0 {
+            self.rssi_prng = 0xCAFE_BABE;
+        }
+        let mut x = self.rssi_prng;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        self.rssi_prng = x;
+        // Mid-range bias (~RSSI of -50 dBm); ±20 dB jitter.
+        40 + (x & 0x1F)
+    }
+
+    #[allow(dead_code)] // reserved for future bit-rate model
     /// Bit-rate cycle count for a packet of `total_bytes` bytes in the
     /// given MODE. MODE values per PS §6.20.12.10. One sim tick ≈ 1 µs.
     fn cycles_for_packet(mode: u32, total_bytes: u32) -> u32 {
@@ -544,8 +610,10 @@ impl Peripheral for Nrf52Radio {
             OFF_EVENTS_PAYLOAD => self.events_payload,
             OFF_EVENTS_END => self.events_end,
             OFF_EVENTS_DISABLED => self.events_disabled,
-            OFF_EVENTS_DEVMATCH | OFF_EVENTS_DEVMISS | OFF_EVENTS_RSSIEND
-            | OFF_EVENTS_BCMATCH | OFF_EVENTS_CRCERROR | OFF_EVENTS_FRAMESTART
+            OFF_EVENTS_DEVMATCH => self.events_devmatch,
+            OFF_EVENTS_DEVMISS => self.events_devmiss,
+            OFF_EVENTS_BCMATCH => self.events_bcmatch,
+            OFF_EVENTS_RSSIEND | OFF_EVENTS_CRCERROR | OFF_EVENTS_FRAMESTART
             | OFF_EVENTS_EDEND | OFF_EVENTS_EDSTOPPED | OFF_EVENTS_CCAIDLE
             | OFF_EVENTS_CCABUSY | OFF_EVENTS_CCASTOPPED | OFF_EVENTS_RATEBOOST
             | OFF_EVENTS_MHRMATCH | OFF_EVENTS_SYNC => 0,
@@ -636,8 +704,25 @@ impl Peripheral for Nrf52Radio {
                     self.disable();
                 }
             }
-            OFF_TASKS_RSSISTART | OFF_TASKS_RSSISTOP | OFF_TASKS_BCSTART
-            | OFF_TASKS_BCSTOP | OFF_TASKS_EDSTART | OFF_TASKS_EDSTOP
+            OFF_TASKS_RSSISTART => {
+                // Sample RSSI immediately — real silicon needs a few µs
+                // but firmware just polls RSSISAMPLE after this task.
+                if value & 1 != 0 {
+                    self.rssisample = self.next_rssi_sample();
+                }
+            }
+            OFF_TASKS_BCSTART => {
+                if value & 1 != 0 {
+                    self.bit_counter_armed = true;
+                    self.bit_counter = 0;
+                }
+            }
+            OFF_TASKS_BCSTOP => {
+                if value & 1 != 0 {
+                    self.bit_counter_armed = false;
+                }
+            }
+            OFF_TASKS_RSSISTOP | OFF_TASKS_EDSTART | OFF_TASKS_EDSTOP
             | OFF_TASKS_CCASTART | OFF_TASKS_CCASTOP => {}
 
             OFF_EVENTS_READY => self.events_ready = value & 1,
@@ -649,6 +734,9 @@ impl Peripheral for Nrf52Radio {
             OFF_EVENTS_TXREADY => self.events_txready = value & 1,
             OFF_EVENTS_RXREADY => self.events_rxready = value & 1,
             OFF_EVENTS_PHYEND => self.events_phyend = value & 1,
+            OFF_EVENTS_DEVMATCH => self.events_devmatch = value & 1,
+            OFF_EVENTS_DEVMISS => self.events_devmiss = value & 1,
+            OFF_EVENTS_BCMATCH => self.events_bcmatch = value & 1,
 
             OFF_SHORTS => self.shorts = value,
             OFF_INTENSET => self.inten |= value,
@@ -867,19 +955,23 @@ impl Peripheral for Nrf52Radio {
                 bytes: packet.clone(),
                 addr_base,
                 addr_prefix,
-                addr_len: 3 + ((self.pcnf1 >> 16) & 0x7) as u8, // BALEN field
+                addr_len: 3 + ((self.pcnf1 >> 16) & 0x7) as u8,
                 whitening_iv: self.datawhiteiv as u8,
                 crcinit: self.crcinit,
+                mode: self.mode,
             };
             self.last_tx_packet = Some(packet);
 
-            // Push to the global virtual air keyed by (FREQUENCY, MODE).
+            // Push to the global virtual air keyed by FREQUENCY. Frames carry
+            // their MODE so receivers tuned to a different mode on the same
+            // band correctly fail to decode.
             if let Ok(mut air) = virtual_air().lock() {
-                let key = (self.frequency as u8, self.mode);
+                let key = self.frequency as u8;
                 air.queues.entry(key).or_default().push_back(frame);
             }
 
-            // Defer EVENTS_END via bit-rate countdown.
+            // Bit-rate countdown until EVENTS_END. cycles_for_packet returns
+            // bytes × cycles-per-byte for the MODE; +3 for the CRC bytes.
             self.tx_or_rx_cycles_remaining =
                 Some(Self::cycles_for_packet(self.mode, length as u32 + 3));
         }
@@ -892,16 +984,23 @@ impl Peripheral for Nrf52Radio {
         if self.pending_rx_dma {
             self.pending_rx_dma = false;
 
-            // First, try the global virtual air at (FREQUENCY, MODE).
-            // Only consume a frame whose sender's address matches one of
-            // the receiver's enabled logical addresses.
+            // First, try the global virtual air at FREQUENCY. Only consume
+            // a frame whose MODE matches ours AND whose sender's address
+            // matches one of our enabled logical addresses. DEVMATCH / DEVMISS
+            // are also computed here against the DAB/DAP whitelist.
             let mut popped = None;
+            let mut popped_frame_addr: Option<(u32, u8)> = None;
             if let Ok(mut air) = virtual_air().lock() {
-                let key = (self.frequency as u8, self.mode);
+                let key = self.frequency as u8;
                 if let Some(queue) = air.queues.get_mut(&key) {
-                    let pos = queue.iter().position(|f| self.matches_address(f));
+                    let pos = queue
+                        .iter()
+                        .position(|f| f.mode == self.mode && self.matches_address(f));
                     if let Some(idx) = pos {
-                        popped = queue.remove(idx).map(|f| f.bytes);
+                        if let Some(f) = queue.remove(idx) {
+                            popped_frame_addr = Some((f.addr_base, f.addr_prefix));
+                            popped = Some(f.bytes);
+                        }
                     }
                 }
             }
@@ -933,6 +1032,30 @@ impl Peripheral for Nrf52Radio {
                 for (i, b) in pkt.iter().enumerate() {
                     let _ = bus.write_u8((base as u64).wrapping_add(i as u64), *b);
                 }
+
+                // ── DEVMATCH / DEVMISS via DAB / DAP whitelist ─────────
+                // Only when we actually consumed a frame from the global
+                // air (which carries the sender's address). Local
+                // rx_inbox loopback skips this — those tests don't set
+                // DAB/DAP.
+                if let Some((fb, fp)) = popped_frame_addr {
+                    if self.device_match(fb, fp) {
+                        self.events_devmatch = 1;
+                    } else {
+                        self.events_devmiss = 1;
+                    }
+                }
+
+                // ── BCMATCH — if armed, count bits received against BCC ─
+                if self.bit_counter_armed {
+                    self.bit_counter = (pkt.len() as u32) * 8;
+                    if self.bit_counter >= self.bcc {
+                        self.events_bcmatch = 1;
+                    }
+                }
+
+                // ── RSSI sampling per-frame ──────────────────────────
+                self.rssisample = self.next_rssi_sample();
 
                 // Set bit-rate countdown for the actual received packet
                 // length (including the 3 CRC bytes we stripped above).
@@ -1317,5 +1440,267 @@ mod tests {
         assert_eq!(bus_rx.read_u8(0x2000_3000).unwrap(), 0);
     }
 
+
+
+    #[test]
+    fn bit_rate_timing_defers_events_end() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+        let _guard = air_test_setup();
+
+        let mut bus = SystemBus::new();
+        // 4-byte payload at 0x20000000: S0, LENGTH=2, payload bytes.
+        bus.write_u8(0x2000_0000, 0x12).unwrap();
+        bus.write_u8(0x2000_0001, 2).unwrap();
+        bus.write_u8(0x2000_0002, 0x34).unwrap();
+        bus.write_u8(0x2000_0003, 0x56).unwrap();
+
+        let mut r = Nrf52Radio::new();
+        r.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        r.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        r.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        r.write_u32(OFF_FREQUENCY, 11).unwrap();
+        r.write_u32(OFF_MODE, 3).unwrap(); // BLE_1Mbit → 8 cycles/byte
+        r.write_u32(OFF_CRCINIT, 0).unwrap();
+        r.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        r.tick();
+
+        // After START, the test calls tick_with_bus FIRST (matching the
+        // new bus pre-tick order) so cycles_for_packet sets the proper
+        // countdown before tick() can decrement.
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick_with_bus(&mut bus);
+
+        // Step ticks; EVENTS_END must NOT fire on the first few. With
+        // 5 net bytes (S0 + LEN + 2 payload + 3 CRC) at 8 cycles/byte
+        // we expect ~40 cycles before END fires.
+        let mut end_tick: Option<usize> = None;
+        for i in 0..200 {
+            r.tick();
+            if r.read_u32(OFF_EVENTS_END).unwrap() != 0 {
+                end_tick = Some(i);
+                break;
+            }
+        }
+        let end_tick = end_tick.expect("EVENTS_END should fire within 200 ticks");
+        assert!(
+            end_tick > 4,
+            "EVENTS_END fired too early (tick {end_tick}); bit-rate countdown was skipped"
+        );
+    }
+
+    #[test]
+    fn devmatch_fires_when_dab_dap_whitelist_matches() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+        let _guard = air_test_setup();
+
+        // TX from logical address 0 (BASE0=0xDEADBE00, PREFIX0[0]=0xEF).
+        let mut bus_tx = SystemBus::new();
+        bus_tx.write_u8(0x2000_0000, 0xAA).unwrap();
+        bus_tx.write_u8(0x2000_0001, 1).unwrap();
+        bus_tx.write_u8(0x2000_0002, 0x55).unwrap();
+
+        let mut tx = Nrf52Radio::new();
+        tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        tx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        tx.write_u32(OFF_FREQUENCY, 12).unwrap();
+        tx.write_u32(OFF_MODE, 3).unwrap();
+        tx.write_u32(OFF_CRCINIT, 0).unwrap();
+        tx.write_u32(OFF_BASE0, 0xDEAD_BE00).unwrap();
+        tx.write_u32(OFF_PREFIX0, 0xEF).unwrap();
+        tx.write_u32(OFF_TXADDRESS, 0).unwrap();
+        tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        tx.tick();
+        tx.write_u32(OFF_TASKS_START, 1).unwrap();
+        tx.tick_with_bus(&mut bus_tx);
+
+        // RX whitelists DAB[3] = 0xDEADBE00, DAP[3] = 0xEF, with DACNF
+        // enabling slot 3.
+        let mut bus_rx = SystemBus::new();
+        let mut rx = Nrf52Radio::new();
+        rx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        rx.write_u32(OFF_PACKETPTR, 0x2000_4000).unwrap();
+        rx.write_u32(OFF_FREQUENCY, 12).unwrap();
+        rx.write_u32(OFF_MODE, 3).unwrap();
+        rx.write_u32(OFF_CRCINIT, 0).unwrap();
+        rx.write_u32(OFF_BASE0, 0xDEAD_BE00).unwrap();
+        rx.write_u32(OFF_PREFIX0, 0xEF).unwrap();
+        rx.write_u32(OFF_RXADDRESSES, 0x01).unwrap();
+        // DAB[3] / DAP[3] whitelist match.
+        rx.write_u32(OFF_DAB0 + 12, 0xDEAD_BE00).unwrap();
+        rx.write_u32(OFF_DAP0 + 12, 0xEF).unwrap();
+        rx.write_u32(OFF_DACNF, 1 << 3).unwrap();
+
+        rx.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx.tick();
+        rx.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx.tick_with_bus(&mut bus_rx);
+
+        assert_eq!(rx.read_u32(OFF_EVENTS_DEVMATCH).unwrap(), 1);
+        assert_eq!(rx.read_u32(OFF_EVENTS_DEVMISS).unwrap(), 0);
+    }
+
+    #[test]
+    fn devmiss_fires_when_whitelist_does_not_match() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+        let _guard = air_test_setup();
+
+        let mut bus_tx = SystemBus::new();
+        bus_tx.write_u8(0x2000_0000, 0x11).unwrap();
+        bus_tx.write_u8(0x2000_0001, 1).unwrap();
+        bus_tx.write_u8(0x2000_0002, 0x22).unwrap();
+        let mut tx = Nrf52Radio::new();
+        tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        tx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        tx.write_u32(OFF_FREQUENCY, 13).unwrap();
+        tx.write_u32(OFF_MODE, 3).unwrap();
+        tx.write_u32(OFF_CRCINIT, 0).unwrap();
+        tx.write_u32(OFF_BASE0, 0x1111_1100).unwrap();
+        tx.write_u32(OFF_PREFIX0, 0x77).unwrap();
+        tx.write_u32(OFF_TXADDRESS, 0).unwrap();
+        tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        tx.tick();
+        tx.write_u32(OFF_TASKS_START, 1).unwrap();
+        tx.tick_with_bus(&mut bus_tx);
+
+        let mut bus_rx = SystemBus::new();
+        let mut rx = Nrf52Radio::new();
+        rx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        rx.write_u32(OFF_PACKETPTR, 0x2000_5000).unwrap();
+        rx.write_u32(OFF_FREQUENCY, 13).unwrap();
+        rx.write_u32(OFF_MODE, 3).unwrap();
+        rx.write_u32(OFF_CRCINIT, 0).unwrap();
+        rx.write_u32(OFF_BASE0, 0x1111_1100).unwrap();
+        rx.write_u32(OFF_PREFIX0, 0x77).unwrap();
+        rx.write_u32(OFF_RXADDRESSES, 0x01).unwrap();
+        // DAB/DAP whitelist with a non-matching address.
+        rx.write_u32(OFF_DAB0, 0xAAAA_AAAA).unwrap();
+        rx.write_u32(OFF_DAP0, 0xBB).unwrap();
+        rx.write_u32(OFF_DACNF, 1).unwrap();
+
+        rx.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx.tick();
+        rx.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx.tick_with_bus(&mut bus_rx);
+
+        assert_eq!(rx.read_u32(OFF_EVENTS_DEVMATCH).unwrap(), 0);
+        assert_eq!(rx.read_u32(OFF_EVENTS_DEVMISS).unwrap(), 1);
+    }
+
+    #[test]
+    fn bcmatch_fires_when_bit_count_reaches_bcc() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+        let _guard = air_test_setup();
+
+        // TX a 4-byte payload, so RX consumes ~5 bytes (S0+LEN+payload) = 40 bits.
+        let mut bus_tx = SystemBus::new();
+        bus_tx.write_u8(0x2000_0000, 0x11).unwrap();
+        bus_tx.write_u8(0x2000_0001, 4).unwrap();
+        for (i, b) in [0xC0, 0xFF, 0xEE, 0x42].iter().enumerate() {
+            bus_tx.write_u8(0x2000_0002 + i as u64, *b).unwrap();
+        }
+        let mut tx = Nrf52Radio::new();
+        tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        tx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        tx.write_u32(OFF_FREQUENCY, 14).unwrap();
+        tx.write_u32(OFF_MODE, 3).unwrap();
+        tx.write_u32(OFF_CRCINIT, 0).unwrap();
+        tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        tx.tick();
+        tx.write_u32(OFF_TASKS_START, 1).unwrap();
+        tx.tick_with_bus(&mut bus_tx);
+
+        let mut bus_rx = SystemBus::new();
+        let mut rx = Nrf52Radio::new();
+        rx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        rx.write_u32(OFF_PACKETPTR, 0x2000_6000).unwrap();
+        rx.write_u32(OFF_FREQUENCY, 14).unwrap();
+        rx.write_u32(OFF_MODE, 3).unwrap();
+        rx.write_u32(OFF_CRCINIT, 0).unwrap();
+        // Arm the bit counter; BCC = 16 bits → fires after the second
+        // byte regardless.
+        rx.write_u32(OFF_TASKS_BCSTART, 1).unwrap();
+        rx.write_u32(OFF_BCC, 16).unwrap();
+        rx.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx.tick();
+        rx.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx.tick_with_bus(&mut bus_rx);
+
+        assert_eq!(rx.read_u32(OFF_EVENTS_BCMATCH).unwrap(), 1);
+    }
+
+    #[test]
+    fn rssistart_updates_rssisample_deterministically() {
+        let mut r = Nrf52Radio::new();
+        let s0 = r.read_u32(OFF_RSSISAMPLE).unwrap();
+        r.write_u32(OFF_TASKS_RSSISTART, 1).unwrap();
+        let s1 = r.read_u32(OFF_RSSISAMPLE).unwrap();
+        // Should differ from the reset value.
+        assert_ne!(s0, s1);
+        // RSSI is 7-bit (PS table 282).
+        assert!(s1 <= 0x7F);
+        // A second sample drifts further.
+        r.write_u32(OFF_TASKS_RSSISTART, 1).unwrap();
+        let s2 = r.read_u32(OFF_RSSISAMPLE).unwrap();
+        assert!(s2 <= 0x7F);
+    }
+
+    #[test]
+    fn multi_mode_on_same_freq_no_cross_decode() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+        let _guard = air_test_setup();
+
+        // TX in MODE=3 (BLE_1Mbit) on FREQUENCY=15.
+        let mut bus_tx = SystemBus::new();
+        bus_tx.write_u8(0x2000_0000, 0x99).unwrap();
+        bus_tx.write_u8(0x2000_0001, 1).unwrap();
+        bus_tx.write_u8(0x2000_0002, 0xAA).unwrap();
+        let mut tx = Nrf52Radio::new();
+        tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        tx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        tx.write_u32(OFF_FREQUENCY, 15).unwrap();
+        tx.write_u32(OFF_MODE, 3).unwrap();
+        tx.write_u32(OFF_CRCINIT, 0).unwrap();
+        tx.write_u32(OFF_BASE0, 0x4242_4200).unwrap();
+        tx.write_u32(OFF_PREFIX0, 0x42).unwrap();
+        tx.write_u32(OFF_TXADDRESS, 0).unwrap();
+        tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        tx.tick();
+        tx.write_u32(OFF_TASKS_START, 1).unwrap();
+        tx.tick_with_bus(&mut bus_tx);
+
+        // RX tuned to MODE=0 (Nrf_1Mbit) on the same FREQUENCY. Even with
+        // address-matched BASE/PREFIX, the frame must NOT be consumed
+        // (mode mismatch — different modulation on the same band).
+        let mut bus_rx = SystemBus::new();
+        let mut rx = Nrf52Radio::new();
+        rx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        rx.write_u32(OFF_PACKETPTR, 0x2000_7000).unwrap();
+        rx.write_u32(OFF_FREQUENCY, 15).unwrap();
+        rx.write_u32(OFF_MODE, 0).unwrap(); // different mode
+        rx.write_u32(OFF_CRCINIT, 0).unwrap();
+        rx.write_u32(OFF_BASE0, 0x4242_4200).unwrap();
+        rx.write_u32(OFF_PREFIX0, 0x42).unwrap();
+        rx.write_u32(OFF_RXADDRESSES, 0x01).unwrap();
+        rx.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx.tick();
+        rx.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx.tick_with_bus(&mut bus_rx);
+
+        // RAM at PACKETPTR stays at reset 0; frame stays in the air.
+        assert_eq!(bus_rx.read_u8(0x2000_7000).unwrap(), 0);
+    }
 
 }
