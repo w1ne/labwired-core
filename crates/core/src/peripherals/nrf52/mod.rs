@@ -10,10 +10,12 @@
 //! `nrf52_onboarding_diff` test.
 
 pub mod aar;
+pub mod acl;
 pub mod bprot;
 pub mod ccm;
 pub mod clock;
 pub mod comp;
+pub mod cryptocell;
 pub mod ecb;
 pub mod egu;
 pub mod ficr;
@@ -34,4 +36,6 @@ pub mod saadc;
 pub mod temp;
 pub mod timer;
 pub mod uicr;
+pub mod usbd;
+pub mod usbregulator;
 pub mod wdt;

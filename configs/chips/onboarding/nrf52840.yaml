@@ -247,3 +247,22 @@ peripherals:
   type: nrf52840_bprot
   bus: sysbus
   base_address: 1073897472  # 0x40026000
+- id: usbd
+  type: nrf52840_usbd
+  bus: sysbus
+  base_address: 1073901568  # 0x40027000
+  irq: 39
+- id: usbregulator
+  type: nrf52840_usbregulator
+  bus: sysbus
+  base_address: 1073967104  # 0x40037000
+- id: acl
+  type: nrf52840_acl
+  bus: sysbus
+  base_address: 1073930240  # 0x4002F000
+  irq: 30
+- id: cryptocell
+  type: nrf52840_cryptocell
+  bus: sysbus
+  base_address: 1342348800  # 0x5002A000
+  irq: 42

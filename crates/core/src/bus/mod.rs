@@ -990,6 +990,18 @@ impl SystemBus {
                 "nrf52840_bprot" | "nrf52_bprot" => {
                     Box::new(crate::peripherals::nrf52::bprot::Nrf52Bprot::new())
                 }
+                "nrf52840_usbd" | "nrf52_usbd" => {
+                    Box::new(crate::peripherals::nrf52::usbd::Nrf52Usbd::new())
+                }
+                "nrf52840_acl" | "nrf52_acl" => {
+                    Box::new(crate::peripherals::nrf52::acl::Nrf52Acl::new())
+                }
+                "nrf52840_cryptocell" | "nrf52_cryptocell" => {
+                    Box::new(crate::peripherals::nrf52::cryptocell::Nrf52Cryptocell::new())
+                }
+                "nrf52840_usbregulator" | "nrf52_usbregulator" => {
+                    Box::new(crate::peripherals::nrf52::usbregulator::Nrf52UsbRegulator::new())
+                }
                 "declarative" => {
                     let descriptor_path = p_cfg
                         .config
