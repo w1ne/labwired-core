@@ -1689,6 +1689,23 @@ impl SystemBus {
             }
         }
 
+        // Bus-aware tick pass: for peripherals that need to read/write the
+        // bus during their tick (Easy DMA on RADIO, currently). We swap each
+        // such peripheral OUT of the vector temporarily so the borrow
+        // checker is happy with `&mut self` passed into `tick_with_bus`.
+        // A no-op for peripherals whose `needs_bus_tick` returns false
+        // (the default for everyone except RADIO).
+        for i in 0..self.peripherals.len() {
+            if !self.peripherals[i].dev.needs_bus_tick() {
+                continue;
+            }
+            let placeholder: Box<dyn Peripheral> =
+                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
+            let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
+            dev.tick_with_bus(self);
+            self.peripherals[i].dev = dev;
+        }
+
         (
             interrupts,
             costs,

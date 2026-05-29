@@ -381,6 +381,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// is configured to watch a matching (port, pin) with a matching
     /// polarity. Default no-op.
     fn observe_gpio_change(&mut self, _changes: &[(u8, u8, u8)]) {}
+
+    /// Bus-aware tick hook for peripherals that need to read or write the
+    /// bus themselves (e.g. Easy DMA on RADIO). Default no-op.
+    fn tick_with_bus(&mut self, _bus: &mut dyn Bus) {}
+
+    /// True if this peripheral wants the bus to call `tick_with_bus`.
+    /// Default false so the bus skips the swap dance for everyone else.
+    fn needs_bus_tick(&self) -> bool { false }
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
