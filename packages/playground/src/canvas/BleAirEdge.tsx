@@ -1,140 +1,80 @@
-// Phase 4: an auto-spawned tldraw shape that visualises the BLE
-// virtual air between any two nRF52840 chips on the canvas. Rendered
-// as an animated dashed line connecting the chips' centres; clicking
-// the edge opens the BLE packet trace panel.
-//
-// Identity: BleAirEdge isn't a tldraw arrow — it's a self-positioning
-// custom shape with two endpoints (chipIdA, chipIdB). Its geometry
-// follows whatever positions the two ChipShapes currently have so it
-// stays connected when the user drags either chip.
-import { useEffect, useRef, useState } from 'react';
+// React Flow custom edge that visualises the BLE virtual air between
+// two nRF52840 chips. Replaces the tldraw BleAirEdgeShape with the
+// same behaviour:
+//   - Animated dashed stroke when the virtual-air ring buffer grew
+//     in the last 1.5s; static at lower opacity when idle.
+//   - Click → opens the BleTracePanel.
+//   - Auto-spawned by useBleAirEdges() for every pair of nRF52840
+//     chips on the canvas.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  HTMLContainer,
-  Rectangle2d,
-  ShapeUtil,
-  T,
-  type TLBaseShape,
-  type Editor,
-} from 'tldraw';
+  BaseEdge,
+  EdgeLabelRenderer,
+  getStraightPath,
+  type EdgeProps,
+  type Edge,
+  type Node,
+} from '@xyflow/react';
 import { useChips } from './ChipSession';
 import { useBleTracePanel } from './BleTracePanel';
+import type { ChipNodeData } from './ChipNode';
 
-export interface BleAirEdgeProps {
-  fromChipId: string;
-  toChipId: string;
-  w: number;
-  h: number;
-}
+export type BleAirEdgeType = Edge<{ fromChipId: string; toChipId: string }, 'ble-air'>;
 
-export type BleAirEdgeShape = TLBaseShape<'ble-air-edge', BleAirEdgeProps>;
-
-declare module '@tldraw/tlschema' {
-  interface TLGlobalShapePropsMap {
-    'ble-air-edge': BleAirEdgeProps;
-  }
-}
-
-export class BleAirEdgeShapeUtil extends ShapeUtil<BleAirEdgeShape> {
-  static override type = 'ble-air-edge' as const;
-  static override props = {
-    fromChipId: T.string,
-    toChipId: T.string,
-    w: T.number,
-    h: T.number,
-  };
-
-  override getDefaultProps(): BleAirEdgeShape['props'] {
-    return { fromChipId: '', toChipId: '', w: 100, h: 100 };
-  }
-  override getGeometry(shape: BleAirEdgeShape) {
-    return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: false });
-  }
-  override canResize() {
-    return false;
-  }
-  override canEdit() {
-    return false;
-  }
-  override hideRotateHandle() {
-    return true;
-  }
-  override hideResizeHandles() {
-    return true;
-  }
-  override hideSelectionBoundsFg() {
-    return true;
-  }
-  override component(shape: BleAirEdgeShape) {
-    return <BleAirEdgeBody shape={shape} />;
-  }
-  override getIndicatorPath(shape: BleAirEdgeShape) {
-    const path = new Path2D();
-    path.rect(0, 0, shape.props.w, shape.props.h);
-    return path;
-  }
-}
-
-function BleAirEdgeBody({ shape }: { shape: BleAirEdgeShape }) {
+export function BleAirEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+}: EdgeProps<BleAirEdgeType>) {
   const { open } = useBleTracePanel();
   const active = useTrafficPulse();
+  const [edgePath, labelX, labelY] = getStraightPath({ sourceX, sourceY, targetX, targetY });
+
   return (
-    <HTMLContainer
-      id={shape.id}
-      style={{
-        width: shape.props.w,
-        height: shape.props.h,
-        pointerEvents: 'all',
-        cursor: 'pointer',
-      }}
-    >
-      <svg
-        width={shape.props.w}
-        height={shape.props.h}
-        viewBox={`0 0 ${shape.props.w} ${shape.props.h}`}
-        onClick={open}
-        style={{ display: 'block' }}
-      >
-        <line
-          x1={0}
-          y1={shape.props.h / 2}
-          x2={shape.props.w}
-          y2={shape.props.h / 2}
-          stroke="#33dd66"
-          strokeWidth={2}
-          strokeDasharray="8 6"
-          strokeLinecap="round"
-          opacity={active ? 0.85 : 0.3}
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: '#33dd66',
+          strokeWidth: 2,
+          strokeDasharray: '8 6',
+          strokeLinecap: 'round',
+          opacity: active ? 0.85 : 0.3,
+          animation: active ? 'lw-ble-edge-dash 0.8s linear infinite' : undefined,
+        }}
+      />
+      <EdgeLabelRenderer>
+        <button
+          type="button"
+          onClick={open}
+          className="nodrag nopan"
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, calc(-50% - 18px)) translate(${labelX}px, ${labelY}px)`,
+            background: 'rgba(10, 10, 15, 0.92)',
+            color: active ? '#33dd66' : 'rgba(51, 221, 102, 0.55)',
+            border: '1px solid rgba(51, 221, 102, 0.3)',
+            borderRadius: 999,
+            padding: '4px 10px',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 11,
+            cursor: 'pointer',
+            pointerEvents: 'all',
+          }}
         >
-          {active && (
-            <animate
-              attributeName="stroke-dashoffset"
-              from="0"
-              to="-28"
-              dur="0.8s"
-              repeatCount="indefinite"
-            />
-          )}
-        </line>
-        <text
-          x={shape.props.w / 2}
-          y={shape.props.h / 2 - 10}
-          textAnchor="middle"
-          fontSize={11}
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fill="#33dd66"
-          opacity={active ? 0.9 : 0.4}
-        >
-          {active ? 'BLE air · live' : 'BLE air · idle'}
-        </text>
-      </svg>
-    </HTMLContainer>
+          BLE air · {active ? 'live' : 'idle'}
+        </button>
+      </EdgeLabelRenderer>
+    </>
   );
 }
 
-/// Returns true when the shared virtual-air ring buffer has grown in
-/// the last ~1.5s. Polls a single bridge — they all expose the same
-/// process-static trace. Cheap (4Hz) and decouples the animation
-/// from "any RADIO peripheral exists".
+/// Polls the shared virtual-air trace; returns true when the buffer
+/// grew in the last 1.5s. Any live bridge returns the same snapshot
+/// since the trace is a process-static ring in Rust.
 function useTrafficPulse(): boolean {
   const { sessions, order } = useChips();
   const [active, setActive] = useState(false);
@@ -145,7 +85,6 @@ function useTrafficPulse(): boolean {
     let alive = true;
     const tick = () => {
       if (!alive) return;
-      // Find any live bridge; if none, mark idle.
       let bridge = null;
       for (const id of order) {
         const b = sessions[id]?.bridge;
@@ -182,92 +121,39 @@ function useTrafficPulse(): boolean {
   return active;
 }
 
-/// Reconcile a BLE air edge between every pair of nRF52840 chips on
-/// the canvas. Called every time the chip layout changes; idempotent.
-export function useBleAirEdgeSync(editor: Editor | null) {
+/// Computes the set of BLE-air edges that should exist on the canvas:
+/// one edge per pair of nRF52840 chips. Used by CanvasShell to
+/// reconcile the edge list against the live chip session list.
+export function useBleAirEdgesFor(nodes: Node[]): BleAirEdgeType[] {
   const { sessions, order } = useChips();
-  useEffect(() => {
-    if (!editor) return;
+  return useMemo(() => {
     const nrfChips = order.filter((id) => {
       const s = sessions[id];
-      return s && s.board && (s.board.boardId ?? '').includes('nrf52840');
+      return s && (s.board.boardId ?? '').includes('nrf52840');
     });
-    // Existing edge shapes on the page
-    const existing = Array.from(editor.getCurrentPageShapeIds())
-      .map((id) => editor.getShape(id))
-      .filter((s): s is BleAirEdgeShape => !!s && s.type === 'ble-air-edge');
-
-    const desired = new Set<string>();
+    const edges: BleAirEdgeType[] = [];
     for (let i = 0; i < nrfChips.length; i++) {
       for (let j = i + 1; j < nrfChips.length; j++) {
         const a = nrfChips[i]!;
         const b = nrfChips[j]!;
-        desired.add(`${a}::${b}`);
+        // Only emit the edge if both endpoint nodes actually
+        // exist on the canvas (defensive — should always be true
+        // since CanvasShell syncs nodes against the same session
+        // list).
+        if (
+          nodes.find((n) => (n.data as ChipNodeData).chipId === a) &&
+          nodes.find((n) => (n.data as ChipNodeData).chipId === b)
+        ) {
+          edges.push({
+            id: `ble-air-${a}-${b}`,
+            source: `chip-${a}`,
+            target: `chip-${b}`,
+            type: 'ble-air',
+            data: { fromChipId: a, toChipId: b },
+          });
+        }
       }
     }
-
-    // Drop edges whose endpoints no longer exist
-    const stale = existing.filter(
-      (s) => !desired.has(`${s.props.fromChipId}::${s.props.toChipId}`),
-    );
-    if (stale.length > 0) editor.deleteShapes(stale.map((s) => s.id));
-
-    // Add missing edges. Position is recomputed each render from
-    // current chip-shape geometry.
-    for (const pair of desired) {
-      const [a, b] = pair.split('::');
-      if (!a || !b) continue;
-      const have = existing.find(
-        (s) => s.props.fromChipId === a && s.props.toChipId === b,
-      );
-      const geom = computeEdgeGeometry(editor, a, b);
-      if (!geom) continue;
-      if (!have) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (editor.createShape as any)({
-          type: 'ble-air-edge',
-          x: geom.x,
-          y: geom.y,
-          props: {
-            fromChipId: a,
-            toChipId: b,
-            w: geom.w,
-            h: geom.h,
-          },
-        });
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (editor.updateShape as any)({
-          id: have.id,
-          type: 'ble-air-edge',
-          x: geom.x,
-          y: geom.y,
-          props: { fromChipId: a, toChipId: b, w: geom.w, h: geom.h },
-        });
-      }
-    }
-  }, [editor, sessions, order]);
-}
-
-function computeEdgeGeometry(editor: Editor, fromChipId: string, toChipId: string) {
-  // Find the chip-shapes by their chipId prop (shapeId convention
-  // matches createShapeId(`chip-${chipId}`) used by CanvasShell).
-  const all = Array.from(editor.getCurrentPageShapeIds())
-    .map((id) => editor.getShape(id))
-    .filter((s) => s && s.type === 'chip');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const from = all.find((s: any) => s?.props.chipId === fromChipId) as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const to = all.find((s: any) => s?.props.chipId === toChipId) as any;
-  if (!from || !to) return null;
-  // Endpoints: centre of each chip-shape (in page coords).
-  const fx = from.x + from.props.w / 2;
-  const fy = from.y + from.props.h / 2;
-  const tx = to.x + to.props.w / 2;
-  const ty = to.y + to.props.h / 2;
-  const x = Math.min(fx, tx);
-  const y = Math.min(fy, ty) - 20;
-  const w = Math.max(40, Math.abs(tx - fx));
-  const h = Math.max(40, Math.abs(ty - fy)) + 40;
-  return { x, y, w, h };
+    return edges;
+  }, [sessions, order, nodes]);
 }

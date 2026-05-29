@@ -1,18 +1,29 @@
-// Phase 1+2a+2b+4 canvas shell.
-//   Phase 1   - Tldraw shell with one read-only chip-shape.
-//   Phase 2a  - Pan/zoom + drag.
-//   Phase 2b  - Multi-chip: one ChipShape per session (active = full
-//               size, inactive = compact ChipCard).
-//   Phase 4   - BLE air auto-edge between any two nRF52840 chips.
-//   Polish    - Active chip sizes to viewport (minus a margin so
-//               compact chips fit on the right), auto-zoomToFit after
-//               every shape reconciliation so newly added chips don't
-//               land off-screen.
-import { useEffect, useState, type ReactNode } from 'react';
-import { Tldraw, type Editor, createShapeId, type TLShapeId } from 'tldraw';
-import 'tldraw/tldraw.css';
-import { ChipShapeUtil, ChipChildrenProvider } from './ChipShape';
-import { BleAirEdgeShapeUtil, useBleAirEdgeSync } from './BleAirEdge';
+// Canvas substrate built on React Flow (@xyflow/react). Replaces
+// tldraw to avoid the commercial-license watermark.
+//
+// Structure:
+//   - One ChipNode per session in ChipsProvider; active chip is
+//     viewport-sized, inactive chips are compact 260x180 tiles
+//     laid out in a column to the right of the active chip.
+//   - One BleAirEdge per pair of nRF52840 chips (auto-spawned).
+//   - "+ add chip" floating action button at top-left.
+//   - Pan/zoom + node drag enabled; persistence in localStorage
+//     (positions + chip-id mapping).
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  BackgroundVariant,
+  MiniMap,
+  applyNodeChanges,
+  useReactFlow,
+  type Node,
+  type NodeChange,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { ChipNode, ChipChildrenProvider, type ChipNodeData } from './ChipNode';
+import { BleAirEdge, useBleAirEdgesFor } from './BleAirEdge';
 import { BleTracePanelProvider } from './BleTracePanel';
 import { useChips } from './ChipSession';
 import { useBackgroundChips } from './useBackgroundChips';
@@ -23,9 +34,48 @@ const COMPACT_H = 180;
 const GAP = 40;
 const MIN_ACTIVE_W = 720;
 const MIN_ACTIVE_H = 480;
-const PERSISTENCE_KEY = 'lw-canvas-v3';
+const POSITIONS_KEY = 'lw-canvas-positions-v1';
 
-const shapeIdFor = (chipId: string): TLShapeId => createShapeId(`chip-${chipId}`);
+const nodeIdFor = (chipId: string) => `chip-${chipId}`;
+
+const nodeTypes = { chip: ChipNode };
+const edgeTypes = { 'ble-air': BleAirEdge };
+
+interface SavedPositions {
+  byNodeId: Record<string, { x: number; y: number }>;
+}
+
+function loadSavedPositions(): SavedPositions {
+  if (typeof window === 'undefined') return { byNodeId: {} };
+  try {
+    const raw = window.localStorage.getItem(POSITIONS_KEY);
+    if (!raw) return { byNodeId: {} };
+    return JSON.parse(raw) as SavedPositions;
+  } catch {
+    return { byNodeId: {} };
+  }
+}
+
+function saveSavedPositions(pos: SavedPositions) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(POSITIONS_KEY, JSON.stringify(pos));
+  } catch {
+    /* quota / private — skip */
+  }
+}
+
+export function CanvasShell({ children }: { children: ReactNode }) {
+  return (
+    <BleTracePanelProvider>
+      <ChipChildrenProvider content={children}>
+        <ReactFlowProvider>
+          <CanvasInner />
+        </ReactFlowProvider>
+      </ChipChildrenProvider>
+    </BleTracePanelProvider>
+  );
+}
 
 function useViewportSize() {
   const [size, setSize] = useState(() => ({
@@ -40,46 +90,125 @@ function useViewportSize() {
   return size;
 }
 
-export function CanvasShell({ children }: { children: ReactNode }) {
-  return (
-    <BleTracePanelProvider>
-      <ChipChildrenProvider content={children}>
-        <CanvasInner />
-      </ChipChildrenProvider>
-    </BleTracePanelProvider>
-  );
-}
-
 function CanvasInner() {
-  const [editor, setEditor] = useState<Editor | null>(null);
   const { order, activeChipId, addChip } = useChips();
   const viewport = useViewportSize();
+  const { fitView } = useReactFlow();
   useBackgroundChips(true);
-  useBleAirEdgeSync(editor);
 
+  const [savedPositions, setSavedPositions] = useState<SavedPositions>(() =>
+    loadSavedPositions(),
+  );
+
+  // Compute the canonical layout (size + default position for each
+  // chip). Inactive chips inherit a slot in the right-column unless
+  // the user has dragged them somewhere — savedPositions takes
+  // precedence.
+  const inactiveCount = Math.max(0, order.length - 1);
+  const reserveForCompact = inactiveCount > 0 ? COMPACT_W + GAP * 2 : 0;
+  const activeW = Math.max(MIN_ACTIVE_W, viewport.w - reserveForCompact - 32);
+  const activeH = Math.max(MIN_ACTIVE_H, viewport.h - 32);
+
+  const nodes = useMemo<Node<ChipNodeData>[]>(() => {
+    let inactiveIdx = 0;
+    return order.map((chipId) => {
+      const isActive = chipId === activeChipId;
+      const id = nodeIdFor(chipId);
+      const w = isActive ? activeW : COMPACT_W;
+      const h = isActive ? activeH : COMPACT_H;
+      const defaultX = isActive
+        ? -activeW / 2
+        : activeW / 2 + GAP;
+      const defaultY = isActive
+        ? -activeH / 2
+        : -activeH / 2 + inactiveIdx * (COMPACT_H + GAP);
+      if (!isActive) inactiveIdx += 1;
+      const saved = savedPositions.byNodeId[id];
+      return {
+        id,
+        type: 'chip',
+        position: saved ?? { x: defaultX, y: defaultY },
+        data: { chipId },
+        // Active chip is positioned by layout, not user-draggable
+        // (its size is viewport-fit so dragging it offscreen would
+        // be confusing). Compact chips are draggable.
+        draggable: !isActive,
+        selectable: !isActive,
+        // Drag handle is the header strip — see ChipNode.
+        dragHandle: '.lw-chip-node-header',
+        width: w,
+        height: h,
+        style: { width: w, height: h },
+      };
+    });
+  }, [order, activeChipId, activeW, activeH, savedPositions]);
+
+  const edges = useBleAirEdgesFor(nodes);
+
+  // Capture drags into savedPositions so the layout persists across
+  // chip-list mutations (add/remove/focus) and page reloads.
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    let mutated = false;
+    setSavedPositions((prev) => {
+      const next = { ...prev.byNodeId };
+      for (const c of changes) {
+        if (c.type === 'position' && c.position && c.dragging === false) {
+          next[c.id] = { x: c.position.x, y: c.position.y };
+          mutated = true;
+        }
+      }
+      if (!mutated) return prev;
+      const result = { byNodeId: next };
+      saveSavedPositions(result);
+      return result;
+    });
+    // We don't store the node list ourselves — `nodes` is recomputed
+    // from order + savedPositions every render. But we still need to
+    // run applyNodeChanges on a local copy for React Flow's
+    // intermediate drag rendering. The functional setSavedPositions
+    // above commits the final position.
+    applyNodeChanges(changes, nodes); // returned array unused; here only for type completeness.
+  }, [nodes]);
+
+  // Auto fit-view on chip count change so newly added chips don't
+  // land off-screen the way they did in the tldraw build.
   useEffect(() => {
-    if (!editor) return;
-    const inactiveCount = Math.max(0, order.length - 1);
-    // Active chip fills the viewport minus a reserve on the right for
-    // the inactive ChipCards (column of compact tiles) and a small
-    // outer margin so the chip doesn't bleed past the screen edges.
-    const reserveForCompact = inactiveCount > 0 ? COMPACT_W + GAP * 2 : 0;
-    const activeW = Math.max(MIN_ACTIVE_W, viewport.w - reserveForCompact - 32);
-    const activeH = Math.max(MIN_ACTIVE_H, viewport.h - 32);
-    syncShapes(editor, order, activeChipId, activeW, activeH);
-  }, [editor, order, activeChipId, viewport.w, viewport.h]);
+    const id = window.setTimeout(() => {
+      fitView({ padding: 0.08, duration: 200 });
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [order.length, activeChipId, fitView]);
 
   return (
     <div className="lw-canvas-root">
-      <Tldraw
-        hideUi
-        shapeUtils={[ChipShapeUtil, BleAirEdgeShapeUtil]}
-        persistenceKey={PERSISTENCE_KEY}
-        onMount={(ed) => {
-          setEditor(ed);
-          ed.setCurrentTool('select');
-        }}
-      />
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        proOptions={{ hideAttribution: true }}
+        fitView
+        minZoom={0.2}
+        maxZoom={1.5}
+        panOnDrag
+        panOnScroll={false}
+        zoomOnScroll
+        zoomOnPinch
+        nodesConnectable={false}
+        nodesFocusable={false}
+        edgesFocusable={false}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(255,255,255,0.06)" />
+        <MiniMap
+          nodeColor={(n) => (n.id === nodeIdFor(activeChipId) ? '#e83e8c' : 'rgba(255,255,255,0.35)')}
+          nodeStrokeWidth={3}
+          maskColor="rgba(0,0,0,0.6)"
+          style={{ background: '#0a0a0f', border: '1px solid rgba(255,255,255,0.08)' }}
+          pannable
+          zoomable
+        />
+      </ReactFlow>
       <button
         type="button"
         onClick={() => addChip()}
@@ -91,61 +220,4 @@ function CanvasInner() {
       </button>
     </div>
   );
-}
-
-function syncShapes(
-  editor: Editor,
-  order: string[],
-  activeChipId: string,
-  activeW: number,
-  activeH: number,
-) {
-  let inactiveIndex = 0;
-  for (const chipId of order) {
-    const isActive = chipId === activeChipId;
-    const w = isActive ? activeW : COMPACT_W;
-    const h = isActive ? activeH : COMPACT_H;
-    const x = isActive ? -activeW / 2 : activeW / 2 + GAP;
-    const y = isActive
-      ? -activeH / 2
-      : -activeH / 2 + inactiveIndex * (COMPACT_H + GAP);
-    if (!isActive) inactiveIndex += 1;
-
-    const id = shapeIdFor(chipId);
-    const existing = editor.getShape(id);
-    if (!existing) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor.createShape as any)({
-        id,
-        type: 'chip',
-        x,
-        y,
-        props: { w, h, chipId },
-      });
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor.updateShape as any)({
-        id,
-        type: 'chip',
-        x,
-        y,
-        props: { w, h, chipId },
-      });
-    }
-  }
-
-  // Drop shapes that no longer correspond to a session (active or
-  // inactive). Edge shapes are managed by useBleAirEdgeSync.
-  const liveIds = new Set(order.map(shapeIdFor));
-  const orphanChipShapes = Array.from(editor.getCurrentPageShapeIds())
-    .map((id) => ({ id, shape: editor.getShape(id) }))
-    .filter(({ shape }) => shape && shape.type === 'chip')
-    .filter(({ id }) => !liveIds.has(id as TLShapeId))
-    .map(({ id }) => id);
-  if (orphanChipShapes.length > 0) editor.deleteShapes(orphanChipShapes);
-
-  // After reconciling shapes, fit everything in view so newly added
-  // chips don't land off-screen (tldraw culls shapes outside camera
-  // bounds — they exist in the store but render `display: none`).
-  editor.zoomToFit({ animation: { duration: 200 } });
 }
