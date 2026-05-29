@@ -3,40 +3,51 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
+#
+# IRQ numbers from nRF52840 PS rev 1.7 §6.1.4 "Instantiation table".
+# Required so that the sim's NVIC can pend the right line when a
+# peripheral tick() returns irq:true. Without these, dynamic tick
+# handlers silently no-op even when behaviourally correct.
 
 name: nrf52840
 arch: arm
 flash:
-  base: 134217728
-  size: 1048576B
+  base: 0           # 0x00000000 — Nordic nRF52840 flash
+  size: 1048576B    # 1024 KiB
 ram:
-  base: 8388608
-  size: 262144B
+  base: 536870912   # 0x20000000 — Nordic nRF52840 SRAM
+  size: 262144B     # 256 KiB
 peripherals:
 - id: uart0
   type: nrf52840_uart
   bus: sysbus
   base_address: 1073750016
+  irq: 2  # UARTE0_UART0
 - id: uart1
   type: nrf52840_uart
   bus: sysbus
   base_address: 1073905664
+  irq: 40  # UARTE1
 - id: rtc0
   type: nrf52840_rtc
   bus: sysbus
   base_address: 1073786880
+  irq: 11
 - id: rtc1
   type: nrf52840_rtc
   bus: sysbus
   base_address: 1073811456
+  irq: 17
 - id: rtc2
   type: nrf52840_rtc
   bus: sysbus
   base_address: 1073889280
+  irq: 36
 - id: wdt
   type: nrf52840_watchdog
   bus: sysbus
   base_address: 1073807360
+  irq: 16
 - id: ppi
   type: nrf52840_ppi
   bus: sysbus
@@ -45,67 +56,140 @@ peripherals:
   type: nrf_clock
   bus: sysbus
   base_address: 1073741824
+  irq: 0  # POWER_CLOCK (shared)
 - id: twi0
   type: nrf52840_i2c
   bus: sysbus
   base_address: 1073754112
+  irq: 3  # SPI0_TWI0
 - id: spi2
   type: nrf52840_spi
   bus: sysbus
   base_address: 1073885184
+  irq: 35  # SPIM2_SPIS2_SPI2
 - id: gpio0
   type: nrf52840_gpio
   bus: sysbus
-  base_address: 1342178560
+  base_address: 1342177280  # 0x50000000 — standard Nordic P0 base
+# Note: real Nordic P1 lives at 0x50000300 with 0x508-offset registers,
+# but its 4KB peripheral window overlaps GPIO0's. We follow the
+# production yaml's convention of placing P1 at 0x50001000 so the
+# peripheral lookup is unambiguous. Firmware that targets P0 (the only
+# port with LEDs on most demo boards) is unaffected; firmware that
+# writes to P1's standard addresses won't reach gpio1 here.
 - id: gpio1
   type: nrf52840_gpio
   bus: sysbus
-  base_address: 1342179328
+  base_address: 1342181376  # 0x50001000
 - id: gpiote
   type: nrf52840_gpiotasksevents
   bus: sysbus
   base_address: 1073766400
+  irq: 6
 - id: twi1
   type: nrf52840_i2c
   bus: sysbus
   base_address: 1073758208
+  irq: 4  # SPI1_TWI1
 - id: timer0
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073774592
+  irq: 8
 - id: timer1
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073778688
+  irq: 9
 - id: timer2
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073782784
+  irq: 10
 - id: timer3
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073848320
+  irq: 26
 - id: timer4
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073852416
+  irq: 27
 - id: i2s
   type: nrf52840_i2s
   bus: sysbus
   base_address: 1073893376
+  irq: 37
 - id: pdm
   type: nrf52840_pdm
   bus: sysbus
   base_address: 1073860608
+  irq: 31
 - id: radio
   type: nrf52840_radio
   bus: sysbus
   base_address: 1073745920
+  irq: 1
 - id: rng
   type: nrf52840_rng
   bus: sysbus
   base_address: 1073795072
+  irq: 13
 - id: ecb
   type: nrf52840_ecb
   bus: sysbus
   base_address: 1073799168
+  irq: 14
+- id: temp
+  type: nrf52840_temp
+  bus: sysbus
+  base_address: 1073790976  # 0x4000C000
+  irq: 12
+- id: saadc
+  type: nrf52840_saadc
+  bus: sysbus
+  base_address: 1073770496  # 0x40007000
+  irq: 7
+- id: pwm0
+  type: nrf52840_pwm
+  bus: sysbus
+  base_address: 1073856512  # 0x4001C000
+  irq: 28
+- id: pwm1
+  type: nrf52840_pwm
+  bus: sysbus
+  base_address: 1073876992  # 0x40021000
+  irq: 29
+- id: pwm2
+  type: nrf52840_pwm
+  bus: sysbus
+  base_address: 1073881088  # 0x40022000
+  irq: 30
+- id: pwm3
+  type: nrf52840_pwm
+  bus: sysbus
+  base_address: 1073926144  # 0x4002D000
+  irq: 45
+- id: qspi
+  type: nrf52840_qspi
+  bus: sysbus
+  base_address: 1073909760  # 0x40029000
+  irq: 41
+- id: nfct
+  type: nrf52840_nfct
+  bus: sysbus
+  base_address: 1073762304  # 0x40005000
+  irq: 5
+- id: ficr
+  type: nrf52840_ficr
+  bus: sysbus
+  base_address: 268435456   # 0x10000000
+- id: uicr
+  type: nrf52840_uicr
+  bus: sysbus
+  base_address: 268439552   # 0x10001000
+- id: nvmc
+  type: nrf52840_nvmc
+  bus: sysbus
+  base_address: 1073864704  # 0x4001E000

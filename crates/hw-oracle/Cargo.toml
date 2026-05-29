@@ -8,6 +8,7 @@ description = "HW oracle harness: JTAG-driven cross-validation against physical 
 [dependencies]
 labwired-hw-oracle-macros = { path = "../hw-oracle-macros" }
 labwired-core = { path = "../core" }
+labwired-config = { path = "../config" }
 labwired-loader = { path = "../loader" }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
@@ -41,3 +42,6 @@ hw-oracle = ["dep:serialport"]
 hw-oracle-c3 = []
 # Gates ARM Thumb/STM32 _hw and _diff runners.  Sim-side is always built.
 hw-oracle-stm32 = []
+# Gates nRF52 (Cortex-M4) MMIO diff harness over ST-Link SWD.
+# Sim-side is always built; this gate only wires the hardware tests.
+hw-oracle-nrf52 = []

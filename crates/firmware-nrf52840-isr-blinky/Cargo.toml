@@ -1,0 +1,21 @@
+[package]
+name = "firmware-nrf52840-isr-blinky"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+# IRQ-driven blinky used by labwired-core::tests::nrf52 integration test
+# `nrf52840_onboarding_isr_firmware_toggles_led`. Proves CortexM dispatches
+# NVIC interrupts through VTOR to the firmware's TIMER0 handler.
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nrf52840-isr-blinky"
+path = "src/main.rs"
+test = false
+bench = false

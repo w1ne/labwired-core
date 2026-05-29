@@ -1,0 +1,22 @@
+[package]
+name = "firmware-nrf52840-timer-blinky"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+# TIMER-driven blinky used by the labwired-core integration test
+# `nrf52840_onboarding_real_firmware_toggles_led`. Built once with
+# `cargo build --release --target thumbv7em-none-eabi
+#    -p firmware-nrf52840-timer-blinky` and consumed as an ELF.
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nrf52840-timer-blinky"
+path = "src/main.rs"
+test = false
+bench = false

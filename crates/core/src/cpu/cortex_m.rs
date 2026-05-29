@@ -45,6 +45,11 @@ pub struct CortexM {
     /// Currently active exception number (0 = thread mode). Used to prevent re-entry
     /// of the same or lower-priority exception while one is already being serviced.
     pub active_exception: u32,
+    /// Shared with SCB peripheral: live mirror of `active_exception` so
+    /// firmware reading ICSR.VECTACTIVE sees the currently-handling
+    /// exception. cortex-m-rt's DefaultHandler depends on this to
+    /// route to the right IRQ branch.
+    pub vectactive: Arc<AtomicU32>,
     pub decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
     /// FPU single-precision register file (VFPv4 single — S0..S31).
     /// Each S register is the IEEE-754 binary32 bit pattern; reads via
@@ -79,6 +84,7 @@ impl Default for CortexM {
             vtor: Arc::new(AtomicU32::new(0)),
             it_state: 0,
             active_exception: 0,
+            vectactive: Arc::new(AtomicU32::new(0)),
             decode_cache: Box::new([None; 4096]),
             fpu_s: [0u32; 32],
         }
@@ -100,6 +106,17 @@ impl CortexM {
 
     pub fn set_shared_vtor(&mut self, vtor: Arc<AtomicU32>) {
         self.vtor = vtor;
+    }
+
+    pub fn set_shared_vectactive(&mut self, vectactive: Arc<AtomicU32>) {
+        self.vectactive = vectactive;
+    }
+
+    /// Update both the local field and the SCB.ICSR mirror in one go.
+    fn set_active_exception(&mut self, exc: u32) {
+        self.active_exception = exc;
+        self.vectactive
+            .store(exc & 0x1FF, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn xpsr_with_itstate(&self, xpsr: u32) -> u32 {
@@ -243,7 +260,7 @@ impl CortexM {
         // Restore active exception from stacked xPSR IPSR bits [8:0].
         // When taking an exception, we saved the previous active_exception in IPSR,
         // so restoring it here correctly handles both non-nested and nested cases.
-        self.active_exception = self.xpsr & 0x1FF;
+        self.set_active_exception(self.xpsr & 0x1FF);
 
         tracing::debug!(
             "EXC_RETURN: frame={:#010x} restored LR={:#010x} PC={:#010x} active_exc={}",
@@ -261,7 +278,7 @@ impl Cpu for CortexM {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
         self.pending_exceptions = 0;
-        self.active_exception = 0;
+        self.set_active_exception(0);
         self.decode_cache.fill(None);
 
         let vtor = self.vtor.load(Ordering::SeqCst) as u64;
@@ -477,7 +494,7 @@ impl CortexM {
 
                 // Update active exception before stacking so nested exceptions see
                 // the correct level.
-                self.active_exception = exception_num;
+                self.set_active_exception(exception_num);
 
                 // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
                 let stacked_lr = self.lr;
@@ -909,9 +926,42 @@ impl CortexM {
                     }
                 }
                 Instruction::Unknown32(h1, h2) => {
-                    // Manual fallback for complex bit patterns not yet in Instruction enum
-                    if (h1 & 0xFE00) == 0xE800 {
-                        // Table branch, load/store exclusive etc (handled by Tbb/Tbh above usually, but just in case)
+                    // Manual fallback for complex bit patterns not yet in Instruction enum.
+                    //
+                    // LDREX Rt, [Rn, #imm8*4]: T1 = 0xE85F_TFTT where
+                    //   h1 = 0xE85_ | Rn, h2 = (Rt << 12) | 0xF00 | imm8
+                    // STREX Rd, Rt, [Rn, #imm8*4]: T1 = 0xE840_TDII where
+                    //   h1 = 0xE84_ | Rn, h2 = (Rt << 12) | (Rd << 8) | imm8
+                    //
+                    // Single-threaded sim has no preemption between LDREX and
+                    // STREX, so we model the exclusive monitor as always
+                    // succeeding. This matches the observable behavior of
+                    // atomic ops on real hardware in the uncontended case.
+                    if (h1 & 0xFFF0) == 0xE850 {
+                        // LDREX
+                        let rn = (h1 & 0xF) as u8;
+                        let rt = ((h2 >> 12) & 0xF) as u8;
+                        let imm8 = (h2 & 0xFF) as u32;
+                        let addr = self.get_register(rn).wrapping_add(imm8 * 4);
+                        if let Ok(val) = bus.read_u32(addr as u64) {
+                            self.set_register(rt, val);
+                        }
+                        pc_increment = 4;
+                    } else if (h1 & 0xFFF0) == 0xE840 {
+                        // STREX
+                        let rn = (h1 & 0xF) as u8;
+                        let rt = ((h2 >> 12) & 0xF) as u8;
+                        let rd = ((h2 >> 8) & 0xF) as u8;
+                        let imm8 = (h2 & 0xFF) as u32;
+                        let addr = self.get_register(rn).wrapping_add(imm8 * 4);
+                        let val = self.get_register(rt);
+                        let _ = bus.write_u32(addr as u64, val);
+                        // Rd = 0 → success.
+                        self.set_register(rd, 0);
+                        pc_increment = 4;
+                    } else if (h1 & 0xFE00) == 0xE800 {
+                        // Table branch, load/store multiple etc — not yet
+                        // modeled in full; advance past the 32-bit insn.
                         pc_increment = 4;
                     } else if (h1 & 0xFE00) == 0xF800 {
                         // LDR/STR (immediate) T3/T4

@@ -236,10 +236,7 @@ impl Peripheral for Dma1 {
             irq,
             cycles: if dma_requests.is_none() { 0 } else { 1 },
             dma_requests,
-            explicit_irqs: None,
-            system_exception: None,
-            dma_signals: None,
-            ticks_until_next: None,
+            ..Default::default()
         }
     }
 

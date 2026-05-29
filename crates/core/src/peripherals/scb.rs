@@ -15,6 +15,12 @@ pub struct Scb {
     pub icsr: u32,
     #[serde(skip)]
     pub vtor: Arc<AtomicU32>, // Shared with CPU
+    #[serde(skip)]
+    /// Shared with CPU: bits 0..8 of ICSR.VECTACTIVE. Read-only mirror
+    /// of the CPU's currently-active exception number. cortex-m-rt's
+    /// DefaultHandler reads ICSR to identify which IRQ fired, so this
+    /// must be live or the handler can't dispatch correctly.
+    pub vectactive: Arc<AtomicU32>,
     pub aircr: u32,
     pub scr: u32,
     pub ccr: u32,
@@ -25,10 +31,15 @@ pub struct Scb {
 
 impl Scb {
     pub fn new(vtor: Arc<AtomicU32>) -> Self {
+        Self::with_vectactive(vtor, Arc::new(AtomicU32::new(0)))
+    }
+
+    pub fn with_vectactive(vtor: Arc<AtomicU32>, vectactive: Arc<AtomicU32>) -> Self {
         Self {
             cpuid: 0x410F_C241, // Cortex-M4 r0p1
             icsr: 0,
             vtor,
+            vectactive,
             aircr: 0,
             scr: 0,
             ccr: 0,
@@ -41,7 +52,12 @@ impl Scb {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cpuid,
-            0x04 => self.icsr,
+            0x04 => {
+                // ICSR: only VECTACTIVE [8:0] is modeled live. The rest
+                // (VECTPENDING [22:12], ISRPREEMPT [23], PENDSV [28],
+                // NMIPENDSET [31] etc.) come from the stored icsr.
+                (self.icsr & !0x1FF) | (self.vectactive.load(Ordering::Relaxed) & 0x1FF)
+            }
             0x08 => self.vtor.load(Ordering::Relaxed),
             0x0C => self.aircr,
             0x10 => self.scr,

@@ -106,6 +106,536 @@ fn xiao_nrf52840_gpio_task_registers_drive_led_pins() {
     assert_eq!(bus.read_u32(0x5000_0504).unwrap() & (1 << 26), 0);
 }
 
+/// Behavioural test: TIMER0 driven through onboarding manifest.
+/// Configures BITMODE=32-bit, PRESCALER=0, CC[0]=5, enables COMPARE[0] IRQ,
+/// starts the timer, then ticks the bus enough cycles for the compare to
+/// fire. Asserts the event register and that the configured NVIC IRQ (8)
+/// got pended.
+#[test]
+fn nrf52840_onboarding_timer0_fires_compare_and_pends_irq() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+
+    const TIMER0: u64 = 0x4000_8000;
+    const TASKS_START: u64 = TIMER0;
+    const EVENTS_COMPARE0: u64 = TIMER0 + 0x140;
+    const INTENSET: u64 = TIMER0 + 0x304;
+    const BITMODE: u64 = TIMER0 + 0x508;
+    const PRESCALER: u64 = TIMER0 + 0x510;
+    const CC0: u64 = TIMER0 + 0x540;
+    const TIMER0_IRQ: u32 = 8;
+
+    bus.write_u32(BITMODE, 3).unwrap(); // 32-bit
+    bus.write_u32(PRESCALER, 0).unwrap();
+    bus.write_u32(CC0, 5).unwrap();
+    bus.write_u32(INTENSET, 1 << 16).unwrap(); // COMPARE[0]
+    bus.write_u32(TASKS_START, 1).unwrap();
+
+    // Tick the bus until COMPARE[0] fires or we time out.
+    let mut compare_fired = false;
+    let mut irq_pended = false;
+    for _ in 0..200 {
+        let (interrupts, _costs) = bus.tick_peripherals_fully();
+        if interrupts.contains(&TIMER0_IRQ) {
+            irq_pended = true;
+        }
+        if bus.read_u32(EVENTS_COMPARE0).unwrap() != 0 {
+            compare_fired = true;
+            break;
+        }
+    }
+
+    assert!(compare_fired, "TIMER0 EVENTS_COMPARE[0] never fired");
+    assert!(irq_pended, "TIMER0 IRQ (8) was never pended on NVIC");
+}
+
+/// Behavioural test: RTC0 driven through the onboarding manifest.
+/// Configures PRESCALER=0, CC[0]=4, enables COMPARE[0] IRQ + EVTEN,
+/// starts the RTC, ticks the bus, asserts EVENTS_COMPARE[0] and NVIC IRQ 11.
+#[test]
+fn nrf52840_onboarding_rtc0_fires_compare_and_pends_irq() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+
+    const RTC0: u64 = 0x4000_B000;
+    const TASKS_START: u64 = RTC0;
+    const EVENTS_COMPARE0: u64 = RTC0 + 0x140;
+    const INTENSET: u64 = RTC0 + 0x304;
+    const EVTENSET: u64 = RTC0 + 0x344;
+    const PRESCALER: u64 = RTC0 + 0x508;
+    const CC0: u64 = RTC0 + 0x540;
+    const RTC0_IRQ: u32 = 11;
+
+    bus.write_u32(PRESCALER, 0).unwrap();
+    bus.write_u32(CC0, 4).unwrap();
+    bus.write_u32(EVTENSET, 1 << 16).unwrap();
+    bus.write_u32(INTENSET, 1 << 16).unwrap();
+    bus.write_u32(TASKS_START, 1).unwrap();
+
+    let mut compare_fired = false;
+    let mut irq_pended = false;
+    for _ in 0..200 {
+        let (interrupts, _costs) = bus.tick_peripherals_fully();
+        if interrupts.contains(&RTC0_IRQ) {
+            irq_pended = true;
+        }
+        if bus.read_u32(EVENTS_COMPARE0).unwrap() != 0 {
+            compare_fired = true;
+            break;
+        }
+    }
+
+    assert!(compare_fired, "RTC0 EVENTS_COMPARE[0] never fired");
+    assert!(irq_pended, "RTC0 IRQ (11) was never pended on NVIC");
+}
+
+/// Behavioural test: Zephyr / nRF SDK clock_init boot pattern.
+/// Firmware writes TASKS_HFCLKSTART then busy-loops on EVENTS_HFCLKSTARTED.
+/// The bus must surface the event within a bounded number of ticks for
+/// the firmware to make forward progress.
+#[test]
+fn nrf52840_onboarding_clock_boot_pattern_completes() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+
+    const CLOCK: u64 = 0x4000_0000;
+    const TASKS_HFCLKSTART: u64 = CLOCK;
+    const TASKS_LFCLKSTART: u64 = CLOCK + 0x008;
+    const EVENTS_HFCLKSTARTED: u64 = CLOCK + 0x100;
+    const EVENTS_LFCLKSTARTED: u64 = CLOCK + 0x104;
+    const HFCLKSTAT: u64 = CLOCK + 0x40C;
+    const LFCLKSRC: u64 = CLOCK + 0x518;
+
+    // Issue both clock starts as a typical bring-up sequence would.
+    bus.write_u32(LFCLKSRC, 1).unwrap(); // Xtal
+    bus.write_u32(TASKS_HFCLKSTART, 1).unwrap();
+    bus.write_u32(TASKS_LFCLKSTART, 1).unwrap();
+
+    let mut hf_done = false;
+    let mut lf_done = false;
+    for _ in 0..16 {
+        bus.tick_peripherals_fully();
+        if bus.read_u32(EVENTS_HFCLKSTARTED).unwrap() != 0 {
+            hf_done = true;
+        }
+        if bus.read_u32(EVENTS_LFCLKSTARTED).unwrap() != 0 {
+            lf_done = true;
+        }
+        if hf_done && lf_done {
+            break;
+        }
+    }
+
+    assert!(hf_done, "EVENTS_HFCLKSTARTED never fired");
+    assert!(lf_done, "EVENTS_LFCLKSTARTED never fired");
+    // HFCLKSTAT.STATE should show running.
+    assert_ne!(bus.read_u32(HFCLKSTAT).unwrap() & (1 << 16), 0);
+}
+
+/// Diagnostic: confirm the onboarding bus actually maps GPIO0 at the
+/// standard Nordic base and that a direct OUTSET write lands on it.
+#[test]
+fn nrf52840_onboarding_gpio0_direct_outset_works() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+
+    let map: Vec<String> = bus
+        .peripherals
+        .iter()
+        .map(|p| format!("{}@0x{:08X}+0x{:X}", p.name, p.base, p.size))
+        .collect();
+    let mut bus = bus;
+    let write_res = bus.write_u32(0x5000_0508, 1 << 26);
+    let read_res = bus.read_u32(0x5000_0504);
+    assert!(
+        read_res.as_ref().ok().copied().unwrap_or(0) & (1 << 26) == (1 << 26),
+        "GPIO0 OUTSET via 0x5000_0508 didn't set OUT bit 26. \
+         write_res={write_res:?} read_res={read_res:?} \
+         peripherals={map:#?}"
+    );
+}
+
+/// GPIOTE EVENTS_IN: a GPIO0 pin transition should fire EVENTS_IN[0]
+/// when channel 0 is configured in Event mode with matching pin and
+/// polarity. We drive the edge by writing to GPIO0.OUTSET — the IN
+/// register tracks OUT for output-configured pins on Nordic silicon.
+#[test]
+fn nrf52840_onboarding_gpiote_event_in_fires_on_edge() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+
+    const GPIOTE: u64 = 0x4000_6000;
+    const GPIOTE_CONFIG_0: u64 = GPIOTE + 0x510;
+    const GPIOTE_INTENSET: u64 = GPIOTE + 0x304;
+    const GPIOTE_EVENTS_IN_0: u64 = GPIOTE + 0x100;
+    const GPIO0_DIRSET: u64 = 0x5000_0518;
+    const GPIO0_OUTSET: u64 = 0x5000_0508;
+
+    let pin: u32 = 3;
+    // Configure pin 3 as output so IN tracks it.
+    bus.write_u32(GPIO0_DIRSET, 1 << pin).unwrap();
+
+    // GPIOTE ch0: Event mode (1), port 0, PSEL pin 3, polarity LO_TO_HI.
+    let cfg = 1 | (pin << 8) | (1u32 << 16);
+    bus.write_u32(GPIOTE_CONFIG_0, cfg).unwrap();
+    bus.write_u32(GPIOTE_INTENSET, 1).unwrap(); // IN[0] interrupt
+
+    // Initial tick — snapshots current GPIO IN (all zero) as baseline.
+    bus.tick_peripherals_fully();
+    assert_eq!(
+        bus.read_u32(GPIOTE_EVENTS_IN_0).unwrap(),
+        0,
+        "EVENTS_IN[0] must be 0 before any edge"
+    );
+
+    // Drive the rising edge.
+    bus.write_u32(GPIO0_OUTSET, 1 << pin).unwrap();
+
+    // First tick after the edge: bus snapshots new GPIO IN, GPIOTE
+    // observes the change.  Second tick: GPIOTE drains pending events.
+    let mut irq_seen = false;
+    for _ in 0..4 {
+        let (irqs, _costs) = bus.tick_peripherals_fully();
+        if irqs.contains(&6) {
+            irq_seen = true;
+        }
+    }
+
+    assert_eq!(
+        bus.read_u32(GPIOTE_EVENTS_IN_0).unwrap(),
+        1,
+        "EVENTS_IN[0] should be set after rising edge on watched pin"
+    );
+    assert!(irq_seen, "GPIOTE IRQ 6 should pend when INTEN.IN[0] enabled");
+}
+
+/// End-to-end PPI test: TIMER0 EVENTS_COMPARE[0] → PPI CH[0] →
+/// GPIOTE TASKS_OUT[0] → GPIO0.OUTSET pin 26.
+///
+/// This is the canonical "hardware-driven LED toggle" pattern in nRF SDK
+/// firmware. Exercises every link in the cross-peripheral chain we just
+/// added: TIMER fires fired_events, PPI routes them, GPIOTE produces
+/// mmio_writes, bus applies them to GPIO0 — all without any CPU
+/// instruction execution.
+#[test]
+fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+
+    const TIMER0: u64 = 0x4000_8000;
+    const TIMER0_TASKS_START: u64 = TIMER0;
+    const TIMER0_TASKS_CLEAR: u64 = TIMER0 + 0x00C;
+    const TIMER0_EVENTS_COMPARE0: u64 = TIMER0 + 0x140;
+    const TIMER0_BITMODE: u64 = TIMER0 + 0x508;
+    const TIMER0_PRESCALER: u64 = TIMER0 + 0x510;
+    const TIMER0_SHORTS: u64 = TIMER0 + 0x200;
+    const TIMER0_CC0: u64 = TIMER0 + 0x540;
+
+    const GPIOTE: u64 = 0x4000_6000;
+    const GPIOTE_TASKS_OUT_0: u64 = GPIOTE;
+    const GPIOTE_CONFIG_0: u64 = GPIOTE + 0x510;
+
+    const PPI: u64 = 0x4001_F000;
+    const PPI_CH0_EEP: u64 = PPI + 0x510;
+    const PPI_CH0_TEP: u64 = PPI + 0x514;
+    const PPI_CHENSET: u64 = PPI + 0x504;
+
+    const GPIO0_OUT: u64 = 0x5000_0504;
+    const LED_RED_PIN: u32 = 26;
+
+    // 1. GPIOTE channel 0: Task mode, port 0, pin 26, polarity = Toggle.
+    let gpiote_cfg = 3       // MODE = Task
+        | (LED_RED_PIN << 8) // PSEL
+        | (3u32 << 16);      // POLARITY = Toggle
+    bus.write_u32(GPIOTE_CONFIG_0, gpiote_cfg).unwrap();
+
+    // 2. PPI channel 0: TIMER0.EVENTS_COMPARE[0] → GPIOTE.TASKS_OUT[0].
+    bus.write_u32(PPI_CH0_EEP, TIMER0_EVENTS_COMPARE0 as u32).unwrap();
+    bus.write_u32(PPI_CH0_TEP, GPIOTE_TASKS_OUT_0 as u32).unwrap();
+    bus.write_u32(PPI_CHENSET, 1).unwrap();
+
+    // 3. TIMER0: 32-bit, no prescaler, CC[0]=4, auto-clear on compare.
+    bus.write_u32(TIMER0_BITMODE, 3).unwrap();
+    bus.write_u32(TIMER0_PRESCALER, 0).unwrap();
+    bus.write_u32(TIMER0_CC0, 4).unwrap();
+    bus.write_u32(TIMER0_SHORTS, 1).unwrap(); // COMPARE[0]_CLEAR
+    bus.write_u32(TIMER0_TASKS_CLEAR, 1).unwrap();
+    bus.write_u32(TIMER0_TASKS_START, 1).unwrap();
+
+    // 4. Run the bus enough cycles for several compares to fire.
+    let mut prior_out = bus.read_u32(GPIO0_OUT).unwrap();
+    let mut transitions = 0;
+    let mut compare_observed_at: Vec<usize> = Vec::new();
+    for tick in 0usize..200 {
+        bus.tick_peripherals_fully();
+        if bus.read_u32(TIMER0_EVENTS_COMPARE0).unwrap() != 0
+            && compare_observed_at.last().copied() != Some(tick.saturating_sub(1))
+        {
+            compare_observed_at.push(tick);
+        }
+        let now_out = bus.read_u32(GPIO0_OUT).unwrap();
+        if (now_out & (1 << LED_RED_PIN)) != (prior_out & (1 << LED_RED_PIN)) {
+            transitions += 1;
+            prior_out = now_out;
+        }
+    }
+
+    let last_out = bus.read_u32(GPIO0_OUT).unwrap();
+    assert!(
+        transitions >= 4,
+        "expected ≥4 GPIO0 pin {LED_RED_PIN} transitions in 200 ticks, got {transitions}. \
+         TIMER0 EVENTS_COMPARE[0] observed at ticks {compare_observed_at:?}; \
+         final GPIO0.OUT = 0x{last_out:08X}"
+    );
+}
+
+/// Real-firmware end-to-end: load the precompiled
+/// `firmware-nrf52840-timer-blinky` ELF, step the Cortex-M CPU, and
+/// assert that GPIO0 OUT bit 26 toggles. This exercises the whole
+/// stack — instruction decode, TIMER0 dynamics, EVENTS_COMPARE polling,
+/// GPIO writes — in one go.
+///
+/// The ELF must be built before running:
+/// ```text
+/// cargo build --release --target thumbv7em-none-eabi \
+///     -p firmware-nrf52840-timer-blinky
+/// ```
+///
+/// If the ELF isn't present, the test prints a skip message and passes
+/// (instead of failing CI on a missing artifact).
+#[test]
+fn nrf52840_onboarding_real_firmware_toggles_led() {
+    use crate::Machine;
+    use crate::cpu::cortex_m::CortexM;
+
+    let elf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/thumbv7em-none-eabi/release/firmware-nrf52840-timer-blinky");
+
+    if !elf_path.exists() {
+        // Don't fail CI when the prebuilt artifact is missing — but be
+        // loud so a missing ELF doesn't look like a passing test.
+        println!(
+            "SKIPPED: ELF not built at {}. Run\n  cargo build --release --target thumbv7em-none-eabi -p firmware-nrf52840-timer-blinky\nfirst.",
+            elf_path.display()
+        );
+        return;
+    }
+    println!("Loading firmware from {}", elf_path.display());
+
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+    let cpu = CortexM::new();
+    let mut machine = Machine::new(cpu, bus);
+
+    // Inline ELF loader: goblin parses PT_LOAD segments, we feed them to
+    // ProgramImage. Bypasses labwired-loader to avoid the dev-dep cycle
+    // (loader depends on labwired-core, so importing it from labwired-core
+    // tests would produce two crate versions in the dep graph).
+    let elf_bytes = std::fs::read(&elf_path).expect("read ELF");
+    let elf = goblin::elf::Elf::parse(&elf_bytes).expect("parse ELF");
+    let mut image = crate::memory::ProgramImage::new(elf.entry, crate::Arch::Arm);
+    for ph in &elf.program_headers {
+        if ph.p_type != goblin::elf::program_header::PT_LOAD || ph.p_filesz == 0 {
+            continue;
+        }
+        let start = ph.p_paddr;
+        let off = ph.p_offset as usize;
+        let size = ph.p_filesz as usize;
+        image.add_segment(start, elf_bytes[off..off + size].to_vec());
+    }
+    machine.load_firmware(&image).expect("load firmware");
+
+    const GPIO0_OUT: u64 = 0x5000_0504;
+    const LED_BIT: u32 = 1 << 26;
+
+    let mut last_state = machine.bus.read_u32(GPIO0_OUT).unwrap_or(0) & LED_BIT;
+    let mut transitions = 0usize;
+    let max_steps = 200_000;
+
+    for _ in 0..max_steps {
+        machine.step().expect("step");
+        let now = machine.bus.read_u32(GPIO0_OUT).unwrap_or(0) & LED_BIT;
+        if now != last_state {
+            transitions += 1;
+            last_state = now;
+            if transitions >= 4 {
+                break;
+            }
+        }
+    }
+
+    println!("Firmware ran {transitions} GPIO0 pin 26 transitions.");
+    assert!(
+        transitions >= 4,
+        "firmware should toggle GPIO0 pin 26 at least 4 times within \
+         {max_steps} CPU steps; observed {transitions}"
+    );
+}
+
+/// IRQ-driven firmware end-to-end: load the ISR-blinky ELF, step the
+/// CPU, and confirm the TIMER0 interrupt handler ran (LED toggled).
+/// Exercises the full NVIC + vector-dispatch path through the sim:
+/// firmware writes NVIC ISER, TIMER raises IRQ via tick, bus pends it,
+/// CortexM dispatches through VTOR + 0x60, handler runs, returns, WFI
+/// loop resumes.
+#[test]
+fn nrf52840_onboarding_isr_firmware_toggles_led() {
+    use crate::Machine;
+
+    let elf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/thumbv7em-none-eabi/release/firmware-nrf52840-isr-blinky");
+
+    if !elf_path.exists() {
+        println!(
+            "SKIPPED: ELF not built at {}. Run\n  cargo build --release --target thumbv7em-none-eabi -p firmware-nrf52840-isr-blinky\nfirst.",
+            elf_path.display()
+        );
+        return;
+    }
+
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+    // Add NVIC/SCB/DWT peripherals at the standard Cortex-M addresses;
+    // chip yamls don't list them. Returns a CPU with VTOR shared with SCB.
+    let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+
+    let elf_bytes = std::fs::read(&elf_path).expect("read ELF");
+    let elf = goblin::elf::Elf::parse(&elf_bytes).expect("parse ELF");
+
+    // Find the ISR_COUNT symbol so we can read it directly out of RAM
+    // after stepping — confirms the handler actually executed (vs the
+    // LED being toggled some other way).
+    let isr_count_addr = elf
+        .syms
+        .iter()
+        .find_map(|sym| match elf.strtab.get_at(sym.st_name) {
+            Some("ISR_COUNT") => Some(sym.st_value),
+            _ => None,
+        })
+        .expect("ISR_COUNT symbol present in ELF");
+
+    let mut image = crate::memory::ProgramImage::new(elf.entry, crate::Arch::Arm);
+    for ph in &elf.program_headers {
+        if ph.p_type != goblin::elf::program_header::PT_LOAD || ph.p_filesz == 0 {
+            continue;
+        }
+        image.add_segment(
+            ph.p_paddr,
+            elf_bytes[ph.p_offset as usize..(ph.p_offset + ph.p_filesz) as usize].to_vec(),
+        );
+    }
+    machine.load_firmware(&image).expect("load firmware");
+
+    const GPIO0_OUT: u64 = 0x5000_0504;
+    const LED_BIT: u32 = 1 << 26;
+
+    let mut transitions = 0usize;
+    let mut last_state = machine.bus.read_u32(GPIO0_OUT).unwrap_or(0) & LED_BIT;
+    let max_steps = 500_000;
+    let mut grace = 0usize;
+    for _ in 0..max_steps {
+        machine.step().expect("step");
+        let now = machine.bus.read_u32(GPIO0_OUT).unwrap_or(0) & LED_BIT;
+        if now != last_state {
+            transitions += 1;
+            last_state = now;
+        }
+        if transitions >= 4 {
+            grace += 1;
+            // Step a few extra cycles to let any in-flight ISR complete
+            // its atomic increment of ISR_COUNT before we break out.
+            if grace >= 200 {
+                break;
+            }
+        }
+    }
+
+    let isr_count = machine.bus.read_u32(isr_count_addr).unwrap_or(0);
+    println!("ISR ran {isr_count} times; GPIO0 pin 26 transitions = {transitions}");
+
+    assert!(
+        isr_count >= 4,
+        "TIMER0 ISR should have fired at least 4 times; got {isr_count}"
+    );
+    assert!(
+        transitions >= 4,
+        "ISR should have toggled GPIO0 pin 26 at least 4 times; got {transitions}"
+    );
+}
+
 #[test]
 fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
     let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

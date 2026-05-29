@@ -94,6 +94,19 @@ pub struct PeripheralTickResult {
     pub system_exception: Option<u32>,
     pub dma_signals: Option<Vec<u32>>,
     pub ticks_until_next: Option<u64>,
+
+    /// Cross-peripheral side-effect writes the peripheral wants the bus
+    /// to apply on its behalf. Used by GPIOTE to drive GPIO OUTSET/OUTCLR
+    /// without holding a bus handle, and as the sink for PPI-triggered
+    /// task writes.
+    pub mmio_writes: Vec<(u32, u32)>,
+
+    /// Offsets (within this peripheral's window) of EVENTS_* registers
+    /// that transitioned 0→1 during this tick. The bus globalises them
+    /// to absolute addresses (peripheral.base + offset) and feeds them
+    /// to the PPI router. Peripherals that don't fire events leave this
+    /// empty; consumers ignore it.
+    pub fired_events: Vec<u32>,
 }
 
 impl PeripheralTickResult {
@@ -353,6 +366,21 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }
+    /// PPI hook: given absolute addresses of events that just fired
+    /// across the bus, return absolute addresses of tasks to trigger.
+    /// Only the PPI peripheral overrides this; everyone else returns
+    /// the default empty vector and the bus skips them at near-zero
+    /// cost.
+    fn route_ppi_events(&mut self, _fired_global: &[u32]) -> Vec<u32> {
+        Vec::new()
+    }
+
+    /// Cross-peripheral GPIO change hook: bus snapshots GPIO IN registers
+    /// each tick and calls this with a list of `(port, pin, new_level)`
+    /// transitions. GPIOTE overrides to drive EVENTS_IN[i] when a channel
+    /// is configured to watch a matching (port, pin) with a matching
+    /// polarity. Default no-op.
+    fn observe_gpio_change(&mut self, _changes: &[(u8, u8, u8)]) {}
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }

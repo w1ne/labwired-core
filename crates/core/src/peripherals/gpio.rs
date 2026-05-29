@@ -102,7 +102,13 @@ impl GpioPort {
             },
             GpioRegisterLayout::Nrf52 => match offset {
                 0x504 => self.odr,
-                0x510 => self.idr,
+                // IN reflects the physical pin level. For pins configured
+                // as output (DIR bit = 1) it tracks OUT; for input pins it
+                // returns whatever was last latched into IDR. This matches
+                // Nordic PS §6.10 "PIN reads the value present on the pin"
+                // — for output pins driving the line, that value is the
+                // output driver state.
+                0x510 => (self.odr & self.dir) | (self.idr & !self.dir),
                 0x514 => self.dir,
                 0x700..=0x77C if offset % 4 == 0 => {
                     let idx = ((offset - 0x700) / 4) as usize;

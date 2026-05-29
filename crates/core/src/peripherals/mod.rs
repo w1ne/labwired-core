@@ -26,6 +26,7 @@ pub mod i2c;
 pub mod i2c_temp_sensor;
 pub mod iwdg;
 pub mod lptim;
+pub mod nrf52;
 pub mod nvic;
 pub mod pio;
 pub mod pwr;

@@ -14,15 +14,17 @@ use std::sync::Arc;
 
 pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     let vtor = Arc::new(AtomicU32::new(0));
+    let vectactive = Arc::new(AtomicU32::new(0));
     let nvic_state = Arc::new(NvicState::default());
 
     let mut cpu = CortexM::default();
     cpu.set_shared_vtor(vtor.clone());
+    cpu.set_shared_vectactive(vectactive.clone());
 
     bus.nvic = Some(nvic_state.clone());
 
-    // Ensure SCB exists (VTOR relocation)
-    let scb = Scb::new(vtor);
+    // Ensure SCB exists (VTOR relocation, ICSR.VECTACTIVE mirror).
+    let scb = Scb::with_vectactive(vtor, vectactive);
     if let Some(p) = bus
         .peripherals
         .iter_mut()

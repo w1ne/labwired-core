@@ -97,6 +97,22 @@ impl OpenOcd {
         Self::spawn_with_args(&["-f", "interface/stlink.cfg", "-f", &target_cfg])
     }
 
+    /// Spawn OpenOCD for nRF52 (Cortex-M4) over ST-Link SWD.
+    ///
+    /// Equivalent to:
+    /// ```text
+    /// openocd -f interface/stlink.cfg -f target/nrf52.cfg
+    /// ```
+    ///
+    /// Validated against a Seeed XIAO nRF52840 Sense (CPUID 0x410FC241,
+    /// FICR INFO.PART 0x52840) wired SWDIO/SWCLK/GND/3V3 to an ST-Link/V2.
+    /// The same config also covers the bare nRF52840-DK (which exposes
+    /// SWD on its onboard SEGGER probe — there you would prefer the
+    /// jlink interface, not stlink).
+    pub fn spawn_nrf52() -> Result<Self> {
+        Self::spawn_with_args(&["-f", "interface/stlink.cfg", "-f", "target/nrf52.cfg"])
+    }
+
     /// Spawn OpenOCD with explicit `-f` config arguments, plus `init`.
     ///
     /// The caller passes the raw arguments that appear after `openocd`, e.g.

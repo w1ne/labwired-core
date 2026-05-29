@@ -1491,6 +1491,15 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         return Instruction::Uxtb { rd, rm };
     }
 
+    // LDREX / STREX (Encoding T1, ARMv7-M B6.7.79 / B6.7.198).
+    // Must be checked before LDRD/STRD T1 because they share the h1
+    // prefix but have a specific bit pattern in h1[11:4]:
+    //   STREX h1 = 0xE84_, LDREX h1 = 0xE85_  (Rn in low nibble).
+    // The CPU's Unknown32 fallback handles the actual load/store.
+    if (h1 & 0xFFF0) == 0xE840 || (h1 & 0xFFF0) == 0xE850 {
+        return Instruction::Unknown32(h1, h2);
+    }
+
     // LDRD / STRD / TBB / TBH / STMDB / LDMIA.W (Encoding E8xx/E9xx)
     if (h1 & 0xFE00) == 0xE800 {
         let is_load = (h1 & (1 << 4)) != 0;
@@ -1526,8 +1535,36 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 };
             }
         } else if is_load {
+            // LDREX (T1, ARMv7-M B6.7.79) shares the h1 = 0xE85x prefix
+            // with LDRD; the distinguishing field is h2[11:8] = 0xF.
+            // When that field is 0xF and h1[20] = 1 (load), it's LDREX.
+            // Otherwise it's LDRD. We let the CPU's Unknown32 fallback
+            // handle LDREX itself.
+            if (h2 & 0x0F00) == 0x0F00 {
+                return Instruction::Unknown32(h1, h2);
+            }
             return Instruction::Ldrd { rt, rt2, rn, imm8 };
         } else {
+            // STREX (T1, B6.7.198) — distinguished from STRD the same
+            // way. h2[15:12]=Rt (value), h2[11:8]=Rd (success flag);
+            // for STRD h2[11:8]=Rt2 of the doubleword pair, which is
+            // never 0xF in well-formed code.
+            // For STREX the Rd field can be any of r0-r12; the safer
+            // heuristic is the h1 specific bit pattern: STREX is exactly
+            // h1 = 0xE84x (no other STRD variant matches). LDREX/STREX
+            // are distinguished from LDRD/STRD T1 by h1 having a fixed
+            // value rather than the writeback/pre-index/up variations
+            // available to LDRD/STRD.
+            //
+            // The simplest reliable check: STREX has h1 with bits
+            // 27..22 = 1000_01 and bit 21 = 0, bit 20 = 0. LDRD/STRD
+            // T1 have bit 22 = 1 with P/U/W/L varying — that overlap
+            // means we have to look at h2 too. h2[11:8] = 0xF reliably
+            // marks REX variants.
+            if (h2 & 0x0F00) == 0x0F00 {
+                // Unlikely for STRD; treat as STREX.
+                return Instruction::Unknown32(h1, h2);
+            }
             return Instruction::Strd { rt, rt2, rn, imm8 };
         }
     }

@@ -93,6 +93,12 @@ pub struct SystemBus {
         std::collections::HashMap<u32, crate::peripherals::esp32s3::rom_thunks::RomThunkFn>,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
+    /// Last-known IN value of GPIO ports 0 and 1, used by the per-tick
+    /// edge-detection pass that drives GPIOTE EVENTS_IN. Both default to
+    /// 0 at construction; the first tick after a GPIO write will produce
+    /// edge events for any non-zero bits, which matches Nordic
+    /// hardware's "reset to zero, edge on first set" behavior.
+    last_gpio_in: [u32; 2],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +136,17 @@ impl SystemBus {
             _ => {}
         }
 
+        // Nordic-specific pre-emption — keep these ahead of the generic
+        // mappers so types like `nrf52840_saadc` (contains "adc") and
+        // `nrf52840_qspi` (contains "spi" + "qspi") aren't coerced to
+        // STM32 layouts.
+        if t == "nrf52840_saadc" || t == "nrf52_saadc" || t == "nrf52840_adc" {
+            return "nrf52_saadc".to_string();
+        }
+        if t == "nrf52840_qspi" || t == "nrf52_qspi" {
+            return "nrf52_qspi".to_string();
+        }
+
         // Specific mappers first — must come before fuzzy matchers so e.g.
         // "quadspi" doesn't get swallowed by the generic "contains(spi)" rule.
         if t.contains("quadspi") || t == "qspi" {
@@ -163,6 +180,12 @@ impl SystemBus {
         if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
             return "uart".to_string();
         }
+        // Nordic GPIOTE shares "gpio" in its name but is a task/event
+        // controller with a totally different register surface; route it
+        // to the dedicated nRF52 model before the generic gpio matcher.
+        if t == "nrf52840_gpiotasksevents" || t == "nrf52_gpiote" {
+            return "nrf52_gpiote".to_string();
+        }
         if t == "sam4s_pio" || (t.contains("gpio") && t != "pio") {
             return "gpio".to_string();
         }
@@ -175,7 +198,14 @@ impl SystemBus {
         if t == "udma" || t.contains("dma") {
             return "dma".to_string();
         }
-        if t.contains("rcc") || t.contains("cmu") || t == "nrf_clock" {
+        // Nordic CLOCK shares its name with the generic "rcc" bin in the
+        // canonicalize, but its register layout is Nordic-specific and it
+        // is unioned with the POWER peripheral at the same base address.
+        // Route it to the dedicated nRF52 model.
+        if t == "nrf_clock" || t == "nrf52_clock" || t == "nrf52840_clock" {
+            return "nrf52_clock".to_string();
+        }
+        if t.contains("rcc") || t.contains("cmu") {
             return "rcc".to_string();
         }
         if t == "arm_generictimer" || t == "arm_globaltimer" || t == "arm_sp804_timer" {
@@ -501,6 +531,7 @@ impl SystemBus {
             pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -524,6 +555,7 @@ impl SystemBus {
             pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -669,6 +701,7 @@ impl SystemBus {
             pending_cpu_irqs: 0,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
         };
 
         let mut merged_peripherals = chip.peripherals.clone();
@@ -724,7 +757,11 @@ impl SystemBus {
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
                 | "imxrt_gpio" => {
                     let layout: GpioRegisterLayout =
-                        if p_cfg.r#type.contains("stm32f4") || p_cfg.r#type.contains("h5") {
+                        if p_cfg.r#type.contains("nrf") {
+                            GpioRegisterLayout::Nrf52
+                        } else if p_cfg.r#type.contains("stm32f4")
+                            || p_cfg.r#type.contains("h5")
+                        {
                             GpioRegisterLayout::Stm32V2
                         } else {
                             Self::parse_profile_or_default(p_cfg, "GPIO")?
@@ -767,24 +804,31 @@ impl SystemBus {
                     Box::new(crate::peripherals::dbgmcu::Dbgmcu::new(idcode))
                 }
                 "timer" | "stm32_timer" | "efm32timer" | "renesasra_agt" | "stm32l0_lptimer" => {
-                    // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
-                    // YAML: `config: { width: 32 }`. Defaults to 16 for
-                    // back-compat with F1-class general-purpose timers.
-                    // `advanced: true` enables RCR/BDTR/CCR5/6 (TIM1/TIM8).
-                    let width: u8 = p_cfg
-                        .config
-                        .get("width")
-                        .and_then(|v| v.as_u64())
-                        .map(|n| n as u8)
-                        .unwrap_or(16);
-                    let advanced = p_cfg
-                        .config
-                        .get("advanced")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    Box::new(crate::peripherals::timer::Timer::new_with_layout(
-                        width, advanced,
-                    ))
+                    if p_cfg.r#type.contains("nrf") {
+                        // Nordic TIMER is task/event-driven and shares no
+                        // register layout with the STM32 TIMx family —
+                        // route to the dedicated nRF52 model.
+                        Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new())
+                    } else {
+                        // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
+                        // YAML: `config: { width: 32 }`. Defaults to 16 for
+                        // back-compat with F1-class general-purpose timers.
+                        // `advanced: true` enables RCR/BDTR/CCR5/6 (TIM1/TIM8).
+                        let width: u8 = p_cfg
+                            .config
+                            .get("width")
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as u8)
+                            .unwrap_or(16);
+                        let advanced = p_cfg
+                            .config
+                            .get("advanced")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        Box::new(crate::peripherals::timer::Timer::new_with_layout(
+                            width, advanced,
+                        ))
+                    }
                 }
                 "i2c"
                 | "stm32f1_i2c"
@@ -868,6 +912,56 @@ impl SystemBus {
                         pio.load_program_asm(program)?;
                     }
                     Box::new(pio)
+                }
+                // Nordic peripherals — register-surface models cross-validated
+                // by hw-oracle::nrf52_onboarding_diff. See peripherals/nrf52/.
+                "nrf52840_rtc" | "nrf52_rtc" => {
+                    Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new())
+                }
+                "nrf52840_rng" | "nrf52_rng" => {
+                    Box::new(crate::peripherals::nrf52::rng::Nrf52Rng::new())
+                }
+                "nrf52840_watchdog" | "nrf52_watchdog" | "nrf52_wdt" => {
+                    Box::new(crate::peripherals::nrf52::wdt::Nrf52Wdt::new())
+                }
+                "nrf52840_ppi" | "nrf52_ppi" => {
+                    Box::new(crate::peripherals::nrf52::ppi::Nrf52Ppi::new())
+                }
+                "nrf52840_pdm" | "nrf52_pdm" => {
+                    Box::new(crate::peripherals::nrf52::pdm::Nrf52Pdm::new())
+                }
+                "nrf52_gpiote" | "nrf52840_gpiotasksevents" => {
+                    Box::new(crate::peripherals::nrf52::gpiote::Nrf52Gpiote::new())
+                }
+                "nrf52840_ecb" | "nrf52_ecb" => {
+                    Box::new(crate::peripherals::nrf52::ecb::Nrf52Ecb::new())
+                }
+                "nrf52_clock" => {
+                    Box::new(crate::peripherals::nrf52::clock::Nrf52Clock::new())
+                }
+                "nrf52840_temp" | "nrf52_temp" => {
+                    Box::new(crate::peripherals::nrf52::temp::Nrf52Temp::new())
+                }
+                "nrf52840_adc" | "nrf52840_saadc" | "nrf52_saadc" => {
+                    Box::new(crate::peripherals::nrf52::saadc::Nrf52Saadc::new())
+                }
+                "nrf52840_pwm" | "nrf52_pwm" => {
+                    Box::new(crate::peripherals::nrf52::pwm::Nrf52Pwm::new())
+                }
+                "nrf52840_qspi" | "nrf52_qspi" => {
+                    Box::new(crate::peripherals::nrf52::qspi::Nrf52Qspi::new())
+                }
+                "nrf52840_nfct" | "nrf52_nfct" => {
+                    Box::new(crate::peripherals::nrf52::nfct::Nrf52Nfct::new())
+                }
+                "nrf52840_ficr" | "nrf52_ficr" => {
+                    Box::new(crate::peripherals::nrf52::ficr::Nrf52Ficr::new())
+                }
+                "nrf52840_uicr" | "nrf52_uicr" => {
+                    Box::new(crate::peripherals::nrf52::uicr::Nrf52Uicr::new())
+                }
+                "nrf52840_nvmc" | "nrf52_nvmc" => {
+                    Box::new(crate::peripherals::nrf52::nvmc::Nrf52Nvmc::new())
                 }
                 "declarative" => {
                     let descriptor_path = p_cfg
@@ -1419,6 +1513,11 @@ impl SystemBus {
         // requires `&self` (incompatible with the iter_mut borrow here).
         let mut explicit_source_ids: Vec<u32> = Vec::new();
 
+        // Cross-peripheral side-effects collected during phase 1 and
+        // applied after the iter_mut borrow ends.
+        let mut pending_mmio: Vec<(u32, u32)> = Vec::new();
+        let mut fired_events_global: Vec<u32> = Vec::new();
+
         let tick_interval = self.config.peripheral_tick_interval as u64;
 
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
@@ -1466,6 +1565,85 @@ impl SystemBus {
             // pushed directly so the CPU sees them on next dispatch.
             if let Some(exc) = res.system_exception {
                 interrupts.push(exc);
+            }
+
+            // Cross-peripheral writes: collected here, applied below
+            // (we can't call self.write_u32 while iter_mut holds the
+            // borrow).
+            pending_mmio.extend(res.mmio_writes);
+
+            // Globalise event offsets (relative to peripheral window) into
+            // absolute bus addresses so PPI sees them at the same address
+            // firmware uses for CH[i].EEP.
+            for off in res.fired_events {
+                fired_events_global.push((p.base as u32).wrapping_add(off));
+            }
+        }
+
+        // Apply any cross-peripheral mmio writes the peripherals requested
+        // (e.g. GPIOTE → GPIO OUTSET/OUTCLR).  Errors are logged but not
+        // propagated — these are best-effort side-effects, not core sim
+        // failures.
+        for (addr, val) in pending_mmio.drain(..) {
+            if let Err(e) = self.write_u32(addr as u64, val) {
+                tracing::warn!(
+                    "phase1 mmio_write 0x{addr:08X} = 0x{val:08X} failed: {e:?}"
+                );
+            }
+        }
+
+        // PPI routing pass: feed every fired event through any peripheral
+        // that overrides route_ppi_events (only Nrf52Ppi does).  Each
+        // returned absolute address is a task to trigger by writing 1.
+        if !fired_events_global.is_empty() {
+            let mut pending_tasks: Vec<u32> = Vec::new();
+            for p in self.peripherals.iter_mut() {
+                let tasks = p.dev.route_ppi_events(&fired_events_global);
+                pending_tasks.extend(tasks);
+            }
+            for task_addr in pending_tasks {
+                if let Err(e) = self.write_u32(task_addr as u64, 1) {
+                    tracing::warn!("PPI task trigger 0x{task_addr:08X} failed: {e:?}");
+                }
+            }
+        }
+
+        // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
+        // 0 and 1, diff against last-known state, and notify every
+        // peripheral of changed pins.  GPIOTE overrides observe_gpio_change
+        // to drive EVENTS_IN[i] when a channel watches a matching pin.
+        //
+        // We look up peripheral bases by name so the addresses stay valid
+        // even when a chip yaml relocates GPIO ports (e.g. the onboarding
+        // yaml's non-standard gpio1 at 0x50001000).
+        let gpio_bases: [Option<u64>; 2] = [
+            self.find_peripheral_index_by_name("gpio0")
+                .map(|i| self.peripherals[i].base),
+            self.find_peripheral_index_by_name("gpio1")
+                .map(|i| self.peripherals[i].base),
+        ];
+        let mut changes: Vec<(u8, u8, u8)> = Vec::new();
+        let mut current_in = self.last_gpio_in;
+        for (port, base) in gpio_bases.iter().enumerate() {
+            let Some(base) = base else { continue };
+            // GPIO IN register is at offset 0x510 in the Nordic layout.
+            let cur = self.read_u32(*base + 0x510).unwrap_or(0);
+            let prev = self.last_gpio_in[port];
+            let diff = cur ^ prev;
+            if diff != 0 {
+                for pin in 0..32u8 {
+                    if diff & (1 << pin) != 0 {
+                        let level = ((cur >> pin) & 1) as u8;
+                        changes.push((port as u8, pin, level));
+                    }
+                }
+            }
+            current_in[port] = cur;
+        }
+        self.last_gpio_in = current_in;
+        if !changes.is_empty() {
+            for p in self.peripherals.iter_mut() {
+                p.dev.observe_gpio_change(&changes);
             }
         }
 
@@ -2239,6 +2417,7 @@ mod tests {
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -2284,6 +2463,7 @@ mod tests {
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
         };
 
         bus.rebuild_peripheral_ranges();
@@ -2332,6 +2512,7 @@ mod tests {
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
         };
         bus.rebuild_peripheral_ranges();
 
