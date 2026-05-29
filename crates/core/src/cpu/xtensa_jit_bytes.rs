@@ -44,6 +44,29 @@ pub const LOOPTASK_PREFIX_INSTR_COUNT: u32 = 3;
 /// taken; the interpreter resumes from here.
 pub const LOOPTASK_PREFIX_END: u32 = LOOPTASK_PC + 9;
 
+/// PC of the loopTask **tail** block (Phase 4.4): the `L32R → BEQZ` pair
+/// at `_Z8loopTaskPv + 0x18`, immediately following the `CALL8 _Z4loopv`
+/// return. Decoded as:
+/// ```text
+///   400d4a9c: l32r  a8, &serialEventRun
+///   400d4a9f: beqz  a8, 400d4a8d        ; loop back to loopTask top
+///   400d4aa2: call8 serialEventRun       ; terminator (interp)
+///   400d4aa5: j     400d4a8d             ; terminator (interp)
+/// ```
+/// The JIT covers the L32R + BEQZ pair (BEQZ is the terminator). In
+/// steady-state polling (`serialEventRun == NULL`, the default at boot)
+/// BEQZ is taken every iteration and the dispatcher loops straight back
+/// to [`LOOPTASK_PC`], avoiding both `CALL8 serialEventRun` and the
+/// unconditional `J`. When the literal is non-zero the JIT falls through
+/// to `0x400d4aa2` (the CALL8) and the interpreter handles the rest.
+pub const LOOPTASK_TAIL_PC: u32 = 0x400d_4a9c;
+/// Number of Xtensa instructions in the loopTask tail block. L32R + BEQZ.
+pub const LOOPTASK_TAIL_INSTR_COUNT: u32 = 2;
+/// First PC after the loopTask tail block — fall-through resume PC when
+/// BEQZ is not taken (i.e. `serialEventRun != NULL`). The interpreter
+/// resumes at the `CALL8 serialEventRun`.
+pub const LOOPTASK_TAIL_END: u32 = LOOPTASK_TAIL_PC + 6;
+
 /// Side-exit: block executed cleanly to the terminator.
 pub const EXIT_FALL_THROUGH: i32 = 0;
 /// Side-exit: a conditional or unconditional branch terminated the BB

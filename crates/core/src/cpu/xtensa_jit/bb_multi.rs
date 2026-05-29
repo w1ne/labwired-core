@@ -76,6 +76,7 @@ use super::emit_core::{self, BlockShape, EmittedBlock, PsBits, SideExitReason};
 pub use crate::cpu::xtensa_jit_bytes::{
     EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
     HOT_BB_L32R_ADDR, HOT_BB_PC, LOOPTASK_PC, LOOPTASK_PREFIX_END, LOOPTASK_PREFIX_INSTR_COUNT,
+    LOOPTASK_TAIL_END, LOOPTASK_TAIL_INSTR_COUNT, LOOPTASK_TAIL_PC,
 };
 
 // Re-export the walker types from emit_core for back-compat with the
@@ -147,6 +148,18 @@ pub struct LoopTaskPrefixResult {
     pub next_pc: u32,
     pub l8ui_at_value: u32,
     pub beqz_target_pc: u32,
+}
+
+/// Result of running a [`BlockShape::LoopTaskTail`] block (Phase 4.4).
+///
+/// Fields mirror the emit-core wasm signature `() -> (exit_code,
+/// next_pc, l32r_at_value)`. The dispatcher writes `l32r_at_value` into
+/// the AR named by [`BlockShape::LoopTaskTail::l32r_at`] and sets
+/// `cpu.pc = next_pc`.
+pub struct LoopTaskTailResult {
+    pub exit_code: i32,
+    pub next_pc: u32,
+    pub l32r_at_value: u32,
 }
 
 impl MultiOpBlock {
@@ -250,6 +263,75 @@ impl MultiOpBlock {
         Self::build_from_emitted(engine, emitted)
     }
 
+    /// Build the loopTask tail block (`L32R → BEQZ` at
+    /// [`LOOPTASK_TAIL_PC`]). Synthesizes the canonical 0x400d4a9c byte
+    /// stream the ereader firmware exposes (matching the disasm in
+    /// `xtensa_jit_bytes`) so the cache builder doesn't need a live
+    /// `Bus`. The shape recognizer constant-folds both the L32R literal
+    /// and the BEQZ direction, so the resulting wasm body is a fixed
+    /// return tuple.
+    pub fn build_looptask_tail(engine: &Engine) -> wasmtime::Result<Self> {
+        // Canonical bytes: L32R a8, &serialEventRun ; BEQZ a8, loopTask_top.
+        // The L32R pc_rel_byte_offset is computed from the real
+        // disassembly (imm16 = 0xFEED → ea = ((PC+3) & ~3) + (-72) ≈ ...).
+        // We synthesize the slice with a literal pool at PC-32 that holds
+        // `serialEventRun = NULL` so the recognizer constant-folds BEQZ
+        // as statically-taken (the steady-state ereader case).
+        //
+        // imm16 encoding for L32R: pc_rel_byte_offset = (imm16 -
+        // 0x10000) * 4 (since bit 15 is set for backward refs). For
+        // pc_rel_byte_offset = -32 → imm16 = 0xFFF8. L32R word layout:
+        // imm16<<8 | at<<4 | opcode → 0xFFF8<<8 | 8<<4 | 0x1 = 0xFFF881.
+        // Little-endian bytes: [0x81, 0xF8, 0xFF].
+        //
+        // BEQZ a8, +offset: target = LOOPTASK_PC (back to the prefix
+        // start, which sits at LOOPTASK_TAIL_PC - 15). The decoder bakes
+        // +4 into its stored offset, so the offset we carry is
+        // target - after_l32r_pc = LOOPTASK_PC - (LOOPTASK_TAIL_PC + 3) =
+        // -18. The encoded imm12 satisfies signext(imm12)+4 == -18 →
+        // imm12 = -22 = 0xFEA. BEQZ word layout: imm12<<12 | as_<<8 |
+        // 0x16 = 0xFEA816. Little-endian bytes: [0x16, 0xA8, 0xFE].
+        let mut bus_slice: Vec<u8> = Vec::new();
+        // Literal pool at PC-32: 4 bytes of zero (= NULL pointer, the
+        // steady-state value of `serialEventRun`).
+        const LITERAL_POOL_VALUE: u32 = 0;
+        for _ in 0..32 {
+            bus_slice.push(0);
+        }
+        // Overwrite the 4 bytes at offset 0 with the literal pool value
+        // (still all zero here — kept explicit for symmetry with the
+        // prefix builder).
+        for (i, b) in LITERAL_POOL_VALUE.to_le_bytes().iter().enumerate() {
+            bus_slice[i] = *b;
+        }
+        // Instructions at LOOPTASK_TAIL_PC.
+        bus_slice.extend_from_slice(&[
+            0x81, 0xF8, 0xFF, // L32R a8, ... (pc_rel_byte_offset = -32 → EA = TAIL_PC - 32)
+            0x16, 0xA8, 0xFE, // BEQZ a8, LOOPTASK_PC
+            0x65, 0x3C, 0xFE, // CALL8 (terminator, never executed by JIT body)
+            0x06, 0xF9, 0xFF, // J (terminator, never executed by JIT body)
+        ]);
+        // slice_base_pc: pc_to_offset(LOOPTASK_TAIL_PC - 32) == 0.
+        let slice_base_pc = LOOPTASK_TAIL_PC.wrapping_sub(32);
+
+        let emitted = emit_core::walk_and_emit(
+            &bus_slice,
+            LOOPTASK_TAIL_PC,
+            |pc| {
+                let off = pc.wrapping_sub(slice_base_pc) as usize;
+                if off < bus_slice.len() {
+                    Some(off)
+                } else {
+                    None
+                }
+            },
+            PsBits::default(),
+        )
+        .map_err(|e| wasmtime::Error::msg(format!("emit_core walk_and_emit: {e}")))?;
+
+        Self::build_from_emitted(engine, emitted)
+    }
+
     /// Compile + instantiate a wasmtime block from a pre-emitted byte
     /// stream. Phase 4.2's browser adapter has a structurally
     /// identical entry point on its side; both consume `EmittedBlock`
@@ -265,24 +347,32 @@ impl MultiOpBlock {
         let scratch: std::sync::Arc<Mutex<ScratchSlot>> =
             std::sync::Arc::new(Mutex::new(ScratchSlot::default()));
 
-        let pending_for_import = pending_loads.clone();
-        let scratch_for_import = scratch.clone();
+        // host.read_u8 is only wired for shapes that perform L8UI in the
+        // wasm body. The Phase 4.4 [`BlockShape::LoopTaskTail`] returns a
+        // pre-baked constant tuple — no imports needed.
+        let needs_read_u8 = !matches!(emitted.shape, BlockShape::LoopTaskTail { .. });
 
-        // host.read_u8(addr): the host had already pre-staged byte values
-        // into `pending_loads` (one per L8UI in BB order). The import
-        // pops the next value and returns it. If `pending_loads` is empty
-        // when called, we report a bus error so wasm bails cleanly.
-        let read_u8: Func = Func::wrap(&mut store, move |_addr: i32| -> i32 {
-            let mut p = pending_for_import.lock().unwrap();
-            if p.is_empty() {
-                scratch_for_import.lock().unwrap().bus_error = true;
-                return -1;
-            }
-            let v = p.remove(0);
-            v as i32
-        });
-
-        let instance = Instance::new(&mut store, &module, &[read_u8.into()])?;
+        let instance = if needs_read_u8 {
+            let pending_for_import = pending_loads.clone();
+            let scratch_for_import = scratch.clone();
+            // host.read_u8(addr): the host had already pre-staged byte
+            // values into `pending_loads` (one per L8UI in BB order). The
+            // import pops the next value and returns it. If
+            // `pending_loads` is empty when called, we report a bus error
+            // so wasm bails cleanly.
+            let read_u8: Func = Func::wrap(&mut store, move |_addr: i32| -> i32 {
+                let mut p = pending_for_import.lock().unwrap();
+                if p.is_empty() {
+                    scratch_for_import.lock().unwrap().bus_error = true;
+                    return -1;
+                }
+                let v = p.remove(0);
+                v as i32
+            });
+            Instance::new(&mut store, &module, &[read_u8.into()])?
+        } else {
+            Instance::new(&mut store, &module, &[])?
+        };
         let run = instance.get_func(&mut store, "run").ok_or_else(|| {
             wasmtime::Error::msg("emit-core wasm module missing required `run` export")
         })?;
@@ -381,6 +471,28 @@ impl MultiOpBlock {
         })
     }
 
+    /// Invoke a [`BlockShape::LoopTaskTail`] block. Signature: `() ->
+    /// (exit, next_pc, l32r_at_value)`. The caller commits
+    /// `l32r_at_value` into the AR named by the shape descriptor's
+    /// `l32r_at` and advances PC to `next_pc`.
+    #[inline]
+    pub fn run_looptask_tail(&mut self) -> wasmtime::Result<LoopTaskTailResult> {
+        debug_assert!(matches!(
+            self.emitted.shape,
+            BlockShape::LoopTaskTail { .. }
+        ));
+        use wasmtime::Val;
+        let params: [Val; 0] = [];
+        let mut results = [Val::I32(0); 3];
+        self.run.call(&mut self.store, &params, &mut results)?;
+        self.hits += 1;
+        Ok(LoopTaskTailResult {
+            exit_code: results[0].i32().unwrap_or(0),
+            next_pc: results[1].i32().unwrap_or(0) as u32,
+            l32r_at_value: results[2].i32().unwrap_or(0) as u32,
+        })
+    }
+
     /// Classify a wire `exit_code` into the runtime-agnostic
     /// [`SideExitReason`] vocabulary. Useful for tests + Phase 4.2
     /// side-exit handling.
@@ -472,6 +584,7 @@ mod tests {
                 l8ui_at,
                 l8ui_base_at,
                 l32r_literal_value: _,
+                beqz_target_pc: _,
             } => {
                 // Per the canonical bytes pinned in `build_looptask_prefix`:
                 // L32R writes a2, L8UI writes a3, L8UI base = a2.
@@ -705,7 +818,132 @@ mod tests {
             lt.shape()
         );
 
+        // LOOPTASK_TAIL_PC installs and reports LoopTaskTail (Phase 4.4).
+        let tail = cache
+            .lookup_or_install_multi_op(LOOPTASK_TAIL_PC)
+            .expect("loopTask tail installs");
+        assert!(
+            matches!(tail.shape(), BlockShape::LoopTaskTail { .. }),
+            "loopTask tail must be LoopTaskTail-shaped, got {:?}",
+            tail.shape()
+        );
+
         // An unknown PC still refuses (cache stays narrow).
         assert!(cache.lookup_or_install_multi_op(0xDEAD_BEEF).is_none());
+    }
+
+    // ── Phase 4.4 loopTask tail dispatch tests ───────────────────────
+    //
+    // The tail block (`L32R → BEQZ` at LOOPTASK_TAIL_PC) is the
+    // counterpart to the prefix block. Both halves of the BEQZ are
+    // statically resolved at walk_and_emit time against the live bus's
+    // literal pool, so the wasm body is a constant return tuple. These
+    // tests exercise the dispatcher end-to-end through `Cpu::step` so
+    // we catch any divergence between the JIT path and the pure-interp
+    // path on either branch direction.
+
+    /// Layout a memory image for the loopTask tail block. The L32R
+    /// loads from a literal pool at PC-32; `literal` is the value
+    /// stored there (controls whether BEQZ is statically taken).
+    #[cfg(test)]
+    fn populate_looptask_tail_image(bus: &mut DispatcherTestBus, literal: u32) {
+        // Literal pool at PC-32 (matches the synthesized fixture in
+        // `build_looptask_tail`).
+        bus.write_word_le(LOOPTASK_TAIL_PC.wrapping_sub(32), literal);
+        let instrs: &[u8] = &[
+            0x81, 0xF8, 0xFF, // L32R a8, ... (EA = PC - 32)
+            0x16, 0xA8, 0xFE, // BEQZ a8, LOOPTASK_PC
+            0x65, 0x3C, 0xFE, // CALL8 (terminator; not exercised)
+            0x06, 0xF9, 0xFF, // J (terminator; not exercised)
+        ];
+        for (i, b) in instrs.iter().enumerate() {
+            bus.write_byte(LOOPTASK_TAIL_PC + i as u32, *b);
+        }
+    }
+
+    /// Run the loopTask tail at `LOOPTASK_TAIL_PC` through either the
+    /// JIT or the pure interpreter until PC leaves the tail range,
+    /// then return `(pc, a8)`. The JIT executes the whole tail in one
+    /// step; the interpreter needs two.
+    #[cfg(test)]
+    fn run_looptask_tail_once(jit_enabled: bool, literal: u32) -> (u32, u32) {
+        use crate::cpu::XtensaLx7;
+        use crate::Cpu;
+        let observers: Vec<std::sync::Arc<dyn crate::SimulationObserver>> = Vec::new();
+        let config = crate::SimulationConfig::default();
+
+        let mut cpu = XtensaLx7::new();
+        cpu.jit_enabled = jit_enabled;
+        cpu.pc = LOOPTASK_TAIL_PC;
+        cpu.ps = crate::cpu::xtensa_regs::Ps::from_raw(0);
+
+        let mut bus = DispatcherTestBus::new();
+        populate_looptask_tail_image(&mut bus, literal);
+
+        // Step until PC leaves the tail range. Cap at 8 to bound a
+        // runaway: interp needs 2, JIT needs 1. When BEQZ takes we
+        // land at LOOPTASK_PC (outside the tail range — loop top).
+        for _ in 0..8 {
+            let pc = cpu.pc;
+            if pc < LOOPTASK_TAIL_PC || pc >= LOOPTASK_TAIL_END {
+                break;
+            }
+            cpu.step(&mut bus, &observers, &config).expect("step ok");
+        }
+        (cpu.pc, cpu.regs.read_logical(8))
+    }
+
+    /// Lockstep: BEQZ-taken path (literal == 0). JIT and interp must
+    /// agree on post-state PC + a8. PC must land at LOOPTASK_PC.
+    #[test]
+    fn looptask_tail_jit_matches_interp_branch_taken() {
+        let (jit_pc, jit_a8) = run_looptask_tail_once(true, 0);
+        let (int_pc, int_a8) = run_looptask_tail_once(false, 0);
+        assert_eq!(jit_pc, int_pc, "PC mismatch jit={jit_pc:#x} int={int_pc:#x}");
+        assert_eq!(jit_a8, int_a8, "a8 mismatch jit={jit_a8:#x} int={int_a8:#x}");
+        assert_eq!(jit_pc, LOOPTASK_PC, "BEQZ taken should land at loopTask top");
+        assert_eq!(jit_a8, 0, "L32R wrote the literal (0)");
+    }
+
+    /// Lockstep: BEQZ-not-taken path (literal != 0). JIT and interp
+    /// must agree on post-state PC + a8. PC must land at
+    /// LOOPTASK_TAIL_END (fall-through to CALL8 serialEventRun).
+    #[test]
+    fn looptask_tail_jit_matches_interp_branch_not_taken() {
+        let literal = 0x400d_2e68u32; // canonical ereader: &_Z14serialEventRunv
+        let (jit_pc, jit_a8) = run_looptask_tail_once(true, literal);
+        let (int_pc, int_a8) = run_looptask_tail_once(false, literal);
+        assert_eq!(jit_pc, int_pc, "PC mismatch jit={jit_pc:#x} int={int_pc:#x}");
+        assert_eq!(jit_a8, int_a8, "a8 mismatch jit={jit_a8:#x} int={int_a8:#x}");
+        assert_eq!(jit_pc, LOOPTASK_TAIL_END);
+        assert_eq!(jit_a8, literal);
+    }
+
+    /// `build_looptask_tail` produces a block tagged with the right
+    /// shape and dispatching it through `run_looptask_tail` yields a
+    /// statically-resolved 3-tuple matching the BEQZ direction.
+    #[test]
+    fn looptask_tail_dispatches_constant_tuple() {
+        let engine = Engine::default();
+        let mut block = MultiOpBlock::build_looptask_tail(&engine).expect("compile");
+        // Canonical synthesized fixture has literal == 0 → BEQZ taken.
+        match block.shape() {
+            BlockShape::LoopTaskTail {
+                l32r_at,
+                l32r_literal_value,
+                statically_taken,
+                ..
+            } => {
+                assert_eq!(l32r_at, 8, "loopTask tail L32R writes a8");
+                assert_eq!(l32r_literal_value, 0);
+                assert!(statically_taken);
+            }
+            other => panic!("expected LoopTaskTail, got {other:?}"),
+        }
+        let res = block.run_looptask_tail().expect("run");
+        assert_eq!(res.exit_code, EXIT_BRANCH_TAKEN);
+        assert_eq!(res.next_pc, LOOPTASK_PC);
+        assert_eq!(res.l32r_at_value, 0);
+        assert_eq!(block.hits, 1);
     }
 }

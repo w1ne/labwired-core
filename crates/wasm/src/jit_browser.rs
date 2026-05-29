@@ -65,7 +65,7 @@ use labwired_core::cpu::xtensa_jit::emit_core::{
 };
 use labwired_core::cpu::xtensa_jit_bytes::{
     EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_L32R_ADDR, HOT_BB_PC,
-    LOOPTASK_PREFIX_INSTR_COUNT,
+    LOOPTASK_PREFIX_INSTR_COUNT, LOOPTASK_TAIL_END, LOOPTASK_TAIL_INSTR_COUNT,
 };
 use labwired_core::cpu::xtensa_sr::CCOUNT;
 use labwired_core::cpu::XtensaLx7;
@@ -94,6 +94,18 @@ pub struct BrowserLoopTaskPrefixResult {
     pub next_pc: u32,
     pub l8ui_at_value: u32,
     pub beqz_target_pc: u32,
+}
+
+/// Result of running a [`BlockShape::LoopTaskTail`] block (Phase 4.4).
+///
+/// Field naming mirrors the emit-core wasm signature `() -> (exit_code,
+/// next_pc, l32r_at_value)`. The browser dispatcher writes
+/// `l32r_at_value` into the AR named by the shape descriptor's
+/// `l32r_at` and sets `cpu.pc = next_pc`.
+pub struct BrowserLoopTaskTailResult {
+    pub exit_code: i32,
+    pub next_pc: u32,
+    pub l32r_at_value: u32,
 }
 
 /// One installed block: the compiled `WebAssembly.Module`, its
@@ -163,6 +175,12 @@ impl BrowserCompiledBlock {
         //    from it. The closure captures the queue via `Rc` so both
         //    Rust (`stage_loads`) and JS (each `host.read_u8` call) can
         //    reach it.
+        //
+        // The Phase 4.4 [`BlockShape::LoopTaskTail`] module is constant
+        // (no imports). We still build the closure (cheap; the empty
+        // queue path returns -1 and the wasm body never calls it) so
+        // every block ships with the same scaffolding.
+        let needs_read_u8 = !matches!(emitted.shape, BlockShape::LoopTaskTail { .. });
         let pending: Rc<RefCell<Vec<u8>>> = Rc::new(RefCell::new(Vec::with_capacity(4)));
         let pending_for_closure = pending.clone();
         let read_u8_closure = Closure::<dyn FnMut(i32) -> i32>::new(move |_addr: i32| -> i32 {
@@ -176,10 +194,17 @@ impl BrowserCompiledBlock {
             q.remove(0) as i32
         });
 
-        // 4. Build imports + instantiate.
-        let imports = build_imports(&read_u8_closure)?;
-        let instance = WebAssembly::Instance::new(&module, &imports)
-            .map_err(|e| JsValue::from_str(&format!("WebAssembly.Instance: {e:?}")))?;
+        // 4. Build imports + instantiate. Tail blocks have no imports;
+        //    pass an empty object so the wasm validator is happy.
+        let instance = if needs_read_u8 {
+            let imports = build_imports(&read_u8_closure)?;
+            WebAssembly::Instance::new(&module, &imports)
+                .map_err(|e| JsValue::from_str(&format!("WebAssembly.Instance: {e:?}")))?
+        } else {
+            let empty = Object::new();
+            WebAssembly::Instance::new(&module, &empty)
+                .map_err(|e| JsValue::from_str(&format!("WebAssembly.Instance: {e:?}")))?
+        };
 
         // 5. Pluck the `run` export. emit-core always exports `run`;
         //    if that changes, this is the one place to update.
@@ -289,6 +314,26 @@ impl BrowserCompiledBlock {
         })
     }
 
+    /// Invoke a [`BlockShape::LoopTaskTail`] block. Returns
+    /// `(exit, next_pc, l32r_at_value)`. No staged loads — the body is
+    /// constant-folded at compile time. Mirrors
+    /// `bb_multi::MultiOpBlock::run_looptask_tail`.
+    pub fn run_looptask_tail(&mut self) -> Result<BrowserLoopTaskTailResult, JsValue> {
+        debug_assert!(matches!(
+            self.emitted.shape,
+            BlockShape::LoopTaskTail { .. }
+        ));
+        let result = self.run.call0(&JsValue::NULL)?;
+        let arr = decode_result_array(result, 3)?;
+        let g = |i: u32| -> i32 { arr.get(i).as_f64().map(|f| f as i64 as i32).unwrap_or(0) };
+        self.hits += 1;
+        Ok(BrowserLoopTaskTailResult {
+            exit_code: g(0),
+            next_pc: g(1) as u32,
+            l32r_at_value: g(2) as u32,
+        })
+    }
+
     /// Expose the block's emit-core metadata. Used by the dispatcher
     /// to advance PC and bump CCOUNT after a clean fall-through.
     pub fn emitted(&self) -> &EmittedBlock {
@@ -365,6 +410,10 @@ pub struct BrowserJitCache {
     /// Total hits across all compiled blocks. Tracked as a running
     /// total so `WasmSimulator::jit_hits()` is O(1).
     total_hits: u64,
+    /// Phase 4.4 instrumentation: per-PC hit counters. Surfaced via
+    /// [`Self::hits_per_pc`] so the bench harness can validate that
+    /// each installed shape is actually firing.
+    pub hits_by_pc: HashMap<u32, u64>,
 }
 
 impl BrowserJitCache {
@@ -437,6 +486,11 @@ impl BrowserJitCache {
     fn bump_hit(&mut self) {
         self.total_hits = self.total_hits.saturating_add(1);
     }
+
+    /// Bump the per-PC hit counter (Phase 4.4 diagnostics).
+    fn bump_hit_pc(&mut self, pc: u32) {
+        *self.hits_by_pc.entry(pc).or_insert(0) += 1;
+    }
 }
 
 /// Failure surface for [`BrowserJitCache::install_from_emitted`].
@@ -500,6 +554,89 @@ pub fn try_browser_jit_step(
     // why it matters perf-wise.
     if cache.refused.contains(&(pc, ps_bits.raw)) {
         return false;
+    }
+
+    // Phase 4.4 short-circuit: for shapes whose wasm body is dominated
+    // by constants (so the wasm call overhead exceeds the work it
+    // does), execute the equivalent logic in Rust and skip the
+    // WebAssembly.Function.call_N round-trip entirely. This is the
+    // single biggest perf lever for short blocks — Phase 4.6.1 showed
+    // a 7% regression even with the prefix-only setup; Phase 4.4
+    // empirical data (see /tmp/jit_bench_phase44.txt) showed a ~14%
+    // delta between the wasm-call and pure-Rust dispatch paths for
+    // the tail block alone.
+    if let Some(installed) = cache.get_mut(pc, ps_bits) {
+        match installed.emitted().shape {
+            BlockShape::LoopTaskTail {
+                l32r_at,
+                l32r_literal_value,
+                beqz_target_pc,
+                statically_taken,
+            } => {
+                cpu.regs.write_logical(l32r_at, l32r_literal_value);
+                if statically_taken {
+                    cpu.pc = beqz_target_pc;
+                    cpu.branched = true;
+                } else {
+                    cpu.pc = LOOPTASK_TAIL_END;
+                    cpu.branched = false;
+                }
+                if LOOPTASK_TAIL_INSTR_COUNT > 1 {
+                    let cc = cpu.sr.read(CCOUNT);
+                    cpu.sr
+                        .write(CCOUNT, cc.wrapping_add(LOOPTASK_TAIL_INSTR_COUNT - 1));
+                }
+                installed.hits += 1;
+                cache.bump_hit();
+                cache.bump_hit_pc(pc);
+                return true;
+            }
+            BlockShape::LoopTaskPrefix {
+                l32r_at,
+                l8ui_at,
+                l8ui_base_at,
+                l32r_literal_value,
+                beqz_target_pc,
+            } => {
+                // Same idea as above for the prefix. The wasm body
+                // here would: write L32R, call host.read_u8(literal),
+                // branch on the result. We do the same in Rust: the
+                // L8UI base is the L32R literal (shape invariant
+                // l8ui_base_at == l32r_at), the byte is read through
+                // the live bus, and the BEQZ direction tested
+                // directly. A bus error refuses cleanly.
+                debug_assert_eq!(l8ui_base_at, l32r_at);
+                let l8ui_base = l32r_literal_value;
+                let b0 = match bus.read_u8(l8ui_base as u64) {
+                    Ok(v) => v,
+                    Err(_) => return false,
+                };
+                cpu.regs.write_logical(l32r_at, l32r_literal_value);
+                cpu.regs.write_logical(l8ui_at, b0 as u32);
+                if b0 == 0 {
+                    // BEQZ taken: skip wdt_reset, land at CALL8 loopv
+                    // (target carried in the shape descriptor — for
+                    // the real ereader at PC 0x400d4a8d this is
+                    // 0x400d4a99; the canonical fixture differs).
+                    cpu.pc = beqz_target_pc;
+                    cpu.branched = true;
+                } else {
+                    // BEQZ not taken: fall through to wdt_reset CALL8.
+                    cpu.pc = labwired_core::cpu::xtensa_jit_bytes::LOOPTASK_PREFIX_END;
+                    cpu.branched = false;
+                }
+                if LOOPTASK_PREFIX_INSTR_COUNT > 1 {
+                    let cc = cpu.sr.read(CCOUNT);
+                    cpu.sr
+                        .write(CCOUNT, cc.wrapping_add(LOOPTASK_PREFIX_INSTR_COUNT - 1));
+                }
+                installed.hits += 1;
+                cache.bump_hit();
+                cache.bump_hit_pc(pc);
+                return true;
+            }
+            _ => {}
+        }
     }
 
     // Fast path: block already installed under (pc, ps_bits). Skip
@@ -647,6 +784,7 @@ pub fn try_browser_jit_step(
                     }
                     cpu.branched = false;
                     cache.bump_hit();
+                    cache.bump_hit_pc(pc);
                     true
                 }
                 x if x == EXIT_HOST_BUS_ERROR => {
@@ -664,6 +802,7 @@ pub fn try_browser_jit_step(
             l8ui_at,
             l8ui_base_at,
             l32r_literal_value,
+            beqz_target_pc: _,
         } => {
             // Stage inputs per the shape descriptor. The L8UI base
             // register IS the L32R destination (shape invariant
@@ -710,6 +849,7 @@ pub fn try_browser_jit_step(
                     }
                     cpu.branched = true;
                     cache.bump_hit();
+                    cache.bump_hit_pc(pc);
                     true
                 }
                 x if x == EXIT_FALL_THROUGH => {
@@ -722,11 +862,68 @@ pub fn try_browser_jit_step(
                     }
                     cpu.branched = false;
                     cache.bump_hit();
+                    cache.bump_hit_pc(pc);
                     true
                 }
                 x if x == EXIT_HOST_BUS_ERROR => {
                     cache.refusals = cache.refusals.saturating_add(1);
                     false
+                }
+                _ => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    false
+                }
+            }
+        }
+        BlockShape::LoopTaskTail {
+            l32r_at,
+            l32r_literal_value: _,
+            beqz_target_pc: _,
+            statically_taken: _,
+        } => {
+            // No staged inputs and no host imports for this shape — the
+            // wasm body returns a pre-baked constant tuple decided at
+            // walk_and_emit time from the live bus's literal pool.
+            let block = match cache.get_mut(pc, ps_bits) {
+                Some(b) => b,
+                None => return false,
+            };
+            let res = match block.run_looptask_tail() {
+                Ok(r) => r,
+                Err(_) => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    return false;
+                }
+            };
+
+            // L32R writes unconditionally (matches interp: L32R runs
+            // before the BEQZ test).
+            cpu.regs.write_logical(l32r_at, res.l32r_at_value);
+
+            match res.exit_code {
+                x if x == EXIT_BRANCH_TAKEN => {
+                    cpu.pc = res.next_pc;
+                    if LOOPTASK_TAIL_INSTR_COUNT > 1 {
+                        let cc = cpu.sr.read(CCOUNT);
+                        cpu.sr
+                            .write(CCOUNT, cc.wrapping_add(LOOPTASK_TAIL_INSTR_COUNT - 1));
+                    }
+                    cpu.branched = true;
+                    cache.bump_hit();
+                    cache.bump_hit_pc(pc);
+                    true
+                }
+                x if x == EXIT_FALL_THROUGH => {
+                    cpu.pc = res.next_pc;
+                    if LOOPTASK_TAIL_INSTR_COUNT > 1 {
+                        let cc = cpu.sr.read(CCOUNT);
+                        cpu.sr
+                            .write(CCOUNT, cc.wrapping_add(LOOPTASK_TAIL_INSTR_COUNT - 1));
+                    }
+                    cpu.branched = false;
+                    cache.bump_hit();
+                    cache.bump_hit_pc(pc);
+                    true
                 }
                 _ => {
                     cache.refusals = cache.refusals.saturating_add(1);

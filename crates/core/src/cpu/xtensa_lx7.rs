@@ -183,7 +183,7 @@ impl XtensaLx7 {
     fn try_jit_step(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
         use crate::cpu::xtensa_jit::{
             JitCache, FILL_SCREEN_BLOCK_END, FILL_SCREEN_BLOCK_INSTR_COUNT, FILL_SCREEN_BLOCK_PC,
-            HOT_BB_PC, LOOPTASK_PC, LOOPV_CALL8_PC,
+            HOT_BB_PC, LOOPTASK_PC, LOOPTASK_TAIL_PC, LOOPV_CALL8_PC,
         };
         let pc = self.pc;
         // Hot guard: cheap exact-PC check for any of the JIT'd PCs before
@@ -197,6 +197,9 @@ impl XtensaLx7 {
         }
         if pc == LOOPTASK_PC {
             return self.try_jit_looptask_prefix(bus);
+        }
+        if pc == LOOPTASK_TAIL_PC {
+            return self.try_jit_looptask_tail(bus);
         }
         if pc != FILL_SCREEN_BLOCK_PC {
             return Ok(None);
@@ -466,6 +469,7 @@ impl XtensaLx7 {
                 l8ui_at,
                 l8ui_base_at,
                 l32r_literal_value,
+                beqz_target_pc: _,
             } => (l32r_at, l8ui_at, l8ui_base_at, l32r_literal_value),
             other => {
                 return Err(SimulationError::NotImplemented(format!(
@@ -543,6 +547,93 @@ impl XtensaLx7 {
                 "xtensa loopTask JIT returned unknown side-exit code {other}"
             ))),
         }
+    }
+
+    /// Phase 4.4 (issue #124): JIT dispatch for the loopTask **tail**
+    /// (`L32R → BEQZ`) at PC 0x400d4a9c, immediately following the
+    /// `CALL8 _Z4loopv` return. Two Xtensa instructions, both
+    /// constant-folded by the recognizer (literal value + BEQZ
+    /// direction). The wasm body is a fixed return tuple; the
+    /// dispatcher commits the L32R write + advances PC.
+    ///
+    /// Together with [`Self::try_jit_looptask_prefix`] this absorbs the
+    /// first 3 + last 2 instructions of the 7-instruction loopTask
+    /// body, leaving the two `CALL8`s (and the conditional `J`) to the
+    /// interpreter.
+    #[cfg(feature = "jit")]
+    fn try_jit_looptask_tail(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
+        use crate::cpu::xtensa_jit::emit_core::BlockShape;
+        use crate::cpu::xtensa_jit::{
+            JitCache, LOOPTASK_TAIL_END, LOOPTASK_TAIL_INSTR_COUNT, MULTI_EXIT_BRANCH_TAKEN,
+            MULTI_EXIT_FALL_THROUGH,
+        };
+        let pc = self.pc;
+        if self.jit.is_none() {
+            self.jit = Some(Box::new(JitCache::new()));
+        }
+        let cache = self.jit.as_mut().expect("jit cache init above");
+        let block = match cache.lookup_or_install_multi_op(pc) {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        let (l32r_dst_ar, beqz_target_pc) = match block.shape() {
+            BlockShape::LoopTaskTail {
+                l32r_at,
+                beqz_target_pc,
+                ..
+            } => (l32r_at, beqz_target_pc),
+            other => {
+                return Err(SimulationError::NotImplemented(format!(
+                    "loopTask tail JIT at pc=0x{pc:08x} installed with wrong shape {other:?}"
+                )));
+            }
+        };
+        // We still run the wasm body for hit-counter parity with the
+        // browser path, but the result tuple's bias toward the
+        // canonical-fixture literal is overridden below by a live-bus
+        // L32R re-read. (The native install path uses a synthesised
+        // fixture — same pattern as `build_looptask_prefix` — so the
+        // baked literal can disagree with the live bus.)
+        let _ = block
+            .run_looptask_tail()
+            .map_err(|e| SimulationError::NotImplemented(format!("xtensa loopTask tail JIT: {e:#}")))?;
+
+        // Resolve the L32R literal against the live bus. The L32R EA
+        // formula is `((pc + 3) & ~3) + pc_rel_byte_offset`; for the
+        // synthesised fixture pc_rel_byte_offset = -32, but for the
+        // real ereader at PC=0x400d4a9c it's also a known constant
+        // captured by the canonical disassembly. Re-decoding here keeps
+        // the JIT robust against canonical-fixture drift.
+        let l32r_pc = pc;
+        let aligned = (l32r_pc.wrapping_add(3)) & !3u32;
+        // For the real ereader at PC=0x400d4a9c, the L32R word
+        // `0xedfe81` decodes to imm16 = 0xfeed → pc_rel_byte_offset
+        // = (0xfeed - 0x10000) * 4 = -76. Decode dynamically from the
+        // bus so the JIT is right for any literal-pool layout.
+        let instr_word = bus.read_u32(l32r_pc as u64)?;
+        // L32R bits 8..23 hold imm16; the low byte is the opcode/at.
+        let imm16 = ((instr_word >> 8) & 0xFFFF) as i32;
+        let pc_rel_byte_offset = (imm16 - 0x10000) * 4; // bit15 always set for valid L32R
+        let literal_ea = aligned.wrapping_add(pc_rel_byte_offset as u32);
+        let l32r_literal = bus.read_u32(literal_ea as u64)?;
+
+        self.regs.write_logical(l32r_dst_ar, l32r_literal);
+        let taken = l32r_literal == 0;
+        let (next_pc, branched, exit_code) = if taken {
+            (beqz_target_pc, true, MULTI_EXIT_BRANCH_TAKEN)
+        } else {
+            (LOOPTASK_TAIL_END, false, MULTI_EXIT_FALL_THROUGH)
+        };
+        self.pc = next_pc;
+        if LOOPTASK_TAIL_INSTR_COUNT > 1 {
+            use crate::cpu::xtensa_sr::CCOUNT;
+            let cc = self.sr.read(CCOUNT);
+            self.sr
+                .write(CCOUNT, cc.wrapping_add(LOOPTASK_TAIL_INSTR_COUNT - 1));
+        }
+        self.branched = branched;
+        let _ = exit_code; // for symmetry with the prefix dispatcher
+        Ok(Some(LOOPTASK_TAIL_INSTR_COUNT))
     }
 
     /// Read an SR by ID, with special routing for PS / WINDOWBASE / WINDOWSTART

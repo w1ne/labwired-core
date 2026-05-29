@@ -2149,6 +2149,18 @@ impl WasmSimulator {
             .unwrap_or(0)
     }
 
+    /// Phase 4.4: per-PC JIT hit count for the given PC. Used by the
+    /// bench harness to confirm each installed shape is firing as
+    /// expected (prefix at 0x400d4a8d, tail at 0x400d4a9c, etc.).
+    /// Returns 0 if the PC has never been hit.
+    #[wasm_bindgen]
+    pub fn jit_hits_at(&self, pc: u32) -> u64 {
+        self.jit_browser_cache
+            .as_ref()
+            .and_then(|c| c.hits_by_pc.get(&pc).copied())
+            .unwrap_or(0)
+    }
+
     /// Bench runner: execute `cycles` `step_with_esp32_aids` iterations
     /// and return elapsed milliseconds (measured via
     /// `performance.now()`). The caller drives this twice — once with
@@ -2252,6 +2264,7 @@ impl WasmSimulator {
                 let pc_now = machine.cpu.get_pc();
                 if pc_now == labwired_core::cpu::xtensa_jit_bytes::HOT_BB_PC
                     || pc_now == labwired_core::cpu::xtensa_jit_bytes::LOOPTASK_PC
+                    || pc_now == labwired_core::cpu::xtensa_jit_bytes::LOOPTASK_TAIL_PC
                 {
                     if self.jit_browser_cache.is_none() {
                         self.jit_browser_cache =

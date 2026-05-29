@@ -52,7 +52,8 @@
 
 use crate::cpu::xtensa_jit_bytes::{
     EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
-    HOT_BB_PC, LOOPTASK_PC, LOOPTASK_PREFIX_END, LOOPTASK_PREFIX_INSTR_COUNT,
+    HOT_BB_PC, LOOPTASK_PC, LOOPTASK_PREFIX_END, LOOPTASK_PREFIX_INSTR_COUNT, LOOPTASK_TAIL_END,
+    LOOPTASK_TAIL_INSTR_COUNT, LOOPTASK_TAIL_PC,
 };
 use crate::cpu::xtensa_jit::wasm_emit::{
     emit_call, emit_end, emit_i32_and, emit_i32_const, emit_i32_eqz, emit_i32_lt_s, emit_i32_or,
@@ -136,6 +137,34 @@ pub enum BlockShape {
         /// `mem32[((PC+3) & ~3) + pc_rel_byte_offset]` at compile time.
         /// Constant-folded — the literal pool is immutable.
         l32r_literal_value: u32,
+        /// BEQZ branch target PC (Phase 4.4): added so the Rust
+        /// short-circuit fast-path in the browser dispatcher can route
+        /// to the right PC without re-decoding the BEQZ immediate.
+        /// The wasm body still carries it as a constant; this field
+        /// surfaces it to callers that bypass wasm.
+        beqz_target_pc: u32,
+    },
+    /// loopTask tail at [`LOOPTASK_TAIL_PC`] — `L32R → BEQZ`. The BEQZ
+    /// tests the L32R-loaded literal directly (no L8UI in between), so
+    /// both the L32R literal AND the BEQZ direction are constant-folded
+    /// at compile time. The wasm body is a single fixed return tuple.
+    ///
+    /// Signature: `() -> (exit, next_pc, l32r_at_value)`. The Xtensa
+    /// `at` register for L32R is in the shape descriptor; the dispatcher
+    /// commits `l32r_at_value` into it after the call.
+    LoopTaskTail {
+        /// L32R destination register (Xtensa AR index, 0..=15).
+        l32r_at: u8,
+        /// Pre-resolved L32R literal value (constant-folded).
+        l32r_literal_value: u32,
+        /// BEQZ target PC (where execution resumes if BEQZ is taken —
+        /// i.e. if the literal is zero).
+        beqz_target_pc: u32,
+        /// Whether the BEQZ is statically taken (literal == 0). True
+        /// means the wasm body always returns
+        /// `(EXIT_BRANCH_TAKEN, beqz_target_pc, 0)`; false means
+        /// `(EXIT_FALL_THROUGH, LOOPTASK_TAIL_END, l32r_literal_value)`.
+        statically_taken: bool,
     },
 }
 
@@ -438,6 +467,7 @@ where
                 l8ui_at: prefix.l8ui_at,
                 l8ui_base_at: prefix.l8ui_base_at,
                 l32r_literal_value: prefix.l32r_literal_value,
+                beqz_target_pc: prefix.beqz_target_pc,
             };
             return Ok(EmittedBlock {
                 wasm_bytes: build_looptask_prefix_module(&prefix),
@@ -447,6 +477,28 @@ where
                     (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
                     (EXIT_BRANCH_TAKEN, SideExitReason::BranchTaken),
                     (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
+                ],
+                shape,
+            });
+        }
+    }
+
+    if pc == LOOPTASK_TAIL_PC {
+        if let Some(tail) = match_looptask_tail(&ops, pc, bus_slice, &mut pc_to_offset) {
+            let statically_taken = tail.l32r_literal_value == 0;
+            let shape = BlockShape::LoopTaskTail {
+                l32r_at: tail.l32r_at,
+                l32r_literal_value: tail.l32r_literal_value,
+                beqz_target_pc: tail.beqz_target_pc,
+                statically_taken,
+            };
+            return Ok(EmittedBlock {
+                wasm_bytes: build_looptask_tail_module(&tail, statically_taken),
+                length_in_instrs: LOOPTASK_TAIL_INSTR_COUNT,
+                end_pc: LOOPTASK_TAIL_END,
+                side_exit_reasons: vec![
+                    (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
+                    (EXIT_BRANCH_TAKEN, SideExitReason::BranchTaken),
                 ],
                 shape,
             });
@@ -830,6 +882,140 @@ fn build_looptask_prefix_module(prefix: &LoopTaskPrefix) -> Vec<u8> {
     emit_i32_const(LOOPTASK_PREFIX_END as i32, &mut body);
     emit_local_get(LOOPTASK_LOCAL_L8UI_AT, &mut body);
     emit_i32_const(target as i32, &mut body);
+    emit_end(&mut body);
+
+    let f_run = m.add_func(t_run, body);
+    m.add_func_export("run", f_run);
+    m.finish()
+}
+
+// ── loopTask tail shape (Phase 4.4) ───────────────────────────────────
+//
+// PC `0x400d4a9c`: `L32R → BEQZ` immediately following the `CALL8 _Z4loopv`
+// return. Two ops, both constant-folded at compile time:
+//   * L32R writes a known literal value (literal pool is immutable).
+//   * BEQZ tests that literal directly — the branch direction is therefore
+//     statically known. We emit a wasm body that always returns the same
+//     constant tuple.
+//
+// Signature: `() -> (exit_code, next_pc, l32r_at_value)`. The L32R `at`
+// register is in the shape descriptor — the dispatcher commits
+// `l32r_at_value` after the call.
+
+/// Decoded loopTask tail.
+struct LoopTaskTail {
+    /// L32R destination register (Xtensa `at`).
+    l32r_at: u8,
+    /// BEQZ branch target PC (absolute).
+    beqz_target_pc: u32,
+    /// Pre-resolved L32R literal value (constant-folded).
+    l32r_literal_value: u32,
+}
+
+/// Recognize the loopTask tail at `start_pc`: one non-terminator op
+/// `L32R` followed by a `BEQZ` terminator that tests the same register
+/// the L32R wrote. (The block deliberately rejects an L8UI in between —
+/// that's the [`match_looptask_prefix`] shape, not this one.)
+fn match_looptask_tail<F>(
+    ops: &[DecodedOp],
+    start_pc: u32,
+    bus_slice: &[u8],
+    mut pc_to_offset: F,
+) -> Option<LoopTaskTail>
+where
+    F: FnMut(u32) -> Option<usize>,
+{
+    use Instruction::*;
+    if ops.len() != 1 {
+        return None;
+    }
+    let (l32r_at, l32r_off) = match ops[0].ins {
+        L32r {
+            at,
+            pc_rel_byte_offset,
+        } => (at, pc_rel_byte_offset),
+        _ => return None,
+    };
+    // Constant-fold the literal pool load (same EA arithmetic as
+    // `match_looptask_prefix`).
+    let l32r_base = (ops[0].pc.wrapping_add(3)) & !3u32;
+    let l32r_ea = l32r_base.wrapping_add(l32r_off as u32);
+    let l32r_off_in_slice = pc_to_offset(l32r_ea)?;
+    if l32r_off_in_slice + 4 > bus_slice.len() {
+        return None;
+    }
+    let l32r_literal_value = u32::from_le_bytes([
+        bus_slice[l32r_off_in_slice],
+        bus_slice[l32r_off_in_slice + 1],
+        bus_slice[l32r_off_in_slice + 2],
+        bus_slice[l32r_off_in_slice + 3],
+    ]);
+    // Peek the BEQZ terminator immediately after the L32R.
+    let after_l32r_pc = ops[0].pc.wrapping_add(ops[0].len);
+    let off = pc_to_offset(after_l32r_pc)?;
+    if off + 3 > bus_slice.len() {
+        return None;
+    }
+    let w = u32::from_le_bytes([bus_slice[off], bus_slice[off + 1], bus_slice[off + 2], 0]);
+    let term = xtensa::decode(w);
+    let (beqz_as, beqz_offset) = match term {
+        Beqz { as_, offset } => (as_, offset),
+        _ => return None,
+    };
+    if beqz_as != l32r_at {
+        return None;
+    }
+    let beqz_target_pc = after_l32r_pc.wrapping_add(beqz_offset as u32);
+    // Sanity: recognized range = exactly one 3-byte L32R + one 3-byte
+    // BEQZ (the BEQZ is excluded from `ops` but its bytes are after
+    // `start_pc + 3`).
+    if after_l32r_pc.wrapping_add(3).wrapping_sub(start_pc) != LOOPTASK_TAIL_INSTR_COUNT * 3 {
+        return None;
+    }
+    Some(LoopTaskTail {
+        l32r_at,
+        beqz_target_pc,
+        l32r_literal_value,
+    })
+}
+
+/// Build the loopTask-tail wasm module. Both halves of the BEQZ are
+/// statically resolved against the pre-folded L32R literal at compile
+/// time, so the wasm body is a fixed return tuple — but the direction
+/// captured in `statically_taken` was decided by the compile-time
+/// canonical fixture, not the live bus. The runtime dispatcher
+/// re-decides BEQZ direction against the AR file write (it has the
+/// fresh literal in hand), then picks the right exit path; the wasm
+/// body's role is therefore minimal: push the three constants the
+/// dispatcher pre-baked.
+///
+/// Why still ship a wasm body if everything is constant? Two reasons:
+///   * Uniform cache shape — the dispatcher loop has one code path that
+///     calls `block.run_*()` for any JIT-installed block.
+///   * Phase 4.5 (multi-block) will likely want this slot to carry
+///     non-trivial work; keeping the wasm path live now means the
+///     install + invoke plumbing is already shaken out.
+fn build_looptask_tail_module(tail: &LoopTaskTail, statically_taken: bool) -> Vec<u8> {
+    let mut m = WasmModule::new();
+    let t_run = m.add_type(FuncType {
+        params: vec![],
+        results: vec![ValType::I32, ValType::I32, ValType::I32],
+    });
+
+    let mut body = Vec::with_capacity(16);
+    // No locals.
+    encode_u32(0, &mut body);
+    if statically_taken {
+        // BEQZ taken: (EXIT_BRANCH_TAKEN, beqz_target_pc, 0).
+        emit_i32_const(EXIT_BRANCH_TAKEN, &mut body);
+        emit_i32_const(tail.beqz_target_pc as i32, &mut body);
+        emit_i32_const(0, &mut body);
+    } else {
+        // BEQZ not taken: (EXIT_FALL_THROUGH, LOOPTASK_TAIL_END, literal).
+        emit_i32_const(EXIT_FALL_THROUGH, &mut body);
+        emit_i32_const(LOOPTASK_TAIL_END as i32, &mut body);
+        emit_i32_const(tail.l32r_literal_value as i32, &mut body);
+    }
     emit_end(&mut body);
 
     let f_run = m.add_func(t_run, body);

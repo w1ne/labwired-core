@@ -52,10 +52,11 @@ mod windowed_call;
 
 #[cfg(feature = "jit")]
 pub use bb_multi::{
-    walk_bb, DecodedOp, LoopTaskPrefixResult, MultiOpBlock, MultiOpResult,
+    walk_bb, DecodedOp, LoopTaskPrefixResult, LoopTaskTailResult, MultiOpBlock, MultiOpResult,
     EXIT_BRANCH_TAKEN as MULTI_EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH as MULTI_EXIT_FALL_THROUGH,
     EXIT_HOST_BUS_ERROR as MULTI_EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
     HOT_BB_L32R_ADDR, HOT_BB_PC, LOOPTASK_PC, LOOPTASK_PREFIX_END, LOOPTASK_PREFIX_INSTR_COUNT,
+    LOOPTASK_TAIL_END, LOOPTASK_TAIL_INSTR_COUNT, LOOPTASK_TAIL_PC,
 };
 #[cfg(feature = "jit")]
 pub use windowed_call::{
@@ -167,6 +168,9 @@ pub struct JitCache {
     /// (`L32R → L8UI → BEQZ`). Independent slot so the PC-keyed cache
     /// lookup is a constant-time match without a HashMap allocation.
     pub looptask_prefix: Option<Box<MultiOpBlock>>,
+    /// Phase 4.4: loopTask tail block at PC 0x400d4a9c
+    /// (`L32R → BEQZ`). Independent slot for the same reason.
+    pub looptask_tail: Option<Box<MultiOpBlock>>,
     /// Phase 3.6.3 instrumentation: count multi-op refusals.
     pub multi_op_refusals: u64,
 }
@@ -189,6 +193,7 @@ impl JitCache {
             windowed_refusals: 0,
             hot_bb: None,
             looptask_prefix: None,
+            looptask_tail: None,
             multi_op_refusals: 0,
         }
     }
@@ -278,6 +283,20 @@ impl JitCache {
                 }
                 self.looptask_prefix.as_deref_mut()
             }
+            LOOPTASK_TAIL_PC => {
+                if self.looptask_tail.is_none() {
+                    match MultiOpBlock::build_looptask_tail(&self.engine) {
+                        Ok(b) => self.looptask_tail = Some(Box::new(b)),
+                        Err(e) => {
+                            tracing::warn!(target: "labwired-core::jit",
+                                "loopTask tail JIT compile failed for pc=0x{pc:08x}: {e:#}. \
+                                 Falling back to interpreter for this PC.");
+                            return None;
+                        }
+                    }
+                }
+                self.looptask_tail.as_deref_mut()
+            }
             _ => None,
         }
     }
@@ -289,7 +308,8 @@ impl JitCache {
         let windowed_hits = self.loopv_call8.as_ref().map(|b| b.hits).unwrap_or(0);
         let multi_op_hits = self.hot_bb.as_ref().map(|b| b.hits).unwrap_or(0);
         let looptask_hits = self.looptask_prefix.as_ref().map(|b| b.hits).unwrap_or(0);
-        fillscreen_hits + windowed_hits + multi_op_hits + looptask_hits
+        let tail_hits = self.looptask_tail.as_ref().map(|b| b.hits).unwrap_or(0);
+        fillscreen_hits + windowed_hits + multi_op_hits + looptask_hits + tail_hits
     }
 
     /// Build the `fillScreen` body block.
