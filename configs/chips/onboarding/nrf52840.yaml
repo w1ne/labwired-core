@@ -233,3 +233,17 @@ peripherals:
   bus: sysbus
   base_address: 1073844224  # 0x40019000
   irq: 25
+- id: mwu
+  type: nrf52840_mwu
+  bus: sysbus
+  base_address: 1073872896  # 0x40020000
+  irq: 32
+- id: aar
+  type: nrf52840_aar
+  bus: sysbus
+  base_address: 1073803264  # 0x4000F000 — alternate-window with CCM
+  irq: 15
+- id: bprot
+  type: nrf52840_bprot
+  bus: sysbus
+  base_address: 1073897472  # 0x40026000

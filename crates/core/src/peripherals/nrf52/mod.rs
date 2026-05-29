@@ -10,6 +10,7 @@
 //! `nrf52_onboarding_diff` test.
 
 pub mod aar;
+pub mod bprot;
 pub mod ccm;
 pub mod clock;
 pub mod comp;

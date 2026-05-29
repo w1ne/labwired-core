@@ -987,6 +987,9 @@ impl SystemBus {
                 "nrf52840_ccm" | "nrf52_ccm" => {
                     Box::new(crate::peripherals::nrf52::ccm::Nrf52Ccm::new())
                 }
+                "nrf52840_bprot" | "nrf52_bprot" => {
+                    Box::new(crate::peripherals::nrf52::bprot::Nrf52Bprot::new())
+                }
                 "declarative" => {
                     let descriptor_path = p_cfg
                         .config
