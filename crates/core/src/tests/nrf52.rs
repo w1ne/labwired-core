@@ -636,6 +636,144 @@ fn nrf52840_onboarding_isr_firmware_toggles_led() {
     );
 }
 
+/// Two-instance BLE loopback: spin up two independent nRF52840 sims,
+/// load TX firmware on one and RX firmware on the other, then
+/// interleave their CPU steps. The TX firmware drives the RADIO TASKS_TXEN
+/// → TASKS_START → EVENTS_END cycle, pushing a packet onto the global
+/// virtual air; the RX firmware drives TASKS_RXEN → TASKS_START →
+/// EVENTS_END and consumes the packet, writing the first payload byte
+/// + length + CRCSTATUS into well-known statics.
+///
+/// This is the "full simulation" smoke: two complete Cortex-M cores
+/// running real Rust firmware that talks to a real RADIO model with
+/// PACKETPTR Easy DMA, BLE whitening, CRC-24, address matching, and
+/// cross-instance air routing.
+#[test]
+fn nrf52840_ble_loopback_through_virtual_air() {
+    use crate::peripherals::nrf52::radio;
+    use crate::Machine;
+
+    let tx_elf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/thumbv7em-none-eabi/release/firmware-nrf52840-ble-tx");
+    let rx_elf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/thumbv7em-none-eabi/release/firmware-nrf52840-ble-rx");
+
+    if !tx_elf.exists() || !rx_elf.exists() {
+        println!(
+            "SKIPPED: build firmwares first:\n  \
+             cargo build --release --target thumbv7em-none-eabi \
+             -p firmware-nrf52840-ble-tx -p firmware-nrf52840-ble-rx"
+        );
+        return;
+    }
+
+    // Start with a clean virtual air so prior tests in this binary don't
+    // leak frames into this one.
+    radio::clear_virtual_air();
+
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    let build_machine = |elf_path: &PathBuf| -> Machine<crate::cpu::cortex_m::CortexM> {
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut machine = Machine::new(cpu, bus);
+        let elf_bytes = std::fs::read(elf_path).expect("read ELF");
+        let elf = goblin::elf::Elf::parse(&elf_bytes).expect("parse ELF");
+        let mut image = crate::memory::ProgramImage::new(elf.entry, crate::Arch::Arm);
+        for ph in &elf.program_headers {
+            if ph.p_type != goblin::elf::program_header::PT_LOAD || ph.p_filesz == 0 {
+                continue;
+            }
+            image.add_segment(
+                ph.p_paddr,
+                elf_bytes[ph.p_offset as usize..(ph.p_offset + ph.p_filesz) as usize].to_vec(),
+            );
+        }
+        machine.load_firmware(&image).expect("load firmware");
+        machine
+    };
+
+    // Resolve the symbol addresses we want to peek at.
+    let tx_elf_bytes = std::fs::read(&tx_elf).unwrap();
+    let tx_elf_parsed = goblin::elf::Elf::parse(&tx_elf_bytes).unwrap();
+    let tx_done_addr = tx_elf_parsed
+        .syms
+        .iter()
+        .find_map(|s| match tx_elf_parsed.strtab.get_at(s.st_name) {
+            Some("TX_DONE_COUNT") => Some(s.st_value),
+            _ => None,
+        })
+        .expect("TX_DONE_COUNT symbol");
+
+    let rx_elf_bytes = std::fs::read(&rx_elf).unwrap();
+    let rx_elf_parsed = goblin::elf::Elf::parse(&rx_elf_bytes).unwrap();
+    let find_rx_sym = |name: &str| -> u64 {
+        rx_elf_parsed
+            .syms
+            .iter()
+            .find_map(|s| match rx_elf_parsed.strtab.get_at(s.st_name) {
+                Some(n) if n == name => Some(s.st_value),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("missing symbol: {name}"))
+    };
+    let rx_done_addr = find_rx_sym("RX_DONE_COUNT");
+    let rx_length_addr = find_rx_sym("RX_LENGTH");
+    let rx_first_payload_addr = find_rx_sym("RX_FIRST_PAYLOAD_BYTE");
+    let rx_crc_addr = find_rx_sym("RX_CRC_STATUS");
+
+    let mut tx_machine = build_machine(&tx_elf);
+    let mut rx_machine = build_machine(&rx_elf);
+
+    // Interleave steps. The RX firmware needs to be running its
+    // TASKS_START + poll-loop while the TX firmware pushes onto the
+    // air; otherwise the RX peripheral hasn't dequeued before the test
+    // checks RAM.
+    let max_steps = 1_000_000;
+    let mut tx_done = false;
+    let mut rx_done = false;
+    for _ in 0..max_steps {
+        if !tx_done {
+            tx_machine.step().expect("tx step");
+            if tx_machine.bus.read_u32(tx_done_addr).unwrap_or(0) > 0 {
+                tx_done = true;
+            }
+        }
+        if !rx_done {
+            rx_machine.step().expect("rx step");
+            if rx_machine.bus.read_u32(rx_done_addr).unwrap_or(0) > 0 {
+                rx_done = true;
+            }
+        }
+        if tx_done && rx_done {
+            break;
+        }
+    }
+
+    assert!(tx_done, "TX firmware never reached TX_DONE_COUNT increment");
+    assert!(rx_done, "RX firmware never reached RX_DONE_COUNT increment");
+
+    let length = rx_machine.bus.read_u32(rx_length_addr).unwrap_or(0);
+    let first = rx_machine.bus.read_u32(rx_first_payload_addr).unwrap_or(0);
+    let crc = rx_machine.bus.read_u32(rx_crc_addr).unwrap_or(0);
+
+    println!(
+        "BLE loopback: length={length} first_payload_byte=0x{first:02X} crc_status={crc}"
+    );
+
+    assert_eq!(length, 4, "RX should have observed LENGTH=4");
+    assert_eq!(first, 0xC0, "RX should have observed first payload byte 0xC0");
+    assert_eq!(crc, 1, "CRC should validate end-to-end");
+}
+
 #[test]
 fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
     let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

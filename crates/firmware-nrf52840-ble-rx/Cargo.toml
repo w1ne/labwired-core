@@ -1,0 +1,22 @@
+[package]
+name = "firmware-nrf52840-ble-rx"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+# Companion to firmware-nrf52840-ble-tx: configures RADIO for RX,
+# waits for a packet to arrive, copies the first payload byte into
+# RX_FIRST_PAYLOAD_BYTE so the integration test can verify the round
+# trip.
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nrf52840-ble-rx"
+path = "src/main.rs"
+test = false
+bench = false

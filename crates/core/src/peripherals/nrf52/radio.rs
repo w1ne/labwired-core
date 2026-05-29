@@ -982,7 +982,10 @@ impl Peripheral for Nrf52Radio {
         // write to PACKETPTR-pointed RAM. Address-matched against
         // RXADDRESSES + BASE/PREFIX before delivery.
         if self.pending_rx_dma {
-            self.pending_rx_dma = false;
+            // Cancel any default 1-tick countdown that start_packet
+            // seeded; we only want EVENTS_END to fire when we actually
+            // dequeue a frame.
+            self.tx_or_rx_cycles_remaining = None;
 
             // First, try the global virtual air at FREQUENCY. Only consume
             // a frame whose MODE matches ours AND whose sender's address
@@ -1010,6 +1013,9 @@ impl Peripheral for Nrf52Radio {
             let pkt_opt = popped.or_else(|| self.rx_inbox.pop_front());
 
             if let Some(mut pkt) = pkt_opt {
+                // A packet was actually dequeued — clear the pending flag
+                // and the rest of the body runs the DMA + sets cycles.
+                self.pending_rx_dma = false;
                 let desc = self.packet_descriptor();
 
                 // Trailing 3 bytes are the CRC (LE).

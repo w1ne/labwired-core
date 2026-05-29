@@ -1,0 +1,22 @@
+[package]
+name = "firmware-nrf52840-ble-tx"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+# Minimal raw-RADIO BLE transmitter. Configures the RADIO peripheral
+# directly via MMIO, builds a 4-byte payload in RAM, and transmits it
+# on FREQUENCY=42, MODE=BLE_1Mbit. Used by the multi-instance
+# integration test `nrf52840_ble_loopback_through_virtual_air`.
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nrf52840-ble-tx"
+path = "src/main.rs"
+test = false
+bench = false

@@ -25,6 +25,8 @@ members = [
     "crates/firmware-h563-io-demo",
     "crates/firmware-hil-showcase",
     "crates/firmware-l476-demo",
+    "crates/firmware-nrf52840-ble-rx",
+    "crates/firmware-nrf52840-ble-tx",
     "crates/firmware-nrf52840-demo",
     "crates/firmware-nrf52840-isr-blinky",
     "crates/firmware-nrf52840-timer-blinky",
