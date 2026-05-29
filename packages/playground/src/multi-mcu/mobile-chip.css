@@ -1,0 +1,231 @@
+.lw-mob {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0f;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+}
+
+.lw-mob-header {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.lw-mob-logo {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.lw-mob-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.lw-mob-canvas {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lw-mob-card {
+  background: #11121b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 100ms ease, transform 80ms ease;
+}
+
+.lw-mob-card[data-active='true'] {
+  border-color: rgba(232, 62, 140, 0.5);
+  box-shadow: 0 8px 24px rgba(232, 62, 140, 0.12);
+}
+
+.lw-mob-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+
+.lw-mob-card-thumb {
+  flex-shrink: 0;
+  width: 86px;
+  height: 56px;
+}
+
+.lw-mob-card-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.lw-mob-card-id {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.lw-mob-card-board {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 2px;
+}
+
+.lw-mob-card-status {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lw-mob-card-led {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.lw-mob-card-led[data-state='running'] {
+  background: #33dd66;
+  box-shadow: 0 0 8px rgba(51, 221, 102, 0.6);
+  animation: lw-mob-pulse 1.2s ease-in-out infinite;
+}
+
+.lw-mob-card-led[data-state='paused'] {
+  background: #e8c842;
+}
+
+.lw-mob-card-led[data-state='idle'] {
+  background: #555;
+}
+
+@keyframes lw-mob-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.lw-mob-card-remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.lw-mob-card-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.lw-mob-card-uart {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  max-height: 60px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.lw-mob-card-props {
+  background: rgba(232, 62, 140, 0.14);
+  color: #e83e8c;
+  border: 1px solid rgba(232, 62, 140, 0.4);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.lw-mob-card-props:active {
+  transform: translateY(1px);
+}
+
+.lw-mob-add {
+  background: transparent;
+  border: 1px dashed rgba(232, 62, 140, 0.45);
+  color: #e83e8c;
+  border-radius: 14px;
+  padding: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.lw-mob-add:active {
+  background: rgba(232, 62, 140, 0.08);
+}
+
+.lw-mob-props {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #0a0a0f;
+  display: flex;
+  flex-direction: column;
+}
+
+.lw-mob-props-header {
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.lw-mob-back {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.lw-mob-props-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.lw-mob-props-body {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}

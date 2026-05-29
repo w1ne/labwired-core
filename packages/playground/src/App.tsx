@@ -39,7 +39,6 @@ import {
   type ComponentState,
 } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
-import { MobileDemoView } from './MobileDemoView';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
@@ -47,6 +46,7 @@ import { ChipsProvider } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
 import { McuStrip } from './multi-mcu/McuStrip';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
+import { MobileMultiChipView } from './multi-mcu/MobileMultiChipView';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1628,23 +1628,31 @@ export function App() {
   }, []);
 
   if (isMobile) {
-    const epaperBuffer = simState.displayBuffers['epaper'];
     return (
-      <MobileDemoView
-        selectedBoard={selectedBoard}
-        panelPlanes={epaperBuffer?.kind === 'ssd1680_tricolor_290' ? epaperBuffer.data : undefined}
-        panelGeneration={epaperBuffer?.generation}
-        uartOutput={simState.uartOutput}
-        boardIoStates={simState.boardIoStates}
-        running={running}
-        cycles={simState.cycles ?? 0}
-        runtimeMs={runtimeMs}
-        loading={loading}
-        onRun={() => requireAuth(onSimRun)}
-        onPause={handlePause}
-        onReset={handleReset}
-        toast={toast ? <div className="px-4 py-2 rounded-lg bg-magenta text-bg-base text-[13px] font-medium shadow-lg">{toast}</div> : null}
-      />
+      <ChipsProvider initialBoard={selectedBoard}>
+        <ChipBridgeSync
+          bridge={bridge}
+          board={selectedBoard}
+          source={source}
+          config={activeSimulationConfig}
+          onRestore={(s) => {
+            const workspace = loadBoardWorkspace(s.board);
+            setBridge(s.bridge);
+            setSelectedBoard(s.board);
+            setSource(s.source ?? workspace.source);
+            setActiveSimulationConfig(s.config as ActiveSimulationConfig | null);
+            editor.loadDiagram(workspace.diagram);
+          }}
+        />
+        <BackgroundChipTicker />
+        <MobileMultiChipView
+          propertiesContent={renderDevDrawer?.(true, 0)}
+          simControls={simDockNode}
+          uartPreview={simState.uartOutput}
+          running={running}
+          cyclesActive={simState.cycles ?? 0}
+        />
+      </ChipsProvider>
     );
   }
 
