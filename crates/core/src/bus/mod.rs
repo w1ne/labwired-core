@@ -963,6 +963,30 @@ impl SystemBus {
                 "nrf52840_nvmc" | "nrf52_nvmc" => {
                     Box::new(crate::peripherals::nrf52::nvmc::Nrf52Nvmc::new())
                 }
+                "nrf52840_egu" | "nrf52_egu" => {
+                    Box::new(crate::peripherals::nrf52::egu::Nrf52Egu::new())
+                }
+                "nrf52840_comp" | "nrf52_comp" => {
+                    Box::new(crate::peripherals::nrf52::comp::Nrf52Comp::new())
+                }
+                "nrf52840_lpcomp" | "nrf52_lpcomp" => {
+                    Box::new(crate::peripherals::nrf52::lpcomp::Nrf52Lpcomp::new())
+                }
+                "nrf52840_qdec" | "nrf52_qdec" => {
+                    Box::new(crate::peripherals::nrf52::qdec::Nrf52Qdec::new())
+                }
+                "nrf52840_i2s" | "nrf52_i2s" => {
+                    Box::new(crate::peripherals::nrf52::i2s::Nrf52I2s::new())
+                }
+                "nrf52840_mwu" | "nrf52_mwu" => {
+                    Box::new(crate::peripherals::nrf52::mwu::Nrf52Mwu::new())
+                }
+                "nrf52840_aar" | "nrf52_aar" => {
+                    Box::new(crate::peripherals::nrf52::aar::Nrf52Aar::new())
+                }
+                "nrf52840_ccm" | "nrf52_ccm" => {
+                    Box::new(crate::peripherals::nrf52::ccm::Nrf52Ccm::new())
+                }
                 "declarative" => {
                     let descriptor_path = p_cfg
                         .config

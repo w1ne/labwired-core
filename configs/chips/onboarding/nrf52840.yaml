@@ -193,3 +193,43 @@ peripherals:
   type: nrf52840_nvmc
   bus: sysbus
   base_address: 1073864704  # 0x4001E000
+- id: comp
+  type: nrf52840_comp
+  bus: sysbus
+  base_address: 1073819648  # 0x40013000
+  irq: 19
+- id: qdec
+  type: nrf52840_qdec
+  bus: sysbus
+  base_address: 1073815552  # 0x40012000
+  irq: 18
+- id: egu0
+  type: nrf52840_egu
+  bus: sysbus
+  base_address: 1073823744  # 0x40014000
+  irq: 20
+- id: egu1
+  type: nrf52840_egu
+  bus: sysbus
+  base_address: 1073827840  # 0x40015000
+  irq: 21
+- id: egu2
+  type: nrf52840_egu
+  bus: sysbus
+  base_address: 1073831936  # 0x40016000
+  irq: 22
+- id: egu3
+  type: nrf52840_egu
+  bus: sysbus
+  base_address: 1073836032  # 0x40017000
+  irq: 23
+- id: egu4
+  type: nrf52840_egu
+  bus: sysbus
+  base_address: 1073840128  # 0x40018000
+  irq: 24
+- id: egu5
+  type: nrf52840_egu
+  bus: sysbus
+  base_address: 1073844224  # 0x40019000
+  irq: 25

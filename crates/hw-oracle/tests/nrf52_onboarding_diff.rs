@@ -43,6 +43,11 @@ const SAADC: u32 = 0x4000_7000;
 const PWM0: u32 = 0x4001_C000;
 const QSPI: u32 = 0x4002_9000;
 const NFCT: u32 = 0x4000_5000;
+const COMP: u32 = 0x4001_3000;
+const QDEC: u32 = 0x4001_2000;
+const EGU0: u32 = 0x4001_4000;
+const FICR: u32 = 0x1000_0000;
+const NVMC: u32 = 0x4001_E000;
 
 // ── Case structure (mirrors nrf52_mmio_diff.rs) ──────────────────────────────
 
@@ -247,6 +252,60 @@ const CASES: &[MmioCase] = &[
         read_addr: NFCT + 0x590,
         mask: 0xFFFF_FFFF,
         expect: 0xDEAD_BEEF,
+    },
+    // ── COMP — TH (threshold) ──────────────────────────────────────────────
+    MmioCase {
+        peripheral: "COMP",
+        label: "TH = 0x0F0F",
+        prep: &[(COMP + 0x500, 0)], // ENABLE = 0
+        write: (COMP + 0x530, 0x0F0F),
+        read_addr: COMP + 0x530,
+        mask: 0x3F3F,
+        expect: 0x0F0F,
+    },
+    // ── QDEC — SAMPLEPER ───────────────────────────────────────────────────
+    MmioCase {
+        peripheral: "QDEC",
+        label: "SAMPLEPER = 7 (1024 us)",
+        prep: &[(QDEC + 0x500, 0)],
+        write: (QDEC + 0x508, 7),
+        read_addr: QDEC + 0x508,
+        mask: 0xF,
+        expect: 7,
+    },
+    // ── EGU0 — INTENSET (trigger 0 enabled) ────────────────────────────────
+    MmioCase {
+        peripheral: "EGU0",
+        label: "INTENSET trigger 0 = 1",
+        prep: &[(EGU0 + 0x308, 0xFFFF_FFFF)], // INTENCLR all
+        write: (EGU0 + 0x304, 1),
+        read_addr: EGU0 + 0x304,
+        mask: 0x1,
+        expect: 1,
+    },
+    // ── FICR — INFO.PART (read-only chip ID) ───────────────────────────────
+    //
+    // FICR is RO on silicon and pre-seeded in our model. Writing should
+    // be silently dropped on both sides; reading INFO.PART returns the
+    // chip family code on the XIAO nRF52840 silicon and 0x52840 in sim.
+    MmioCase {
+        peripheral: "FICR",
+        label: "INFO.PART = 0x52840 (read-only)",
+        prep: &[],
+        write: (FICR + 0x100, 0xDEAD_BEEF), // should be dropped
+        read_addr: FICR + 0x100,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0005_2840,
+    },
+    // ── NVMC — READY (idle = 1) ────────────────────────────────────────────
+    MmioCase {
+        peripheral: "NVMC",
+        label: "READY = 1 (no flash op pending)",
+        prep: &[],
+        write: (NVMC + 0x400, 0), // RO — ignored
+        read_addr: NVMC + 0x400,
+        mask: 0x1,
+        expect: 1,
     },
 ];
 

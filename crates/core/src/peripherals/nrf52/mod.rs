@@ -9,15 +9,23 @@
 //! validated against real silicon by the `hw-oracle` crate's
 //! `nrf52_onboarding_diff` test.
 
+pub mod aar;
+pub mod ccm;
 pub mod clock;
+pub mod comp;
 pub mod ecb;
+pub mod egu;
 pub mod ficr;
 pub mod gpiote;
+pub mod i2s;
+pub mod lpcomp;
+pub mod mwu;
 pub mod nfct;
 pub mod nvmc;
 pub mod pdm;
 pub mod ppi;
 pub mod pwm;
+pub mod qdec;
 pub mod qspi;
 pub mod rng;
 pub mod rtc;
