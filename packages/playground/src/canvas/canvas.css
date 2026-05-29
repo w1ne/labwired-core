@@ -1,0 +1,16 @@
+.lw-canvas-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.lw-canvas-root .tl-background {
+  background: transparent;
+}
+
+.lw-canvas-root .tl-html-layer,
+.lw-canvas-root .tl-svg-layer {
+  pointer-events: auto;
+}

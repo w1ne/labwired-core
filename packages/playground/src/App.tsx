@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, Suspense, lazy, type ReactNode } from 'react';
 import { ProjectsModal } from './studio/ProjectsModal';
 import type { ProjectRecord } from './studio/useProjects';
 import { CommandPalette } from './studio/CommandPalette';
@@ -43,6 +43,10 @@ import { MobileDemoView } from './MobileDemoView';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
+// Lazy-load the canvas substrate (tldraw is ~500 KB gzip). Only the
+// studio route mounts CanvasShell, so library / landing / CI pages
+// keep their pre-canvas bundle size.
+const CanvasShell = lazy(() => import('./canvas/CanvasShell').then((m) => ({ default: m.CanvasShell })));
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1645,6 +1649,8 @@ export function App() {
   }
 
   return (
+    <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }} />}>
+    <CanvasShell>
     <StudioShell
       boardName={activeProjectName ?? selectedBoard.name}
       isEmpty={isEmpty}
@@ -2028,5 +2034,7 @@ export function App() {
       }}
     />
     </StudioShell>
+    </CanvasShell>
+    </Suspense>
   );
 }

@@ -24,7 +24,8 @@
     "framer-motion": "^11.18.2",
     "monaco-editor": "^0.55.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tldraw": "^5.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
