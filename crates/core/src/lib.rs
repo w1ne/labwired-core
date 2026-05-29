@@ -221,6 +221,15 @@ impl Cpu for Box<dyn Cpu> {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
         (**self).reset(bus)
     }
+    /// Forward the concrete-type escape hatch through the Box.
+    /// Without this, `Machine<Box<dyn Cpu>>::cpu.as_any_mut()` would
+    /// hit the default impl on the trait (which returns `None`),
+    /// silently disabling every downcast — including the browser JIT
+    /// dispatcher in `labwired-wasm`. Reported during #124 Phase 4.2
+    /// bench validation.
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        (**self).as_any_mut()
+    }
     fn step(
         &mut self,
         bus: &mut dyn Bus,

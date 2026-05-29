@@ -2126,15 +2126,14 @@ impl WasmSimulator {
         }
     }
 
-    /// Total number of times the browser JIT has dispatched the hot
-    /// block. Useful for confirming the JIT path actually fired during
-    /// a benchmark.
+    /// Total number of times the browser JIT has dispatched a
+    /// compiled block. Useful for confirming the JIT path actually
+    /// fired during a benchmark.
     #[wasm_bindgen]
     pub fn jit_hits(&self) -> u64 {
         self.jit_browser_cache
             .as_ref()
-            .and_then(|c| c.hot_bb.as_ref())
-            .map(|b| b.hits)
+            .map(|c| c.total_hits())
             .unwrap_or(0)
     }
 
