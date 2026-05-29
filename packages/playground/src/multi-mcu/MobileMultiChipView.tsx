@@ -26,6 +26,12 @@ export interface MobileMultiChipViewProps {
   uartPreview?: string;
   running?: boolean;
   cyclesActive?: number;
+  // Whether the active chip currently has firmware available to run
+  // (source compiled or bridge already instantiated). Drives the
+  // per-chip Run button visibility.
+  canRun?: boolean;
+  onRun?: () => void;
+  onPause?: () => void;
 }
 
 export function MobileMultiChipView({
@@ -34,6 +40,9 @@ export function MobileMultiChipView({
   uartPreview,
   running,
   cyclesActive,
+  canRun,
+  onRun,
+  onPause,
 }: MobileMultiChipViewProps) {
   const { order, sessions, activeChipId, setActiveChipId, addChip, removeChip } = useChips();
   const [propsOpen, setPropsOpen] = useState(false);
@@ -58,7 +67,18 @@ export function MobileMultiChipView({
               running={isActive && !!running}
               cycles={isActive ? cyclesActive : undefined}
               uartPreview={isActive ? uartPreview : undefined}
-              simControls={isActive ? simControls : undefined}
+              canRun={isActive ? !!canRun : !!session.source || !!session.bridge}
+              onRun={
+                isActive
+                  ? onRun
+                  : () => {
+                      setActiveChipId(chipId);
+                      // Run kicks in once App.tsx restores this
+                      // chip's source/bridge — the next frame.
+                      setTimeout(() => onRun?.(), 60);
+                    }
+              }
+              onPause={isActive ? onPause : undefined}
               onFocus={() => setActiveChipId(chipId)}
               onOpenProperties={() => {
                 setActiveChipId(chipId);
@@ -73,7 +93,7 @@ export function MobileMultiChipView({
         </button>
       </main>
 
-      {propsOpen && (
+      {propsOpen && sessions[activeChipId] && (
         <div className="lw-mob-props" role="dialog" aria-modal="true">
           <header className="lw-mob-props-header">
             <button
@@ -85,9 +105,33 @@ export function MobileMultiChipView({
               ←
             </button>
             <span className="lw-mob-props-title">
-              {sessions[activeChipId]?.chipId} · properties
+              {sessions[activeChipId]!.chipId} · properties
             </span>
           </header>
+          <section className="lw-mob-props-summary">
+            <div className="lw-mob-props-thumb">
+              <McuThumb session={sessions[activeChipId]!} width={110} height={70} />
+            </div>
+            <div className="lw-mob-props-summary-meta">
+              <div className="lw-mob-props-board">
+                {sessions[activeChipId]!.board.name}
+              </div>
+              <div className="lw-mob-props-status">
+                <span
+                  className="lw-mob-card-led"
+                  data-state={running ? 'running' : sessions[activeChipId]!.bridge ? 'paused' : 'idle'}
+                />
+                {running
+                  ? `${(cyclesActive ?? 0).toLocaleString()} cycles`
+                  : sessions[activeChipId]!.bridge
+                    ? 'paused'
+                    : 'no firmware'}
+              </div>
+              {simControls && (
+                <div className="lw-mob-props-controls">{simControls}</div>
+              )}
+            </div>
+          </section>
           <div className="lw-mob-props-body">{propertiesContent}</div>
         </div>
       )}
@@ -101,7 +145,9 @@ interface MobileChipCardProps {
   running: boolean;
   cycles?: number;
   uartPreview?: string;
-  simControls?: ReactNode;
+  canRun: boolean;
+  onRun?: () => void;
+  onPause?: () => void;
   onFocus: () => void;
   onOpenProperties: () => void;
   onRemove?: () => void;
@@ -113,7 +159,9 @@ function MobileChipCard({
   running,
   cycles,
   uartPreview,
-  simControls,
+  canRun,
+  onRun,
+  onPause,
   onFocus,
   onOpenProperties,
   onRemove,
@@ -158,25 +206,36 @@ function MobileChipCard({
         )}
       </div>
 
-      {isActive && (
-        <>
-          {simControls && <div className="lw-mob-card-controls">{simControls}</div>}
-          {uartPreview && (
-            <pre className="lw-mob-card-uart" aria-label="Recent serial output">
-              {uartPreview.trimEnd().split('\n').slice(-3).join('\n')}
-            </pre>
-          )}
+      <div className="lw-mob-card-actions">
+        {canRun && (
           <button
             type="button"
-            className="lw-mob-card-props"
+            className="lw-mob-card-run"
+            data-running={running ? 'true' : 'false'}
             onClick={(e) => {
               e.stopPropagation();
-              onOpenProperties();
+              if (running) onPause?.();
+              else onRun?.();
             }}
           >
-            Open properties →
+            {running ? '⏸ Pause' : '▶ Run'}
           </button>
-        </>
+        )}
+        <button
+          type="button"
+          className="lw-mob-card-props"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenProperties();
+          }}
+        >
+          Properties
+        </button>
+      </div>
+      {isActive && uartPreview && (
+        <pre className="lw-mob-card-uart" aria-label="Recent serial output">
+          {uartPreview.trimEnd().split('\n').slice(-3).join('\n')}
+        </pre>
       )}
     </article>
   );

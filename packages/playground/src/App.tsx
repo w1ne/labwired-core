@@ -1651,6 +1651,9 @@ export function App() {
           uartPreview={simState.uartOutput}
           running={running}
           cyclesActive={simState.cycles ?? 0}
+          canRun={!!source || !!bridge}
+          onRun={() => requireAuth(onSimRun)}
+          onPause={handlePause}
         />
       </ChipsProvider>
     );

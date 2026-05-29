@@ -48,7 +48,7 @@ export interface GlobalNavProps {
 export function GlobalNav({ active, variant = 'light', className }: GlobalNavProps) {
   return (
     <nav className={clsx('flex items-center', variant === 'dark' ? 'gap-1' : 'gap-5 text-[14px]', className)}>
-      {NAV_ITEMS.map((item) => {
+      {NAV_ITEMS.filter((item) => item.id !== active).map((item) => {
         const isActive = item.id === active;
         const external = 'external' in item && item.external;
         const cls =
