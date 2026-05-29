@@ -264,5 +264,5 @@ peripherals:
 - id: cryptocell
   type: nrf52840_cryptocell
   bus: sysbus
-  base_address: 1342348800  # 0x5002A000
+  base_address: 1342349312  # 0x5002A000
   irq: 42

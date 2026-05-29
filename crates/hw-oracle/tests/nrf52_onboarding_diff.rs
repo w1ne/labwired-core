@@ -48,6 +48,12 @@ const QDEC: u32 = 0x4001_2000;
 const EGU0: u32 = 0x4001_4000;
 const FICR: u32 = 0x1000_0000;
 const NVMC: u32 = 0x4001_E000;
+const USBD: u32 = 0x4002_7000;
+const ACL: u32 = 0x4002_F000;
+const CRYPTOCELL: u32 = 0x5002_A000;
+const BPROT: u32 = 0x4002_6000;
+const MWU: u32 = 0x4002_0000;
+const AAR: u32 = 0x4000_F000;
 
 // ── Case structure (mirrors nrf52_mmio_diff.rs) ──────────────────────────────
 
@@ -304,6 +310,42 @@ const CASES: &[MmioCase] = &[
         prep: &[],
         write: (NVMC + 0x400, 0), // RO — ignored
         read_addr: NVMC + 0x400,
+        mask: 0x1,
+        expect: 1,
+    },
+    MmioCase {
+        peripheral: "USBD",
+        label: "ENABLE = 1 (USB device on)",
+        prep: &[],
+        write: (USBD + 0x500, 1),
+        read_addr: USBD + 0x500,
+        mask: 0x1,
+        expect: 1,
+    },
+    MmioCase {
+        peripheral: "ACL",
+        label: "ACL[0].ADDR = 0x1000 (4KB-aligned)",
+        prep: &[],
+        write: (ACL + 0x500, 0x0000_1000),
+        read_addr: ACL + 0x500,
+        mask: 0xFFFF_F000,
+        expect: 0x0000_1000,
+    },
+    MmioCase {
+        peripheral: "CRYPTOCELL",
+        label: "ENABLE = 1",
+        prep: &[],
+        write: (CRYPTOCELL + 0x500, 1),
+        read_addr: CRYPTOCELL + 0x500,
+        mask: 0x1,
+        expect: 1,
+    },
+    MmioCase {
+        peripheral: "BPROT",
+        label: "DISABLEINDEBUG = 1",
+        prep: &[],
+        write: (BPROT + 0x610, 1),
+        read_addr: BPROT + 0x610,
         mask: 0x1,
         expect: 1,
     },
