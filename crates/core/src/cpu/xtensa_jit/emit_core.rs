@@ -115,11 +115,27 @@ pub enum BlockShape {
     /// beqz_target_pc)`. The Xtensa `at` registers for L32R and L8UI
     /// are carried in the shape descriptor so backends can commit the
     /// right logical registers without re-decoding.
+    ///
+    /// The L32R literal pool value is resolved at `walk_and_emit` time
+    /// (the pool lives in immutable flash/IRAM, so constant-folding the
+    /// load is safe and saves a per-call bus dispatch). The dispatcher
+    /// passes `l32r_literal_value` directly to the wasm body as the
+    /// `l32r_val` param AND writes it into `l32r_dst_ar` after the
+    /// call — the wasm body doesn't pass the literal back in its
+    /// result tuple.
     LoopTaskPrefix {
-        /// L32R destination register (Xtensa `at`).
+        /// L32R destination register (Xtensa AR index, 0..=15).
         l32r_at: u8,
-        /// L8UI destination register (Xtensa `at`).
+        /// L8UI destination register (Xtensa AR index, 0..=15).
         l8ui_at: u8,
+        /// L8UI base register (Xtensa AR index, 0..=15). The dispatcher
+        /// reads this register's current value and passes it as the
+        /// `l8ui_base` wasm param.
+        l8ui_base_at: u8,
+        /// Pre-resolved L32R literal value, read from
+        /// `mem32[((PC+3) & ~3) + pc_rel_byte_offset]` at compile time.
+        /// Constant-folded — the literal pool is immutable.
+        l32r_literal_value: u32,
     },
 }
 
@@ -420,6 +436,8 @@ where
             let shape = BlockShape::LoopTaskPrefix {
                 l32r_at: prefix.l32r_at,
                 l8ui_at: prefix.l8ui_at,
+                l8ui_base_at: prefix.l8ui_base_at,
+                l32r_literal_value: prefix.l32r_literal_value,
             };
             return Ok(EmittedBlock {
                 wasm_bytes: build_looptask_prefix_module(&prefix),
@@ -649,10 +667,17 @@ struct LoopTaskPrefix {
     l32r_at: u8,
     /// L8UI destination register (Xtensa `at`).
     l8ui_at: u8,
+    /// L8UI base register (Xtensa AR — same as `l32r_at` per the shape
+    /// invariant, but carried separately so the dispatcher doesn't
+    /// have to know the invariant).
+    l8ui_base_at: u8,
     /// L8UI immediate (byte offset added to `l8ui_base`).
     l8ui_imm: u32,
     /// BEQZ branch target PC (absolute).
     beqz_target_pc: u32,
+    /// Pre-resolved L32R literal value, read from
+    /// `mem32[((PC+3) & ~3) + pc_rel_byte_offset]` at walk time.
+    l32r_literal_value: u32,
 }
 
 /// Recognize the loopTask prefix at `start_pc`: two non-terminator ops
@@ -672,7 +697,7 @@ where
     if ops.len() < 2 {
         return None;
     }
-    let (l32r_at, _l32r_off) = match ops[0].ins {
+    let (l32r_at, l32r_off) = match ops[0].ins {
         L32r { at, pc_rel_byte_offset } => (at, pc_rel_byte_offset),
         _ => return None,
     };
@@ -685,6 +710,25 @@ where
     if l8ui_as != l32r_at {
         return None;
     }
+    // Resolve the L32R literal at walk time: EA = ((pc+3) & !3) +
+    // pc_rel_byte_offset, then read 4 bytes (little-endian) out of the
+    // bus slice. The literal pool is immutable for our purposes; we
+    // constant-fold the load so the JIT'd block doesn't pay a per-call
+    // bus dispatch on a known-static value. If the EA falls outside
+    // `bus_slice`, refuse the shape — the dispatcher will fall back
+    // to the interpreter, which can talk to the live bus.
+    let l32r_base = (ops[0].pc.wrapping_add(3)) & !3u32;
+    let l32r_ea = l32r_base.wrapping_add(l32r_off as u32);
+    let l32r_off_in_slice = pc_to_offset(l32r_ea)?;
+    if l32r_off_in_slice + 4 > bus_slice.len() {
+        return None;
+    }
+    let l32r_literal_value = u32::from_le_bytes([
+        bus_slice[l32r_off_in_slice],
+        bus_slice[l32r_off_in_slice + 1],
+        bus_slice[l32r_off_in_slice + 2],
+        bus_slice[l32r_off_in_slice + 3],
+    ]);
     // Peek at the terminator immediately after ops[1] — `walk_bb`
     // excludes terminators from its result. The BEQZ at this PC tests
     // the value the L8UI just produced.
@@ -717,8 +761,10 @@ where
     Some(LoopTaskPrefix {
         l32r_at,
         l8ui_at,
+        l8ui_base_at: l8ui_as,
         l8ui_imm,
         beqz_target_pc,
+        l32r_literal_value,
     })
 }
 
@@ -1311,13 +1357,17 @@ mod tests {
     // (decode_l32r / decode_lsai / decode_si / decode_calln) so the
     // bytes round-trip back through the decoder unchanged.
     //
-    //   L32R  word = 0x_FFFF_21 → bytes 0x21,0xFF,0xFF  (at=2, raw imm16=0xFFFF)
+    //   L32R  word = 0x_FFFE_21 → bytes 0x21,0xFE,0xFF  (at=2, raw imm16=0xFFFE → EA = PC-5)
     //   L8UI  word = 0x_00_03_32 → bytes 0x32,0x03,0x00  (at=3, as=2, imm=0)
     //   BEQZ  word = 0x_00_83_16 → bytes 0x16,0x83,0x00  (as=3, imm12=8 → offset 12)
     //   CALL8 word = 0x_00_00_25 → bytes 0x25,0x00,0x00  (terminator)
+    //
+    // imm16 chosen as 0xFFFE (not 0xFFFF) so the L32R EA points at
+    // PC-5 — leaving a 1-byte gap before the L32R instruction's own
+    // bytes, avoiding overlap with the synthetic literal pool.
     #[cfg(feature = "jit")]
     const LOOPTASK_PREFIX_BYTES: &[u8] = &[
-        0x21, 0xFF, 0xFF, // L32R a2, ...
+        0x21, 0xFE, 0xFF, // L32R a2, ... (EA = PC-5)
         0x32, 0x02, 0x00, // L8UI a3, a2, 0
         0x16, 0x83, 0x00, // BEQZ a3, +12
         0x25, 0x00, 0x00, // CALL8 ... (terminator at end of recognized prefix)
@@ -1332,12 +1382,23 @@ mod tests {
         use crate::cpu::xtensa_jit_bytes::{LOOPTASK_PC, LOOPTASK_PREFIX_END};
         use wasmtime::{Engine, Func, Instance, Module, Store};
 
+        // L32R imm16=0xFFFE resolves to EA=PC-5, so prefix the slice
+        // with 4 bytes of literal pool + 1 byte gap BELOW the
+        // instruction stream. Phase 4.3.7 wire-up: `walk_and_emit` now
+        // constant-folds this literal at compile time.
+        const LITERAL_POOL_VALUE: u32 = 0x4008_0534;
+        let lit = LITERAL_POOL_VALUE.to_le_bytes();
+        let mut bus_slice: Vec<u8> = lit.to_vec();
+        bus_slice.push(0); // 1-byte gap at PC-1 (not read)
+        bus_slice.extend_from_slice(LOOPTASK_PREFIX_BYTES);
+        let slice_base_pc = LOOPTASK_PC.wrapping_sub(5);
+
         let emitted = walk_and_emit(
-            LOOPTASK_PREFIX_BYTES,
+            &bus_slice,
             LOOPTASK_PC,
             |pc| {
-                let off = pc.wrapping_sub(LOOPTASK_PC) as usize;
-                if off < LOOPTASK_PREFIX_BYTES.len() {
+                let off = pc.wrapping_sub(slice_base_pc) as usize;
+                if off < bus_slice.len() {
                     Some(off)
                 } else {
                     None
@@ -1407,8 +1468,11 @@ mod tests {
     fn walk_and_emit_side_exits_at_unsupported_terminator() {
         // L32R a2, ... ; L8UI a3, a2, 0 ; CALL8 ... — no BEQZ between
         // L8UI and CALL8, so the loopTask prefix recognizer rejects.
+        // (imm16=0xFFFE matches the canonical fixture; the L32R EA
+        // resolution will fail anyway because this test doesn't
+        // populate a literal pool — the recognizer refuses cleanly.)
         let text: &[u8] = &[
-            0x21, 0xFF, 0xFF, // L32R a2
+            0x21, 0xFE, 0xFF, // L32R a2 (EA = PC-5; unmapped in this slice)
             0x32, 0x02, 0x00, // L8UI a3, a2, 0
             0x25, 0x00, 0x00, // CALL8 (terminator)
         ];

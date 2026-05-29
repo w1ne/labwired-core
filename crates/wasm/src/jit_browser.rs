@@ -64,7 +64,8 @@ use labwired_core::cpu::xtensa_jit::emit_core::{
     self, BlockShape, EmitError, EmittedBlock, PsBits,
 };
 use labwired_core::cpu::xtensa_jit_bytes::{
-    EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_L32R_ADDR, HOT_BB_PC,
+    EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_L32R_ADDR, HOT_BB_PC,
+    LOOPTASK_PREFIX_INSTR_COUNT,
 };
 use labwired_core::cpu::xtensa_sr::CCOUNT;
 use labwired_core::cpu::XtensaLx7;
@@ -86,14 +87,8 @@ pub struct BrowserMultiOpResult {
 }
 
 /// Result of running a [`BlockShape::LoopTaskPrefix`] block. Mirrors
-/// the native `bb_multi::LoopTaskPrefixResult`. Constructed by
-/// [`BrowserCompiledBlock::run_looptask_prefix`]; consumed once the
-/// dispatcher grows L32R-literal + L8UI-base staging (next chunk).
-#[allow(
-    dead_code,
-    reason = "Phase 4.3.6 shape-aware result type; consumed by Phase 4.4+ dispatcher \
-              once loopTask staging lands"
-)]
+/// the native `bb_multi::LoopTaskPrefixResult`. Consumed by the
+/// browser dispatcher in [`try_browser_jit_step`] (Phase 4.3.7).
 pub struct BrowserLoopTaskPrefixResult {
     pub exit_code: i32,
     pub next_pc: u32,
@@ -267,15 +262,8 @@ impl BrowserCompiledBlock {
     /// the single L8UI byte via [`Self::stage_loads`] beforehand.
     ///
     /// Mirrors `bb_multi::MultiOpBlock::run_looptask_prefix`. The
-    /// browser dispatcher currently refuses LoopTaskPrefix blocks at
-    /// run time (it doesn't yet drive the staging — see
-    /// [`try_browser_jit_step`]); this method is the wired execution
-    /// path that lights up once Phase 4.4 grows the dispatcher.
-    #[allow(
-        dead_code,
-        reason = "Phase 4.3.6 shape-aware run path; consumed by Phase 4.4+ dispatcher \
-                  once loopTask staging lands"
-    )]
+    /// browser dispatcher in [`try_browser_jit_step`] drives this
+    /// for LoopTaskPrefix-shaped blocks (Phase 4.3.7).
     pub fn run_looptask_prefix(
         &mut self,
         l32r_val: u32,
@@ -671,14 +659,80 @@ pub fn try_browser_jit_step(
                 }
             }
         }
-        BlockShape::LoopTaskPrefix { .. } => {
-            // Block was emitted + installed (good — the cache contract
-            // works for both shapes). End-to-end dispatch needs new
-            // staging: the L32R literal address comes from decoding the
-            // L32R instruction itself, and the L8UI base register is
-            // shape-dependent. That staging layer is the next chunk.
-            cache.refusals = cache.refusals.saturating_add(1);
-            false
+        BlockShape::LoopTaskPrefix {
+            l32r_at,
+            l8ui_at,
+            l8ui_base_at,
+            l32r_literal_value,
+        } => {
+            // Stage inputs per the shape descriptor. The L8UI base
+            // register IS the L32R destination (shape invariant
+            // `l8ui_base_at == l32r_at` — the L8UI dereferences the
+            // literal the L32R just loaded). The L32R hasn't executed
+            // yet, so we use the constant-folded literal value as the
+            // L8UI base rather than reading the stale AR slot. The
+            // single L8UI byte is pre-read through the live bus so a
+            // real bus error surfaces via the interpreter retry path
+            // (mirrors `try_jit_looptask_prefix` on the native side).
+            debug_assert_eq!(l8ui_base_at, l32r_at);
+            let l8ui_base = l32r_literal_value;
+            let b0 = match bus.read_u8(l8ui_base as u64) {
+                Ok(v) => v,
+                Err(_) => return false,
+            };
+
+            let block = match cache.get_mut(pc, ps_bits) {
+                Some(b) => b,
+                None => return false,
+            };
+            block.stage_loads(&[b0]);
+            let res = match block.run_looptask_prefix(l32r_literal_value, l8ui_base) {
+                Ok(r) => r,
+                Err(_) => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    return false;
+                }
+            };
+
+            // L32R literal write happens unconditionally on every
+            // successful path (matches interp semantics — L32R runs
+            // before the BEQZ test).
+            cpu.regs.write_logical(l32r_at, l32r_literal_value);
+
+            match res.exit_code {
+                x if x == EXIT_BRANCH_TAKEN => {
+                    cpu.regs.write_logical(l8ui_at, res.l8ui_at_value);
+                    cpu.pc = res.beqz_target_pc;
+                    if LOOPTASK_PREFIX_INSTR_COUNT > 1 {
+                        let cc = cpu.sr.read(CCOUNT);
+                        cpu.sr
+                            .write(CCOUNT, cc.wrapping_add(LOOPTASK_PREFIX_INSTR_COUNT - 1));
+                    }
+                    cpu.branched = true;
+                    cache.bump_hit();
+                    true
+                }
+                x if x == EXIT_FALL_THROUGH => {
+                    cpu.regs.write_logical(l8ui_at, res.l8ui_at_value);
+                    cpu.pc = res.next_pc;
+                    if LOOPTASK_PREFIX_INSTR_COUNT > 1 {
+                        let cc = cpu.sr.read(CCOUNT);
+                        cpu.sr
+                            .write(CCOUNT, cc.wrapping_add(LOOPTASK_PREFIX_INSTR_COUNT - 1));
+                    }
+                    cpu.branched = false;
+                    cache.bump_hit();
+                    true
+                }
+                x if x == EXIT_HOST_BUS_ERROR => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    false
+                }
+                _ => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    false
+                }
+            }
         }
     }
 }

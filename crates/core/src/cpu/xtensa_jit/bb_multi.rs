@@ -210,21 +210,34 @@ impl MultiOpBlock {
     /// the cache-build path doesn't require a live `Bus` at construction
     /// time (mirrors `build_hot_bb`'s design).
     pub fn build_looptask_prefix(engine: &Engine) -> wasmtime::Result<Self> {
-        // Bytes: L32R a2,... ; L8UI a3,a2,0 ; BEQZ a3,+12 ; CALL8 (terminator)
-        // — matches the encoding pinned by the emit-core end-to-end test.
-        const LOOPTASK_BYTES: &[u8] = &[
-            0x21, 0xFF, 0xFF, // L32R a2, ...
+        // Synthetic slice layout: 4 bytes of literal pool, 1 byte pad,
+        // then four 3-byte Xtensa instructions. The L32R encoding uses
+        // imm16=0xFFFE which the decoder turns into
+        // pc_rel_byte_offset = -8, i.e. EA = ((LOOPTASK_PC+3) & ~3) - 8
+        // = LOOPTASK_PC - 5 (=`0x400d_4a88`). The 4-byte literal at
+        // PC-5..PC-1 does NOT overlap the L32R instruction at PC..PC+3
+        // (1 byte unused gap at PC-1).
+        const LITERAL_POOL_VALUE: u32 = 0x4008_0534;
+        let literal_le = LITERAL_POOL_VALUE.to_le_bytes();
+        let mut bus_slice: Vec<u8> = literal_le.to_vec();
+        bus_slice.push(0); // 1-byte gap at PC-1 (not read)
+        bus_slice.extend_from_slice(&[
+            0x21, 0xFE, 0xFF, // L32R a2, ... (imm16=0xFFFE → EA = PC-5)
             0x32, 0x02, 0x00, // L8UI a3, a2, 0
             0x16, 0x83, 0x00, // BEQZ a3, +12
             0x25, 0x00, 0x00, // CALL8 (terminator, not emitted)
-        ];
+        ]);
+        // slice_base_pc chosen so that
+        //   pc_to_offset(LOOPTASK_PC - 5) = 0  (literal at slice start)
+        //   pc_to_offset(LOOPTASK_PC)     = 5  (instructions after lit+gap)
+        let slice_base_pc = LOOPTASK_PC.wrapping_sub(5);
 
         let emitted = emit_core::walk_and_emit(
-            LOOPTASK_BYTES,
+            &bus_slice,
             LOOPTASK_PC,
             |pc| {
-                let off = pc.wrapping_sub(LOOPTASK_PC) as usize;
-                if off < LOOPTASK_BYTES.len() {
+                let off = pc.wrapping_sub(slice_base_pc) as usize;
+                if off < bus_slice.len() {
                     Some(off)
                 } else {
                     None
@@ -454,11 +467,17 @@ mod tests {
         let mut block = MultiOpBlock::build_looptask_prefix(&engine).expect("compile");
         // Shape tag is what the cache key consumer dispatches on.
         match block.shape() {
-            BlockShape::LoopTaskPrefix { l32r_at, l8ui_at } => {
+            BlockShape::LoopTaskPrefix {
+                l32r_at,
+                l8ui_at,
+                l8ui_base_at,
+                l32r_literal_value: _,
+            } => {
                 // Per the canonical bytes pinned in `build_looptask_prefix`:
-                // L32R writes a2, L8UI writes a3.
+                // L32R writes a2, L8UI writes a3, L8UI base = a2.
                 assert_eq!(l32r_at, 2);
                 assert_eq!(l8ui_at, 3);
+                assert_eq!(l8ui_base_at, 2);
             }
             other => panic!("expected LoopTaskPrefix shape, got {other:?}"),
         }
@@ -489,6 +508,173 @@ mod tests {
 
         // Two successful calls → two hits.
         assert_eq!(block.hits, 2);
+    }
+
+    // ── Phase 4.3.7 dispatcher lockstep tests ────────────────────────
+    //
+    // The JIT body returned by `run_looptask_prefix` was validated in
+    // isolation by `looptask_prefix_dispatches_taken_and_not_taken`.
+    // What's NEW in 4.3.7 is the I/O staging in `try_jit_step` (native
+    // side): reading the L8UI base register from the AR file, pre-
+    // reading the L8UI byte through the live bus, dispatching, and
+    // committing the L32R + L8UI dst writes plus the new PC. These
+    // tests drive a synthetic `XtensaLx7` + MockBus through the JIT
+    // path and the pure-interp path independently, diffing the
+    // resulting (pc, AR) state. Any divergence means the staging
+    // wired the wrong register or skipped a writeback.
+
+    /// Minimal in-memory `Bus` for dispatcher tests. Maps `HashMap<u64,
+    /// u8>` for byte-granular access; word reads fall back to the
+    /// default `Bus::read_u32` (4 byte loads).
+    #[cfg(test)]
+    struct DispatcherTestBus {
+        mem: std::collections::HashMap<u64, u8>,
+        config: crate::SimulationConfig,
+    }
+
+    #[cfg(test)]
+    impl DispatcherTestBus {
+        fn new() -> Self {
+            Self {
+                mem: std::collections::HashMap::new(),
+                config: crate::SimulationConfig::default(),
+            }
+        }
+        fn write_byte(&mut self, addr: u32, v: u8) {
+            self.mem.insert(addr as u64, v);
+        }
+        fn write_word_le(&mut self, addr: u32, v: u32) {
+            for i in 0..4 {
+                self.mem.insert((addr + i) as u64, (v >> (i * 8)) as u8);
+            }
+        }
+    }
+
+    #[cfg(test)]
+    impl crate::Bus for DispatcherTestBus {
+        fn read_u8(&self, addr: u64) -> crate::SimResult<u8> {
+            Ok(*self.mem.get(&addr).unwrap_or(&0))
+        }
+        fn write_u8(&mut self, addr: u64, value: u8) -> crate::SimResult<()> {
+            self.mem.insert(addr, value);
+            Ok(())
+        }
+        fn tick_peripherals(&mut self) -> Vec<u32> {
+            Vec::new()
+        }
+        fn execute_dma(&mut self, _requests: &[crate::DmaRequest]) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn config(&self) -> &crate::SimulationConfig {
+            &self.config
+        }
+    }
+
+    /// Layout a memory image for the loopTask prefix at `LOOPTASK_PC`
+    /// matching the synthetic byte stream `build_looptask_prefix`
+    /// hardcodes (so the JIT-side constant-folded L32R literal matches
+    /// what the interpreter reads from the live bus).
+    ///
+    /// `l8ui_target_byte` is the byte the L8UI reads from the literal
+    /// pool's resolved value (which is also the L8UI base address —
+    /// the L32R loads a pointer, the L8UI dereferences it).
+    #[cfg(test)]
+    fn populate_looptask_image(bus: &mut DispatcherTestBus, l8ui_target_byte: u8) {
+        const LITERAL_POOL_VALUE: u32 = 0x4008_0534;
+        // Literal pool: L32R imm16=0xFFFE → pc_rel_byte_offset = -8 →
+        // EA = ((PC+3) & !3) - 8 = PC - 5. The 4-byte literal occupies
+        // [PC-5..PC-1).
+        bus.write_word_le(LOOPTASK_PC.wrapping_sub(5), LITERAL_POOL_VALUE);
+        // Instructions at LOOPTASK_PC: L32R, L8UI, BEQZ, then a
+        // terminator (CALL8 — never executed by the JIT body but
+        // present so the walker's terminator predicate fires cleanly
+        // if the interpreter ever decodes it).
+        let instrs: &[u8] = &[
+            0x21, 0xFE, 0xFF, // L32R a2, ... (imm16=0xFFFE → EA = PC-5)
+            0x32, 0x02, 0x00, // L8UI a3, a2, 0
+            0x16, 0x83, 0x00, // BEQZ a3, +12
+            0x25, 0x00, 0x00, // CALL8 (terminator; not exercised)
+        ];
+        for (i, b) in instrs.iter().enumerate() {
+            bus.write_byte(LOOPTASK_PC + i as u32, *b);
+        }
+        // L8UI dereferences the literal pool value as a pointer.
+        bus.write_byte(LITERAL_POOL_VALUE, l8ui_target_byte);
+    }
+
+    /// Run the loopTask prefix at `LOOPTASK_PC` through either the JIT
+    /// (`jit_enabled=true`) or the pure interpreter (`jit_enabled=false`)
+    /// until PC leaves the prefix range, then return the post-state
+    /// `(pc, a2, a3)`. The JIT executes the whole prefix in one
+    /// `step()` call; the interpreter needs three (one per Xtensa
+    /// instruction). The post-state diff is what tells us the
+    /// dispatcher staging matches the interpreter byte-for-byte.
+    #[cfg(test)]
+    fn run_looptask_once(jit_enabled: bool, l8ui_byte: u8) -> (u32, u32, u32) {
+        use crate::cpu::XtensaLx7;
+        use crate::Cpu;
+        let observers: Vec<std::sync::Arc<dyn crate::SimulationObserver>> = Vec::new();
+        let config = crate::SimulationConfig::default();
+
+        let mut cpu = XtensaLx7::new();
+        cpu.jit_enabled = jit_enabled;
+        cpu.pc = LOOPTASK_PC;
+        // Wake the CPU from its reset EXCM=1 so the interp path doesn't
+        // chase exception vectors — we're testing one block in isolation.
+        cpu.ps = crate::cpu::xtensa_regs::Ps::from_raw(0);
+
+        let mut bus = DispatcherTestBus::new();
+        populate_looptask_image(&mut bus, l8ui_byte);
+
+        // Step until PC leaves the prefix range. Cap at 8 steps to bound
+        // a runaway: interp needs 3 (L32R + L8UI + BEQZ), JIT needs 1.
+        for _ in 0..8 {
+            let pc = cpu.pc;
+            if pc < LOOPTASK_PC || pc >= LOOPTASK_PREFIX_END {
+                break;
+            }
+            cpu.step(&mut bus, &observers, &config).expect("step ok");
+        }
+
+        (cpu.pc, cpu.regs.read_logical(2), cpu.regs.read_logical(3))
+    }
+
+    /// Lockstep: BEQZ-taken path (L8UI loads 0x00). JIT and interp must
+    /// agree on post-state PC + AR2 (L32R literal) + AR3 (L8UI byte).
+    /// This exercises the full Phase 4.3.7 dispatcher wiring: L8UI base
+    /// register read from the AR file, L32R literal constant-folded at
+    /// compile time, both writes committed, PC set to the BEQZ target.
+    #[test]
+    fn looptask_prefix_jit_matches_interp_branch_taken() {
+        let (jit_pc, jit_a2, jit_a3) = run_looptask_once(true, 0x00);
+        let (int_pc, int_a2, int_a3) = run_looptask_once(false, 0x00);
+        assert_eq!(jit_pc, int_pc, "PC mismatch: jit={jit_pc:#x} interp={int_pc:#x}");
+        assert_eq!(jit_a2, int_a2, "a2 mismatch");
+        assert_eq!(jit_a3, int_a3, "a3 mismatch");
+        // Architectural truth: BEQZ taken targets LOOPTASK_PC + 6 + 12.
+        assert_eq!(jit_pc, LOOPTASK_PC + 6 + 12);
+        // a2 = L32R literal value (constant-folded into the JIT body).
+        assert_eq!(jit_a2, 0x4008_0534);
+        // a3 = the byte the L8UI loaded.
+        assert_eq!(jit_a3, 0x00);
+    }
+
+    /// Lockstep: BEQZ-not-taken path (L8UI loads non-zero). JIT and
+    /// interp must agree on post-state PC + AR2 + AR3. The PC after a
+    /// fall-through is `LOOPTASK_PREFIX_END`, the byte after BEQZ.
+    #[test]
+    fn looptask_prefix_jit_matches_interp_branch_not_taken() {
+        let (jit_pc, jit_a2, jit_a3) = run_looptask_once(true, 0x7A);
+        let (int_pc, int_a2, int_a3) = run_looptask_once(false, 0x7A);
+        assert_eq!(jit_pc, int_pc, "PC mismatch: jit={jit_pc:#x} interp={int_pc:#x}");
+        assert_eq!(jit_a2, int_a2, "a2 mismatch");
+        assert_eq!(jit_a3, int_a3, "a3 mismatch");
+        // Architectural truth: BEQZ not taken falls through to PC+3
+        // (BEQZ is 3 bytes); the interp single-steps the BEQZ so its
+        // post-state PC is also LOOPTASK_PC + 6 + 3 = LOOPTASK_PREFIX_END.
+        assert_eq!(jit_pc, LOOPTASK_PREFIX_END);
+        assert_eq!(jit_a2, 0x4008_0534);
+        assert_eq!(jit_a3, 0x7A);
     }
 
     /// Phase 4.3.6: `JitCache::lookup_or_install_multi_op` returns a

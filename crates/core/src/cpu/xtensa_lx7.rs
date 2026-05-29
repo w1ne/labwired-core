@@ -183,7 +183,7 @@ impl XtensaLx7 {
     fn try_jit_step(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
         use crate::cpu::xtensa_jit::{
             JitCache, FILL_SCREEN_BLOCK_END, FILL_SCREEN_BLOCK_INSTR_COUNT, FILL_SCREEN_BLOCK_PC,
-            HOT_BB_PC, LOOPV_CALL8_PC,
+            HOT_BB_PC, LOOPTASK_PC, LOOPV_CALL8_PC,
         };
         let pc = self.pc;
         // Hot guard: cheap exact-PC check for any of the JIT'd PCs before
@@ -194,6 +194,9 @@ impl XtensaLx7 {
         }
         if pc == HOT_BB_PC {
             return self.try_jit_multi_op(bus);
+        }
+        if pc == LOOPTASK_PC {
+            return self.try_jit_looptask_prefix(bus);
         }
         if pc != FILL_SCREEN_BLOCK_PC {
             return Ok(None);
@@ -421,6 +424,123 @@ impl XtensaLx7 {
             }
             other => Err(SimulationError::NotImplemented(format!(
                 "xtensa multi-op JIT returned unknown side-exit code {other}"
+            ))),
+        }
+    }
+
+    /// Phase 4.3.7 (issue #124): JIT dispatch for the loopTask prefix
+    /// (`L32R → L8UI → BEQZ`) at PC 0x400d4a8d.
+    ///
+    /// Marshals the input state (`l8ui_base` AR register), invokes the
+    /// pre-compiled wasm block, and commits the result back to the CPU
+    /// register file:
+    ///   * Always writes `l32r_literal_value` into the L32R dst AR (the
+    ///     wasm body doesn't carry the literal through its result
+    ///     tuple — it's constant-folded at compile time).
+    ///   * On BRANCH_TAKEN / FALL_THROUGH: writes the L8UI byte into the
+    ///     L8UI dst AR and advances PC to the appropriate target.
+    ///   * On HOST_BUS_ERROR: refuses (returns Ok(None)) so the
+    ///     interpreter can raise the fault with full bus context.
+    ///
+    /// CCOUNT: bumps by `LOOPTASK_PREFIX_INSTR_COUNT - 1` on success
+    /// (the outer step already counted one).
+    #[cfg(feature = "jit")]
+    fn try_jit_looptask_prefix(&mut self, bus: &mut dyn Bus) -> SimResult<Option<u32>> {
+        use crate::cpu::xtensa_jit::emit_core::BlockShape;
+        use crate::cpu::xtensa_jit::{
+            JitCache, LOOPTASK_PREFIX_INSTR_COUNT, MULTI_EXIT_BRANCH_TAKEN,
+            MULTI_EXIT_FALL_THROUGH, MULTI_EXIT_HOST_BUS_ERROR,
+        };
+        let pc = self.pc;
+        if self.jit.is_none() {
+            self.jit = Some(Box::new(JitCache::new()));
+        }
+        let cache = self.jit.as_mut().expect("jit cache init above");
+        let block = match cache.lookup_or_install_multi_op(pc) {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        let (l32r_dst_ar, l8ui_dst_ar, l8ui_base_ar, l32r_literal_value) = match block.shape() {
+            BlockShape::LoopTaskPrefix {
+                l32r_at,
+                l8ui_at,
+                l8ui_base_at,
+                l32r_literal_value,
+            } => (l32r_at, l8ui_at, l8ui_base_at, l32r_literal_value),
+            other => {
+                return Err(SimulationError::NotImplemented(format!(
+                    "loopTask JIT at pc=0x{pc:08x} installed with wrong shape {other:?}"
+                )));
+            }
+        };
+
+        // Pre-read the single L8UI byte through the live bus so a real
+        // bus error surfaces via the interpreter retry path. The L8UI
+        // base register IS the L32R destination (shape invariant
+        // `l8ui_base_at == l32r_at` — the L8UI dereferences the literal
+        // the L32R just loaded). The L32R hasn't executed yet at this
+        // point, so we use the resolved literal value as the base
+        // rather than reading the stale AR file slot.
+        debug_assert_eq!(l8ui_base_ar, l32r_dst_ar);
+        let l8ui_base = l32r_literal_value;
+        let b0 = match bus.read_u8(l8ui_base as u64) {
+            Ok(v) => v,
+            Err(_) => return Ok(None),
+        };
+        block.stage_loads(&[b0]);
+        let result = block.run_looptask_prefix(l32r_literal_value, l8ui_base).map_err(|e| {
+            SimulationError::NotImplemented(format!("xtensa loopTask JIT: {e:#}"))
+        })?;
+
+        // The L32R literal write happens unconditionally on every
+        // path the wasm body returns through (matches interp semantics:
+        // L32R runs before the BEQZ).
+        self.regs.write_logical(l32r_dst_ar, l32r_literal_value);
+
+        match result.exit_code {
+            x if x == MULTI_EXIT_BRANCH_TAKEN => {
+                self.regs.write_logical(l8ui_dst_ar, result.l8ui_at_value);
+                self.pc = result.beqz_target_pc;
+                if LOOPTASK_PREFIX_INSTR_COUNT > 1 {
+                    use crate::cpu::xtensa_sr::CCOUNT;
+                    let cc = self.sr.read(CCOUNT);
+                    self.sr
+                        .write(CCOUNT, cc.wrapping_add(LOOPTASK_PREFIX_INSTR_COUNT - 1));
+                }
+                self.branched = true;
+                Ok(Some(LOOPTASK_PREFIX_INSTR_COUNT))
+            }
+            x if x == MULTI_EXIT_FALL_THROUGH => {
+                self.regs.write_logical(l8ui_dst_ar, result.l8ui_at_value);
+                self.pc = result.next_pc;
+                if LOOPTASK_PREFIX_INSTR_COUNT > 1 {
+                    use crate::cpu::xtensa_sr::CCOUNT;
+                    let cc = self.sr.read(CCOUNT);
+                    self.sr
+                        .write(CCOUNT, cc.wrapping_add(LOOPTASK_PREFIX_INSTR_COUNT - 1));
+                }
+                self.branched = false;
+                Ok(Some(LOOPTASK_PREFIX_INSTR_COUNT))
+            }
+            x if x == MULTI_EXIT_HOST_BUS_ERROR => {
+                // Roll back the L32R write so the interpreter retry
+                // produces the same architectural state as if the JIT
+                // never ran. AR file has no "undo"; we re-read the
+                // pre-call value, but the easiest correct path is to
+                // leave the JIT-side write in place — the interpreter
+                // will replay the L32R as its first op and produce an
+                // identical write, then attempt the L8UI which will
+                // raise the real bus fault. Documented behaviour:
+                // post-refusal architectural state may have the L32R
+                // dst pre-populated, which is benign because the
+                // interpreter overwrites it.
+                if let Some(c) = self.jit.as_mut() {
+                    c.multi_op_refusals += 1;
+                }
+                Ok(None)
+            }
+            other => Err(SimulationError::NotImplemented(format!(
+                "xtensa loopTask JIT returned unknown side-exit code {other}"
             ))),
         }
     }
