@@ -95,6 +95,34 @@ impl SideExitReason {
     }
 }
 
+/// Which JIT'd BB shape an [`EmittedBlock`] was built for.
+///
+/// Each shape pairs a wasm signature (param + result tuple shape) with
+/// a register/PC marshalling convention. Backend adapters (wasmtime in
+/// `bb_multi`, `js_sys` in `jit_browser`) branch on this to decode the
+/// result tuple correctly and commit register writes.
+///
+/// Adding a new shape is the canonical extension point: a new
+/// `walk_and_emit` arm produces an [`EmittedBlock`] tagged with the
+/// new variant, and each backend grows one new dispatch arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockShape {
+    /// Canonical hot block at [`HOT_BB_PC`] (call_start_cpu0 delay loop).
+    /// Signature: `(a3, a5, l32r) -> (exit, a2, a6, a8, a10)`.
+    HotBbCanonical,
+    /// loopTask prefix at [`LOOPTASK_PC`] — `L32R → L8UI → BEQZ`.
+    /// Signature: `(l32r_val, l8ui_base) -> (exit, next_pc, l8ui_at,
+    /// beqz_target_pc)`. The Xtensa `at` registers for L32R and L8UI
+    /// are carried in the shape descriptor so backends can commit the
+    /// right logical registers without re-decoding.
+    LoopTaskPrefix {
+        /// L32R destination register (Xtensa `at`).
+        l32r_at: u8,
+        /// L8UI destination register (Xtensa `at`).
+        l8ui_at: u8,
+    },
+}
+
 /// Failure reasons from [`walk_and_emit`]. None of these are bugs — they
 /// just mean "this PC isn't JIT-able yet"; the caller falls back to the
 /// interpreter and the BB walks back through the regular dispatch path.
@@ -172,6 +200,10 @@ pub struct EmittedBlock {
     /// reason. Backends use this to map a returned i32 to "commit
     /// state" vs "refuse + fall back to interp".
     pub side_exit_reasons: Vec<(i32, SideExitReason)>,
+    /// Which JIT'd BB shape this block was emitted for. Backends
+    /// (wasmtime / js_sys) branch on this to pick the right param +
+    /// result-tuple decoding ABI.
+    pub shape: BlockShape,
 }
 
 impl EmittedBlock {
@@ -379,11 +411,16 @@ where
                 (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
                 (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
             ],
+            shape: BlockShape::HotBbCanonical,
         });
     }
 
     if pc == LOOPTASK_PC {
         if let Some(prefix) = match_looptask_prefix(&ops, pc, bus_slice, &mut pc_to_offset) {
+            let shape = BlockShape::LoopTaskPrefix {
+                l32r_at: prefix.l32r_at,
+                l8ui_at: prefix.l8ui_at,
+            };
             return Ok(EmittedBlock {
                 wasm_bytes: build_looptask_prefix_module(&prefix),
                 length_in_instrs: LOOPTASK_PREFIX_INSTR_COUNT,
@@ -393,6 +430,7 @@ where
                     (EXIT_BRANCH_TAKEN, SideExitReason::BranchTaken),
                     (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
                 ],
+                shape,
             });
         }
     }
@@ -1247,6 +1285,7 @@ mod tests {
                 (EXIT_BRANCH_TAKEN, SideExitReason::BranchTaken),
                 (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
             ],
+            shape: BlockShape::HotBbCanonical,
         };
         assert_eq!(
             block.reason_for(EXIT_FALL_THROUGH),

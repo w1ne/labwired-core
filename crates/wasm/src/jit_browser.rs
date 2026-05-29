@@ -60,7 +60,9 @@
 //!      counted one).
 
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
-use labwired_core::cpu::xtensa_jit::emit_core::{self, EmitError, EmittedBlock, PsBits};
+use labwired_core::cpu::xtensa_jit::emit_core::{
+    self, BlockShape, EmitError, EmittedBlock, PsBits,
+};
 use labwired_core::cpu::xtensa_jit_bytes::{
     EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_L32R_ADDR, HOT_BB_PC,
 };
@@ -81,6 +83,22 @@ pub struct BrowserMultiOpResult {
     pub a6: u32,
     pub a8: u32,
     pub a10: u32,
+}
+
+/// Result of running a [`BlockShape::LoopTaskPrefix`] block. Mirrors
+/// the native `bb_multi::LoopTaskPrefixResult`. Constructed by
+/// [`BrowserCompiledBlock::run_looptask_prefix`]; consumed once the
+/// dispatcher grows L32R-literal + L8UI-base staging (next chunk).
+#[allow(
+    dead_code,
+    reason = "Phase 4.3.6 shape-aware result type; consumed by Phase 4.4+ dispatcher \
+              once loopTask staging lands"
+)]
+pub struct BrowserLoopTaskPrefixResult {
+    pub exit_code: i32,
+    pub next_pc: u32,
+    pub l8ui_at_value: u32,
+    pub beqz_target_pc: u32,
 }
 
 /// One installed block: the compiled `WebAssembly.Module`, its
@@ -197,33 +215,26 @@ impl BrowserCompiledBlock {
         q.extend_from_slice(bytes);
     }
 
-    /// Invoke the block. Returns the 5-tuple `(exit, a2, a6, a8, a10)`
-    /// produced by the wasm body.
+    /// Invoke a [`BlockShape::HotBbCanonical`] block. Returns the
+    /// 5-tuple `(exit, a2, a6, a8, a10)` produced by the wasm body.
     ///
     /// JS-side, multi-value wasm returns become Arrays. We pluck five
     /// `i32`s out via `Array::get` + `as_f64` — JS numbers round-trip
     /// every i32 cleanly.
-    pub fn run(
+    pub fn run_hot_bb(
         &mut self,
         a3: u32,
         a5: u32,
         l32r_val: u32,
     ) -> Result<BrowserMultiOpResult, JsValue> {
+        debug_assert_eq!(self.emitted.shape, BlockShape::HotBbCanonical);
         let result = self.run.call3(
             &JsValue::NULL,
             &JsValue::from_f64(a3 as i32 as f64),
             &JsValue::from_f64(a5 as i32 as f64),
             &JsValue::from_f64(l32r_val as i32 as f64),
         )?;
-        let arr: Array = result
-            .dyn_into::<Array>()
-            .map_err(|_| JsValue::from_str("wasm.run return is not an Array"))?;
-        if arr.length() != 5 {
-            return Err(JsValue::from_str(&format!(
-                "wasm.run returned {} values; expected 5",
-                arr.length()
-            )));
-        }
+        let arr = decode_result_array(result, 5)?;
         let g = |i: u32| -> i32 { arr.get(i).as_f64().map(|f| f as i64 as i32).unwrap_or(0) };
         self.hits += 1;
         Ok(BrowserMultiOpResult {
@@ -235,11 +246,83 @@ impl BrowserCompiledBlock {
         })
     }
 
+    /// Back-compat shim for [`Self::run_hot_bb`]. Existing browser
+    /// dispatcher call sites used the bare `run` name; preserved so
+    /// this commit stays focused on shape-aware dispatch.
+    #[allow(
+        dead_code,
+        reason = "Back-compat shim; dispatcher now calls run_hot_bb directly"
+    )]
+    pub fn run(
+        &mut self,
+        a3: u32,
+        a5: u32,
+        l32r_val: u32,
+    ) -> Result<BrowserMultiOpResult, JsValue> {
+        self.run_hot_bb(a3, a5, l32r_val)
+    }
+
+    /// Invoke a [`BlockShape::LoopTaskPrefix`] block. Returns
+    /// `(exit, next_pc, l8ui_at_value, beqz_target_pc)`. Caller stages
+    /// the single L8UI byte via [`Self::stage_loads`] beforehand.
+    ///
+    /// Mirrors `bb_multi::MultiOpBlock::run_looptask_prefix`. The
+    /// browser dispatcher currently refuses LoopTaskPrefix blocks at
+    /// run time (it doesn't yet drive the staging — see
+    /// [`try_browser_jit_step`]); this method is the wired execution
+    /// path that lights up once Phase 4.4 grows the dispatcher.
+    #[allow(
+        dead_code,
+        reason = "Phase 4.3.6 shape-aware run path; consumed by Phase 4.4+ dispatcher \
+                  once loopTask staging lands"
+    )]
+    pub fn run_looptask_prefix(
+        &mut self,
+        l32r_val: u32,
+        l8ui_base: u32,
+    ) -> Result<BrowserLoopTaskPrefixResult, JsValue> {
+        debug_assert!(matches!(
+            self.emitted.shape,
+            BlockShape::LoopTaskPrefix { .. }
+        ));
+        let result = self.run.call2(
+            &JsValue::NULL,
+            &JsValue::from_f64(l32r_val as i32 as f64),
+            &JsValue::from_f64(l8ui_base as i32 as f64),
+        )?;
+        let arr = decode_result_array(result, 4)?;
+        let g = |i: u32| -> i32 { arr.get(i).as_f64().map(|f| f as i64 as i32).unwrap_or(0) };
+        self.hits += 1;
+        Ok(BrowserLoopTaskPrefixResult {
+            exit_code: g(0),
+            next_pc: g(1) as u32,
+            l8ui_at_value: g(2) as u32,
+            beqz_target_pc: g(3) as u32,
+        })
+    }
+
     /// Expose the block's emit-core metadata. Used by the dispatcher
     /// to advance PC and bump CCOUNT after a clean fall-through.
     pub fn emitted(&self) -> &EmittedBlock {
         &self.emitted
     }
+}
+
+/// Decode a multi-value wasm return into a JS Array of the expected
+/// arity. Shared by `run_hot_bb` and `run_looptask_prefix` so each
+/// shape's decoding stays a one-liner.
+fn decode_result_array(result: JsValue, expected: u32) -> Result<Array, JsValue> {
+    let arr: Array = result
+        .dyn_into::<Array>()
+        .map_err(|_| JsValue::from_str("wasm.run return is not an Array"))?;
+    if arr.length() != expected {
+        return Err(JsValue::from_str(&format!(
+            "wasm.run returned {} values; expected {}",
+            arr.length(),
+            expected
+        )));
+    }
+    Ok(arr)
 }
 
 /// Build the JS `imports` object the wasm module expects. Today the
@@ -509,72 +592,91 @@ pub fn try_browser_jit_step(
         }
     }
 
-    // Pre-read host-input values. Today's emit (the canonical hot BB)
-    // needs two L8UI bytes from [a3, a3+1] and the L32R literal at
-    // HOT_BB_L32R_ADDR. Phase 4.3+ will need a more general staging
-    // model — at that point the EmittedBlock will carry a manifest of
-    // required inputs.
-    let a3 = cpu.regs.read_logical(3);
-    let a5 = cpu.regs.read_logical(5);
-    let b0 = match bus.read_u8(a3 as u64) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let b1 = match bus.read_u8((a3.wrapping_add(1)) as u64) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    // L32R address is currently hardcoded for the hot block. Phase 4.3
-    // will move this into EmittedBlock alongside the rest of the input
-    // staging manifest.
-    let l32r_addr = if pc == HOT_BB_PC { HOT_BB_L32R_ADDR } else { 0 };
-    let l32r_val = match bus.read_u32(l32r_addr as u64) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
-    let block = match cache.get_mut(pc, ps_bits) {
-        Some(b) => b,
+    // Shape-aware dispatch. Today the browser drives the
+    // HotBbCanonical shape end-to-end. LoopTaskPrefix blocks are
+    // recognized by emit-core and installed in the cache, but the
+    // dispatcher refuses them at run-time because the staging logic
+    // (which L32R literal address, which register to use as the L8UI
+    // base) isn't wired here yet — that's the next browser-side
+    // chunk. Refusing cleanly keeps the dispatch path correct
+    // (interpreter handles the PC) while making the shape-aware
+    // dispatch contract explicit.
+    let block_shape = match cache.get_mut(pc, ps_bits) {
+        Some(b) => b.emitted().shape,
         None => return false,
     };
-    let end_pc = block.emitted().end_pc;
-    let length_in_instrs = block.emitted().length_in_instrs;
 
-    block.stage_loads(&[b0, b1]);
-    let res = match block.run(a3, a5, l32r_val) {
-        Ok(r) => r,
-        Err(_) => {
-            cache.refusals = cache.refusals.saturating_add(1);
-            return false;
-        }
-    };
+    match block_shape {
+        BlockShape::HotBbCanonical => {
+            // Pre-read host-input values for the canonical hot BB:
+            // two L8UI bytes from [a3, a3+1] and the L32R literal at
+            // HOT_BB_L32R_ADDR.
+            let a3 = cpu.regs.read_logical(3);
+            let a5 = cpu.regs.read_logical(5);
+            let b0 = match bus.read_u8(a3 as u64) {
+                Ok(v) => v,
+                Err(_) => return false,
+            };
+            let b1 = match bus.read_u8((a3.wrapping_add(1)) as u64) {
+                Ok(v) => v,
+                Err(_) => return false,
+            };
+            let l32r_addr = if pc == HOT_BB_PC { HOT_BB_L32R_ADDR } else { 0 };
+            let l32r_val = match bus.read_u32(l32r_addr as u64) {
+                Ok(v) => v,
+                Err(_) => return false,
+            };
 
-    match res.exit_code {
-        x if x == EXIT_FALL_THROUGH => {
-            cpu.regs.write_logical(10, res.a10);
-            cpu.regs.write_logical(6, res.a6);
-            cpu.regs.write_logical(2, res.a2);
-            cpu.regs.write_logical(8, res.a8);
-            cpu.pc = end_pc;
-            // CCOUNT honesty: the interpreter would have advanced
-            // CCOUNT by length_in_instrs - 1 (one per instruction; the
-            // outer step counts one more on its own). Mirror the
-            // native `try_jit_multi_op` path. If a future emit ever
-            // produces a 0-length block, the saturating_sub keeps the
-            // arithmetic sane.
-            if length_in_instrs > 1 {
-                let cc = cpu.sr.read(CCOUNT);
-                cpu.sr.write(CCOUNT, cc.wrapping_add(length_in_instrs - 1));
+            let block = match cache.get_mut(pc, ps_bits) {
+                Some(b) => b,
+                None => return false,
+            };
+            let end_pc = block.emitted().end_pc;
+            let length_in_instrs = block.emitted().length_in_instrs;
+
+            block.stage_loads(&[b0, b1]);
+            let res = match block.run_hot_bb(a3, a5, l32r_val) {
+                Ok(r) => r,
+                Err(_) => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    return false;
+                }
+            };
+
+            match res.exit_code {
+                x if x == EXIT_FALL_THROUGH => {
+                    cpu.regs.write_logical(10, res.a10);
+                    cpu.regs.write_logical(6, res.a6);
+                    cpu.regs.write_logical(2, res.a2);
+                    cpu.regs.write_logical(8, res.a8);
+                    cpu.pc = end_pc;
+                    // CCOUNT honesty: the interpreter would have advanced
+                    // CCOUNT by length_in_instrs - 1 (one per instruction;
+                    // the outer step counts one more on its own).
+                    if length_in_instrs > 1 {
+                        let cc = cpu.sr.read(CCOUNT);
+                        cpu.sr.write(CCOUNT, cc.wrapping_add(length_in_instrs - 1));
+                    }
+                    cpu.branched = false;
+                    cache.bump_hit();
+                    true
+                }
+                x if x == EXIT_HOST_BUS_ERROR => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    false
+                }
+                _ => {
+                    cache.refusals = cache.refusals.saturating_add(1);
+                    false
+                }
             }
-            cpu.branched = false;
-            cache.bump_hit();
-            true
         }
-        x if x == EXIT_HOST_BUS_ERROR => {
-            cache.refusals = cache.refusals.saturating_add(1);
-            false
-        }
-        _ => {
+        BlockShape::LoopTaskPrefix { .. } => {
+            // Block was emitted + installed (good — the cache contract
+            // works for both shapes). End-to-end dispatch needs new
+            // staging: the L32R literal address comes from decoding the
+            // L32R instruction itself, and the L8UI base register is
+            // shape-dependent. That staging layer is the next chunk.
             cache.refusals = cache.refusals.saturating_add(1);
             false
         }

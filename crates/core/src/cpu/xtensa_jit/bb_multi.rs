@@ -63,9 +63,9 @@
 #![cfg(feature = "jit")]
 
 use std::sync::Mutex;
-use wasmtime::{Engine, Func, Instance, Module, Store, TypedFunc};
+use wasmtime::{Engine, Func, Instance, Module, Store};
 
-use super::emit_core::{self, EmittedBlock, PsBits, SideExitReason};
+use super::emit_core::{self, BlockShape, EmittedBlock, PsBits, SideExitReason};
 
 // ── Side-exit codes + BB constants ─────────────────────────────────────
 //
@@ -74,8 +74,8 @@ use super::emit_core::{self, EmittedBlock, PsBits, SideExitReason};
 // the same values without dragging wasmtime into its dep graph
 // (#124 Phase 4).
 pub use crate::cpu::xtensa_jit_bytes::{
-    EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT, HOT_BB_L32R_ADDR,
-    HOT_BB_PC,
+    EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
+    HOT_BB_L32R_ADDR, HOT_BB_PC, LOOPTASK_PC, LOOPTASK_PREFIX_END, LOOPTASK_PREFIX_INSTR_COUNT,
 };
 
 // Re-export the walker types from emit_core for back-compat with the
@@ -83,13 +83,16 @@ pub use crate::cpu::xtensa_jit_bytes::{
 // `xtensa_jit::{walk_bb, DecodedOp}`).
 pub use super::emit_core::{walk_bb, DecodedOp};
 
-// ── Wasm function signature ───────────────────────────────────────────
-
-/// Inputs: (a3, a5, l32r_value)
-/// Outputs: (exit_code, a2, a6, a8, a10)
-type BbParams = (i32, i32, i32);
-type BbReturns = (i32, i32, i32, i32, i32);
-type BbRun = TypedFunc<BbParams, BbReturns>;
+// ── Wasm function signatures ──────────────────────────────────────────
+//
+// Each [`BlockShape`] pairs a wasm `(params) -> (results)` signature
+// with a register/PC marshalling convention. We invoke wasmtime through
+// the untyped `Func::call` path so the same `MultiOpBlock` struct can
+// dispatch any shape's params/results without us needing N different
+// `TypedFunc<P, R>` slots.
+//
+// HotBbCanonical:    (a3, a5, l32r) -> (exit, a2, a6, a8, a10)
+// LoopTaskPrefix:    (l32r_val, l8ui_base) -> (exit, next_pc, l8ui_at, beqz_target_pc)
 
 /// Per-call scratch slot. The L8UI import pushes a bus-error flag here
 /// if it's called with the pending queue empty.
@@ -106,25 +109,44 @@ struct ScratchSlot {
 
 pub struct MultiOpBlock {
     store: Store<()>,
-    run: BbRun,
+    /// Untyped wasm export. We dispatch through `Func::call` so a single
+    /// `MultiOpBlock` struct can run any [`BlockShape`]'s param/result
+    /// signature; the [`Self::shape`] tag tells us how to marshal both
+    /// directions.
+    run: Func,
     scratch: std::sync::Arc<Mutex<ScratchSlot>>,
     pub hits: u64,
     /// L8UI host-import call sequence, populated by the caller before
     /// the wasm call. The wasm body indexes into this by position.
     pending_loads: std::sync::Arc<Mutex<Vec<u32>>>,
     /// The emit-core output we built this block from. Held so callers
-    /// can interrogate `length_in_instrs`, `end_pc`, and the side-exit
-    /// reason map without a separate registry. Phase 4.2 will read
-    /// these for variable-length blocks.
+    /// can interrogate `length_in_instrs`, `end_pc`, the side-exit
+    /// reason map, and the [`BlockShape`] tag.
     pub emitted: EmittedBlock,
 }
 
+/// Result of running the canonical HotBbCanonical block.
 pub struct MultiOpResult {
     pub exit_code: i32,
     pub a2: u32,
     pub a6: u32,
     pub a8: u32,
     pub a10: u32,
+}
+
+/// Result of running a [`BlockShape::LoopTaskPrefix`] block.
+///
+/// Field naming mirrors the emit-core wasm signature:
+/// `(exit_code, next_pc, l8ui_at, beqz_target_pc)`. `next_pc` is the
+/// PC the interpreter should resume from (branch target if BEQZ was
+/// taken, [`LOOPTASK_PREFIX_END`] on fall-through). `l8ui_at_value` is
+/// the byte the L8UI loaded — the caller writes it into the Xtensa
+/// register named by [`BlockShape::LoopTaskPrefix::l8ui_at`].
+pub struct LoopTaskPrefixResult {
+    pub exit_code: i32,
+    pub next_pc: u32,
+    pub l8ui_at_value: u32,
+    pub beqz_target_pc: u32,
 }
 
 impl MultiOpBlock {
@@ -180,10 +202,47 @@ impl MultiOpBlock {
         Self::build_from_emitted(engine, emitted)
     }
 
+    /// Build the loopTask prefix block (`L32R → L8UI → BEQZ` at
+    /// [`LOOPTASK_PC`]). Phase 4.3.6 wires this into
+    /// [`super::JitCache::lookup_or_install_multi_op`] alongside the
+    /// canonical hot block. The bus bytes are synthesised from the same
+    /// canonical disassembly the emit-core lockstep test exercises so
+    /// the cache-build path doesn't require a live `Bus` at construction
+    /// time (mirrors `build_hot_bb`'s design).
+    pub fn build_looptask_prefix(engine: &Engine) -> wasmtime::Result<Self> {
+        // Bytes: L32R a2,... ; L8UI a3,a2,0 ; BEQZ a3,+12 ; CALL8 (terminator)
+        // — matches the encoding pinned by the emit-core end-to-end test.
+        const LOOPTASK_BYTES: &[u8] = &[
+            0x21, 0xFF, 0xFF, // L32R a2, ...
+            0x32, 0x02, 0x00, // L8UI a3, a2, 0
+            0x16, 0x83, 0x00, // BEQZ a3, +12
+            0x25, 0x00, 0x00, // CALL8 (terminator, not emitted)
+        ];
+
+        let emitted = emit_core::walk_and_emit(
+            LOOPTASK_BYTES,
+            LOOPTASK_PC,
+            |pc| {
+                let off = pc.wrapping_sub(LOOPTASK_PC) as usize;
+                if off < LOOPTASK_BYTES.len() {
+                    Some(off)
+                } else {
+                    None
+                }
+            },
+            PsBits::default(),
+        )
+        .map_err(|e| wasmtime::Error::msg(format!("emit_core walk_and_emit: {e}")))?;
+
+        Self::build_from_emitted(engine, emitted)
+    }
+
     /// Compile + instantiate a wasmtime block from a pre-emitted byte
-    /// stream. Phase 4.2's browser adapter will have a structurally
+    /// stream. Phase 4.2's browser adapter has a structurally
     /// identical entry point on its side; both consume `EmittedBlock`
-    /// verbatim.
+    /// verbatim. Shape-aware result decoding lives in [`Self::run_hot_bb`]
+    /// and [`Self::run_looptask_prefix`] — pick the one that matches
+    /// `self.emitted.shape`.
     pub fn build_from_emitted(engine: &Engine, emitted: EmittedBlock) -> wasmtime::Result<Self> {
         let module = Module::new(engine, &emitted.wasm_bytes)?;
         let mut store: Store<()> = Store::new(engine, ());
@@ -211,7 +270,9 @@ impl MultiOpBlock {
         });
 
         let instance = Instance::new(&mut store, &module, &[read_u8.into()])?;
-        let run = instance.get_typed_func::<BbParams, BbReturns>(&mut store, "run")?;
+        let run = instance.get_func(&mut store, "run").ok_or_else(|| {
+            wasmtime::Error::msg("emit-core wasm module missing required `run` export")
+        })?;
         Ok(Self {
             store,
             run,
@@ -224,7 +285,8 @@ impl MultiOpBlock {
 
     /// Stage `bytes` into the host-side queue. The wasm body's import
     /// calls dequeue these in order. `bytes.len()` must equal the number
-    /// of L8UI ops in the BB (2 for the hot BB).
+    /// of L8UI ops in the BB (2 for the hot BB, 1 for the loopTask
+    /// prefix).
     pub fn stage_loads(&mut self, bytes: &[u8]) {
         let mut p = self.pending_loads.lock().unwrap();
         p.clear();
@@ -234,20 +296,75 @@ impl MultiOpBlock {
         s.bus_error = false;
     }
 
-    /// Invoke the compiled block. Caller has already staged loads via
-    /// [`Self::stage_loads`].
+    /// Shape tag for this block. Mirror of `self.emitted.shape`; callers
+    /// branch on this to pick the right `run_*` variant.
     #[inline]
-    pub fn run(&mut self, a3: u32, a5: u32, l32r_val: u32) -> wasmtime::Result<MultiOpResult> {
-        let (exit, a2, a6, a8, a10) = self
-            .run
-            .call(&mut self.store, (a3 as i32, a5 as i32, l32r_val as i32))?;
+    pub fn shape(&self) -> BlockShape {
+        self.emitted.shape
+    }
+
+    /// Invoke a [`BlockShape::HotBbCanonical`] block. Panics in debug
+    /// builds if the block's shape isn't HotBbCanonical — production
+    /// callers should branch on [`Self::shape`] first.
+    #[inline]
+    pub fn run_hot_bb(
+        &mut self,
+        a3: u32,
+        a5: u32,
+        l32r_val: u32,
+    ) -> wasmtime::Result<MultiOpResult> {
+        debug_assert_eq!(self.emitted.shape, BlockShape::HotBbCanonical);
+        use wasmtime::Val;
+        let params = [
+            Val::I32(a3 as i32),
+            Val::I32(a5 as i32),
+            Val::I32(l32r_val as i32),
+        ];
+        let mut results = [Val::I32(0); 5];
+        self.run.call(&mut self.store, &params, &mut results)?;
         self.hits += 1;
         Ok(MultiOpResult {
-            exit_code: exit,
-            a2: a2 as u32,
-            a6: a6 as u32,
-            a8: a8 as u32,
-            a10: a10 as u32,
+            exit_code: results[0].i32().unwrap_or(0),
+            a2: results[1].i32().unwrap_or(0) as u32,
+            a6: results[2].i32().unwrap_or(0) as u32,
+            a8: results[3].i32().unwrap_or(0) as u32,
+            a10: results[4].i32().unwrap_or(0) as u32,
+        })
+    }
+
+    /// Back-compat shim for [`Self::run_hot_bb`]. Existing call sites
+    /// (`xtensa_lx7::try_jit_multi_op`, prior tests) used the bare
+    /// `run` name; keep that working so this commit stays focused on
+    /// the dispatch refactor.
+    #[inline]
+    pub fn run(&mut self, a3: u32, a5: u32, l32r_val: u32) -> wasmtime::Result<MultiOpResult> {
+        self.run_hot_bb(a3, a5, l32r_val)
+    }
+
+    /// Invoke a [`BlockShape::LoopTaskPrefix`] block. Caller stages the
+    /// single L8UI byte via [`Self::stage_loads`] beforehand.
+    /// Signature: `(l32r_val, l8ui_base) -> (exit, next_pc, l8ui_at,
+    /// beqz_target_pc)`.
+    #[inline]
+    pub fn run_looptask_prefix(
+        &mut self,
+        l32r_val: u32,
+        l8ui_base: u32,
+    ) -> wasmtime::Result<LoopTaskPrefixResult> {
+        debug_assert!(matches!(
+            self.emitted.shape,
+            BlockShape::LoopTaskPrefix { .. }
+        ));
+        use wasmtime::Val;
+        let params = [Val::I32(l32r_val as i32), Val::I32(l8ui_base as i32)];
+        let mut results = [Val::I32(0); 4];
+        self.run.call(&mut self.store, &params, &mut results)?;
+        self.hits += 1;
+        Ok(LoopTaskPrefixResult {
+            exit_code: results[0].i32().unwrap_or(0),
+            next_pc: results[1].i32().unwrap_or(0) as u32,
+            l8ui_at_value: results[2].i32().unwrap_or(0) as u32,
+            beqz_target_pc: results[3].i32().unwrap_or(0) as u32,
         })
     }
 
@@ -325,5 +442,84 @@ mod tests {
             .run(0x3FFB_0000, 0x1234, 0x40008534)
             .expect("wasm call");
         assert_eq!(res.exit_code, EXIT_HOST_BUS_ERROR);
+    }
+
+    /// Phase 4.3.6: `build_looptask_prefix` produces a runnable block
+    /// tagged with the right shape, and dispatching it both ways
+    /// (BEQZ taken vs not taken) updates `next_pc` per emit-core's
+    /// canonical loopTask prefix decode.
+    #[test]
+    fn looptask_prefix_dispatches_taken_and_not_taken() {
+        let engine = Engine::default();
+        let mut block = MultiOpBlock::build_looptask_prefix(&engine).expect("compile");
+        // Shape tag is what the cache key consumer dispatches on.
+        match block.shape() {
+            BlockShape::LoopTaskPrefix { l32r_at, l8ui_at } => {
+                // Per the canonical bytes pinned in `build_looptask_prefix`:
+                // L32R writes a2, L8UI writes a3.
+                assert_eq!(l32r_at, 2);
+                assert_eq!(l8ui_at, 3);
+            }
+            other => panic!("expected LoopTaskPrefix shape, got {other:?}"),
+        }
+        assert_eq!(block.emitted.length_in_instrs, LOOPTASK_PREFIX_INSTR_COUNT);
+        assert_eq!(block.emitted.end_pc, LOOPTASK_PREFIX_END);
+
+        // L8UI returns 0 → BEQZ taken. next_pc == beqz_target_pc ==
+        // after_l8ui_pc(LOOPTASK_PC + 6) + offset(12).
+        let expected_target = LOOPTASK_PC + 6 + 12;
+        block.stage_loads(&[0x00]);
+        let res = block
+            .run_looptask_prefix(/* l32r_val */ 0x4008_0534, /* l8ui_base */ 0x3FFB_0000)
+            .expect("wasm call");
+        assert_eq!(res.exit_code, EXIT_BRANCH_TAKEN);
+        assert_eq!(res.next_pc, expected_target);
+        assert_eq!(res.l8ui_at_value, 0);
+        assert_eq!(res.beqz_target_pc, expected_target);
+
+        // L8UI returns non-zero → BEQZ falls through. next_pc ==
+        // LOOPTASK_PREFIX_END; l8ui_at carries the loaded byte.
+        block.stage_loads(&[0x7A]);
+        let res = block
+            .run_looptask_prefix(0x4008_0534, 0x3FFB_0000)
+            .expect("wasm call");
+        assert_eq!(res.exit_code, EXIT_FALL_THROUGH);
+        assert_eq!(res.next_pc, LOOPTASK_PREFIX_END);
+        assert_eq!(res.l8ui_at_value, 0x7A);
+
+        // Two successful calls → two hits.
+        assert_eq!(block.hits, 2);
+    }
+
+    /// Phase 4.3.6: `JitCache::lookup_or_install_multi_op` returns a
+    /// working block for both HOT_BB_PC and LOOPTASK_PC. This is the
+    /// cache-level contract that wires shape-aware dispatch into the
+    /// rest of the engine. We verify by checking the shape tag is
+    /// correct for each PC; the actual run paths are covered by
+    /// `hot_bb_arithmetic_matches_interp` and
+    /// `looptask_prefix_dispatches_taken_and_not_taken`.
+    #[test]
+    fn jit_cache_lookup_dispatches_both_shapes() {
+        use crate::cpu::xtensa_jit::JitCache;
+        let mut cache = JitCache::new();
+
+        // HOT_BB_PC installs and reports HotBbCanonical.
+        let hot = cache
+            .lookup_or_install_multi_op(HOT_BB_PC)
+            .expect("hot bb installs");
+        assert_eq!(hot.shape(), BlockShape::HotBbCanonical);
+
+        // LOOPTASK_PC installs and reports LoopTaskPrefix.
+        let lt = cache
+            .lookup_or_install_multi_op(LOOPTASK_PC)
+            .expect("loopTask prefix installs");
+        assert!(
+            matches!(lt.shape(), BlockShape::LoopTaskPrefix { .. }),
+            "loopTask block must be LoopTaskPrefix-shaped, got {:?}",
+            lt.shape()
+        );
+
+        // An unknown PC still refuses (cache stays narrow).
+        assert!(cache.lookup_or_install_multi_op(0xDEAD_BEEF).is_none());
     }
 }

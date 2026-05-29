@@ -52,9 +52,10 @@ mod windowed_call;
 
 #[cfg(feature = "jit")]
 pub use bb_multi::{
-    walk_bb, DecodedOp, MultiOpBlock, MultiOpResult, EXIT_FALL_THROUGH as MULTI_EXIT_FALL_THROUGH,
+    walk_bb, DecodedOp, LoopTaskPrefixResult, MultiOpBlock, MultiOpResult,
+    EXIT_BRANCH_TAKEN as MULTI_EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH as MULTI_EXIT_FALL_THROUGH,
     EXIT_HOST_BUS_ERROR as MULTI_EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
-    HOT_BB_L32R_ADDR, HOT_BB_PC,
+    HOT_BB_L32R_ADDR, HOT_BB_PC, LOOPTASK_PC, LOOPTASK_PREFIX_END, LOOPTASK_PREFIX_INSTR_COUNT,
 };
 #[cfg(feature = "jit")]
 pub use windowed_call::{
@@ -162,6 +163,10 @@ pub struct JitCache {
     /// Phase 3.6.3: multi-op block for the call_start_cpu0 hot loop at
     /// PC 0x400829cc.
     pub hot_bb: Option<Box<MultiOpBlock>>,
+    /// Phase 4.3.6: loopTask prefix block at PC 0x400d4a8d
+    /// (`L32R → L8UI → BEQZ`). Independent slot so the PC-keyed cache
+    /// lookup is a constant-time match without a HashMap allocation.
+    pub looptask_prefix: Option<Box<MultiOpBlock>>,
     /// Phase 3.6.3 instrumentation: count multi-op refusals.
     pub multi_op_refusals: u64,
 }
@@ -183,6 +188,7 @@ impl JitCache {
             loopv_call8: None,
             windowed_refusals: 0,
             hot_bb: None,
+            looptask_prefix: None,
             multi_op_refusals: 0,
         }
     }
@@ -228,23 +234,52 @@ impl JitCache {
         self.loopv_call8.as_deref_mut()
     }
 
-    /// Lazily compile + return the multi-op block for `call_start_cpu0`.
+    /// Lazily compile + return the multi-op block for `pc`. Shape-aware
+    /// dispatch lives in [`MultiOpBlock`]: this method just picks the
+    /// right slot + builder for the matched PC. The returned block's
+    /// [`MultiOpBlock::shape`] tells the caller which `run_*` ABI to
+    /// invoke.
+    ///
+    /// Currently supports:
+    ///   * [`HOT_BB_PC`] — `call_start_cpu0` 8-op hot block
+    ///     ([`BlockShape::HotBbCanonical`]).
+    ///   * [`LOOPTASK_PC`] — Arduino-ESP32 loopTask prefix
+    ///     `L32R → L8UI → BEQZ` ([`BlockShape::LoopTaskPrefix`]).
+    ///
+    /// [`BlockShape::HotBbCanonical`]: emit_core::BlockShape::HotBbCanonical
+    /// [`BlockShape::LoopTaskPrefix`]: emit_core::BlockShape::LoopTaskPrefix
     pub fn lookup_or_install_multi_op(&mut self, pc: u32) -> Option<&mut MultiOpBlock> {
-        if pc != HOT_BB_PC {
-            return None;
-        }
-        if self.hot_bb.is_none() {
-            match MultiOpBlock::build_hot_bb(&self.engine) {
-                Ok(b) => self.hot_bb = Some(Box::new(b)),
-                Err(e) => {
-                    tracing::warn!(target: "labwired-core::jit",
-                        "multi-op JIT compile failed for pc=0x{pc:08x}: {e:#}. \
-                         Falling back to interpreter for this PC.");
-                    return None;
+        match pc {
+            HOT_BB_PC => {
+                if self.hot_bb.is_none() {
+                    match MultiOpBlock::build_hot_bb(&self.engine) {
+                        Ok(b) => self.hot_bb = Some(Box::new(b)),
+                        Err(e) => {
+                            tracing::warn!(target: "labwired-core::jit",
+                                "multi-op JIT compile failed for pc=0x{pc:08x}: {e:#}. \
+                                 Falling back to interpreter for this PC.");
+                            return None;
+                        }
+                    }
                 }
+                self.hot_bb.as_deref_mut()
             }
+            LOOPTASK_PC => {
+                if self.looptask_prefix.is_none() {
+                    match MultiOpBlock::build_looptask_prefix(&self.engine) {
+                        Ok(b) => self.looptask_prefix = Some(Box::new(b)),
+                        Err(e) => {
+                            tracing::warn!(target: "labwired-core::jit",
+                                "loopTask JIT compile failed for pc=0x{pc:08x}: {e:#}. \
+                                 Falling back to interpreter for this PC.");
+                            return None;
+                        }
+                    }
+                }
+                self.looptask_prefix.as_deref_mut()
+            }
+            _ => None,
         }
-        self.hot_bb.as_deref_mut()
     }
 
     /// Total number of times any compiled block has been invoked since
@@ -253,7 +288,8 @@ impl JitCache {
         let fillscreen_hits: u64 = self.compiled.values().map(|cb| cb.hits).sum();
         let windowed_hits = self.loopv_call8.as_ref().map(|b| b.hits).unwrap_or(0);
         let multi_op_hits = self.hot_bb.as_ref().map(|b| b.hits).unwrap_or(0);
-        fillscreen_hits + windowed_hits + multi_op_hits
+        let looptask_hits = self.looptask_prefix.as_ref().map(|b| b.hits).unwrap_or(0);
+        fillscreen_hits + windowed_hits + multi_op_hits + looptask_hits
     }
 
     /// Build the `fillScreen` body block.
