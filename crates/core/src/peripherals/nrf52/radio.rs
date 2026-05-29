@@ -78,6 +78,31 @@ struct VirtualAir {
     /// the same FREQUENCY can both share air (RX simply doesn't decode
     /// the wrong-mode frame).
     queues: HashMap<u8, VecDeque<AirFrame>>,
+    /// Ring buffer of the last ~200 TX frames pushed into the air.
+    /// Lives independently of `queues` (which gets drained by RX) so
+    /// the playground UI can poll a stable trace for visualization.
+    tx_history: VecDeque<AirFrameTrace>,
+}
+
+const TX_HISTORY_CAP: usize = 200;
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AirFrameTrace {
+    pub channel: u8,
+    pub addr_base: u32,
+    pub addr_prefix: u8,
+    pub mode: u32,
+    pub bytes: Vec<u8>,
+}
+
+/// Public view of the current TX trace, intended for WASM consumption
+/// by the playground's BLE-air visualization. Most recent frames first.
+pub fn virtual_air_trace_snapshot() -> Vec<AirFrameTrace> {
+    let air = match virtual_air().lock() {
+        Ok(a) => a,
+        Err(_) => return Vec::new(),
+    };
+    air.tx_history.iter().rev().cloned().collect()
 }
 
 fn virtual_air() -> &'static Mutex<VirtualAir> {
@@ -967,7 +992,18 @@ impl Peripheral for Nrf52Radio {
             // band correctly fail to decode.
             if let Ok(mut air) = virtual_air().lock() {
                 let key = self.frequency as u8;
+                let trace = AirFrameTrace {
+                    channel: key,
+                    addr_base: frame.addr_base,
+                    addr_prefix: frame.addr_prefix,
+                    mode: frame.mode,
+                    bytes: frame.bytes.clone(),
+                };
                 air.queues.entry(key).or_default().push_back(frame);
+                air.tx_history.push_back(trace);
+                while air.tx_history.len() > TX_HISTORY_CAP {
+                    air.tx_history.pop_front();
+                }
             }
 
             // Bit-rate countdown until EVENTS_END. cycles_for_packet returns

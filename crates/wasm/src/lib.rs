@@ -688,6 +688,18 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
+    /// Snapshot of the shared virtual-air TX trace ring buffer (last
+    /// ~200 BLE/proprietary frames pushed by any chip in this WASM
+    /// instance, most-recent-first). The playground's BLE-on-canvas
+    /// visualization polls this to render the packet trace panel; the
+    /// underlying state lives in a Rust static, so any WasmSimulator
+    /// can return the same snapshot — pick whichever chip is alive.
+    #[wasm_bindgen]
+    pub fn air_trace_snapshot(&self) -> JsValue {
+        let trace = labwired_core::peripherals::nrf52::radio::virtual_air_trace_snapshot();
+        serde_wasm_bindgen::to_value(&trace).unwrap_or(JsValue::NULL)
+    }
+
     /// Drain UART TX output bytes accumulated since the last call.
     #[wasm_bindgen]
     pub fn drain_uart_output(&self) -> Vec<u8> {
