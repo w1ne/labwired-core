@@ -13,12 +13,47 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
 import type { SimulatorBridge } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from '../bundled-configs';
+
+/// localStorage key for the lightweight per-chip registry (chipId +
+/// boardId + activeChipId). The bridge / source / config aren't
+/// persisted — they're transient runtime state. The tldraw canvas
+/// snapshot persists separately via its own `persistenceKey`.
+const PERSISTENCE_KEY = 'lw-chips-registry-v1';
+
+interface PersistedChipRegistry {
+  order: string[];
+  activeChipId: string;
+  boardIdByChip: Record<string, string>;
+}
+
+function loadRegistry(): PersistedChipRegistry | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(PERSISTENCE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedChipRegistry;
+    if (!Array.isArray(parsed.order) || !parsed.activeChipId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveRegistry(reg: PersistedChipRegistry) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PERSISTENCE_KEY, JSON.stringify(reg));
+  } catch {
+    /* quota / private mode — skip */
+  }
+}
 
 export interface ChipSession {
   chipId: string;
@@ -38,6 +73,11 @@ interface ChipsContext {
   setActiveChipId: (id: string) => void;
   setSession: (chipId: string, partial: Partial<Omit<ChipSession, 'chipId'>>) => void;
   addChip: (chipId?: string, board?: BoardConfig) => string;
+  /// Remove a chip from the registry. chip-default is protected
+  /// (it's the always-present root chip); attempting to remove it
+  /// is a no-op. Removing the currently active chip falls focus
+  /// back to chip-default.
+  removeChip: (chipId: string) => void;
 }
 
 const Ctx = createContext<ChipsContext | null>(null);
@@ -51,17 +91,63 @@ export function ChipsProvider({
   children: ReactNode;
   initialBoard: BoardConfig;
 }) {
-  const [sessions, setSessions] = useState<Record<string, ChipSession>>(() => ({
-    [DEFAULT_CHIP_ID]: {
-      chipId: DEFAULT_CHIP_ID,
-      bridge: null,
-      board: initialBoard,
-      source: null,
-      config: null,
-    },
-  }));
-  const [order, setOrder] = useState<string[]>(() => [DEFAULT_CHIP_ID]);
-  const [activeChipId, setActiveChipId] = useState<string>(DEFAULT_CHIP_ID);
+  const [sessions, setSessions] = useState<Record<string, ChipSession>>(() => {
+    const persisted = loadRegistry();
+    if (persisted) {
+      const out: Record<string, ChipSession> = {};
+      for (const id of persisted.order) {
+        const boardId = persisted.boardIdByChip[id];
+        const board = BOARD_CONFIGS.find((c) => c.boardId === boardId) ?? initialBoard;
+        out[id] = { chipId: id, bridge: null, board, source: null, config: null };
+      }
+      // Ensure chip-default always exists even if persisted state lost it.
+      if (!out[DEFAULT_CHIP_ID]) {
+        out[DEFAULT_CHIP_ID] = {
+          chipId: DEFAULT_CHIP_ID,
+          bridge: null,
+          board: initialBoard,
+          source: null,
+          config: null,
+        };
+      }
+      return out;
+    }
+    return {
+      [DEFAULT_CHIP_ID]: {
+        chipId: DEFAULT_CHIP_ID,
+        bridge: null,
+        board: initialBoard,
+        source: null,
+        config: null,
+      },
+    };
+  });
+  const [order, setOrder] = useState<string[]>(() => {
+    const persisted = loadRegistry();
+    if (persisted && persisted.order.length > 0) {
+      return persisted.order.includes(DEFAULT_CHIP_ID)
+        ? persisted.order
+        : [DEFAULT_CHIP_ID, ...persisted.order];
+    }
+    return [DEFAULT_CHIP_ID];
+  });
+  const [activeChipId, setActiveChipId] = useState<string>(() => {
+    const persisted = loadRegistry();
+    if (persisted && persisted.order.includes(persisted.activeChipId)) {
+      return persisted.activeChipId;
+    }
+    return DEFAULT_CHIP_ID;
+  });
+
+  // Mirror to localStorage on any structural change.
+  useEffect(() => {
+    const boardIdByChip: Record<string, string> = {};
+    for (const id of order) {
+      const s = sessions[id];
+      if (s) boardIdByChip[id] = s.board.boardId;
+    }
+    saveRegistry({ order, activeChipId, boardIdByChip });
+  }, [order, activeChipId, sessions]);
 
   const setSession = useCallback(
     (chipId: string, partial: Partial<Omit<ChipSession, 'chipId'>>) => {
@@ -92,7 +178,12 @@ export function ChipsProvider({
         while (sessions[`chip-${n}`]) n += 1;
         id = `chip-${n}`;
       }
-      const resolvedBoard = board ?? BOARD_CONFIGS[0] ?? initialBoard;
+      // Default new chips to nRF52840 so two-chip setups auto-spawn
+      // the BLE air edge — that's the discoverable demo path. Fall
+      // back to the active chip's board, then the first catalog
+      // entry if nRF52840 isn't present.
+      const nrf = BOARD_CONFIGS.find((c) => c.boardId === 'nrf52840-dk');
+      const resolvedBoard = board ?? nrf ?? initialBoard ?? BOARD_CONFIGS[0];
       setSessions((prev) => ({
         ...prev,
         [id]: {
@@ -109,9 +200,38 @@ export function ChipsProvider({
     [sessions, initialBoard],
   );
 
+  const removeChip = useCallback(
+    (chipId: string) => {
+      if (chipId === DEFAULT_CHIP_ID) return;
+      setSessions((prev) => {
+        if (!prev[chipId]) return prev;
+        const { [chipId]: _gone, ...rest } = prev;
+        // Free the WASM-side bridge if one was attached so we don't
+        // leak a SimulatorBridge for the deleted chip.
+        try {
+          _gone.bridge?.dispose?.();
+        } catch {
+          /* bridge may have already been torn down */
+        }
+        return rest;
+      });
+      setOrder((prev) => prev.filter((id) => id !== chipId));
+      setActiveChipId((prev) => (prev === chipId ? DEFAULT_CHIP_ID : prev));
+    },
+    [],
+  );
+
   const value = useMemo<ChipsContext>(
-    () => ({ sessions, order, activeChipId, setActiveChipId, setSession, addChip }),
-    [sessions, order, activeChipId, setSession, addChip],
+    () => ({
+      sessions,
+      order,
+      activeChipId,
+      setActiveChipId,
+      setSession,
+      addChip,
+      removeChip,
+    }),
+    [sessions, order, activeChipId, setSession, addChip, removeChip],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

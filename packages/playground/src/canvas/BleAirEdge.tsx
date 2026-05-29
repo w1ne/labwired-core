@@ -7,7 +7,7 @@
 // custom shape with two endpoints (chipIdA, chipIdB). Its geometry
 // follows whatever positions the two ChipShapes currently have so it
 // stays connected when the user drags either chip.
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   HTMLContainer,
   Rectangle2d,
@@ -76,6 +76,7 @@ export class BleAirEdgeShapeUtil extends ShapeUtil<BleAirEdgeShape> {
 
 function BleAirEdgeBody({ shape }: { shape: BleAirEdgeShape }) {
   const { open } = useBleTracePanel();
+  const active = useTrafficPulse();
   return (
     <HTMLContainer
       id={shape.id}
@@ -102,15 +103,17 @@ function BleAirEdgeBody({ shape }: { shape: BleAirEdgeShape }) {
           strokeWidth={2}
           strokeDasharray="8 6"
           strokeLinecap="round"
-          opacity={0.7}
+          opacity={active ? 0.85 : 0.3}
         >
-          <animate
-            attributeName="stroke-dashoffset"
-            from="0"
-            to="-28"
-            dur="0.8s"
-            repeatCount="indefinite"
-          />
+          {active && (
+            <animate
+              attributeName="stroke-dashoffset"
+              from="0"
+              to="-28"
+              dur="0.8s"
+              repeatCount="indefinite"
+            />
+          )}
         </line>
         <text
           x={shape.props.w / 2}
@@ -119,13 +122,64 @@ function BleAirEdgeBody({ shape }: { shape: BleAirEdgeShape }) {
           fontSize={11}
           fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
           fill="#33dd66"
-          opacity={0.8}
+          opacity={active ? 0.9 : 0.4}
         >
-          BLE air
+          {active ? 'BLE air · live' : 'BLE air · idle'}
         </text>
       </svg>
     </HTMLContainer>
   );
+}
+
+/// Returns true when the shared virtual-air ring buffer has grown in
+/// the last ~1.5s. Polls a single bridge — they all expose the same
+/// process-static trace. Cheap (4Hz) and decouples the animation
+/// from "any RADIO peripheral exists".
+function useTrafficPulse(): boolean {
+  const { sessions, order } = useChips();
+  const [active, setActive] = useState(false);
+  const lastSeenLen = useRef(0);
+  const lastGrowthAt = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = () => {
+      if (!alive) return;
+      // Find any live bridge; if none, mark idle.
+      let bridge = null;
+      for (const id of order) {
+        const b = sessions[id]?.bridge;
+        if (b) {
+          bridge = b;
+          break;
+        }
+      }
+      if (!bridge) {
+        if (active) setActive(false);
+        return;
+      }
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const trace = (bridge as any).sim?.air_trace_snapshot?.();
+        const len = Array.isArray(trace) ? trace.length : 0;
+        if (len !== lastSeenLen.current) {
+          lastSeenLen.current = len;
+          lastGrowthAt.current = Date.now();
+        }
+        const live = Date.now() - lastGrowthAt.current < 1500;
+        if (live !== active) setActive(live);
+      } catch {
+        /* swallow */
+      }
+    };
+    const id = window.setInterval(tick, 250);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [sessions, order, active]);
+
+  return active;
 }
 
 /// Reconcile a BLE air edge between every pair of nRF52840 chips on

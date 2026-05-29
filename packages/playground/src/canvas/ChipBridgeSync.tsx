@@ -1,13 +1,14 @@
 // Bridges App.tsx's single-chip state into the ChipsProvider registry
 // and back.
 //
-// Direction 1 (mirror): when the active chip's bridge / board / source
-// / config changes in App, mirror it into chipSessions[activeChipId].
-// Direction 2 (restore): when activeChipId changes (because the user
-// clicked an inactive ChipCard), reload the new chip's state into App.
-//
-// The mirror writes only on real value changes (setSession is shallow-
-// diffed), so the post-restore re-renders don't bounce back through it.
+// Direction 1 (mirror): when App state changes while activeChipId is
+// stable, mirror into chipSessions[activeChipId].
+// Direction 2 (switch): when activeChipId changes (because the user
+// clicked an inactive ChipCard), atomically snapshot the OLD active
+// chip's App state into its session BEFORE loading the new chip's
+// state into App. Doing the snapshot in the same effect as the
+// restore avoids the race where the mirror effect would otherwise
+// write the OLD chip's state into the NEW session.
 import { useEffect, useRef } from 'react';
 import type { SimulatorBridge } from '@labwired/ui';
 import { useChips } from './ChipSession';
@@ -30,35 +31,60 @@ export function ChipBridgeSync({ bridge, board, source, config, onRestore }: Chi
   const chips = useChips();
   const activeChipId = chips.activeChipId;
 
-  // Mirror: keep the active chip's session in sync with App state.
+  // Track the latest App-state values in a ref so the switch effect
+  // can snapshot them without re-running every time bridge/board/...
+  // change. The mirror effects below keep the ref fresh.
+  const stateRef = useRef({ bridge, board, source, config });
+  stateRef.current = { bridge, board, source, config };
+
+  // Mirror — keep the current chip's session in sync with App state.
+  // Skip the first render after activeChipId changes; the switch
+  // effect owns that transition.
+  const prevActiveChipId = useRef<string>(activeChipId);
   useEffect(() => {
+    if (prevActiveChipId.current !== activeChipId) return;
     chips.setSession(activeChipId, { bridge });
   }, [bridge, activeChipId, chips]);
   useEffect(() => {
+    if (prevActiveChipId.current !== activeChipId) return;
     chips.setSession(activeChipId, { board });
   }, [board, activeChipId, chips]);
   useEffect(() => {
+    if (prevActiveChipId.current !== activeChipId) return;
     chips.setSession(activeChipId, { source });
   }, [source, activeChipId, chips]);
   useEffect(() => {
+    if (prevActiveChipId.current !== activeChipId) return;
     chips.setSession(activeChipId, { config });
   }, [config, activeChipId, chips]);
 
-  // Restore: on activeChipId *change* (not initial mount), push the
-  // target session back into App state via onRestore. Skipping the
-  // initial mount is important because chip-default's session is
-  // initialized empty (null bridge / null source) while App is
-  // simultaneously bootstrapping with the board's default code —
-  // restoring on mount would clobber that initial source with null.
-  const prevActiveChipId = useRef<string | null>(null);
+  // Switch — atomic snapshot+restore on activeChipId change. Skipped
+  // on initial mount so chip-default's empty session doesn't clobber
+  // the freshly bootstrapped App state.
+  const firstRunRef = useRef(true);
   useEffect(() => {
-    if (prevActiveChipId.current === null) {
+    if (firstRunRef.current) {
+      firstRunRef.current = false;
       prevActiveChipId.current = activeChipId;
       return;
     }
-    if (prevActiveChipId.current === activeChipId) return;
-    prevActiveChipId.current = activeChipId;
-    const session = chips.sessions[activeChipId];
+    const oldId = prevActiveChipId.current;
+    const newId = activeChipId;
+    if (oldId === newId) return;
+    // Snapshot the OLD active chip's full App-state into its session
+    // before loading the new one — otherwise the mirror effects would
+    // write the old state into the new session under the new
+    // activeChipId.
+    if (oldId) {
+      chips.setSession(oldId, {
+        bridge: stateRef.current.bridge,
+        board: stateRef.current.board,
+        source: stateRef.current.source,
+        config: stateRef.current.config,
+      });
+    }
+    prevActiveChipId.current = newId;
+    const session = chips.sessions[newId];
     if (!session) return;
     onRestore({
       bridge: session.bridge,

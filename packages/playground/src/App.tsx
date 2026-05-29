@@ -1662,12 +1662,16 @@ export function App() {
       config={activeSimulationConfig}
       onRestore={(s) => {
         // Phase 3 chip switch: pull the target chip's saved state
-        // back into App. New chips with no source fall back to the
-        // board's default code so the editor never shows null.
+        // back into App and reapply the board's diagram to the board
+        // canvas. Without loadDiagram, switching chips leaves the
+        // visible board (BluePill, nRF52840 DK, …) untouched even
+        // though selectedBoard updated.
+        const workspace = loadBoardWorkspace(s.board);
         setBridge(s.bridge);
         setSelectedBoard(s.board);
-        setSource(s.source ?? loadBoardWorkspace(s.board).source);
+        setSource(s.source ?? workspace.source);
         setActiveSimulationConfig(s.config as ActiveSimulationConfig | null);
+        editor.loadDiagram(workspace.diagram);
       }}
     />
     <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }} />}>
