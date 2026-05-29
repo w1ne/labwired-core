@@ -38,6 +38,11 @@
 // with the browser-side JIT in `labwired-wasm`.
 pub mod emit_core;
 
+// `wasm_emit` — hand-rolled wasm binary encoder. The Phase 4.2′ rewrite
+// replaces the hardcoded build-time WAT path with runtime byte
+// emission so every block can be JIT'd, not just the single shape.
+pub mod wasm_emit;
+
 // Wasmtime-backed adapters live behind the `jit` feature so the browser
 // build doesn't have to drag wasmtime into its dep tree.
 #[cfg(feature = "jit")]
