@@ -8,6 +8,7 @@ import chipEsp32 from '../../../core/configs/chips/esp32.yaml?raw';
 import chipEsp32c3 from '../../../core/configs/chips/esp32c3.yaml?raw';
 import chipEsp32s3 from '../../../core/configs/chips/esp32s3.yaml?raw';
 import chipNrf52840 from '../../../core/configs/chips/nrf52840.yaml?raw';
+import chipNrf52840Onboarding from '../../../core/configs/chips/onboarding/nrf52840.yaml?raw';
 import chipRp2040 from '../../../core/configs/chips/rp2040.yaml?raw';
 import chipStm32f103 from '../../../core/configs/chips/stm32f103.yaml?raw';
 import chipStm32f401 from '../../../core/configs/chips/stm32f401.yaml?raw';
@@ -16,6 +17,7 @@ import chipStm32h563 from '../../../core/configs/chips/stm32h563.yaml?raw';
 import systemEsp32c3Devkit from '../../../core/configs/systems/esp32c3-devkit.yaml?raw';
 import systemEsp32s3Zero from '../../../core/configs/systems/esp32s3-zero.yaml?raw';
 import systemNrf52840Dk from '../../../core/configs/systems/nrf52840-dk.yaml?raw';
+import systemNrf52840Onboarding from '../../../core/configs/systems/onboarding/nrf52840.yaml?raw';
 import systemNucleoF401re from '../../../core/configs/systems/nucleo-f401re.yaml?raw';
 import systemNucleoH563zi from '../../../core/configs/systems/nucleo-h563zi-demo.yaml?raw';
 import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw';
@@ -366,6 +368,16 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     arch: 'ARM Cortex-M4F',
     chipYaml: chipNrf52840,
     systemYaml: systemNrf52840Dk,
+    mcuComponentType: 'nrf52840-dk',
+  },
+  {
+    boardId: 'nrf52840-onboarding',
+    chipId: 'nrf52840-onboarding',
+    name: 'nRF52840 (full onboarding)',
+    description: 'Nordic nRF52840 with the full 22-peripheral onboarding surface — TIMER, RTC, RNG, CLOCK, GPIOTE, PPI, WDT, RADIO + Easy DMA, USBD, CRYPTOCELL, FICR, NVMC, and more. Validated against real XIAO nRF52840 silicon (22/22 MODELLED).',
+    arch: 'ARM Cortex-M4F',
+    chipYaml: chipNrf52840Onboarding,
+    systemYaml: systemNrf52840Onboarding,
     mcuComponentType: 'nrf52840-dk',
   },
 ];

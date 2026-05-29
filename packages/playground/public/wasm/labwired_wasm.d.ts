@@ -18,6 +18,17 @@ export class WasmSimulator {
      */
     apply_runtime_snapshot(bytes: Uint8Array): void;
     /**
+     * Bench runner: execute `cycles` `step_with_esp32_aids` iterations
+     * and return elapsed milliseconds (measured via
+     * `performance.now()`). The caller drives this twice — once with
+     * `set_jit_enabled(false)`, once with `set_jit_enabled(true)` —
+     * and compares the two numbers to quantify JIT speedup.
+     *
+     * Returns a `Result<f64, JsValue>`: the `Err` path bubbles step
+     * errors so the bench harness can show a useful message.
+     */
+    bench_jit(cycles: number): number;
+    /**
      * Drain UART TX output bytes accumulated since the last call.
      */
     drain_uart_output(): Uint8Array;
@@ -157,6 +168,19 @@ export class WasmSimulator {
     install_arduino_esp32_quirks(elf_bytes: Uint8Array): void;
     install_esp32_arduino_quirks(): void;
     /**
+     * Total number of times the browser JIT has dispatched a
+     * compiled block. Useful for confirming the JIT path actually
+     * fired during a benchmark.
+     */
+    jit_hits(): bigint;
+    /**
+     * Total number of JIT refusals (host bus errors, JS-side
+     * dispatch failures). Surfaced for the bench harness so it can
+     * distinguish "JIT was tried and rejected" from "JIT was never
+     * hit because PC never reached the block".
+     */
+    jit_refusals(): bigint;
+    /**
      * Re-write the dual-core handshake bytes. Call every ~10k steps from JS
      * — firmware boot code revisits these and we need them to stay 1.
      */
@@ -210,6 +234,14 @@ export class WasmSimulator {
      */
     set_i2c_sensor_sample_6dof(device_id: string, ax: number, ay: number, az: number, gx: number, gy: number, gz: number): void;
     /**
+     * #124 Phase 4: enable/disable the browser-side JIT fast-path. When
+     * on, `step_with_esp32_aids` short-circuits any pre-fetch step
+     * whose PC matches the JIT'd hot block (`0x400829cc`) into a wasm
+     * call constructed via `js_sys::WebAssembly`. Off by default —
+     * callers opt in from JS once they've benchmarked.
+     */
+    set_jit_enabled(enabled: boolean): void;
+    /**
      * Set the simulated thermocouple and internal temperatures on a MAX31855 device.
      */
     set_max31855_temperature(device_id: string, tc_c: number, internal_c: number): void;
@@ -255,6 +287,7 @@ export interface InitOutput {
     readonly __wbg_wasmsimulator_free: (a: number, b: number) => void;
     readonly wasmsimulator_apply_agentdeck_quirks: (a: number) => [number, number];
     readonly wasmsimulator_apply_runtime_snapshot: (a: number, b: number, c: number) => [number, number];
+    readonly wasmsimulator_bench_jit: (a: number, b: number) => [number, number, number];
     readonly wasmsimulator_drain_uart_output: (a: number) => [number, number];
     readonly wasmsimulator_feed_uart_input: (a: number, b: number, c: number) => void;
     readonly wasmsimulator_gdb_process_packet: (a: number, b: number, c: number) => [number, number];
@@ -280,6 +313,8 @@ export interface InitOutput {
     readonly wasmsimulator_get_uc8151d_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
     readonly wasmsimulator_install_arduino_esp32_quirks: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_install_esp32_arduino_quirks: (a: number) => [number, number];
+    readonly wasmsimulator_jit_hits: (a: number) => bigint;
+    readonly wasmsimulator_jit_refusals: (a: number) => bigint;
     readonly wasmsimulator_keep_alive_esp32_dual_core: (a: number) => void;
     readonly wasmsimulator_new: (a: number, b: number) => [number, number, number];
     readonly wasmsimulator_new_from_config: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -290,6 +325,7 @@ export interface InitOutput {
     readonly wasmsimulator_set_gps_position: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly wasmsimulator_set_i2c_sensor_sample: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly wasmsimulator_set_i2c_sensor_sample_6dof: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
+    readonly wasmsimulator_set_jit_enabled: (a: number, b: number) => void;
     readonly wasmsimulator_set_max31855_temperature: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly wasmsimulator_set_ntc_temperature: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_step: (a: number, b: number) => [number, number];
@@ -297,11 +333,15 @@ export interface InitOutput {
     readonly wasmsimulator_step_single: (a: number) => [number, number];
     readonly wasmsimulator_step_with_esp32_aids: (a: number, b: number) => [number, number];
     readonly wasmsimulator_take_runtime_snapshot: (a: number) => [number, number, number, number];
-    readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __externref_table_dealloc: (a: number) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h90cbb89e119fd004: (a: number, b: number, c: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_exn_store: (a: number) => void;
+    readonly __externref_table_alloc: () => number;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __wbindgen_destroy_closure: (a: number, b: number) => void;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 
