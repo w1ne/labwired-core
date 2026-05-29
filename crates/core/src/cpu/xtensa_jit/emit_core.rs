@@ -29,23 +29,25 @@
 //! walks the bus to decode the BB, and returns the bytes both backends
 //! consume.
 //!
-//! ## Current emit scope (4.1)
+//! ## Current emit scope (4.2′)
 //!
-//! Phase 4.1 is a *refactor*: the actual byte-stream-emit-per-opcode work
-//! lives in the canonical [`crate::cpu::xtensa_jit::hot_bb.wat`] source
-//! and is compiled to wasm bytes by `crates/core/build.rs`. The walker +
-//! [`walk_and_emit`] currently only recognise the canonical
-//! [`HOT_BB_PC`] shape (the 8-instruction `call_start_cpu0` delay loop)
-//! and reuse the pre-baked [`HOT_BB_WASM`] bytes verbatim. Per-opcode
-//! runtime emit functions are stubbed below ([`emit_or`], [`emit_l8ui`],
-//! …) so Phase 4.2/4.3 can fill them in without further surgery on the
-//! native / browser adapters.
+//! [`walk_and_emit`] now constructs the wasm bytes at runtime via
+//! [`super::wasm_emit::WasmModule`] + the per-opcode helpers below
+//! ([`emit_or`], [`emit_l8ui`], …). Only the canonical [`HOT_BB_PC`]
+//! shape is wired up — other PCs return [`EmitError::UnsupportedShape`].
+//! Output is byte-equivalent (under wasmtime parity) to the build-time-
+//! baked `HOT_BB_WASM` artifact so neither backend's hot path moves.
 //!
 //! [`HOT_BB_PC`]: crate::cpu::xtensa_jit_bytes::HOT_BB_PC
 //! [`HOT_BB_WASM`]: crate::cpu::xtensa_jit_bytes::HOT_BB_WASM
 
 use crate::cpu::xtensa_jit_bytes::{
-    EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT, HOT_BB_PC, HOT_BB_WASM,
+    EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT, HOT_BB_PC,
+};
+use crate::cpu::xtensa_jit::wasm_emit::{
+    emit_call, emit_end, emit_i32_and, emit_i32_const, emit_i32_lt_s, emit_i32_or, emit_i32_shr_u,
+    emit_if_void, emit_local_get, emit_local_set, emit_locals_run, emit_return, encode_u32,
+    FuncType, ValType, WasmModule,
 };
 use crate::decoder::xtensa::{self, Instruction};
 use crate::decoder::{xtensa_length, xtensa_narrow};
@@ -323,13 +325,16 @@ pub fn is_supported(ins: &Instruction) -> bool {
 ///
 /// `ps_bits` is currently informational — see [`PsBits`].
 ///
-/// ## Phase 4.1 scope cap
+/// ## Phase 4.2′ scope cap
 ///
-/// Only the canonical [`HOT_BB_PC`] shape is recognised. The BB walker
-/// is fully general; the per-opcode emit functions ([`emit_or`],
-/// [`emit_l8ui`], …) are stubs. If the walked ops match the canonical
-/// hot-block shape we return the pre-baked [`HOT_BB_WASM`] bytes.
-/// Otherwise [`EmitError::UnsupportedShape`].
+/// Only the canonical [`HOT_BB_PC`] shape is recognised. The wasm bytes
+/// are now constructed at runtime via [`WasmModule`] + per-opcode
+/// [`emit_or`] / [`emit_l8ui`] / … helpers, replacing the build-time
+/// `hot_bb.wat` round-trip. Output bytes match [`HOT_BB_WASM`]'s ABI
+/// exactly: same import (`host.read_u8`), same `run` export, same
+/// `(a3, a5, l32r) -> (exit, a2, a6, a8, a10)` signature, same 5×i32
+/// locals run, same side-exit codes. Other shapes return
+/// [`EmitError::UnsupportedShape`].
 pub fn walk_and_emit<F>(
     bus_slice: &[u8],
     pc: u32,
@@ -339,7 +344,7 @@ pub fn walk_and_emit<F>(
 where
     F: FnMut(u32) -> Option<usize>,
 {
-    // Cap the walk at `HOT_BB_INSTR_COUNT + 2` — Phase 4.1 only emits
+    // Cap the walk at `HOT_BB_INSTR_COUNT + 2` — Phase 4.2′ only emits
     // the 8-op hot block; budget two slack ops so a shape mismatch
     // surfaces as UnsupportedShape rather than a silent truncation.
     let max_ops = (HOT_BB_INSTR_COUNT as usize) + 2;
@@ -348,19 +353,133 @@ where
         return Err(EmitError::BlockTooShort);
     }
 
-    if pc == HOT_BB_PC && matches_hot_bb_shape(&ops) {
-        Ok(EmittedBlock {
-            wasm_bytes: HOT_BB_WASM.to_vec(),
-            length_in_instrs: HOT_BB_INSTR_COUNT,
-            end_pc: HOT_BB_END,
-            side_exit_reasons: vec![
-                (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
-                (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
-            ],
-        })
-    } else {
-        Err(EmitError::UnsupportedShape)
+    if pc != HOT_BB_PC || !matches_hot_bb_shape(&ops) {
+        return Err(EmitError::UnsupportedShape);
     }
+
+    Ok(EmittedBlock {
+        wasm_bytes: build_hot_bb_module(&ops),
+        length_in_instrs: HOT_BB_INSTR_COUNT,
+        end_pc: HOT_BB_END,
+        side_exit_reasons: vec![
+            (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
+            (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
+        ],
+    })
+}
+
+// ── Hot-BB runtime emit ───────────────────────────────────────────────
+//
+// Canonical wasm locals for the hot block, mirroring `hot_bb.wat`'s
+// param + local declarations. Wasm function locals are indexed as
+// params first, then declared locals — keep these in sync with the
+// type and locals run in `build_hot_bb_module`.
+const LOCAL_A3: u32 = 0;
+const LOCAL_A5: u32 = 1;
+const LOCAL_L32R: u32 = 2;
+const LOCAL_A2: u32 = 3;
+const LOCAL_A6: u32 = 4;
+const LOCAL_A8: u32 = 5;
+const LOCAL_A10: u32 = 6;
+const LOCAL_TMP: u32 = 7;
+
+/// Map an Xtensa register number used by the hot block to its wasm
+/// local index. Only the registers `matches_hot_bb_shape` accepts are
+/// supported.
+fn hot_bb_local_for(reg: u8) -> u32 {
+    match reg {
+        2 => LOCAL_A2,
+        3 => LOCAL_A3,
+        5 => LOCAL_A5,
+        6 => LOCAL_A6,
+        8 => LOCAL_A8,
+        10 => LOCAL_A10,
+        _ => panic!("hot_bb shape match must reject unknown reg {reg}"),
+    }
+}
+
+/// Build the wasm module for the canonical hot block via the
+/// [`WasmModule`] builder + per-opcode emit helpers below. Matches
+/// `HOT_BB_WASM`'s ABI exactly (verified by the parity test).
+fn build_hot_bb_module(ops: &[DecodedOp]) -> Vec<u8> {
+    let mut m = WasmModule::new();
+    let t_read_u8 = m.add_type(FuncType {
+        params: vec![ValType::I32],
+        results: vec![ValType::I32],
+    });
+    let t_run = m.add_type(FuncType {
+        params: vec![ValType::I32, ValType::I32, ValType::I32],
+        results: vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+    });
+    let f_read_u8 = m.add_func_import("host", "read_u8", t_read_u8);
+
+    let mut body = Vec::with_capacity(128);
+    // Locals vec: one run of 5 × i32 (a2, a6, a8, a10, tmp).
+    encode_u32(1, &mut body);
+    emit_locals_run(5, ValType::I32, &mut body);
+
+    for op in ops {
+        match op.ins {
+            Instruction::Or { ar, as_, at } => {
+                emit_or(
+                    hot_bb_local_for(ar),
+                    hot_bb_local_for(as_),
+                    hot_bb_local_for(at),
+                    &mut body,
+                );
+            }
+            Instruction::Memw => emit_memw(&mut body),
+            Instruction::L8ui { at, as_, imm } => {
+                emit_l8ui(
+                    hot_bb_local_for(at),
+                    hot_bb_local_for(as_),
+                    imm,
+                    f_read_u8,
+                    LOCAL_TMP,
+                    &mut body,
+                );
+            }
+            Instruction::Extui {
+                ar,
+                at,
+                shift,
+                bits,
+            } => {
+                emit_extui(
+                    hot_bb_local_for(ar),
+                    hot_bb_local_for(at),
+                    shift,
+                    bits,
+                    &mut body,
+                );
+            }
+            Instruction::And { ar, as_, at } => {
+                emit_and(
+                    hot_bb_local_for(ar),
+                    hot_bb_local_for(as_),
+                    hot_bb_local_for(at),
+                    &mut body,
+                );
+            }
+            Instruction::L32r { at, .. } => {
+                emit_l32r(hot_bb_local_for(at), LOCAL_L32R, &mut body);
+            }
+            Instruction::Nop => emit_nop(&mut body),
+            _ => unreachable!("hot_bb shape match must reject unknown op"),
+        }
+    }
+
+    // Tail: push the 5-tuple result and close the function.
+    emit_i32_const(EXIT_FALL_THROUGH, &mut body);
+    emit_local_get(LOCAL_A2, &mut body);
+    emit_local_get(LOCAL_A6, &mut body);
+    emit_local_get(LOCAL_A8, &mut body);
+    emit_local_get(LOCAL_A10, &mut body);
+    emit_end(&mut body);
+
+    let f_run = m.add_func(t_run, body);
+    m.add_func_export("run", f_run);
+    m.finish()
 }
 
 /// Does this decoded op sequence match the canonical hot-BB shape?
@@ -426,58 +545,95 @@ fn matches_hot_bb_shape(ops: &[DecodedOp]) -> bool {
         && matches!(ops[7].ins, L32r { at: 8, .. })
 }
 
-// ── Per-opcode emit stubs ─────────────────────────────────────────────
+// ── Per-opcode emit helpers ───────────────────────────────────────────
 //
-// Phase 4.1 keeps the canonical wasm body in `hot_bb.wat`; each per-op
-// emit function below currently delegates to that pre-baked artifact
-// (effectively a no-op for the runtime path). Phase 4.2 will replace
-// these stubs with real wasm-byte emission so `walk_and_emit` can build
-// a block byte stream for any sequence of supported ops, not just the
-// canonical shape.
-//
-// The signatures live here today so the Phase 4.2 wiring is a fill-in
-// rather than a rewrite. Each stub returns a `Result` so a future
-// "unsupported operand" path can plumb through without an API break.
-//
-// NOTE: these are deliberately not exposed via `pub use` until Phase
-// 4.2 fills them in — exposing empty stubs would risk callers binding
-// to incorrect output.
+// Phase 4.2′: real wasm-byte emission per Xtensa opcode supported by the
+// hot block. Each helper takes wasm local indices (not Xtensa register
+// numbers) so the caller — `build_hot_bb_module` — owns the
+// reg→local mapping. Bytes match `HOT_BB_WASM` exactly (parity test).
 
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_or(_ar: u8, _as_: u8, _at: u8, _out: &mut Vec<u8>) {}
+/// `or ar, as, at` — `ar = as | at`.
+pub(crate) fn emit_or(ar: u32, as_: u32, at: u32, out: &mut Vec<u8>) {
+    emit_local_get(as_, out);
+    emit_local_get(at, out);
+    emit_i32_or(out);
+    emit_local_set(ar, out);
+}
 
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
+/// `memw` — semantic no-op (memory barrier in the simulator).
 pub(crate) fn emit_memw(_out: &mut Vec<u8>) {}
 
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
+/// `nop` / `nop.n` — semantic no-op.
 pub(crate) fn emit_nop(_out: &mut Vec<u8>) {}
 
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_l8ui(_at: u8, _as_: u8, _imm: u32, _out: &mut Vec<u8>) {}
+/// `l8ui at, as, imm` — `at = read_u8(as + imm)`. The host import
+/// returns a negative i32 on bus error; we side-exit early with
+/// `EXIT_HOST_BUS_ERROR` and zeroed-out result locals (matching
+/// `HOT_BB_WASM`).
+pub(crate) fn emit_l8ui(
+    at: u32,
+    as_: u32,
+    imm: u32,
+    read_u8_func: u32,
+    tmp: u32,
+    out: &mut Vec<u8>,
+) {
+    emit_local_get(as_, out);
+    if imm != 0 {
+        emit_i32_const(imm as i32, out);
+        // i32.add
+        out.push(0x6A);
+    }
+    emit_call(read_u8_func, out);
+    emit_local_set(tmp, out);
+    emit_local_get(tmp, out);
+    emit_i32_const(0, out);
+    emit_i32_lt_s(out);
+    emit_if_void(out);
+    emit_i32_const(EXIT_HOST_BUS_ERROR, out);
+    emit_i32_const(0, out);
+    emit_i32_const(0, out);
+    emit_i32_const(0, out);
+    emit_i32_const(0, out);
+    emit_return(out);
+    emit_end(out);
+    emit_local_get(tmp, out);
+    emit_i32_const(0xFF, out);
+    emit_i32_and(out);
+    emit_local_set(at, out);
+}
 
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_l32r(_at: u8, _literal: u32, _out: &mut Vec<u8>) {}
+/// `l32r at, literal_addr` — pre-resolved literal supplied as a wasm
+/// param. We just copy the param into the destination local.
+pub(crate) fn emit_l32r(at: u32, l32r_param: u32, out: &mut Vec<u8>) {
+    emit_local_get(l32r_param, out);
+    emit_local_set(at, out);
+}
 
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_extui(_ar: u8, _at: u8, _shift: u8, _bits: u8, _out: &mut Vec<u8>) {}
+/// `extui ar, at, shift, bits` — `ar = (at >> shift) & ((1 << bits) - 1)`.
+pub(crate) fn emit_extui(ar: u32, at: u32, shift: u8, bits: u8, out: &mut Vec<u8>) {
+    emit_local_get(at, out);
+    if shift != 0 {
+        emit_i32_const(shift as i32, out);
+        emit_i32_shr_u(out);
+    }
+    let mask: i32 = if bits >= 32 {
+        -1
+    } else {
+        ((1u32 << bits) - 1) as i32
+    };
+    emit_i32_const(mask, out);
+    emit_i32_and(out);
+    emit_local_set(ar, out);
+}
 
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_and(_ar: u8, _as_: u8, _at: u8, _out: &mut Vec<u8>) {}
-
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_add(_ar: u8, _as_: u8, _at: u8, _out: &mut Vec<u8>) {}
-
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_sub(_ar: u8, _as_: u8, _at: u8, _out: &mut Vec<u8>) {}
-
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_xor(_ar: u8, _as_: u8, _at: u8, _out: &mut Vec<u8>) {}
-
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_addi(_at: u8, _as_: u8, _imm8: i32, _out: &mut Vec<u8>) {}
-
-#[allow(dead_code, reason = "Phase 4.2 stub — fills in real emit logic")]
-pub(crate) fn emit_movi(_at: u8, _imm: i32, _out: &mut Vec<u8>) {}
+/// `and ar, as, at` — `ar = as & at`.
+pub(crate) fn emit_and(ar: u32, as_: u32, at: u32, out: &mut Vec<u8>) {
+    emit_local_get(as_, out);
+    emit_local_get(at, out);
+    emit_i32_and(out);
+    emit_local_set(ar, out);
+}
 
 #[cfg(test)]
 mod tests {
@@ -519,6 +675,83 @@ mod tests {
         let text: Vec<u8> = vec![0x40, 0x13, 0x40];
         let err = walk_and_emit(&text, 0, |pc| Some(pc as usize), PsBits::default()).unwrap_err();
         assert_eq!(err, EmitError::WalkRefused);
+    }
+
+    /// Functional parity: `walk_and_emit` on the canonical hot block
+    /// matches the pre-baked `HOT_BB_WASM` for every input we test. Both
+    /// are instantiated under wasmtime with the same `host.read_u8`
+    /// import (returns `(addr & 0xFF) as i32`) and the 5-tuple results
+    /// are compared byte-for-byte. Gated on `feature = "jit"` because
+    /// the parity check needs wasmtime.
+    #[cfg(feature = "jit")]
+    #[test]
+    fn walk_and_emit_matches_hot_bb_wasm_under_wasmtime() {
+        use crate::cpu::xtensa_jit_bytes::HOT_BB_WASM;
+        use wasmtime::{Engine, Func, Instance, Module, Store, TypedFunc};
+
+        const HOT_BB_BYTES: &[u8] = &[
+            0x50, 0xa5, 0x20, // or    a10, a5, a5
+            0xc0, 0x20, 0x00, // memw
+            0x62, 0x03, 0x00, // l8ui  a6,  a3, 0
+            0xc0, 0x20, 0x00, // memw
+            0x22, 0x03, 0x01, // l8ui  a2,  a3, 1
+            0x20, 0x20, 0x74, // extui a2,  a2, 0, 8
+            0x60, 0x22, 0x10, // and   a2,  a2, a6
+            0x81, 0xd4, 0xf6, // l32r  a8,  0x40080534
+            0xe0, 0x08, 0x00, // callx8 a8 — terminator
+        ];
+        let emitted = walk_and_emit(
+            HOT_BB_BYTES,
+            HOT_BB_PC,
+            |pc| {
+                let off = pc.wrapping_sub(HOT_BB_PC) as usize;
+                if off < HOT_BB_BYTES.len() {
+                    Some(off)
+                } else {
+                    None
+                }
+            },
+            PsBits::default(),
+        )
+        .expect("hot bb emits");
+
+        type Params = (i32, i32, i32);
+        type Returns = (i32, i32, i32, i32, i32);
+
+        fn instantiate(engine: &Engine, bytes: &[u8]) -> (Store<()>, TypedFunc<Params, Returns>) {
+            let module = Module::new(engine, bytes).expect("wasmtime accepts module");
+            let mut store = Store::new(engine, ());
+            // host.read_u8(addr) -> (addr & 0xFF) as i32. Deterministic
+            // and non-negative so the bus-error early-exit path stays
+            // dormant for these inputs.
+            let read_u8 = Func::wrap(&mut store, |addr: i32| -> i32 { (addr as u32 & 0xFF) as i32 });
+            let inst = Instance::new(&mut store, &module, &[read_u8.into()])
+                .expect("instantiate");
+            let run = inst
+                .get_typed_func::<Params, Returns>(&mut store, "run")
+                .expect("run export");
+            (store, run)
+        }
+
+        let engine = Engine::default();
+        let (mut s_ref, run_ref) = instantiate(&engine, HOT_BB_WASM);
+        let (mut s_new, run_new) = instantiate(&engine, &emitted.wasm_bytes);
+
+        let inputs: [(i32, i32, i32); 4] = [
+            (0, 0, 0x40080534),
+            (0xDEADBEEFu32 as i32, 0x12345678, 0x40080534),
+            (-1, -1, 0x40080534),
+            (0x3FFB_0000, 0x1234, 0x40008534u32 as i32),
+        ];
+        for input in inputs {
+            let r_ref = run_ref.call(&mut s_ref, input).expect("ref runs");
+            let r_new = run_new.call(&mut s_new, input).expect("new runs");
+            assert_eq!(
+                r_ref, r_new,
+                "parity mismatch for input {:?}: ref={:?} new={:?}",
+                input, r_ref, r_new
+            );
+        }
     }
 
     /// `SideExitReason::wire_code` round-trips through
