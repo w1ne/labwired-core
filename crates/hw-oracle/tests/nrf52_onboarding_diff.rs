@@ -53,6 +53,7 @@ const ACL: u32 = 0x4002_F000;
 const CRYPTOCELL: u32 = 0x5002_A000;
 const BPROT: u32 = 0x4002_6000;
 const MWU: u32 = 0x4002_0000;
+const RADIO: u32 = 0x4000_1000;
 const AAR: u32 = 0x4000_F000;
 
 // ── Case structure (mirrors nrf52_mmio_diff.rs) ──────────────────────────────
@@ -339,6 +340,33 @@ const CASES: &[MmioCase] = &[
         read_addr: CRYPTOCELL + 0x500,
         mask: 0x1,
         expect: 1,
+    },
+    MmioCase {
+        peripheral: "RADIO",
+        label: "FREQUENCY = 0x4E (BLE adv ch 37)",
+        prep: &[],
+        write: (RADIO + 0x508, 0x4E),
+        read_addr: RADIO + 0x508,
+        mask: 0xFF,
+        expect: 0x4E,
+    },
+    MmioCase {
+        peripheral: "RADIO",
+        label: "MODE = 3 (BLE_1Mbit)",
+        prep: &[],
+        write: (RADIO + 0x510, 3),
+        read_addr: RADIO + 0x510,
+        mask: 0xF,
+        expect: 3,
+    },
+    MmioCase {
+        peripheral: "RADIO",
+        label: "BASE0 = 0xCAFEBABE",
+        prep: &[],
+        write: (RADIO + 0x51C, 0xCAFE_BABE),
+        read_addr: RADIO + 0x51C,
+        mask: 0xFFFF_FFFF,
+        expect: 0xCAFE_BABE,
     },
     MmioCase {
         peripheral: "BPROT",
