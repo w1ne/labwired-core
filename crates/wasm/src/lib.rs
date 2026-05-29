@@ -2242,13 +2242,26 @@ impl WasmSimulator {
             // CCOMPARE0 edge detection honest.
             if self.jit_browser_enabled {
                 let machine = self.machine.as_mut().unwrap();
-                if self.jit_browser_cache.is_none() {
-                    self.jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));
-                }
-                let cache = self.jit_browser_cache.as_mut().unwrap();
-                if let Some(any) = machine.cpu.as_any_mut() {
-                    if let Some(xt) = any.downcast_mut::<labwired_core::cpu::XtensaLx7>() {
-                        jit_browser::try_browser_jit_step(xt, &mut machine.bus, cache);
+                // Phase 4.6.1 (#124): cheap PC-range gate. The browser
+                // JIT today only ever installs blocks for HOT_BB_PC and
+                // LOOPTASK_PC. On every other PC the downcast + cache
+                // lookup is pure overhead — ~87% of cycles in the
+                // loopTask steady state hit this path. Two constant
+                // compares are cheaper than virtual `as_any_mut` +
+                // `downcast_mut` + `HashSet::contains` + `HashMap::get_mut`.
+                let pc_now = machine.cpu.get_pc();
+                if pc_now == labwired_core::cpu::xtensa_jit_bytes::HOT_BB_PC
+                    || pc_now == labwired_core::cpu::xtensa_jit_bytes::LOOPTASK_PC
+                {
+                    if self.jit_browser_cache.is_none() {
+                        self.jit_browser_cache =
+                            Some(Box::new(jit_browser::BrowserJitCache::new()));
+                    }
+                    let cache = self.jit_browser_cache.as_mut().unwrap();
+                    if let Some(any) = machine.cpu.as_any_mut() {
+                        if let Some(xt) = any.downcast_mut::<labwired_core::cpu::XtensaLx7>() {
+                            jit_browser::try_browser_jit_step(xt, &mut machine.bus, cache);
+                        }
                     }
                 }
             }
