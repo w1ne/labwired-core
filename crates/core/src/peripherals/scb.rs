@@ -27,6 +27,13 @@ pub struct Scb {
     pub shpr1: u32,
     pub shpr2: u32,
     pub shpr3: u32,
+    /// PendSV exception pend bit. Set by an ICSR.PENDSVSET write
+    /// (bit 28); drained into the CPU's pending_exceptions via tick().
+    pub pendsv_pending: bool,
+    /// SysTick exception pend bit (ICSR.PENDSTSET=bit 26).
+    pub systick_pending: bool,
+    /// NMI pend bit (ICSR.NMIPENDSET=bit 31).
+    pub nmi_pending: bool,
 }
 
 impl Scb {
@@ -46,6 +53,9 @@ impl Scb {
             shpr1: 0,
             shpr2: 0,
             shpr3: 0,
+            pendsv_pending: false,
+            systick_pending: false,
+            nmi_pending: false,
         }
     }
 
@@ -71,7 +81,33 @@ impl Scb {
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            0x04 => self.icsr = value, // Simplified
+            0x04 => {
+                // ICSR side effects (ARMv7-M ARM B3.2.4):
+                //   bit 31 NMIPENDSET — pend NMI (2)
+                //   bit 28 PENDSVSET  — pend PendSV (14); needed for
+                //                       FreeRTOS context switches.
+                //   bit 27 PENDSVCLR  — clear PendSV pending
+                //   bit 26 PENDSTSET  — pend SysTick (15)
+                //   bit 25 PENDSTCLR  — clear SysTick pending
+                // tick() drains these into the CPU's pending_exceptions
+                // via the standard system_exception result field.
+                if value & (1 << 31) != 0 {
+                    self.nmi_pending = true;
+                }
+                if value & (1 << 28) != 0 {
+                    self.pendsv_pending = true;
+                }
+                if value & (1 << 27) != 0 {
+                    self.pendsv_pending = false;
+                }
+                if value & (1 << 26) != 0 {
+                    self.systick_pending = true;
+                }
+                if value & (1 << 25) != 0 {
+                    self.systick_pending = false;
+                }
+                self.icsr = value;
+            }
             0x08 => self.vtor.store(value, Ordering::Relaxed),
             0x0C => self.aircr = value,
             0x10 => self.scr = value,
@@ -103,6 +139,37 @@ impl crate::Peripheral for Scb {
 
         self.write_reg(reg_offset, reg_val);
         Ok(())
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        // Drain pending system-exception bits set by ICSR writes. NMI
+        // takes priority over SysTick over PendSV when multiple are
+        // pending simultaneously (per ARMv7-M priority table).
+        if self.nmi_pending {
+            self.nmi_pending = false;
+            return crate::PeripheralTickResult {
+                system_exception: Some(2),
+                cycles: 1,
+                ..Default::default()
+            };
+        }
+        if self.systick_pending {
+            self.systick_pending = false;
+            return crate::PeripheralTickResult {
+                system_exception: Some(15),
+                cycles: 1,
+                ..Default::default()
+            };
+        }
+        if self.pendsv_pending {
+            self.pendsv_pending = false;
+            return crate::PeripheralTickResult {
+                system_exception: Some(14),
+                cycles: 1,
+                ..Default::default()
+            };
+        }
+        crate::PeripheralTickResult::default()
     }
 
     fn snapshot(&self) -> serde_json::Value {
