@@ -43,6 +43,10 @@ import { MobileDemoView } from './MobileDemoView';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
+import { ChipsProvider } from './multi-mcu/ChipsProvider';
+import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
+import { McuStrip } from './multi-mcu/McuStrip';
+import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1645,6 +1649,26 @@ export function App() {
   }
 
   return (
+    <ChipsProvider initialBoard={selectedBoard}>
+    <ChipBridgeSync
+      bridge={bridge}
+      board={selectedBoard}
+      source={source}
+      config={activeSimulationConfig}
+      onRestore={(s) => {
+        // Restore the target MCU's state into App on focus switch.
+        // loadDiagram reapplies the board's diagram so the visible
+        // workspace updates too (selectedBoard alone doesn't).
+        const workspace = loadBoardWorkspace(s.board);
+        setBridge(s.bridge);
+        setSelectedBoard(s.board);
+        setSource(s.source ?? workspace.source);
+        setActiveSimulationConfig(s.config as ActiveSimulationConfig | null);
+        editor.loadDiagram(workspace.diagram);
+      }}
+    />
+    <BackgroundChipTicker />
+    <McuStrip />
     <StudioShell
       boardName={activeProjectName ?? selectedBoard.name}
       isEmpty={isEmpty}
@@ -2028,5 +2052,11 @@ export function App() {
       }}
     />
     </StudioShell>
+    </ChipsProvider>
   );
+}
+
+function BackgroundChipTicker() {
+  useBackgroundChips(true);
+  return null;
 }

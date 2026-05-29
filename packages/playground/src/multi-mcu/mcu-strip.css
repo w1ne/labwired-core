@@ -1,0 +1,118 @@
+.lw-mcu-strip {
+  position: fixed;
+  /* Sit below the 44px TopChrome strip. */
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.lw-mcu-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.lw-mcu-tile-focus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.85);
+  transition: background 100ms ease, border-color 100ms ease, transform 80ms ease;
+}
+
+.lw-mcu-tile-focus:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lw-mcu-tile[data-active='true'] .lw-mcu-tile-focus {
+  background: rgba(232, 62, 140, 0.12);
+  border-color: rgba(232, 62, 140, 0.45);
+  box-shadow: 0 0 0 1px rgba(232, 62, 140, 0.1);
+}
+
+.lw-mcu-tile-thumb {
+  width: 68px;
+  height: 42px;
+  flex-shrink: 0;
+}
+
+.lw-mcu-tile-meta {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  line-height: 1.2;
+}
+
+.lw-mcu-tile-id {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.lw-mcu-tile-board {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.lw-mcu-tile-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  border: none;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.lw-mcu-tile:hover .lw-mcu-tile-remove {
+  opacity: 1;
+}
+
+.lw-mcu-tile-remove:hover {
+  background: rgba(255, 60, 60, 0.6);
+  color: #fff;
+}
+
+.lw-mcu-add {
+  width: 44px;
+  border-radius: 10px;
+  background: rgba(232, 62, 140, 0.14);
+  color: #e83e8c;
+  border: 1px dashed rgba(232, 62, 140, 0.5);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 100ms ease, color 100ms ease, transform 80ms ease;
+}
+
+.lw-mcu-add:hover {
+  background: rgba(232, 62, 140, 0.25);
+  color: #fff;
+  transform: translateY(-1px);
+}
