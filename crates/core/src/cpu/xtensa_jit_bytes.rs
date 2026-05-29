@@ -33,6 +33,11 @@ pub const HOT_BB_L32R_ADDR: u32 = 0x4008_0534;
 
 /// Side-exit: block executed cleanly to the terminator.
 pub const EXIT_FALL_THROUGH: i32 = 0;
+/// Side-exit: a conditional or unconditional branch terminated the BB
+/// with the taken path. The wasm body has populated the result tuple's
+/// PC slot with the branch target; the interpreter resumes execution
+/// from there. Wire code consumed by both backends (Phase 4.3, #124).
+pub const EXIT_BRANCH_TAKEN: i32 = 1;
 /// Side-exit: host `read_u8` import signalled a bus error.
 pub const EXIT_HOST_BUS_ERROR: i32 = 5;
 

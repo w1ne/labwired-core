@@ -29,25 +29,35 @@
 //! walks the bus to decode the BB, and returns the bytes both backends
 //! consume.
 //!
-//! ## Current emit scope (4.2′)
+//! ## Current emit scope (4.2′ + 4.3)
 //!
-//! [`walk_and_emit`] now constructs the wasm bytes at runtime via
+//! [`walk_and_emit`] constructs the wasm bytes at runtime via
 //! [`super::wasm_emit::WasmModule`] + the per-opcode helpers below
 //! ([`emit_or`], [`emit_l8ui`], …). Only the canonical [`HOT_BB_PC`]
-//! shape is wired up — other PCs return [`EmitError::UnsupportedShape`].
-//! Output is byte-equivalent (under wasmtime parity) to the build-time-
-//! baked `HOT_BB_WASM` artifact so neither backend's hot path moves.
+//! shape is wired into the end-to-end entry point — other PCs return
+//! [`EmitError::UnsupportedShape`]. Output is byte-equivalent (under
+//! wasmtime parity) to the build-time-baked `HOT_BB_WASM` artifact so
+//! neither backend's hot path moves.
+//!
+//! Phase 4.3 adds three terminator emit primitives —
+//! [`emit_beqz`] / [`emit_bnez`] / [`emit_j`] — that future BB shape
+//! recognizers (e.g. the `loopTask` prefix at PC 0x400d4a8d) will
+//! consume to emit branches as part of the JIT'd body. They share a
+//! callback-based side-exit signature so they stay agnostic to the
+//! caller's ABI (the hot-BB `(a3, a5, l32r) -> (exit, a2, a6, a8, a10)`
+//! tuple is one ABI; future shapes will be others).
 //!
 //! [`HOT_BB_PC`]: crate::cpu::xtensa_jit_bytes::HOT_BB_PC
 //! [`HOT_BB_WASM`]: crate::cpu::xtensa_jit_bytes::HOT_BB_WASM
 
 use crate::cpu::xtensa_jit_bytes::{
-    EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT, HOT_BB_PC,
+    EXIT_BRANCH_TAKEN, EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_END, HOT_BB_INSTR_COUNT,
+    HOT_BB_PC,
 };
 use crate::cpu::xtensa_jit::wasm_emit::{
-    emit_call, emit_end, emit_i32_and, emit_i32_const, emit_i32_lt_s, emit_i32_or, emit_i32_shr_u,
-    emit_if_void, emit_local_get, emit_local_set, emit_locals_run, emit_return, encode_u32,
-    FuncType, ValType, WasmModule,
+    emit_call, emit_end, emit_i32_and, emit_i32_const, emit_i32_eqz, emit_i32_lt_s, emit_i32_or,
+    emit_i32_shr_u, emit_if_void, emit_local_get, emit_local_set, emit_locals_run, emit_return,
+    encode_u32, FuncType, ValType, WasmModule,
 };
 use crate::decoder::xtensa::{self, Instruction};
 use crate::decoder::{xtensa_length, xtensa_narrow};
@@ -63,6 +73,10 @@ pub enum SideExitReason {
     /// Block executed cleanly to the terminator. Wire code:
     /// [`EXIT_FALL_THROUGH`].
     FallThrough,
+    /// A conditional or unconditional branch in the JIT'd body resolved
+    /// to "taken" and the body returned to let the interpreter resume at
+    /// the branch target PC. Wire code: [`EXIT_BRANCH_TAKEN`].
+    BranchTaken,
     /// A host import (e.g. `read_u8`) reported a bus error. Wire code:
     /// [`EXIT_HOST_BUS_ERROR`].
     HostBusError,
@@ -75,6 +89,7 @@ impl SideExitReason {
     pub fn wire_code(self) -> i32 {
         match self {
             SideExitReason::FallThrough => EXIT_FALL_THROUGH,
+            SideExitReason::BranchTaken => EXIT_BRANCH_TAKEN,
             SideExitReason::HostBusError => EXIT_HOST_BUS_ERROR,
         }
     }
@@ -635,6 +650,97 @@ pub(crate) fn emit_and(ar: u32, as_: u32, at: u32, out: &mut Vec<u8>) {
     emit_local_set(ar, out);
 }
 
+// ── Branch emit (Phase 4.3) ───────────────────────────────────────────
+//
+// Three terminator emitters: BEQZ / BNEZ / J. Each one ends the JIT'd
+// basic block — the caller is responsible for not emitting any more ops
+// after `emit_j`, and for following `emit_beqz` / `emit_bnez` with the
+// function epilogue that handles the not-taken (fall-through) path.
+//
+// The taken-path side-exit body is supplied by the caller via a
+// closure, so these primitives stay ABI-agnostic: they don't know how
+// many result slots the JIT'd function has, what their order is, or
+// which Xtensa registers map to which wasm locals. The closure pushes
+// the full result tuple onto the wasm stack (in the same order as the
+// function's `results` declaration) and then we emit `return`.
+//
+// The wire side-exit code on the taken side is always [`EXIT_BRANCH_TAKEN`];
+// the new PC is whatever the caller chose to pass through the result
+// tuple's PC slot. The interpreter resumes from that PC.
+
+/// `beqz as_, offset` — branch taken iff `AR[as_] == 0`. Emits:
+///
+/// ```text
+///   local.get $as_local
+///   i32.eqz
+///   if (void)
+///     <taken_exit_body>          ;; pushes result tuple, then `return`
+///     return
+///   end
+/// ```
+///
+/// `taken_exit_body` is responsible for pushing the result tuple
+/// (including the new PC = branch target) onto the wasm stack before
+/// we emit `return`. The closure runs while the wasm stack already
+/// holds nothing — anything it pushes becomes the return values.
+///
+/// After this emitter returns, the caller continues emitting the
+/// fall-through path (which, for a BB-final BEQZ, is the function's
+/// own epilogue that returns `EXIT_FALL_THROUGH` with the
+/// post-branch-not-taken PC).
+#[allow(
+    dead_code,
+    reason = "Phase 4.3 primitive — wired in by Phase 4.3.5 BB shape recognizer; \
+              exercised today only by the `feature = jit` lockstep tests."
+)]
+pub(crate) fn emit_beqz<F>(as_local: u32, taken_exit_body: F, out: &mut Vec<u8>)
+where
+    F: FnOnce(&mut Vec<u8>),
+{
+    emit_local_get(as_local, out);
+    emit_i32_eqz(out);
+    emit_if_void(out);
+    taken_exit_body(out);
+    emit_return(out);
+    emit_end(out);
+}
+
+/// `bnez as_, offset` — branch taken iff `AR[as_] != 0`. We just test
+/// the register directly: wasm `if` triggers on non-zero, so the shape
+/// is `local.get; if; <taken-exit>; end`.
+#[allow(
+    dead_code,
+    reason = "Phase 4.3 primitive — wired in by Phase 4.3.5 BB shape recognizer; \
+              exercised today only by the `feature = jit` lockstep tests."
+)]
+pub(crate) fn emit_bnez<F>(as_local: u32, taken_exit_body: F, out: &mut Vec<u8>)
+where
+    F: FnOnce(&mut Vec<u8>),
+{
+    emit_local_get(as_local, out);
+    emit_if_void(out);
+    taken_exit_body(out);
+    emit_return(out);
+    emit_end(out);
+}
+
+/// `j offset` — unconditional jump. Emits the taken-path side-exit
+/// body inline (no `if`) and a `return`. This is a terminator: the
+/// caller must not emit any further ops in this function body after
+/// `emit_j`.
+#[allow(
+    dead_code,
+    reason = "Phase 4.3 primitive — wired in by Phase 4.3.5 BB shape recognizer; \
+              exercised today only by the `feature = jit` lockstep tests."
+)]
+pub(crate) fn emit_j<F>(taken_exit_body: F, out: &mut Vec<u8>)
+where
+    F: FnOnce(&mut Vec<u8>),
+{
+    taken_exit_body(out);
+    emit_return(out);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -754,6 +860,191 @@ mod tests {
         }
     }
 
+    // ── Branch primitive lockstep tests (Phase 4.3) ──────────────────
+    //
+    // Each test builds a minimal wasm function with signature
+    // `(reg: i32) -> (exit: i32, pc: i32)` that exercises one of the
+    // branch primitives at the function's terminator, then drives it
+    // through wasmtime for both the taken and not-taken inputs. We
+    // diff the wasm output against the Xtensa interpreter's branch
+    // reference (`XtensaLx7::branch` semantics, replicated here as a
+    // pure helper). If the wasm and the helper agree byte-for-byte
+    // on `(exit_code, new_pc)`, the primitive emits correctly.
+    //
+    // Why not the full `xtensa_lockstep` harness? The harness runs
+    // both modes through `Machine::step()`, which assumes a JIT
+    // already wired into the dispatch path. The branch primitives
+    // landed here aren't wired into any BB shape recognizer yet —
+    // they're standalone emit helpers Phase 4.3.5+ will consume.
+    // Direct wasm + reference comparison is the leanest test of the
+    // primitives themselves.
+
+    /// Reference Xtensa branch semantics: if `cond`, PC = pc + offset
+    /// (offset is the decoder's already-+4-baked value); else PC = pc + len.
+    /// Mirrors `XtensaLx7::branch` exactly so the test diff isolates
+    /// the wasm emit and nothing else.
+    #[cfg(feature = "jit")]
+    fn xtensa_branch_ref(pc: u32, offset: i32, len: u32, cond: bool) -> u32 {
+        if cond {
+            pc.wrapping_add(offset as u32)
+        } else {
+            pc.wrapping_add(len)
+        }
+    }
+
+    /// Build a one-function wasm module with signature `(i32) -> (i32, i32)`
+    /// whose body invokes `emit_branch` to populate the terminator. The
+    /// not-taken fall-through tail returns `(EXIT_FALL_THROUGH, fallthrough_pc)`.
+    /// The branch target PC is owned by the caller's `emit_branch` closure,
+    /// which captures it directly when building the taken-exit body.
+    #[cfg(feature = "jit")]
+    fn build_branch_test_module(
+        fallthrough_pc: u32,
+        emit_branch: impl FnOnce(u32, &mut Vec<u8>),
+    ) -> Vec<u8> {
+        let mut m = WasmModule::new();
+        let ty = m.add_type(FuncType {
+            params: vec![ValType::I32],
+            results: vec![ValType::I32, ValType::I32],
+        });
+        let mut body = Vec::with_capacity(32);
+        // No additional locals (the `as_` source is param 0).
+        encode_u32(0, &mut body);
+
+        // Emit the branch primitive with a taken-exit body that pushes
+        // `(EXIT_BRANCH_TAKEN, target_pc)` as the result tuple.
+        emit_branch(/* as_local */ 0, &mut body);
+
+        // Fall-through tail: `(EXIT_FALL_THROUGH, fallthrough_pc)`.
+        emit_i32_const(EXIT_FALL_THROUGH, &mut body);
+        emit_i32_const(fallthrough_pc as i32, &mut body);
+        emit_end(&mut body);
+
+        let fn_idx = m.add_func(ty, body);
+        m.add_func_export("run", fn_idx);
+        m.finish()
+    }
+
+    /// Run a built module through wasmtime and return its (exit, pc) tuple.
+    #[cfg(feature = "jit")]
+    fn run_branch_module(bytes: &[u8], reg_value: u32) -> (i32, u32) {
+        use wasmtime::{Engine, Instance, Module, Store};
+        let engine = Engine::default();
+        let module = Module::new(&engine, bytes).expect("module compiles");
+        let mut store: Store<()> = Store::new(&engine, ());
+        let inst = Instance::new(&mut store, &module, &[]).expect("instantiate");
+        let run = inst
+            .get_typed_func::<i32, (i32, i32)>(&mut store, "run")
+            .expect("run export");
+        let (exit, pc) = run.call(&mut store, reg_value as i32).expect("run ok");
+        (exit, pc as u32)
+    }
+
+    /// BEQZ: taken when `as_ == 0`, not taken otherwise. Compare wasm
+    /// against the Xtensa reference for both inputs.
+    #[cfg(feature = "jit")]
+    #[test]
+    fn beqz_taken_and_not_taken_match_interp() {
+        let pc = 0x400d_4a8du32;
+        let len = 3u32; // BEQZ is 3 bytes
+        let offset = 12i32 + 4; // decoder pre-bakes +4
+        let target_pc = pc.wrapping_add(offset as u32);
+        let fallthrough_pc = pc.wrapping_add(len);
+
+        let bytes = build_branch_test_module(fallthrough_pc, |as_local, out| {
+            emit_beqz(
+                as_local,
+                |o| {
+                    emit_i32_const(EXIT_BRANCH_TAKEN, o);
+                    emit_i32_const(target_pc as i32, o);
+                },
+                out,
+            );
+        });
+
+        // as_ == 0 → taken.
+        let (exit, new_pc) = run_branch_module(&bytes, 0);
+        assert_eq!(exit, EXIT_BRANCH_TAKEN);
+        assert_eq!(new_pc, xtensa_branch_ref(pc, offset, len, true));
+
+        // as_ != 0 → fall through.
+        for &reg in &[1u32, 0xFFFF_FFFF, 0xDEAD_BEEF, 42] {
+            let (exit, new_pc) = run_branch_module(&bytes, reg);
+            assert_eq!(exit, EXIT_FALL_THROUGH, "reg={:#x}", reg);
+            assert_eq!(new_pc, xtensa_branch_ref(pc, offset, len, false));
+        }
+    }
+
+    /// BNEZ: taken when `as_ != 0`, not taken when `as_ == 0`.
+    #[cfg(feature = "jit")]
+    #[test]
+    fn bnez_taken_and_not_taken_match_interp() {
+        let pc = 0x400d_4a90u32;
+        let len = 3u32;
+        let offset = -8i32 + 4; // backward branch (still +4-baked by decoder)
+        let target_pc = pc.wrapping_add(offset as u32);
+        let fallthrough_pc = pc.wrapping_add(len);
+
+        let bytes = build_branch_test_module(fallthrough_pc, |as_local, out| {
+            emit_bnez(
+                as_local,
+                |o| {
+                    emit_i32_const(EXIT_BRANCH_TAKEN, o);
+                    emit_i32_const(target_pc as i32, o);
+                },
+                out,
+            );
+        });
+
+        // as_ == 0 → fall through.
+        let (exit, new_pc) = run_branch_module(&bytes, 0);
+        assert_eq!(exit, EXIT_FALL_THROUGH);
+        assert_eq!(new_pc, xtensa_branch_ref(pc, offset, len, false));
+
+        // as_ != 0 → taken.
+        for &reg in &[1u32, 0xFFFF_FFFF, 0xDEAD_BEEF, 42] {
+            let (exit, new_pc) = run_branch_module(&bytes, reg);
+            assert_eq!(exit, EXIT_BRANCH_TAKEN, "reg={:#x}", reg);
+            assert_eq!(new_pc, xtensa_branch_ref(pc, offset, len, true));
+        }
+    }
+
+    /// J: always taken. Wasm `(_) -> (EXIT_BRANCH_TAKEN, target_pc)`
+    /// regardless of input.
+    #[cfg(feature = "jit")]
+    #[test]
+    fn j_always_taken_matches_interp() {
+        let pc = 0x400d_4a93u32;
+        let len = 3u32;
+        let offset = 32i32 + 4;
+        let target_pc = pc.wrapping_add(offset as u32);
+
+        let mut m = WasmModule::new();
+        let ty = m.add_type(FuncType {
+            params: vec![ValType::I32],
+            results: vec![ValType::I32, ValType::I32],
+        });
+        let mut body = Vec::with_capacity(16);
+        encode_u32(0, &mut body); // no locals
+        emit_j(
+            |o| {
+                emit_i32_const(EXIT_BRANCH_TAKEN, o);
+                emit_i32_const(target_pc as i32, o);
+            },
+            &mut body,
+        );
+        emit_end(&mut body);
+        let fn_idx = m.add_func(ty, body);
+        m.add_func_export("run", fn_idx);
+        let bytes = m.finish();
+
+        for &reg in &[0u32, 1, 0xDEAD_BEEF] {
+            let (exit, new_pc) = run_branch_module(&bytes, reg);
+            assert_eq!(exit, EXIT_BRANCH_TAKEN, "J ignores reg (was {:#x})", reg);
+            assert_eq!(new_pc, xtensa_branch_ref(pc, offset, len, true));
+        }
+    }
+
     /// `SideExitReason::wire_code` round-trips through
     /// `EmittedBlock::reason_for` (sanity for backends that index by
     /// the i32 returned from wasm).
@@ -765,6 +1056,7 @@ mod tests {
             end_pc: 0,
             side_exit_reasons: vec![
                 (EXIT_FALL_THROUGH, SideExitReason::FallThrough),
+                (EXIT_BRANCH_TAKEN, SideExitReason::BranchTaken),
                 (EXIT_HOST_BUS_ERROR, SideExitReason::HostBusError),
             ],
         };
@@ -773,9 +1065,32 @@ mod tests {
             Some(SideExitReason::FallThrough)
         );
         assert_eq!(
+            block.reason_for(EXIT_BRANCH_TAKEN),
+            Some(SideExitReason::BranchTaken)
+        );
+        assert_eq!(
             block.reason_for(EXIT_HOST_BUS_ERROR),
             Some(SideExitReason::HostBusError)
         );
         assert_eq!(block.reason_for(42), None);
+    }
+
+    /// Wire codes for the three currently-known side-exit reasons are
+    /// disjoint and round-trip through `SideExitReason::wire_code`.
+    #[test]
+    fn side_exit_wire_codes_are_disjoint() {
+        let reasons = [
+            SideExitReason::FallThrough,
+            SideExitReason::BranchTaken,
+            SideExitReason::HostBusError,
+        ];
+        let codes: Vec<i32> = reasons.iter().map(|r| r.wire_code()).collect();
+        // No duplicates.
+        let mut sorted = codes.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), codes.len(), "wire codes must be unique");
+        // Match the constants we expect.
+        assert_eq!(codes, vec![EXIT_FALL_THROUGH, EXIT_BRANCH_TAKEN, EXIT_HOST_BUS_ERROR]);
     }
 }
