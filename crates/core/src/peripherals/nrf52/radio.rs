@@ -30,7 +30,55 @@
 //!   TASKS_START regardless of MODE/DATARATE.
 
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Mutex, OnceLock};
+
+// ── Global "virtual air" registry ────────────────────────────────────────────
+//
+// Cross-instance routing for sim-to-sim BLE. When one Radio TX'es a frame on
+// FREQUENCY=N MODE=M, we push it here; every Radio in RX mode on the same
+// (FREQUENCY, MODE) gets a chance to consume it next tick. Each frame carries
+// the sender's address fields so RX can do the proper RXADDRESSES match.
+//
+// The registry is sim-global because the sim represents one physical space; if
+// you spin up multiple Machine instances in the same process they all share
+// this air. To partition (e.g. two physically-distant simulators) use the
+// `radio_air_namespace()` helper to give each cluster its own slot.
+
+#[derive(Debug, Clone)]
+struct AirFrame {
+    /// Whitened bytes including the trailing 3-byte CRC; layout is what
+    /// TX produced and what RX consumes verbatim.
+    bytes: Vec<u8>,
+    /// Address bytes that travel with the frame so receivers can match
+    /// against RXADDRESSES + BASE/PREFIX. We send the full sender
+    /// logical-address tuple (base, prefix, len).
+    addr_base: u32,
+    addr_prefix: u8,
+    addr_len: u8,
+    /// Whitening init the sender used; RX side uses this to de-whiten
+    /// when its own DATAWHITEIV matches.
+    whitening_iv: u8,
+    /// CRC init the sender used; RX uses this to verify.
+    crcinit: u32,
+}
+
+#[derive(Debug, Default)]
+struct VirtualAir {
+    queues: HashMap<(u8, u32), VecDeque<AirFrame>>,
+}
+
+fn virtual_air() -> &'static Mutex<VirtualAir> {
+    static AIR: OnceLock<Mutex<VirtualAir>> = OnceLock::new();
+    AIR.get_or_init(|| Mutex::new(VirtualAir::default()))
+}
+
+/// Clear the global virtual air (test helper).
+pub fn clear_virtual_air() {
+    if let Ok(mut a) = virtual_air().lock() {
+        a.queues.clear();
+    }
+}
 
 // ── Tasks (PS §6.20.13, table 222) ───────────────────────────────────────────
 
@@ -219,6 +267,22 @@ pub struct Nrf52Radio {
     pending_rx_dma: bool,
     /// CRCSTATUS for the most recent RX (1 = OK, 0 = ERROR).
     crc_status: u32,
+
+    /// Bit-rate countdown. When TX or RX is in flight, the cycles
+    /// until EVENTS_END fires.  Computed from MODE + packet length:
+    /// BLE_1Mbit → 8 cycles/byte, BLE_2Mbit → 4, Nrf_2Mbit → 4,
+    /// 802.15.4 (250 kbps) → 32. Sim treats one tick as ~1 µs.
+    ///
+    /// When `Some(0)`, the next tick fires EVENTS_END. When `None`,
+    /// no transmission is in flight.
+    tx_or_rx_cycles_remaining: Option<u32>,
+    /// Logical address (0..7) the current RX is listening for. RXADDRESSES
+    /// bits map to BASE0/PREFIX0[0] for bit 0, BASE1/PREFIX0[1..3] for
+    /// bits 1..3, BASE1/PREFIX1[0..3] for bits 4..7.
+    rx_address_mask: u8,
+    /// Frame currently being received (popped from virtual air, awaiting
+    /// the bit-rate countdown to expire before becoming visible).
+    rx_in_flight: Option<AirFrame>,
 }
 
 impl Nrf52Radio {
@@ -304,9 +368,64 @@ impl Nrf52Radio {
         } else {
             return;
         }
-        self.pending_address = true;
-        self.pending_payload = true;
-        self.pending_end = true;
+        // Default 1-tick fire so callers that don't drive tick_with_bus
+        // (state-machine tests, firmware that never sees the bus DMA)
+        // still get EVENTS_ADDRESS/PAYLOAD/END quickly. tick_with_bus
+        // overwrites this with a proper bit-rate count when it runs.
+        self.tx_or_rx_cycles_remaining = Some(1);
+    }
+
+    /// Look up the (BASE, PREFIX) tuple for logical address N per
+    /// PS §6.20.6.3. Returns (BASE0 or BASE1, prefix byte).
+    fn lookup_logical_address(&self, n: u8) -> (u32, u8) {
+        match n {
+            0 => (self.base0, (self.prefix0 & 0xFF) as u8),
+            1 => (self.base1, ((self.prefix0 >> 8) & 0xFF) as u8),
+            2 => (self.base1, ((self.prefix0 >> 16) & 0xFF) as u8),
+            3 => (self.base1, ((self.prefix0 >> 24) & 0xFF) as u8),
+            4 => (self.base1, (self.prefix1 & 0xFF) as u8),
+            5 => (self.base1, ((self.prefix1 >> 8) & 0xFF) as u8),
+            6 => (self.base1, ((self.prefix1 >> 16) & 0xFF) as u8),
+            7 => (self.base1, ((self.prefix1 >> 24) & 0xFF) as u8),
+            _ => (0, 0),
+        }
+    }
+
+    /// Returns true if any RXADDRESSES-enabled logical address on this
+    /// receiver matches the (base, prefix) the frame came from.
+    fn matches_address(&self, frame: &AirFrame) -> bool {
+        let enabled = (self.rxaddresses & 0xFF) as u8;
+        if enabled == 0 {
+            // No RX addresses configured — promiscuous mode for tests.
+            return true;
+        }
+        for n in 0..8u8 {
+            if enabled & (1 << n) == 0 {
+                continue;
+            }
+            let (b, p) = self.lookup_logical_address(n);
+            if b == frame.addr_base && p == frame.addr_prefix {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[allow(dead_code)]  // reserved for future bit-rate model
+    /// Bit-rate cycle count for a packet of `total_bytes` bytes in the
+    /// given MODE. MODE values per PS §6.20.12.10. One sim tick ≈ 1 µs.
+    fn cycles_for_packet(mode: u32, total_bytes: u32) -> u32 {
+        let cycles_per_byte = match mode & 0xF {
+            0 | 3 => 8,  // Nrf_1Mbit, Ble_1Mbit
+            1 | 4 => 4,  // Nrf_2Mbit, Ble_2Mbit
+            2 => 32,     // Nrf_250Kbit (deprecated)
+            5 => 64,     // Ble_LR125Kbit
+            6 => 16,     // Ble_LR500Kbit
+            15 => 32,    // Ieee802154_250Kbit
+            _ => 8,
+        };
+        // Always at least 1 cycle so a zero-length packet still fires.
+        (total_bytes.max(1)) * cycles_per_byte
     }
 
     fn disable(&mut self) {
@@ -575,6 +694,26 @@ impl Peripheral for Nrf52Radio {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Bit-rate countdown for TX/RX in flight. When the count reaches
+        // zero on this tick we set the ADDRESS/PAYLOAD/END flags so the
+        // events fire in the existing handler below. If the count is
+        // still > 1, we just decrement and return — the firmware sees
+        // the radio still transmitting / receiving.
+        if let Some(n) = self.tx_or_rx_cycles_remaining {
+            if n <= 1 {
+                self.tx_or_rx_cycles_remaining = None;
+                self.pending_address = true;
+                self.pending_payload = true;
+                self.pending_end = true;
+            } else {
+                self.tx_or_rx_cycles_remaining = Some(n - 1);
+                return PeripheralTickResult {
+                    cycles: 1,
+                    ..Default::default()
+                };
+            }
+        }
+
         if !self.pending_ready
             && !self.pending_address
             && !self.pending_payload
@@ -711,17 +850,67 @@ impl Peripheral for Nrf52Radio {
             packet.push(((crc >> 8) & 0xFF) as u8);
             packet.push(((crc >> 16) & 0xFF) as u8);
 
+            // Capture the sender's logical address so receivers can match
+            // against their RXADDRESSES + BASE/PREFIX. Logical-address
+            // table (PS §6.20.6.3):
+            //   N=0: BASE0 + PREFIX0[7:0]
+            //   N=1: BASE1 + PREFIX0[15:8]
+            //   N=2: BASE1 + PREFIX0[23:16]
+            //   N=3: BASE1 + PREFIX0[31:24]
+            //   N=4: BASE1 + PREFIX1[7:0]
+            //   N=5: BASE1 + PREFIX1[15:8]
+            //   N=6: BASE1 + PREFIX1[23:16]
+            //   N=7: BASE1 + PREFIX1[31:24]
+            let txaddr = (self.txaddress & 0x7) as u8;
+            let (addr_base, addr_prefix) = self.lookup_logical_address(txaddr);
+            let frame = AirFrame {
+                bytes: packet.clone(),
+                addr_base,
+                addr_prefix,
+                addr_len: 3 + ((self.pcnf1 >> 16) & 0x7) as u8, // BALEN field
+                whitening_iv: self.datawhiteiv as u8,
+                crcinit: self.crcinit,
+            };
             self.last_tx_packet = Some(packet);
+
+            // Push to the global virtual air keyed by (FREQUENCY, MODE).
+            if let Ok(mut air) = virtual_air().lock() {
+                let key = (self.frequency as u8, self.mode);
+                air.queues.entry(key).or_default().push_back(frame);
+            }
+
+            // Defer EVENTS_END via bit-rate countdown.
+            self.tx_or_rx_cycles_remaining =
+                Some(Self::cycles_for_packet(self.mode, length as u32 + 3));
         }
 
         // ── RX Easy DMA ──────────────────────────────────────────────────
-        // Pop the next packet from rx_inbox, strip the trailing CRC and
-        // verify it (in whitened form, since the air-side carries the
-        // whitened frame). De-whiten the payload, write back to RAM at
-        // PACKETPTR + payload_offset; copy header bytes verbatim.
+        // Pop the next packet from the global virtual air OR rx_inbox
+        // (loopback path used by some tests), verify CRC, de-whiten,
+        // write to PACKETPTR-pointed RAM. Address-matched against
+        // RXADDRESSES + BASE/PREFIX before delivery.
         if self.pending_rx_dma {
             self.pending_rx_dma = false;
-            if let Some(mut pkt) = self.rx_inbox.pop_front() {
+
+            // First, try the global virtual air at (FREQUENCY, MODE).
+            // Only consume a frame whose sender's address matches one of
+            // the receiver's enabled logical addresses.
+            let mut popped = None;
+            if let Ok(mut air) = virtual_air().lock() {
+                let key = (self.frequency as u8, self.mode);
+                if let Some(queue) = air.queues.get_mut(&key) {
+                    let pos = queue.iter().position(|f| self.matches_address(f));
+                    if let Some(idx) = pos {
+                        popped = queue.remove(idx).map(|f| f.bytes);
+                    }
+                }
+            }
+
+            // Fall back to the per-instance rx_inbox (used by tests that
+            // don't go through the global air).
+            let pkt_opt = popped.or_else(|| self.rx_inbox.pop_front());
+
+            if let Some(mut pkt) = pkt_opt {
                 let desc = self.packet_descriptor();
 
                 // Trailing 3 bytes are the CRC (LE).
@@ -744,6 +933,11 @@ impl Peripheral for Nrf52Radio {
                 for (i, b) in pkt.iter().enumerate() {
                     let _ = bus.write_u8((base as u64).wrapping_add(i as u64), *b);
                 }
+
+                // Set bit-rate countdown for the actual received packet
+                // length (including the 3 CRC bytes we stripped above).
+                self.tx_or_rx_cycles_remaining =
+                    Some(Self::cycles_for_packet(self.mode, pkt.len() as u32 + 3));
             }
         }
     }
@@ -752,6 +946,18 @@ impl Peripheral for Nrf52Radio {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Serialise tests that touch the global virtual air so they don't
+    /// see each other's frames. Each test acquires this guard before
+    /// clearing the air.
+    static AIR_GUARD: Mutex<()> = Mutex::new(());
+
+    fn air_test_setup() -> std::sync::MutexGuard<'static, ()> {
+        let guard = AIR_GUARD.lock().unwrap_or_else(|p| p.into_inner());
+        clear_virtual_air();
+        guard
+    }
 
     #[test]
     fn txen_progresses_to_txidle_and_fires_ready() {
@@ -797,12 +1003,14 @@ mod tests {
         r.write_u32(OFF_SHORTS, SHORT_READY_START | SHORT_END_DISABLE)
             .unwrap();
         r.write_u32(OFF_TASKS_TXEN, 1).unwrap();
-        // Single tick walks the whole cascade: TXEN → READY (SHORT_READY_START)
-        // → START → END (SHORT_END_DISABLE) → DISABLE → DISABLED. This is the
-        // sim-side collapse of an effect that takes microseconds on real
-        // silicon but is observably the same end state for firmware.
+        // Tick 1: READY fires; SHORT_READY_START schedules a TX. Bit-rate
+        // countdown starts (cycles=Some(1) default since no tick_with_bus
+        // ran to refine the count).
         r.tick();
         assert_eq!(r.read_u32(OFF_EVENTS_READY).unwrap(), 1);
+        // Tick 2: countdown expires, ADDRESS/PAYLOAD/END fire;
+        // SHORT_END_DISABLE chains into DISABLE which fires DISABLED.
+        r.tick();
         assert_eq!(r.read_u32(OFF_EVENTS_END).unwrap(), 1);
         assert_eq!(r.read_u32(OFF_EVENTS_DISABLED).unwrap(), 1);
         assert_eq!(r.read_u32(OFF_STATE).unwrap(), STATE_DISABLED);
@@ -859,6 +1067,7 @@ mod tests {
 
     #[test]
     fn tx_easy_dma_reads_packetptr_and_stores_packet() {
+        let _guard = air_test_setup();
         use crate::bus::SystemBus;
         use crate::Bus;
 
@@ -894,6 +1103,7 @@ mod tests {
 
     #[test]
     fn rx_easy_dma_loopback_through_inbox() {
+        let _guard = air_test_setup();
         use crate::bus::SystemBus;
         use crate::Bus;
 
@@ -935,6 +1145,7 @@ mod tests {
 
     #[test]
     fn tx_rx_full_loopback_with_whitening() {
+        let _guard = air_test_setup();
         use crate::bus::SystemBus;
         use crate::Bus;
 
@@ -992,4 +1203,119 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn cross_instance_via_virtual_air() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+        let _guard = air_test_setup();
+
+        // Sender configures address 0 = BASE0 + PREFIX0[0] = 0xCAFEBA + 0xBE.
+        let mut bus_tx = SystemBus::new();
+        bus_tx.write_u8(0x2000_0000, 0xAA).unwrap(); // S0
+        bus_tx.write_u8(0x2000_0001, 4).unwrap();    // LENGTH
+        bus_tx.write_u8(0x2000_0002, 0xDE).unwrap();
+        bus_tx.write_u8(0x2000_0003, 0xAD).unwrap();
+        bus_tx.write_u8(0x2000_0004, 0xBE).unwrap();
+        bus_tx.write_u8(0x2000_0005, 0xEF).unwrap();
+        let mut tx = Nrf52Radio::new();
+        tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        tx.write_u32(OFF_PCNF1, 0xFF | (1 << 25)).unwrap();
+        tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        tx.write_u32(OFF_FREQUENCY, 73).unwrap();
+        tx.write_u32(OFF_MODE, 3).unwrap();
+        tx.write_u32(OFF_DATAWHITEIV, 50).unwrap();
+        tx.write_u32(OFF_CRCINIT, 0x555555).unwrap();
+        tx.write_u32(OFF_BASE0, 0xCAFE_BA00).unwrap();
+        tx.write_u32(OFF_PREFIX0, 0xBE).unwrap();
+        tx.write_u32(OFF_TXADDRESS, 0).unwrap();
+        tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        tx.tick();
+        tx.write_u32(OFF_TASKS_START, 1).unwrap();
+        tx.tick();
+        tx.tick_with_bus(&mut bus_tx);
+
+        // Receiver is a completely separate Nrf52Radio + bus, sharing
+        // only the global virtual air. RXADDRESSES enables logical
+        // address 0 only.
+        let mut bus_rx = SystemBus::new();
+        let mut rx = Nrf52Radio::new();
+        rx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx.write_u32(OFF_PCNF1, 0xFF | (1 << 25)).unwrap();
+        rx.write_u32(OFF_PACKETPTR, 0x2000_3000).unwrap();
+        rx.write_u32(OFF_FREQUENCY, 73).unwrap();
+        rx.write_u32(OFF_MODE, 3).unwrap();
+        rx.write_u32(OFF_DATAWHITEIV, 50).unwrap();
+        rx.write_u32(OFF_CRCINIT, 0x555555).unwrap();
+        rx.write_u32(OFF_BASE0, 0xCAFE_BA00).unwrap();
+        rx.write_u32(OFF_PREFIX0, 0xBE).unwrap();
+        rx.write_u32(OFF_RXADDRESSES, 0x01).unwrap();
+        rx.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx.tick();
+        rx.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx.tick();
+        rx.tick_with_bus(&mut bus_rx);
+
+        // Verify the frame landed in RX RAM with the correct payload.
+        assert_eq!(rx.crc_status, 1, "CRC must verify across the virtual air");
+        assert_eq!(bus_rx.read_u8(0x2000_3000).unwrap(), 0xAA);
+        assert_eq!(bus_rx.read_u8(0x2000_3001).unwrap(), 4);
+        assert_eq!(bus_rx.read_u8(0x2000_3002).unwrap(), 0xDE);
+        assert_eq!(bus_rx.read_u8(0x2000_3003).unwrap(), 0xAD);
+        assert_eq!(bus_rx.read_u8(0x2000_3004).unwrap(), 0xBE);
+        assert_eq!(bus_rx.read_u8(0x2000_3005).unwrap(), 0xEF);
+    }
+
+    #[test]
+    fn address_mismatch_drops_frame() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+        let _guard = air_test_setup();
+
+        // Sender uses address 0; receiver only enables address 3 — the
+        // frame should stay in the air and RX RAM stays untouched.
+        let mut bus_tx = SystemBus::new();
+        bus_tx.write_u8(0x2000_0000, 0x11).unwrap();
+        bus_tx.write_u8(0x2000_0001, 2).unwrap();
+        bus_tx.write_u8(0x2000_0002, 0x22).unwrap();
+        bus_tx.write_u8(0x2000_0003, 0x33).unwrap();
+        let mut tx = Nrf52Radio::new();
+        tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        tx.write_u32(OFF_PCNF1, 0xFF).unwrap(); // whitening off for clarity
+        tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        tx.write_u32(OFF_FREQUENCY, 91).unwrap();
+        tx.write_u32(OFF_MODE, 3).unwrap();
+        tx.write_u32(OFF_CRCINIT, 0).unwrap();
+        tx.write_u32(OFF_BASE0, 0x1111_1100).unwrap();
+        tx.write_u32(OFF_PREFIX0, 0x77).unwrap();
+        tx.write_u32(OFF_TXADDRESS, 0).unwrap();
+        tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        tx.tick();
+        tx.write_u32(OFF_TASKS_START, 1).unwrap();
+        tx.tick();
+        tx.tick_with_bus(&mut bus_tx);
+
+        let mut bus_rx = SystemBus::new();
+        let mut rx = Nrf52Radio::new();
+        rx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        rx.write_u32(OFF_PACKETPTR, 0x2000_3000).unwrap();
+        rx.write_u32(OFF_FREQUENCY, 91).unwrap();
+        rx.write_u32(OFF_MODE, 3).unwrap();
+        rx.write_u32(OFF_CRCINIT, 0).unwrap();
+        // Different BASE/PREFIX so address 3 also wouldn't match TX.
+        rx.write_u32(OFF_BASE1, 0xDEAD_CAFE).unwrap();
+        rx.write_u32(OFF_PREFIX0, 0xAA_00_00_00).unwrap();
+        rx.write_u32(OFF_RXADDRESSES, 0x08).unwrap(); // only logical 3
+        rx.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx.tick();
+        rx.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx.tick();
+        rx.tick_with_bus(&mut bus_rx);
+
+        // RAM should still be the reset value (0).
+        assert_eq!(bus_rx.read_u8(0x2000_3000).unwrap(), 0);
+    }
+
+
 }
