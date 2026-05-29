@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useEffect, Suspense, lazy, type ReactNode } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, type ReactNode } from 'react';
 import { ProjectsModal } from './studio/ProjectsModal';
 import type { ProjectRecord } from './studio/useProjects';
 import { CommandPalette } from './studio/CommandPalette';
@@ -43,12 +43,6 @@ import { MobileDemoView } from './MobileDemoView';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
-import { GlobalChrome } from './studio/GlobalChrome';
-// Lazy-load the canvas substrate (React Flow is ~62 KB gzip).
-const CanvasShell = lazy(() => import('./canvas/CanvasShell').then((m) => ({ default: m.CanvasShell })));
-import { ChipsProvider } from './canvas/ChipSession';
-import { ChipBridgeSync } from './canvas/ChipBridgeSync';
-import { ChipContentProvider } from './canvas/ChipContent';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1651,33 +1645,18 @@ export function App() {
   }
 
   return (
-    <ChipsProvider initialBoard={selectedBoard}>
-    <ChipBridgeSync
-      bridge={bridge}
-      board={selectedBoard}
-      source={source}
-      config={activeSimulationConfig}
-      onRestore={(s) => {
-        // Phase 3 chip switch: pull the target chip's saved state
-        // back into App and reapply the board's diagram to the board
-        // canvas. Without loadDiagram, switching chips leaves the
-        // visible board (BluePill, nRF52840 DK, …) untouched even
-        // though selectedBoard updated.
-        const workspace = loadBoardWorkspace(s.board);
-        setBridge(s.bridge);
-        setSelectedBoard(s.board);
-        setSource(s.source ?? workspace.source);
-        setActiveSimulationConfig(s.config as ActiveSimulationConfig | null);
-        editor.loadDiagram(workspace.diagram);
-      }}
-    />
-    <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#0a0a0f' }} />}>
-    <GlobalChrome
+    <StudioShell
       boardName={activeProjectName ?? selectedBoard.name}
+      isEmpty={isEmpty}
+      onPickLab={handlePickLab}
       onUploadFirmware={handleUploadFirmware}
       onShare={handleShare}
+      toast={toast}
+      onDismissToast={() => setToast(null)}
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
+      inspector={inspectorNode}
+      simDock={simDockNode}
       authSlot={<AuthPill onOpenProjects={() => setProjectsModalOpen(true)} />}
       projectSlot={
         <button
@@ -1691,27 +1670,11 @@ export function App() {
           <span className="truncate">{activeProjectName ?? 'My Projects'}</span>
         </button>
       }
+      renderDevDrawer={renderDevDrawer}
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}
-      toast={toast}
-      onDismissToast={() => setToast(null)}
-    />
-    <ChipContentProvider
-      // Active chip's full per-chip view — the existing StudioShell
-      // body (board canvas + sim controls + dev drawer tabs) renders
-      // INSIDE the active chip-shape on the canvas. No floating
-      // window. Inspector window is hidden.
-      board={
-        <StudioShell
-          chromeMode="body-only"
-          isEmpty={isEmpty}
-          onPickLab={handlePickLab}
-          inspector={inspectorNode}
-          simDock={simDockNode}
-          renderDevDrawer={renderDevDrawer}
-        >
-          <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
-          <div data-legacy-shell="true" className="playground playground--in-chip">
+    >
+    <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
     <div data-legacy-shell="true" className="playground">
       {/* ===== Header ===== */}
       {!embed && (
@@ -2064,14 +2027,6 @@ export function App() {
         setActiveProjectName(p.name);
       }}
     />
-          </div>
-        </StudioShell>
-      }
-      inspector={null}
-    >
-      <CanvasShell />
-    </ChipContentProvider>
-    </Suspense>
-    </ChipsProvider>
+    </StudioShell>
   );
 }

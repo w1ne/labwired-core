@@ -19,7 +19,6 @@
     "@clerk/clerk-react": "^5.61.6",
     "@labwired/ui": "file:../ui",
     "@monaco-editor/react": "^4.7.0",
-    "@xyflow/react": "^12.10.2",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "framer-motion": "^11.18.2",
