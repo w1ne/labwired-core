@@ -11,6 +11,7 @@ import {
   SerialMonitor,
   SimulatorBridge,
   Ssd1306Display,
+  Pcd8544Display,
   Ili9341Display,
   GpsControl,
   ThermistorControl,
@@ -176,6 +177,33 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'GND' }, to: { part: 'oled', pin: 'GND' }, color: '#888888' },
         { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'oled', pin: 'SCL' }, color: '#5BD8FF' },
         { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'oled', pin: 'SDA' }, color: '#B07BFF' },
+      ],
+    };
+  }
+
+  if (config.boardId === 'nokia5110-invaders-lab') {
+    // STM32L476 Breakout: Nokia 5110 (PCD8544 SPI1) + HC-SR04. Part ids match
+    // the lab's external_device ids ('lcd', 'dist') so the framebuffer fetch
+    // and distance setter resolve.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'lcd', type: 'pcd8544', x: 500, y: 60, rotate: 0, attrs: {} },
+        { id: 'dist', type: 'ultrasonic', x: 500, y: 280, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'lcd', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'lcd', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'lcd', pin: 'CLK' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA7' }, to: { part: 'lcd', pin: 'DIN' }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PC7' }, to: { part: 'lcd', pin: 'DC' }, color: '#3DD68C' },
+        { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'lcd', pin: 'CE' }, color: '#FFD166' },
+        { from: { part: 'mcu', pin: 'PA9' }, to: { part: 'lcd', pin: 'RST' }, color: '#EF476F' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'dist', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'dist', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA8' }, to: { part: 'dist', pin: 'TRIG' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PB10' }, to: { part: 'dist', pin: 'ECHO' }, color: '#118AB2' },
       ],
     };
   }
@@ -925,6 +953,32 @@ export function App() {
     return () => window.clearInterval(id);
   }, [running, bridge]);
 
+  // PCD8544 (Nokia 5110) live framebuffer + HC-SR04 hand distance
+  const [pcd8544Framebuffer, setPcd8544Framebuffer] = useState<Uint8Array | null>(null);
+  const [hcsr04Distance, setHcsr04DistanceState] = useState(30);
+
+  useEffect(() => {
+    if (!running || !bridge) {
+      setPcd8544Framebuffer(null);
+      return;
+    }
+    const poll = () => {
+      const fb = bridge.getPcd8544Framebuffer('lcd');
+      if (fb) setPcd8544Framebuffer(fb);
+    };
+    poll();
+    const id = window.setInterval(poll, 100);
+    return () => window.clearInterval(id);
+  }, [running, bridge]);
+
+  const handleDistanceChange = useCallback(
+    (cm: number) => {
+      setHcsr04DistanceState(cm);
+      bridge?.setHcsr04Distance('dist', cm);
+    },
+    [bridge],
+  );
+
   // ILI9341 live framebuffer (153 KB @ 100 ms = ~1.5 MB/s WASM→JS)
   const [ili9341Framebuffer, setIli9341Framebuffer] = useState<Uint8Array | null>(null);
 
@@ -1139,6 +1193,28 @@ export function App() {
     if (partType === 'oled-ssd1306') {
       return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
     }
+    if (partType === 'pcd8544' || partType === 'nokia-5110') {
+      return (
+        <div className="flex flex-col gap-3">
+          <Pcd8544Display framebuffer={pcd8544Framebuffer} width={252} />
+          <label className="block">
+            <div className="flex items-center justify-between text-fg-tertiary text-[11px] font-mono mb-1">
+              <span>HC-SR04 hand distance</span>
+              <span className="text-fg-primary">{hcsr04Distance.toFixed(0)} cm</span>
+            </div>
+            <input
+              type="range"
+              min={2}
+              max={200}
+              step={1}
+              value={hcsr04Distance}
+              onChange={(e) => handleDistanceChange(parseFloat(e.target.value))}
+              style={{ width: '100%' }}
+            />
+          </label>
+        </div>
+      );
+    }
     if (partType === 'ili9341') {
       return <Ili9341Display framebuffer={ili9341Framebuffer} width={240} />;
     }
@@ -1223,7 +1299,7 @@ export function App() {
     }
     return undefined;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
+  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, pcd8544Framebuffer, hcsr04Distance, handleDistanceChange, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
 
   // Right-side InspectorCard removed — Properties live in the
   // bottom drawer (per-chip Serial/Registers/Trace/Memory/Source/

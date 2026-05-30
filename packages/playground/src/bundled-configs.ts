@@ -14,6 +14,7 @@ import chipStm32f103 from '../../../core/configs/chips/stm32f103.yaml?raw';
 import chipStm32f401 from '../../../core/configs/chips/stm32f401.yaml?raw';
 import chipStm32f401cdu6 from '../../../core/configs/chips/stm32f401cdu6.yaml?raw';
 import chipStm32h563 from '../../../core/configs/chips/stm32h563.yaml?raw';
+import chipStm32l476 from '../../../core/configs/chips/stm32l476.yaml?raw';
 import systemEsp32c3Devkit from '../../../core/configs/systems/esp32c3-devkit.yaml?raw';
 import systemEsp32s3Zero from '../../../core/configs/systems/esp32s3-zero.yaml?raw';
 import systemNrf52840Dk from '../../../core/configs/systems/nrf52840-dk.yaml?raw';
@@ -28,6 +29,7 @@ import systemMpu6050SensorLab from '../../../core/examples/mpu6050-sensor-lab/sy
 import systemBme280WeatherLab from '../../../core/examples/bme280-weather-lab/system.yaml?raw';
 import systemMax31855ThermocoupleLab from '../../../core/examples/max31855-thermocouple-lab/system.yaml?raw';
 import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
+import systemNokia5110InvadersLab from '../../../core/examples/nokia5110-invaders-lab/system.yaml?raw';
 import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
 import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
@@ -39,6 +41,7 @@ import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs
 import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
 import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src/main.rs?raw';
 import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
+import sourceNokia5110Invaders from '../../../core/examples/nokia5110-invaders-lab/src/main.rs?raw';
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
@@ -152,6 +155,21 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceSsd1306,
     sourceFilename: 'ssd1306-hello-lab/src/main.rs',
+    kind: 'lab',
+  },
+  {
+    boardId: 'nokia5110-invaders-lab',
+    chipId: 'stm32l476',
+    name: 'Nokia 5110 Breakout',
+    description:
+      'STM32L476 Breakout on a Nokia 5110 (PCD8544 84×48 LCD) over SPI, with an HC-SR04 ultrasonic sensor — move the hand-distance slider to steer the paddle.',
+    arch: 'ARM Cortex-M4',
+    chipYaml: chipStm32l476,
+    systemYaml: systemNokia5110InvadersLab,
+    demoFirmwarePath: `${BASE}wasm/demo-nokia5110-invaders-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceNokia5110Invaders,
+    sourceFilename: 'nokia5110-invaders-lab/src/main.rs',
     kind: 'lab',
   },
   {

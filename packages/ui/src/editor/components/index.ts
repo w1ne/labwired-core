@@ -29,6 +29,7 @@ import { neo6mGpsComponent } from './neo6m-gps';
 import { ntcThermistorComponent } from './ntc-thermistor';
 // Displays
 import { oledSsd1306Component } from './oled-ssd1306';
+import { pcd8544Component } from './pcd8544';
 import { ledMatrixComponent } from './led-matrix';
 import { ili9341TftComponent } from './ili9341-tft';
 import { epdSsd1680TricolorComponent } from './epd-ssd1680-tricolor';
@@ -94,6 +95,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [sevenSegmentComponent.type, sevenSegmentComponent],
   [lcd1602Component.type, lcd1602Component],
   [oledSsd1306Component.type, oledSsd1306Component],
+  [pcd8544Component.type, pcd8544Component],
   [ledMatrixComponent.type, ledMatrixComponent],
   [ili9341TftComponent.type, ili9341TftComponent],
   [epdSsd1680TricolorComponent.type, epdSsd1680TricolorComponent],

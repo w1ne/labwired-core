@@ -72,6 +72,13 @@ arduino-cli compile \
 cp "$BUILD_TMP_F401"/*.ino.elf "$OUT_DIR/demo-nucleo-f401.elf"
 echo "STM32F401RE firmware → $OUT_DIR/demo-nucleo-f401.elf"
 
+# ── STM32L476 Nokia 5110 Breakout + HC-SR04 ──────────────────────────────────
+# Same .elf runs in the sim AND flashes to a real NUCLEO-L476RG (HW-validated).
+echo "Building STM32L476 Nokia 5110 Breakout firmware..."
+(cd "$CORE_DIR" && cargo build -p nokia5110-invaders-lab --release --target thumbv7em-none-eabihf)
+cp "$CORE_DIR/target/thumbv7em-none-eabihf/release/nokia5110-invaders-lab" "$OUT_DIR/demo-nokia5110-invaders-lab.elf"
+echo "STM32L476 Nokia 5110 firmware → $OUT_DIR/demo-nokia5110-invaders-lab.elf"
+
 # ── 4. nRF52840 BLE two-radio demo (sensor + collector) ──────────────────────
 # Same ELFs run in the sim AND flash to real nRF silicon (parity-proven).
 # The sensor broadcasts an incrementing reading; the collector receives it.

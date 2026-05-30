@@ -170,6 +170,12 @@ export interface WasmSimulatorInstance {
   // SSD1306 OLED framebuffer
   get_ssd1306_framebuffer(device_id: string): Uint8Array;
 
+  // PCD8544 (Nokia 5110) framebuffer (504 B: 6 banks × 84 cols, bank-major)
+  get_pcd8544_framebuffer(device_id: string): Uint8Array;
+
+  // HC-SR04 ultrasonic: host-set "hand distance" in cm
+  set_hcsr04_distance(id: string, distance_cm: number): void;
+
   // ILI9341 TFT framebuffer
   get_ili9341_framebuffer(device_id: string): Uint8Array;
 
@@ -486,6 +492,25 @@ export class SimulatorBridge {
       return fb ? new Uint8Array(fb) : null;
     } catch {
       return null;
+    }
+  }
+
+  /** Returns the 504-byte framebuffer for a PCD8544 (Nokia 5110), or null if not found. */
+  getPcd8544Framebuffer(deviceId: string): Uint8Array | null {
+    try {
+      const fb = this.sim.get_pcd8544_framebuffer(deviceId);
+      return fb ? new Uint8Array(fb) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Set the HC-SR04 measured distance (cm) — the host-controlled hand position. */
+  setHcsr04Distance(id: string, distanceCm: number): void {
+    try {
+      this.sim.set_hcsr04_distance(id, distanceCm);
+    } catch {
+      /* sensor not present in this lab */
     }
   }
 
