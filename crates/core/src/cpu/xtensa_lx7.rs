@@ -15,6 +15,10 @@ use crate::cpu::xtensa_sr::{
     EXCCAUSE, INTENABLE, INTERRUPT, PS as PS_SR, SAR, SCOMPARE1, VECBASE, WINDOWBASE, WINDOWSTART,
 };
 use crate::decoder::{xtensa, xtensa_length, xtensa_narrow};
+
+/// Decode-cache slot count (direct-mapped by `(pc >> 1) & MASK`). Power of two.
+const DECODE_CACHE_SIZE: usize = 8192;
+const DECODE_CACHE_MASK: usize = DECODE_CACHE_SIZE - 1;
 use crate::snapshot::{CpuSnapshot, XtensaLx7CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationError, SimulationObserver};
 use std::sync::Arc;
@@ -106,6 +110,16 @@ pub struct XtensaLx7 {
     pub halted: bool,
     /// IRAM/flash instruction-fetch slice cache (#119 Phase 1.2).
     fetch_cache: Option<(u64, u64, usize)>,
+    /// Decode cache (#124 follow-on): direct-mapped PC → (tag, len, decoded
+    /// `Instruction`). The fetch_cache removes the bus dispatch but every
+    /// instruction is still re-decoded; the demos' tight busy-loops decode the
+    /// same handful of PCs millions of times. Each slot carries the
+    /// `cur_decode_gen` it was filled under; any fetch-cache invalidation
+    /// (write into a cached code range, IRQ dispatch, snapshot restore) bumps
+    /// the generation, lazily voiding every entry without a clear pass.
+    decode_cache: Vec<Option<(u32, u32, crate::decoder::xtensa::Instruction)>>,
+    decode_gen: Vec<u32>,
+    cur_decode_gen: u32,
     /// JIT cache (Phase 3.2 pilot — issue #124).
     #[cfg(feature = "jit")]
     pub jit: Option<Box<crate::cpu::xtensa_jit::JitCache>>,
@@ -130,6 +144,9 @@ impl XtensaLx7 {
             branched: false,
             halted: false,
             fetch_cache: None,
+            decode_cache: vec![None; DECODE_CACHE_SIZE],
+            decode_gen: vec![0; DECODE_CACHE_SIZE],
+            cur_decode_gen: 1,
             #[cfg(feature = "jit")]
             jit: None,
             #[cfg(feature = "jit")]
@@ -143,6 +160,9 @@ impl XtensaLx7 {
     #[inline]
     fn invalidate_fetch_cache(&mut self) {
         self.fetch_cache = None;
+        // Decode cache shares the fetch cache's invalidation conditions: bump
+        // the generation so every cached decode is lazily voided (no clear).
+        self.cur_decode_gen = self.cur_decode_gen.wrapping_add(1);
     }
 
     /// Invalidate the fetch cache iff `addr` (the start byte of an
@@ -156,6 +176,15 @@ impl XtensaLx7 {
             if a >= start && a < end {
                 self.fetch_cache = None;
             }
+        }
+        // Decode-cache SMC safety: a store into Xtensa instruction space
+        // (>= 0x4000_0000 — IRAM/flash/ROM; DRAM lives below) may rewrite code
+        // we've cached the *decoded* form of. The fetch_cache reads live bytes
+        // so it's self-healing, but the decode cache isn't — so any code-space
+        // write voids the whole decode cache. Data stores (DRAM) skip this, so
+        // the cache doesn't thrash on the common path.
+        if addr >= 0x4000_0000 {
+            self.cur_decode_gen = self.cur_decode_gen.wrapping_add(1);
         }
     }
 
@@ -2184,72 +2213,93 @@ impl Cpu for XtensaLx7 {
         // `read_u32` + `RefCell::borrow`) entirely for hot loops
         // (#119 Phase 1.2).
         let pc_u64 = pc as u64;
-        let cache_hit = match self.fetch_cache {
-            Some((start, end, ptr_addr)) if pc_u64 >= start && pc_u64 + 4 <= end => {
-                Some((start, ptr_addr))
-            }
-            _ => None,
-        };
 
-        let (b0, len, ins) = if let Some((start, ptr_addr)) = cache_hit {
-            // SAFETY: cache was populated by `Bus::fetch_slice`, which
-            // returns a pointer into a `RamPeripheral` backing buffer.
-            // The buffer is fixed-size for the peripheral's lifetime
-            // (see `system::xtensa::RamPeripheral` INVARIANT) and the
-            // CPU invalidates the cache on any bus write that lands in
-            // the cached range, on IRQ dispatch, and on snapshot
-            // restore. We've already bounds-checked `pc + 4 <= end`.
-            let off = (pc_u64 - start) as usize;
-            unsafe {
-                let p = (ptr_addr as *const u8).add(off);
-                let b0 = *p;
-                let len = xtensa_length::instruction_length(b0);
-                let ins = if len == 2 {
-                    let hw = u16::from_le_bytes([*p, *p.add(1)]);
-                    xtensa_narrow::decode_narrow(hw)
-                } else {
-                    let w = u32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]);
-                    xtensa::decode(w)
-                };
-                (b0, len, ins)
+        // Decode cache: a hit skips fetch AND decode entirely. Direct-mapped
+        // by `(pc >> 1)`; `tag == pc` guards aliasing; the generation guards
+        // staleness (bumped on every fetch-cache invalidation).
+        let dc_idx = (pc as usize >> 1) & DECODE_CACHE_MASK;
+        let dc_hit = if self.decode_gen[dc_idx] == self.cur_decode_gen {
+            match self.decode_cache[dc_idx] {
+                Some((tag, l, i)) if tag == pc => Some((l, i)),
+                _ => None,
             }
         } else {
-            // Slow path: ask the bus, then try to populate the cache
-            // for next time. Non-RAM peripherals (RomThunkBank, GPIO,
-            // declarative regs, …) keep returning `None` from
-            // `fetch_slice` and stay on the slow path forever — that's
-            // intentional: side-effect-bearing reads must run through
-            // the bus.
-            let b0 = bus.read_u8(pc_u64)?;
-            let len = xtensa_length::instruction_length(b0);
-            let ins = if len == 2 {
-                let hw = bus.read_u16(pc_u64)?;
-                xtensa_narrow::decode_narrow(hw)
-            } else {
-                let w = bus.read_u32(pc_u64)?;
-                xtensa::decode(w)
-            };
-            if self.fetch_cache.is_none() {
-                if let Some((start, end, slice)) = bus.fetch_slice(pc_u64) {
-                    // Stash pointer-as-usize; see `fetch_cache` doc for
-                    // the Send + lifetime story.
-                    self.fetch_cache = Some((start, end, slice.as_ptr() as usize));
-                }
-            }
-            (b0, len, ins)
+            None
         };
 
-        // S32E/L32E are 3-byte wide instructions with op0=0 (QRST), op1=9
-        // (LSC4), op2=4/0 — decoded by the standard wide path and dispatched
-        // through QRST. No special predecode needed; byte0 low nibble = 0
-        // (op0=0), so the length predecoder correctly returns 3.
-        //
-        // (An earlier draft routed S32E via op0=9, requiring a special
-        // EXCM-gated predecode here. That decoder agreed with hand-crafted
-        // test inputs but rejected real esp-hal firmware. See Plan 3 Task 10
-        // case study.)
+        let (len, ins) = if let Some((l, i)) = dc_hit {
+            (l, i)
+        } else {
+            let cache_hit = match self.fetch_cache {
+                Some((start, end, ptr_addr)) if pc_u64 >= start && pc_u64 + 4 <= end => {
+                    Some((start, ptr_addr))
+                }
+                _ => None,
+            };
 
-        let _ = b0; // retained for documentation parity with the slow path
+            let (b0, len, ins) = if let Some((start, ptr_addr)) = cache_hit {
+                // SAFETY: cache was populated by `Bus::fetch_slice`, which
+                // returns a pointer into a `RamPeripheral` backing buffer.
+                // The buffer is fixed-size for the peripheral's lifetime
+                // (see `system::xtensa::RamPeripheral` INVARIANT) and the
+                // CPU invalidates the cache on any bus write that lands in
+                // the cached range, on IRQ dispatch, and on snapshot
+                // restore. We've already bounds-checked `pc + 4 <= end`.
+                let off = (pc_u64 - start) as usize;
+                unsafe {
+                    let p = (ptr_addr as *const u8).add(off);
+                    let b0 = *p;
+                    let len = xtensa_length::instruction_length(b0);
+                    let ins = if len == 2 {
+                        let hw = u16::from_le_bytes([*p, *p.add(1)]);
+                        xtensa_narrow::decode_narrow(hw)
+                    } else {
+                        let w = u32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]);
+                        xtensa::decode(w)
+                    };
+                    (b0, len, ins)
+                }
+            } else {
+                // Slow path: ask the bus, then try to populate the cache
+                // for next time. Non-RAM peripherals (RomThunkBank, GPIO,
+                // declarative regs, …) keep returning `None` from
+                // `fetch_slice` and stay on the slow path forever — that's
+                // intentional: side-effect-bearing reads must run through
+                // the bus.
+                let b0 = bus.read_u8(pc_u64)?;
+                let len = xtensa_length::instruction_length(b0);
+                let ins = if len == 2 {
+                    let hw = bus.read_u16(pc_u64)?;
+                    xtensa_narrow::decode_narrow(hw)
+                } else {
+                    let w = bus.read_u32(pc_u64)?;
+                    xtensa::decode(w)
+                };
+                if self.fetch_cache.is_none() {
+                    if let Some((start, end, slice)) = bus.fetch_slice(pc_u64) {
+                        // Stash pointer-as-usize; see `fetch_cache` doc for
+                        // the Send + lifetime story.
+                        self.fetch_cache = Some((start, end, slice.as_ptr() as usize));
+                    }
+                }
+                (b0, len, ins)
+            };
+
+            // S32E/L32E are 3-byte wide instructions with op0=0 (QRST), op1=9
+            // (LSC4), op2=4/0 — decoded by the standard wide path and dispatched
+            // through QRST. No special predecode needed; byte0 low nibble = 0
+            // (op0=0), so the length predecoder correctly returns 3.
+            //
+            // (An earlier draft routed S32E via op0=9, requiring a special
+            // EXCM-gated predecode here. That decoder agreed with hand-crafted
+            // test inputs but rejected real esp-hal firmware. See Plan 3 Task 10
+            // case study.)
+
+            let _ = b0; // retained for documentation parity with the slow path
+            self.decode_cache[dc_idx] = Some((pc, len, ins));
+            self.decode_gen[dc_idx] = self.cur_decode_gen;
+            (len, ins)
+        };
         self.branched = false;
         let fall_through_pc = pc.wrapping_add(len);
         self.execute(ins, bus, len)?;
