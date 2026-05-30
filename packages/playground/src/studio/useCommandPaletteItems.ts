@@ -53,13 +53,17 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
     }
 
     for (const board of ctx.boards) {
+      // A board IS a component (an MCU one). Dropping it adds a new
+      // MCU instance to the session — same flow as dropping any
+      // other component. If onAddMcu isn't wired (legacy single-
+      // chip), fall back to replacing the current board.
       items.push({
         id: `board:${board.boardId}`,
-        bucket: 'Boards',
+        bucket: 'Components',
         label: board.name,
         hint: board.arch,
         icon: getComponentIcon(board.mcuComponentType ?? 'mcu', 'misc'),
-        action: () => ctx.onLoadBoard(board),
+        action: () => (ctx.onAddMcu ? ctx.onAddMcu(board) : ctx.onLoadBoard(board)),
       });
     }
 
@@ -80,29 +84,6 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
       { id: 'act:dev', bucket: 'Actions', label: 'Toggle Dev mode', action: ctx.onToggleDev },
     );
 
-    if (ctx.onAddMcu) {
-      // Multi-chip session: let the user drop another MCU through
-      // the same command-palette flow as everything else, scoped to
-      // the boards already in the catalog.
-      const onAddMcu = ctx.onAddMcu;
-      items.push({
-        id: 'mcu:add-default',
-        bucket: 'MCU',
-        label: 'Add MCU (nRF52840 DK)',
-        hint: 'new bridge',
-        action: () => onAddMcu(),
-      });
-      for (const board of ctx.boards) {
-        items.push({
-          id: `mcu:add-${board.boardId}`,
-          bucket: 'MCU',
-          label: `Add MCU: ${board.name}`,
-          hint: board.arch,
-          icon: getComponentIcon(board.mcuComponentType ?? 'mcu', 'misc'),
-          action: () => onAddMcu(board),
-        });
-      }
-    }
 
     return items;
   }, [ctx]);

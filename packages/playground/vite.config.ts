@@ -12,6 +12,10 @@ export default defineConfig({
     fs: {
       allow: [path.resolve(__dirname, '../..')],
     },
+    // Accept any Host header so a phone can reach the dev server
+    // via `vite dev --host` LAN IP or a cloudflared/ngrok tunnel.
+    // Dev only — production build doesn't use the dev server.
+    allowedHosts: true,
   },
   resolve: {
     dedupe: ['react', 'react-dom'],

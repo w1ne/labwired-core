@@ -1663,6 +1663,7 @@ export function App() {
           canRun={!!source || !!bridge}
           onRun={() => requireAuth(onSimRun)}
           onPause={handlePause}
+          renderCommandPalette={renderCommandPalette}
         />
       </ChipsProvider>
     );

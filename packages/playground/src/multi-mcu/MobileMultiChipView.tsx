@@ -32,6 +32,13 @@ export interface MobileMultiChipViewProps {
   canRun?: boolean;
   onRun?: () => void;
   onPause?: () => void;
+  // Renders the ⌘K command palette overlay; receives open/close
+  // callbacks so the mobile header search button can drive it.
+  renderCommandPalette?: (
+    open: boolean,
+    close: () => void,
+    open_: () => void,
+  ) => ReactNode;
 }
 
 export function MobileMultiChipView({
@@ -43,15 +50,32 @@ export function MobileMultiChipView({
   canRun,
   onRun,
   onPause,
+  renderCommandPalette,
 }: MobileMultiChipViewProps) {
-  const { order, sessions, activeChipId, setActiveChipId, addChip, removeChip } = useChips();
-  const [propsOpen, setPropsOpen] = useState(false);
+  const {
+    order,
+    sessions,
+    activeChipId,
+    setActiveChipId,
+    removeChip,
+    propertiesOpen: propsOpen,
+    setPropertiesOpen: setPropsOpen,
+  } = useChips();
+  const [commandOpen, setCommandOpen] = useState(false);
 
   return (
     <div className="lw-mob">
       <header className="lw-mob-header">
         <span className="lw-mob-logo">LabWired</span>
         <span className="lw-mob-sub">{order.length} MCU{order.length === 1 ? '' : 's'}</span>
+        <button
+          type="button"
+          className="lw-mob-search"
+          aria-label="Search components & actions"
+          onClick={() => setCommandOpen(true)}
+        >
+          🔍
+        </button>
       </header>
 
       <main className="lw-mob-canvas">
@@ -88,10 +112,12 @@ export function MobileMultiChipView({
             />
           );
         })}
-        <button type="button" className="lw-mob-add" onClick={() => addChip()}>
-          + add MCU
+        <button type="button" className="lw-mob-add" onClick={() => setCommandOpen(true)}>
+          + add component
         </button>
       </main>
+
+      {renderCommandPalette?.(commandOpen, () => setCommandOpen(false), () => setCommandOpen(true))}
 
       {propsOpen && sessions[activeChipId] && (
         <div className="lw-mob-props" role="dialog" aria-modal="true">

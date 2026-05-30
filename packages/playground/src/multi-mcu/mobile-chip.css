@@ -29,6 +29,25 @@
 .lw-mob-sub {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.55);
+  flex: 1;
+  margin-left: 12px;
+}
+
+.lw-mob-search {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.lw-mob-search:active {
+  background: rgba(232, 62, 140, 0.18);
 }
 
 .lw-mob-canvas {
