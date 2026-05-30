@@ -177,6 +177,13 @@ pub struct SystemBus {
     /// token)`; `Machine::drain_scheduler_events` enqueues and clears them.
     /// Only populated under the `event-scheduler` feature.
     pub pending_schedule: Vec<(usize, u64, u32)>,
+    /// Phase 2B.3c (issue #192): when true, `tick_peripherals_phase1` skips the
+    /// entire per-cycle peripheral walk — the actual ~2.4x win. Set ONLY for a
+    /// config whose every peripheral is migrated (`uses_scheduler`) or inert
+    /// (no real `tick()` work), e.g. ESP32-classic via `configure_xtensa_esp32`.
+    /// Read only under the `event-scheduler` feature; flag-off the walk always
+    /// runs, so the shipped build is unchanged.
+    pub legacy_walk_disabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -616,6 +623,7 @@ impl SystemBus {
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -642,6 +650,7 @@ impl SystemBus {
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -799,6 +808,7 @@ impl SystemBus {
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
         };
 
         let mut merged_peripherals = chip.peripherals.clone();
@@ -1686,7 +1696,17 @@ impl SystemBus {
 
         let tick_interval = self.config.peripheral_tick_interval as u64;
 
+        // Phase 2B.3c (issue #192): if every peripheral on this bus is migrated
+        // or inert, the whole walk is skipped — the actual orchestration win.
+        // Read once before the borrow; gated so flag-off always walks.
+        #[cfg(feature = "event-scheduler")]
+        let legacy_walk_disabled = self.legacy_walk_disabled;
+
         for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
+            #[cfg(feature = "event-scheduler")]
+            if legacy_walk_disabled {
+                break;
+            }
             // Phase 2B.2 (issue #192): scheduler-driven peripherals are advanced
             // lazily via `sync_to` on MMIO access (and by the event drain in
             // `Machine::step`), never by this per-cycle walk. Skipping them here
@@ -2595,6 +2615,7 @@ mod tests {
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -2645,6 +2666,7 @@ mod tests {
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
         };
 
         bus.rebuild_peripheral_ranges();
@@ -2697,6 +2719,7 @@ mod tests {
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
         };
         bus.rebuild_peripheral_ranges();
 

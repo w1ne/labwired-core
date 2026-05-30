@@ -36,6 +36,10 @@ pub struct Esp32Gpio {
     int_enable: u32,
     int_type: [u8; 32],
     cycle: u64,
+    /// Phase 2B.3c (issue #192): peripheral-tick index of the last `sync_to`,
+    /// for the scheduler path. `cycle` is only an observability timestamp
+    /// passed to `GpioObserver::on_pin_change`; no firmware register reads it.
+    anchor_tick: u64,
     observers: Vec<Arc<dyn GpioObserver>>,
 }
 
@@ -48,6 +52,7 @@ impl Esp32Gpio {
             int_enable: 0,
             int_type: [0; 32],
             cycle: 0,
+            anchor_tick: 0,
             observers: Vec::new(),
         }
     }
@@ -222,6 +227,22 @@ impl Peripheral for Esp32Gpio {
     fn tick(&mut self) -> PeripheralTickResult {
         self.cycle = self.cycle.wrapping_add(1);
         PeripheralTickResult::default()
+    }
+
+    /// Phase 2B.3c (issue #192): migrated to the event scheduler. `cycle` is a
+    /// free-running observability timestamp; flag-on it advances lazily via
+    /// `sync_to` on MMIO access instead of one per `tick()`. Flag-off, `tick()`
+    /// still drives it.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn sync_to(&mut self, tick_now: u64) {
+        if tick_now <= self.anchor_tick {
+            return;
+        }
+        self.cycle = self.cycle.wrapping_add(tick_now - self.anchor_tick);
+        self.anchor_tick = tick_now;
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

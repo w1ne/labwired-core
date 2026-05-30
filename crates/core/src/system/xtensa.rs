@@ -605,6 +605,15 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(RamPeripheral::new(0x10000)),
     );
 
+    // Phase 2B.3c (issue #192): every peripheral registered above is either
+    // migrated to the event scheduler (uart0, gpio, rtc_cntl, timg0/1) or
+    // inert (esp32 spi, efuse, syscon, and the SystemStub batch). So under the
+    // `event-scheduler` feature the per-cycle peripheral walk is skipped
+    // entirely — the ~2.4x throughput win. Verified: the full ESP32-classic
+    // test suite passes with the walk disabled (e2e renders byte-perfect).
+    // No effect with the feature off (the flag is only read there).
+    bus.legacy_walk_disabled = true;
+
     XtensaLx7::new()
 }
 
