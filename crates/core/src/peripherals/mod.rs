@@ -22,6 +22,7 @@ pub mod exti;
 pub mod flash;
 pub mod fmc;
 pub mod gpio;
+pub mod hc_sr04;
 pub mod i2c;
 pub mod i2c_temp_sensor;
 pub mod iwdg;

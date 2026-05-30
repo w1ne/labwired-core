@@ -184,6 +184,10 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
+    /// HC-SR04 ultrasonic sensors wired to GPIO TRIG/ECHO pins. Serviced once
+    /// per peripheral-tick: the bus reads each sensor's TRIG output level and
+    /// drives the computed ECHO input level. Empty by default → zero cost.
+    pub hcsr04: Vec<crate::peripherals::hc_sr04::HcSr04>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -522,6 +526,50 @@ impl SystemBus {
         Some((base + odr_off, bit))
     }
 
+    /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
+    /// drive an MCU input line (e.g. the HC-SR04 ECHO pin).
+    fn resolve_pin_idr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
+        let (port_name, bit) = Self::parse_stm32_pin(pin)?;
+        let idx = bus.find_peripheral_index_by_name(&port_name)?;
+        let base = bus.peripherals[idx].base;
+        let idr_off = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+            .map(|g| g.idr_offset())?;
+        Some((base + idr_off, bit))
+    }
+
+    /// Service all HC-SR04 sensors for one tick: read each sensor's TRIG
+    /// output level, advance its echo window, and drive the resulting ECHO
+    /// input level. No-op when no sensors are wired.
+    pub(crate) fn service_hcsr04(&mut self) {
+        if self.hcsr04.is_empty() {
+            return;
+        }
+        let now = self.current_cycle;
+        for i in 0..self.hcsr04.len() {
+            let trig_addr = self.hcsr04[i].trig_odr_addr;
+            let trig_bit = self.hcsr04[i].trig_bit;
+            let trig_high = self
+                .read_u32(trig_addr)
+                .map(|v| (v >> trig_bit) & 1 != 0)
+                .unwrap_or(false);
+            let echo_high = self.hcsr04[i].service(trig_high, now);
+            let echo_addr = self.hcsr04[i].echo_idr_addr;
+            let echo_bit = self.hcsr04[i].echo_bit;
+            let idr = self.read_u32(echo_addr).unwrap_or(0);
+            let new_idr = if echo_high {
+                idr | (1 << echo_bit)
+            } else {
+                idr & !(1 << echo_bit)
+            };
+            if new_idr != idr {
+                let _ = self.write_u32(echo_addr, new_idr);
+            }
+        }
+    }
+
     /// Before an SPI transfer, refresh the D/C level of any attached
     /// display that observes a D/C GPIO line (e.g. the PCD8544 Nokia 5110)
     /// by reading the driving GPIO's output bit. No-op for non-SPI writes and
@@ -716,6 +764,7 @@ impl SystemBus {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -743,6 +792,7 @@ impl SystemBus {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -901,6 +951,7 @@ impl SystemBus {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
         };
 
         let mut merged_peripherals = chip.peripherals.clone();
@@ -1597,6 +1648,61 @@ impl SystemBus {
                     }
                     spi.attach(Box::new(dev));
                 }
+                "hc-sr04" | "hcsr04" => {
+                    // GPIO-wired ultrasonic sensor — no SPI/I2C connection. The
+                    // bus services it each tick: reads TRIG (an MCU output) and
+                    // drives ECHO (an MCU input) with a distance-proportional
+                    // pulse. `distance_cm` is the host-controlled "hand position".
+                    let trig = ext
+                        .config
+                        .get("trig_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("PA8")
+                        .to_string();
+                    let echo = ext
+                        .config
+                        .get("echo_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("PA9")
+                        .to_string();
+                    let distance_cm = ext
+                        .config
+                        .get("distance_cm")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(50.0) as f32;
+                    let cpu_hz = ext
+                        .config
+                        .get("cpu_hz")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(80_000_000);
+
+                    let (trig_addr, trig_bit) =
+                        Self::resolve_pin_odr(&bus, &trig).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "HC-SR04 '{}' trig_pin '{}' could not be resolved to a GPIO",
+                                ext.id,
+                                trig
+                            )
+                        })?;
+                    let (echo_addr, echo_bit) =
+                        Self::resolve_pin_idr(&bus, &echo).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "HC-SR04 '{}' echo_pin '{}' could not be resolved to a GPIO",
+                                ext.id,
+                                echo
+                            )
+                        })?;
+
+                    bus.hcsr04.push(crate::peripherals::hc_sr04::HcSr04::new(
+                        ext.id.clone(),
+                        trig_addr,
+                        trig_bit,
+                        echo_addr,
+                        echo_bit,
+                        cpu_hz,
+                        distance_cm,
+                    ));
+                }
                 "ntc-thermistor" => {
                     // Analog source path: NTC connects directly to an ADC channel.
                     // Read channel + initial temperature from config.
@@ -1979,6 +2085,10 @@ impl SystemBus {
                 p.dev.observe_gpio_change(&changes);
             }
         }
+
+        // HC-SR04 service pass: read each sensor's TRIG output level and drive
+        // the computed ECHO input level. Empty list → skipped entirely.
+        self.service_hcsr04();
 
         (
             interrupts,
@@ -2758,6 +2868,7 @@ mod tests {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -2809,6 +2920,7 @@ mod tests {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
         };
 
         bus.rebuild_peripheral_ranges();
@@ -2862,6 +2974,7 @@ mod tests {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
 

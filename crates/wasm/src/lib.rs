@@ -418,6 +418,24 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
+    /// Set the distance (cm) reported by an HC-SR04 ultrasonic sensor — the
+    /// host-controlled "hand position" that drives gesture control. Clamped to
+    /// the sensor's 2–400 cm range.
+    #[wasm_bindgen]
+    pub fn set_hcsr04_distance(&mut self, id: &str, distance_cm: f32) -> Result<(), JsValue> {
+        let machine = self
+            .machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        for sensor in machine.bus.hcsr04.iter_mut() {
+            if sensor.id == id {
+                sensor.set_distance_cm(distance_cm);
+                return Ok(());
+            }
+        }
+        Err(JsValue::from_str(&format!("No HC-SR04 sensor '{}'", id)))
+    }
+
     /// Set an input board_io binding (e.g. button press).
     /// Writes to the GPIO IDR register bit for the specified binding.
     #[wasm_bindgen]

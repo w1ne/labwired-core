@@ -193,6 +193,16 @@ impl GpioPort {
         }
     }
 
+    /// Register offset of the input data register (IDR) for this layout.
+    /// Used by the bus to resolve a sensor's input line (e.g. HC-SR04 ECHO).
+    pub fn idr_offset(&self) -> u64 {
+        match self.layout {
+            GpioRegisterLayout::Stm32F1 => 0x08,
+            GpioRegisterLayout::Stm32V2 => 0x10,
+            GpioRegisterLayout::Nrf52 => 0x510,
+        }
+    }
+
     #[allow(dead_code)]
     fn bsrr_offset(&self) -> u64 {
         match self.layout {
