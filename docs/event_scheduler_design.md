@@ -118,10 +118,12 @@ side-channels.
 (placeholder `StubPeripheral`, same dance as `tick_with_bus`) so `&mut self.bus`
 can be passed into `on_event`, then `apply_event_result`.
 
-## 10. OPEN — Phase 2B.2: TIMG migration mechanism
+## 10. Phase 2B.2: TIMG migration mechanism — RESOLVED & IMPLEMENTED
 
-> This section was in the lost doc and is **not yet pinned by code**. It needs a
-> decision before TIMG sets `uses_scheduler() = true`.
+> Decision (2026-05-30): **Machine-side anchor sync** (candidate A below). TIMG
+> is the first peripheral to opt in (`uses_scheduler() == true`). Implemented;
+> validated flag-OFF byte-identical and flag-ON behaviour-neutral (the ESP32
+> epaper e2e produces the identical output, pre-existing one-pixel bug and all).
 
 TIMG today (`peripherals/esp32/timg.rs`) is a free-running counter: `tick()`
 increments `counter_t0`/`counter_t1` by 1 every CPU cycle when enabled, and
@@ -155,5 +157,26 @@ in CPU cycles), raises its IRQ in the returned `EventResult`, and (for
 auto-reload) re-arms via the reentrant `schedule(now, …)` path (§5). TIMG
 subscribes to the APB clock domain and reschedules on `on_clock_change` (§7).
 
-Recommendation in the lost doc is unknown. **A** maximizes the perf goal; **B**
-is the least invasive correct option. Pick before implementing 2B.2.
+### Implemented (2B.2)
+
+- `Peripheral::sync_to(&mut self, tick_now: u64)` — default no-op trait hook.
+  `tick_now` is the peripheral-tick index = `total_cycles / peripheral_tick_interval`,
+  the exact quantum the legacy walk advanced one-per-`tick()`, so the lazy model
+  is behaviour-identical for any tick interval.
+- `Machine::step` mirrors `total_cycles` into `SystemBus::current_cycle` once per
+  step — O(1), does not reintroduce the per-peripheral walk.
+- The bus calls `sync_to` on a scheduler-driven peripheral immediately *before*
+  an MMIO **write** observes it (`sync_scheduler_peripheral`). Reads are `&self`
+  and can't sync; this is fine because LO/HI reads require a prior `T0_UPDATE`
+  *write* strobe (real-silicon requirement, honoured by esp-idf), and the strobe
+  syncs first then latches the up-to-date counter.
+- `tick_peripherals_phase1` skips `uses_scheduler()` peripherals — the actual
+  orchestration saving.
+- TIMG keeps its legacy per-cycle `tick()` increment for flag-OFF builds and
+  gains the anchor-based `sync_to` for flag-ON. `anchor_tick` is monotonic; a
+  span spent disabled is excluded.
+
+All of the above is gated behind `event-scheduler`, so flag-OFF stays
+byte-identical. Perf payoff is marginal at 2B.2 (only TIMG is lazy; the walk
+still runs for the other ~39 peripherals) and scales as each subsequent
+peripheral migrates and the walk is eventually deleted (§9).

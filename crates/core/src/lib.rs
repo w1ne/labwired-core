@@ -455,6 +455,15 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn uses_scheduler(&self) -> bool {
         false
     }
+
+    /// Phase 2B.2 (issue #192): advance a scheduler-driven peripheral's lazy
+    /// state to `tick_now` (the peripheral-tick index — CPU cycles divided by
+    /// `peripheral_tick_interval`, the same quantum the legacy walk advanced
+    /// one step per `tick()` call). Called by the bus immediately before an
+    /// MMIO write observes the peripheral, so a frozen-then-strobed counter
+    /// reads the up-to-date value. Default no-op; only peripherals that opt
+    /// into the scheduler implement it.
+    fn sync_to(&mut self, _tick_now: u64) {}
 }
 
 /// Trait representing the system bus
@@ -781,6 +790,14 @@ impl<C: Cpu> Machine<C> {
 
     pub fn step(&mut self) -> SimResult<()> {
         self.total_cycles += 1;
+        // Phase 2B.2 (issue #192): mirror the cycle count into the bus before
+        // the CPU executes, so MMIO writes during this step can lazily sync
+        // scheduler-driven peripherals to "now". O(1) — does not reintroduce
+        // the per-peripheral walk this phase exists to remove.
+        #[cfg(feature = "event-scheduler")]
+        {
+            self.bus.current_cycle = self.total_cycles;
+        }
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
         // Dual-core: step the secondary CPU one instruction per
@@ -1018,6 +1035,14 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
             // Execute in batch until next peripheral tick or breakpoint/limit
             let current_cycles = self.total_cycles;
+            // Phase 2B.2 (issue #192): mirror the cycle count before the batch so
+            // MMIO writes inside it can lazily sync scheduler-driven peripherals.
+            // The batch is bounded by `peripheral_tick_interval`, so intra-batch
+            // staleness is < one tick — within the functional-timer tolerance.
+            #[cfg(feature = "event-scheduler")]
+            {
+                self.bus.current_cycle = current_cycles;
+            }
             let tick_interval = self.config.peripheral_tick_interval as u64;
             let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
 

@@ -147,6 +147,13 @@ pub struct Timg {
     counter_t0: u64,
     /// Live 64-bit value for timer 1. Same semantics as `counter_t0`.
     counter_t1: u64,
+    /// Phase 2B.2 (issue #192): peripheral-tick index of the last `sync_to`.
+    /// In scheduler mode the counters no longer advance one-per-`tick()`;
+    /// instead `sync_to(now)` lazily adds `(now - anchor_tick)` to each
+    /// enabled counter on MMIO access, and `tick()` is never called (the bus
+    /// skips `uses_scheduler()` peripherals in its per-cycle walk). Unused in
+    /// the legacy (flag-off) build, where `tick()` drives the counters.
+    anchor_tick: u64,
 }
 
 impl Timg {
@@ -157,6 +164,7 @@ impl Timg {
             regs: HashMap::new(),
             counter_t0: 0,
             counter_t1: 0,
+            anchor_tick: 0,
         }
     }
 
@@ -361,6 +369,38 @@ impl Peripheral for Timg {
         PeripheralTickResult::default()
     }
 
+    /// Phase 2B.2 (issue #192): TIMG is the first peripheral to migrate to the
+    /// event scheduler. With the `event-scheduler` feature on, the bus stops
+    /// calling `tick()` every cycle and instead calls `sync_to` lazily on MMIO
+    /// access. (No-op effect when the feature is off — the bus ignores this.)
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    /// Advance the enabled counters to peripheral-tick `tick_now`. Equivalent
+    /// to having called `tick()` once per intervening tick while enabled, but
+    /// computed in O(1) at access time instead of once per cycle. Disabled
+    /// timers don't accrue: `anchor_tick` is always moved to `tick_now`, so a
+    /// span spent disabled is excluded once the timer is re-enabled. `tick_now`
+    /// is monotonic (driven by `Machine::total_cycles`), so the delta is never
+    /// negative; `saturating_sub` guards the degenerate equal/rewind case.
+    fn sync_to(&mut self, tick_now: u64) {
+        // Monotonic guard: a non-advancing or rewinding `tick_now` is a no-op,
+        // and the anchor never moves backward (else the next sync would
+        // double-count the reclaimed span).
+        if tick_now <= self.anchor_tick {
+            return;
+        }
+        let delta = tick_now - self.anchor_tick;
+        if self.is_t0_enabled() {
+            self.counter_t0 = self.counter_t0.wrapping_add(delta);
+        }
+        if self.is_t1_enabled() {
+            self.counter_t1 = self.counter_t1.wrapping_add(delta);
+        }
+        self.anchor_tick = tick_now;
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -418,6 +458,51 @@ mod tests {
         let v2 = read_u32(&t, T0_LO);
         assert!(v2 > v1, "counter must be monotonically increasing");
         assert_eq!(v2 - v1, 50, "counter should advance by exactly 50 ticks");
+    }
+
+    #[test]
+    fn lazy_sync_advances_enabled_counter() {
+        // Phase 2B.2: in scheduler mode the counter advances via sync_to, not
+        // tick(). Enable T0, sync to tick 100, strobe, read → 100.
+        let mut t = Timg::new(0x3FF5_F000);
+        write_u32(&mut t, T0_CONFIG, T_CONFIG_EN_BIT);
+        t.sync_to(100);
+        write_u32(&mut t, T0_UPDATE, 1);
+        assert_eq!(read_u32(&t, T0_LO), 100);
+
+        // A second sync adds only the new delta.
+        t.sync_to(175);
+        write_u32(&mut t, T0_UPDATE, 1);
+        assert_eq!(read_u32(&t, T0_LO), 175);
+    }
+
+    #[test]
+    fn lazy_sync_excludes_disabled_span() {
+        // A span spent disabled must not accrue: sync past it while disabled,
+        // then enable and sync again — only the post-enable delta counts.
+        let mut t = Timg::new(0x3FF5_F000);
+        t.sync_to(50); // disabled: anchor moves, counter stays 0
+        write_u32(&mut t, T0_CONFIG, T_CONFIG_EN_BIT);
+        t.sync_to(100); // enabled: +50
+        write_u32(&mut t, T0_UPDATE, 1);
+        assert_eq!(read_u32(&t, T0_LO), 50, "disabled span [0,50) excluded");
+    }
+
+    #[test]
+    fn lazy_sync_is_monotonic() {
+        // A non-advancing or rewinding tick_now is a no-op (saturating delta).
+        let mut t = Timg::new(0x3FF5_F000);
+        write_u32(&mut t, T0_CONFIG, T_CONFIG_EN_BIT);
+        t.sync_to(100);
+        t.sync_to(40); // rewind ignored
+        t.sync_to(100); // same value → no double count
+        write_u32(&mut t, T0_UPDATE, 1);
+        assert_eq!(read_u32(&t, T0_LO), 100);
+    }
+
+    #[test]
+    fn uses_scheduler_is_true() {
+        assert!(Timg::new(0x3FF5_F000).uses_scheduler());
     }
 
     #[test]
