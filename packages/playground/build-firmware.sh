@@ -18,11 +18,15 @@ mkdir -p "$OUT_DIR"
 
 # ── 1. WASM simulator module ──────────────────────────────────────────────────
 echo "Building labwired-wasm..."
+# NOTE: `labwired-wasm` has no `wasm-bindgen` *feature* (wasm-bindgen is a
+# plain dependency), so the old `-- --features wasm-bindgen` errored and left
+# this wasm stale. The event-scheduler perf path ships via the labwired-core
+# dependency's own `event-scheduler` feature (always on for the wasm crate),
+# so a plain release build picks it up.
 (cd "$CORE_DIR" && ~/.cargo/bin/wasm-pack build crates/wasm \
   --target web \
   --release \
-  --out-dir "$OUT_DIR" \
-  -- --features wasm-bindgen)
+  --out-dir "$OUT_DIR")
 
 echo "WASM module → $OUT_DIR/labwired_wasm.js"
 

@@ -343,7 +343,7 @@ export interface InitOutput {
     readonly wasmsimulator_step_single: (a: number) => [number, number];
     readonly wasmsimulator_step_with_esp32_aids: (a: number, b: number) => [number, number];
     readonly wasmsimulator_take_runtime_snapshot: (a: number) => [number, number, number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h90cbb89e119fd004: (a: number, b: number, c: number) => number;
+    readonly wasm_bindgen__convert__closures_____invoke__hd749741175e04d09: (a: number, b: number, c: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
