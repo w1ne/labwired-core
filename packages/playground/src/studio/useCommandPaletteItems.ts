@@ -52,18 +52,19 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
     }
 
     for (const board of ctx.boards) {
-      // Selecting a board from the palette LOADS it (swaps the workspace to
-      // that board's starter diagram + source). The previous behaviour routed
-      // through onAddMcu → the chip-session registry, which never added a part
-      // to the canvas — so picking e.g. "ESP32 E-Reader" did nothing visible.
-      // Loading is the intuitive result of choosing a board/example.
+      // Selecting a board from the palette adds it to the workspace as an MCU
+      // (multi-chip session) when that path is wired — so picking a first board
+      // loads it and picking a second ADDS it alongside, giving two chips that
+      // talk over the shared virtual air. addChip() de-dupes (same board just
+      // refocuses) and, on the first chip, behaves like loading. Falls back to
+      // plain load when the multi-chip host isn't present (e.g. embed mode).
       items.push({
         id: `board:${board.boardId}`,
         bucket: 'Boards',
         label: board.name,
         hint: board.arch,
         icon: getComponentIcon(board.mcuComponentType ?? 'mcu', 'misc'),
-        action: () => ctx.onLoadBoard(board),
+        action: () => (ctx.onAddMcu ?? ctx.onLoadBoard)(board),
       });
     }
 
