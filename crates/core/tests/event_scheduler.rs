@@ -217,7 +217,13 @@ fn machine_step_parity_with_no_scheduler_users() {
     // — cycles=0, ticks_until_next=None — so total_cycles grows by exactly 1
     // per step.
     let mut bus = SystemBus::empty();
-    bus.add_peripheral("stub", 0x5000_0000, 0x10, None, Box::new(StubPeripheral::new(0)));
+    bus.add_peripheral(
+        "stub",
+        0x5000_0000,
+        0x10,
+        None,
+        Box::new(StubPeripheral::new(0)),
+    );
 
     let cpu = CortexM::new();
     let mut machine = Machine::new(cpu, bus);
@@ -238,4 +244,66 @@ fn machine_step_parity_with_no_scheduler_users() {
 
     // Scheduler must remain inert when nobody opts in.
     assert_eq!(machine.sched.stats().past_schedule_clamps, 0);
+}
+
+// Phase 2B.3a (issue #192): write-context scheduling plumbing. A peripheral
+// that arms an event from an MMIO write must have it buffered into the bus's
+// `pending_schedule` for `Machine::drain_scheduler_events` to enqueue. Gated
+// because the collection only runs under the `event-scheduler` feature.
+#[cfg(feature = "event-scheduler")]
+mod write_context_scheduling {
+    use labwired_core::bus::SystemBus;
+    use labwired_core::{Peripheral, SimResult};
+
+    const ARM_TOKEN: u32 = 0xE5;
+
+    #[derive(Debug, Default)]
+    struct ArmingPeripheral {
+        armed: bool,
+    }
+
+    impl Peripheral for ArmingPeripheral {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            self.armed = true;
+            Ok(())
+        }
+        fn uses_scheduler(&self) -> bool {
+            true
+        }
+        fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+            if std::mem::take(&mut self.armed) {
+                vec![(0, ARM_TOKEN)]
+            } else {
+                Vec::new()
+            }
+        }
+    }
+
+    #[test]
+    fn write_buffers_schedule_request() {
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral(
+            "arm",
+            0x5000_0000,
+            0x10,
+            None,
+            Box::new(ArmingPeripheral::default()),
+        );
+
+        // A non-arming-aware peripheral would leave this empty; ours queues
+        // exactly one (peripheral_idx=0, delay=0, ARM_TOKEN) on write.
+        bus.write_u32(0x5000_0000, 1).unwrap();
+        assert_eq!(bus.pending_schedule, vec![(0usize, 0u64, ARM_TOKEN)]);
+
+        // A second write re-arms and appends another request (the harvest
+        // cleared `armed` the first time, so this isn't a stale duplicate).
+        bus.write_u32(0x5000_0000, 1).unwrap();
+        assert_eq!(
+            bus.pending_schedule,
+            vec![(0usize, 0u64, ARM_TOKEN), (0usize, 0u64, ARM_TOKEN)]
+        );
+    }
 }

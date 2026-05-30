@@ -389,7 +389,9 @@ pub trait Peripheral: std::fmt::Debug + Send {
 
     /// True if this peripheral wants the bus to call `tick_with_bus`.
     /// Default false so the bus skips the swap dance for everyone else.
-    fn needs_bus_tick(&self) -> bool { false }
+    fn needs_bus_tick(&self) -> bool {
+        false
+    }
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
@@ -464,6 +466,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// reads the up-to-date value. Default no-op; only peripherals that opt
     /// into the scheduler implement it.
     fn sync_to(&mut self, _tick_now: u64) {}
+
+    /// Phase 2B.3a (issue #192): hand the bus any events this peripheral wants
+    /// scheduled as a result of the MMIO write that just completed (e.g. a
+    /// UART arming its TX interrupt). Each entry is `(delay_ticks, token)` —
+    /// a delay in peripheral-tick units from "now" and an opaque token the
+    /// peripheral interprets in its own `on_event`. The buffer is drained
+    /// (cleared) by this call. A peripheral can't reach the scheduler from
+    /// `write`, so this is the bootstrap path; `on_event` reschedules itself
+    /// thereafter. Default empty — only write-scheduling peripherals override.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        Vec::new()
+    }
 }
 
 /// Trait representing the system bus
@@ -650,9 +664,7 @@ impl<C: Cpu> Machine<C> {
         let rtc_cntl_index = bus.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
-                .and_then(|a| {
-                    a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>()
-                })
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
                 .is_some()
         });
         Self {
@@ -843,27 +855,7 @@ impl<C: Cpu> Machine<C> {
         // everyone) the drain is a no-op — the legacy `tick()` walk
         // above still drives every peripheral until each migrates.
         #[cfg(feature = "event-scheduler")]
-        {
-            self.sched.advance_to(self.total_cycles);
-            let generations = self.bus.peripheral_generations();
-            let due = self.sched.drain_due(&generations);
-            for ev in due {
-                let idx = ev.peripheral_idx as usize;
-                let Some(entry) = self.bus.peripherals.get_mut(idx) else {
-                    continue;
-                };
-                // SAFETY-equivalent: swap the peripheral out so we can pass
-                // `&mut self.bus` into `on_event` without holding two
-                // simultaneous mutable borrows. Same dance the bus uses for
-                // `tick_with_bus`.
-                let placeholder: Box<dyn Peripheral> =
-                    Box::new(crate::peripherals::stub::StubPeripheral::new(0));
-                let mut dev = std::mem::replace(&mut entry.dev, placeholder);
-                let result = dev.on_event(ev.event_token, &mut self.sched, &mut self.bus);
-                self.bus.peripherals[idx].dev = dev;
-                self.apply_event_result(idx, result);
-            }
-        }
+        self.drain_scheduler_events();
 
         // RTC_CNTL software system reset (OPTIONS0 bit 31 / `SW_SYS_RST`).
         // The ESP32 BROM's `_rtc_trigger_sw_system_reset` writes this bit
@@ -881,6 +873,50 @@ impl<C: Cpu> Machine<C> {
         }
 
         Ok(())
+    }
+
+    /// Phase 2B.1/2B.3a (issue #192): advance the scheduler and fire every due
+    /// peripheral event. Called from both `step()` and the batch run loop so
+    /// neither path silently strands a scheduler-driven peripheral.
+    ///
+    /// The scheduler runs in peripheral-tick units (`total_cycles /
+    /// peripheral_tick_interval`) — the same quantum the legacy walk and
+    /// `sync_to` use — so deadlines are interval-agnostic. Write-context
+    /// schedule requests the bus buffered during this step's MMIO writes
+    /// (`pending_schedule`) are enqueued first: a peripheral can't reach the
+    /// scheduler from `write`, so it hands `(delay_ticks, token)` to the bus
+    /// and we convert to an absolute deadline here.
+    #[cfg(feature = "event-scheduler")]
+    fn drain_scheduler_events(&mut self) {
+        let interval = (self.config.peripheral_tick_interval as u64).max(1);
+        self.sched.advance_to(self.total_cycles / interval);
+        let now = self.sched.now();
+        for (idx, delay, token) in std::mem::take(&mut self.bus.pending_schedule) {
+            let gen = self
+                .bus
+                .peripherals
+                .get(idx)
+                .map(|p| p.generation)
+                .unwrap_or(0);
+            self.sched.schedule(now + delay, idx as u32, token, gen);
+        }
+        let generations = self.bus.peripheral_generations();
+        let due = self.sched.drain_due(&generations);
+        for ev in due {
+            let idx = ev.peripheral_idx as usize;
+            let Some(entry) = self.bus.peripherals.get_mut(idx) else {
+                continue;
+            };
+            // Swap the peripheral out so we can pass `&mut self.bus` into
+            // `on_event` without holding two simultaneous mutable borrows.
+            // Same dance the bus uses for `tick_with_bus`.
+            let placeholder: Box<dyn Peripheral> =
+                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
+            let mut dev = std::mem::replace(&mut entry.dev, placeholder);
+            let result = dev.on_event(ev.event_token, &mut self.sched, &mut self.bus);
+            self.bus.peripherals[idx].dev = dev;
+            self.apply_event_result(idx, result);
+        }
     }
 
     /// Phase 2B.1 (issue #192): fan out the side-effects produced by a
@@ -908,9 +944,7 @@ impl<C: Cpu> Machine<C> {
         }
         for (addr, val) in result.mmio_writes {
             if let Err(e) = self.bus.write_u32(addr as u64, val) {
-                tracing::warn!(
-                    "on_event mmio_write 0x{addr:08X} = 0x{val:08X} failed: {e:?}"
-                );
+                tracing::warn!("on_event mmio_write 0x{addr:08X} = 0x{val:08X} failed: {e:?}");
             }
         }
         // PPI fan-out: globalise event offsets to absolute bus addresses and
@@ -953,9 +987,7 @@ impl<C: Cpu> Machine<C> {
         };
         p.dev
             .as_any()
-            .and_then(|a| {
-                a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>()
-            })
+            .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
             .map(|rtc| rtc.drain_reset_request())
             .unwrap_or(false)
     }
@@ -1075,6 +1107,9 @@ impl<C: Cpu> DebugControl for Machine<C> {
                     tracing::debug!("Exception {} Pend", irq);
                 }
             }
+
+            #[cfg(feature = "event-scheduler")]
+            self.drain_scheduler_events();
 
             // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
             // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.

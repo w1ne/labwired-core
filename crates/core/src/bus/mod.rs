@@ -81,6 +81,21 @@ impl SystemBus {
             p.dev.sync_to(tick_now);
         }
     }
+
+    /// Phase 2B.3a (issue #192): after an MMIO write to a scheduler-driven
+    /// peripheral, harvest any events it wants scheduled (e.g. a just-armed
+    /// TX interrupt) into `pending_schedule` for `Machine` to enqueue. One
+    /// virtual `uses_scheduler()` call for legacy peripherals (false → return).
+    #[cfg(feature = "event-scheduler")]
+    #[inline]
+    fn collect_scheduled_events(&mut self, idx: usize) {
+        if !self.peripherals[idx].dev.uses_scheduler() {
+            return;
+        }
+        for (delay, token) in self.peripherals[idx].dev.take_scheduled_events() {
+            self.pending_schedule.push((idx, delay, token));
+        }
+    }
 }
 
 pub struct PeripheralEntry {
@@ -136,6 +151,13 @@ pub struct SystemBus {
     /// to "now" before a register write observes their state. Only consulted
     /// under the `event-scheduler` feature; harmlessly 0 otherwise.
     pub current_cycle: u64,
+    /// Phase 2B.3a (issue #192): write-context schedule requests buffered
+    /// during MMIO writes. A scheduler-driven peripheral can't reach the
+    /// scheduler from `write`, so after the write the bus collects its
+    /// `take_scheduled_events()` here as `(peripheral_idx, delay_ticks,
+    /// token)`; `Machine::drain_scheduler_events` enqueues and clears them.
+    /// Only populated under the `event-scheduler` feature.
+    pub pending_schedule: Vec<(usize, u64, u32)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -574,6 +596,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            pending_schedule: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -599,6 +622,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            pending_schedule: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -755,6 +779,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            pending_schedule: Vec::new(),
         };
 
         let mut merged_peripherals = chip.peripherals.clone();
@@ -809,16 +834,13 @@ impl SystemBus {
                 }
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
                 | "imxrt_gpio" => {
-                    let layout: GpioRegisterLayout =
-                        if p_cfg.r#type.contains("nrf") {
-                            GpioRegisterLayout::Nrf52
-                        } else if p_cfg.r#type.contains("stm32f4")
-                            || p_cfg.r#type.contains("h5")
-                        {
-                            GpioRegisterLayout::Stm32V2
-                        } else {
-                            Self::parse_profile_or_default(p_cfg, "GPIO")?
-                        };
+                    let layout: GpioRegisterLayout = if p_cfg.r#type.contains("nrf") {
+                        GpioRegisterLayout::Nrf52
+                    } else if p_cfg.r#type.contains("stm32f4") || p_cfg.r#type.contains("h5") {
+                        GpioRegisterLayout::Stm32V2
+                    } else {
+                        Self::parse_profile_or_default(p_cfg, "GPIO")?
+                    };
                     Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
                 }
                 "rcc" => {
@@ -989,9 +1011,7 @@ impl SystemBus {
                 "nrf52840_ecb" | "nrf52_ecb" => {
                     Box::new(crate::peripherals::nrf52::ecb::Nrf52Ecb::new())
                 }
-                "nrf52_clock" => {
-                    Box::new(crate::peripherals::nrf52::clock::Nrf52Clock::new())
-                }
+                "nrf52_clock" => Box::new(crate::peripherals::nrf52::clock::Nrf52Clock::new()),
                 "nrf52840_temp" | "nrf52_temp" => {
                     Box::new(crate::peripherals::nrf52::temp::Nrf52Temp::new())
                 }
@@ -1538,7 +1558,10 @@ impl SystemBus {
             self.sync_scheduler_peripheral(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
-            return p.dev.write_u32(addr - p.base, value);
+            let r = p.dev.write_u32(addr - p.base, value);
+            #[cfg(feature = "event-scheduler")]
+            self.collect_scheduled_events(idx);
+            return r;
         }
 
         self.write_u8(addr, (value & 0xFF) as u8)?;
@@ -1586,7 +1609,10 @@ impl SystemBus {
             self.sync_scheduler_peripheral(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
-            return p.dev.write_u16(addr - p.base, value);
+            let r = p.dev.write_u16(addr - p.base, value);
+            #[cfg(feature = "event-scheduler")]
+            self.collect_scheduled_events(idx);
+            return r;
         }
 
         self.write_u8(addr, (value & 0xFF) as u8)?;
@@ -1717,9 +1743,7 @@ impl SystemBus {
         // failures.
         for (addr, val) in pending_mmio.drain(..) {
             if let Err(e) = self.write_u32(addr as u64, val) {
-                tracing::warn!(
-                    "phase1 mmio_write 0x{addr:08X} = 0x{val:08X} failed: {e:?}"
-                );
+                tracing::warn!("phase1 mmio_write 0x{addr:08X} = 0x{val:08X} failed: {e:?}");
             }
         }
 
@@ -2000,7 +2024,10 @@ impl crate::Bus for SystemBus {
                 #[cfg(feature = "event-scheduler")]
                 self.sync_scheduler_peripheral(idx);
                 let p = &mut self.peripherals[idx];
-                p.dev.write(addr - p.base, value)
+                let r = p.dev.write(addr - p.base, value);
+                #[cfg(feature = "event-scheduler")]
+                self.collect_scheduled_events(idx);
+                r
             } else {
                 Err(SimulationError::MemoryViolation(addr))
             }
@@ -2086,7 +2113,10 @@ impl crate::Bus for SystemBus {
             self.sync_scheduler_peripheral(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
-            return p.dev.write_u16(addr - p.base, value);
+            let r = p.dev.write_u16(addr - p.base, value);
+            #[cfg(feature = "event-scheduler")]
+            self.collect_scheduled_events(idx);
+            return r;
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
@@ -2121,7 +2151,10 @@ impl crate::Bus for SystemBus {
             self.sync_scheduler_peripheral(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
-            return p.dev.write_u32(addr - p.base, value);
+            let r = p.dev.write_u32(addr - p.base, value);
+            #[cfg(feature = "event-scheduler")]
+            self.collect_scheduled_events(idx);
+            return r;
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
@@ -2556,6 +2589,7 @@ mod tests {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            pending_schedule: Vec::new(),
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -2605,6 +2639,7 @@ mod tests {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            pending_schedule: Vec::new(),
         };
 
         bus.rebuild_peripheral_ranges();
@@ -2656,6 +2691,7 @@ mod tests {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            pending_schedule: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
 
