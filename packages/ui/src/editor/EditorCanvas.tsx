@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import type { Part, PinDef, ComponentState, DisplayBuffer, EditorState, WireEndpoint } from './types';
 import { COMPONENT_REGISTRY } from './components/index';
 import { validateWireConnection } from './circuitValidation';
@@ -30,6 +31,16 @@ interface EditorCanvasProps {
   onButtonToggle?: (partId: string, active: boolean) => void;
   /** Set analog value for adc_input components (e.g. potentiometer). Value 0-4095. */
   onAnalogChange?: (partId: string, value: number) => void;
+  /**
+   * Optional overlay anchored to the single selected part — e.g. a chip's
+   * control toolbar. Rendered in a <foreignObject> just above the part so it
+   * tracks pan/zoom automatically. Return null to render nothing for a part
+   * (the caller decides which parts get an overlay, e.g. only MCUs).
+   */
+  selectedPartOverlay?: (
+    part: Part,
+    box: { x: number; y: number; width: number; height: number },
+  ) => ReactNode;
 }
 
 export function EditorCanvas({
@@ -49,6 +60,7 @@ export function EditorCanvas({
   onDropPart,
   onButtonToggle,
   onAnalogChange,
+  selectedPartOverlay,
 }: EditorCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewBox, setViewBox] = useState({ x: -100, y: -50, w: 1200, h: 800 });
@@ -468,6 +480,37 @@ export function EditorCanvas({
           </g>
         );
       })}
+
+      {/* Overlay anchored to the single selected part (e.g. a chip's control
+          toolbar). In a <foreignObject> so its HTML buttons stay crisp and it
+          tracks pan/zoom with the canvas. */}
+      {selectedPartOverlay && state.selectedIds.size === 1 && (() => {
+        const id = [...state.selectedIds][0];
+        const part = state.diagram.parts.find((p) => p.id === id);
+        if (!part) return null;
+        const def = COMPONENT_REGISTRY.get(part.type);
+        if (!def) return null;
+        const sc = part.scale ?? 1;
+        const box = { x: part.x, y: part.y, width: def.width * sc, height: def.height * sc };
+        const content = selectedPartOverlay(part, box);
+        if (!content) return null;
+        const OVERLAY_H = 44;
+        const margin = 8;
+        // Prefer above the part; flip below when it would clip the top of view.
+        const aboveY = box.y - OVERLAY_H;
+        const overlayY = aboveY < viewBox.y + margin ? box.y + box.height + margin : aboveY;
+        return (
+          <foreignObject
+            x={box.x}
+            y={overlayY}
+            width={Math.max(box.width, 260)}
+            height={OVERLAY_H}
+            style={{ overflow: 'visible' }}
+          >
+            <div style={{ display: 'inline-flex' }}>{content}</div>
+          </foreignObject>
+        );
+      })()}
 
       {/* Rubber-band selection rectangle */}
       {selRect && (

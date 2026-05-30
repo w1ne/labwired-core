@@ -44,11 +44,14 @@ import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
 import { ChipsProvider, useChips } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
-import { McuStrip } from './multi-mcu/McuStrip';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
 import { MobileMultiChipView } from './multi-mcu/MobileMultiChipView';
 import { PropertiesGate } from './multi-mcu/PropertiesGate';
 import { ChipTabsBar, DrawerCloseButton } from './multi-mcu/ChipTabsBar';
+import { ChipControls } from './multi-mcu/ChipControls';
+import { usePerChipSims } from './multi-mcu/usePerChipSims';
+import { ChipWindow } from './multi-mcu/ChipWindow';
+import { ChipInspector } from './multi-mcu/ChipInspector';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -56,6 +59,8 @@ import { AccountPanel } from './studio/AccountPanel';
 import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
 import { type InspectorSelection } from './studio/InspectorCard';
+import { ComponentInspector } from './multi-mcu/ComponentInspector';
+import { PartActions } from './multi-mcu/PartActions';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
 import {
@@ -475,6 +480,19 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   transistor: 'misc',
   'shift-register-74hc595': 'misc',
 };
+
+// Resolve an MCU diagram part to its BoardConfig. The primary 'mcu'
+// part IS the active board; any other part whose type matches a
+// board's mcuComponentType (e.g. a dropped 'nrf52840-dk') resolves
+// to that board. Returns null for non-MCU parts (LEDs, wires…).
+function mcuBoardForPart(
+  part: { id: string; type: string } | undefined,
+  primaryBoard: BoardConfig,
+): BoardConfig | null {
+  if (!part) return null;
+  if (part.id === 'mcu') return primaryBoard;
+  return BOARD_CONFIGS.find((b) => b.mcuComponentType === part.type) ?? null;
+}
 
 function EmptyTabState({ label }: { label: string }) {
   return (
@@ -1027,6 +1045,84 @@ export function App() {
     };
   }, [editor.state.selectedIds, editor.state.diagram.parts]);
 
+  // The dev drawer reflects the MCU selected on the canvas, falling
+  // back to the primary 'mcu'. This replaces the old activeChipId
+  // coupling: dropping a 2nd MCU (e.g. an nRF52840 DK) and clicking
+  // it now re-binds the drawer to that chip. Only the primary 'mcu'
+  // has a live simulator bridge; secondary MCUs show their static
+  // identity (Source / YAML) with no live serial/registers.
+  const drawerSubject = useMemo(() => {
+    const parts = editor.state.diagram.parts;
+    const primaryPart = parts.find((p) => p.id === 'mcu');
+    let selectedMcu: typeof primaryPart | undefined;
+    if (editor.state.selectedIds.size === 1) {
+      const id = [...editor.state.selectedIds][0];
+      const p = parts.find((pp) => pp.id === id);
+      if (p && mcuBoardForPart(p, selectedBoard)) selectedMcu = p;
+    }
+    const part = selectedMcu ?? primaryPart;
+    const board = mcuBoardForPart(part, selectedBoard) ?? selectedBoard;
+    return { part, board, isPrimary: part?.id === 'mcu' };
+  }, [editor.state.selectedIds, editor.state.diagram.parts, selectedBoard]);
+
+  // Per-chip sims: the selected MCU is the foreground (App's bridge/running
+  // mirror it, the main loop drives it); every other running chip ticks in
+  // the background so two chips can talk over the shared BLE air at once.
+  const foregroundPartId = drawerSubject.part?.id ?? 'mcu';
+  const mcuPartIds = useMemo(
+    () => editor.state.diagram.parts.filter((p) => mcuBoardForPart(p, selectedBoard)).map((p) => p.id),
+    [editor.state.diagram.parts, selectedBoard],
+  );
+  const { sims: chipSims } = usePerChipSims({
+    foregroundPartId,
+    mcuPartIds,
+    bridge,
+    running,
+    config: activeSimulationConfig,
+    board: drawerSubject.board,
+    foregroundUart: simState.uartOutput,
+    setBridge,
+    setRunning,
+    setConfig: setActiveSimulationConfig,
+    clearUart,
+  });
+
+  const clearChipSerial = (partId: string) => {
+    if (partId === foregroundPartId) clearUart();
+    const sim = chipSims.current.get(partId);
+    if (sim) sim.uart = '';
+  };
+  const chipSerialFor = (partId: string, isFg: boolean) => {
+    const sim = chipSims.current.get(partId);
+    return isFg ? (sim?.uart ?? '') + simState.uartOutput : sim?.uart ?? '';
+  };
+
+  // Floating property windows — one per clicked component (any part, not just
+  // chips). Click a part → its window opens NEAR the click; × closes it;
+  // removing the part prunes it (the render list filters to live parts).
+  const lastPointerRef = useRef({ x: 220, y: 150 });
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    return () => window.removeEventListener('pointerdown', onDown, true);
+  }, []);
+  const [openWindows, setOpenWindows] = useState<{ id: string; x: number; y: number }[]>([]);
+  const openWindowIds = openWindows.filter((w) =>
+    editor.state.diagram.parts.some((p) => p.id === w.id),
+  );
+  const openWindow = (id: string) =>
+    setOpenWindows((prev) => {
+      if (prev.some((w) => w.id === id)) return prev;
+      const { x, y } = lastPointerRef.current;
+      const px = Math.max(8, Math.min(window.innerWidth - 360, x + 16));
+      const py = Math.max(8, Math.min(window.innerHeight - 200, y + 12));
+      return [...prev, { id, x: px, y: py }];
+    });
+  const closeWindow = (id: string) =>
+    setOpenWindows((prev) => prev.filter((w) => w.id !== id));
+
   // Build live sensor widget for selected I2C / UART devices
   const inspectorLabWidget = useMemo<ReactNode>(() => {
     if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
@@ -1182,36 +1278,39 @@ export function App() {
         setCompileOutput(`Loading firmware: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
         const firmware = new Uint8Array(await file.arrayBuffer());
 
-        // Derive the system YAML from the current canvas so the user's wired-up components
-        // are exposed to the uploaded firmware. Chip YAML is fixed by the selected board.
-        let systemYaml = selectedBoard.systemYaml;
-        let chipYaml = selectedBoard.chipYaml;
-        try {
-          const config = diagramToConfig(editor.state.diagram, selectedBoard.chipYaml);
-          systemYaml = config.systemYaml;
-          chipYaml = config.chipYaml;
-        } catch (configErr) {
-          // If the canvas can't be translated (e.g., dangling wires), fall back to the bundled
-          // system YAML and surface a warning. The firmware still runs against the bundled board.
-          const msg = configErr instanceof Error ? configErr.message : String(configErr);
-          setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
+        // Upload targets the SELECTED chip. The primary 'mcu' owns the wired
+        // canvas, so derive its system YAML from the diagram. A secondary chip
+        // boots standalone against its own board YAML — cross-chip comms ride
+        // the shared BLE air, not wires.
+        const target = drawerSubject.board;
+        let systemYaml = target.systemYaml;
+        let chipYaml = target.chipYaml;
+        if (drawerSubject.isPrimary) {
+          try {
+            const config = diagramToConfig(editor.state.diagram, target.chipYaml);
+            systemYaml = config.systemYaml;
+            chipYaml = config.chipYaml;
+          } catch (configErr) {
+            const msg = configErr instanceof Error ? configErr.message : String(configErr);
+            setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
+          }
         }
 
         await launchSimulation({
           systemYaml,
           chipYaml,
           firmware,
-          quirks: selectedBoard.quirks,
-          bootSnapshotUrl: selectedBoard.bootSnapshotUrl,
+          quirks: target.quirks,
+          bootSnapshotUrl: target.bootSnapshotUrl,
         });
-        setCompileOutput((prev) => `${prev}\nUploaded ${file.name} (${firmware.length} bytes). Simulation started.`);
+        setCompileOutput((prev) => `${prev}\nUploaded ${file.name} to ${target.name} (${firmware.length} bytes). Simulation started.`);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setError(`Upload failed: ${message}`);
         setCompileOutput((prev) => `${prev}\nUpload failed: ${message}`);
       }
     },
-    [launchSimulation, selectedBoard.systemYaml, selectedBoard.chipYaml, editor.state.diagram],
+    [launchSimulation, drawerSubject, editor.state.diagram],
   );
 
   const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
@@ -1501,6 +1600,9 @@ export function App() {
   // Bridge so the command palette (defined here, outside the
   // ChipsProvider tree) can drop a new MCU through the ⌘K flow.
   const addMcuRef = useRef<((board?: BoardConfig) => void) | null>(null);
+  // Bridge to open the properties drawer when the user clicks the
+  // MCU part on the EditorCanvas — chip-on-canvas IS the affordance.
+  const setPropsOpenRef = useRef<((open: boolean) => void) | null>(null);
 
   // Command palette items
   const commandItems = useCommandPaletteItems({
@@ -1529,6 +1631,29 @@ export function App() {
 
   // Run-button intent: if a sim is already loaded, resume from pause; otherwise launch fresh.
   const onSimRun = activeSimulationConfig ? handlePlay : handleRun;
+
+  // The per-chip control surface (Run/Pause · Upload · Restart), reused by the
+  // on-canvas toolbar and the inspector header. The controls always target the
+  // SELECTED chip (= the foreground sim). Upload is available for any MCU
+  // (booting an ELF is how a chip starts); Run/Restart light up once the chip
+  // has a runnable config — for the primary that's its source, for any other
+  // chip that's an uploaded firmware.
+  const renderChipControls = (isPrimary: boolean, variant: 'toolbar' | 'header') => {
+    const canRun = isPrimary || !!activeSimulationConfig;
+    return (
+      <ChipControls
+        variant={variant}
+        state={simDockState}
+        canRun={canRun}
+        canUpload
+        onRun={() => requireAuth(onSimRun)}
+        onPause={handlePause}
+        onRestart={handleReset}
+        onUpload={handleUploadFirmware}
+        disabledReason={canRun ? undefined : 'Upload firmware to run this chip'}
+      />
+    );
+  };
 
   // Cycle-consuming actions are gated behind Clerk sign-in. Anonymous users
   // who click Run get the Clerk modal instead. Pause/Reset stay open — they
@@ -1563,48 +1688,72 @@ export function App() {
     </div>
   );
 
-  const renderDevDrawer = (devMode: boolean, leftOffset: number) => (
+  const renderDevDrawer = (devMode: boolean, leftOffset: number) => {
+    // The drawer reflects the FOREGROUND chip (= the selected MCU). Its live
+    // serial/registers/trace/memory exist whenever that chip has a running
+    // bridge — App's `bridge`/`simState` mirror the foreground sim. A chip
+    // with no firmware yet shows a prompt to run/upload.
+    const { board: subjectBoard, isPrimary } = drawerSubject;
+    const hasLiveSim = !!bridge;
+    const noSimLabel = `${subjectBoard.name} — run or upload firmware to see live data.`;
+    // On desktop, every component is inspected in its own floating window
+    // (rendered below) — the docked drawer is mobile-only now.
+    if (!isMobile) return null;
+    return (
     <PropertiesGate>
     <DevDrawer
-      header={<ChipTabsBar />}
+      header={
+        <div className="flex items-center gap-3">
+          <ChipTabsBar name={subjectBoard.name} />
+          {renderChipControls(isPrimary, 'header')}
+        </div>
+      }
       headerRight={<DrawerCloseButton />}
       devMode={devMode}
       leftOffset={leftOffset}
       tabs={{
         serial: (
-          <SerialMonitor output={simState.uartOutput} onClear={clearUart} style={{ height: '100%' }} />
+          hasLiveSim ? (
+            <SerialMonitor
+              output={chipSerialFor(foregroundPartId, true)}
+              onClear={() => clearChipSerial(foregroundPartId)}
+              style={{ height: '100%' }}
+            />
+          ) : (
+            <EmptyTabState label={noSimLabel} />
+          )
         ),
         registers: (
-          bridge ? (
+          hasLiveSim ? (
             <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />
           ) : (
-            <EmptyTabState label="Run the simulator to inspect CPU registers." />
+            <EmptyTabState label="Run or upload firmware to inspect CPU registers." />
           )
         ),
         trace: (
-          bridge ? (
+          hasLiveSim ? (
             <InstructionTrace entries={traceEntries} style={{ maxHeight: '100%', overflow: 'auto' }} />
           ) : (
-            <EmptyTabState label="Run the simulator to see the instruction trace." />
+            <EmptyTabState label="Run or upload firmware to see the instruction trace." />
           )
         ),
         memory: (
-          bridge ? (
+          hasLiveSim ? (
             <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />
           ) : (
-            <EmptyTabState label="Run the simulator to inspect memory." />
+            <EmptyTabState label="Run or upload firmware to inspect memory." />
           )
         ),
         source: (
-          selectedBoard.sourceCode ? (
+          subjectBoard.sourceCode ? (
             <div className="h-full flex flex-col">
-              {selectedBoard.sourceFilename && (
+              {subjectBoard.sourceFilename && (
                 <div className="px-3 py-1.5 text-fg-tertiary text-[11px] font-mono border-b border-border bg-bg-elevated/40 shrink-0">
-                  {selectedBoard.sourceFilename}
+                  {subjectBoard.sourceFilename}
                 </div>
               )}
               <pre className="font-mono text-[12px] leading-[1.5] p-3 text-fg-secondary whitespace-pre overflow-auto flex-1">
-                {selectedBoard.sourceCode}
+                {subjectBoard.sourceCode}
               </pre>
             </div>
           ) : (
@@ -1613,13 +1762,14 @@ export function App() {
         ),
         yaml: (
           <pre className="font-mono text-[12px] p-3 text-fg-secondary whitespace-pre-wrap">
-            {selectedBoard.systemYaml}
+            {subjectBoard.systemYaml}
           </pre>
         ),
       }}
     />
     </PropertiesGate>
-  );
+    );
+  };
 
   // Mobile-only demo shell: the desktop canvas editor is unusable on a phone.
   // Render a focused single-screen view (board name → big e-paper preview →
@@ -1640,6 +1790,7 @@ export function App() {
     return (
       <ChipsProvider initialBoard={selectedBoard}>
         <AddMcuRefSync addMcuRef={addMcuRef} />
+    <SetPropsOpenRefSync setPropsOpenRef={setPropsOpenRef} />
         <ChipBridgeSync
           bridge={bridge}
           board={selectedBoard}
@@ -1673,6 +1824,7 @@ export function App() {
   return (
     <ChipsProvider initialBoard={selectedBoard}>
     <AddMcuRefSync addMcuRef={addMcuRef} />
+    <SetPropsOpenRefSync setPropsOpenRef={setPropsOpenRef} />
     <ChipBridgeSync
       bridge={bridge}
       board={selectedBoard}
@@ -1691,19 +1843,21 @@ export function App() {
       }}
     />
     <BackgroundChipTicker />
-    <McuStrip />
     <StudioShell
       boardName={activeProjectName ?? selectedBoard.name}
       isEmpty={isEmpty}
       onPickLab={handlePickLab}
-      onUploadFirmware={handleUploadFirmware}
+      // Upload now lives per-chip in ChipControls — a global top-bar
+      // Upload is ambiguous about which chip it targets, so it's gone.
       onShare={handleShare}
       toast={toast}
       onDismissToast={() => setToast(null)}
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
       inspector={null}
-      simDock={simDockNode}
+      // Desktop: Run/Pause/PC/cycles live inside each chip's window. Mobile
+      // keeps the standalone dock.
+      simDock={isMobile ? simDockNode : null}
       authSlot={<AuthPill onOpenProjects={() => setProjectsModalOpen(true)} />}
       projectSlot={
         <button
@@ -1959,7 +2113,16 @@ export function App() {
                 invalidPins={invalidPins}
                 onMovePart={editor.movePart}
                 onResizePart={editor.resizePart}
-                onSelect={editor.select}
+                onSelect={(id, add) => {
+                  editor.select(id, add);
+                  // Every component opens its own floating property window
+                  // when clicked (chips get the rich inspector, other parts
+                  // their properties). Clicking empty canvas (id null) or a
+                  // wire opens nothing.
+                  if (id && editor.state.diagram.parts.some((p) => p.id === id)) {
+                    openWindow(id);
+                  }
+                }}
                 onSelectRect={editor.selectRect}
                 onStartWire={handleStartWire}
                 onCompleteWire={handleCompleteWire}
@@ -1968,6 +2131,12 @@ export function App() {
                 onDropPart={handleDropPart}
                 onButtonToggle={handleButtonToggle}
                 onAnalogChange={handleAnalogChange}
+                // Anchored control toolbar — only for MCU parts (a chip's
+                // intrinsic verbs live next to it on the canvas).
+                selectedPartOverlay={(part) => {
+                  if (!mcuBoardForPart(part, selectedBoard)) return null;
+                  return renderChipControls(part.id === 'mcu', 'toolbar');
+                }}
               />
             </div>
           </div>
@@ -2074,6 +2243,112 @@ export function App() {
         setActiveProjectName(p.name);
       }}
     />
+    {/* One floating property window per clicked component — draggable and
+        arrangeable. Chips get the rich inspector (control surface + tabs);
+        other parts get their properties. Clicking a window focuses its part. */}
+    {!isMobile && openWindowIds.map((w, i) => {
+      const partId = w.id;
+      const part = editor.state.diagram.parts.find((p) => p.id === partId);
+      if (!part) return null;
+      const chipBoard = mcuBoardForPart(part, selectedBoard);
+      const isFg = partId === foregroundPartId;
+      const dot = `h-2 w-2 shrink-0 rounded-full ${isFg ? 'bg-green-400' : 'bg-green-400/60'}`;
+
+      if (chipBoard) {
+        // Focused chip: control surface + the Run/Pause/PC/cycles readout
+        // (this is the old middle dock, now living in the chip's window).
+        const readout = isFg ? (
+          <div className="ml-1 flex items-center gap-2 font-mono text-[10px] text-fg-tertiary">
+            <button
+              type="button"
+              onClick={() => requireAuth(handleStep)}
+              disabled={!bridge}
+              title="Step one instruction"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border text-fg-secondary hover:bg-bg-elevated hover:text-fg-primary disabled:opacity-40"
+            >
+              ⏵
+            </button>
+            <span>{(simState.cycles ?? 0).toLocaleString()} cyc</span>
+            <span>PC 0x{(simState.pc ?? 0).toString(16).toUpperCase()}</span>
+          </div>
+        ) : null;
+        return (
+          <ChipWindow
+            key={partId}
+            initial={{ x: w.x, y: w.y }}
+            width={500}
+            height={380}
+            zIndex={60 + i}
+            onFocus={() => editor.select(partId)}
+            onClose={() => closeWindow(partId)}
+            title={
+              <>
+                <span className={dot} />
+                <span className="truncate font-mono text-xs text-fg-primary">{chipBoard.name}</span>
+                {isFg && <span className="shrink-0 text-[10px] text-accent">focused</span>}
+              </>
+            }
+          >
+            <ChipInspector
+              board={chipBoard}
+              isForeground={isFg}
+              hasLiveSim={!!bridge}
+              controls={isFg ? <>{renderChipControls(partId === 'mcu', 'header')}{readout}</> : undefined}
+              actions={
+                <PartActions
+                  onRotate={() => editor.rotatePart(partId)}
+                  scale={part.scale ?? 1}
+                  onScale={(s) => editor.resizePart(partId, s)}
+                  onDelete={() => { editor.select(partId); editor.deleteSelected(); closeWindow(partId); }}
+                  canDelete={partId !== 'mcu'}
+                />
+              }
+              serialOutput={chipSerialFor(partId, isFg)}
+              onClearSerial={() => clearChipSerial(partId)}
+              registers={registers}
+              traceEntries={traceEntries}
+              stackMemory={stackMemory}
+              stackBase={stackBase}
+            />
+          </ChipWindow>
+        );
+      }
+
+      // Non-chip component → its own meaningful, editable properties.
+      const def = COMPONENT_REGISTRY.get(part.type);
+      const live = boardIoStateMap[partId];
+      return (
+        <ChipWindow
+          key={partId}
+          initial={{ x: w.x, y: w.y }}
+          width={300}
+          height={280}
+          zIndex={60 + i}
+          onFocus={() => editor.select(partId)}
+          onClose={() => closeWindow(partId)}
+          title={
+            <span className="truncate font-mono text-xs text-fg-primary">{def?.label ?? part.type}</span>
+          }
+        >
+          <ComponentInspector
+            partType={part.type}
+            partId={partId}
+            attrs={part.attrs ?? {}}
+            fields={def?.attrFields ?? []}
+            live={live ? { active: live.active, analogValue: live.analogValue } : undefined}
+            onChange={(key, value) => editor.updateAttrs(partId, { [key]: value })}
+            actions={
+              <PartActions
+                onRotate={() => editor.rotatePart(partId)}
+                scale={part.scale ?? 1}
+                onScale={(s) => editor.resizePart(partId, s)}
+                onDelete={() => { editor.select(partId); editor.deleteSelected(); closeWindow(partId); }}
+              />
+            }
+          />
+        </ChipWindow>
+      );
+    })}
     </StudioShell>
     </ChipsProvider>
   );
@@ -2096,5 +2371,17 @@ export function AddMcuRefSync({
   addMcuRef.current = (board) => {
     chips.addChip(board);
   };
+  return null;
+}
+
+/// Bridges setPropertiesOpen out of the provider so the EditorCanvas
+/// MCU click can open the drawer.
+export function SetPropsOpenRefSync({
+  setPropsOpenRef,
+}: {
+  setPropsOpenRef: { current: ((open: boolean) => void) | null };
+}) {
+  const chips = useChips();
+  setPropsOpenRef.current = chips.setPropertiesOpen;
   return null;
 }

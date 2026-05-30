@@ -5,13 +5,15 @@
 import { useChips } from './ChipsProvider';
 import './chip-tabs-bar.css';
 
-export function ChipTabsBar() {
+// `name` is the drawer subject's board name (the MCU selected on the
+// canvas). Falls back to the active session's name when not provided.
+export function ChipTabsBar({ name }: { name?: string }) {
   const { sessions, activeChipId } = useChips();
-  const session = sessions[activeChipId];
-  if (!session) return null;
+  const label = name ?? sessions[activeChipId]?.name;
+  if (!label) return null;
   return (
     <div className="lw-chip-header" aria-label="Active chip properties header">
-      <span className="lw-chip-header-id">{session.name}</span>
+      <span className="lw-chip-header-id">{label}</span>
       <span className="lw-chip-switch-divider" aria-hidden />
     </div>
   );
