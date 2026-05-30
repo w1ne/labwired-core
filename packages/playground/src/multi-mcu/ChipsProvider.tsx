@@ -32,13 +32,6 @@ export interface ChipSession {
   config: unknown;
 }
 
-function defaultNameFor(board: BoardConfig, taken: Set<string>): string {
-  const base = board.name;
-  if (!taken.has(base)) return base;
-  let n = 2;
-  while (taken.has(`${base} (${n})`)) n += 1;
-  return `${base} (${n})`;
-}
 
 interface ChipsContext {
   sessions: Record<string, ChipSession>;
@@ -102,20 +95,21 @@ export function ChipsProvider({
   const [sessions, setSessions] = useState<Record<string, ChipSession>>(() => {
     const persisted = loadRegistry();
     if (persisted) {
+      // De-dupe by boardId: if a persisted state somehow has two
+      // sessions for the same board, drop the later ones.
       const out: Record<string, ChipSession> = {};
-      const taken = new Set<string>();
+      const seenBoards = new Set<string>();
       for (const id of persisted.order) {
         const boardId = persisted.boardIdByChip[id];
+        if (seenBoards.has(boardId)) continue;
+        seenBoards.add(boardId);
         const board = BOARD_CONFIGS.find((c) => c.boardId === boardId) ?? initialBoard;
-        const name = defaultNameFor(board, taken);
-        taken.add(name);
-        out[id] = { chipId: id, name, bridge: null, board, source: null, config: null };
+        out[id] = { chipId: id, name: board.name, bridge: null, board, source: null, config: null };
       }
       if (!out[DEFAULT_CHIP_ID]) {
-        const name = defaultNameFor(initialBoard, taken);
         out[DEFAULT_CHIP_ID] = {
           chipId: DEFAULT_CHIP_ID,
-          name,
+          name: initialBoard.name,
           bridge: null,
           board: initialBoard,
           source: null,
@@ -193,18 +187,31 @@ export function ChipsProvider({
 
   const addChip = useCallback(
     (board?: BoardConfig) => {
-      // Default new MCUs to nRF52840 so the BLE demo path is one
-      // click away (both chips share virtual_air on the Rust side).
       const nrf = BOARD_CONFIGS.find((c) => c.boardId === 'nrf52840-dk');
       const resolvedBoard = board ?? nrf ?? initialBoard ?? BOARD_CONFIGS[0];
+      // No duplicate boards. If the same board is already in the
+      // session, focus that chip and don't add another. The user
+      // can keep working with the existing one.
+      const existing = Object.values(sessions).find(
+        (s) => s.board.boardId === resolvedBoard.boardId,
+      );
+      if (existing) {
+        setActiveChipId(existing.chipId);
+        return existing.chipId;
+      }
       let n = 2;
       while (sessions[`chip-${n}`]) n += 1;
       const id = `chip-${n}`;
-      const taken = new Set(Object.values(sessions).map((s) => s.name));
-      const name = defaultNameFor(resolvedBoard, taken);
       setSessions((prev) => ({
         ...prev,
-        [id]: { chipId: id, name, bridge: null, board: resolvedBoard, source: null, config: null },
+        [id]: {
+          chipId: id,
+          name: resolvedBoard.name,
+          bridge: null,
+          board: resolvedBoard,
+          source: null,
+          config: null,
+        },
       }));
       setOrder((prev) => (prev.includes(id) ? prev : [...prev, id]));
       return id;
