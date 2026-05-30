@@ -1055,6 +1055,60 @@ impl WasmSimulator {
         )))
     }
 
+    /// Return the PCD8544 (Nokia 5110) framebuffer for the device identified
+    /// by `device_id`.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type:
+    /// "pcd8544"`. Returns 504 bytes: 84 columns × 6 banks, bank-major. Pixel
+    /// (x, y) is bit `(y % 8)` of byte `[(y / 8) * 84 + x]` (1 = on/dark).
+    #[wasm_bindgen]
+    pub fn get_pcd8544_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("pcd8544"))
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("No pcd8544 board_io binding '{}'", device_id))
+            })?;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("SPI peripheral '{}' not found", binding.peripheral))
+            })?;
+
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+
+        let spi = any
+            .downcast_ref::<labwired_core::peripherals::spi::Spi>()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "Peripheral '{}' is not an SPI controller",
+                    binding.peripheral
+                ))
+            })?;
+
+        for device in &spi.attached_devices {
+            if let Some(lcd) = device
+                .as_any()
+                .and_then(|a| a.downcast_ref::<labwired_core::peripherals::components::Pcd8544>())
+            {
+                return Ok(lcd.framebuffer().to_vec().into_boxed_slice());
+            }
+        }
+
+        Err(JsValue::from_str(&format!(
+            "PCD8544 device not found on SPI peripheral '{}'",
+            binding.peripheral
+        )))
+    }
+
     /// Return the SSD1680 tri-color e-paper framebuffer for the device identified by `device_id`.
     ///
     /// `device_id` must match a `board_io` binding with `device_type: "ssd1680_tricolor_290"`.

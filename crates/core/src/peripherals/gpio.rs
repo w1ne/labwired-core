@@ -183,6 +183,16 @@ impl GpioPort {
         }
     }
 
+    /// Register offset of the output data register (ODR) for this layout.
+    /// Used by the bus to resolve a display's D/C line to a concrete address.
+    pub fn odr_offset(&self) -> u64 {
+        match self.layout {
+            GpioRegisterLayout::Stm32F1 => 0x0C,
+            GpioRegisterLayout::Stm32V2 => 0x14,
+            GpioRegisterLayout::Nrf52 => 0x504,
+        }
+    }
+
     #[allow(dead_code)]
     fn bsrr_offset(&self) -> u64 {
         match self.layout {
@@ -230,6 +240,14 @@ impl crate::Peripheral for GpioPort {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 }
 

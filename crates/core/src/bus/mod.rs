@@ -474,6 +474,98 @@ impl SystemBus {
             .to_string()
     }
 
+    fn pcd8544_cs_pin(ext: &ExternalDevice) -> String {
+        ext.config
+            .get("cs_pin")
+            .and_then(|v| v.as_str())
+            .unwrap_or("PB6")
+            .to_string()
+    }
+
+    fn pcd8544_dc_pin(ext: &ExternalDevice) -> String {
+        ext.config
+            .get("dc_pin")
+            .and_then(|v| v.as_str())
+            .unwrap_or("PC7")
+            .to_string()
+    }
+
+    /// Parse an STM32 pin label like "PC7" into `("gpioc", 7)`.
+    fn parse_stm32_pin(pin: &str) -> Option<(String, u8)> {
+        let s = pin.trim();
+        let bytes = s.as_bytes();
+        if bytes.len() < 3 || !bytes[0].eq_ignore_ascii_case(&b'P') {
+            return None;
+        }
+        let port = (bytes[1] as char).to_ascii_lowercase();
+        if !port.is_ascii_alphabetic() {
+            return None;
+        }
+        let num: u8 = s[2..].parse().ok()?;
+        if num > 15 {
+            return None;
+        }
+        Some((format!("gpio{port}"), num))
+    }
+
+    /// Resolve an STM32 pin label to its `(ODR address, bit)` so a display's
+    /// D/C line can be sampled directly from the driving GPIO's output register.
+    fn resolve_pin_odr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
+        let (port_name, bit) = Self::parse_stm32_pin(pin)?;
+        let idx = bus.find_peripheral_index_by_name(&port_name)?;
+        let base = bus.peripherals[idx].base;
+        let odr_off = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+            .map(|g| g.odr_offset())?;
+        Some((base + odr_off, bit))
+    }
+
+    /// Before an SPI transfer, refresh the D/C level of any attached
+    /// display that observes a D/C GPIO line (e.g. the PCD8544 Nokia 5110)
+    /// by reading the driving GPIO's output bit. No-op for non-SPI writes and
+    /// for SPI peripherals with no D/C-observing device (one cheap downcast).
+    fn maybe_latch_dc(&mut self, idx: usize) {
+        // Phase 1: collect (attached_index, odr_addr, bit) — immutable borrow.
+        let sources: Vec<(usize, u64, u8)> = {
+            let Some(any) = self.peripherals[idx].dev.as_any() else {
+                return;
+            };
+            let Some(spi) = any.downcast_ref::<crate::peripherals::spi::Spi>() else {
+                return;
+            };
+            spi.attached_devices
+                .iter()
+                .enumerate()
+                .filter_map(|(i, d)| d.dc_source().map(|(a, b)| (i, a, b)))
+                .collect()
+        };
+        if sources.is_empty() {
+            return;
+        }
+        // Phase 2: sample the GPIO output bits via the bus.
+        let levels: Vec<(usize, bool)> = sources
+            .iter()
+            .map(|&(i, addr, bit)| {
+                let lvl = crate::Bus::read_u32(self, addr)
+                    .map(|v| (v >> bit) & 1 != 0)
+                    .unwrap_or(false);
+                (i, lvl)
+            })
+            .collect();
+        // Phase 3: push the latched levels into the devices — mutable borrow.
+        if let Some(any) = self.peripherals[idx].dev.as_any_mut() {
+            if let Some(spi) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
+                for (i, lvl) in levels {
+                    if let Some(d) = spi.attached_devices.get_mut(i) {
+                        d.set_dc_level(lvl);
+                    }
+                }
+            }
+        }
+    }
+
     fn ssd1306_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
         let Some(value) = ext.config.get("i2c_address") else {
             return Ok(0x3C);
@@ -1460,6 +1552,51 @@ impl SystemBus {
                         crate::peripherals::components::Ssd1680Tricolor290::new(cs_pin),
                     ));
                 }
+                "pcd8544" | "nokia-5110" => {
+                    // SPI device path — Nokia 5110 (PCD8544) monochrome LCD.
+                    // Distinguishes command vs data by a D/C GPIO line, which
+                    // we resolve to a concrete ODR address up front.
+                    let cs_pin = Self::pcd8544_cs_pin(ext);
+                    let dc_pin = Self::pcd8544_dc_pin(ext);
+                    let dc_src = Self::resolve_pin_odr(&bus, &dc_pin);
+
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let spi = any
+                        .downcast_mut::<crate::peripherals::spi::Spi>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let mut dev = crate::peripherals::components::Pcd8544::new(cs_pin, dc_pin);
+                    if let Some((odr_addr, bit)) = dc_src {
+                        crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
+                    }
+                    spi.attach(Box::new(dev));
+                }
                 "ntc-thermistor" => {
                     // Analog source path: NTC connects directly to an ADC channel.
                     // Read channel + initial temperature from config.
@@ -1585,6 +1722,7 @@ impl SystemBus {
         if let Some(idx) = self.find_peripheral_index(addr) {
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            self.maybe_latch_dc(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u32(addr - p.base, value);
@@ -1636,6 +1774,7 @@ impl SystemBus {
         if let Some(idx) = self.find_peripheral_index(addr) {
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            self.maybe_latch_dc(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u16(addr - p.base, value);
@@ -2048,6 +2187,7 @@ impl crate::Bus for SystemBus {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 #[cfg(feature = "event-scheduler")]
                 self.sync_scheduler_peripheral(idx);
+                self.maybe_latch_dc(idx);
                 let p = &mut self.peripherals[idx];
                 let r = p.dev.write(addr - p.base, value);
                 #[cfg(feature = "event-scheduler")]
@@ -2136,6 +2276,7 @@ impl crate::Bus for SystemBus {
         if let Some(idx) = self.find_peripheral_index(addr) {
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            self.maybe_latch_dc(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u16(addr - p.base, value);
@@ -2174,6 +2315,7 @@ impl crate::Bus for SystemBus {
         if let Some(idx) = self.find_peripheral_index(addr) {
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            self.maybe_latch_dc(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u32(addr - p.base, value);

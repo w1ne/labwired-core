@@ -42,6 +42,18 @@ pub trait SpiDevice: Send {
     /// Latched level of the [`dc_pin`](SpiDevice::dc_pin) at transfer time,
     /// pushed by the bus. No-op for devices that do not observe a D/C line.
     fn set_dc_level(&mut self, _level: bool) {}
+    /// Resolved `(ODR address, bit)` of the D/C line. The bus computes this
+    /// once at install time (from [`dc_pin`](SpiDevice::dc_pin)) and records it
+    /// via [`set_dc_source`]; thereafter the bus reads that GPIO output bit
+    /// just before each transfer and pushes the level via [`set_dc_level`].
+    /// Default `None` → no D/C latching.
+    ///
+    /// [`set_dc_source`]: SpiDevice::set_dc_source
+    fn dc_source(&self) -> Option<(u64, u8)> {
+        None
+    }
+    /// Bus-side setter recording the resolved D/C `(ODR address, bit)`.
+    fn set_dc_source(&mut self, _odr_addr: u64, _bit: u8) {}
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
