@@ -23,12 +23,11 @@ export interface StudioShellProps {
   toast?: string | null;
   onDismissToast?: () => void;
   /**
-   * Optional external control of the "Code" toggle. When provided, these
-   * override the shell's internal layout state so the host (App) can tie the
-   * top-bar Code pill to the desktop code editor it renders in `children`.
+   * Host-controlled "dev mode" (code editor open). Drives the mobile dev
+   * drawer and the sim-dock offset. The on-canvas toggle was removed, so this
+   * is currently always closed on desktop.
    */
   devMode?: boolean;
-  onToggleDev?: () => void;
   children?: ReactNode;
 }
 
@@ -50,13 +49,10 @@ export function StudioShell({
   toast,
   onDismissToast,
   devMode: devModeProp,
-  onToggleDev: onToggleDevProp,
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
-  // Host-controlled Code toggle wins over the shell's internal state.
   const devMode = devModeProp ?? layout.devMode;
-  const toggleDev = onToggleDevProp ?? layout.toggleDev;
 
   useEffect(() => {
     onMountCommandRef?.({ open: layout.openCommand, close: layout.closeCommand });
@@ -66,9 +62,7 @@ export function StudioShell({
     <div className="relative w-full h-screen overflow-hidden bg-bg-base text-fg-primary">
       <TopChrome
         boardName={boardName}
-        devMode={devMode}
         onOpenCommand={layout.openCommand}
-        onToggleDev={toggleDev}
         onShare={onShare}
         onUploadFirmware={onUploadFirmware}
         authSlot={authSlot}

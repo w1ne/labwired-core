@@ -1629,7 +1629,6 @@ export function App() {
     onRun: () => requireAuth(handleRun),
     onShare: handleShare,
     onReset: handleReset,
-    onToggleDev: () => { /* no-op: dev toggle is owned by useStudioLayout inside StudioShell; TopChrome's toggle still works */ },
     onAddMcu: (board) => addMcuRef.current?.(board),
   });
 
@@ -1883,7 +1882,6 @@ export function App() {
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}
       devMode={showCode}
-      onToggleDev={() => setShowCode((v) => !v)}
     >
     <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
     <div data-legacy-shell="true" className={`playground${showCode ? ' code-open' : ''}`}>

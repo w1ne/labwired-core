@@ -1,19 +1,16 @@
 import { useRef, type ReactNode } from 'react';
-import clsx from 'clsx';
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 
 export interface TopChromeProps {
   boardName: string;
-  devMode: boolean;
   onOpenCommand: () => void;
-  onToggleDev: () => void;
   onShare?: () => void;
   onUploadFirmware?: (file: File) => void;
   authSlot?: ReactNode;
   projectSlot?: ReactNode;
 }
 
-export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onShare, onUploadFirmware, authSlot, projectSlot }: TopChromeProps) {
+export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware, authSlot, projectSlot }: TopChromeProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   return (
     <header
@@ -76,25 +73,6 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
           </button>
         </>
       )}
-      <button
-        type="button"
-        role="switch"
-        aria-checked={devMode}
-        aria-label={devMode ? 'Hide code editor' : 'Show code editor'}
-        title={devMode ? 'Hide code editor' : 'Show code editor'}
-        onClick={onToggleDev}
-        className={clsx(
-          'hidden sm:flex h-6 px-3 rounded-pill text-xs font-medium transition-colors duration-micro shrink-0 items-center gap-1.5',
-          devMode
-            ? 'bg-accent-soft text-accent border border-accent/40'
-            : 'bg-bg-surface/60 text-fg-secondary border border-border hover:text-fg-primary'
-        )}
-      >
-        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M5 4 1 8l4 4 M11 4l4 4-4 4" />
-        </svg>
-        Code
-      </button>
       <div className="hidden sm:flex items-center gap-1">
         <GlobalNav active="playground" variant="dark" />
       </div>

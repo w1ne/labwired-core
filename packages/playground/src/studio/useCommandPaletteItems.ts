@@ -30,7 +30,6 @@ export interface CommandPaletteContext {
   onRun: () => void;
   onShare: () => void;
   onReset: () => void;
-  onToggleDev: () => void;
   /// Drop a new MCU into the multi-chip session. Pass a board to
   /// pre-select it; otherwise the default (nRF52840) is used.
   onAddMcu?: (board?: BoardConfig) => void;
@@ -82,7 +81,6 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
       { id: 'act:run', bucket: 'Actions', label: 'Run simulation', hint: 'Space', action: ctx.onRun },
       { id: 'act:reset', bucket: 'Actions', label: 'Reset simulation', action: ctx.onReset },
       { id: 'act:share', bucket: 'Actions', label: 'Share project', action: ctx.onShare },
-      { id: 'act:dev', bucket: 'Actions', label: 'Toggle Dev mode', action: ctx.onToggleDev },
     );
 
 
