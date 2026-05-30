@@ -585,10 +585,25 @@ pub struct Machine<C: Cpu> {
     pub last_breakpoint: Option<u32>,
     pub total_cycles: u64,
     pub config: SimulationConfig,
+    /// Cached bus index of the (single) RTC_CNTL peripheral, resolved at
+    /// construction. `step()` drains the SW_SYS_RST latch every cycle; the
+    /// pre-cache code walked the full ~40-peripheral list and downcast each
+    /// to `RtcCntl` per cycle. With the index cached this collapses to one
+    /// indexed access + one downcast. `None` for configs that don't register
+    /// an RTC_CNTL peripheral (every non-ESP32-classic target).
+    rtc_cntl_index: Option<usize>,
 }
 
 impl<C: Cpu> Machine<C> {
     pub fn new(cpu: C, bus: bus::SystemBus) -> Self {
+        let rtc_cntl_index = bus.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>()
+                })
+                .is_some()
+        });
         Self {
             cpu,
             cpu_secondary: None,
@@ -598,6 +613,7 @@ impl<C: Cpu> Machine<C> {
             last_breakpoint: None,
             total_cycles: 0,
             config: SimulationConfig::default(),
+            rtc_cntl_index,
         }
     }
 
@@ -777,25 +793,26 @@ impl<C: Cpu> Machine<C> {
         Ok(())
     }
 
-    /// Returns true (and clears the latch) if any registered RTC_CNTL
+    /// Returns true (and clears the latch) if the registered RTC_CNTL
     /// peripheral has a pending software-system-reset request. Used by
     /// `step()` to honor OPTIONS0 bit 31 writes at a clean instruction
-    /// boundary. Walks the bus's peripheral list and downcasts; in
-    /// practice there's at most one RTC_CNTL on the bus, so this is O(N)
-    /// over a short vector.
+    /// boundary. Uses the cached `rtc_cntl_index` resolved at construction
+    /// — non-ESP32-classic configs (no RTC_CNTL on the bus) short-circuit
+    /// to `false` without touching the peripheral vector at all.
     fn drain_rtc_cntl_reset_request(&self) -> bool {
-        for p in &self.bus.peripherals {
-            if let Some(any) = p.dev.as_any() {
-                if let Some(rtc) =
-                    any.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>()
-                {
-                    if rtc.drain_reset_request() {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
+        let Some(idx) = self.rtc_cntl_index else {
+            return false;
+        };
+        let Some(p) = self.bus.peripherals.get(idx) else {
+            return false;
+        };
+        p.dev
+            .as_any()
+            .and_then(|a| {
+                a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>()
+            })
+            .map(|rtc| rtc.drain_reset_request())
+            .unwrap_or(false)
     }
 
     pub fn snapshot(&self) -> snapshot::MachineSnapshot {

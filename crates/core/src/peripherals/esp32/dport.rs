@@ -68,7 +68,6 @@
 //! delivery) without churning the rest of the catch-all.
 
 use crate::{Peripheral, SimResult};
-use std::collections::HashMap;
 
 // ── Register offsets (per ESP32 TRM v5.0 §6 + §7) ───────────────────────────
 
@@ -117,16 +116,20 @@ pub const DPORT_APP_INTR_FROM_CPU_3_OFFSET: u32 = 0x0174;
 
 /// DPORT peripheral.
 ///
-/// Word-granular sparse storage keeps the model compact — most of the
-/// 4 KiB DPORT window is unused at any given moment. Read/write are
-/// plain last-write-wins so the WASM IPI bridge (which reads back its
-/// own writes) keeps working.
+/// Word-granular dense storage — DPORT is exactly 4 KiB / 1024 words, so a
+/// flat `[u32; 1024]` (heap-boxed to keep the peripheral handle small) is
+/// the same memory order as a real `HashMap` entry plus the SipHash work,
+/// minus the hashing. The WASM IPI bridge polls this peripheral every
+/// cycle; cache-resident array reads beat hashed lookups by a wide margin
+/// on the bench.
 #[derive(Debug)]
 pub struct Dport {
     /// Base MMIO address (informational; bus dispatches by offset).
     base: u32,
-    /// Backing word store. Indexed by 4-byte-aligned offset within DPORT.
-    regs: HashMap<u32, u32>,
+    /// Backing word store. `regs[word_off >> 2]` is the value at byte
+    /// offset `word_off`. Heap-boxed so the peripheral handle stays
+    /// pointer-sized.
+    regs: Box<[u32; Self::WORDS]>,
 }
 
 impl Default for Dport {
@@ -140,6 +143,8 @@ impl Dport {
     pub const BASE: u32 = 0x3FF0_0000;
     /// DPORT window size (4 KiB per TRM).
     pub const SIZE: u32 = 0x1000;
+    /// Number of 32-bit words in the DPORT window.
+    pub const WORDS: usize = (Self::SIZE / 4) as usize;
 
     /// Construct a freshly-powered DPORT block.
     ///
@@ -151,10 +156,10 @@ impl Dport {
     ///     real silicon reset value.
     ///   * Every other offset reads back 0 until written.
     pub fn new() -> Self {
-        let mut regs = HashMap::new();
-        regs.insert(DPORT_PERIP_CLK_EN_OFFSET, 0xFFFF_FFFF);
-        regs.insert(DPORT_PERIP_RST_EN_OFFSET, 0);
-        regs.insert(DPORT_CPU_PER_CONF_OFFSET, 0);
+        let mut regs = Box::new([0u32; Self::WORDS]);
+        regs[(DPORT_PERIP_CLK_EN_OFFSET >> 2) as usize] = 0xFFFF_FFFF;
+        regs[(DPORT_PERIP_RST_EN_OFFSET >> 2) as usize] = 0;
+        regs[(DPORT_CPU_PER_CONF_OFFSET >> 2) as usize] = 0;
         Self {
             base: Self::BASE,
             regs,
@@ -167,11 +172,14 @@ impl Dport {
     }
 
     fn read_word(&self, word_off: u32) -> u32 {
-        self.regs.get(&word_off).copied().unwrap_or(0)
+        // Bus already clamps offset to the registered SIZE, so the index
+        // is bounded by WORDS. The cast is checked in debug via the array
+        // bounds check; release builds elide it.
+        self.regs[(word_off >> 2) as usize]
     }
 
     fn write_word(&mut self, word_off: u32, value: u32) {
-        self.regs.insert(word_off, value);
+        self.regs[(word_off >> 2) as usize] = value;
     }
 }
 
@@ -189,10 +197,26 @@ impl Peripheral for Dport {
         // Read-modify-write so partial-byte writes don't clobber the
         // other three bytes of the word. PERIP_CLK_EN's all-ones seed
         // survives a single-byte poke this way.
-        let mut word = self.regs.get(&word_off).copied().unwrap_or(0);
+        let mut word = self.read_word(word_off);
         word &= !(0xFFu32 << byte_off);
         word |= (value as u32) << byte_off;
         self.write_word(word_off, word);
+        Ok(())
+    }
+
+    // Word-granular fast paths: the firmware DPORT polling loop (WASM IPI
+    // bridge, intmatrix mapping reads) hits these every CPU cycle. The
+    // default Peripheral trait impl issues four byte reads/writes, each
+    // hashing the offset through SipHash to index `regs`. Overriding here
+    // collapses that to one lookup. Reads and writes are pure
+    // last-write-wins storage with no side effects, so a single-word
+    // operation is byte-identical to the four-byte default path.
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_word(offset as u32 & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_word(offset as u32 & !3, value);
         Ok(())
     }
 
@@ -209,8 +233,17 @@ impl Peripheral for Dport {
         struct Snap {
             regs: Vec<(u32, u32)>,
         }
+        // Preserve the sparse on-wire format. Skip zero words so the
+        // snapshot stays small (most of the 4 KiB window is unwritten
+        // in practice).
         let snap = Snap {
-            regs: self.regs.iter().map(|(k, v)| (*k, *v)).collect(),
+            regs: self
+                .regs
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| **v != 0)
+                .map(|(i, v)| ((i as u32) << 2, *v))
+                .collect(),
         };
         bincode::serialize(&snap).expect("bincode serialize Dport")
     }
@@ -223,7 +256,10 @@ impl Peripheral for Dport {
         let snap: Snap = bincode::deserialize(bytes).map_err(|e| {
             crate::SimulationError::NotImplemented(format!("Dport snapshot decode: {e}"))
         })?;
-        self.regs = snap.regs.into_iter().collect();
+        self.regs = Box::new([0u32; Self::WORDS]);
+        for (off, val) in snap.regs {
+            self.regs[(off >> 2) as usize] = val;
+        }
         Ok(())
     }
 }

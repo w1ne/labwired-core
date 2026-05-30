@@ -215,6 +215,33 @@ impl Timg {
         self.latch_t1();
     }
 
+    /// Dispatch the per-word side effects of a register write. Factored
+    /// out so both byte-granular `write` and word-granular `write_u32`
+    /// produce identical observable state. Idempotent for all the
+    /// triggers below (they read live state from `regs`/counters and
+    /// write back deterministic values), so calling once per word or
+    /// four times per word produces the same outcome.
+    fn apply_write_side_effects(&mut self, word_off: u64) {
+        match word_off {
+            T0_UPDATE => self.latch_t0(),
+            T1_UPDATE => self.latch_t1(),
+            T0_LOAD => self.preload_t0(),
+            T1_LOAD => self.preload_t1(),
+            WDT_FEED | WDT_WPROTECT => {
+                // Watchdog feed / write-protect: round-trip the value.
+                // WDT timing/reset behavior isn't modeled.
+            }
+            INT_CLR => {
+                // Write-1-to-clear: clear matching bits in INT_RAW.
+                let mask = self.word(INT_CLR);
+                let raw = self.word(INT_RAW);
+                self.regs.insert(INT_RAW, raw & !mask);
+            }
+            RTCCALICFG => self.maybe_complete_rtc_calibration(),
+            _ => {}
+        }
+    }
+
     /// Apply RTC calibration completion semantics (carried over from the
     /// pre-existing `TimgStub`). When firmware sets `RTCCALICFG.START`,
     /// we immediately mark `RDY` and stash a derived value in
@@ -273,36 +300,48 @@ impl Peripheral for Timg {
         let entry = self.regs.entry(word_off).or_insert(0);
         *entry &= !(0xFFu32 << byte_off);
         *entry |= (value as u32) << byte_off;
+        self.apply_write_side_effects(word_off);
+        Ok(())
+    }
 
-        // Side effects on the word that was just touched.
-        match word_off {
-            T0_UPDATE => self.latch_t0(),
-            T1_UPDATE => self.latch_t1(),
-            T0_LOAD => self.preload_t0(),
-            T1_LOAD => self.preload_t1(),
-            WDT_FEED => {
-                // Watchdog feed: silently accepted. We don't model the
-                // WDT timing path or reset behavior — the value written
-                // doesn't matter. We also don't clear the WDTFEED
-                // register itself; firmware never reads it back.
-            }
-            WDT_WPROTECT => {
-                // Round-trip; real silicon uses 0x50D83AA1 to unlock
-                // subsequent WDTCONFIG* writes. We accept any value.
-            }
-            INT_CLR => {
-                // Write-1-to-clear semantics: clear matching INT_RAW bits.
-                let mask = self.word(INT_CLR);
-                let raw = self.word(INT_RAW);
-                self.regs.insert(INT_RAW, raw & !mask);
-                // INT_CLR itself is conventionally readable-as-zero; we
-                // leave the written bits in place since callers don't
-                // read them back. Firmware that does will see the last
-                // write value, which is harmless.
-            }
-            RTCCALICFG => self.maybe_complete_rtc_calibration(),
-            _ => {}
-        }
+    // Word-granular fast paths. The default trait impls would issue 4×
+    // byte ops (each hashing through `regs`); the bench polls T0_LO and
+    // INT_RAW heavily. Reads look up the word once with the same LO/HI
+    // counter fallback as the byte path. Writes overwrite the word in
+    // one shot, then dispatch side effects via the shared helper so the
+    // observable state is identical to four byte writes.
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        let word_off = offset & !3;
+        let word = match word_off {
+            T0_LO => self
+                .regs
+                .get(&T0_LO)
+                .copied()
+                .unwrap_or(self.counter_t0 as u32),
+            T0_HI => self
+                .regs
+                .get(&T0_HI)
+                .copied()
+                .unwrap_or((self.counter_t0 >> 32) as u32),
+            T1_LO => self
+                .regs
+                .get(&T1_LO)
+                .copied()
+                .unwrap_or(self.counter_t1 as u32),
+            T1_HI => self
+                .regs
+                .get(&T1_HI)
+                .copied()
+                .unwrap_or((self.counter_t1 >> 32) as u32),
+            _ => self.word(word_off),
+        };
+        Ok(word)
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        let word_off = offset & !3;
+        self.regs.insert(word_off, value);
+        self.apply_write_side_effects(word_off);
         Ok(())
     }
 
