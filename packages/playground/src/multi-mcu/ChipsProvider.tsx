@@ -129,7 +129,15 @@ export function ChipsProvider({
     }
     return DEFAULT_CHIP_ID;
   });
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  // Default desktop drawer to OPEN so single-MCU sessions don't
+  // lose access to Serial/Registers/Trace/Memory/Source/YAML —
+  // there's no chip tile to click when only one MCU exists. On
+  // mobile the drawer is hidden by default (modal pattern) — the
+  // mobile view sets it true on Properties tap.
+  const [propertiesOpen, setPropertiesOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 767px)').matches;
+  });
 
   useEffect(() => {
     const boardIdByChip: Record<string, string> = {};
