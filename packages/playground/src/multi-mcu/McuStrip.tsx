@@ -28,8 +28,11 @@ export function McuStrip() {
             key={chipId}
             session={session}
             isActive={isActive}
-            onFocus={() => setActiveChipId(chipId)}
-            onOpenProperties={() => {
+            onClick={() => {
+              // Clicking the chip = selecting it + showing its
+              // properties. No separate button. The properties ARE
+              // the chip — Serial / Registers / Trace / Memory /
+              // Source / YAML in the drawer below.
               setActiveChipId(chipId);
               setPropertiesOpen(true);
             }}
@@ -44,19 +47,17 @@ export function McuStrip() {
 function McuTile({
   session,
   isActive,
-  onFocus,
-  onOpenProperties,
+  onClick,
   onRemove,
 }: {
   session: ChipSession;
   isActive: boolean;
-  onFocus: () => void;
-  onOpenProperties: () => void;
+  onClick: () => void;
   onRemove?: () => void;
 }) {
   return (
     <div className="lw-mcu-tile" data-active={isActive ? 'true' : 'false'}>
-      <button type="button" className="lw-mcu-tile-focus" onClick={onFocus}>
+      <button type="button" className="lw-mcu-tile-focus" onClick={onClick}>
         <span className="lw-mcu-tile-thumb">
           <McuThumb session={session} width={56} height={36} />
         </span>
@@ -64,14 +65,6 @@ function McuTile({
           <span className="lw-mcu-tile-id">{session.chipId}</span>
           <span className="lw-mcu-tile-board">{session.board.name}</span>
         </span>
-      </button>
-      <button
-        type="button"
-        className="lw-mcu-tile-props"
-        onClick={onOpenProperties}
-        title={`Open ${session.chipId} properties`}
-      >
-        Properties
       </button>
       {onRemove && (
         <button

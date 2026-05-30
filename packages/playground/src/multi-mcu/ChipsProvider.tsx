@@ -129,12 +129,17 @@ export function ChipsProvider({
     }
     return DEFAULT_CHIP_ID;
   });
-  // Properties are a per-chip attribute. The drawer is hidden by
-  // default; user opens it by clicking a chip's Properties button
-  // in the McuStrip (same on desktop and mobile). The drawer then
-  // shows that chip's Serial / Registers / Trace / Memory / Source
-  // / YAML.
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  // Properties are a per-chip attribute (Serial / Registers /
+  // Trace / Memory / Source / YAML — the drawer below the canvas
+  // shows them). Default OPEN on desktop so single-chip sessions
+  // see their properties immediately; clicking another chip tile
+  // in the McuStrip swaps the drawer content to that chip's
+  // properties. Default CLOSED on mobile (modal pattern — tap a
+  // chip to open).
+  const [propertiesOpen, setPropertiesOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 767px)').matches;
+  });
 
   useEffect(() => {
     const boardIdByChip: Record<string, string> = {};

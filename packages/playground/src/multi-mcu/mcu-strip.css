@@ -75,24 +75,6 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
-.lw-mcu-tile-props {
-  background: rgba(232, 62, 140, 0.14);
-  color: #e83e8c;
-  border: 1px solid rgba(232, 62, 140, 0.4);
-  border-radius: 8px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 100ms ease, color 100ms ease;
-}
-
-.lw-mcu-tile-props:hover {
-  background: rgba(232, 62, 140, 0.32);
-  color: #fff;
-}
-
 .lw-mcu-tile-remove {
   width: 18px;
   height: 18px;
