@@ -10,11 +10,21 @@ import { useChips } from './ChipsProvider';
 import './chip-tabs-bar.css';
 
 export function ChipTabsBar() {
-  const { order, activeChipId, setActiveChipId, removeChip } = useChips();
-  if (order.length <= 1) return null;
+  const { order, activeChipId, setActiveChipId, removeChip, setPropertiesOpen } = useChips();
   return (
     <div className="lw-chip-switch" role="tablist" aria-label="MCU instances">
-      {order.map((chipId) => {
+      {/* Close-drawer button on the LEFT so it stays put even when
+          the tab strip scrolls horizontally. */}
+      <button
+        type="button"
+        className="lw-chip-switch-close"
+        onClick={() => setPropertiesOpen(false)}
+        aria-label="Close properties drawer"
+        title="Hide properties"
+      >
+        ×
+      </button>
+      {order.length > 1 && order.map((chipId) => {
         const isActive = chipId === activeChipId;
         return (
           <span key={chipId} className="lw-chip-pill" data-active={isActive ? 'true' : 'false'}>
@@ -43,7 +53,7 @@ export function ChipTabsBar() {
           </span>
         );
       })}
-      <span className="lw-chip-switch-divider" aria-hidden />
+      {order.length > 1 && <span className="lw-chip-switch-divider" aria-hidden />}
     </div>
   );
 }

@@ -12,6 +12,26 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.lw-chip-switch-close {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.lw-chip-switch-close:hover {
+  background: rgba(255, 60, 60, 0.65);
+  color: #fff;
+}
+
 .lw-chip-pill {
   display: inline-flex;
   align-items: center;
