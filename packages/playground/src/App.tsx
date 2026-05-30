@@ -1498,6 +1498,13 @@ export function App() {
   const { openSignIn } = useClerk();
   const requireAuth = useCallback(
     (action: () => void) => {
+      // Local-dev escape hatch: set VITE_DISABLE_AUTH=true in
+      // packages/playground/.env.local to run sims without signing in.
+      // Off by default, so production (Cloudflare Pages) stays gated.
+      if (import.meta.env.VITE_DISABLE_AUTH === 'true') {
+        action();
+        return;
+      }
       if (clerkLoaded && !isSignedIn) {
         openSignIn({});
         return;
