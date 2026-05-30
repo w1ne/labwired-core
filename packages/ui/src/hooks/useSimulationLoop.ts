@@ -187,8 +187,10 @@ export function useSimulationLoop(
       const t0 = performance.now();
       try {
         bridge.stepBatch(batchRef.current);
-      } catch {
-        // Simulation error - stop the loop
+      } catch (e) {
+        // A faulting step halts the loop. Surface it — swallowing this
+        // silently makes a stuck simulation look like an unexplained freeze.
+        console.error('[LabWired] simulation step threw; halting run loop:', e);
         return;
       }
       const elapsed = performance.now() - t0;

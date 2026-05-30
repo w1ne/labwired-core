@@ -485,6 +485,14 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
 // part IS the active board; any other part whose type matches a
 // board's mcuComponentType (e.g. a dropped 'nrf52840-dk') resolves
 // to that board. Returns null for non-MCU parts (LEDs, wires…).
+// Wall-clock time the MCU has been running, mm:ss.
+function formatRuntime(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const ss = String(totalSeconds % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
 function mcuBoardForPart(
   part: { id: string; type: string } | undefined,
   primaryBoard: BoardConfig,
@@ -2270,6 +2278,7 @@ export function App() {
             >
               ⏵
             </button>
+            <span title="Time this MCU has been running">⏱ {formatRuntime(runtimeMs)}</span>
             <span>{(simState.cycles ?? 0).toLocaleString()} cyc</span>
             <span>PC 0x{(simState.pc ?? 0).toString(16).toUpperCase()}</span>
           </div>
