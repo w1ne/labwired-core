@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-nrf52840-ble-collector"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+# Periodic raw-RADIO BLE "collector". Receives BLE_1Mbit frames on
+# FREQUENCY=42 from firmware-nrf52840-ble-sensor and reads out the reading.
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nrf52840-ble-collector"
+path = "src/main.rs"
+test = false
+bench = false

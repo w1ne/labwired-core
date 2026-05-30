@@ -1,0 +1,24 @@
+# LabWired - Firmware Simulation Platform
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-nrf52840-ble-sensor"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team"]
+license = "MIT"
+
+# Periodic raw-RADIO BLE "sensor". Broadcasts an incrementing reading on
+# FREQUENCY=42, MODE=BLE_1Mbit. Companion to firmware-nrf52840-ble-collector;
+# drives the playground two-nRF cross-instance BLE demo.
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nrf52840-ble-sensor"
+path = "src/main.rs"
+test = false
+bench = false
