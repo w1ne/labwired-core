@@ -93,6 +93,10 @@ pub struct AirFrameTrace {
     pub addr_prefix: u8,
     pub mode: u32,
     pub bytes: Vec<u8>,
+    /// Whitening IV the sender used. `bytes` is the on-air (whitened) frame;
+    /// a sniffer can de-whiten `bytes[..len-3]` (the 3-byte CRC is appended
+    /// after whitening) with this IV to recover the logical payload.
+    pub whitening_iv: u8,
 }
 
 /// Public view of the current TX trace, intended for WASM consumption
@@ -998,6 +1002,7 @@ impl Peripheral for Nrf52Radio {
                     addr_prefix: frame.addr_prefix,
                     mode: frame.mode,
                     bytes: frame.bytes.clone(),
+                    whitening_iv: frame.whitening_iv,
                 };
                 air.queues.entry(key).or_default().push_back(frame);
                 air.tx_history.push_back(trace);
