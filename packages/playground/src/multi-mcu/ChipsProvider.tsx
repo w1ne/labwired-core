@@ -129,15 +129,12 @@ export function ChipsProvider({
     }
     return DEFAULT_CHIP_ID;
   });
-  // Default desktop drawer to OPEN so single-MCU sessions don't
-  // lose access to Serial/Registers/Trace/Memory/Source/YAML —
-  // there's no chip tile to click when only one MCU exists. On
-  // mobile the drawer is hidden by default (modal pattern) — the
-  // mobile view sets it true on Properties tap.
-  const [propertiesOpen, setPropertiesOpen] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return !window.matchMedia('(max-width: 767px)').matches;
-  });
+  // Properties are a per-chip attribute. The drawer is hidden by
+  // default; user opens it by clicking a chip's Properties button
+  // in the McuStrip (same on desktop and mobile). The drawer then
+  // shows that chip's Serial / Registers / Trace / Memory / Source
+  // / YAML.
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
 
   useEffect(() => {
     const boardIdByChip: Record<string, string> = {};

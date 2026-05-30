@@ -44,6 +44,7 @@ import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
 import { ChipsProvider, useChips } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
+import { McuStrip } from './multi-mcu/McuStrip';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
 import { MobileMultiChipView } from './multi-mcu/MobileMultiChipView';
 import { PropertiesGate } from './multi-mcu/PropertiesGate';
@@ -1691,6 +1692,7 @@ export function App() {
       }}
     />
     <BackgroundChipTicker />
+    <McuStrip />
     <StudioShell
       boardName={activeProjectName ?? selectedBoard.name}
       isEmpty={isEmpty}

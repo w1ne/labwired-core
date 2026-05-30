@@ -1,25 +1,25 @@
-/* Inline chip switcher on the LEFT of the drawer's tab strip.
-   Compact text-only pills + a vertical divider before the dev
-   tabs. Sits in the same 36px-tall row so the drawer keeps a
-   single header line — no stacked headers. */
+/* Drawer header — anchored to the LEFT of the dev tab strip via
+   DevDrawer's `header` slot. Names the owning chip so it's
+   unambiguous which chip's properties the drawer is showing. */
 
-.lw-chip-switch {
+.lw-chip-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-right: 12px;
+  padding-right: 4px;
   flex-shrink: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .lw-chip-switch-close {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
@@ -32,63 +32,42 @@
   color: #fff;
 }
 
-.lw-chip-pill {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-  transition: background 100ms ease, border-color 100ms ease;
+.lw-chip-header-thumb {
+  display: flex;
+  width: 32px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
-.lw-chip-pill:hover {
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.lw-chip-pill[data-active='true'] {
-  background: rgba(232, 62, 140, 0.16);
-  border-color: rgba(232, 62, 140, 0.5);
-}
-
-.lw-chip-pill-focus {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.75);
-  padding: 3px 10px;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.lw-chip-pill[data-active='true'] .lw-chip-pill-focus {
-  color: #fff;
-  font-weight: 600;
-}
-
-.lw-chip-pill-remove {
-  width: 18px;
-  height: 18px;
-  margin-right: 3px;
-  border-radius: 50%;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.55);
-  border: none;
+.lw-chip-header-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 100ms ease, color 100ms ease;
 }
 
-.lw-chip-pill-remove:hover {
-  background: rgba(255, 60, 60, 0.6);
+.lw-chip-header-prop {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+}
+
+.lw-chip-header-id {
   color: #fff;
+  font-weight: 700;
+}
+
+.lw-chip-header-sep {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.lw-chip-header-board {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .lw-chip-switch-divider {
   width: 1px;
-  height: 18px;
-  margin-left: 6px;
+  height: 20px;
+  margin-left: 4px;
   background: rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }

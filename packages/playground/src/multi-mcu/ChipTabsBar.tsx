@@ -1,20 +1,20 @@
-// Compact chip switcher that sits inline on the LEFT of the
-// drawer's existing Serial/Registers/Trace/Memory/Source/YAML
-// tab strip. Each "chip" is a small pill — chipId only — with the
-// active one highlighted in magenta. Followed by a vertical
-// divider that separates the chip switcher from the dev tabs.
+// Drawer header content: clear identity of the chip whose
+// properties the drawer is showing, plus a close button.
 //
-// Single-chip sessions render nothing (chip is implied; saves
-// horizontal space).
+// Replaces the older multi-chip pill switcher — chip switching
+// now happens via the McuStrip tile's "Properties" button (one
+// chip owns one drawer). The drawer here is unambiguously
+// labelled with the chip it represents.
 import { useChips } from './ChipsProvider';
+import { McuThumb } from './McuThumb';
 import './chip-tabs-bar.css';
 
 export function ChipTabsBar() {
-  const { order, activeChipId, setActiveChipId, removeChip, setPropertiesOpen } = useChips();
+  const { sessions, activeChipId, setPropertiesOpen } = useChips();
+  const session = sessions[activeChipId];
+  if (!session) return null;
   return (
-    <div className="lw-chip-switch" role="tablist" aria-label="MCU instances">
-      {/* Close-drawer button on the LEFT so it stays put even when
-          the tab strip scrolls horizontally. */}
+    <div className="lw-chip-header" aria-label="Active chip properties header">
       <button
         type="button"
         className="lw-chip-switch-close"
@@ -24,36 +24,16 @@ export function ChipTabsBar() {
       >
         ×
       </button>
-      {order.length > 1 && order.map((chipId) => {
-        const isActive = chipId === activeChipId;
-        return (
-          <span key={chipId} className="lw-chip-pill" data-active={isActive ? 'true' : 'false'}>
-            <button
-              type="button"
-              className="lw-chip-pill-focus"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveChipId(chipId)}
-            >
-              {chipId}
-            </button>
-            {chipId !== 'chip-default' && (
-              <button
-                type="button"
-                className="lw-chip-pill-remove"
-                aria-label={`Remove ${chipId}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeChip(chipId);
-                }}
-              >
-                ×
-              </button>
-            )}
-          </span>
-        );
-      })}
-      {order.length > 1 && <span className="lw-chip-switch-divider" aria-hidden />}
+      <span className="lw-chip-header-thumb">
+        <McuThumb session={session} width={32} height={20} />
+      </span>
+      <span className="lw-chip-header-label">
+        <span className="lw-chip-header-prop">Properties of</span>
+        <span className="lw-chip-header-id">{session.chipId}</span>
+        <span className="lw-chip-header-sep">·</span>
+        <span className="lw-chip-header-board">{session.board.name}</span>
+      </span>
+      <span className="lw-chip-switch-divider" aria-hidden />
     </div>
   );
 }
