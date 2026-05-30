@@ -4,11 +4,15 @@
 //
 // End-to-end test: load the `esp32-epaper-lab` ELF, run it in the
 // simulator wired with our ESP32-classic GPIO + VSPI peripherals, and
-// verify the SSD1680 panel received the expected three-band pattern.
+// verify the SSD1680 panel received the exact e-reader bitmap the firmware
+// streams (`EREADER_BLACK_PLANE` / `EREADER_RED_PLANE`).
 //
 // This is the side-by-side fidelity check that justifies "same ELF on
 // chip and in sim" for the Arduino-ESP32-style ESP32 + tri-color e-paper
-// hardware target.
+// hardware target: the panel content must match the firmware's embedded
+// planes byte-for-byte. (The firmware switched from a synthetic three-band
+// pattern to the rendered e-reader page in 87d8d45; this test was updated
+// to match — the gitignored ELF had let the stale golden go unnoticed.)
 
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::components::Ssd1680Tricolor290;
@@ -17,6 +21,12 @@ use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
 use std::process::Command;
+
+// The exact planes the firmware embeds and streams to the panel. Pointing
+// at the firmware's own source makes this golden self-maintaining: if the
+// bitmap is regenerated, the expectation follows automatically.
+#[path = "../../../examples/esp32-epaper-lab/src/ereader_bitmap.rs"]
+mod ereader_bitmap;
 
 fn firmware_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
@@ -47,7 +57,7 @@ fn ensure_firmware_built() -> PathBuf {
 }
 
 #[test]
-fn firmware_drives_panel_to_three_band_pattern() {
+fn firmware_drives_panel_to_ereader_bitmap() {
     let elf_path = ensure_firmware_built();
     if !elf_path.exists() {
         eprintln!("[skip] esp32-epaper-lab ELF unavailable; skipping");
@@ -142,28 +152,23 @@ fn firmware_drives_panel_to_three_band_pattern() {
     assert_eq!(black.len(), 4736);
     assert_eq!(red.len(), 4736);
 
+    // The panel must hold exactly what the firmware streamed: its embedded
+    // e-reader bitmap planes, byte-for-byte. This is the digital-twin
+    // guarantee — same ELF, same pixels. Report the first divergence with
+    // its row/col for a readable failure.
     const WIDTH_BYTES: usize = 16;
-    let band_byte = |row: usize| -> (u8, u8) {
-        match row {
-            0..=98 => (0xFF, 0xFF),
-            99..=197 => (0x00, 0xFF),
-            _ => (0xFF, 0x00),
-        }
+    let first_diff = |got: &[u8], want: &[u8]| -> Option<(usize, usize, u8, u8)> {
+        got.iter()
+            .zip(want)
+            .enumerate()
+            .find_map(|(idx, (&g, &w))| {
+                (g != w).then_some((idx / WIDTH_BYTES, idx % WIDTH_BYTES, g, w))
+            })
     };
-    for row in 0..296usize {
-        let (exp_b, exp_r) = band_byte(row);
-        for col_byte in 0..WIDTH_BYTES {
-            let idx = row * WIDTH_BYTES + col_byte;
-            assert_eq!(
-                black[idx], exp_b,
-                "black plane[row={row} col={col_byte}] expected {exp_b:#04x}, got {:#04x}",
-                black[idx]
-            );
-            assert_eq!(
-                red[idx], exp_r,
-                "red plane[row={row} col={col_byte}] expected {exp_r:#04x}, got {:#04x}",
-                red[idx]
-            );
-        }
+    if let Some((row, col, got, want)) = first_diff(black, &ereader_bitmap::EREADER_BLACK_PLANE) {
+        panic!("black plane[row={row} col={col}] = {got:#04x}, expected {want:#04x} (firmware EREADER_BLACK_PLANE)");
+    }
+    if let Some((row, col, got, want)) = first_diff(red, &ereader_bitmap::EREADER_RED_PLANE) {
+        panic!("red plane[row={row} col={col}] = {got:#04x}, expected {want:#04x} (firmware EREADER_RED_PLANE)");
     }
 }
