@@ -246,6 +246,9 @@ export interface AirFrameTrace {
   addr_prefix: number;
   mode: number;
   bytes: number[];
+  /** Whitening IV the sender used, so a sniffer can de-whiten `bytes`
+   *  (minus the trailing 3-byte CRC) to recover the logical payload. */
+  whitening_iv: number;
 }
 
 export class SimulatorBridge {

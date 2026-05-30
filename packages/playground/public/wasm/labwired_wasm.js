@@ -214,6 +214,27 @@ export class WasmSimulator {
         return ret >>> 0;
     }
     /**
+     * Return the PCD8544 (Nokia 5110) framebuffer for the device identified
+     * by `device_id`.
+     *
+     * `device_id` must match a `board_io` binding with `device_type:
+     * "pcd8544"`. Returns 504 bytes: 84 columns × 6 banks, bank-major. Pixel
+     * (x, y) is bit `(y % 8)` of byte `[(y / 8) * 84 + x]` (1 = on/dark).
+     * @param {string} device_id
+     * @returns {Uint8Array}
+     */
+    get_pcd8544_framebuffer(device_id) {
+        const ptr0 = passStringToWasm0(device_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_get_pcd8544_framebuffer(this.__wbg_ptr, ptr0, len0);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
      * List all peripherals: [{ name, base_address }]
      * @returns {any}
      */
@@ -532,6 +553,21 @@ export class WasmSimulator {
         }
     }
     /**
+     * Set the distance (cm) reported by an HC-SR04 ultrasonic sensor — the
+     * host-controlled "hand position" that drives gesture control. Clamped to
+     * the sensor's 2–400 cm range.
+     * @param {string} id
+     * @param {number} distance_cm
+     */
+    set_hcsr04_distance(id, distance_cm) {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmsimulator_set_hcsr04_distance(this.__wbg_ptr, ptr0, len0, distance_cm);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * Set the simulated X/Y/Z sample on an ADXL345 attached to an I2C peripheral.
      * Looks up the binding in `board_io` by id; the binding must have
      * `device_type: "adxl345"`.
@@ -782,7 +818,7 @@ function __wbg_get_imports() {
             console.warn(getStringFromWasm0(arg0, arg1));
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1808, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1838, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hd749741175e04d09);
             return ret;
         },

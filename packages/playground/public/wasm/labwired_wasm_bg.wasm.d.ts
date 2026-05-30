@@ -18,6 +18,7 @@ export const wasmsimulator_get_i2c_sensor_states: (a: number) => any;
 export const wasmsimulator_get_ili9341_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
 export const wasmsimulator_get_led_state: (a: number) => number;
 export const wasmsimulator_get_pc: (a: number) => number;
+export const wasmsimulator_get_pcd8544_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
 export const wasmsimulator_get_peripheral_list: (a: number) => any;
 export const wasmsimulator_get_peripheral_snapshot: (a: number, b: number, c: number) => any;
 export const wasmsimulator_get_register: (a: number, b: number) => number;
@@ -41,6 +42,7 @@ export const wasmsimulator_set_adc_value: (a: number, b: number, c: number, d: n
 export const wasmsimulator_set_board_io_input: (a: number, b: number, c: number, d: number) => [number, number];
 export const wasmsimulator_set_gps_fix: (a: number, b: number, c: number, d: number) => [number, number];
 export const wasmsimulator_set_gps_position: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+export const wasmsimulator_set_hcsr04_distance: (a: number, b: number, c: number, d: number) => [number, number];
 export const wasmsimulator_set_i2c_sensor_sample: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
 export const wasmsimulator_set_i2c_sensor_sample_6dof: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
 export const wasmsimulator_set_jit_enabled: (a: number, b: number) => void;

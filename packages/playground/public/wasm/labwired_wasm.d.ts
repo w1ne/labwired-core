@@ -100,6 +100,15 @@ export class WasmSimulator {
     get_led_state(): boolean;
     get_pc(): number;
     /**
+     * Return the PCD8544 (Nokia 5110) framebuffer for the device identified
+     * by `device_id`.
+     *
+     * `device_id` must match a `board_io` binding with `device_type:
+     * "pcd8544"`. Returns 504 bytes: 84 columns × 6 banks, bank-major. Pixel
+     * (x, y) is bit `(y % 8)` of byte `[(y / 8) * 84 + x]` (1 = on/dark).
+     */
+    get_pcd8544_framebuffer(device_id: string): Uint8Array;
+    /**
      * List all peripherals: [{ name, base_address }]
      */
     get_peripheral_list(): any;
@@ -233,6 +242,12 @@ export class WasmSimulator {
      */
     set_gps_position(device_id: string, lat: number, lon: number): void;
     /**
+     * Set the distance (cm) reported by an HC-SR04 ultrasonic sensor — the
+     * host-controlled "hand position" that drives gesture control. Clamped to
+     * the sensor's 2–400 cm range.
+     */
+    set_hcsr04_distance(id: string, distance_cm: number): void;
+    /**
      * Set the simulated X/Y/Z sample on an ADXL345 attached to an I2C peripheral.
      * Looks up the binding in `board_io` by id; the binding must have
      * `device_type: "adxl345"`.
@@ -310,6 +325,7 @@ export interface InitOutput {
     readonly wasmsimulator_get_ili9341_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
     readonly wasmsimulator_get_led_state: (a: number) => number;
     readonly wasmsimulator_get_pc: (a: number) => number;
+    readonly wasmsimulator_get_pcd8544_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
     readonly wasmsimulator_get_peripheral_list: (a: number) => any;
     readonly wasmsimulator_get_peripheral_snapshot: (a: number, b: number, c: number) => any;
     readonly wasmsimulator_get_register: (a: number, b: number) => number;
@@ -333,6 +349,7 @@ export interface InitOutput {
     readonly wasmsimulator_set_board_io_input: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_set_gps_fix: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_set_gps_position: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly wasmsimulator_set_hcsr04_distance: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_set_i2c_sensor_sample: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly wasmsimulator_set_i2c_sensor_sample_6dof: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
     readonly wasmsimulator_set_jit_enabled: (a: number, b: number) => void;

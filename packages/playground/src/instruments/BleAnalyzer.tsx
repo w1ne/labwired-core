@@ -1,13 +1,14 @@
 // BLE packet analyzer — the first instrument in the playground's universal
 // analyzer toolset. It polls the simulator's shared virtual-air trace (every
 // chip in the WASM instance pushes onto the same ring) and renders each frame
-// as a sniffer row. Because the air registry is process-global, ONE live
-// bridge is enough to observe traffic from every radio on the canvas — so this
-// panel works whether you're watching the sensor or the collector.
+// as a decoded protocol row. Because the air registry is process-global, ONE
+// live bridge is enough to observe traffic from every radio on the canvas — so
+// this panel works whether you're watching the sensor or the collector.
 //
-// The captured bytes are the WHITENED on-air frame (what a real sniffer sees),
-// so the panel shows frame metadata + raw bytes rather than a logical field
-// decode. De-whitened application-level decoding is a future layer.
+// The captured bytes are the WHITENED on-air frame (what a real sniffer sees);
+// the decoder de-whitens them with the frame's IV to recover the logical
+// [S0, LENGTH, payload], so the sensor's incrementing Reading is human-visible.
+// The raw on-air hex is kept in a tooltip for the literal sniffer view.
 import { useEffect, useRef, useState } from 'react';
 import type { SimulatorBridge } from '@labwired/ui';
 import { decodeBleTrace, type BleTransaction } from './bleDecode';
@@ -71,21 +72,24 @@ export function BleAnalyzer({ bridge, running, pollMs = 200 }: BleAnalyzerProps)
                 <th className="px-3 py-1.5 font-medium">Freq</th>
                 <th className="px-3 py-1.5 font-medium">PHY</th>
                 <th className="px-3 py-1.5 font-medium">Address</th>
-                <th className="px-3 py-1.5 font-medium">Bytes</th>
-                <th className="px-3 py-1.5 font-medium">On-air (whitened)</th>
+                <th className="px-3 py-1.5 font-medium">Len</th>
+                <th className="px-3 py-1.5 font-medium">Reading</th>
+                <th className="px-3 py-1.5 font-medium">Payload (de-whitened)</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr
-                  key={`${i}-${r.hex}`}
+                  key={`${i}-${r.rawHex}`}
                   className="border-t border-border/60 hover:bg-bg-canvas"
+                  title={`On-air (whitened): ${r.rawHex}`}
                 >
                   <td className="px-3 py-1 text-fg-tertiary">{rows.length - i}</td>
                   <td className="px-3 py-1">{r.freqMhz} MHz</td>
                   <td className="px-3 py-1">{r.phy}</td>
                   <td className="px-3 py-1 text-fg-secondary">{r.address}</td>
-                  <td className="px-3 py-1">{r.byteCount}</td>
+                  <td className="px-3 py-1">{r.length ?? '–'}</td>
+                  <td className="px-3 py-1 text-fg-primary font-semibold">{r.reading ?? '–'}</td>
                   <td className="px-3 py-1 text-fg-secondary whitespace-nowrap">{r.hex}</td>
                 </tr>
               ))}
