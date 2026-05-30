@@ -55,7 +55,7 @@ import { WatchOverlay } from './studio/WatchOverlay';
 import { AccountPanel } from './studio/AccountPanel';
 import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
-import { InspectorCard, type InspectorSelection } from './studio/InspectorCard';
+import { type InspectorSelection } from './studio/InspectorCard';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
 import {
@@ -1120,15 +1120,13 @@ export function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
 
-  const inspectorNode = (
-    <InspectorCard
-      selection={inspectorSelection}
-      devMode={false}
-      labWidget={inspectorLabWidget}
-      onDelete={(id) => { editor.select(id); editor.deleteSelected(); }}
-      onDuplicate={(_id) => { /* no duplicate API yet */ }}
-    />
-  );
+  // Right-side InspectorCard removed — Properties live in the
+  // bottom drawer (per-chip Serial/Registers/Trace/Memory/Source/
+  // YAML). The part-specific inspector (lab widgets, delete/
+  // duplicate) is dropped along with it; can be reintroduced as a
+  // tab on the properties drawer if useful later.
+  void inspectorSelection;
+  void inspectorLabWidget;
 
   const paletteComponents = useMemo<PaletteComponent[]>(
     () =>
@@ -1703,7 +1701,7 @@ export function App() {
       onDismissToast={() => setToast(null)}
       paletteComponents={paletteComponents}
       onPaletteDrag={handlePaletteDrag}
-      inspector={inspectorNode}
+      inspector={null}
       simDock={simDockNode}
       authSlot={<AuthPill onOpenProjects={() => setProjectsModalOpen(true)} />}
       projectSlot={
