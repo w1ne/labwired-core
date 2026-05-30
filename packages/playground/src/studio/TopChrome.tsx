@@ -39,7 +39,7 @@ export function TopChrome({ boardName, devMode, onOpenCommand, onToggleDev, onSh
           onClick={onOpenCommand}
           style={{ borderRadius: 999 }}
           className="w-full h-6 px-4 flex items-center gap-2 bg-white/[0.05] hover:bg-white/[0.09] text-left transition-colors duration-micro outline-none border-0 focus-visible:ring-2 focus-visible:ring-accent/50"
-          aria-label="Open command palette"
+          aria-label="Search components, boards, and examples"
         >
           <span aria-hidden className="text-fg-tertiary text-[11px] font-mono">⌘K</span>
           <span className="flex-1 text-fg-tertiary text-[12px] truncate">Search components, boards, examples…</span>

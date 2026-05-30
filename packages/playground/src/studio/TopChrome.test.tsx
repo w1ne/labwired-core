@@ -17,7 +17,7 @@ describe('TopChrome', () => {
   it('opens the command palette when the search affordance is clicked', async () => {
     const onOpenCommand = vi.fn();
     render(<TopChrome boardName="Untitled" onOpenCommand={onOpenCommand} devMode={false} onToggleDev={() => {}} />);
-    await userEvent.click(screen.getByRole('button', { name: /open command palette/i }));
+    await userEvent.click(screen.getByRole('button', { name: /search components/i }));
     expect(onOpenCommand).toHaveBeenCalled();
   });
 
