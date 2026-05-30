@@ -380,6 +380,30 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     systemYaml: systemNrf52840Onboarding,
     mcuComponentType: 'nrf52840-dk',
   },
+  {
+    boardId: 'nrf52840-ble-sensor',
+    chipId: 'nrf52840',
+    name: 'nRF52840 BLE Sensor',
+    description: 'Nordic nRF52840 broadcasting an incrementing reading over the BLE 1 Mbit PHY (2442 MHz) into the shared virtual air. Add the BLE Collector to the same canvas and Run both to watch them talk. The same .elf flashes to real nRF silicon (ST-Link parity-proven).',
+    arch: 'ARM Cortex-M4F',
+    chipYaml: chipNrf52840,
+    systemYaml: systemNrf52840Dk,
+    demoFirmwarePath: `${BASE}wasm/demo-nrf52840-ble-sensor.elf`,
+    mcuComponentType: 'nrf52840-dk',
+    kind: 'lab',
+  },
+  {
+    boardId: 'nrf52840-ble-collector',
+    chipId: 'nrf52840',
+    name: 'nRF52840 BLE Collector',
+    description: 'Nordic nRF52840 receiving BLE frames from the BLE Sensor over the shared virtual air, recording the latest reading, length, and CRC status. The same .elf flashes to real nRF silicon.',
+    arch: 'ARM Cortex-M4F',
+    chipYaml: chipNrf52840,
+    systemYaml: systemNrf52840Dk,
+    demoFirmwarePath: `${BASE}wasm/demo-nrf52840-ble-collector.elf`,
+    mcuComponentType: 'nrf52840-dk',
+    kind: 'lab',
+  },
 ];
 
 export const BOARD_CONFIG_MAP = new Map(BOARD_CONFIGS.map((c) => [c.boardId, c]));

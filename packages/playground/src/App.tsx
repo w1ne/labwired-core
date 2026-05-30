@@ -52,6 +52,7 @@ import { ChipControls } from './multi-mcu/ChipControls';
 import { usePerChipSims } from './multi-mcu/usePerChipSims';
 import { ChipWindow } from './multi-mcu/ChipWindow';
 import { ChipInspector } from './multi-mcu/ChipInspector';
+import { BleAnalyzer } from './instruments/BleAnalyzer';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -2358,6 +2359,24 @@ export function App() {
         </ChipWindow>
       );
     })}
+
+    {/* Packet Analyzer — the first instrument of the universal analyzer
+        toolset. It surfaces whenever a BLE board is on the canvas. The
+        virtual-air registry is process-global (one WASM instance, shared
+        air), so the foreground bridge observes every radio's traffic. */}
+    {!isMobile && (() => {
+      const hasBle = mcuPartIds.some((id) => {
+        const part = editor.state.diagram.parts.find((p) => p.id === id);
+        const b = part ? mcuBoardForPart(part, selectedBoard) : null;
+        return b?.boardId?.startsWith('nrf52840-ble') ?? false;
+      });
+      if (!hasBle) return null;
+      return (
+        <div className="absolute right-3 bottom-3 z-30 w-[460px] h-[300px] rounded-lg border border-border bg-bg-base shadow-lg overflow-hidden">
+          <BleAnalyzer bridge={bridge} running={running} />
+        </div>
+      );
+    })()}
     </StudioShell>
     </ChipsProvider>
   );

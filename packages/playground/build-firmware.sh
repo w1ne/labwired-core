@@ -72,6 +72,19 @@ arduino-cli compile \
 cp "$BUILD_TMP_F401"/*.ino.elf "$OUT_DIR/demo-nucleo-f401.elf"
 echo "STM32F401RE firmware → $OUT_DIR/demo-nucleo-f401.elf"
 
+# ── 4. nRF52840 BLE two-radio demo (sensor + collector) ──────────────────────
+# Same ELFs run in the sim AND flash to real nRF silicon (parity-proven).
+# The sensor broadcasts an incrementing reading; the collector receives it.
+# They talk over the engine's shared virtual-air BLE registry.
+echo "Building nRF52840 BLE sensor + collector firmware..."
+(cd "$CORE_DIR" && cargo build --release --target thumbv7em-none-eabihf \
+  -p firmware-nrf52840-ble-sensor -p firmware-nrf52840-ble-collector)
+cp "$CORE_DIR/target/thumbv7em-none-eabihf/release/firmware-nrf52840-ble-sensor" \
+  "$OUT_DIR/demo-nrf52840-ble-sensor.elf"
+cp "$CORE_DIR/target/thumbv7em-none-eabihf/release/firmware-nrf52840-ble-collector" \
+  "$OUT_DIR/demo-nrf52840-ble-collector.elf"
+echo "nRF BLE firmware → $OUT_DIR/demo-nrf52840-ble-{sensor,collector}.elf"
+
 echo ""
 echo "Done. Firmware in $OUT_DIR:"
 ls -lh "$OUT_DIR"/*.{bin,elf,wasm,js} 2>/dev/null || true

@@ -49,6 +49,7 @@ export type {
   PeripheralInfo,
   SimulatorConfig,
   WasmModule,
+  AirFrameTrace,
 } from './wasm/simulator-bridge';
 
 // Editor

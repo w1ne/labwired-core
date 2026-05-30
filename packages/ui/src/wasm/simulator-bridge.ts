@@ -199,6 +199,9 @@ export interface WasmSimulatorInstance {
   get_peripheral_snapshot(name: string): unknown;
   get_peripheral_list(): PeripheralInfo[];
 
+  // Virtual-air BLE trace (shared across all chips in this WASM instance)
+  air_trace_snapshot(): unknown;
+
   // GDB
   gdb_process_packet(data: Uint8Array): Uint8Array;
 
@@ -227,6 +230,22 @@ export interface WasmModule {
 // chose to serialize. Works whether the entry is already an object or a Map.
 function asPlainObject<T>(entry: unknown): T {
   return entry instanceof Map ? (Object.fromEntries(entry) as T) : (entry as T);
+}
+
+/**
+ * One frame seen on the shared virtual-air BLE registry, as surfaced by the
+ * RADIO model's `virtual_air_trace_snapshot`. `bytes` is the on-air payload
+ * (whitened header + payload + CRC) the transmitter pushed; `channel` is the
+ * RADIO FREQUENCY register value (MHz offset from 2400), `mode` the PHY
+ * (3 = BLE 1 Mbit). Mirrors `AirFrameTrace` in
+ * core/crates/core/src/peripherals/nrf52/radio.rs.
+ */
+export interface AirFrameTrace {
+  channel: number;
+  addr_base: number;
+  addr_prefix: number;
+  mode: number;
+  bytes: number[];
 }
 
 export class SimulatorBridge {
@@ -412,6 +431,16 @@ export class SimulatorBridge {
 
   getPeripheralList(): PeripheralInfo[] {
     return this.sim.get_peripheral_list();
+  }
+
+  /**
+   * Snapshot of the shared virtual-air BLE trace (most-recent-first, last
+   * ~200 frames). The underlying ring lives in a Rust static, so every
+   * chip's bridge returns the same view — poll any live one.
+   */
+  airTraceSnapshot(): AirFrameTrace[] {
+    const raw = this.sim.air_trace_snapshot() as unknown[] | null;
+    return (raw ?? []).map((f) => asPlainObject<AirFrameTrace>(f));
   }
 
   getSpiDeviceStates(): SpiDeviceState[] {
