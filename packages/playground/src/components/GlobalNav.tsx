@@ -31,7 +31,6 @@ export const NAV_ITEMS = [
   { id: 'playground', label: 'Playground', href: '/' },
   { id: 'library', label: 'Library', href: 'https://labwired.com/library.html', external: true },
   { id: 'ci', label: 'For CI', href: 'https://labwired.com/ci.html', external: true },
-  { id: 'github', label: 'GitHub', href: 'https://github.com/w1ne/labwired-core', external: true },
 ] as const;
 
 export type NavId = (typeof NAV_ITEMS)[number]['id'];
