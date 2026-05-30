@@ -68,7 +68,7 @@ export function StudioShell({
         onOpenChange={layout.setPaletteOpen}
         onDragStart={(type) => onPaletteDrag?.(type)}
       />
-      <main role="main" aria-label="Canvas" className="absolute inset-0 pt-11 bg-bg-canvas">
+      <main role="main" aria-label="Canvas" className="absolute inset-0 pt-8 bg-bg-canvas">
         {children}
         {inspector}
         {isEmpty && (

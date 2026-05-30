@@ -58,7 +58,7 @@ export function PaletteDrawer({ components, open, onOpenChange, onDragStart }: P
             animate={{ x: 0 }}
             exit={{ x: -280 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute top-11 left-0 bottom-0 z-20 w-[280px] bg-bg-surface border-r border-border flex flex-col"
+            className="absolute top-8 left-0 bottom-0 z-20 w-[280px] bg-bg-surface border-r border-border flex flex-col"
             aria-label="Component palette"
           >
             <div role="search" className="p-3 border-b border-border">
