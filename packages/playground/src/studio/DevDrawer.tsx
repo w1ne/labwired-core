@@ -63,8 +63,8 @@ export function DevDrawer({ devMode, tabs, defaultHeight = 240, leftOffset = 0, 
             }}
             className="h-1 cursor-ns-resize hover:bg-border"
           />
-          {header}
           <div role="tablist" className="flex items-center px-3 border-b border-border h-9 flex-shrink-0">
+            {header}
             {TAB_ORDER.map((tab) => (
               <button
                 key={tab}

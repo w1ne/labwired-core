@@ -1,45 +1,37 @@
-// VS Code-style chip-switcher bar that lives INSIDE the bottom
-// dev drawer (passed as DevDrawer's `header` slot). One tab per
-// MCU with PCB thumbnail + chipId + board; clicking switches the
-// active chip; X removes it. Sticks to the drawer's top edge no
-// matter how the user resizes the drawer height.
+// Compact chip switcher that sits inline on the LEFT of the
+// drawer's existing Serial/Registers/Trace/Memory/Source/YAML
+// tab strip. Each "chip" is a small pill — chipId only — with the
+// active one highlighted in magenta. Followed by a vertical
+// divider that separates the chip switcher from the dev tabs.
+//
+// Single-chip sessions render nothing (chip is implied; saves
+// horizontal space).
 import { useChips } from './ChipsProvider';
-import { McuThumb } from './McuThumb';
 import './chip-tabs-bar.css';
 
 export function ChipTabsBar() {
-  const { order, sessions, activeChipId, setActiveChipId, removeChip } = useChips();
+  const { order, activeChipId, setActiveChipId, removeChip } = useChips();
+  if (order.length <= 1) return null;
   return (
-    <div className="lw-chip-tabs" role="tablist" aria-label="MCU instances">
+    <div className="lw-chip-switch" role="tablist" aria-label="MCU instances">
       {order.map((chipId) => {
-        const session = sessions[chipId];
-        if (!session) return null;
         const isActive = chipId === activeChipId;
         return (
-          <div
-            key={chipId}
-            role="tab"
-            aria-selected={isActive}
-            data-active={isActive ? 'true' : 'false'}
-            className="lw-chip-tab"
-          >
+          <span key={chipId} className="lw-chip-pill" data-active={isActive ? 'true' : 'false'}>
             <button
               type="button"
-              className="lw-chip-tab-focus"
+              className="lw-chip-pill-focus"
+              role="tab"
+              aria-selected={isActive}
               onClick={() => setActiveChipId(chipId)}
             >
-              <span className="lw-chip-tab-thumb">
-                <McuThumb session={session} width={28} height={18} />
-              </span>
-              <span className="lw-chip-tab-id">{session.chipId}</span>
-              <span className="lw-chip-tab-board">{session.board.name}</span>
+              {chipId}
             </button>
             {chipId !== 'chip-default' && (
               <button
                 type="button"
-                className="lw-chip-tab-remove"
+                className="lw-chip-pill-remove"
                 aria-label={`Remove ${chipId}`}
-                title={`Remove ${chipId}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   removeChip(chipId);
@@ -48,9 +40,10 @@ export function ChipTabsBar() {
                 ×
               </button>
             )}
-          </div>
+          </span>
         );
       })}
+      <span className="lw-chip-switch-divider" aria-hidden />
     </div>
   );
 }
