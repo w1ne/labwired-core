@@ -8,14 +8,19 @@ interface LedColor {
   bodyDim: string;
   glow: string;
   highlight: string;
+  // Off-state dome: a real LED is a tinted translucent lens even when unlit.
+  // `lens` is the dome's mid tone and `lensEdge` its rim — both kept clearly
+  // colored (not near-black) so the LED stays visible against the dark canvas.
+  lens: string;
+  lensEdge: string;
 }
 
 const LED_COLORS: Record<string, LedColor> = {
-  red: { body: '#F2545B', bodyDim: '#7a2226', glow: 'rgba(242,84,91,0.65)', highlight: '#FF9FA3' },
-  green: { body: '#3DD68C', bodyDim: '#19663F', glow: 'rgba(61,214,140,0.65)', highlight: '#A8F0CB' },
-  blue: { body: '#5B9DFF', bodyDim: '#24487A', glow: 'rgba(91,157,255,0.65)', highlight: '#B8D6FF' },
-  yellow: { body: '#F5B642', bodyDim: '#7a5a18', glow: 'rgba(245,182,66,0.65)', highlight: '#FDE3A8' },
-  white: { body: '#F2F4F9', bodyDim: '#777a85', glow: 'rgba(242,244,249,0.55)', highlight: '#FFFFFF' },
+  red: { body: '#F2545B', bodyDim: '#7a2226', glow: 'rgba(242,84,91,0.65)', highlight: '#FF9FA3', lens: '#9c3a40', lensEdge: '#4a1c1f' },
+  green: { body: '#3DD68C', bodyDim: '#19663F', glow: 'rgba(61,214,140,0.65)', highlight: '#A8F0CB', lens: '#2c8f5d', lensEdge: '#16432c' },
+  blue: { body: '#5B9DFF', bodyDim: '#24487A', glow: 'rgba(91,157,255,0.65)', highlight: '#B8D6FF', lens: '#3f6cb0', lensEdge: '#1d3457' },
+  yellow: { body: '#F5B642', bodyDim: '#7a5a18', glow: 'rgba(245,182,66,0.65)', highlight: '#FDE3A8', lens: '#b3852f', lensEdge: '#4f3a12' },
+  white: { body: '#F2F4F9', bodyDim: '#777a85', glow: 'rgba(242,244,249,0.55)', highlight: '#FFFFFF', lens: '#9a9da8', lensEdge: '#43454d' },
 };
 
 export const ledComponent: ComponentDef = {
@@ -53,9 +58,9 @@ export const ledComponent: ComponentDef = {
       <g>
         <defs>
           <radialGradient id={gradId} cx="0.35" cy="0.3" r="0.8">
-            <stop offset="0" stopColor={c.highlight} stopOpacity={active ? 1 : 0.7} />
-            <stop offset="0.4" stopColor={active ? c.body : c.bodyDim} />
-            <stop offset="1" stopColor={active ? c.bodyDim : '#1a1a1a'} />
+            <stop offset="0" stopColor={c.highlight} stopOpacity={active ? 1 : 0.55} />
+            <stop offset="0.4" stopColor={active ? c.body : c.lens} />
+            <stop offset="1" stopColor={active ? c.bodyDim : c.lensEdge} />
           </radialGradient>
           <radialGradient id={glowId} cx="0.5" cy="0.5" r="0.5">
             <stop offset="0" stopColor={c.body} stopOpacity={0.55} />
