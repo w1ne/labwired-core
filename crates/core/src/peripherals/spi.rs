@@ -25,6 +25,23 @@ pub trait SpiDevice: Send {
     /// CS pin label this device is wired to (e.g. "PA4" or numeric pin ID). Used by the bus
     /// dispatcher to pick which device responds when the firmware drives a particular CS line.
     fn cs_pin(&self) -> &str;
+    /// Data/Command (D/C) pin label this device observes, if any (e.g. "PB6").
+    ///
+    /// Displays like the Nokia 5110 (PCD8544) distinguish command bytes from
+    /// pixel-data bytes by the level of a dedicated GPIO line rather than by
+    /// byte semantics. When this returns `Some(pin)`, the bus latches that
+    /// pin's current output level into the device via [`set_dc_level`] after
+    /// each MMIO write, so the value is current by the time the firmware
+    /// writes the SPI data register. Default `None` → the bus does no latching
+    /// and the device infers framing from the protocol (ILI9341 / SSD1680).
+    ///
+    /// [`set_dc_level`]: SpiDevice::set_dc_level
+    fn dc_pin(&self) -> Option<&str> {
+        None
+    }
+    /// Latched level of the [`dc_pin`](SpiDevice::dc_pin) at transfer time,
+    /// pushed by the bus. No-op for devices that do not observe a D/C line.
+    fn set_dc_level(&mut self, _level: bool) {}
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
@@ -189,7 +206,20 @@ impl Spi {
             0x00 => {
                 self.cr1 = value;
             }
-            0x04 => self.cr2 = value,
+            0x04 => {
+                // STM32L4/F7/H5 SPI CR2: DS[3:0] (bits 11:8) select the data
+                // frame size. Values below 0b0011 are reserved and the
+                // hardware forces them to 0b0111 (8-bit). Verified on
+                // NUCLEO-L476RG over SWD: writing CR2=0x0000 reads back
+                // 0x0700. Model the clamp so a CR2 readback matches silicon
+                // bit-for-bit (l476_mmio_diff parity sweep).
+                let ds = (value >> 8) & 0xF;
+                self.cr2 = if ds < 0b0011 {
+                    (value & !0x0F00) | (0b0111 << 8)
+                } else {
+                    value
+                };
+            }
             0x08 => {
                 // SR is mostly read-only; allow clearing OVR if modelled.
                 self.sr = value & 0xFFBF;

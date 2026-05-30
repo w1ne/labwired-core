@@ -97,6 +97,52 @@ impl OpenOcd {
         Self::spawn_with_args(&["-f", "interface/stlink.cfg", "-f", &target_cfg])
     }
 
+    /// Spawn OpenOCD configured for STM32L4 over ST-Link SWD.
+    ///
+    /// Equivalent to:
+    /// ```text
+    /// openocd -f interface/stlink.cfg -f target/stm32l4x.cfg
+    /// ```
+    ///
+    /// Targets the NUCLEO-L476RG (STM32L476RG, Cortex-M4F, DBGMCU IDCODE
+    /// 0x10076415 — the same DEV_ID the `firmware_survival` L476 bank and
+    /// `configs/chips/stm32l476.yaml` are validated against).  The embedded
+    /// ST-Link/V2-1 on the Nucleo enumerates as a standard ST-Link, so the
+    /// generic `interface/stlink.cfg` applies.
+    pub fn spawn_stm32l4() -> Result<Self> {
+        Self::spawn_stm32("stm32l4x")
+    }
+
+    /// Generic STM32 SWD helper driven by a **SEGGER J-Link** instead of an
+    /// ST-Link.
+    ///
+    /// Equivalent to:
+    /// ```text
+    /// openocd -f interface/jlink.cfg -c "transport select swd" -f target/<family>.cfg
+    /// ```
+    ///
+    /// The explicit `transport select swd` is required because `jlink.cfg`
+    /// leaves the transport unset and the J-Link driver would otherwise
+    /// default to JTAG; every STM32 debugs over SWD.  Covers both a discrete
+    /// SEGGER J-Link and a Nucleo whose on-board ST-Link has been reflashed
+    /// to J-Link firmware (both enumerate as VID 0x1366).
+    pub fn spawn_jlink_stm32(target_family: &str) -> Result<Self> {
+        let target_cfg = format!("target/{target_family}.cfg");
+        Self::spawn_with_args(&[
+            "-f",
+            "interface/jlink.cfg",
+            "-c",
+            "transport select swd",
+            "-f",
+            &target_cfg,
+        ])
+    }
+
+    /// Spawn OpenOCD for STM32L4 over a SEGGER J-Link (SWD).
+    pub fn spawn_stm32l4_jlink() -> Result<Self> {
+        Self::spawn_jlink_stm32("stm32l4x")
+    }
+
     /// Spawn OpenOCD for nRF52 (Cortex-M4) over ST-Link SWD.
     ///
     /// Equivalent to:
@@ -135,7 +181,10 @@ impl OpenOcd {
         let mut full_args: Vec<&str> = args.to_vec();
         full_args.extend_from_slice(&["-c", "init"]);
 
-        let child = Command::new("openocd")
+        // Allow overriding the OpenOCD binary (e.g. a distro build that has
+        // the J-Link driver compiled in, when the PATH default does not).
+        let openocd_bin = std::env::var("OPENOCD_BIN").unwrap_or_else(|_| "openocd".to_string());
+        let child = Command::new(&openocd_bin)
             .args(&full_args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
