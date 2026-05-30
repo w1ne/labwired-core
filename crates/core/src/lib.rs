@@ -809,14 +809,11 @@ impl<C: Cpu> Machine<C> {
 
     pub fn step(&mut self) -> SimResult<()> {
         self.total_cycles += 1;
-        // Phase 2B.2 (issue #192): mirror the cycle count into the bus before
-        // the CPU executes, so MMIO writes during this step can lazily sync
-        // scheduler-driven peripherals to "now". O(1) — does not reintroduce
-        // the per-peripheral walk this phase exists to remove.
-        #[cfg(feature = "event-scheduler")]
-        {
-            self.bus.current_cycle = self.total_cycles;
-        }
+        // Mirror the cycle count into the bus before the CPU executes, so
+        // tick-time services can read "now": scheduler-driven peripheral sync
+        // (event-scheduler) and the HC-SR04 echo-window timing (always). O(1) —
+        // a single field write, not the per-peripheral walk this phase removed.
+        self.bus.current_cycle = self.total_cycles;
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
         // Dual-core: step the secondary CPU one instruction per
@@ -1110,14 +1107,10 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
             // Execute in batch until next peripheral tick or breakpoint/limit
             let current_cycles = self.total_cycles;
-            // Phase 2B.2 (issue #192): mirror the cycle count before the batch so
-            // MMIO writes inside it can lazily sync scheduler-driven peripherals.
-            // The batch is bounded by `peripheral_tick_interval`, so intra-batch
-            // staleness is < one tick — within the functional-timer tolerance.
-            #[cfg(feature = "event-scheduler")]
-            {
-                self.bus.current_cycle = current_cycles;
-            }
+            // Mirror the cycle count before the batch so MMIO writes inside it
+            // (and tick-time services) can read "now". The batch is bounded by
+            // `peripheral_tick_interval`, so intra-batch staleness is < one tick.
+            self.bus.current_cycle = current_cycles;
             let tick_interval = self.config.peripheral_tick_interval as u64;
             let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
 

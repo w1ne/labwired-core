@@ -1,0 +1,122 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+//
+// End-to-end test for the nokia5110-invaders-lab: the same firmware ELF that
+// flashes to a real NUCLEO-L476RG + Nokia 5110 + HC-SR04 must, in the
+// simulator, (a) drive the PCD8544 framebuffer via the bus D/C-pin keystone
+// and (b) move the player ship as the host-controlled HC-SR04 distance
+// changes — proving both new peripheral models work through real firmware.
+
+use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::bus::SystemBus;
+use labwired_core::cpu::cortex_m::CortexM;
+use labwired_core::peripherals::components::Pcd8544;
+use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::{Cpu, Machine};
+use std::path::PathBuf;
+use std::process::Command;
+
+type Cm = Machine<CortexM>;
+
+const W: usize = 84;
+
+fn ensure_firmware_built() -> PathBuf {
+    let elf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/thumbv7em-none-eabihf/release/nokia5110-invaders-lab");
+    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/nokia5110-invaders-lab/src/main.rs");
+    if let (Ok(e), Ok(s)) = (std::fs::metadata(&elf), std::fs::metadata(&src)) {
+        if e.modified().unwrap() >= s.modified().unwrap() {
+            return elf;
+        }
+    }
+    let status = Command::new("cargo")
+        .args([
+            "build",
+            "-p",
+            "nokia5110-invaders-lab",
+            "--target",
+            "thumbv7em-none-eabihf",
+            "--release",
+        ])
+        .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .status()
+        .expect("cargo build nokia5110-invaders-lab");
+    assert!(status.success(), "nokia5110-invaders-lab build failed");
+    assert!(elf.exists(), "ELF not found at {elf:?}");
+    elf
+}
+
+fn build_machine(elf: &PathBuf) -> Cm {
+    let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/nokia5110-invaders-lab/system.yaml");
+    let manifest = SystemManifest::from_file(&system_path).expect("load manifest");
+    let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load chip");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image = labwired_loader::load_elf(elf).expect("parse ELF");
+    machine.load_firmware(&image).expect("load firmware");
+    machine
+}
+
+fn framebuffer(machine: &Cm) -> Vec<u8> {
+    let idx = machine.bus.find_peripheral_index_by_name("spi1").unwrap();
+    let spi = machine.bus.peripherals[idx]
+        .dev
+        .as_any()
+        .unwrap()
+        .downcast_ref::<labwired_core::peripherals::spi::Spi>()
+        .unwrap();
+    spi.attached_devices
+        .iter()
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+        .expect("PCD8544 attached to spi1")
+        .framebuffer()
+        .to_vec()
+}
+
+/// Left-most column of the player ship (bank 5 holds the ship rows).
+fn ship_left(fb: &[u8]) -> Option<usize> {
+    (0..W).find(|&x| fb[5 * W + x] != 0)
+}
+
+fn step_frames(machine: &mut Cm, steps: u64) {
+    for _ in 0..steps {
+        machine.step().expect("step");
+    }
+}
+
+// Builds the firmware and steps several million cycles in the sim (~90 s), so
+// it's gated behind --ignored rather than run in the default suite. Requires
+// the example to be a workspace member (examples/nokia5110-invaders-lab):
+//   cargo test -p labwired-core --test e2e_nokia5110_invaders -- --ignored --nocapture
+#[test]
+#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+fn firmware_draws_and_ship_tracks_distance() {
+    let elf = ensure_firmware_built();
+    let mut machine = build_machine(&elf);
+
+    // Near hand → short echo → ship to the left.
+    machine.bus.hcsr04[0].set_distance_cm(8.0);
+    step_frames(&mut machine, 4_000_000);
+    let fb_near = framebuffer(&machine);
+    assert!(
+        fb_near.iter().any(|&b| b != 0),
+        "firmware should have drawn something to the Nokia framebuffer"
+    );
+    let near = ship_left(&fb_near).expect("ship visible (near)");
+
+    // Far hand → long echo → ship to the right.
+    machine.bus.hcsr04[0].set_distance_cm(300.0);
+    step_frames(&mut machine, 4_000_000);
+    let fb_far = framebuffer(&machine);
+    let far = ship_left(&fb_far).expect("ship visible (far)");
+
+    assert!(
+        far > near,
+        "ship should move right as the hand moves away: near_x={near}, far_x={far}"
+    );
+}

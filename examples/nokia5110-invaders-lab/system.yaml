@@ -1,0 +1,28 @@
+name: "nokia5110-invaders-lab"
+chip: "../../configs/chips/stm32l476.yaml"
+# spi1, gpioa-e and rcc all come from the chip descriptor; we only attach the
+# external devices and declare the host-controllable I/O here.
+external_devices:
+  - id: "lcd"
+    type: "pcd8544"
+    connection: "spi1"
+    config:
+      cs_pin: "PB6"
+      dc_pin: "PC7"
+  - id: "dist"
+    type: "hc-sr04"
+    # GPIO-wired (no SPI/I2C bus); connection is unused for this device type.
+    connection: "gpioa"
+    config:
+      trig_pin: "PA8"
+      echo_pin: "PB10"
+      distance_cm: 30.0
+      cpu_hz: 4000000
+board_io:
+  - id: "lcd"
+    kind: "spi_device"
+    peripheral: "spi1"
+    pin: 6
+    signal: "input"
+    active_high: true
+    device_type: "pcd8544"
