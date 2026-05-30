@@ -111,6 +111,12 @@ pub struct RtcCntl {
     /// the store never returns. Held in a `Cell` so it can be drained via
     /// the shared `&dyn Peripheral` reference the bus hands out.
     reset_requested: Cell<bool>,
+    /// Phase 2B.3c (issue #192): peripheral-tick index of the last `sync_to`.
+    /// In scheduler mode `slow_counter` advances lazily here instead of one
+    /// per `tick()`. Firmware reads RTC time via the TIME_UPDATE strobe (an
+    /// MMIO write), which syncs first — so the latched value is current.
+    /// Unused in the legacy (flag-off) build.
+    anchor_tick: u64,
 }
 
 impl Default for RtcCntl {
@@ -140,6 +146,7 @@ impl RtcCntl {
             regs,
             slow_counter: 0,
             reset_requested: Cell::new(false),
+            anchor_tick: 0,
         }
     }
 
@@ -247,6 +254,26 @@ impl Peripheral for RtcCntl {
         // that needs wall-clock timing uses Systimer instead.
         self.slow_counter = self.slow_counter.wrapping_add(1);
         PeripheralTickResult::default()
+    }
+
+    /// Phase 2B.3c (issue #192): RTC_CNTL is migrated to the event scheduler.
+    /// Flag-on, the bus stops calling `tick()` every cycle and `sync_to`
+    /// advances `slow_counter` lazily on MMIO access. Flag-off, `tick()` still
+    /// drives it.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    /// Advance `slow_counter` to peripheral-tick `tick_now` — equivalent to
+    /// having called `tick()` once per intervening tick. The counter is
+    /// free-running (no enable bit), so it always accrues. Monotonic guard
+    /// matches the TIMG migration.
+    fn sync_to(&mut self, tick_now: u64) {
+        if tick_now <= self.anchor_tick {
+            return;
+        }
+        self.slow_counter = self.slow_counter.wrapping_add(tick_now - self.anchor_tick);
+        self.anchor_tick = tick_now;
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

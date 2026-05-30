@@ -15,7 +15,12 @@ wasm-bindgen = "0.2.92"
 # transitive dep of `serde-wasm-bindgen`; pinning it here makes the direct
 # usage visible at the dep boundary.
 js-sys = "0.3"
-labwired-core = { path = "../core" }
+# Phase 2B.3c (issue #192): the browser sim runs ESP32-classic via
+# `configure_xtensa_esp32`, where every peripheral is migrated or inert — so the
+# event-scheduler's per-cycle-walk deletion gives ~2.4x throughput (1.48 -> 3.57
+# MIPS on the epaper firmware). Other arches keep the legacy walk; the feature is
+# behaviour-neutral for them (full suite green flag-on). Enabled here to ship it.
+labwired-core = { path = "../core", features = ["event-scheduler"] }
 labwired-config = { path = "../config" }
 labwired-loader = { path = "../loader" }
 cortex-m = "0.7"

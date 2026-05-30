@@ -11,6 +11,11 @@ use std::io::{self, Write};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
+/// Phase 2B.3b (issue #192): the UART uses a single self-perpetuating event
+/// token — it has only one kind of wakeup ("do one tick of work"), so the
+/// value is arbitrary and never disambiguated in `on_event`.
+const UART_WAKE_TOKEN: u32 = 0;
+
 /// A device that emits bytes through the UART's RX path (e.g. a GPS module).
 pub trait UartStreamDevice: Send {
     /// Called periodically by the bus tick. Returns the next byte to push into UART RX,
@@ -69,6 +74,11 @@ pub struct Uart {
     pub attached_streams: Vec<Box<dyn UartStreamDevice>>,
     /// Microseconds accumulated since last stream tick.
     elapsed_us: u32,
+    /// Phase 2B.3b (issue #192): whether a self-perpetuating scheduler WAKE
+    /// event is currently in flight. Guards against double-arming. Only used
+    /// under the `event-scheduler` feature (flag-off drives via `tick()`).
+    #[serde(skip)]
+    scheduled: bool,
 }
 
 impl core::fmt::Debug for Uart {
@@ -103,6 +113,7 @@ impl Uart {
             dma_tx_pending: false,
             attached_streams: Vec::new(),
             elapsed_us: 0,
+            scheduled: false,
         }
     }
 
@@ -114,6 +125,52 @@ impl Uart {
     /// Get a shared handle to the RX buffer for external data injection.
     pub fn rx_buffer(&self) -> Arc<Mutex<VecDeque<u8>>> {
         self.rx_buf.clone()
+    }
+
+    /// Phase 2B.3b (issue #192): does the UART have anything that needs a
+    /// per-tick wakeup? Level-triggered TXEIE/TCIE, an attached RX stream, or
+    /// a pending DMA TX. Drives both the initial scheduler arm and the
+    /// self-reschedule decision so the event path matches the legacy `tick()`.
+    fn has_active_work(&self) -> bool {
+        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
+        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
+        txeie_set || tcie_set || !self.attached_streams.is_empty() || self.dma_tx_pending
+    }
+
+    /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
+    /// `tick()` and the scheduler `on_event` so both paths are identical.
+    /// Returns `(raise_irq, dma_signals)`.
+    fn advance_one_tick(&mut self) -> (bool, Vec<u32>) {
+        let mut dma_signals = Vec::new();
+        if self.dma_tx_pending {
+            dma_signals.push(1); // 1 = TX Signal
+            self.dma_tx_pending = false;
+        }
+
+        // Poll attached stream devices and push emitted bytes into the RX
+        // buffer. Each tick represents ~1000 µs (1 ms) of simulated time. At
+        // 9600 baud that is about 1 byte/ms, which matches the GPS pacing.
+        if !self.attached_streams.is_empty() {
+            const TICK_US: u32 = 1000;
+            self.elapsed_us = self.elapsed_us.saturating_add(TICK_US);
+            let elapsed = self.elapsed_us;
+            self.elapsed_us = 0; // consumed this tick
+
+            if let Ok(mut rx_guard) = self.rx_buf.lock() {
+                for stream in &mut self.attached_streams {
+                    if let Some(byte) = stream.poll(elapsed) {
+                        rx_guard.push_back(byte);
+                    }
+                }
+            }
+        }
+
+        // Fire while either TXEIE or TCIE is set:
+        // - TXEIE lets HAL push bytes into DR
+        // - TCIE delivers the final completion interrupt after the last byte
+        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
+        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
+        (txeie_set || tcie_set, dma_signals)
     }
 
     fn status_offset(&self) -> u64 {
@@ -260,39 +317,53 @@ impl crate::Peripheral for Uart {
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
-        let mut dma_signals = None;
-        if self.dma_tx_pending {
-            dma_signals = Some(vec![1]); // 1 = TX Signal
-            self.dma_tx_pending = false;
-        }
-
-        // Poll attached stream devices and push emitted bytes into the RX buffer.
-        // Each tick represents ~1000 µs (1 ms) of simulated time.
-        // At 9600 baud that is about 1 byte/ms, which matches the GPS pacing.
-        if !self.attached_streams.is_empty() {
-            const TICK_US: u32 = 1000;
-            self.elapsed_us = self.elapsed_us.saturating_add(TICK_US);
-            let elapsed = self.elapsed_us;
-            self.elapsed_us = 0; // consumed this tick
-
-            if let Ok(mut rx_guard) = self.rx_buf.lock() {
-                for stream in &mut self.attached_streams {
-                    if let Some(byte) = stream.poll(elapsed) {
-                        rx_guard.push_back(byte);
-                    }
-                }
-            }
-        }
-
-        // Fire while either TXEIE or TCIE is set:
-        // - TXEIE lets HAL push bytes into DR
-        // - TCIE delivers the final completion interrupt after the last byte
-        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
-        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
-
+        let (irq, dma_signals) = self.advance_one_tick();
         crate::PeripheralTickResult {
-            irq: txeie_set || tcie_set,
+            irq,
+            dma_signals: (!dma_signals.is_empty()).then_some(dma_signals),
+            ..Default::default()
+        }
+    }
+
+    /// Phase 2B.3b (issue #192): the shared `Uart` is migrated to the event
+    /// scheduler. With the feature on, the bus stops calling `tick()` every
+    /// cycle; `take_scheduled_events` / `on_event` drive it instead. With the
+    /// feature off this is ignored and `tick()` still runs.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    /// Hand the bus a single self-perpetuating WAKE event when the UART has
+    /// active work and none is already in flight. Called after an MMIO write
+    /// (TXEIE/TCIE arm, DMA trigger) and once at scheduler bootstrap (so an
+    /// RX stream attached before firmware runs gets polled).
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.has_active_work() && !self.scheduled {
+            self.scheduled = true;
+            vec![(0, UART_WAKE_TOKEN)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Fire one tick-equivalent of work and re-arm while there's still work.
+    /// `raise_own_irq` mirrors the legacy `tick()` returning `irq: true` (the
+    /// bus pends the UART's configured NVIC line); `dma_signals` route exactly
+    /// as the legacy path; `reschedule_delay` keeps the level-triggered IRQ
+    /// (and stream pacing) going at one event per tick until work drains.
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let (irq, dma_signals) = self.advance_one_tick();
+        let keep_going = self.has_active_work();
+        self.scheduled = keep_going;
+        crate::sched::EventResult {
+            raise_own_irq: irq,
             dma_signals,
+            reschedule_delay: keep_going.then_some(1),
             ..Default::default()
         }
     }
@@ -384,5 +455,82 @@ mod tests {
         uart.write(0x0C, 1 << 6).unwrap();
 
         assert!(uart.tick().irq);
+    }
+
+    // ── Phase 2B.3b: event-scheduler path ────────────────────────────────
+    // These exercise the same `advance_one_tick` core as `tick()` but via the
+    // scheduler hooks. The hooks aren't feature-gated (only the Machine/bus
+    // *callers* are), so they run in both build configs.
+
+    #[test]
+    fn event_path_arms_and_raises_own_irq_for_tcie() {
+        use crate::bus::SystemBus;
+        use crate::sched::EventScheduler;
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.write(0x0C, 1 << 6).unwrap(); // TCIE → active work
+
+        // Arms exactly one WAKE; a second take is a no-op (already scheduled).
+        assert_eq!(
+            uart.take_scheduled_events(),
+            vec![(0, super::UART_WAKE_TOKEN)]
+        );
+        assert!(uart.take_scheduled_events().is_empty());
+
+        // on_event raises the UART's *own* IRQ and re-arms while TCIE is set.
+        let mut sched = EventScheduler::new();
+        let mut bus = SystemBus::empty();
+        let r = uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
+        assert!(r.raise_own_irq, "event path must request the own-IRQ pend");
+        assert_eq!(r.reschedule_delay, Some(1), "re-arm while interrupt is set");
+    }
+
+    #[test]
+    fn event_path_stops_when_interrupt_cleared() {
+        use crate::bus::SystemBus;
+        use crate::sched::EventScheduler;
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.write(0x0C, 1 << 6).unwrap(); // TCIE on
+        let _ = uart.take_scheduled_events();
+
+        // Clear TCIE → next event raises no IRQ and does not re-arm.
+        uart.write(0x0C, 0).unwrap();
+        let mut sched = EventScheduler::new();
+        let mut bus = SystemBus::empty();
+        let r = uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
+        assert!(!r.raise_own_irq);
+        assert_eq!(r.reschedule_delay, None, "idle UART stops scheduling");
+        // And it won't re-arm itself with no active work.
+        assert!(uart.take_scheduled_events().is_empty());
+    }
+
+    #[test]
+    fn event_path_paces_attached_stream_rx() {
+        use super::UartStreamDevice;
+        use crate::bus::SystemBus;
+        use crate::sched::EventScheduler;
+
+        struct OneByte(u8);
+        impl UartStreamDevice for OneByte {
+            fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+                Some(self.0)
+            }
+        }
+
+        let mut uart = Uart::new();
+        uart.attach_stream(Box::new(OneByte(b'G')));
+
+        // A stream attached at setup is "active work" → arms at bootstrap.
+        assert_eq!(
+            uart.take_scheduled_events(),
+            vec![(0, super::UART_WAKE_TOKEN)]
+        );
+
+        let mut sched = EventScheduler::new();
+        let mut bus = SystemBus::empty();
+        let rx = uart.rx_buffer();
+        uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
+        assert_eq!(rx.lock().unwrap().front().copied(), Some(b'G'));
     }
 }
