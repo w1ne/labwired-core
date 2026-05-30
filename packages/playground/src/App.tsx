@@ -556,7 +556,7 @@ export function App() {
   const [compileOutput, setCompileOutput] = useState('');
   const [compiling, setCompiling] = useState(false);
   const [bottomTab, setBottomTab] = useState<BottomTab>('output');
-  const [showCode, setShowCode] = useState(true);
+  const [showCode, setShowCode] = useState(false);
   const [showBottomPanel, setShowBottomPanel] = useState(true);
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
   const [projectsModalOpen, setProjectsModalOpen] = useState(false);
@@ -1874,9 +1874,11 @@ export function App() {
       renderDevDrawer={renderDevDrawer}
       renderCommandPalette={renderCommandPalette}
       onMountCommandRef={(refs) => { commandRefs.current = refs; }}
+      devMode={showCode}
+      onToggleDev={() => setShowCode((v) => !v)}
     >
     <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
-    <div data-legacy-shell="true" className="playground">
+    <div data-legacy-shell="true" className={`playground${showCode ? ' code-open' : ''}`}>
       {/* ===== Header ===== */}
       {!embed && (
         <div className="playground-header">

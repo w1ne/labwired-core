@@ -22,6 +22,13 @@ export interface StudioShellProps {
   onMountCommandRef?: (refs: { open: () => void; close: () => void }) => void;
   toast?: string | null;
   onDismissToast?: () => void;
+  /**
+   * Optional external control of the "Code" toggle. When provided, these
+   * override the shell's internal layout state so the host (App) can tie the
+   * top-bar Code pill to the desktop code editor it renders in `children`.
+   */
+  devMode?: boolean;
+  onToggleDev?: () => void;
   children?: ReactNode;
 }
 
@@ -42,9 +49,14 @@ export function StudioShell({
   onMountCommandRef,
   toast,
   onDismissToast,
+  devMode: devModeProp,
+  onToggleDev: onToggleDevProp,
   children,
 }: StudioShellProps) {
   const layout = useStudioLayout();
+  // Host-controlled Code toggle wins over the shell's internal state.
+  const devMode = devModeProp ?? layout.devMode;
+  const toggleDev = onToggleDevProp ?? layout.toggleDev;
 
   useEffect(() => {
     onMountCommandRef?.({ open: layout.openCommand, close: layout.closeCommand });
@@ -54,9 +66,9 @@ export function StudioShell({
     <div className="relative w-full h-screen overflow-hidden bg-bg-base text-fg-primary">
       <TopChrome
         boardName={boardName}
-        devMode={layout.devMode}
+        devMode={devMode}
         onOpenCommand={layout.openCommand}
-        onToggleDev={layout.toggleDev}
+        onToggleDev={toggleDev}
         onShare={onShare}
         onUploadFirmware={onUploadFirmware}
         authSlot={authSlot}
@@ -90,12 +102,12 @@ export function StudioShell({
         {simDock && (
           <div
             className="absolute left-1/2 -translate-x-1/2 z-20 transition-[bottom] duration-panel ease-out"
-            style={{ bottom: layout.devMode ? 256 : 16 }}
+            style={{ bottom: devMode ? 256 : 16 }}
           >
             {simDock}
           </div>
         )}
-        {renderDevDrawer?.(layout.devMode, !layout.mobile && layout.paletteOpen ? 280 : 0)}
+        {renderDevDrawer?.(devMode, !layout.mobile && layout.paletteOpen ? 280 : 0)}
       </main>
       {renderCommandPalette?.(layout.commandOpen, layout.closeCommand, layout.openCommand)}
       <Toast message={toast ?? null} onDismiss={() => onDismissToast?.()} />

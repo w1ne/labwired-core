@@ -53,17 +53,18 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
     }
 
     for (const board of ctx.boards) {
-      // A board IS a component (an MCU one). Dropping it adds a new
-      // MCU instance to the session — same flow as dropping any
-      // other component. If onAddMcu isn't wired (legacy single-
-      // chip), fall back to replacing the current board.
+      // Selecting a board from the palette LOADS it (swaps the workspace to
+      // that board's starter diagram + source). The previous behaviour routed
+      // through onAddMcu → the chip-session registry, which never added a part
+      // to the canvas — so picking e.g. "ESP32 E-Reader" did nothing visible.
+      // Loading is the intuitive result of choosing a board/example.
       items.push({
         id: `board:${board.boardId}`,
-        bucket: 'Components',
+        bucket: 'Boards',
         label: board.name,
         hint: board.arch,
         icon: getComponentIcon(board.mcuComponentType ?? 'mcu', 'misc'),
-        action: () => (ctx.onAddMcu ? ctx.onAddMcu(board) : ctx.onLoadBoard(board)),
+        action: () => ctx.onLoadBoard(board),
       });
     }
 

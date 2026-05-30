@@ -62,4 +62,23 @@
     height: 100% !important;
     flex: 1 1 auto !important;
   }
+
+  /* Code editor: the top-bar "Code" toggle adds `.code-open`, which reveals the
+     Monaco pane and splits it beside the canvas (the pane is hidden above by
+     default in the Studio shell). */
+  [data-legacy-shell].code-open .editor-top-split {
+    display: flex !important;
+  }
+  [data-legacy-shell].code-open .editor-code-pane {
+    display: flex !important;
+    width: 42% !important;
+    min-width: 320px;
+    max-width: 620px;
+    height: 100% !important;
+    flex: 0 0 auto !important;
+  }
+  [data-legacy-shell].code-open .editor-canvas-pane {
+    width: auto !important;
+    flex: 1 1 auto !important;
+  }
 }
