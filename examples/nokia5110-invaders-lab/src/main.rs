@@ -409,6 +409,14 @@ fn count_to_paddle_x(count: u32) -> i32 {
     v.clamp(0, span)
 }
 
+/// Median of three — rejects a single spurious HC-SR04 reading (the spikes
+/// that make the paddle jump). `sum - max - min` is the middle value.
+fn median3(a: u32, b: u32, c: u32) -> u32 {
+    let mx = a.max(b).max(c);
+    let mn = a.min(b).min(c);
+    (a + b + c) - mx - mn
+}
+
 /// Bring-up diagnostic: sweep contrast while blinking the whole screen
 /// black↔clear. If the panel blinks at any Vop, wiring + data path are good
 /// (note which Vop looks best); if it never blinks at all, it's a wiring/power
@@ -462,23 +470,29 @@ fn main() -> ! {
     }
     delay(1_000_000);
 
-    // Paddle control: HC-SR04 hand distance when present; otherwise auto-sweep
-    // so the demo stays visibly alive even with no sensor/hand.
-    let mut sweep: i32 = (W as i32 - PADDLE_W) / 2;
-    let mut sweep_dir: i32 = 2;
+    // Paddle control: HC-SR04 hand distance, smoothed (median-of-3 to drop
+    // spikes + an exponential moving average to tame jitter). On a missed
+    // echo we hold the last position rather than jump.
+    let center = (W as i32 - PADDLE_W) / 2;
+    let mut filt: i32 = center << 3; // paddle X in 1/8-px fixed point
+    let mut c1 = 0u32;
+    let mut c2 = 0u32;
     loop {
         let count = measure();
-        let paddle_x = if count > 0 {
-            count_to_paddle_x(count)
-        } else {
-            sweep += sweep_dir;
-            if sweep <= 0 || sweep >= (W as i32 - PADDLE_W) {
-                sweep_dir = -sweep_dir;
-                sweep = sweep.clamp(0, W as i32 - PADDLE_W);
+        if count > 0 {
+            if c1 == 0 {
+                c1 = count; // seed the window on the first reading
+                c2 = count;
             }
-            sweep
-        };
-        game.step(paddle_x);
+            let m = median3(count, c1, c2);
+            c2 = c1;
+            c1 = count;
+            let target = count_to_paddle_x(m);
+            // EMA, α = 1/4: filt += (target - filt) / 4, in 1/8-px units.
+            filt += ((target << 3) - filt) >> 2;
+        }
+        let paddle = (filt >> 3).clamp(0, W as i32 - PADDLE_W);
+        game.step(paddle);
         unsafe {
             game.render(&mut FB);
             lcd_frame(&FB);
