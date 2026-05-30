@@ -1,11 +1,20 @@
 // Pure decoders for the playground's universal packet analyzer.
 //
 // The simulator's virtual-air registry hands the UI a list of `AirFrameTrace`
-// records (most-recent-first), each carrying the PRE-whitening logical bytes
-// the transmitter put on air — `[S0, LENGTH, payload…]` for the nRF RADIO's
-// BLE/proprietary framing. These functions turn one raw trace into a
-// display-ready transaction without any wasm/React coupling, so they can be
-// unit-tested in isolation and reused by a CLI exporter later.
+// records (most-recent-first). Each carries the bytes the transmitter actually
+// put ON AIR — i.e. the BLE-whitened header+payload+CRC, "exactly what a
+// sniffer on the air would capture" (see the RADIO model's TX path). The
+// receiver de-whitens on the far side; the air capture itself stays whitened.
+//
+// Because the captured bytes are whitened, we do NOT pretend to parse logical
+// [S0, LENGTH, payload] fields out of them — that would print garbage. Instead
+// we present the truthful sniffer view: the frame's metadata (channel → centre
+// frequency, MODE → PHY, logical address) plus the raw on-air bytes. De-whitened
+// logical decoding is a separate, opt-in layer (it needs the whitening IV, which
+// the trace does not yet carry).
+//
+// Keeping this as a pure function means it can be unit-tested in isolation and
+// reused by a CLI exporter later.
 import type { AirFrameTrace } from '@labwired/ui';
 
 /** A decoded, display-ready row for the analyzer's protocol view. */
@@ -16,17 +25,11 @@ export interface BleTransaction {
   freqMhz: number;
   /** Human label for the PHY/MODE register. */
   phy: string;
-  /** Logical access address, big-endian-ish "PREFIX:BASE" hex for display. */
+  /** Logical access address, "PREFIX:BASE" hex for display. */
   address: string;
-  /** S0 header byte (first logical byte), or null if the frame is empty. */
-  s0: number | null;
-  /** LENGTH header field (second logical byte), or null. */
-  length: number | null;
-  /** Payload bytes after [S0, LENGTH], clamped to LENGTH when sane. */
-  payload: number[];
-  /** Convenience: first payload byte — the sensor's incrementing reading. */
-  reading: number | null;
-  /** Whole logical frame as a spaced hex string for the raw column. */
+  /** Number of bytes captured on air (whitened header+payload+CRC). */
+  byteCount: number;
+  /** Raw on-air bytes as a spaced hex string. */
   hex: string;
 }
 
@@ -58,16 +61,6 @@ export function toHex(bytes: number[]): string {
 /** Decode a single air-trace frame into a display transaction. */
 export function decodeBleFrame(frame: AirFrameTrace): BleTransaction {
   const bytes = frame.bytes ?? [];
-  const s0 = bytes.length > 0 ? bytes[0] & 0xff : null;
-  const length = bytes.length > 1 ? bytes[1] & 0xff : null;
-
-  // Payload sits after [S0, LENGTH]. Clamp to the declared LENGTH when it
-  // fits the frame; otherwise show whatever bytes are actually present so a
-  // malformed frame is still visible rather than silently truncated.
-  const rawPayload = bytes.slice(2);
-  const payload =
-    length !== null && length <= rawPayload.length ? rawPayload.slice(0, length) : rawPayload;
-
   const prefix = (frame.addr_prefix & 0xff).toString(16).padStart(2, '0').toUpperCase();
   const base = (frame.addr_base >>> 0).toString(16).padStart(8, '0').toUpperCase();
 
@@ -76,10 +69,7 @@ export function decodeBleFrame(frame: AirFrameTrace): BleTransaction {
     freqMhz: 2400 + frame.channel,
     phy: phyLabel(frame.mode),
     address: `${prefix}:${base}`,
-    s0,
-    length,
-    payload,
-    reading: payload.length > 0 ? payload[0] & 0xff : null,
+    byteCount: bytes.length,
     hex: toHex(bytes),
   };
 }
