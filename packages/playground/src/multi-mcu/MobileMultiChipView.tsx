@@ -43,7 +43,6 @@ export interface MobileMultiChipViewProps {
 
 export function MobileMultiChipView({
   propertiesContent,
-  simControls,
   uartPreview,
   running,
   cyclesActive,
@@ -131,33 +130,9 @@ export function MobileMultiChipView({
               ←
             </button>
             <span className="lw-mob-props-title">
-              {sessions[activeChipId]!.chipId} · properties
+              {sessions[activeChipId]!.chipId} · {sessions[activeChipId]!.board.name}
             </span>
           </header>
-          <section className="lw-mob-props-summary">
-            <div className="lw-mob-props-thumb">
-              <McuThumb session={sessions[activeChipId]!} width={110} height={70} />
-            </div>
-            <div className="lw-mob-props-summary-meta">
-              <div className="lw-mob-props-board">
-                {sessions[activeChipId]!.board.name}
-              </div>
-              <div className="lw-mob-props-status">
-                <span
-                  className="lw-mob-card-led"
-                  data-state={running ? 'running' : sessions[activeChipId]!.bridge ? 'paused' : 'idle'}
-                />
-                {running
-                  ? `${(cyclesActive ?? 0).toLocaleString()} cycles`
-                  : sessions[activeChipId]!.bridge
-                    ? 'paused'
-                    : 'no firmware'}
-              </div>
-              {simControls && (
-                <div className="lw-mob-props-controls">{simControls}</div>
-              )}
-            </div>
-          </section>
           <div className="lw-mob-props-body">{propertiesContent}</div>
         </div>
       )}

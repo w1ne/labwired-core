@@ -237,9 +237,10 @@
   left: 0;
   right: 0;
   bottom: 0;
-  /* Bottom drawer ~70% of viewport — leaves the chip canvas
-     visible above so the user can see context. */
-  height: 70vh;
+  /* Half-screen drawer — chip canvas remains visible above so
+     the user keeps spatial context with the chip they're
+     inspecting. */
+  height: 50vh;
   z-index: 1000;
   background: #0a0a0f;
   display: flex;
@@ -330,6 +331,18 @@
 
 .lw-mob-props-body {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   position: relative;
+}
+
+/* DevDrawer is absolute bottom-0 with a fixed height inside its
+   parent. On mobile we want it to fill the modal body, so
+   override its height + sizing. */
+.lw-mob-props-body > div {
+  position: absolute !important;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: auto !important;
 }
