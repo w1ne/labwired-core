@@ -218,6 +218,17 @@ export interface WasmModule {
   };
 }
 
+// serde_wasm_bindgen serializes `serde_json::Value::Object` as a JS `Map`
+// (whereas a tagged Rust struct comes back as a plain object). The wasm
+// methods that build their result with `serde_json::json!{…}` therefore hand
+// back arrays of `Map`s, so reading `entry.id` / `entry.active` yields
+// `undefined`. Normalize those entries to plain objects at the boundary so
+// every consumer can use property access regardless of how the wasm side
+// chose to serialize. Works whether the entry is already an object or a Map.
+function asPlainObject<T>(entry: unknown): T {
+  return entry instanceof Map ? (Object.fromEntries(entry) as T) : (entry as T);
+}
+
 export class SimulatorBridge {
   private sim: WasmSimulatorInstance;
   private _cycles = 0;
@@ -354,7 +365,8 @@ export class SimulatorBridge {
   }
 
   getBoardIoStates(): BoardIoState[] {
-    return this.sim.get_board_io_states();
+    const raw = this.sim.get_board_io_states() as unknown[] | null;
+    return (raw ?? []).map((s) => asPlainObject<BoardIoState>(s));
   }
 
   setBoardIoInput(id: string, active: boolean): void {
@@ -374,7 +386,8 @@ export class SimulatorBridge {
   }
 
   getAnalogStates(): AnalogState[] {
-    return this.sim.get_board_io_analog_states() ?? [];
+    const raw = this.sim.get_board_io_analog_states() as unknown[] | null;
+    return (raw ?? []).map((s) => asPlainObject<AnalogState>(s));
   }
 
   setI2cSensorSample(deviceId: string, x: number, y: number, z: number): void {
