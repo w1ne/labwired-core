@@ -196,6 +196,22 @@ impl Peripheral for Dport {
         Ok(())
     }
 
+    // Word-granular fast paths: the firmware DPORT polling loop (WASM IPI
+    // bridge, intmatrix mapping reads) hits these every CPU cycle. The
+    // default Peripheral trait impl issues four byte reads/writes, each
+    // hashing the offset through SipHash to index `regs`. Overriding here
+    // collapses that to one lookup. Reads and writes are pure
+    // last-write-wins storage with no side effects, so a single-word
+    // operation is byte-identical to the four-byte default path.
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_word(offset as u32 & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_word(offset as u32 & !3, value);
+        Ok(())
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

@@ -223,6 +223,13 @@ impl Peripheral for RtcCntl {
         Ok(((word >> byte_off) & 0xFF) as u8)
     }
 
+    // Word-granular read fast path: same `read_word` as the byte path,
+    // looked up once instead of four times. Pure register lookup +
+    // TIME0/TIME1 live-counter view; no side effects on read.
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_word((offset & !3) as u32))
+    }
+
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let word_off = (offset & !3) as u32;
         let byte_off = (offset & 3) * 8;
