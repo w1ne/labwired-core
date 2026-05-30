@@ -44,10 +44,13 @@
     display: none !important;
   }
 
-  /* Let the canvas occupy the full available space below the new top chrome. */
+  /* Let the canvas occupy the full available space below the new top chrome.
+     The shell's <main> already insets content below the 32px top bar; the
+     legacy 44px pad was sized for the old taller header and left a dead black
+     band under the bar. */
   [data-legacy-shell].playground {
     height: 100%;
-    padding-top: 44px;
+    padding-top: 0;
   }
 
   [data-legacy-shell] .editor-layout {
