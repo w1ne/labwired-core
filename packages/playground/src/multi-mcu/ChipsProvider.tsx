@@ -21,10 +21,23 @@ import { BOARD_CONFIGS, type BoardConfig } from '../bundled-configs';
 
 export interface ChipSession {
   chipId: string;
+  /// Human-readable name shown in the UI — defaults to the board
+  /// name (e.g., "nRF52840 DK"), disambiguated as "nRF52840 DK
+  /// (2)" if the same board is dropped twice. User can rename in
+  /// the future if needed.
+  name: string;
   bridge: SimulatorBridge | null;
   board: BoardConfig;
   source: string | null;
   config: unknown;
+}
+
+function defaultNameFor(board: BoardConfig, taken: Set<string>): string {
+  const base = board.name;
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} (${n})`)) n += 1;
+  return `${base} (${n})`;
 }
 
 interface ChipsContext {
@@ -45,7 +58,10 @@ interface ChipsContext {
 
 const Ctx = createContext<ChipsContext | null>(null);
 
-const DEFAULT_CHIP_ID = 'chip-default';
+// User-facing identity for the always-present first chip. Renamed
+// from "chip-default" — too jargony. Subsequent chips added via
+// the command palette get chip-2, chip-3, …
+const DEFAULT_CHIP_ID = 'chip-1';
 const PERSISTENCE_KEY = 'lw-mcu-registry-v1';
 
 interface PersistedRegistry {
@@ -87,14 +103,19 @@ export function ChipsProvider({
     const persisted = loadRegistry();
     if (persisted) {
       const out: Record<string, ChipSession> = {};
+      const taken = new Set<string>();
       for (const id of persisted.order) {
         const boardId = persisted.boardIdByChip[id];
         const board = BOARD_CONFIGS.find((c) => c.boardId === boardId) ?? initialBoard;
-        out[id] = { chipId: id, bridge: null, board, source: null, config: null };
+        const name = defaultNameFor(board, taken);
+        taken.add(name);
+        out[id] = { chipId: id, name, bridge: null, board, source: null, config: null };
       }
       if (!out[DEFAULT_CHIP_ID]) {
+        const name = defaultNameFor(initialBoard, taken);
         out[DEFAULT_CHIP_ID] = {
           chipId: DEFAULT_CHIP_ID,
+          name,
           bridge: null,
           board: initialBoard,
           source: null,
@@ -106,6 +127,7 @@ export function ChipsProvider({
     return {
       [DEFAULT_CHIP_ID]: {
         chipId: DEFAULT_CHIP_ID,
+        name: initialBoard.name,
         bridge: null,
         board: initialBoard,
         source: null,
@@ -175,12 +197,14 @@ export function ChipsProvider({
       // click away (both chips share virtual_air on the Rust side).
       const nrf = BOARD_CONFIGS.find((c) => c.boardId === 'nrf52840-dk');
       const resolvedBoard = board ?? nrf ?? initialBoard ?? BOARD_CONFIGS[0];
-      let n = 1;
+      let n = 2;
       while (sessions[`chip-${n}`]) n += 1;
       const id = `chip-${n}`;
+      const taken = new Set(Object.values(sessions).map((s) => s.name));
+      const name = defaultNameFor(resolvedBoard, taken);
       setSessions((prev) => ({
         ...prev,
-        [id]: { chipId: id, bridge: null, board: resolvedBoard, source: null, config: null },
+        [id]: { chipId: id, name, bridge: null, board: resolvedBoard, source: null, config: null },
       }));
       setOrder((prev) => (prev.includes(id) ? prev : [...prev, id]));
       return id;

@@ -48,7 +48,7 @@ import { McuStrip } from './multi-mcu/McuStrip';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
 import { MobileMultiChipView } from './multi-mcu/MobileMultiChipView';
 import { PropertiesGate } from './multi-mcu/PropertiesGate';
-import { ChipTabsBar } from './multi-mcu/ChipTabsBar';
+import { ChipTabsBar, DrawerCloseButton } from './multi-mcu/ChipTabsBar';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1567,6 +1567,7 @@ export function App() {
     <PropertiesGate>
     <DevDrawer
       header={<ChipTabsBar />}
+      headerRight={<DrawerCloseButton />}
       devMode={devMode}
       leftOffset={leftOffset}
       tabs={{

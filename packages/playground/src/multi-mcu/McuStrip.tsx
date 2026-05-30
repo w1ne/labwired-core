@@ -62,16 +62,16 @@ function McuTile({
           <McuThumb session={session} width={56} height={36} />
         </span>
         <span className="lw-mcu-tile-meta">
-          <span className="lw-mcu-tile-id">{session.chipId}</span>
-          <span className="lw-mcu-tile-board">{session.board.name}</span>
+          <span className="lw-mcu-tile-id">{session.name}</span>
+          <span className="lw-mcu-tile-board">{session.board.arch}</span>
         </span>
       </button>
       {onRemove && (
         <button
           type="button"
           className="lw-mcu-tile-remove"
-          aria-label={`Remove ${session.chipId}`}
-          title={`Remove ${session.chipId}`}
+          aria-label={`Remove ${session.name}`}
+          title={`Remove ${session.name}`}
           onClick={onRemove}
         >
           ×

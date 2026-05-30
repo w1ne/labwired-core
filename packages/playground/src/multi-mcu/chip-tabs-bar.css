@@ -1,15 +1,25 @@
-/* Drawer header — anchored to the LEFT of the dev tab strip via
-   DevDrawer's `header` slot. Names the owning chip so it's
-   unambiguous which chip's properties the drawer is showing. */
+/* Compact chip-identity label on the LEFT of the dev tab strip. */
 
 .lw-chip-header {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-right: 12px;
-  padding-right: 4px;
   flex-shrink: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.lw-chip-header-id {
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.lw-chip-switch-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
 }
 
 .lw-chip-switch-close {
@@ -23,6 +33,7 @@
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
+  margin-left: 8px;
   font-family: inherit;
   transition: background 100ms ease, color 100ms ease;
 }
@@ -30,44 +41,4 @@
 .lw-chip-switch-close:hover {
   background: rgba(255, 60, 60, 0.65);
   color: #fff;
-}
-
-.lw-chip-header-thumb {
-  display: flex;
-  width: 32px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.lw-chip-header-label {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.lw-chip-header-prop {
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 11px;
-}
-
-.lw-chip-header-id {
-  color: #fff;
-  font-weight: 700;
-}
-
-.lw-chip-header-sep {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.lw-chip-header-board {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.lw-chip-switch-divider {
-  width: 1px;
-  height: 20px;
-  margin-left: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  flex-shrink: 0;
 }
