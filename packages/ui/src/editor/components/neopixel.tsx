@@ -26,15 +26,21 @@ export const neopixelComponent: ComponentDef = {
     const count = Math.min(Math.max(parseInt((attrs.count as string) || '8', 10), 1), 8);
     const colors = ['#F2545B', '#F5B642', '#3DD68C', '#5B9DFF', '#F062B8', '#B07BFF', '#5BD8FF', '#FFE680'];
     const ledSize = (W - 16) / count;
+    // Per-instance ids — each part renders in its own <svg>, so a static id
+    // duplicated by the palette thumbnail would shadow this one and break the
+    // url(#…) fills. See led.tsx.
+    const uid = state?.id ?? 'def';
+    const stripId = `neo-strip-${uid}`;
+    const baseId = `neo-led-base-${uid}`;
     return (
       <g>
         <defs>
-          <linearGradient id="neo-strip" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={stripId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#1f1f1f" />
             <stop offset="0.5" stopColor="#0e0e0e" />
             <stop offset="1" stopColor="#000" />
           </linearGradient>
-          <radialGradient id="neo-led-base" cx="0.5" cy="0.5" r="0.6">
+          <radialGradient id={baseId} cx="0.5" cy="0.5" r="0.6">
             <stop offset="0" stopColor="#f8f8f8" />
             <stop offset="1" stopColor="#888" />
           </radialGradient>
@@ -44,7 +50,7 @@ export const neopixelComponent: ComponentDef = {
         <ellipse cx={W / 2} cy={H} rx={W / 2 - 4} ry={2} fill="#000" opacity={0.4} />
 
         {/* Flexible PCB strip body */}
-        <rect x={0} y={3} width={W} height={H - 6} rx={3} fill="url(#neo-strip)" stroke={selected ? '#F062B8' : '#000'} strokeWidth={selected ? 2.5 : 0.8} />
+        <rect x={0} y={3} width={W} height={H - 6} rx={3} fill={`url(#${stripId})`} stroke={selected ? '#F062B8' : '#000'} strokeWidth={selected ? 2.5 : 0.8} />
 
         {/* End connector pads (left + right) */}
         <rect x={0} y={H / 2 - 4} width={3} height={8} fill="#FFE680" stroke="#7a5a1a" strokeWidth={0.3} />
@@ -62,7 +68,7 @@ export const neopixelComponent: ComponentDef = {
                 <circle cx={cx} cy={cy} r={ledSize * 0.85} fill={color} opacity={0.35} />
               )}
               {/* White ceramic LED package */}
-              <rect x={cx - ledSize / 2 + 1} y={cy - 6} width={ledSize - 2} height={12} rx={1} fill="url(#neo-led-base)" stroke="#444" strokeWidth={0.4} />
+              <rect x={cx - ledSize / 2 + 1} y={cy - 6} width={ledSize - 2} height={12} rx={1} fill={`url(#${baseId})`} stroke="#444" strokeWidth={0.4} />
               {/* Inner die */}
               <rect x={cx - 3} y={cy - 3} width={6} height={6} fill={active ? color : '#1a1a1a'} opacity={active ? 1 : 0.6} />
               {/* Specular highlight when active */}

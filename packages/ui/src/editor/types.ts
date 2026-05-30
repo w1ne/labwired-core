@@ -68,6 +68,14 @@ export interface ComponentState {
   angle?: number;
   /** Live framebuffer from a simulated display peripheral, if present. */
   displayBuffer?: DisplayBuffer;
+  /**
+   * Stable per-instance id (the part id on the canvas, or a synthetic id in the
+   * palette). Components MUST suffix any SVG `<defs>` ids (gradients, filters)
+   * with this — each part renders in its own `<svg>`, and duplicate ids across
+   * those SVGs make `url(#id)` references resolve to the wrong (first) element,
+   * which then fails to paint. See led.tsx.
+   */
+  id?: string;
 }
 
 /**

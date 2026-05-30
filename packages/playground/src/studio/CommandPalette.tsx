@@ -42,7 +42,7 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16 }}
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[18vh] bg-bg-base/60 backdrop-blur"
+          className="fixed inset-0 z-[100] flex items-start justify-center pt-[18vh] bg-bg-base/60 backdrop-blur"
           onClick={onClose}
         >
           <motion.div

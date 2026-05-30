@@ -2278,7 +2278,7 @@ export function App() {
             initial={{ x: w.x, y: w.y }}
             width={500}
             height={380}
-            zIndex={60 + i}
+            zIndex={Math.min(60 + i, 95)}
             onFocus={() => editor.select(partId)}
             onClose={() => closeWindow(partId)}
             title={
@@ -2323,7 +2323,7 @@ export function App() {
           initial={{ x: w.x, y: w.y }}
           width={300}
           height={280}
-          zIndex={60 + i}
+          zIndex={Math.min(60 + i, 95)}
           onFocus={() => editor.select(partId)}
           onClose={() => closeWindow(partId)}
           title={

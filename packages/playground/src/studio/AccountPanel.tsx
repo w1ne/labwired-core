@@ -73,7 +73,7 @@ export function AccountPanel({ open, onClose }: AccountPanelProps) {
       role="dialog"
       aria-modal="true"
       aria-label="Account"
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 overflow-auto"
+      className="fixed inset-0 z-[100] flex items-start justify-center p-4 sm:p-8 overflow-auto"
     >
       <button
         type="button"

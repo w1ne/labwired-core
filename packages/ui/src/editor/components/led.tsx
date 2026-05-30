@@ -16,11 +16,11 @@ interface LedColor {
 }
 
 const LED_COLORS: Record<string, LedColor> = {
-  red: { body: '#F2545B', bodyDim: '#7a2226', glow: 'rgba(242,84,91,0.65)', highlight: '#FF9FA3', lens: '#9c3a40', lensEdge: '#4a1c1f' },
-  green: { body: '#3DD68C', bodyDim: '#19663F', glow: 'rgba(61,214,140,0.65)', highlight: '#A8F0CB', lens: '#2c8f5d', lensEdge: '#16432c' },
-  blue: { body: '#5B9DFF', bodyDim: '#24487A', glow: 'rgba(91,157,255,0.65)', highlight: '#B8D6FF', lens: '#3f6cb0', lensEdge: '#1d3457' },
-  yellow: { body: '#F5B642', bodyDim: '#7a5a18', glow: 'rgba(245,182,66,0.65)', highlight: '#FDE3A8', lens: '#b3852f', lensEdge: '#4f3a12' },
-  white: { body: '#F2F4F9', bodyDim: '#777a85', glow: 'rgba(242,244,249,0.55)', highlight: '#FFFFFF', lens: '#9a9da8', lensEdge: '#43454d' },
+  red: { body: '#F2545B', bodyDim: '#7a2226', glow: 'rgba(242,84,91,0.65)', highlight: '#FF9FA3', lens: '#e0565d', lensEdge: '#8f2f35' },
+  green: { body: '#3DD68C', bodyDim: '#19663F', glow: 'rgba(61,214,140,0.65)', highlight: '#A8F0CB', lens: '#36c47e', lensEdge: '#1c6c46' },
+  blue: { body: '#5B9DFF', bodyDim: '#24487A', glow: 'rgba(91,157,255,0.65)', highlight: '#B8D6FF', lens: '#5790e6', lensEdge: '#2b5089' },
+  yellow: { body: '#F5B642', bodyDim: '#7a5a18', glow: 'rgba(245,182,66,0.65)', highlight: '#FDE3A8', lens: '#e0a63c', lensEdge: '#7d5d1d' },
+  white: { body: '#F2F4F9', bodyDim: '#777a85', glow: 'rgba(242,244,249,0.55)', highlight: '#FFFFFF', lens: '#d2d5dd', lensEdge: '#64676f' },
 };
 
 export const ledComponent: ComponentDef = {
@@ -51,15 +51,19 @@ export const ledComponent: ComponentDef = {
     const cx = W / 2;
     const cy = H / 2;
     const r = 16;
-    const gradId = `led-grad-${colorKey}`;
-    const glowId = `led-glow-${colorKey}`;
+    // Suffix gradient ids with the instance id: each part renders in its own
+    // <svg>, and a duplicate id (e.g. the palette's default-red LED thumbnail)
+    // earlier in the document would shadow this one, leaving the dome unpainted.
+    const uid = state?.id ?? colorKey;
+    const gradId = `led-grad-${colorKey}-${uid}`;
+    const glowId = `led-glow-${colorKey}-${uid}`;
 
     return (
       <g>
         <defs>
           <radialGradient id={gradId} cx="0.35" cy="0.3" r="0.8">
-            <stop offset="0" stopColor={c.highlight} stopOpacity={active ? 1 : 0.55} />
-            <stop offset="0.4" stopColor={active ? c.body : c.lens} />
+            <stop offset="0" stopColor={c.highlight} stopOpacity={active ? 1 : 0.45} />
+            <stop offset={active ? 0.4 : 0.55} stopColor={active ? c.body : c.lens} />
             <stop offset="1" stopColor={active ? c.bodyDim : c.lensEdge} />
           </radialGradient>
           <radialGradient id={glowId} cx="0.5" cy="0.5" r="0.5">
@@ -82,11 +86,12 @@ export const ledComponent: ComponentDef = {
         {/* LED body — round translucent dome */}
         <circle cx={cx} cy={cy} r={r} fill={`url(#${gradId})`} stroke="#0a0a0a" strokeWidth={1.2} />
 
-        {/* Internal die / chip visible through the dome */}
-        <rect x={cx - 3} y={cy + 2} width={6} height={4} fill={active ? c.highlight : '#5a5a5a'} opacity={active ? 0.95 : 0.5} />
+        {/* Internal die / chip visible through the dome — tinted to the lens
+            when off so it reads as part of the colored dome, not a gray hole. */}
+        <rect x={cx - 3} y={cy + 2} width={6} height={4} fill={active ? c.highlight : c.lensEdge} opacity={active ? 0.95 : 0.75} />
 
         {/* Bond wire (very thin line from die toward anode) */}
-        <line x1={cx} y1={cy + 3} x2={cx - 6} y2={cy - 4} stroke={active ? c.highlight : '#888'} strokeWidth={0.6} opacity={0.7} />
+        <line x1={cx} y1={cy + 3} x2={cx - 6} y2={cy - 4} stroke={active ? c.highlight : c.lensEdge} strokeWidth={0.6} opacity={active ? 0.7 : 0.5} />
 
         {/* Specular highlight on the dome */}
         <ellipse cx={cx - 5} cy={cy - 6} rx={4.5} ry={3} fill="rgba(255,255,255,0.55)" />

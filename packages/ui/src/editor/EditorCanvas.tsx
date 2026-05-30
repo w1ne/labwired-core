@@ -372,6 +372,7 @@ export function EditorCanvas({
           active: ioState?.active ?? false,
           ...ioState,
           ...(displayBuffer ? { displayBuffer } : {}),
+          id: part.id,
         };
         const sc = part.scale ?? 1;
         const sw = def.width * sc;

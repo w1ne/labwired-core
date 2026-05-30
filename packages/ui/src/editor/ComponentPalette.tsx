@@ -44,7 +44,7 @@ export function ComponentPalette({ onAddPart }: ComponentPaletteProps) {
                 viewBox={`0 0 ${def.width} ${def.height}`}
                 style={{ flexShrink: 0 }}
               >
-                {def.render(def.defaultAttrs)}
+                {def.render(def.defaultAttrs, { id: `palette-${def.type}` })}
               </svg>
               <span className="palette-label">{def.label}</span>
             </div>
