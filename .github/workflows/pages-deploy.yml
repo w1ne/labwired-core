@@ -69,4 +69,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy packages/playground/dist --project-name=labwired-playground --branch=main --commit-dirty=true
+          # Pass an explicit ASCII commit message. Wrangler otherwise forwards
+          # the git HEAD message verbatim, and the Cloudflare Pages API rejects
+          # certain code points (e.g. U+2192 "->") with
+          # "Invalid commit message, it must be a valid UTF-8 string" — which
+          # fails the deploy AFTER the files have already uploaded.
+          command: pages deploy packages/playground/dist --project-name=labwired-playground --branch=main --commit-dirty=true --commit-message="main@${{ github.sha }}"
