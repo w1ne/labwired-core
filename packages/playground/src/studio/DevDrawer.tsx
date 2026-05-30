@@ -20,9 +20,14 @@ export interface DevDrawerProps {
   defaultHeight?: number;
   /** px to push the drawer's left edge in by, e.g. to clear the palette. */
   leftOffset?: number;
+  /** Optional header row rendered immediately above the dev tab strip.
+   *  Used by the multi-MCU PropertiesGate to host the chip-switcher
+   *  tabs so they stick to the top of the drawer regardless of its
+   *  resizable height. */
+  header?: ReactNode;
 }
 
-export function DevDrawer({ devMode, tabs, defaultHeight = 240, leftOffset = 0 }: DevDrawerProps) {
+export function DevDrawer({ devMode, tabs, defaultHeight = 240, leftOffset = 0, header }: DevDrawerProps) {
   const [active, setActive] = useState<DevTab>('serial');
   const [height, setHeight] = useState(defaultHeight);
 
@@ -58,6 +63,7 @@ export function DevDrawer({ devMode, tabs, defaultHeight = 240, leftOffset = 0 }
             }}
             className="h-1 cursor-ns-resize hover:bg-border"
           />
+          {header}
           <div role="tablist" className="flex items-center px-3 border-b border-border h-9 flex-shrink-0">
             {TAB_ORDER.map((tab) => (
               <button

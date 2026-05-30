@@ -47,6 +47,7 @@ import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
 import { MobileMultiChipView } from './multi-mcu/MobileMultiChipView';
 import { PropertiesGate } from './multi-mcu/PropertiesGate';
+import { ChipTabsBar } from './multi-mcu/ChipTabsBar';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -1566,6 +1567,7 @@ export function App() {
   const renderDevDrawer = (devMode: boolean, leftOffset: number) => (
     <PropertiesGate>
     <DevDrawer
+      header={<ChipTabsBar />}
       devMode={devMode}
       leftOffset={leftOffset}
       tabs={{

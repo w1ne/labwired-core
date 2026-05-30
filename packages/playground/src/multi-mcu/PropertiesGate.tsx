@@ -1,27 +1,21 @@
-// Wraps the bottom Serial/Registers/Trace/Memory/Source/YAML
-// drawer with:
-//   - a chip tab row at the very top (VS Code-style file tabs)
-//     that lets the user pick which MCU's properties to inspect;
-//     each tab also has an X to remove the chip,
-//   - a close button on desktop (mobile dismiss is via back arrow
-//     in MobileMultiChipView's drawer header).
+// Wraps the bottom dev drawer with:
+//   - visibility gate (chips.propertiesOpen),
+//   - desktop close button (mobile uses MobileMultiChipView's back).
 //
-// The chip tabs replace the floating McuStrip — one source of
-// truth for chip switching: the drawer that owns the properties
-// also owns the switcher. Adding new MCUs still goes through the
-// ⌘K command palette.
+// The chip-switcher tabs are NOT here — they live inside the
+// DevDrawer itself via its `header` slot (see ChipTabsBar), so
+// they stay glued to the drawer's top edge no matter how the
+// user resizes its height.
 import { useEffect, useState, type ReactNode } from 'react';
 import { useChips } from './ChipsProvider';
-import { McuThumb } from './McuThumb';
 import './properties-gate.css';
 
 export function PropertiesGate({ children }: { children: ReactNode }) {
-  const { propertiesOpen, setPropertiesOpen, activeChipId, setActiveChipId, sessions, order, removeChip } = useChips();
+  const { propertiesOpen, setPropertiesOpen } = useChips();
   const isMobile = useIsMobile();
   if (!propertiesOpen) return null;
   return (
     <>
-      {/* Desktop close pill (mobile drawer has its own back). */}
       {!isMobile && (
         <button
           type="button"
@@ -32,52 +26,6 @@ export function PropertiesGate({ children }: { children: ReactNode }) {
           ×
         </button>
       )}
-      {/* Chip tab row — VS Code style. One tab per MCU. Click
-          switches the active chip whose properties are shown in
-          the drawer below. Each tab carries its PCB thumbnail so
-          the user can match the canvas to the drawer at a glance. */}
-      <div className="lw-chip-tabs" role="tablist" aria-label="MCU instances">
-        {order.map((chipId) => {
-          const session = sessions[chipId];
-          if (!session) return null;
-          const isActive = chipId === activeChipId;
-          return (
-            <div
-              key={chipId}
-              role="tab"
-              aria-selected={isActive}
-              data-active={isActive ? 'true' : 'false'}
-              className="lw-chip-tab"
-            >
-              <button
-                type="button"
-                className="lw-chip-tab-focus"
-                onClick={() => setActiveChipId(chipId)}
-              >
-                <span className="lw-chip-tab-thumb">
-                  <McuThumb session={session} width={28} height={18} />
-                </span>
-                <span className="lw-chip-tab-id">{session.chipId}</span>
-                <span className="lw-chip-tab-board">{session.board.name}</span>
-              </button>
-              {chipId !== 'chip-default' && (
-                <button
-                  type="button"
-                  className="lw-chip-tab-remove"
-                  aria-label={`Remove ${chipId}`}
-                  title={`Remove ${chipId}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeChip(chipId);
-                  }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
       {children}
     </>
   );
