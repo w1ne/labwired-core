@@ -56,6 +56,16 @@ fn pend_nvic(
     }
 }
 
+impl SystemBus {
+    /// Phase 2B.1 (issue #192): pend an NVIC IRQ on behalf of an event
+    /// handler. Mirrors the per-tick `pend_nvic` path but collects
+    /// non-NVIC fallthroughs into the supplied vector for the caller to
+    /// forward to `cpu.set_exception_pending`.
+    pub fn pend_irq_for_event(&self, irq: u32, fallthrough: &mut Vec<u32>) {
+        pend_nvic(&self.nvic, fallthrough, irq);
+    }
+}
+
 pub struct PeripheralEntry {
     pub name: String,
     pub base: u64,
@@ -63,6 +73,10 @@ pub struct PeripheralEntry {
     pub irq: Option<u32>,
     pub dev: Box<dyn Peripheral>,
     pub ticks_remaining: u64,
+    /// Phase 2B.1 (issue #192): lazy cancel token for the event scheduler.
+    /// Bumped when the peripheral resets; `EventScheduler::drain_due` drops
+    /// entries whose generation no longer matches the snapshot.
+    pub generation: u32,
 }
 
 pub struct SystemBus {
@@ -498,6 +512,7 @@ impl SystemBus {
                     irq: Some(37),
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
+                    generation: 0,
                 },
                 PeripheralEntry {
                     name: "gpioa".to_string(),
@@ -506,6 +521,7 @@ impl SystemBus {
                     irq: None,
                     dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
                     ticks_remaining: 0,
+                    generation: 0,
                 },
                 PeripheralEntry {
                     name: "rcc".to_string(),
@@ -514,6 +530,7 @@ impl SystemBus {
                     irq: None,
                     dev: Box::new(crate::peripherals::rcc::Rcc::new()),
                     ticks_remaining: 0,
+                    generation: 0,
                 },
                 PeripheralEntry {
                     name: "systick".to_string(),
@@ -522,6 +539,7 @@ impl SystemBus {
                     irq: Some(15),
                     dev: Box::new(crate::peripherals::systick::Systick::new()),
                     ticks_remaining: 0,
+                    generation: 0,
                 },
             ],
             nvic: None,
@@ -583,8 +601,17 @@ impl SystemBus {
             irq,
             dev,
             ticks_remaining: 0,
+            generation: 0,
         });
         self.rebuild_peripheral_ranges();
+    }
+
+    /// Phase 2B.1 (issue #192): snapshot of every peripheral's lazy-cancel
+    /// generation, indexed by `peripheral_idx`. Threaded into
+    /// `EventScheduler::drain_due` / `next_event_deadline` so stale events
+    /// (scheduled before a peripheral reset) are dropped.
+    pub fn peripheral_generations(&self) -> Vec<u32> {
+        self.peripherals.iter().map(|p| p.generation).collect()
     }
 
     /// Look up a registered ROM thunk by absolute PC.
@@ -1140,6 +1167,7 @@ impl SystemBus {
                 irq,
                 dev,
                 ticks_remaining: 0,
+                generation: 0,
             });
         }
 
@@ -2508,6 +2536,7 @@ mod tests {
                     irq: None,
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
+                    generation: 0,
                 },
                 PeripheralEntry {
                     name: "low".to_string(),
@@ -2516,6 +2545,7 @@ mod tests {
                     irq: None,
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
+                    generation: 0,
                 },
             ],
             nvic: None,
@@ -2566,6 +2596,7 @@ mod tests {
                 irq: Some(16),
                 dev: Box::new(crate::peripherals::dma::Dma1::new()),
                 ticks_remaining: 0,
+                generation: 0,
             }],
             nvic: None,
             observers: Vec::new(),

@@ -19,6 +19,7 @@ pub mod network;
 pub mod peripherals;
 pub mod physics;
 pub mod runtime_snapshot;
+pub mod sched;
 pub mod signals;
 pub mod snapshot;
 pub mod system;
@@ -422,6 +423,38 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn restore_runtime_snapshot(&mut self, _bytes: &[u8]) -> SimResult<()> {
         Ok(())
     }
+
+    /// Phase 2B.1 (issue #192): event-driven peripheral scheduler hook.
+    /// Default returns an empty result; peripherals that opt in
+    /// (`uses_scheduler() == true`) override to interpret `event_token`
+    /// via their own internal token enum and produce side-effects via
+    /// the shared `EventResult` channel.
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut sched::EventScheduler,
+        _bus: &mut dyn Bus,
+    ) -> sched::EventResult {
+        sched::EventResult::default()
+    }
+
+    /// Phase 2B.1: synchronously notified when a subscribed clock domain
+    /// changes rate. Implementations typically cancel in-flight events and
+    /// reschedule at the new cadence. Default no-op.
+    fn on_clock_change(
+        &mut self,
+        _domain: sched::ClockDomain,
+        _new_hz: u64,
+        _sched: &mut sched::EventScheduler,
+    ) {
+    }
+
+    /// Phase 2B.1: when `true`, `Machine::step` skips this peripheral's
+    /// legacy `tick()` walk and relies on the scheduler to drive it. Default
+    /// `false` preserves existing per-cycle tick behaviour.
+    fn uses_scheduler(&self) -> bool {
+        false
+    }
 }
 
 /// Trait representing the system bus
@@ -585,6 +618,15 @@ pub struct Machine<C: Cpu> {
     pub last_breakpoint: Option<u32>,
     pub total_cycles: u64,
     pub config: SimulationConfig,
+
+    /// Phase 2B.1 (issue #192): event-driven peripheral scheduler. Active
+    /// behaviour is gated behind the `event-scheduler` feature; the field
+    /// is always present so other crates can borrow it without cfg gates.
+    pub sched: sched::EventScheduler,
+    /// Phase 2B.1: clock domain registry + observer fan-out. Wiring to
+    /// real ESP32 register writes lands with the DPORT / RTC_CNTL
+    /// migration PRs (design §12a).
+    pub clocks: sched::ClockGraph,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -598,6 +640,8 @@ impl<C: Cpu> Machine<C> {
             last_breakpoint: None,
             total_cycles: 0,
             config: SimulationConfig::default(),
+            sched: sched::EventScheduler::new(),
+            clocks: sched::ClockGraph::new(),
         }
     }
 
@@ -759,6 +803,35 @@ impl<C: Cpu> Machine<C> {
             }
         }
 
+        // Phase 2B.1 (issue #192): event-driven peripheral scheduler.
+        // With the `event-scheduler` flag OFF this block compiles out
+        // entirely and behaviour matches pre-2B `main`. With the flag ON
+        // and no peripheral opted in (`uses_scheduler() == false` for
+        // everyone) the drain is a no-op — the legacy `tick()` walk
+        // above still drives every peripheral until each migrates.
+        #[cfg(feature = "event-scheduler")]
+        {
+            self.sched.advance_to(self.total_cycles);
+            let generations = self.bus.peripheral_generations();
+            let due = self.sched.drain_due(&generations);
+            for ev in due {
+                let idx = ev.peripheral_idx as usize;
+                let Some(entry) = self.bus.peripherals.get_mut(idx) else {
+                    continue;
+                };
+                // SAFETY-equivalent: swap the peripheral out so we can pass
+                // `&mut self.bus` into `on_event` without holding two
+                // simultaneous mutable borrows. Same dance the bus uses for
+                // `tick_with_bus`.
+                let placeholder: Box<dyn Peripheral> =
+                    Box::new(crate::peripherals::stub::StubPeripheral::new(0));
+                let mut dev = std::mem::replace(&mut entry.dev, placeholder);
+                let result = dev.on_event(ev.event_token, &mut self.sched, &mut self.bus);
+                self.bus.peripherals[idx].dev = dev;
+                self.apply_event_result(idx, result);
+            }
+        }
+
         // RTC_CNTL software system reset (OPTIONS0 bit 31 / `SW_SYS_RST`).
         // The ESP32 BROM's `_rtc_trigger_sw_system_reset` writes this bit
         // and expects execution NOT to return from the store — on real
@@ -775,6 +848,61 @@ impl<C: Cpu> Machine<C> {
         }
 
         Ok(())
+    }
+
+    /// Phase 2B.1 (issue #192): fan out the side-effects produced by a
+    /// `Peripheral::on_event` handler. Mirrors the post-`tick()` fan-out
+    /// in `tick_peripherals_phase1`: IRQ pend, system exception, mmio
+    /// writes, PPI fired_events globalisation, DMA execute. No peripheral
+    /// opts into the scheduler in 2B.1, so this code only runs when the
+    /// `event-scheduler` feature is on AND a peripheral overrides
+    /// `uses_scheduler()` in a later migration PR.
+    #[cfg(feature = "event-scheduler")]
+    fn apply_event_result(&mut self, peripheral_idx: usize, result: sched::EventResult) {
+        let base = self.bus.peripherals[peripheral_idx].base as u32;
+        let mut fallthrough: Vec<u32> = Vec::new();
+        if let Some(irq) = result.raise_irq {
+            self.bus.pend_irq_for_event(irq, &mut fallthrough);
+        }
+        for irq in &result.explicit_irqs {
+            self.bus.pend_irq_for_event(*irq, &mut fallthrough);
+        }
+        if let Some(exc) = result.system_exception {
+            self.cpu.set_exception_pending(exc);
+        }
+        for irq in fallthrough {
+            self.cpu.set_exception_pending(irq);
+        }
+        for (addr, val) in result.mmio_writes {
+            if let Err(e) = self.bus.write_u32(addr as u64, val) {
+                tracing::warn!(
+                    "on_event mmio_write 0x{addr:08X} = 0x{val:08X} failed: {e:?}"
+                );
+            }
+        }
+        // PPI fan-out: globalise event offsets to absolute bus addresses and
+        // route through any peripheral that overrides `route_ppi_events`.
+        if !result.fired_events.is_empty() {
+            let fired_global: Vec<u32> = result
+                .fired_events
+                .iter()
+                .map(|off| base.wrapping_add(*off))
+                .collect();
+            let mut pending_tasks: Vec<u32> = Vec::new();
+            for p in self.bus.peripherals.iter_mut() {
+                pending_tasks.extend(p.dev.route_ppi_events(&fired_global));
+            }
+            for task_addr in pending_tasks {
+                if let Err(e) = self.bus.write_u32(task_addr as u64, 1) {
+                    tracing::warn!("on_event PPI task 0x{task_addr:08X} failed: {e:?}");
+                }
+            }
+        }
+        if !result.dma_requests.is_empty() {
+            if let Err(e) = self.bus.execute_dma(&result.dma_requests) {
+                tracing::warn!("on_event execute_dma failed: {e:?}");
+            }
+        }
     }
 
     /// Returns true (and clears the latch) if any registered RTC_CNTL

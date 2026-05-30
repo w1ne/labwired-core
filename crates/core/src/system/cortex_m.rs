@@ -54,6 +54,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             irq: None,
             dev: Box::new(scb),
             ticks_remaining: 0,
+            generation: 0,
         });
     }
 
@@ -77,6 +78,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             irq: None,
             dev: Box::new(nvic),
             ticks_remaining: 0,
+            generation: 0,
         });
     }
 
@@ -102,6 +104,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             irq: None,
             dev: Box::new(dwt),
             ticks_remaining: 0,
+            generation: 0,
         });
     }
 
