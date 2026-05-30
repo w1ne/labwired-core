@@ -65,6 +65,25 @@ impl SystemBus {
         pend_nvic(&self.nvic, fallthrough, irq);
     }
 
+    /// Route a peripheral DMA signal (`source_name` + `request_id`) to its
+    /// target DMA channel. Single source of truth shared by the legacy
+    /// `tick_peripherals_with_costs` path and the event path
+    /// (`Machine::apply_event_result`), so both behave identically.
+    pub fn route_dma_signal(&mut self, source_name: &str, request_id: u32) {
+        // Simplified routing for Top-5 targets (e.g. STM32F1):
+        // UART1_TX (signal ID 1) -> DMA1 Channel 1 (H5 uses GPDMA; mocked here).
+        let target_dma = if (source_name == "uart1" || source_name == "uart3") && request_id == 1 {
+            Some(("dma1", 1))
+        } else {
+            None
+        };
+        if let Some((dma_name, channel)) = target_dma {
+            if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
+                self.peripherals[p_idx].dev.dma_request(channel);
+            }
+        }
+    }
+
     /// Phase 2B.2 (issue #192): if the peripheral at `idx` is scheduler-driven,
     /// advance its lazy state to the current peripheral-tick index before an
     /// MMIO write observes it. The tick index is `current_cycle /
@@ -1885,21 +1904,7 @@ impl SystemBus {
 
         // Phase 1.5: Route DMA signals
         for (source_name, request_id) in dma_signals {
-            // Simplified routing for Top-5 targets (e.g. STM32F1)
-            // UART1_TX (signal ID 1) -> DMA1 Channel 4
-            // This would ideally be in a system-specific routing table
-            let target_dma =
-                if (source_name == "uart1" || source_name == "uart3") && request_id == 1 {
-                    Some(("dma1", 1)) // H5 uses GPDMA, but for our mock we map it to channel 1
-                } else {
-                    None
-                };
-
-            if let Some((dma_name, channel)) = target_dma {
-                if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
-                    self.peripherals[p_idx].dev.dma_request(channel);
-                }
-            }
+            self.route_dma_signal(&source_name, request_id);
         }
 
         // Phase 2: Execute DMA requests (this now has access to self.flash/ram via write_u8)

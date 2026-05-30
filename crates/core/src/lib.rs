@@ -657,6 +657,12 @@ pub struct Machine<C: Cpu> {
     /// indexed access + one downcast. `None` for configs that don't register
     /// an RTC_CNTL peripheral (every non-ESP32-classic target).
     rtc_cntl_index: Option<usize>,
+    /// Phase 2B.3b (issue #192): whether the one-time scheduler bootstrap has
+    /// run. On the first `drain_scheduler_events`, peripherals with setup-time
+    /// work (e.g. a UART with an RX stream attached before any MMIO write) get
+    /// one chance to schedule their initial events. Always present; only read
+    /// under the `event-scheduler` feature.
+    scheduler_bootstrapped: bool,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -679,6 +685,7 @@ impl<C: Cpu> Machine<C> {
             sched: sched::EventScheduler::new(),
             clocks: sched::ClockGraph::new(),
             rtc_cntl_index,
+            scheduler_bootstrapped: false,
         }
     }
 
@@ -888,6 +895,19 @@ impl<C: Cpu> Machine<C> {
     /// and we convert to an absolute deadline here.
     #[cfg(feature = "event-scheduler")]
     fn drain_scheduler_events(&mut self) {
+        // One-time bootstrap: give every scheduler-driven peripheral a chance
+        // to schedule events that arise from *setup* rather than an MMIO write
+        // (e.g. a UART with an RX stream attached before firmware runs).
+        if !self.scheduler_bootstrapped {
+            self.scheduler_bootstrapped = true;
+            for idx in 0..self.bus.peripherals.len() {
+                if self.bus.peripherals[idx].dev.uses_scheduler() {
+                    for (delay, token) in self.bus.peripherals[idx].dev.take_scheduled_events() {
+                        self.bus.pending_schedule.push((idx, delay, token));
+                    }
+                }
+            }
+        }
         let interval = (self.config.peripheral_tick_interval as u64).max(1);
         self.sched.advance_to(self.total_cycles / interval);
         let now = self.sched.now();
@@ -915,6 +935,15 @@ impl<C: Cpu> Machine<C> {
             let mut dev = std::mem::replace(&mut entry.dev, placeholder);
             let result = dev.on_event(ev.event_token, &mut self.sched, &mut self.bus);
             self.bus.peripherals[idx].dev = dev;
+            // Phase 2B.3b: a level-triggered peripheral re-arms its own event
+            // (same token) while it has active work. We own the (idx,
+            // generation) the scheduler needs, so we do it here.
+            if let Some(delay) = result.reschedule_delay {
+                let gen = self.bus.peripherals[idx].generation;
+                let deadline = self.sched.now() + delay;
+                self.sched
+                    .schedule(deadline, idx as u32, ev.event_token, gen);
+            }
             self.apply_event_result(idx, result);
         }
     }
@@ -933,8 +962,22 @@ impl<C: Cpu> Machine<C> {
         if let Some(irq) = result.raise_irq {
             self.bus.pend_irq_for_event(irq, &mut fallthrough);
         }
+        // Phase 2B.3b: pend the peripheral's *own* configured NVIC line — the
+        // event-path equivalent of the legacy `tick()` returning `irq: true`.
+        if result.raise_own_irq {
+            if let Some(irq) = self.bus.peripherals[peripheral_idx].irq {
+                self.bus.pend_irq_for_event(irq, &mut fallthrough);
+            }
+        }
         for irq in &result.explicit_irqs {
             self.bus.pend_irq_for_event(*irq, &mut fallthrough);
+        }
+        // Phase 2B.3b: route DMA signals exactly as the legacy tick path does.
+        if !result.dma_signals.is_empty() {
+            let source_name = self.bus.peripherals[peripheral_idx].name.clone();
+            for sig in &result.dma_signals {
+                self.bus.route_dma_signal(&source_name, *sig);
+            }
         }
         if let Some(exc) = result.system_exception {
             self.cpu.set_exception_pending(exc);
