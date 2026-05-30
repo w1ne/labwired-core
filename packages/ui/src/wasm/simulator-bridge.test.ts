@@ -58,3 +58,28 @@ describe('SimulatorBridge board-IO normalization', () => {
     expect(states[0].value).toBe(2048);
   });
 });
+
+describe('SimulatorBridge cycle accounting', () => {
+  it('does not produce NaN cycles when the ESP32 aided step returns no count', () => {
+    // The ESP32 dual-core aided step path can return undefined while still
+    // advancing the batch; accumulating that raw turned totalCycles into NaN.
+    const bridge = bridgeWith({
+      install_arduino_esp32_quirks: () => {},
+      step_with_esp32_aids: () => undefined,
+      step_batch: () => 1000,
+      get_pc: () => 0x400d0000,
+    });
+    bridge.installArduinoEsp32QuirksAutodiscover(new Uint8Array([0]));
+    const executed = bridge.stepBatch(500_000);
+    expect(Number.isFinite(executed)).toBe(true);
+    expect(executed).toBe(500_000); // falls back to the requested batch size
+    expect(Number.isFinite(bridge.totalCycles)).toBe(true);
+    expect(bridge.totalCycles).toBe(500_000);
+  });
+
+  it('uses the real count when the step returns one (STM32 path)', () => {
+    const bridge = bridgeWith({ step_batch: () => 250_000, get_pc: () => 0 });
+    bridge.stepBatch(500_000);
+    expect(bridge.totalCycles).toBe(250_000);
+  });
+});

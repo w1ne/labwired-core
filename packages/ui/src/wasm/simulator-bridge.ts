@@ -328,9 +328,13 @@ export class SimulatorBridge {
   stepBatch(maxCycles: number): number {
     // Route ESP32-classic firmware that needs the dual-core handshake
     // refresh through the aided step function — keeps loopTask alive.
-    const executed = this._esp32ArduinoQuirks
+    const raw = this._esp32ArduinoQuirks
       ? this.sim.step_with_esp32_aids(maxCycles)
       : this.sim.step_batch(maxCycles);
+    // The aided ESP32 step path can return undefined (no count) even though it
+    // advanced the batch — accumulating that directly turns `_cycles` into NaN.
+    // Fall back to the requested batch size, which is what it just ran.
+    const executed = Number.isFinite(raw as number) ? (raw as number) : maxCycles;
     this._cycles += executed;
     return executed;
   }
