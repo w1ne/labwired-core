@@ -56,6 +56,7 @@ import { ChipWindow } from './multi-mcu/ChipWindow';
 import { ChipInspector } from './multi-mcu/ChipInspector';
 import { McuStrip } from './multi-mcu/McuStrip';
 import { BleAnalyzer } from './instruments/BleAnalyzer';
+import { ToolsMenu } from './studio/ToolsMenu';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -2143,14 +2144,17 @@ export function App() {
             >
               <SidebarRightIcon size={14} />
             </button>
-            <button
-              className={`toolbar-btn toolbar-btn-ghost ${showAnalyzer ? 'active' : ''}`}
-              onClick={() => setShowAnalyzer((v) => !v)}
-              aria-pressed={showAnalyzer}
-              title="Toggle BLE packet analyzer"
-            >
-              Analyzer
-            </button>
+            <ToolsMenu
+              tools={[
+                {
+                  id: 'air-tracer',
+                  label: 'Air Tracer · BLE',
+                  description: 'Catch virtual-air frames (CRC)',
+                  active: showAnalyzer,
+                  onToggle: () => setShowAnalyzer((v) => !v),
+                },
+              ]}
+            />
           </div>
 
           <div className="header-separator" />
