@@ -40,6 +40,7 @@ import {
   type ComponentState,
 } from '@labwired/ui';
 import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
+import { resolveBoardForPart } from './board-resolve';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { StudioShell } from './studio/StudioShell';
@@ -524,12 +525,11 @@ function formatRuntime(ms: number): string {
 }
 
 function mcuBoardForPart(
-  part: { id: string; type: string } | undefined,
+  part: { id: string; type: string; attrs?: Record<string, unknown> | null } | undefined,
   primaryBoard: BoardConfig,
 ): BoardConfig | null {
   if (!part) return null;
-  if (part.id === 'mcu') return primaryBoard;
-  return BOARD_CONFIGS.find((b) => b.mcuComponentType === part.type) ?? null;
+  return resolveBoardForPart(part, primaryBoard, BOARD_CONFIGS);
 }
 
 function EmptyTabState({ label }: { label: string }) {
