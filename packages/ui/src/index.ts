@@ -65,7 +65,7 @@ export { validateDiagram, validateWireConnection } from './editor/circuitValidat
 export { diagnoseDiagram } from './editor/circuitDiagnostics';
 export type { Diagnostic, DiagnosticCode, DiagnosticSeverity } from './editor/circuitDiagnostics';
 export { routeWire } from './editor/wire-router';
-export { getPinMapping, findPinFunction } from './editor/pin-mapping';
+export { getPinMapping, findPinFunction, PIN_MAPS } from './editor/pin-mapping';
 export type { PinFunction, PinMapping } from './editor/pin-mapping';
 export { COMPONENT_REGISTRY, getComponentsByCategory } from './editor/components/index';
 export type {

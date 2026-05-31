@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPinMapping } from '@labwired/ui';
+import { getPinMapping, PIN_MAPS, COMPONENT_REGISTRY } from '@labwired/ui';
 import { BOARD_CONFIGS, pickerBoards } from './bundled-configs';
 import { STARTER_LABS } from './studio/ChipRow';
 
@@ -131,6 +131,42 @@ describe('BOARD_CONFIGS', () => {
     expect(
       missing,
       `STARTER_LABS examples whose chipId is absent from the pin-mapping — add it to packages/ui/src/editor/pin-mapping.ts: ${missing.join(', ')}`,
+    ).toHaveLength(0);
+  });
+
+  // ── Chip-onboarding invariants ────────────────────────────────────────────
+  // These tests codify the "definition of done" for adding a new chip.
+  // A half-onboarded chip (e.g. in BOARD_CONFIGS but missing from PIN_MAPS)
+  // will break the circuit validator with "Pin X is not available on this board
+  // model". See docs/guides/onboarding-a-chip.md for the full procedure.
+
+  it('every BOARD_CONFIGS.chipId is a key in PIN_MAPS (circuit-validator soundness)', () => {
+    const offenders = BOARD_CONFIGS.filter((b) => !(b.chipId in PIN_MAPS)).map(
+      (b) => `boardId="${b.boardId}" chipId="${b.chipId}"`,
+    );
+    expect(
+      offenders,
+      `BOARD_CONFIGS entries whose chipId is missing from PIN_MAPS — add the chipId alias to packages/ui/src/editor/pin-mapping.ts: ${offenders.join(', ')}`,
+    ).toHaveLength(0);
+  });
+
+  it('every BOARD_CONFIGS.mcuComponentType is registered in COMPONENT_REGISTRY', () => {
+    const offenders = BOARD_CONFIGS.filter((b) => !COMPONENT_REGISTRY.has(b.mcuComponentType)).map(
+      (b) => `boardId="${b.boardId}" mcuComponentType="${b.mcuComponentType}"`,
+    );
+    expect(
+      offenders,
+      `BOARD_CONFIGS entries whose mcuComponentType is missing from COMPONENT_REGISTRY — register it in packages/ui/src/editor/components/index.ts: ${offenders.join(', ')}`,
+    ).toHaveLength(0);
+  });
+
+  it('every BOARD_CONFIGS entry has a non-empty chipYaml (sim always has a chip model)', () => {
+    const offenders = BOARD_CONFIGS.filter((b) => !b.chipYaml || b.chipYaml.trim().length === 0).map(
+      (b) => b.boardId,
+    );
+    expect(
+      offenders,
+      `BOARD_CONFIGS entries with empty chipYaml — every board must point to a chip YAML: ${offenders.join(', ')}`,
     ).toHaveLength(0);
   });
 

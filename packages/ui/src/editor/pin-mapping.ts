@@ -330,15 +330,21 @@ const ESP32_PINS: Record<string, PinMapping> = {
   ),
 };
 
-const PIN_MAPS: Record<string, Record<string, PinMapping>> = {
+export const PIN_MAPS: Record<string, Record<string, PinMapping>> = {
   stm32f103: STM32F103_PINS,
   stm32f401: STM32F103_PINS, // Similar enough for now
+  stm32f401cdu6: STM32F103_PINS, // Black Pill F401CDU6 — same PA/PB/PC GPIO scheme; TODO: dedicated map
   stm32l476: STM32L476_PINS,
   stm32h563: STM32H563_PINS,
   rp2040: RP2040_PINS,
   nrf52840: NRF52840_PINS,
+  'nrf52840-onboarding': NRF52840_PINS, // Full-peripheral onboarding variant — identical GPIO bank layout
   esp32: ESP32_PINS,
   esp32c3: ESP32C3_PINS,
+  // ESP32-S3 has 45 usable GPIOs (0-21, 26-48) vs classic ESP32's non-contiguous set;
+  // ESP32_PINS covers the overlapping range well enough to stop false "pin not available"
+  // errors. A dedicated ESP32S3_PINS with the full 45-pin set is a TODO.
+  esp32s3: ESP32_PINS,
 };
 
 /**

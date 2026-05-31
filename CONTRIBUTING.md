@@ -50,5 +50,12 @@ docker run --rm labwired-test
     - **Coverage**: We use `tarpaulin` for coverage. Ensuring high coverage is encouraged.
 
 
+## Adding a New Chip
+
+To add support for a new MCU or board, follow the step-by-step checklist in
+[docs/guides/onboarding-a-chip.md](docs/guides/onboarding-a-chip.md).
+It covers every touchpoint (sim model, pin-mapping, board catalog, editor
+component) and the CI tests that enforce the procedure.
+
 ## Reporting Issues
 Please open an issue on GitHub describing the bug or feature request clearly.
