@@ -1807,8 +1807,6 @@ export function App() {
         onPause={handlePause}
         onStep={() => requireAuth(handleStep)}
         onReset={handleReset}
-        analyzerOpen={showAnalyzer}
-        onToggleAnalyzer={() => setShowAnalyzer((v) => !v)}
       />
     </div>
   );
@@ -2502,6 +2500,7 @@ export function App() {
             type="button"
             className="text-fg-tertiary hover:text-fg-primary text-[12px] px-1"
             title="Close analyzer"
+            aria-label="Close analyzer"
             onClick={() => setShowAnalyzer(false)}
           >
             ✕
