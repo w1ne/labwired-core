@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD_CONFIGS } from './bundled-configs';
+import { BOARD_CONFIGS, pickerBoards } from './bundled-configs';
+import { STARTER_LABS } from './studio/ChipRow';
 
 describe('BOARD_CONFIGS', () => {
   it('loads bundled manifests directly from the engine-owned YAML files', () => {
@@ -68,6 +69,34 @@ describe('BOARD_CONFIGS', () => {
     expect(adxl345?.systemYaml).toContain('type: "adxl345"');
     expect(adxl345?.systemYaml).toContain('kind: "i2c_device"');
     expect(adxl345?.demoFirmwarePath).toContain('demo-adxl345-sensor-lab.elf');
+  });
+
+  it('pickerBoards() contains no kind:"lab" entries — labs belong in Examples, not Boards', () => {
+    const labsInPicker = pickerBoards().filter((b) => b.kind === 'lab');
+    expect(
+      labsInPicker,
+      `Boards picker must never include kind:"lab" entries. Offenders: ${labsInPicker.map((b) => b.boardId).join(', ')}`,
+    ).toHaveLength(0);
+  });
+
+  it('every non-hidden kind:"lab" board is surfaced in STARTER_LABS as an Example', () => {
+    const starterIds = new Set(STARTER_LABS.map((l) => l.id));
+    const unsurfaced = BOARD_CONFIGS.filter(
+      (b) => b.kind === 'lab' && !b.hidden && !starterIds.has(b.boardId),
+    );
+    expect(
+      unsurfaced,
+      `Non-hidden labs missing from STARTER_LABS (must be surfaced as Examples): ${unsurfaced.map((b) => b.boardId).join(', ')}`,
+    ).toHaveLength(0);
+  });
+
+  it('every STARTER_LABS id resolves to a real BOARD_CONFIGS entry — no dangling examples', () => {
+    const boardIds = new Set(BOARD_CONFIGS.map((c) => c.boardId));
+    const dangling = STARTER_LABS.filter((l) => !boardIds.has(l.id));
+    expect(
+      dangling,
+      `STARTER_LABS entries with no matching BOARD_CONFIGS boardId: ${dangling.map((l) => l.id).join(', ')}`,
+    ).toHaveLength(0);
   });
 
   it('keeps demo-assets.json aligned with BoardConfig.boardId', async () => {

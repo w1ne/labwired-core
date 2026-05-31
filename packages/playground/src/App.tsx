@@ -39,7 +39,7 @@ import {
   type BoardIoBinding,
   type ComponentState,
 } from '@labwired/ui';
-import { BOARD_CONFIGS, type BoardConfig } from './bundled-configs';
+import { BOARD_CONFIGS, pickerBoards, type BoardConfig } from './bundled-configs';
 import { resolveBoardForPart } from './board-resolve';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
@@ -1730,9 +1730,7 @@ export function App() {
 
   // Command palette items
   const commandItems = useCommandPaletteItems({
-    // Labs (kind: 'lab') are demos with prebuilt firmware — they belong in the
-    // Examples bucket (STARTER_LABS), not Boards. Boards = bare MCUs to build on.
-    boards: BOARD_CONFIGS.filter((b) => !b.hidden && b.kind !== 'lab'),
+    boards: pickerBoards(),
     onLoadBoard: handleBoardSelect,
     onPickLab: handlePickLab,
     onAddComponent: (type) => {

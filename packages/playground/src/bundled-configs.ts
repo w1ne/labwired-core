@@ -215,6 +215,9 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceEpaperTricolor,
     sourceFilename: 'epaper-tricolor-lab/src/main.rs',
     kind: 'lab',
+    // Superseded by labwired-ereader (Arduino-ESP32 + GxEPD2); kept resolvable
+    // by boardId for legacy URLs but hidden from all user-facing pickers.
+    hidden: true,
   },
   {
     boardId: 'esp32-epaper-lab',
@@ -229,6 +232,9 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceEsp32Epaper,
     sourceFilename: 'esp32-epaper-lab/src/main.rs',
     kind: 'lab',
+    // Superseded by labwired-ereader (Arduino-ESP32 + GxEPD2); kept resolvable
+    // by boardId for legacy URLs but hidden from all user-facing pickers.
+    hidden: true,
   },
   {
     // `labwired-ereader.ino` compiled against Arduino-ESP32 + GxEPD2 +
@@ -441,6 +447,12 @@ export const BOARD_CONFIGS: BoardConfig[] = [
 ];
 
 export const BOARD_CONFIG_MAP = new Map(BOARD_CONFIGS.map((c) => [c.boardId, c]));
+
+/** Boards shown in the palette "Boards" picker: bare MCUs only — labs are
+ *  Examples (see STARTER_LABS), not boards to build on. */
+export function pickerBoards(configs: BoardConfig[] = BOARD_CONFIGS): BoardConfig[] {
+  return configs.filter((b) => !b.hidden && b.kind !== 'lab');
+}
 
 export function getBoardConfigForChip(chipId: string): BoardConfig | undefined {
   return BOARD_CONFIGS.find((c) => c.chipId === chipId);
