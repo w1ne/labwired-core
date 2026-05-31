@@ -54,7 +54,6 @@ import { ChipControls } from './multi-mcu/ChipControls';
 import { usePerChipSims } from './multi-mcu/usePerChipSims';
 import { ChipWindow } from './multi-mcu/ChipWindow';
 import { ChipInspector } from './multi-mcu/ChipInspector';
-import { McuStrip } from './multi-mcu/McuStrip';
 import { BleAnalyzer } from './instruments/BleAnalyzer';
 import { ToolsMenu } from './studio/ToolsMenu';
 import { AuthPill } from './studio/AuthPill';
@@ -2001,11 +2000,6 @@ export function App() {
       devMode={showCode}
     >
     <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
-    {/* Multi-MCU switcher — one tile per chip in the session. Self-hides for a
-        single chip; appears once a second board is added (⌘K → pick a board),
-        letting you switch the active/foreground chip. This is what surfaces the
-        two-board comms demo on desktop. */}
-    {!embed && <McuStrip />}
     <div data-legacy-shell="true" className={`playground${showCode ? ' code-open' : ''}`}>
       {/* ===== Header ===== */}
       {!embed && (
