@@ -512,10 +512,6 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   'shift-register-74hc595': 'misc',
 };
 
-// Resolve an MCU diagram part to its BoardConfig. The primary 'mcu'
-// part IS the active board; any other part whose type matches a
-// board's mcuComponentType (e.g. a dropped 'nrf52840-dk') resolves
-// to that board. Returns null for non-MCU parts (LEDs, wires…).
 // Wall-clock time the MCU has been running, mm:ss.
 function formatRuntime(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -524,6 +520,7 @@ function formatRuntime(ms: number): string {
   return `${mm}:${ss}`;
 }
 
+// Resolve an MCU diagram part to its BoardConfig (see board-resolve.ts).
 function mcuBoardForPart(
   part: { id: string; type: string; attrs?: Record<string, unknown> | null } | undefined,
   primaryBoard: BoardConfig,

@@ -24,7 +24,7 @@ describe('resolveBoardForPart', () => {
   it('returns null when nothing matches', () => {
     expect(resolveBoardForPart(part('mcu-collector', 'no-such-type'), dk, boards)).toBeNull();
   });
-  it('ignores a non-existent attrs.boardId, falling through', () => {
+  it('ignores a non-existent attrs.boardId and falls through to mcuComponentType match (not primaryBoard)', () => {
     expect(resolveBoardForPart(part('mcu-collector', 'nrf52840-dk', { boardId: 'ghost' }), dk, boards)).toBe(dk);
   });
 });
