@@ -1764,7 +1764,7 @@ export function App() {
   // has a runnable config — for the primary that's its source, for any other
   // chip that's an uploaded firmware.
   const renderChipControls = (isPrimary: boolean, variant: 'toolbar' | 'header') => {
-    const canRun = isPrimary || !!activeSimulationConfig;
+    const canRun = isPrimary || !!activeSimulationConfig || !!drawerSubject.board?.demoFirmwarePath;
     return (
       <ChipControls
         variant={variant}
