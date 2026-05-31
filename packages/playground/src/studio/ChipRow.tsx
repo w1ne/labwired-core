@@ -19,6 +19,7 @@ export const STARTER_LABS: StarterLab[] = [
   { id: 'ntc-thermistor-lab', name: 'NTC Thermistor', icon: '🌡️', locked: false },
   { id: 'ili9341-tft-lab', name: 'TFT Color', icon: '🎨', locked: false },
   { id: 'nucleo-f401re', name: 'Nucleo F4', icon: '🔵', locked: false },
+  { id: 'nrf52840-ble-lab', name: 'nRF BLE Lab', icon: '📶', locked: false },
 ];
 
 export interface ChipRowProps {
