@@ -1,7 +1,44 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getPinMapping, PIN_MAPS, COMPONENT_REGISTRY } from '@labwired/ui';
 import { BOARD_CONFIGS, pickerBoards } from './bundled-configs';
 import { STARTER_LABS } from './studio/ChipRow';
+
+// ── Firmware-asset gate helpers ─────────────────────────────────────────────
+// Every board's demoFirmwarePath is fetched by the browser at Run time. If the
+// file isn't actually present in the build, the dev server / Cloudflare Pages
+// serves index.html (HTML, ~2KB) instead and SimulatorBridge.fromConfig chokes
+// → "Simulator init failed". These helpers let the gate below assert each ELF
+// is real, committed, non-empty firmware — deterministically, in CI, before
+// deploy. (public/wasm/.gitignore is '*', so ELFs must be force-added; an
+// un-committed ELF exists on the author's disk but is absent in CI/the deploy.)
+const PLAYGROUND_ROOT = path.resolve(__dirname, '..');
+const PUBLIC_DIR = path.join(PLAYGROUND_ROOT, 'public');
+const REPO_ROOT = path.resolve(PLAYGROUND_ROOT, '../..');
+
+function publicPathForUrl(url: string): string {
+  // vitest has no import.meta.env.BASE_URL, so demoFirmwarePath is a bare
+  // "/…/wasm/foo.elf" or "wasm/foo.elf"; take everything from "wasm/" on.
+  const idx = url.indexOf('wasm/');
+  const rel = idx >= 0 ? url.slice(idx) : url.replace(/^\/+/, '');
+  return path.join(PUBLIC_DIR, rel);
+}
+
+function trackedWasmBasenames(): Set<string> {
+  const out = execFileSync('git', ['ls-files', 'packages/playground/public/wasm'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  });
+  return new Set(
+    out
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((rel) => path.basename(rel)),
+  );
+}
 
 describe('BOARD_CONFIGS', () => {
   it('loads bundled manifests directly from the engine-owned YAML files', () => {
@@ -168,6 +205,54 @@ describe('BOARD_CONFIGS', () => {
       offenders,
       `BOARD_CONFIGS entries with empty chipYaml — every board must point to a chip YAML: ${offenders.join(', ')}`,
     ).toHaveLength(0);
+  });
+
+  // ── Deterministic firmware-asset gate ────────────────────────────────────
+  // The class of bug this prevents: a board's demoFirmwarePath points at an ELF
+  // that is gitignored / 0-byte / missing, so the live site serves HTML in its
+  // place and the user hits "Simulator init failed" on Run. CI fails HERE
+  // instead — making every deploy reproducible from git alone.
+  describe('firmware-asset gate', () => {
+    const firmwareBoards = BOARD_CONFIGS.filter((c) => c.demoFirmwarePath);
+    const tracked = trackedWasmBasenames();
+
+    it('there is at least one firmware board to gate (sanity)', () => {
+      expect(firmwareBoards.length).toBeGreaterThan(0);
+    });
+
+    it.each(firmwareBoards.map((c) => [c.boardId, c.demoFirmwarePath!] as const))(
+      "board '%s' ships a real, committed firmware ELF",
+      (_boardId, url) => {
+        const file = publicPathForUrl(url);
+        const name = path.basename(file);
+
+        // 1. exists on disk
+        let size = -1;
+        try {
+          size = statSync(file).size;
+        } catch {
+          /* falls to the assertion below */
+        }
+        expect(size, `${name} not found at ${file} — firmware missing from public/wasm`).toBeGreaterThanOrEqual(0);
+
+        // 2. git-tracked (present in CI + the Cloudflare deploy, not just the
+        //    author's disk). public/wasm/.gitignore is '*', so it must be force-added.
+        expect(
+          tracked.has(name),
+          `${name} is not git-tracked — it will be ABSENT in CI and the deploy (public/wasm/.gitignore is '*'; force-add it: git add -f packages/playground/public/wasm/${name})`,
+        ).toBe(true);
+
+        // 3. non-empty (catches 0-byte / truncated)
+        expect(size, `${name} is empty (0 bytes)`).toBeGreaterThan(0);
+
+        // 4. real ELF magic 0x7F 'E' 'L' 'F' (catches an HTML/JSON file served as firmware)
+        const head = Array.from(readFileSync(file).subarray(0, 4));
+        expect(
+          head,
+          `${name} does not start with ELF magic 7f 45 4c 46 — not a real firmware ELF (got ${head.map((b) => b.toString(16).padStart(2, '0')).join(' ')})`,
+        ).toEqual([0x7f, 0x45, 0x4c, 0x46]);
+      },
+    );
   });
 
   it('keeps demo-assets.json aligned with BoardConfig.boardId', async () => {
