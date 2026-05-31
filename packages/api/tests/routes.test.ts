@@ -37,6 +37,8 @@ function makeEnv(
     STRIPE_WEBHOOK_SECRET: 'whsec_placeholder',
     PRO_CYCLES_QUOTA: '100000000',
     ENVIRONMENT: 'test',
+    // base64("clerk.labwired.com$") — same value the prod Worker carries.
+    CLERK_PUBLISHABLE_KEY: 'pk_live_Y2xlcmsubGFid2lyZWQuY29tJA',
   };
 }
 
@@ -307,6 +309,61 @@ describe('Unknown routes', () => {
 
     const resp = await worker.default.fetch(req, env as any);
     expect(resp.status).toBe(404);
+  });
+});
+
+// ── MCP OAuth discovery ───────────────────────────────────────────────────
+
+describe('OAuth discovery for /mcp', () => {
+  it('protected-resource metadata advertises an authorization server', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const req = new Request(
+      'https://api.labwired.com/.well-known/oauth-protected-resource/mcp',
+      { method: 'GET' },
+    );
+    const resp = await worker.default.fetch(req, env as any);
+
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as any;
+    // The bug being guarded against: this array used to be missing entirely,
+    // which dead-ended OAuth discovery and forced a manual API key.
+    expect(Array.isArray(body.authorization_servers)).toBe(true);
+    expect(body.authorization_servers).toContain('https://clerk.labwired.com');
+    expect(body.resource).toBe('https://api.labwired.com/mcp');
+    expect(body.scopes_supported).toContain('labwired:mcp');
+    expect(body.bearer_methods_supported).toContain('header');
+    // Browser-facing discovery → must be CORS-reachable.
+    expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  });
+
+  it('the bare protected-resource path resolves to the same document', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const req = new Request(
+      'https://api.labwired.com/.well-known/oauth-protected-resource',
+      { method: 'GET' },
+    );
+    const resp = await worker.default.fetch(req, env as any);
+
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as any;
+    expect(body.authorization_servers).toContain('https://clerk.labwired.com');
+  });
+
+  it('redirects AS-metadata probes to the Clerk issuer', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const req = new Request(
+      'https://api.labwired.com/.well-known/oauth-authorization-server',
+      { method: 'GET', redirect: 'manual' },
+    );
+    const resp = await worker.default.fetch(req, env as any);
+
+    expect(resp.status).toBe(302);
+    expect(resp.headers.get('Location')).toBe(
+      'https://clerk.labwired.com/.well-known/oauth-authorization-server',
+    );
   });
 });
 
