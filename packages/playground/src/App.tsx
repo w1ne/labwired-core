@@ -148,6 +148,24 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     attrs: {},
   };
 
+  if (config.boardId === 'nrf52840-ble-lab') {
+    // Two nRF52840s on one canvas. Each MCU part carries attrs.boardId so the
+    // resolver gives each its own firmware (sensor TX vs collector RX). They
+    // talk over the shared virtual air, not copper — hence no wires. The first
+    // part keeps id 'mcu' so the default foreground (foregroundPartId ?? 'mcu')
+    // targets it on load.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        { id: 'mcu', type: config.mcuComponentType, x: 100, y: 160, rotate: 0,
+          attrs: { boardId: 'nrf52840-ble-sensor' } },
+        { id: 'mcu-collector', type: config.mcuComponentType, x: 560, y: 160, rotate: 0,
+          attrs: { boardId: 'nrf52840-ble-collector' } },
+      ],
+      wires: [],
+    };
+  }
+
   if (config.boardId === 'stm32f103-blinky') {
     return {
       ...createEmptyDiagram(config.chipId),
@@ -750,6 +768,19 @@ export function App() {
     setLoading(true);
     setError(null);
     try {
+      // The board to run is the FOREGROUND part's resolved board, so each MCU
+      // in a multi-board lab (BLE sensor + collector) runs its own firmware.
+      // Mirrors drawerSubject's resolution, recomputed here because drawerSubject
+      // is defined later in render and can't be referenced from this callback.
+      // For single-board workspaces this resolves to selectedBoard unchanged.
+      const parts = editor.state.diagram.parts;
+      let activePart = parts.find((p) => p.id === 'mcu');
+      if (editor.state.selectedIds.size === 1) {
+        const sel = parts.find((p) => editor.state.selectedIds.has(p.id));
+        if (sel && mcuBoardForPart(sel, selectedBoard)) activePart = sel;
+      }
+      const runBoard = mcuBoardForPart(activePart, selectedBoard) ?? selectedBoard;
+
       // Try compiling first
       const result = await handleCompile();
 
@@ -760,23 +791,23 @@ export function App() {
 
       if (result?.success && result.elf) {
         firmware = result.elf;
-        // Use diagram-derived config with the selected board's chip YAML
-        const config = diagramToConfig(editor.state.diagram, selectedBoard.chipYaml);
+        // Use diagram-derived config with the run board's chip YAML
+        const config = diagramToConfig(editor.state.diagram, runBoard.chipYaml);
         systemYaml = config.systemYaml;
         chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUpload successful. Starting simulation...');
-      } else if (selectedBoard.demoFirmwarePath) {
+      } else if (runBoard.demoFirmwarePath) {
         // Fall back to pre-built demo firmware with its matching YAML configs
-        const resp = await fetch(selectedBoard.demoFirmwarePath);
-        if (!resp.ok) throw new Error(`Failed to load firmware: ${selectedBoard.demoFirmwarePath}`);
+        const resp = await fetch(runBoard.demoFirmwarePath);
+        if (!resp.ok) throw new Error(`Failed to load firmware: ${runBoard.demoFirmwarePath}`);
         firmware = new Uint8Array(await resp.arrayBuffer());
-        systemYaml = selectedBoard.systemYaml;
-        chipYaml = selectedBoard.chipYaml;
+        systemYaml = runBoard.systemYaml;
+        chipYaml = runBoard.chipYaml;
         setCompileOutput((prev) => prev + '\nUsing pre-built demo firmware.');
       } else {
         // No demo firmware and compile failed
         setCompileOutput(
-          (prev) => prev + `\nNo pre-built firmware for ${selectedBoard.name}. Write code and compile it first.`,
+          (prev) => prev + `\nNo pre-built firmware for ${runBoard.name}. Write code and compile it first.`,
         );
         setLoading(false);
         return;
@@ -786,8 +817,8 @@ export function App() {
         systemYaml,
         chipYaml,
         firmware,
-        quirks: selectedBoard.quirks,
-        bootSnapshotUrl: selectedBoard.bootSnapshotUrl,
+        quirks: runBoard.quirks,
+        bootSnapshotUrl: runBoard.bootSnapshotUrl,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -797,7 +828,7 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, [handleCompile, launchSimulation, selectedBoard, editor.state.diagram]);
+  }, [handleCompile, launchSimulation, selectedBoard, editor.state.diagram, editor.state.selectedIds]);
 
   // Stop simulation
   const handleStop = useCallback(() => {

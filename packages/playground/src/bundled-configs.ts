@@ -422,6 +422,17 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'nrf52840-dk',
     kind: 'lab',
   },
+  {
+    boardId: 'nrf52840-ble-lab',
+    chipId: 'nrf52840',
+    name: 'nRF52840 BLE Lab (2 boards)',
+    description: 'Two nRF52840s on one canvas: a Sensor advertising an incrementing reading over the BLE 1 Mbit PHY and a Collector receiving it — both over the shared virtual air. Run the Sensor, select the Collector and Run it too, then open the Packet Analyzer (Tools) to watch the frames cross.',
+    arch: 'ARM Cortex-M4F',
+    chipYaml: chipNrf52840Onboarding,
+    systemYaml: systemNrf52840Onboarding,
+    mcuComponentType: 'nrf52840-dk',
+    kind: 'lab',
+  },
 ];
 
 export const BOARD_CONFIG_MAP = new Map(BOARD_CONFIGS.map((c) => [c.boardId, c]));
