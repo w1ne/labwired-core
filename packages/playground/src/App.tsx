@@ -2145,6 +2145,14 @@ export function App() {
             >
               <SidebarRightIcon size={14} />
             </button>
+            <button
+              className={`toolbar-btn toolbar-btn-ghost ${showAnalyzer ? 'active' : ''}`}
+              onClick={() => setShowAnalyzer((v) => !v)}
+              aria-pressed={showAnalyzer}
+              title="Toggle BLE packet analyzer"
+            >
+              Analyzer
+            </button>
           </div>
 
           <div className="header-separator" />
