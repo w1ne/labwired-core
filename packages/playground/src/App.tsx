@@ -618,6 +618,9 @@ export function App() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
   const [showRightSidebar, setShowRightSidebar] = useState(true);
+  // Analyzer is an opt-in instrument now (was an always-on panel that froze the
+  // canvas). Toggled from the SimDock Tools control; hidden by default.
+  const [showAnalyzer, setShowAnalyzer] = useState(false);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
 
@@ -1804,6 +1807,8 @@ export function App() {
         onPause={handlePause}
         onStep={() => requireAuth(handleStep)}
         onReset={handleReset}
+        analyzerOpen={showAnalyzer}
+        onToggleAnalyzer={() => setShowAnalyzer((v) => !v)}
       />
     </div>
   );
@@ -2477,23 +2482,28 @@ export function App() {
       );
     })}
 
-    {/* Packet Analyzer — the first instrument of the universal analyzer
-        toolset. It surfaces whenever a BLE board is on the canvas. The
-        virtual-air registry is process-global (one WASM instance, shared
-        air), so the foreground bridge observes every radio's traffic. */}
-    {!isMobile && (() => {
-      const hasBle = mcuPartIds.some((id) => {
-        const part = editor.state.diagram.parts.find((p) => p.id === id);
-        const b = part ? mcuBoardForPart(part, selectedBoard) : null;
-        return b?.boardId?.startsWith('nrf52840-ble') ?? false;
-      });
-      if (!hasBle) return null;
-      return (
-        <div className="absolute right-3 bottom-3 z-30 w-[460px] h-[300px] rounded-lg border border-border bg-bg-base shadow-lg overflow-hidden">
+    {/* Packet Analyzer — opt-in Tools instrument, toggled from the SimDock. */}
+    {!isMobile && showAnalyzer && (
+      <div
+        className="absolute bottom-4 right-4 z-30 flex flex-col rounded-lg border border-border bg-bg-base shadow-xl overflow-hidden"
+        style={{ resize: 'both', width: 520, height: 320, minWidth: 320, minHeight: 160, maxWidth: '90vw', maxHeight: '80vh' }}
+      >
+        <div className="flex items-center justify-between px-2 py-1 border-b border-border">
+          <span className="text-[11px] font-semibold text-fg-secondary">Tools · Packet Analyzer</span>
+          <button
+            type="button"
+            className="text-fg-tertiary hover:text-fg-primary text-[12px] px-1"
+            title="Close analyzer"
+            onClick={() => setShowAnalyzer(false)}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
           <BleAnalyzer bridge={bridge} running={running} />
         </div>
-      );
-    })()}
+      </div>
+    )}
     </StudioShell>
     </ChipsProvider>
   );

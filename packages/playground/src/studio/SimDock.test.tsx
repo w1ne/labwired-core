@@ -4,7 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { SimDock } from './SimDock';
 
 describe('SimDock', () => {
-  const baseHandlers = { onRun: vi.fn(), onPause: vi.fn(), onStep: vi.fn(), onReset: vi.fn() };
+  const baseHandlers = {
+    onRun: vi.fn(),
+    onPause: vi.fn(),
+    onStep: vi.fn(),
+    onReset: vi.fn(),
+    analyzerOpen: false,
+    onToggleAnalyzer: vi.fn(),
+  };
 
   beforeEach(() => {
     baseHandlers.onRun.mockClear();

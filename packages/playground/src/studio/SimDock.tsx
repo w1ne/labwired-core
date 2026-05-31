@@ -13,6 +13,8 @@ export interface SimDockProps {
   onPause: () => void;
   onStep: () => void;
   onReset: () => void;
+  analyzerOpen: boolean;
+  onToggleAnalyzer: () => void;
 }
 
 function formatCycles(n: number): string {
@@ -41,7 +43,7 @@ const STATE_LABEL: Record<SimState, string> = {
   halted: 'Halted',
 };
 
-export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onStep, onReset }: SimDockProps) {
+export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onStep, onReset, analyzerOpen, onToggleAnalyzer }: SimDockProps) {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       // Skip when focus is in an editable element
@@ -115,6 +117,22 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
         className="h-10 w-10 sm:h-8 sm:w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary outline-none border-0 shrink-0"
       >
         ↻
+      </button>
+      <button
+        type="button"
+        onClick={onToggleAnalyzer}
+        aria-pressed={analyzerOpen}
+        aria-label="Packet Analyzer"
+        title="Packet Analyzer (BLE air)"
+        style={{ borderRadius: 999 }}
+        className={clsx(
+          'h-10 sm:h-8 px-3 text-[13px] outline-none border-0 shrink-0',
+          analyzerOpen
+            ? 'bg-accent/20 text-fg-primary'
+            : 'bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary',
+        )}
+      >
+        Analyzer
       </button>
       <div className="flex-1" />
       {/* Telemetry labels (runtime, PC, cycles) — hidden on narrow viewports
