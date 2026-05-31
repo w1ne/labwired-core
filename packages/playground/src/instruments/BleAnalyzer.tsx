@@ -50,8 +50,7 @@ export function BleAnalyzer({ bridge, running, pollMs = 200 }: BleAnalyzerProps)
 
   return (
     <div className="flex flex-col h-full min-h-0 text-fg-primary text-[12px]">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="font-semibold tracking-tight">Air Tracer · virtual wireless (BLE)</span>
+      <div className="flex items-center justify-end px-3 py-1.5 border-b border-border">
         <span className="text-fg-tertiary font-mono text-[11px]">
           {rows.length} frame{rows.length === 1 ? '' : 's'}
         </span>
