@@ -1,0 +1,114 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+//
+// This software is released under the MIT License.
+// See the LICENSE file in the project root for full license information.
+
+use crate::peripherals::spi::SpiDevice;
+use std::any::Any;
+
+/// Simulated 74HC165 8-bit parallel-in / serial-out shift register.
+///
+/// Used as a digital-input expander: 8 parallel input channels are captured on
+/// the SH/LD (load) pulse, then clocked out serially MSB-first (QH = channel 7).
+/// In this model the SPI chip-select line is wired to the SH/LD line: asserting
+/// CS performs the parallel load, and each SPI byte transfer clocks the 8 latched
+/// bits onto MISO.
+#[derive(Debug, serde::Serialize)]
+pub struct Sn74hc165 {
+    /// SH/LD line, wired to the GPIO used as SPI chip-select for this device.
+    cs_pin: String,
+    /// Live parallel input states; bit `i` = channel `i`.
+    inputs: u8,
+    /// Value captured at the last load (CS assert).
+    latched: u8,
+}
+
+impl Sn74hc165 {
+    pub fn new(cs_pin: impl Into<String>) -> Self {
+        Self {
+            cs_pin: cs_pin.into(),
+            inputs: 0,
+            latched: 0,
+        }
+    }
+
+    /// Set all 8 input channels at once (bit `i` = channel `i`).
+    pub fn set_inputs(&mut self, value: u8) {
+        self.inputs = value;
+    }
+
+    /// Set a single input channel high or low (no-op for `ch >= 8`).
+    pub fn set_channel(&mut self, ch: u8, high: bool) {
+        if ch < 8 {
+            if high {
+                self.inputs |= 1 << ch;
+            } else {
+                self.inputs &= !(1 << ch);
+            }
+        }
+    }
+
+    /// Read back the live parallel input states.
+    pub fn inputs(&self) -> u8 {
+        self.inputs
+    }
+}
+
+impl SpiDevice for Sn74hc165 {
+    fn cs_pin(&self) -> &str {
+        &self.cs_pin
+    }
+
+    fn cs_select(&mut self) {
+        // SH/LD low → parallel load of the live inputs into the shift register.
+        self.latched = self.inputs;
+    }
+
+    fn cs_release(&mut self) {}
+
+    fn transfer(&mut self, _mosi: u8) -> u8 {
+        // Clock out the 8 latched bits MSB-first (QH = bit 7 = channel 7).
+        self.latched
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::peripherals::spi::SpiDevice;
+
+    #[test]
+    fn loads_and_shifts_out_inputs_msb_first() {
+        let mut d = Sn74hc165::new("PA4");
+        d.set_inputs(0xA5);
+        d.cs_select(); // SH/LD pulse → parallel load
+        // 74HC165 clocks out QH..QA MSB-first; SPI reads MSB-first → byte == inputs
+        assert_eq!(d.transfer(0x00), 0xA5);
+    }
+
+    #[test]
+    fn latches_at_load_not_live() {
+        let mut d = Sn74hc165::new("PA4");
+        d.set_inputs(0x0F);
+        d.cs_select();
+        d.set_inputs(0xFF); // change AFTER load must not affect the latched value
+        assert_eq!(d.transfer(0x00), 0x0F);
+    }
+
+    #[test]
+    fn set_channel_sets_individual_bits() {
+        let mut d = Sn74hc165::new("PA4");
+        d.set_channel(0, true);
+        d.set_channel(7, true);
+        assert_eq!(d.inputs(), 0b1000_0001);
+    }
+}
