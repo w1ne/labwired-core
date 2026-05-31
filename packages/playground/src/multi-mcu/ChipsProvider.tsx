@@ -13,6 +13,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -92,6 +93,13 @@ export function ChipsProvider({
   children: ReactNode;
   initialBoard: BoardConfig;
 }) {
+  // The board the workspace auto-seeds the first chip with. Captured once so
+  // addChip can recognise an untouched default chip as replaceable scratch
+  // (see addChip) without chasing the live initialBoard prop.
+  const initialDefaultBoardIdRef = useRef(initialBoard.boardId);
+  // Once that default chip is kept (a pick focuses it) or replaced, it stops
+  // being replaceable scratch, so later picks add rather than clobber.
+  const defaultConsumedRef = useRef(false);
   const [sessions, setSessions] = useState<Record<string, ChipSession>>(() => {
     const persisted = loadRegistry();
     if (persisted) {
@@ -189,8 +197,34 @@ export function ChipsProvider({
         (s) => s.board.boardId === resolvedBoard.boardId,
       );
       if (existing) {
+        if (existing.board.boardId === initialDefaultBoardIdRef.current) {
+          defaultConsumedRef.current = true;
+        }
         setActiveChipId(existing.chipId);
         return existing.chipId;
+      }
+      // Replace the untouched scratch chip in place rather than leaving it as
+      // a junk tile. "Scratch" = still holds the auto-seeded default board AND
+      // never run (no bridge, no config). The FIRST board pick swaps the
+      // default starter out; once a real board is placed or run, later picks
+      // add alongside — so you get exactly the boards you chose, no leftover.
+      const scratch = defaultConsumedRef.current
+        ? undefined
+        : Object.values(sessions).find(
+            (s) =>
+              !s.bridge &&
+              !s.config &&
+              s.board.boardId === initialDefaultBoardIdRef.current,
+          );
+      if (scratch) {
+        defaultConsumedRef.current = true;
+        const id = scratch.chipId;
+        setSessions((prev) => ({
+          ...prev,
+          [id]: { ...prev[id], name: resolvedBoard.name, board: resolvedBoard, source: null, config: null },
+        }));
+        setActiveChipId(id);
+        return id;
       }
       let n = 2;
       while (sessions[`chip-${n}`]) n += 1;
