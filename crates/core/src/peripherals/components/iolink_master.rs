@@ -298,4 +298,68 @@ mod tests {
         }
         assert_eq!(req3, vec![0x00, 0x00, 0x00, 0x09]);
     }
+
+    #[test]
+    fn master_reaches_operate_through_real_uart() {
+        use crate::peripherals::uart::Uart;
+        use crate::Peripheral;
+
+        let mut uart = Uart::new(); // Stm32F1
+        uart.set_sink(None, false);
+        uart.attach_stream(Box::new(IolinkMaster::new(1, 1, IolinkComSpeed::Com2)));
+
+        // Helper: simulate firmware transmitting a byte (Stm32F1 DR alias = 0x00).
+        fn fw_tx(uart: &mut Uart, b: u8) {
+            uart.write(0x00, b).unwrap();
+        }
+        // Helper: simulate firmware reading one RX byte if available.
+        fn fw_rx(uart: &mut Uart) -> Option<u8> {
+            // status offset 0x00 for F1; RXNE = bit 5
+            let status = Peripheral::read(uart, 0x00).unwrap();
+            if status & (1 << 5) != 0 {
+                Some(Peripheral::read(uart, 0x04).unwrap())
+            } else {
+                None
+            }
+        }
+
+        let mut master_request = Vec::new();
+        let mut acked_preop = false;
+        let mut answered_operate = false;
+
+        for _ in 0..200 {
+            // 1) advance UART one tick → master.poll pushes a request byte into RX
+            let _ = Peripheral::tick(&mut uart);
+
+            // 2) firmware drains any RX byte and records the master's request
+            while let Some(b) = fw_rx(&mut uart) {
+                master_request.push(b);
+            }
+
+            // 3) fake firmware/device logic: respond once each request completes
+            if !acked_preop && master_request == vec![0x55, 0x00, 0x24] {
+                fw_tx(&mut uart, 0x00);
+                fw_tx(&mut uart, 0x24);
+                acked_preop = true;
+                master_request.clear();
+            } else if acked_preop
+                && !answered_operate
+                && master_request == vec![0x0F, 0x0D, 0x00, 0x00, 0x00, 0x09]
+            {
+                for b in [0x20u8, 0xA5, 0x00, 0x0D] {
+                    fw_tx(&mut uart, b);
+                }
+                answered_operate = true;
+            }
+        }
+
+        let master = uart.attached_streams[0]
+            .as_any()
+            .unwrap()
+            .downcast_ref::<IolinkMaster>()
+            .unwrap();
+        assert_eq!(master.link_state, IolinkLinkState::Operate);
+        assert_eq!(master.input_byte(), 0xA5);
+        assert!(master.pd_valid);
+    }
 }
