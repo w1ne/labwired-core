@@ -48,16 +48,15 @@
 
 **Files:** none (git only)
 
-- [ ] **Step 1: Clean base + feature branch**
+- [ ] **Step 1: Confirm the feature branch**
 
+The branch `feat/nrf-ble-lab-example` already exists and carries the planning docs (this plan + the spec), based on `32c8ae4`. Just confirm you are on it:
 ```bash
 cd /home/andrii/Projects/labwired
-git fetch origin
-git switch main && git pull --ff-only
-git switch -c feat/nrf-ble-lab-example
-git log --oneline -3
+git switch feat/nrf-ble-lab-example
+git log --oneline -5
 ```
-Expected: tip is `32c8ae4 fix(playground): board pick replaces untouched default chip (no junk tile)` (or newer if main advanced — fine).
+Expected: recent commits are the `docs:` spec/plan commits on top of `32c8ae4 fix(playground): board pick replaces untouched default chip (no junk tile)`. (If `feat/nrf-ble-lab-example` is missing, create it from the branch holding the docs: `git switch -c feat/nrf-ble-lab-example fix/multichip-junk-tile`.)
 
 - [ ] **Step 2: Revert the broken junk-tile commit**
 
