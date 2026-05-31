@@ -169,7 +169,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipStm32l476,
     systemYaml: systemNokia5110InvadersLab,
     demoFirmwarePath: `${BASE}wasm/demo-nokia5110-invaders-lab.elf`,
-    mcuComponentType: 'stm32-dev',
+    mcuComponentType: 'nucleo-l476rg',
     sourceCode: sourceNokia5110Invaders,
     sourceFilename: 'nokia5110-invaders-lab/src/main.rs',
     kind: 'lab',

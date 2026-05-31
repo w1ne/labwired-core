@@ -51,6 +51,7 @@ import { nrf52840DkComponent } from './boards/nrf52840-dk';
 import { stm32DevComponent } from './boards/stm32-dev';
 import { nucleoH563ziComponent } from './boards/nucleo-h563zi';
 import { nucleoF401reComponent } from './boards/nucleo-f401re';
+import { nucleoL476rgComponent } from './boards/nucleo-l476rg';
 import { stm32BlackpillComponent } from './boards/stm32-blackpill';
 
 /** All available component definitions, keyed by type. */
@@ -61,6 +62,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [stm32DevComponent.type, stm32DevComponent],
   [nucleoH563ziComponent.type, nucleoH563ziComponent],
   [nucleoF401reComponent.type, nucleoF401reComponent],
+  [nucleoL476rgComponent.type, nucleoL476rgComponent],
   [stm32BlackpillComponent.type, stm32BlackpillComponent],
   [esp32Component.type, esp32Component],
   [esp32C3SuperMiniComponent.type, esp32C3SuperMiniComponent],
