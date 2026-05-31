@@ -2,39 +2,44 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a "nRF52840 BLE Lab" board-picker entry that opens a canvas with two nRF52840 boards (sensor + collector) both visible, that genuinely talk over the shared virtual-air, with a fixed/resizable BLE packet analyzer reachable from a Tools menu.
+**Goal:** Ship a "nRF52840 BLE Lab" board-picker entry that opens a canvas with two nRF52840 boards (sensor + collector) both visible, that genuinely talk over the shared virtual-air, with a resizable BLE packet analyzer reachable from a Tools toggle (not an always-on frozen panel).
 
-**Architecture:** Reuse the existing part-based multi-chip engine (`usePerChipSims`, keyed by diagram part id — already wired into App.tsx). The only engine-side change is teaching part→board resolution to honor a per-part `attrs.boardId`, so two parts sharing `mcuComponentType: 'nrf52840-dk'` can run different firmware (sensor TX vs collector RX). The lab is a bundled config whose starter diagram pre-places both MCU parts. The analyzer's decode logic is untouched; only its mount/visibility/sizing change.
+**Architecture:** Reuse the existing part-based multi-chip engine (`usePerChipSims`, keyed by diagram part id — already wired into App.tsx). The only engine-side change is teaching part→board resolution to honor a per-part `attrs.boardId`, so two parts sharing `mcuComponentType: 'nrf52840-dk'` can run different firmware (sensor TX vs collector RX). The two-MCU canvas is produced by special-casing `makeStarterDiagram` for the new lab config. The analyzer's decode logic is untouched; only its mount/visibility/sizing change.
 
 **Tech Stack:** React + Vite + TypeScript (`packages/playground`), Vitest, Tailwind utility classes, Rust core via WASM bridge (`@labwired/ui`), Playwright MCP for live verification.
 
 ---
 
-## Background facts (verified earlier this session)
+## Background facts (verified this session — line numbers from main @32c8ae4)
 
-- **Mechanism A = `usePerChipSims`** (`packages/playground/src/multi-mcu/usePerChipSims.ts`): keyed by diagram part id; the selected MCU part is foreground (driven by the main sim loop), every other running MCU part is background-ticked (200k cycles / 16ms). All parts share the Rust-side process-global virtual-air (`OnceLock<Mutex<VirtualAir>>`), so frames cross between instances. Already wired into `App.tsx`: `foregroundPartId` (~1135 = `drawerSubject.part?.id ?? 'mcu'`), the hook (~1140), `mcuPartIds` (~1136), per-part render `isFg` (~2352), BLE detection (~2457), `useBackgroundChips(true)` (~2475).
-- **`mcuBoardForPart`** in `App.tsx` (~498–532): currently
+- **Mechanism A = `usePerChipSims`** (`packages/playground/src/multi-mcu/usePerChipSims.ts`): keyed by diagram part id; the selected MCU part is foreground (driven by the main sim loop), every other running MCU part is background-ticked (200k cycles / 16ms). All parts share the Rust-side process-global virtual-air (`OnceLock<Mutex<VirtualAir>>`), so frames cross between instances. Already wired into `App.tsx`: `foregroundPartId` (1135 = `drawerSubject.part?.id ?? 'mcu'`), `mcuPartIds` (1136-1139), the hook (1140-1152), per-part window render (2347-2450), the analyzer (2456-2468).
+- **`mcuBoardForPart(part, primaryBoard)`** in `App.tsx` (526-533):
   ```ts
-  // (inside the App component; primaryBoard is in scope)
-  function mcuBoardForPart(part: Part): BoardConfig | null {
+  function mcuBoardForPart(
+    part: { id: string; type: string } | undefined,
+    primaryBoard: BoardConfig,
+  ): BoardConfig | null {
+    if (!part) return null;
     if (part.id === 'mcu') return primaryBoard;
     return BOARD_CONFIGS.find((b) => b.mcuComponentType === part.type) ?? null;
   }
   ```
-  All four nRF board entries share `mcuComponentType: 'nrf52840-dk'`, so the type-match collapses every nRF part to the first nRF config (the DK — which has **no RADIO**). This is the collision to fix.
-- **BLE board entries already exist** in `packages/playground/src/bundled-configs.ts`: `nrf52840-ble-sensor` and `nrf52840-ble-collector`. Both use `chipYaml: chipNrf52840Onboarding` + `systemYaml: systemNrf52840Onboarding` (these have RADIO + CLOCK; the DK system does not), share `mcuComponentType: 'nrf52840-dk'`, and carry a `demoFirmwarePath` (sensor = TX firmware, collector = RX firmware).
-- **`BleAnalyzer`** (`packages/playground/src/instruments/BleAnalyzer.tsx`, 102 lines) is a healthy component: `<div className="flex flex-col h-full min-h-0 …">` with an internal `overflow-auto` table region. Props: `{ bridge: SimulatorBridge | null; running: boolean; pollMs?: number }`. It polls `bridge.airTraceSnapshot()` → `decodeBleTrace()` and renders rows. **Decode logic is correct and must not change.** The "frozen / unresizable / useless" problem is purely its **mount** at `App.tsx` (~2452–2465): an always-on panel with no size control and no way to hide it.
+  Callers pass `selectedBoard` as `primaryBoard` (lines 1128, 1137, 2351, 2459). The bug: all four nRF entries share `mcuComponentType: 'nrf52840-dk'`, so the type-match collapses every nRF part to the first nRF config (the DK — which has **no RADIO**).
+- **`loadBoardWorkspace(config)`** (App.tsx 437-468) returns `{ diagram, source }`. The diagram comes from **`makeStarterDiagram(config)`** (App.tsx 441), overridden only by a non-empty saved localStorage diagram. **There is NO `diagram` field on `BoardConfig`** — the two-MCU canvas must be emitted by `makeStarterDiagram`. The `Diagram` type has `parts: Part[]` (and connections); each `Part` has `id, type, x, y, rotate, attrs` (and optional `scale`). `Diagram`/`Part` are imported into App.tsx (confirm the exact module in Step 1.1).
+- **BLE board entries already exist** in `bundled-configs.ts` (402-424): `nrf52840-ble-sensor` and `nrf52840-ble-collector`. Both use `chipYaml: chipNrf52840Onboarding` + `systemYaml: systemNrf52840Onboarding` (RADIO + CLOCK present; the DK system has neither), share `mcuComponentType: 'nrf52840-dk'`, `kind: 'lab'`, and carry `demoFirmwarePath` (`${BASE}wasm/demo-nrf52840-ble-sensor.elf` / `…-collector.elf`).
+- **`BleAnalyzer`** (`packages/playground/src/instruments/BleAnalyzer.tsx`, 102 lines) is healthy: `<div className="flex flex-col h-full min-h-0 …">` with an internal `overflow-auto` table. Props: `{ bridge: SimulatorBridge | null; running: boolean; pollMs?: number }`. Decode logic is correct — **do not change it.** The freeze is its mount (App.tsx 2456-2468): gated on `hasBle && !isMobile`, fixed `w-[460px] h-[300px]`, no close, no resize.
+- **`SimDock`** (`packages/playground/src/studio/SimDock.tsx`) holds the toolbar toggle buttons (the run/control row). It is the home for the new "Analyzer" toggle. Confirm its props + button pattern in Step 3.1.
 - **Decisions locked:** both boards visible; revert commit `32c8ae4` on the feature branch.
-- **Deferred (YAGNI):** general Add-MCU-onto-canvas UX; deleting Mechanism B (`ChipsProvider`/`McuStrip`/`ChipBridgeSync`) files.
 
 ---
 
 ## File Structure
 
-- **Create** `packages/playground/src/board-resolve.ts` — pure, testable `resolveBoardForPart(part, primaryBoard, boards)` helper. One responsibility: map a diagram part to its `BoardConfig`, honoring `attrs.boardId` first. Extracted from App.tsx so it can be unit-tested without the React tree.
-- **Create** `packages/playground/src/board-resolve.test.ts` — Vitest for the resolver (collision case is the headline test).
-- **Modify** `packages/playground/src/App.tsx` — (a) call `resolveBoardForPart` from `mcuBoardForPart`; (b) replace the always-on analyzer mount with a Tools-menu toggle + resizable host.
-- **Modify** `packages/playground/src/bundled-configs.ts` — add the `nrf52840-ble-lab` config with a two-MCU starter diagram, each MCU part carrying `attrs.boardId`.
+- **Create** `packages/playground/src/board-resolve.ts` — pure, testable `resolveBoardForPart(part, primaryBoard, boards)`. One job: map a diagram part to its `BoardConfig`, honoring `attrs.boardId` first. Extracted from App.tsx so it is unit-testable without the React tree.
+- **Create** `packages/playground/src/board-resolve.test.ts` — Vitest; the collision case is the headline test.
+- **Modify** `packages/playground/src/App.tsx` — (a) `mcuBoardForPart` delegates to `resolveBoardForPart`; (b) `makeStarterDiagram` special-cases the lab to emit two MCU parts; (c) replace the always-on analyzer mount with a Tools-toggle + resizable host; (d) thread `showAnalyzer` to the SimDock toggle.
+- **Modify** `packages/playground/src/bundled-configs.ts` — add the `nrf52840-ble-lab` config entry.
+- **Modify** `packages/playground/src/studio/SimDock.tsx` — add the "Analyzer" toggle button + props.
 - **Modify (git)** revert commit `32c8ae4` on the feature branch.
 
 ---
@@ -43,9 +48,8 @@
 
 **Files:** none (git only)
 
-- [ ] **Step 1: Confirm a clean base and create the feature branch**
+- [ ] **Step 1: Clean base + feature branch**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired
 git fetch origin
@@ -57,20 +61,18 @@ Expected: tip is `32c8ae4 fix(playground): board pick replaces untouched default
 
 - [ ] **Step 2: Revert the broken junk-tile commit**
 
-Run:
 ```bash
 git revert --no-edit 32c8ae4
 git log --oneline -2
 ```
-Expected: a new `Revert "fix(playground): board pick replaces untouched default chip…"` commit on top. If the revert conflicts (main advanced and touched the same lines), resolve by keeping the pre-`32c8ae4` behavior of `ChipsProvider.addChip` (plain append-only / refocus-existing — no scratch-replace), then `git revert --continue`.
+Expected: a new `Revert "fix(playground): board pick replaces untouched default chip…"` commit. If it conflicts (main advanced and touched the same `ChipsProvider.addChip` lines), resolve by keeping the pre-`32c8ae4` append-only / refocus-existing `addChip` (no scratch-replace), then `git revert --continue`.
 
 - [ ] **Step 3: Sanity build**
 
-Run:
 ```bash
 cd packages/playground && npx tsc --noEmit
 ```
-Expected: exit 0 (no type errors introduced by the revert).
+Expected: exit 0.
 
 ---
 
@@ -79,17 +81,16 @@ Expected: exit 0 (no type errors introduced by the revert).
 **Files:**
 - Create: `packages/playground/src/board-resolve.ts`
 - Test: `packages/playground/src/board-resolve.test.ts`
-- Modify: `packages/playground/src/App.tsx` (the `mcuBoardForPart` function, ~498–532)
+- Modify: `packages/playground/src/App.tsx` (`mcuBoardForPart`, 526-533)
 
-- [ ] **Step 1: Confirm the `Part` and `BoardConfig` shapes**
+- [ ] **Step 1: Confirm the `Part` import path**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground/src
-grep -rn "interface Part\b\|type Part =\|attrs" lib editor *.ts 2>/dev/null | grep -v node_modules | head
-sed -n '55,118p' bundled-configs.ts   # BoardConfig interface
+grep -rn "interface Part\|type Part\b\|export interface Diagram" . --include=*.ts --include=*.tsx 2>/dev/null | grep -v node_modules | head
+grep -n "import.*\bPart\b\|import.*\bDiagram\b" App.tsx | head
 ```
-Confirm: `Part` has `id: string`, `type: string`, and an `attrs` record (string-keyed). `BoardConfig` has `boardId: string`, `mcuComponentType: string`. Note the exact import path for the `Part` type (used in the next step).
+Confirm `Part` has `id: string`, `type: string`, `attrs` (a record). Note the module it is exported from (needed only if you choose to import the `Part` type into the new file — the resolver uses a structural param type, so an import is optional).
 
 - [ ] **Step 2: Write the failing test**
 
@@ -99,53 +100,42 @@ import { describe, it, expect } from 'vitest';
 import { resolveBoardForPart } from './board-resolve';
 import type { BoardConfig } from './bundled-configs';
 
-// Minimal fixtures — only the fields the resolver reads.
 const dk = { boardId: 'nrf52840-dk', mcuComponentType: 'nrf52840-dk' } as BoardConfig;
 const sensor = { boardId: 'nrf52840-ble-sensor', mcuComponentType: 'nrf52840-dk' } as BoardConfig;
 const collector = { boardId: 'nrf52840-ble-collector', mcuComponentType: 'nrf52840-dk' } as BoardConfig;
 const boards = [dk, sensor, collector];
 
-// A part is whatever the diagram stores; the resolver only reads id/type/attrs.
 const part = (id: string, type: string, attrs: Record<string, unknown> = {}) =>
-  ({ id, type, attrs } as any);
+  ({ id, type, attrs } as { id: string; type: string; attrs: Record<string, unknown> });
 
 describe('resolveBoardForPart', () => {
   it('prefers attrs.boardId over the mcuComponentType first-match (the nRF collision)', () => {
-    // Both parts share type nrf52840-dk; without attrs.boardId they would both
-    // resolve to `dk`. attrs.boardId must disambiguate.
-    expect(resolveBoardForPart(part('mcu', 'nrf52840-dk', { boardId: 'nrf52840-ble-sensor' }), dk, boards))
-      .toBe(sensor);
-    expect(resolveBoardForPart(part('mcu2', 'nrf52840-dk', { boardId: 'nrf52840-ble-collector' }), dk, boards))
-      .toBe(collector);
+    expect(resolveBoardForPart(part('mcu', 'nrf52840-dk', { boardId: 'nrf52840-ble-sensor' }), dk, boards)).toBe(sensor);
+    expect(resolveBoardForPart(part('mcu-collector', 'nrf52840-dk', { boardId: 'nrf52840-ble-collector' }), dk, boards)).toBe(collector);
   });
-
   it('falls back to primaryBoard for the legacy id==="mcu" part with no boardId', () => {
     expect(resolveBoardForPart(part('mcu', 'nrf52840-dk'), dk, boards)).toBe(dk);
   });
-
   it('falls back to mcuComponentType match for a non-mcu part with no boardId', () => {
-    expect(resolveBoardForPart(part('mcu2', 'nrf52840-dk'), dk, boards)).toBe(dk);
+    expect(resolveBoardForPart(part('mcu-collector', 'nrf52840-dk'), dk, boards)).toBe(dk);
   });
-
   it('returns null when nothing matches', () => {
-    expect(resolveBoardForPart(part('mcu2', 'no-such-type'), dk, boards)).toBeNull();
+    expect(resolveBoardForPart(part('mcu-collector', 'no-such-type'), dk, boards)).toBeNull();
   });
-
-  it('ignores an attrs.boardId that does not exist, falling through', () => {
-    expect(resolveBoardForPart(part('mcu2', 'nrf52840-dk', { boardId: 'ghost' }), dk, boards)).toBe(dk);
+  it('ignores a non-existent attrs.boardId, falling through', () => {
+    expect(resolveBoardForPart(part('mcu-collector', 'nrf52840-dk', { boardId: 'ghost' }), dk, boards)).toBe(dk);
   });
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [ ] **Step 3: Run the test — verify it fails**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground && npx vitest run src/board-resolve.test.ts
 ```
-Expected: FAIL — `Failed to resolve import "./board-resolve"` / `resolveBoardForPart is not a function`.
+Expected: FAIL — `Failed to resolve import "./board-resolve"`.
 
-- [ ] **Step 4: Write the implementation**
+- [ ] **Step 4: Implement**
 
 Create `packages/playground/src/board-resolve.ts`:
 ```ts
@@ -154,14 +144,14 @@ import { type BoardConfig } from './bundled-configs';
 /**
  * Resolve which BoardConfig a diagram part represents.
  *
- * Resolution order:
- *   1. `attrs.boardId` — explicit, set on MCU parts in multi-board labs so two
- *      parts that share an `mcuComponentType` (e.g. both 'nrf52840-dk') can run
- *      different firmware. This is what makes the BLE sensor + collector
- *      distinguishable on one canvas.
- *   2. The legacy `id === 'mcu'` part maps to the workspace's primary board.
- *   3. First board whose `mcuComponentType` matches the part's `type`.
- *   4. null — unknown part.
+ * Order:
+ *   1. attrs.boardId — explicit, set on MCU parts in multi-board labs so two
+ *      parts sharing an mcuComponentType (e.g. both 'nrf52840-dk') run their
+ *      own firmware. This makes the BLE sensor + collector distinguishable on
+ *      one canvas.
+ *   2. id === 'mcu' -> the workspace's primary board.
+ *   3. first board whose mcuComponentType matches the part's type.
+ *   4. null.
  */
 export function resolveBoardForPart(
   part: { id: string; type: string; attrs?: Record<string, unknown> | null },
@@ -178,31 +168,32 @@ export function resolveBoardForPart(
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 5: Run the test — verify it passes**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground && npx vitest run src/board-resolve.test.ts
 ```
 Expected: PASS (5 tests).
 
-- [ ] **Step 6: Wire App.tsx to the helper**
+- [ ] **Step 6: Delegate from App.tsx**
 
-In `packages/playground/src/App.tsx`, add the import near the other local imports (e.g. beside the `bundled-configs` import):
+Add the import beside the `bundled-configs` import:
 ```ts
 import { resolveBoardForPart } from './board-resolve';
 ```
-Then replace the body of `mcuBoardForPart` (~498–532) so it delegates — keep its existing signature/name and surrounding comments:
+Replace the body of `mcuBoardForPart` (526-533), keeping the `!part` guard and adding `attrs` to the param type so `attrs.boardId` type-checks:
 ```ts
-function mcuBoardForPart(part: Part): BoardConfig | null {
+function mcuBoardForPart(
+  part: { id: string; type: string; attrs?: Record<string, unknown> | null } | undefined,
+  primaryBoard: BoardConfig,
+): BoardConfig | null {
+  if (!part) return null;
   return resolveBoardForPart(part, primaryBoard, BOARD_CONFIGS);
 }
 ```
-(If `mcuBoardForPart` is a `useCallback`, keep it a `useCallback` with `[primaryBoard]` deps and the same delegated body.)
 
 - [ ] **Step 7: Typecheck + commit**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground && npx tsc --noEmit && npx vitest run src/board-resolve.test.ts
 git add packages/playground/src/board-resolve.ts packages/playground/src/board-resolve.test.ts packages/playground/src/App.tsx
@@ -212,67 +203,64 @@ Expected: tsc exit 0; 5 tests pass.
 
 ---
 
-## Task 2: `nrf52840-ble-lab` config with a two-MCU starter diagram
+## Task 2: `nrf52840-ble-lab` config + two-MCU starter diagram
 
 **Files:**
-- Modify: `packages/playground/src/bundled-configs.ts`
+- Modify: `packages/playground/src/bundled-configs.ts` (new config entry)
+- Modify: `packages/playground/src/App.tsx` (`makeStarterDiagram`)
 
-- [ ] **Step 1: Learn the lab-config + starter-diagram authoring shape**
+- [ ] **Step 1: Read `makeStarterDiagram` to learn the exact part shape**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground/src
-sed -n '55,118p' bundled-configs.ts          # BoardConfig interface (find the diagram/parts field name)
-sed -n '294,320p' bundled-configs.ts         # adxl345-sensor-lab — a kind:'lab' entry with peripherals
-sed -n '382,445p' bundled-configs.ts         # the four nRF entries (sensor/collector exact fields)
-grep -n "diagram\|parts\|id: 'mcu'\|x:\|y:\|rotate" bundled-configs.ts | head -40
+sed -n '/function makeStarterDiagram/,/^}/p' App.tsx | head -120
 ```
-From this, note: (a) the exact field a `BoardConfig` uses to carry its starter diagram (a `diagram`/`workspace`/`parts` field, OR whether `loadBoardWorkspace` synthesizes it — if a multi-part lab like adxl345 exists, the field exists; use the same one); (b) the `Part` literal shape used there (`{ id, type, x, y, rotate, attrs }`); (c) the exact `chipYaml`/`systemYaml`/`demoFirmwarePath`/`name` values on `nrf52840-ble-sensor` and `nrf52840-ble-collector`.
+Note: how the default `{ id: 'mcu', type: <component>, x, y, rotate, attrs }` part is constructed, the `Diagram` return shape (`{ parts, connections? }`), default coordinates, and how `config.mcuComponentType` maps to a part `type` (App.tsx:143 sets `type: config.mcuComponentType`). The nRF lab's MCU parts use `type: 'nrf52840-dk'` (the component type), disambiguated by `attrs.boardId`.
 
-- [ ] **Step 2: Add the lab config**
+- [ ] **Step 2: Add the lab config to `bundled-configs.ts`**
 
-In `bundled-configs.ts`, add a new entry to `BOARD_CONFIGS` (place it next to the other nRF entries). Mirror the field shape discovered in Step 1; the example below uses the conventional `parts` array — adapt field names to match the existing lab entries exactly:
+Insert into `BOARD_CONFIGS` right after the `nrf52840-ble-collector` entry (before the closing `];` at line 425). The lab's own `chipYaml`/`systemYaml` are the onboarding (RADIO-equipped) manifests; per-part firmware comes from each part's resolved board, so the lab itself needs no `demoFirmwarePath`:
 ```ts
-{
-  boardId: 'nrf52840-ble-lab',
-  name: 'nRF52840 BLE Lab (2 boards)',
-  // Two nRF52840s on one canvas. Each MCU part carries attrs.boardId so the
-  // resolver (board-resolve.ts) gives each its own firmware: the sensor runs
-  // the BLE-advertise/TX demo, the collector runs the scan/RX demo. Both use
-  // the onboarding chip/system (RADIO + CLOCK present; the DK has neither).
-  chipId: 'nrf52840',
-  chipYaml: chipNrf52840Onboarding,
-  systemYaml: systemNrf52840Onboarding,
-  mcuComponentType: 'nrf52840-dk',
-  kind: 'lab',
-  // No single demoFirmwarePath — each MCU part loads its own via attrs.boardId.
-  diagram: {
-    parts: [
-      // Keep one part id === 'mcu' so foregroundPartId's default ('mcu') has a
-      // target on first load. attrs.boardId still steers its firmware.
-      { id: 'mcu', type: 'nrf52840-dk', x: 180, y: 220, rotate: 0,
-        attrs: { boardId: 'nrf52840-ble-sensor' } },
-      { id: 'mcu-collector', type: 'nrf52840-dk', x: 620, y: 220, rotate: 0,
-        attrs: { boardId: 'nrf52840-ble-collector' } },
-    ],
-    connections: [],
+  {
+    boardId: 'nrf52840-ble-lab',
+    chipId: 'nrf52840',
+    name: 'nRF52840 BLE Lab (2 boards)',
+    description: 'Two nRF52840s on one canvas: a Sensor advertising an incrementing reading over the BLE 1 Mbit PHY and a Collector receiving it — both running at once over the shared virtual air. Run and open the Packet Analyzer (Tools) to watch the frames.',
+    arch: 'ARM Cortex-M4F',
+    chipYaml: chipNrf52840Onboarding,
+    systemYaml: systemNrf52840Onboarding,
+    mcuComponentType: 'nrf52840-dk',
+    kind: 'lab',
   },
-},
 ```
-NOTE: if the existing lab entries declare their diagram under a different key (e.g. `workspace`, or a top-level `parts`), use that key instead — match the surrounding entries verbatim. If `BoardConfig` lacks any diagram field and `loadBoardWorkspace` synthesizes from `mcuComponentType`, then instead extend `loadBoardWorkspace` to special-case `boardId === 'nrf52840-ble-lab'` and return the two-part diagram above (document this in the commit).
 
-- [ ] **Step 3: Confirm each MCU part loads its own firmware**
+- [ ] **Step 3: Special-case `makeStarterDiagram` for the lab**
 
-Run:
+In `makeStarterDiagram` (App.tsx), before the default single-MCU return, add a branch that returns two MCU parts — each carrying `attrs.boardId`. Keep one part id === `'mcu'` so `foregroundPartId`'s default (`'mcu'`) has a target on first load. Match the exact `Part`/`Diagram` shape observed in Step 1 (the snippet below assumes `{ parts, connections: [] }` and `Part` = `{ id, type, x, y, rotate, attrs }`; adjust field names/coords to the real shape):
+```ts
+  if (config.boardId === 'nrf52840-ble-lab') {
+    return {
+      parts: [
+        { id: 'mcu', type: 'nrf52840-dk', x: 180, y: 220, rotate: 0,
+          attrs: { boardId: 'nrf52840-ble-sensor' } },
+        { id: 'mcu-collector', type: 'nrf52840-dk', x: 620, y: 220, rotate: 0,
+          attrs: { boardId: 'nrf52840-ble-collector' } },
+      ],
+      connections: [],
+    };
+  }
+```
+
+- [ ] **Step 4: Ensure each MCU part runs its OWN firmware**
+
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground/src
-grep -n "demoFirmwarePath\|attrs.boardId\|mcuBoardForPart\|firmware" ../src/App.tsx | sed -n '1,40p'
+grep -n "demoFirmwarePath\|drawerSubject.board\|launchSimulation\|loadFirmware\|fromConfig" App.tsx | head -30
 ```
-Confirm the per-part sim setup (where `usePerChipSims`/launch resolves a part's board) uses `mcuBoardForPart` (now `resolveBoardForPart`) and loads that board's `demoFirmwarePath`. If the foreground/primary path loads firmware from `selectedBoard` rather than from the part's resolved board, adjust so a part with `attrs.boardId` loads the resolved board's `demoFirmwarePath` (otherwise both parts would run the lab's firmware, not sensor/collector firmware). Add a focused note in the commit if a code change here is needed.
+Confirm the path that builds a part's bridge resolves firmware from the part's board (`mcuBoardForPart`/`drawerSubject.board`), not unconditionally from `selectedBoard`. The foreground part is `drawerSubject.part`, and `drawerSubject.board = mcuBoardForPart(part, selectedBoard) ?? selectedBoard` (1128) — so the foreground already loads the resolved board's firmware. Verify `usePerChipSims`/background bridges do the same for the non-foreground part; if a background bridge is built from `selectedBoard` rather than its part's resolved board, fix it to use the resolved board's `demoFirmwarePath`. Note any code change in the commit.
 
-- [ ] **Step 4: Typecheck + commit**
+- [ ] **Step 5: Typecheck + commit**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground && npx tsc --noEmit
 git add packages/playground/src/bundled-configs.ts packages/playground/src/App.tsx
@@ -282,65 +270,62 @@ Expected: exit 0.
 
 ---
 
-## Task 3: Move the analyzer into a Tools menu + make it resizable
+## Task 3: Move the analyzer into a Tools toggle + make it resizable
 
 **Files:**
-- Modify: `packages/playground/src/App.tsx` (analyzer mount ~2452–2465; add toggle state + Tools control)
+- Modify: `packages/playground/src/App.tsx` (analyzer mount 2456-2468; `showAnalyzer` state; pass to SimDock)
+- Modify: `packages/playground/src/studio/SimDock.tsx` (toggle button + props)
 
-- [ ] **Step 1: Locate the analyzer mount and the toolbar/dock it should live in**
+- [ ] **Step 1: Read SimDock's props + button pattern, and the analyzer mount**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground/src
-sed -n '2445,2470p' App.tsx                              # current always-on mount
-grep -n "SimDock\|toolbar\|Tools\|button\|DevDrawer\|WatchOverlay" App.tsx | head -30
-grep -n "button\|onClick\|aria-label\|title=" studio/SimDock.tsx 2>/dev/null | head
+sed -n '1,130p' studio/SimDock.tsx
+grep -n "SimDock" App.tsx
+sed -n '2452,2470p' App.tsx
 ```
-Identify (a) the JSX block that currently renders `<BleAnalyzer bridge={bridge} running={running} />`, and (b) an existing toolbar/dock with toggle buttons (e.g. `SimDock`) where a "Packet Analyzer" / "Tools" toggle button fits, following the existing button pattern.
+Note SimDock's prop interface and an existing toggle button's exact `className`/markup to mirror, and where `<SimDock … />` is rendered in App so the new props can be passed.
 
-- [ ] **Step 2: Add visibility state**
+- [ ] **Step 2: Add visibility state in App**
 
-Near the other `useState` hooks in the App component, add:
+Near the other `useState` hooks, add:
 ```ts
 // Analyzer is an opt-in instrument now (was an always-on panel that froze the
-// canvas). Toggled from the Tools control; hidden by default.
+// canvas). Toggled from the SimDock Tools control; hidden by default.
 const [showAnalyzer, setShowAnalyzer] = useState(false);
 ```
 
-- [ ] **Step 3: Add the Tools toggle control**
+- [ ] **Step 3: Add the toggle to SimDock**
 
-In the toolbar/dock identified in Step 1, add a toggle button matching the existing button style (replace `className`/icon to match siblings):
+In `SimDock.tsx`, extend the props interface with:
+```ts
+  analyzerOpen: boolean;
+  onToggleAnalyzer: () => void;
+```
+Add a button in the control row, mirroring a sibling button's classes (replace `<SIBLING_BUTTON_CLASSNAME>` with the real one from Step 1):
 ```tsx
 <button
   type="button"
-  className="<copy the className of a sibling dock/toolbar button>"
-  aria-pressed={showAnalyzer}
+  className="<SIBLING_BUTTON_CLASSNAME>"
+  aria-pressed={analyzerOpen}
   title="Packet Analyzer (BLE air)"
-  onClick={() => setShowAnalyzer((v) => !v)}
+  onClick={onToggleAnalyzer}
 >
   Analyzer
 </button>
 ```
-If there is no obvious toolbar, add it to the same row as the Run control in `SimDock`.
+At the `<SimDock … />` call site in App.tsx, pass `analyzerOpen={showAnalyzer}` and `onToggleAnalyzer={() => setShowAnalyzer((v) => !v)}`. Update `SimDock.test.tsx` if it constructs SimDock with a fixed prop set (add the two new props).
 
 - [ ] **Step 4: Replace the always-on mount with a resizable, dismissable host**
 
-Replace the current `<BleAnalyzer … />` mount block (~2452–2465) with a gated, resizable container. Native CSS `resize` needs `overflow` set on the same element; the analyzer fills it via its own `h-full`:
+Replace the analyzer block (App.tsx 2456-2468). Drop the `hasBle` auto-show gate — visibility is now the explicit `showAnalyzer` toggle (keep `!isMobile`). Native CSS `resize` needs `overflow` set on the same element; the analyzer fills it via its own `h-full`:
 ```tsx
-{showAnalyzer && (
+{!isMobile && showAnalyzer && (
   <div
     className="absolute bottom-4 right-4 z-30 flex flex-col rounded-lg border border-border bg-bg-base shadow-xl overflow-hidden"
-    style={{
-      resize: 'both',
-      width: 520,
-      height: 320,
-      minWidth: 320,
-      minHeight: 160,
-      maxWidth: '90vw',
-      maxHeight: '80vh',
-    }}
+    style={{ resize: 'both', width: 520, height: 320, minWidth: 320, minHeight: 160, maxWidth: '90vw', maxHeight: '80vh' }}
   >
-    <div className="flex items-center justify-between px-2 py-1 border-b border-border cursor-default">
+    <div className="flex items-center justify-between px-2 py-1 border-b border-border">
       <span className="text-[11px] font-semibold text-fg-secondary">Tools · Packet Analyzer</span>
       <button
         type="button"
@@ -357,60 +342,60 @@ Replace the current `<BleAnalyzer … />` mount block (~2452–2465) with a gate
   </div>
 )}
 ```
-NOTE: `resize: 'both'` requires `overflow` not `visible` on the resizing element — the outer `overflow-hidden` satisfies that, and the inner wrapper's `min-h-0 overflow-hidden` lets `BleAnalyzer`'s internal `overflow-auto` table scroll. The element must NOT be inside a parent that clips it (`absolute` + high `z-30` keeps it above the canvas). If the surrounding container is not `position: relative`, place this block inside the nearest relatively-positioned canvas wrapper, or change `absolute` to `fixed`.
+NOTE: the outer `overflow-hidden` satisfies the `resize` requirement; the inner `min-h-0 overflow-hidden` lets `BleAnalyzer`'s internal `overflow-auto` table scroll. Confirm the parent of this block is positioned (`relative`/the canvas wrapper) so `absolute` anchors correctly; if not, switch `absolute` to `fixed`.
 
-- [ ] **Step 5: Typecheck + commit**
+- [ ] **Step 5: Typecheck + tests + commit**
 
-Run:
 ```bash
-cd /home/andrii/Projects/labwired/packages/playground && npx tsc --noEmit
-git add packages/playground/src/App.tsx
+cd /home/andrii/Projects/labwired/packages/playground && npx tsc --noEmit && npx vitest run src/studio/SimDock.test.tsx
+git add packages/playground/src/App.tsx packages/playground/src/studio/SimDock.tsx packages/playground/src/studio/SimDock.test.tsx
 git commit -m "fix(playground): analyzer is a toggled, resizable Tools instrument (no more frozen panel)"
 ```
-Expected: exit 0.
+Expected: exit 0; SimDock tests pass.
 
 ---
 
 ## Task 4: Live verification — the proof gate (do NOT merge before this passes)
 
-**Files:** none (manual + Playwright MCP)
+**Files:** none (Playwright MCP)
 
-- [ ] **Step 1: Start the dev server without auth**
+- [ ] **Step 1: Dev server, no auth (background)**
 
-Run (background):
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground
 VITE_DISABLE_AUTH=true npx vite --port 5173 --strictPort
 ```
-Run this with `run_in_background: true`. To stop it later use `fuser -k 5173/tcp` — **never** `pkill -f vite` (it matches the agent's own shell and exits 144).
+Run with `run_in_background: true`. Stop later with `fuser -k 5173/tcp` — **never** `pkill -f vite` (matches the agent's own shell, exits 144).
 
-- [ ] **Step 2: Open the lab and verify two boards render**
+- [ ] **Step 2: Open the lab → two boards visible**
 
-Using Playwright MCP: `browser_navigate` to `http://localhost:5173`, open the board picker / command palette, choose **"nRF52840 BLE Lab (2 boards)"**. `browser_snapshot` + `browser_take_screenshot`.
-Expected: **two nRF52840 boards visible** on one canvas (sensor + collector), side by side.
+Playwright MCP: `browser_navigate` to `http://localhost:5173`, open the board picker / ⌘K palette, choose **"nRF52840 BLE Lab (2 boards)"**. `browser_snapshot` + `browser_take_screenshot`.
+Expected: **two nRF52840 boards** on one canvas (sensor + collector).
 
-- [ ] **Step 3: Open the analyzer from Tools and check it is usable**
+- [ ] **Step 3: Analyzer from Tools is usable**
 
-Click the **Analyzer** toggle. Verify the panel appears, has a visible resize affordance (drag the corner via `browser_drag` a few px), and scrolls — it must NOT freeze the page.
-Expected: panel toggles on/off, resizes, does not lock the UI.
+Click the **Analyzer** toggle in SimDock. Verify the panel appears, drag its corner (`browser_drag`) to resize, and it scrolls — no UI freeze. Toggle it off and on again.
+Expected: toggles, resizes, does not lock the page.
 
-- [ ] **Step 4: Run and confirm packets cross**
+- [ ] **Step 4: Run → packets cross**
 
-Press **Run**. Wait ~2–3s (`browser_wait_for`). `browser_take_screenshot` of the analyzer.
-Expected: the analyzer frame counter climbs and rows appear with a de-whitened **Reading** column that **increments** (sensor's counter), and the **Address**/**Freq** columns are populated — proof the collector is hearing the sensor over shared air, not a single board echoing itself. Cross-check via console: `browser_console_messages` for any errors.
+Press **Run**. `browser_wait_for` ~2-3s. `browser_take_screenshot` of the analyzer.
+Expected: the frame counter climbs; rows show a de-whitened **Reading** that **increments** (the sensor's counter) and populated **Address**/**Freq** — proof the collector hears the sensor over shared air (not one board echoing itself). `browser_console_messages`: no errors.
 
-- [ ] **Step 5: Reload persistence check**
+- [ ] **Step 5: Reload persistence**
 
-`browser_navigate` to the same URL again (reload). Re-open the lab if needed.
-Expected: the lab still loads with two boards and Run still produces packets (no broken state, no junk tile).
+`browser_navigate` to the same URL (reload); re-open the lab if needed.
+Expected: two boards still load and Run still produces packets; no junk tile, no broken state.
 
-- [ ] **Step 6: Record the evidence**
+- [ ] **Step 6: Record evidence**
 
-Save the key screenshot(s); note frame counts and a couple of incrementing Reading values in the PR description. If ANY step fails, stop — fix the relevant task, do not merge.
+Save the key screenshot(s); note frame counts + a couple of incrementing Reading values for the PR. If ANY step fails: stop, fix the relevant task, re-run — do not merge.
 
-- [ ] **Step 7: Stop the dev server**
+- [ ] **Step 7: Stop dev server**
 
-Run: `fuser -k 5173/tcp`
+```bash
+fuser -k 5173/tcp
+```
 
 ---
 
@@ -420,44 +405,50 @@ Run: `fuser -k 5173/tcp`
 
 - [ ] **Step 1: Full local check**
 
-Run:
 ```bash
 cd /home/andrii/Projects/labwired/packages/playground && npx tsc --noEmit && npx vitest run
 ```
-Expected: tsc exit 0; all tests pass (including `board-resolve.test.ts`).
+Expected: tsc exit 0; all tests pass (incl. `board-resolve.test.ts`).
 
-- [ ] **Step 2: Abandon the dead scratch branches**
+- [ ] **Step 2: Abandon dead scratch branches**
 
-Run (only delete branches that are fully superseded and unpushed):
 ```bash
 cd /home/andrii/Projects/labwired
 git branch -D fix/multichip-junk-tile fix/multichip-scratch-replace 2>/dev/null || true
 git branch --list 'fix/multichip-*'
 ```
-Expected: those branches gone (or already absent).
 
-- [ ] **Step 3: Push and open the PR**
+- [ ] **Step 3: Push + PR**
 
-Run:
 ```bash
 git push -u origin feat/nrf-ble-lab-example
 gh pr create --fill --title "nRF52840 BLE Lab — prebuilt two-board example + analyzer Tools fix"
 ```
-In the PR body include: the proof-gate screenshots/notes from Task 4, that `32c8ae4` is reverted here, and that the BLE decode logic is unchanged. Do NOT add any AI/Claude attribution or Co-Authored-By line (project convention).
+PR body: the proof-gate screenshots/notes from Task 4; that `32c8ae4` is reverted here; that BLE decode logic is unchanged. **No AI/Claude attribution or Co-Authored-By line** (project convention).
 
-- [ ] **Step 4: Confirm another agent hasn't moved main under you**
+- [ ] **Step 4: Re-check main hasn't moved**
 
-Run:
 ```bash
 git fetch origin && git log --oneline origin/main -3
 ```
-If main advanced, rebase `feat/nrf-ble-lab-example` onto it and re-run Task 4's proof gate before merge.
+If main advanced, rebase and re-run Task 4's proof gate before merge.
+
+---
+
+## Follow-up work (tracked — NOT dropped)
+
+Per the user: the general **Add-MCU-onto-canvas UX** is **not deferred indefinitely** — it ships as a **separate follow-up** after this lab lands. Capture it as its own issue/PR:
+
+- **Add-MCU general path:** make the ⌘K "Add MCU" command append a new MCU *part* to the current diagram (Mechanism A: `editor.addPart` with a fresh id + `attrs.boardId`), instead of routing through Mechanism B (`ChipsProvider.addChip`, which created the junk-tile/clobber problems). This builds directly on Task 1's `attrs.boardId` resolution — any added MCU part already resolves to its own board/firmware.
+- **Retire Mechanism B (optional, second follow-up):** once Add-MCU uses parts, the `ChipsProvider`/`McuStrip`/`ChipBridgeSync`/`useBackgroundChips` tab system is redundant for the playground; remove or quarantine it (self-contained — only App.tsx + its own files + `useCommandPaletteItems.ts` consume `useChips`). Do this only after confirming nothing else relies on it; coordinate since another agent is active.
+
+Create the follow-up issue when this PR opens; link it in the PR body.
 
 ---
 
 ## Self-review notes
 
-- **Spec coverage:** prebuilt lab (Task 2) ✓; both-boards-visible via Mechanism A (Tasks 1–2, verified Task 4) ✓; part→board identity fix (Task 1) ✓; analyzer Tools-menu + resizable (Task 3) ✓; revert 32c8ae4 (Task 0) ✓; live proof gate (Task 4) ✓; vitest for resolver (Task 1) ✓; deferred Add-MCU / Mechanism-B deletion explicitly out of scope ✓.
-- **Recon-first steps (1.1, 2.1, 3.1):** authored during a tool-output outage; they instruct the implementer to read the exact existing patterns (`BoardConfig` diagram field, lab-entry shape, toolbar button style) before writing code, because those structural shapes were not re-confirmable live at planning time. Each is followed by concrete code to write against the confirmed shape — not a "TBD".
-- **Type consistency:** the resolver is named `resolveBoardForPart` throughout; `mcuBoardForPart` keeps its name and delegates; `attrs.boardId` is the single disambiguation key everywhere.
-- **Risk:** the one genuine unknown is how a `BoardConfig` carries its starter diagram (a field vs `loadBoardWorkspace` synthesis). Step 2.1 resolves it before any code; Step 2.2 covers both branches.
+- **Spec coverage:** prebuilt lab (Task 2) ✓; both-boards-visible via Mechanism A (Tasks 1-2, verified Task 4) ✓; part→board identity fix (Task 1) ✓; analyzer Tools-toggle + resizable (Task 3) ✓; revert 32c8ae4 (Task 0) ✓; live proof gate (Task 4) ✓; vitest for resolver (Task 1) ✓; Add-MCU captured as tracked follow-up (Follow-up section) ✓.
+- **Recon-first steps (1.1, 2.1, 3.1, 2.4):** read the exact existing shapes (`Part` import, `makeStarterDiagram` body + `Diagram`/`Part` literal, `SimDock` props/button, per-part firmware path) before writing code against them — concrete reads, not "TBD".
+- **Type consistency:** resolver is `resolveBoardForPart` throughout; `mcuBoardForPart` keeps name + `(part, primaryBoard)` signature and delegates; `attrs.boardId` is the single disambiguation key; the lab is `nrf52840-ble-lab`; the second part id is `mcu-collector` everywhere.
+- **Corrected from v1:** the starter diagram is synthesized by `makeStarterDiagram` (App.tsx:441), NOT a `BoardConfig.diagram` field — Task 2 now edits `makeStarterDiagram`. `mcuBoardForPart` takes `primaryBoard` as a parameter (not closure) — Task 1 Step 6 matches the real signature.
