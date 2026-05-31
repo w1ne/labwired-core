@@ -9,8 +9,6 @@ describe('SimDock', () => {
     onPause: vi.fn(),
     onStep: vi.fn(),
     onReset: vi.fn(),
-    analyzerOpen: false,
-    onToggleAnalyzer: vi.fn(),
   };
 
   beforeEach(() => {

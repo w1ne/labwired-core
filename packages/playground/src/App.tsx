@@ -1730,7 +1730,7 @@ export function App() {
 
   // Command palette items
   const commandItems = useCommandPaletteItems({
-    boards: BOARD_CONFIGS,
+    boards: BOARD_CONFIGS.filter((b) => !b.hidden),
     onLoadBoard: handleBoardSelect,
     onPickLab: handlePickLab,
     onAddComponent: (type) => {
@@ -1807,8 +1807,6 @@ export function App() {
         onPause={handlePause}
         onStep={() => requireAuth(handleStep)}
         onReset={handleReset}
-        analyzerOpen={showAnalyzer}
-        onToggleAnalyzer={() => setShowAnalyzer((v) => !v)}
       />
     </div>
   );
@@ -2144,6 +2142,14 @@ export function App() {
               title="Toggle properties panel"
             >
               <SidebarRightIcon size={14} />
+            </button>
+            <button
+              className={`toolbar-btn toolbar-btn-ghost ${showAnalyzer ? 'active' : ''}`}
+              onClick={() => setShowAnalyzer((v) => !v)}
+              aria-pressed={showAnalyzer}
+              title="Toggle BLE packet analyzer"
+            >
+              Analyzer
             </button>
           </div>
 
@@ -2482,27 +2488,24 @@ export function App() {
       );
     })}
 
-    {/* Packet Analyzer — opt-in Tools instrument, toggled from the SimDock. */}
+    {/* Packet Analyzer — opt-in Tools instrument, toggled from the SimDock.
+        Uses the shared ChipWindow chrome so it's movable/resizable/closable
+        with the same controls as every chip window on the canvas. */}
     {!isMobile && showAnalyzer && (
-      <div
-        className="absolute bottom-4 right-4 z-30 flex flex-col rounded-lg border border-border bg-bg-base shadow-xl overflow-hidden"
-        style={{ resize: 'both', width: 520, height: 320, minWidth: 320, minHeight: 160, maxWidth: '90vw', maxHeight: '80vh' }}
+      <ChipWindow
+        initial={{ x: 900, y: 420 }}
+        width={520}
+        height={320}
+        zIndex={95}
+        onClose={() => setShowAnalyzer(false)}
+        title={
+          <span className="truncate text-xs font-semibold text-fg-primary">
+            Air Tracer · virtual wireless (BLE)
+          </span>
+        }
       >
-        <div className="flex items-center justify-between px-2 py-1 border-b border-border">
-          <span className="text-[11px] font-semibold text-fg-secondary">Tools · Packet Analyzer</span>
-          <button
-            type="button"
-            className="text-fg-tertiary hover:text-fg-primary text-[12px] px-1"
-            title="Close analyzer"
-            onClick={() => setShowAnalyzer(false)}
-          >
-            ✕
-          </button>
-        </div>
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <BleAnalyzer bridge={bridge} running={running} />
-        </div>
-      </div>
+        <BleAnalyzer bridge={bridge} running={running} />
+      </ChipWindow>
     )}
     </StudioShell>
     </ChipsProvider>

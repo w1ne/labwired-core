@@ -12,7 +12,7 @@ interface BoardPickerProps {
 /** Merge bundled configs with catalog entries for a unified board list. */
 function buildBoardList(catalog: CatalogEntry[]) {
   // Start with bundled (simulatable) boards
-  const items: BoardListItem[] = BOARD_CONFIGS.map((config) => {
+  const items: BoardListItem[] = BOARD_CONFIGS.filter((c) => !c.hidden).map((config) => {
     // Find matching catalog entry for image/metadata enrichment
     const catalogEntry = catalog.find(
       (c) => catalogSlug(c.id) === config.boardId || catalogSlug(c.id) === config.chipId,

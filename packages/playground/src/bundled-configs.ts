@@ -110,6 +110,8 @@ export interface BoardConfig {
   summary?: BoardSummary;
   /** Board-aware "Click Run to start" hint shown next to the SimDock. */
   runHint?: string;
+  /** Hidden from user-facing board lists (still resolvable by boardId — e.g. firmware for a sub-part of a multi-board lab). */
+  hidden?: boolean;
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -407,6 +409,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipNrf52840Onboarding,
     systemYaml: systemNrf52840Onboarding,
     demoFirmwarePath: `${BASE}wasm/demo-nrf52840-ble-sensor.elf`,
+    hidden: true,
     mcuComponentType: 'nrf52840-dk',
     kind: 'lab',
   },
@@ -419,6 +422,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipNrf52840Onboarding,
     systemYaml: systemNrf52840Onboarding,
     demoFirmwarePath: `${BASE}wasm/demo-nrf52840-ble-collector.elf`,
+    hidden: true,
     mcuComponentType: 'nrf52840-dk',
     kind: 'lab',
   },
@@ -432,6 +436,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     systemYaml: systemNrf52840Onboarding,
     mcuComponentType: 'nrf52840-dk',
     kind: 'lab',
+    runHint: 'Run the Sensor, then click the Collector and Run it too — open the Analyzer (toolbar) to watch frames.',
   },
 ];
 
