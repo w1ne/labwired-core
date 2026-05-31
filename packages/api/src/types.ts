@@ -60,6 +60,10 @@ export interface Env {
   CLERK_JWT_KEY: string;
   /** Clerk publishable key. Required by @clerk/backend v2 to resolve the Frontend API. */
   CLERK_PUBLISHABLE_KEY: string;
+  /** OAuth 2.0 authorization server issuer advertised in the MCP protected-resource
+   *  metadata (RFC 9728). Must be set (= the Clerk Frontend API origin, e.g.
+   *  https://clerk.labwired.com) or agents can't discover where to log in. */
+  MCP_AUTHORIZATION_SERVER?: string;
 }
 
 /** Response body for POST /v1/keys/validate */

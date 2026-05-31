@@ -67,3 +67,7 @@ CLERK_JWT_KEY = ""
 # Frontend API URL. Safe to bake into the Worker (it's public, same value
 # the browser bundle uses).
 CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsubGFid2lyZWQuY29tJA"
+# OAuth authorization server advertised in the MCP protected-resource metadata
+# (src/mcp/oauth.ts). Without it, `authorization_servers` is omitted and agent
+# OAuth discovery dead-ends. = the Clerk Frontend API origin (serves RFC 8414 + PKCE).
+MCP_AUTHORIZATION_SERVER = "https://clerk.labwired.com"

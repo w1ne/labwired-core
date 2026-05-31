@@ -39,6 +39,8 @@ import {
   handleDeleteSession,
   handleSessionWebSocket,
 } from './sessions.js';
+import { handleMcpProtectedResourceMetadata } from './mcp/oauth.js';
+import { handleHostedMcp } from './mcp/http.js';
 export { SessionDO } from './SessionDO.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
@@ -59,56 +61,6 @@ function errorResponse(message: string, status = 400): Response {
   return corsResponse({ error: message }, status);
 }
 
-// ── OAuth discovery for the MCP endpoint ───────────────────────────────────
-// Agents (Claude Code, Codex, claude.ai, …) connect to https://api.labwired.com/mcp
-// via browser OAuth — no pasted key. The discovery chain (MCP spec / RFC 9728):
-//   1. POST /mcp           → 401 + WWW-Authenticate pointing at (2)
-//   2. GET  /.well-known/oauth-protected-resource/mcp → lists `authorization_servers`
-//   3. GET  <as>/.well-known/oauth-authorization-server (RFC 8414) → endpoints
-//   4. register (RFC 7591 DCR) + PKCE authorization_code in the browser
-// Clerk is the authorization server (it already serves step 3 + PKCE). The bug
-// this fixes: step 2's document was missing `authorization_servers`, so clients
-// had no AS to send the user to and fell back to demanding a manual key.
-
-/** Clerk Frontend API origin — our OAuth 2.0 authorization server. Derived from
- *  the public publishable key (pk_live_<base64("clerk.labwired.com$")>) so it
- *  stays correct across environments; falls back to the prod host. */
-function clerkIssuer(env: Env): string {
-  const pk = env.CLERK_PUBLISHABLE_KEY || '';
-  const b64 = pk.replace(/^pk_(?:live|test)_/, '');
-  try {
-    const host = atob(b64).replace(/\$+$/, '').trim();
-    if (host) return `https://${host}`;
-  } catch {
-    /* malformed key — fall through to the known prod host */
-  }
-  return 'https://clerk.labwired.com';
-}
-
-function wellKnownResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=3600',
-      ...CORS_HEADERS,
-    },
-  });
-}
-
-/** RFC 9728 protected-resource metadata for the MCP endpoint. */
-function handleProtectedResourceMetadata(url: URL, env: Env): Response {
-  return wellKnownResponse({
-    resource: `${url.origin}/mcp`,
-    resource_name: 'LabWired Engine MCP',
-    // THE FIX: without this, OAuth discovery dead-ends and clients demand a key.
-    authorization_servers: [clerkIssuer(env)],
-    scopes_supported: ['labwired:mcp'],
-    bearer_methods_supported: ['header'],
-    resource_documentation: 'https://labwired.com/#agent-harness',
-  });
-}
-
 // ── Main fetch handler ─────────────────────────────────────────────────────
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -122,18 +74,18 @@ export default {
     }
 
     try {
-      // ── OAuth discovery (RFC 9728 / 8414) for the MCP endpoint ───────────
+      // ── Hosted MCP endpoint + its OAuth discovery (RFC 9728) ─────────────
+      // Agents connect to POST /mcp via browser OAuth. The protected-resource
+      // metadata lists the authorization server (Clerk); see src/mcp/oauth.ts.
       if (
         method === 'GET' &&
-        (pathname === '/.well-known/oauth-protected-resource/mcp' ||
-          pathname === '/.well-known/oauth-protected-resource')
+        (pathname === '/.well-known/oauth-protected-resource' ||
+          pathname === '/.well-known/oauth-protected-resource/mcp')
       ) {
-        return handleProtectedResourceMetadata(url, env);
+        return handleMcpProtectedResourceMetadata(request, env);
       }
-      // Courtesy fallback: clients that probe the resource server itself for AS
-      // metadata are redirected to Clerk's RFC 8414 document.
-      if (method === 'GET' && pathname === '/.well-known/oauth-authorization-server') {
-        return Response.redirect(`${clerkIssuer(env)}/.well-known/oauth-authorization-server`, 302);
+      if (method === 'POST' && pathname === '/mcp') {
+        return handleHostedMcp(request, env);
       }
 
       if (method === 'POST' && pathname === '/v1/webhooks/stripe') {
