@@ -37,3 +37,15 @@ repos:
         language: system
         types: [rust]
         pass_filenames: false
+
+    -   id: playground-invariants
+        name: playground board/chip invariants
+        description: >-
+            Fail the commit if it breaks the board/chip/example invariants:
+            labs stay in Examples (not Boards), and every chip is fully
+            onboarded (pin-mapping + board component + chipYaml). Runs the
+            existing guardrail test. See docs/guides/onboarding-a-chip.md.
+        entry: bash -c 'cd packages/playground && npx vitest run src/bundled-configs.test.ts'
+        language: system
+        files: ^packages/(playground/src/(bundled-configs\.ts|studio/ChipRow\.tsx)|ui/src/editor/(pin-mapping\.ts|diagramToConfig\.ts|components/(index\.ts|boards/[^/]+\.tsx)))$
+        pass_filenames: false
