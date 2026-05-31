@@ -16,6 +16,6 @@ validation:
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-05-24T00:19:38.365045+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/26347265359/attempts/1
+  timestamp_utc: '2026-05-31T00:21:38.557501+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/26698744111/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/gr716.md

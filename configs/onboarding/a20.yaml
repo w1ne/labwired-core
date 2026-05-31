@@ -15,6 +15,6 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-05-24T00:19:37.669497+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/26347265359/attempts/1
+  timestamp_utc: '2026-05-31T00:21:37.785126+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/26698744111/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/a20.md
