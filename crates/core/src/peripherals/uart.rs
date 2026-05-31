@@ -22,6 +22,10 @@ pub trait UartStreamDevice: Send {
     /// or None if no byte is pending. Implementations should respect `elapsed_us` to
     /// pace output (e.g. 9600 baud → ~1 ms/byte → emit one byte per ~1000 us tick).
     fn poll(&mut self, elapsed_us: u32) -> Option<u8>;
+    /// Observe a byte transmitted by firmware on the TX path. Default: ignore.
+    /// Bidirectional peers (e.g. an IO-Link master) override this to receive the
+    /// device's responses, complementing `poll` which drives the RX path.
+    fn on_tx_byte(&mut self, _byte: u8) {}
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
@@ -241,6 +245,10 @@ impl Uart {
             if let Ok(mut guard) = sink.lock() {
                 guard.push(value);
             }
+        }
+
+        for stream in &mut self.attached_streams {
+            stream.on_tx_byte(value);
         }
 
         if self.echo_stdout {
@@ -532,5 +540,31 @@ mod tests {
         let rx = uart.rx_buffer();
         uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
         assert_eq!(rx.lock().unwrap().front().copied(), Some(b'G'));
+    }
+
+    #[test]
+    fn attached_stream_observes_firmware_tx_bytes() {
+        use super::UartStreamDevice;
+        use std::sync::{Arc, Mutex};
+
+        struct Recorder(Arc<Mutex<Vec<u8>>>);
+        impl UartStreamDevice for Recorder {
+            fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+                None
+            }
+            fn on_tx_byte(&mut self, byte: u8) {
+                self.0.lock().unwrap().push(byte);
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let mut uart = Uart::new(); // Stm32F1 layout
+        uart.set_sink(None, false); // disable stdout echo
+        uart.attach_stream(Box::new(Recorder(seen.clone())));
+
+        // Stm32F1: writing the DR alias at offset 0x00 transmits a byte.
+        uart.write(0x00, 0x42).unwrap();
+
+        assert_eq!(*seen.lock().unwrap(), vec![0x42]);
     }
 }
