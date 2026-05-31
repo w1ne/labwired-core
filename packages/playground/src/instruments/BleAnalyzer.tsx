@@ -51,7 +51,7 @@ export function BleAnalyzer({ bridge, running, pollMs = 200 }: BleAnalyzerProps)
   return (
     <div className="flex flex-col h-full min-h-0 text-fg-primary text-[12px]">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="font-semibold tracking-tight">Packet Analyzer · BLE air</span>
+        <span className="font-semibold tracking-tight">Air Tracer · virtual wireless (BLE)</span>
         <span className="text-fg-tertiary font-mono text-[11px]">
           {rows.length} frame{rows.length === 1 ? '' : 's'}
         </span>
@@ -73,6 +73,7 @@ export function BleAnalyzer({ bridge, running, pollMs = 200 }: BleAnalyzerProps)
                 <th className="px-3 py-1.5 font-medium">PHY</th>
                 <th className="px-3 py-1.5 font-medium">Address</th>
                 <th className="px-3 py-1.5 font-medium">Len</th>
+                <th className="px-3 py-1.5 font-medium">CRC</th>
                 <th className="px-3 py-1.5 font-medium">Reading</th>
                 <th className="px-3 py-1.5 font-medium">Payload (de-whitened)</th>
               </tr>
@@ -89,6 +90,15 @@ export function BleAnalyzer({ bridge, running, pollMs = 200 }: BleAnalyzerProps)
                   <td className="px-3 py-1">{r.phy}</td>
                   <td className="px-3 py-1 text-fg-secondary">{r.address}</td>
                   <td className="px-3 py-1">{r.length ?? '–'}</td>
+                  <td className="px-3 py-1 font-semibold">
+                    {r.crcOk === null ? (
+                      <span className="text-fg-tertiary">–</span>
+                    ) : r.crcOk ? (
+                      <span className="text-green-500">OK</span>
+                    ) : (
+                      <span className="text-red-500">BAD</span>
+                    )}
+                  </td>
                   <td className="px-3 py-1 text-fg-primary font-semibold">{r.reading ?? '–'}</td>
                   <td className="px-3 py-1 text-fg-secondary whitespace-nowrap">{r.hex}</td>
                 </tr>

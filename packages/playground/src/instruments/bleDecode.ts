@@ -15,6 +15,15 @@ import type { AirFrameTrace } from '@labwired/ui';
 /** Number of trailing CRC bytes appended (post-whitening) by the RADIO model. */
 const CRC_LEN = 3;
 
+/**
+ * BLE CRC-24 init value (CRCINIT). The air trace does not carry the sender's
+ * CRCINIT register, so we assume the BLE-standard 0x555555 used by every
+ * board on the shared virtual air (matches the RADIO model's call sites and
+ * tests in core/.../nrf52/radio.rs). If a frame used a different init, it will
+ * read BAD — which is the honest answer, not a fabricated OK.
+ */
+export const BLE_CRC_INIT = 0x555555;
+
 /** A decoded, display-ready row for the analyzer's protocol view. */
 export interface BleTransaction {
   /** RADIO FREQUENCY register value (MHz offset from 2400). */
@@ -37,6 +46,12 @@ export interface BleTransaction {
   rawHex: string;
   /** De-whitened logical frame (header+payload, CRC stripped) as spaced hex. */
   hex: string;
+  /**
+   * CRC-24 verification result: true if the recomputed CRC over the on-air
+   * (whitened) bytes matches the trailing 3 CRC bytes, false if it mismatches,
+   * null if the frame is too short to contain a CRC.
+   */
+  crcOk: boolean | null;
 }
 
 /** Map the RADIO MODE register to a short PHY label. */
@@ -87,14 +102,54 @@ export function bleWhiten(data: number[], whiteningIv: number): number[] {
   return out;
 }
 
+/**
+ * BLE CRC-24 — faithful port of the RADIO model's `ble_crc24`
+ * (core/crates/core/src/peripherals/nrf52/radio.rs). MSB-first shift register,
+ * polynomial 0x65B (the low bits of 0x100065B), seeded from `crcInit`.
+ *
+ * The engine computes this over the WHITENED on-air bytes (TX whitens the
+ * header+payload in place, THEN appends the CRC of those whitened bytes), so
+ * the verifier here must feed it the same whitened bytes — NOT the de-whitened
+ * logical frame.
+ */
+export function bleCrc24(data: number[], crcInit: number): number {
+  let crc = crcInit & 0xffffff;
+  for (const byte of data) {
+    crc ^= (byte & 0xff) << 16;
+    for (let bit = 0; bit < 8; bit++) {
+      if ((crc & (1 << 23)) !== 0) {
+        crc = ((crc << 1) ^ 0x65b) & 0xffffff;
+      } else {
+        crc = (crc << 1) & 0xffffff;
+      }
+    }
+  }
+  return crc >>> 0;
+}
+
 /** Decode a single air-trace frame into a display transaction. */
 export function decodeBleFrame(frame: AirFrameTrace): BleTransaction {
   const onAir = frame.bytes ?? [];
 
   // The CRC is appended AFTER whitening, so strip it before de-whitening the
   // logical portion. Guard short frames (no CRC present yet).
-  const logicalWhitened = onAir.length > CRC_LEN ? onAir.slice(0, onAir.length - CRC_LEN) : [];
+  const hasCrc = onAir.length > CRC_LEN;
+  const logicalWhitened = hasCrc ? onAir.slice(0, onAir.length - CRC_LEN) : [];
   const logical = bleWhiten(logicalWhitened, frame.whitening_iv ?? 0);
+
+  // Verify CRC-24: recompute over the whitened on-air bytes (everything before
+  // the trailing 3 CRC bytes) and compare against the appended little-endian
+  // CRC (byte0 = bits 7:0, byte1 = bits 15:8, byte2 = bits 23:16), matching the
+  // RADIO model's TX append order exactly.
+  let crcOk: boolean | null = null;
+  if (hasCrc) {
+    const expected = bleCrc24(logicalWhitened, BLE_CRC_INIT);
+    const c0 = onAir[onAir.length - 3] & 0xff;
+    const c1 = onAir[onAir.length - 2] & 0xff;
+    const c2 = onAir[onAir.length - 1] & 0xff;
+    const received = ((c2 << 16) | (c1 << 8) | c0) >>> 0;
+    crcOk = expected === received;
+  }
 
   const s0 = logical.length > 0 ? logical[0] & 0xff : null;
   const length = logical.length > 1 ? logical[1] & 0xff : null;
@@ -116,6 +171,7 @@ export function decodeBleFrame(frame: AirFrameTrace): BleTransaction {
     reading: payload.length > 0 ? payload[0] & 0xff : null,
     rawHex: toHex(onAir),
     hex: toHex(logical),
+    crcOk,
   };
 }
 
