@@ -64,14 +64,37 @@ jobs:
           npm ci --ignore-scripts
           npm run build
 
-      # Deterministic gate: block the deploy if the playground's unit tests fail.
-      # Covers the firmware-asset gate (every board's demoFirmwarePath ELF must be
-      # committed, non-empty, real ELF magic — so the live site never serves HTML
-      # in place of firmware → "Simulator init failed") and the lab/board UX
-      # invariants. A red test here stops the deploy BEFORE it reaches users.
-      - name: Test @labwired/playground (gate before deploy)
+      # Lean deploy gate: guarantee we never ship a broken build. Checks the
+      # actual dist/ that is about to be uploaded — not source — so it catches
+      # the real failure mode (an ELF missing/gitignored/0-byte ⇒ the live site
+      # serves index.html in its place ⇒ "Simulator init failed" on Run).
+      # Pure file checks, no test runner / jsdom — runs in well under a second.
+      # (The full playground test suite already gates every PR via
+      # playground-ci.yml, so main is green before we get here; this is the
+      # last-mile artifact check.)
+      - name: Verify build artifacts (deploy gate)
         working-directory: packages/playground
-        run: npm run test
+        run: |
+          set -euo pipefail
+          dist="dist"
+          test -f "$dist/index.html" || { echo "::error::dist/index.html missing — build did not produce an app"; exit 1; }
+
+          # Every firmware referenced by a board config must be present in dist,
+          # non-empty, and a real ELF (magic 0x7F 45 4C 46).
+          mapfile -t elfs < <(grep -oE 'demo-[a-z0-9-]+\.elf' src/bundled-configs.ts | sort -u)
+          test "${#elfs[@]}" -gt 0 || { echo "::error::no demoFirmwarePath ELFs found in bundled-configs.ts — gate misconfigured"; exit 1; }
+          fail=0
+          for name in "${elfs[@]}"; do
+            f="$dist/wasm/$name"
+            if [ ! -f "$f" ]; then echo "::error::$name missing from dist/wasm — would be served as HTML → 'Simulator init failed'"; fail=1; continue; fi
+            sz=$(stat -c%s "$f")
+            if [ "$sz" -le 0 ]; then echo "::error::$name is 0 bytes"; fail=1; continue; fi
+            magic=$(head -c4 "$f" | od -An -tx1 | tr -d ' \n')
+            if [ "$magic" != "7f454c46" ]; then echo "::error::$name is not a real ELF (magic=$magic) — likely HTML/placeholder"; fail=1; continue; fi
+            echo "ok: $name ($sz bytes, ELF)"
+          done
+          test "$fail" -eq 0 || { echo "::error::deploy gate failed — refusing to publish a broken build"; exit 1; }
+          echo "Deploy gate passed: ${#elfs[@]} firmware ELFs present + valid in dist."
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
