@@ -10,6 +10,7 @@ pub mod bme280;
 pub mod bmp280;
 pub mod i2c_factory;
 pub mod ili9341;
+pub mod iolink_master;
 pub mod max31855;
 pub mod mpu6050;
 pub mod neo6m;
