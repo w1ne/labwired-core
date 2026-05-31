@@ -236,20 +236,22 @@ Insert into `BOARD_CONFIGS` right after the `nrf52840-ble-collector` entry (befo
 
 - [ ] **Step 3: Special-case `makeStarterDiagram` for the lab**
 
-In `makeStarterDiagram` (App.tsx), before the default single-MCU return, add a branch that returns two MCU parts — each carrying `attrs.boardId`. Keep one part id === `'mcu'` so `foregroundPartId`'s default (`'mcu'`) has a target on first load. Match the exact `Part`/`Diagram` shape observed in Step 1 (the snippet below assumes `{ parts, connections: [] }` and `Part` = `{ id, type, x, y, rotate, attrs }`; adjust field names/coords to the real shape):
+In `makeStarterDiagram` (App.tsx, body starts at line 140), add a branch alongside the other `if (config.boardId === …)` blocks. The verified diagram shape is `{ ...createEmptyDiagram(config.chipId), parts: Part[], wires: Wire[] }` (it uses `wires`, NOT `connections`), and `Part = { id, type, x, y, rotate, attrs }` (optional `scale`). The two MCU parts have no wires between them — they talk over the virtual air, not copper. Keep one part id === `'mcu'` so `foregroundPartId`'s default (`'mcu'`) has a target on first load:
 ```ts
   if (config.boardId === 'nrf52840-ble-lab') {
     return {
+      ...createEmptyDiagram(config.chipId),
       parts: [
-        { id: 'mcu', type: 'nrf52840-dk', x: 180, y: 220, rotate: 0,
+        { id: 'mcu', type: config.mcuComponentType, x: 100, y: 160, rotate: 0,
           attrs: { boardId: 'nrf52840-ble-sensor' } },
-        { id: 'mcu-collector', type: 'nrf52840-dk', x: 620, y: 220, rotate: 0,
+        { id: 'mcu-collector', type: config.mcuComponentType, x: 560, y: 160, rotate: 0,
           attrs: { boardId: 'nrf52840-ble-collector' } },
       ],
-      connections: [],
+      wires: [],
     };
   }
 ```
+(`config.mcuComponentType` is `'nrf52840-dk'` for this lab — same as the top-of-function `mcu` const uses.)
 
 - [ ] **Step 4: Ensure each MCU part runs its OWN firmware**
 
@@ -302,19 +304,25 @@ In `SimDock.tsx`, extend the props interface with:
   analyzerOpen: boolean;
   onToggleAnalyzer: () => void;
 ```
-Add a button in the control row, mirroring a sibling button's classes (replace `<SIBLING_BUTTON_CLASSNAME>` with the real one from Step 1):
+Add a button just before the `<div className="flex-1" />` spacer (line ~119), styled like the existing Step/Reset secondary buttons (verified classes below; uses `clsx` which is already imported):
 ```tsx
 <button
   type="button"
-  className="<SIBLING_BUTTON_CLASSNAME>"
+  onClick={onToggleAnalyzer}
   aria-pressed={analyzerOpen}
   title="Packet Analyzer (BLE air)"
-  onClick={onToggleAnalyzer}
+  style={{ borderRadius: 999 }}
+  className={clsx(
+    'h-10 sm:h-8 px-3 text-[13px] outline-none border-0 shrink-0',
+    analyzerOpen
+      ? 'bg-accent/20 text-fg-primary'
+      : 'bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary',
+  )}
 >
   Analyzer
 </button>
 ```
-At the `<SimDock … />` call site in App.tsx, pass `analyzerOpen={showAnalyzer}` and `onToggleAnalyzer={() => setShowAnalyzer((v) => !v)}`. Update `SimDock.test.tsx` if it constructs SimDock with a fixed prop set (add the two new props).
+At the `<SimDock … />` call site (App.tsx:1770), pass `analyzerOpen={showAnalyzer}` and `onToggleAnalyzer={() => setShowAnalyzer((v) => !v)}`. Update `SimDock.test.tsx` to supply the two new props (it renders SimDock with a fixed prop set).
 
 - [ ] **Step 4: Replace the always-on mount with a resizable, dismissable host**
 
