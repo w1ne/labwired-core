@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getPinMapping } from '@labwired/ui';
 import { BOARD_CONFIGS, pickerBoards } from './bundled-configs';
 import { STARTER_LABS } from './studio/ChipRow';
 
@@ -96,6 +97,40 @@ describe('BOARD_CONFIGS', () => {
     expect(
       dangling,
       `STARTER_LABS entries with no matching BOARD_CONFIGS boardId: ${dangling.map((l) => l.id).join(', ')}`,
+    ).toHaveLength(0);
+  });
+
+  it('every STARTER_LABS example chip is present in the pin-mapping (no PIN_NOT_ON_CHIP at startup)', () => {
+    // A representative GPIO pin that exists on every supported MCU under its
+    // canonical pin label. For STM32 families this is PA5 (the Nucleo user LED);
+    // for RP2040 it's GP5; for nRF52840 it's P0.05; for ESP32 it's GPIO5.
+    const REPRESENTATIVE_PINS: Record<string, string> = {
+      stm32f103: 'PA5',
+      stm32f401: 'PA5',
+      stm32l476: 'PA5',
+      stm32h563: 'PA5',
+      rp2040: 'GP5',
+      nrf52840: 'P0.05',
+      'nrf52840-onboarding': 'P0.05',
+      esp32: 'GPIO5',
+      esp32c3: 'GPIO5',
+      esp32s3: 'GPIO5',
+    };
+
+    const missing: string[] = [];
+    for (const lab of STARTER_LABS) {
+      const config = BOARD_CONFIGS.find((c) => c.boardId === lab.id);
+      if (!config) continue; // covered by the "dangling examples" test above
+      const chipId = config.chipId;
+      const probe = REPRESENTATIVE_PINS[chipId] ?? 'PA5';
+      const mapping = getPinMapping(chipId, probe);
+      if (!mapping) {
+        missing.push(`${lab.id} (chipId="${chipId}", probe="${probe}")`);
+      }
+    }
+    expect(
+      missing,
+      `STARTER_LABS examples whose chipId is absent from the pin-mapping — add it to packages/ui/src/editor/pin-mapping.ts: ${missing.join(', ')}`,
     ).toHaveLength(0);
   });
 

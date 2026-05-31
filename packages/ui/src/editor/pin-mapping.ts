@@ -180,6 +180,72 @@ const STM32F103_PINS: Record<string, PinMapping> = {
   PC15: { gpio: { peripheral: 'gpioc', pin: 15 }, functions: [] },
 };
 
+/**
+ * STM32L476 pin mappings (NUCLEO-L476RG LQFP-64).
+ * PA0-PA7 carry ADC1 channels 5-12 per RM0351 Table 16.
+ * Reuses the F103 baseline for GPIO structure; ADC channel numbers differ
+ * (L476 uses ADC1 channels 5..12 for PA0..PA7 per RM0351 §16.4.1).
+ */
+const STM32L476_PINS: Record<string, PinMapping> = {
+  ...STM32F103_PINS,
+  // Override PA0-PA7 with L476-correct ADC1 channel numbers (RM0351 §16)
+  PA0: { gpio: { peripheral: 'gpioa', pin: 0 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 5 },
+    { type: 'timer', peripheral: 'tim2', channel: 1 },
+  ]},
+  PA1: { gpio: { peripheral: 'gpioa', pin: 1 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 6 },
+    { type: 'timer', peripheral: 'tim2', channel: 2 },
+  ]},
+  PA2: { gpio: { peripheral: 'gpioa', pin: 2 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 7 },
+    { type: 'uart', peripheral: 'uart2', role: 'tx' },
+    { type: 'timer', peripheral: 'tim2', channel: 3 },
+  ]},
+  PA3: { gpio: { peripheral: 'gpioa', pin: 3 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 8 },
+    { type: 'uart', peripheral: 'uart2', role: 'rx' },
+    { type: 'timer', peripheral: 'tim2', channel: 4 },
+  ]},
+  PA4: { gpio: { peripheral: 'gpioa', pin: 4 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 9 },
+    { type: 'spi', peripheral: 'spi1', role: 'nss' },
+  ]},
+  PA5: { gpio: { peripheral: 'gpioa', pin: 5 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 10 },
+    { type: 'spi', peripheral: 'spi1', role: 'sck' },
+  ]},
+  PA6: { gpio: { peripheral: 'gpioa', pin: 6 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 11 },
+    { type: 'spi', peripheral: 'spi1', role: 'miso' },
+    { type: 'timer', peripheral: 'tim3', channel: 1 },
+  ]},
+  PA7: { gpio: { peripheral: 'gpioa', pin: 7 }, functions: [
+    { type: 'adc', peripheral: 'adc1', channel: 12 },
+    { type: 'spi', peripheral: 'spi1', role: 'mosi' },
+    { type: 'timer', peripheral: 'tim3', channel: 2 },
+  ]},
+  // L476 has additional GPIO ports D/E/H present on LQFP-64
+  PD0: { gpio: { peripheral: 'gpiod', pin: 0 }, functions: [] },
+  PD1: { gpio: { peripheral: 'gpiod', pin: 1 }, functions: [] },
+  PD2: { gpio: { peripheral: 'gpiod', pin: 2 }, functions: [] },
+  PD3: { gpio: { peripheral: 'gpiod', pin: 3 }, functions: [] },
+  PD4: { gpio: { peripheral: 'gpiod', pin: 4 }, functions: [] },
+  PD5: { gpio: { peripheral: 'gpiod', pin: 5 }, functions: [
+    { type: 'uart', peripheral: 'uart2', role: 'tx' },
+  ]},
+  PD6: { gpio: { peripheral: 'gpiod', pin: 6 }, functions: [
+    { type: 'uart', peripheral: 'uart2', role: 'rx' },
+  ]},
+  PD7: { gpio: { peripheral: 'gpiod', pin: 7 }, functions: [] },
+  PD8: { gpio: { peripheral: 'gpiod', pin: 8 }, functions: [] },
+  PD9: { gpio: { peripheral: 'gpiod', pin: 9 }, functions: [] },
+  PE0: { gpio: { peripheral: 'gpioe', pin: 0 }, functions: [] },
+  PE1: { gpio: { peripheral: 'gpioe', pin: 1 }, functions: [] },
+  PH0: { gpio: { peripheral: 'gpioh', pin: 0 }, functions: [] },
+  PH1: { gpio: { peripheral: 'gpioh', pin: 1 }, functions: [] },
+};
+
 /** STM32H563 pin mappings (extends F103 with additional GPIO ports D-G). */
 const STM32H563_PINS: Record<string, PinMapping> = {
   ...STM32F103_PINS,
@@ -267,6 +333,7 @@ const ESP32_PINS: Record<string, PinMapping> = {
 const PIN_MAPS: Record<string, Record<string, PinMapping>> = {
   stm32f103: STM32F103_PINS,
   stm32f401: STM32F103_PINS, // Similar enough for now
+  stm32l476: STM32L476_PINS,
   stm32h563: STM32H563_PINS,
   rp2040: RP2040_PINS,
   nrf52840: NRF52840_PINS,
