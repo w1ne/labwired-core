@@ -1730,7 +1730,7 @@ export function App() {
 
   // Command palette items
   const commandItems = useCommandPaletteItems({
-    boards: BOARD_CONFIGS,
+    boards: BOARD_CONFIGS.filter((b) => !b.hidden),
     onLoadBoard: handleBoardSelect,
     onPickLab: handlePickLab,
     onAddComponent: (type) => {
