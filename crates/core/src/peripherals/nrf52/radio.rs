@@ -4,30 +4,49 @@
 //! Nordic nRF52 RADIO peripheral.
 //!
 //! Source: nRF52840 PS rev 1.7 §6.20 (RADIO). 2.4 GHz BLE/802.15.4/proprietary
-//! transceiver. The hardware is enormous; this model implements:
+//! transceiver.
 //!
+//! Scope, stated plainly: **we don't simulate the wireless medium — we
+//! simulate everything the firmware actually touches.** Every digital layer of
+//! a transfer is real (registers, Easy-DMA, whitening, CRC, address matching),
+//! so firmware behaves bit-for-bit as it would on silicon for these code
+//! paths. The one thing that is *not* physical is the RF channel itself: the
+//! "air" is a lossless, collision-free in-process queue, not a radio link.
+//!
+//! Faithfully modeled (firmware can't tell it from silicon):
 //! * **Register surface** — every documented register in 0x000–0x77C
 //!   round-trips with proper masks and reset values.
 //! * **Task / event state machine** — TASKS_{TX,RX}EN → STATE=TXIDLE/RXIDLE +
-//!   EVENTS_READY; TASKS_START → EVENTS_END after the packet "transmits"
-//!   (instant); TASKS_DISABLE → STATE=DISABLED + EVENTS_DISABLED. Enough
-//!   that BLE-stack init code that polls EVENTS_READY before sending the
-//!   next task does not spin.
+//!   EVENTS_READY; TASKS_START → EVENTS_END; TASKS_DISABLE → STATE=DISABLED +
+//!   EVENTS_DISABLED. BLE-stack init that polls EVENTS_READY won't spin.
 //! * **SHORTS** for the common chain patterns (READY→START,
 //!   END→DISABLE, ADDRESS→RSSISTART, DISABLED→TXEN/RXEN/RSSISTOP).
-//! * **Easy DMA**: PACKETPTR is a pointer to a buffer in RAM; on
-//!   TASKS_START in TX mode, real silicon DMAs the buffer to the air;
-//!   we don't do air, but we mark EVENTS_ADDRESS, EVENTS_PAYLOAD,
-//!   EVENTS_END in sequence so firmware progresses through its state
-//!   machine.
-//! * **CRCSTATUS** = 1 (OK) after every receive in this model; no
-//!   actual CRC is computed.
+//! * **Easy DMA** — PACKETPTR is read from RAM on TX and written to RAM on RX.
+//! * **BLE whitening** — real PN9 LFSR (x^7+x^4+1); applied on TX, reversed
+//!   on RX.
+//! * **CRC-24** — computed over the payload (poly 0x65B, configurable init);
+//!   on RX the trailing 3 bytes are recomputed and compared, and CRCSTATUS is
+//!   the *real* 1/0 verdict (not hardcoded).
+//! * **Address matching** — RXADDRESSES × BASE/PREFIX logical-address table,
+//!   plus DEVMATCH/DEVMISS against the DAB/DAP whitelist and BCMATCH bit
+//!   counting.
+//! * **Cross-instance delivery** — a TX frame (whitened, CRC'd, address- and
+//!   MODE-tagged) crosses to another RADIO instance on the same FREQUENCY via
+//!   a shared in-process registry, where it is verified end to end.
 //!
-//! What is **not** modeled:
-//! * Actual RF transmission / reception (no air, no peer).
-//! * Whitening, BLE address resolution (deferred to AAR).
-//! * Cyclic-bit-rate accuracy. EVENTS_END fires the next tick after
-//!   TASKS_START regardless of MODE/DATARATE.
+//! Idealized — present but not physical:
+//! * **The channel is lossless and collision-free.** No bit errors, no
+//!   interference, no packet loss, no two-transmitter collision; CRC therefore
+//!   essentially always passes. RX *consumes* the frame from the queue, so
+//!   delivery is point-to-point, not broadcast (one receiver per frame).
+//! * **Timing is proportional, not cycle-accurate.** EVENTS_END is scheduled
+//!   bytes × per-MODE cost (one tick ≈ 1 µs); no preamble, T_IFS, or ramp-up.
+//! * **RSSI is a deterministic PRNG** around ~-50 dBm — plausible jitter with
+//!   no physical meaning (no path loss / distance).
+//!
+//! Not modeled at all: GFSK modulation, preamble / access-address bit sync,
+//! channel hopping, AAR encryption, and the advertising / connection state
+//! machines.
 
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 use std::collections::{HashMap, VecDeque};
