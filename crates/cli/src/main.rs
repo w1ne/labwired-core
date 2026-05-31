@@ -3092,31 +3092,36 @@ fn run_test(args: TestArgs) -> ExitCode {
     // inside `build_system_bus`) will fail: it tries to attach external devices
     // (e.g. the SSD1680 e-paper panel) to `spi3`, but `spi3` is not in the
     // chip YAML — it is installed in code by `configure_xtensa_esp32`. Detect
-    // the Xtensa arch early by peeking at the chip YAML, and take the dedicated
-    // `build_esp32_system` path that calls configure + attach together, before
-    // falling through to `build_system_bus` for all other architectures.
-    let is_xtensa = if let Some(sys_path) = system_path.as_deref() {
-        labwired_config::SystemManifest::from_file(sys_path)
-            .ok()
-            .and_then(|m| {
-                let chip_path = sys_path
-                    .parent()
-                    .unwrap_or_else(|| std::path::Path::new("."))
-                    .join(&m.chip);
-                labwired_config::ChipDescriptor::from_file(&chip_path).ok()
-            })
-            .map(|c| c.arch == labwired_config::Arch::Xtensa)
-            .unwrap_or(false)
-    } else {
-        false
-    };
+    // the Xtensa arch early by parsing the manifest once, and take the dedicated
+    // `build_esp32_system_from_manifest` path that calls configure + attach
+    // together, before falling through to `build_system_bus` for all other
+    // architectures. The parsed manifest is reused so the file is read only once.
+    let esp32_manifest: Option<labwired_config::SystemManifest> =
+        if let Some(sys_path) = system_path.as_deref() {
+            labwired_config::SystemManifest::from_file(sys_path)
+                .ok()
+                .filter(|m| {
+                    let chip_path = sys_path
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new("."))
+                        .join(&m.chip);
+                    labwired_config::ChipDescriptor::from_file(&chip_path)
+                        .map(|c| c.arch == labwired_config::Arch::Xtensa)
+                        .unwrap_or(false)
+                })
+        } else {
+            None
+        };
+    let is_xtensa = esp32_manifest.is_some();
 
-    // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system.
+    // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system_from_manifest.
     if is_xtensa {
-        if let Some(ref sys_path) = system_path {
+        if let (Some(ref sys_path), Some(ref manifest)) = (system_path.as_ref(), esp32_manifest.as_ref()) {
             let uart_tx = Arc::new(Mutex::new(Vec::new()));
             let (mut esp_bus, esp_cpu) =
-                match labwired_core::system::builder::build_esp32_system(sys_path) {
+                match labwired_core::system::builder::build_esp32_system_from_manifest(
+                    manifest, sys_path,
+                ) {
                     Ok(pair) => pair,
                     Err(e) => {
                         let msg = format!("{:#}", e);
@@ -3168,18 +3173,18 @@ fn run_test(args: TestArgs) -> ExitCode {
                 );
             }
             // ESP32 manifest path: skip BROM emulation and jump directly to
-            // the ELF entry point — matches the wasm/playground path. The
-            // BROM reset vector (0x4000_0400) is fine for firmware that was
-            // compiled to boot from BROM, but playground ELFs are pre-linked
-            // to start at the app entry. Unconditionally set PC here so both
-            // use cases work correctly.
+            // the ELF entry point — matches the wasm/playground path
+            // (`new_from_config_xtensa_esp32`) and the e2e test
+            // (`e2e_esp32_epaper.rs`). The BROM reset vector (0x4000_0400)
+            // is fine for firmware compiled to boot from BROM, but playground
+            // ELFs are pre-linked to start at the app entry.
             //
-            // Also seed SP to the top of SRAM1 (0x3FFE_0000) — the same
-            // value used by `run_snapshot_capture` and the WASM playground.
-            // Firmware that sets its own stack in startup code will overwrite
-            // this immediately; firmware that relies on a pre-seeded SP
-            // (e.g. Arduino-ESP32 entry stubs) needs it to avoid faulting on
-            // the first stack access.
+            // Seed SP to the top of DRAM (0x3FFE_0000): Arduino-ESP32 firmware
+            // (call_start_cpu0) expects BROM to have placed SP here before
+            // jumping to the app entry. We skip BROM, so do it ourselves —
+            // matching `install_esp32_arduino_quirks` in the WASM path.
+            // Native Xtensa firmware that sets its own SP will overwrite this
+            // immediately.
             machine.cpu.set_pc(program.entry_point as u32);
             machine.cpu.set_sp(0x3FFE_0000);
             let exit_code = execute_test_loop(
