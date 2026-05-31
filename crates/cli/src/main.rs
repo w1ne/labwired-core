@@ -3088,6 +3088,133 @@ fn run_test(args: TestArgs) -> ExitCode {
         }
     };
 
+    // For Xtensa/ESP32 system manifests, `SystemBus::from_config` (called
+    // inside `build_system_bus`) will fail: it tries to attach external devices
+    // (e.g. the SSD1680 e-paper panel) to `spi3`, but `spi3` is not in the
+    // chip YAML — it is installed in code by `configure_xtensa_esp32`. Detect
+    // the Xtensa arch early by peeking at the chip YAML, and take the dedicated
+    // `build_esp32_system` path that calls configure + attach together, before
+    // falling through to `build_system_bus` for all other architectures.
+    let is_xtensa = if let Some(sys_path) = system_path.as_deref() {
+        labwired_config::SystemManifest::from_file(sys_path)
+            .ok()
+            .and_then(|m| {
+                let chip_path = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."))
+                    .join(&m.chip);
+                labwired_config::ChipDescriptor::from_file(&chip_path).ok()
+            })
+            .map(|c| c.arch == labwired_config::Arch::Xtensa)
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system.
+    if is_xtensa {
+        if let Some(ref sys_path) = system_path {
+            let uart_tx = Arc::new(Mutex::new(Vec::new()));
+            let (mut esp_bus, esp_cpu) =
+                match labwired_core::system::builder::build_esp32_system(sys_path) {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        let msg = format!("{:#}", e);
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+            esp_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+
+            let program = match labwired_loader::load_elf(&firmware_path) {
+                Ok(program) => program,
+                Err(e) => {
+                    let msg = format!("{:#}", e);
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+            };
+
+            let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
+            let mut machine = labwired_core::Machine::new(esp_cpu, esp_bus);
+            machine.observers.push(metrics.clone());
+            if let Err(e) = machine.load_firmware(&program) {
+                return handle_load_error(
+                    &args,
+                    &metrics,
+                    &resolved_limits,
+                    &firmware_bytes,
+                    &uart_tx,
+                    &machine.cpu,
+                    &firmware_path,
+                    system_path.as_ref(),
+                    e,
+                );
+            }
+            // ESP32 manifest path: skip BROM emulation and jump directly to
+            // the ELF entry point — matches the wasm/playground path. The
+            // BROM reset vector (0x4000_0400) is fine for firmware that was
+            // compiled to boot from BROM, but playground ELFs are pre-linked
+            // to start at the app entry. Unconditionally set PC here so both
+            // use cases work correctly.
+            //
+            // Also seed SP to the top of SRAM1 (0x3FFE_0000) — the same
+            // value used by `run_snapshot_capture` and the WASM playground.
+            // Firmware that sets its own stack in startup code will overwrite
+            // this immediately; firmware that relies on a pre-seeded SP
+            // (e.g. Arduino-ESP32 entry stubs) needs it to avoid faulting on
+            // the first stack access.
+            machine.cpu.set_pc(program.entry_point as u32);
+            machine.cpu.set_sp(0x3FFE_0000);
+            let exit_code = execute_test_loop(
+                &args,
+                &mut machine,
+                &resolved_limits,
+                &assertions,
+                &firmware_bytes,
+                &uart_tx,
+                &metrics,
+                &firmware_path,
+                system_path.as_ref(),
+            );
+            if let Some(ref key) = api_key_opt {
+                use sha2::{Digest, Sha256};
+                let mut hasher = Sha256::new();
+                hasher.update(&firmware_bytes);
+                let firmware_hash = format!("{:x}", hasher.finalize());
+                let duration_ms = run_start.elapsed().as_millis() as u64;
+                let cycles = metrics.get_cycles();
+                let exit_val: i32 = if exit_code == ExitCode::from(EXIT_PASS) {
+                    0
+                } else if exit_code == ExitCode::from(EXIT_ASSERT_FAIL) {
+                    1
+                } else if exit_code == ExitCode::from(EXIT_RUNTIME_ERROR) {
+                    3
+                } else {
+                    2
+                };
+                api_client::record_run(key, &firmware_hash, cycles, duration_ms, exit_val);
+            }
+            return exit_code;
+        }
+    }
+
     let mut bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
         Ok(bus) => bus,
         Err(e) => {
@@ -3168,6 +3295,7 @@ fn run_test(args: TestArgs) -> ExitCode {
             setup_and_run!(cpu)
         }
         labwired_core::Arch::XtensaLx7 => {
+            // No system manifest present: plain configure path (no external devices).
             let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
             setup_and_run!(cpu)
         }

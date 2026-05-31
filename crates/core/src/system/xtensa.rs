@@ -93,6 +93,70 @@ pub fn configure_xtensa(bus: &mut SystemBus) -> XtensaLx7 {
     configure_xtensa_esp32s3(bus, &Esp32s3Opts::default()).cpu
 }
 
+/// Attach external devices declared in `manifest.external_devices` to an
+/// ESP32-classic bus that was already set up by `configure_xtensa_esp32`.
+///
+/// Currently supports `ssd1680_tricolor_290` / `epd-2in9-tricolor` (the
+/// Waveshare 2.9" tri-color e-paper panel on SPI3/VSPI).  Other device
+/// types emit a `tracing::warn` and are skipped so that future labs with
+/// additional devices don't break existing runs.
+///
+/// This is the canonical implementation; `crates/wasm/src/lib.rs` delegates
+/// to it (the wasm crate no longer carries its own copy).
+pub fn attach_esp32_external_devices(
+    bus: &mut SystemBus,
+    manifest: &labwired_config::SystemManifest,
+) -> anyhow::Result<()> {
+    for ext in &manifest.external_devices {
+        match ext.r#type.as_str() {
+            "ssd1680_tricolor_290" | "epd-2in9-tricolor" => {
+                let cs_pin = ext
+                    .config
+                    .get("cs_pin")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("GPIO5")
+                    .to_string();
+                let idx = bus
+                    .find_peripheral_index_by_name(&ext.connection)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' references missing connection '{}'",
+                            ext.id,
+                            ext.connection
+                        )
+                    })?;
+                let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "External device '{}' connection '{}' cannot be downcast",
+                        ext.id,
+                        ext.connection
+                    )
+                })?;
+                let spi = any
+                    .downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
+                            ext.id,
+                            ext.connection
+                        )
+                    })?;
+                spi.attach(Box::new(
+                    crate::peripherals::components::Ssd1680Tricolor290::new(cs_pin),
+                ));
+            }
+            other => {
+                tracing::warn!(
+                    "ESP32 external_devices: unsupported type '{}' on '{}'; skipping",
+                    other,
+                    ext.id
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Register a minimum-viable ESP32 (classic, Xtensa LX6) memory map on
 /// `bus` and return the CPU.  Reuses `XtensaLx7` for the CPU — LX6 is a
 /// near-subset of LX7 for the instructions a demo firmware uses (base
@@ -1154,5 +1218,117 @@ mod tests {
         wiring.dcache_backing.lock().unwrap()[0] = 0xFE;
         assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache alias");
         assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xFE, "D-cache alias");
+    }
+
+    /// `configure_xtensa_esp32` + `attach_esp32_external_devices` must register
+    /// `spi3` on the bus and attach an `Ssd1680Tricolor290` panel to it when the
+    /// manifest declares an `ssd1680_tricolor_290` external device on `spi3`.
+    ///
+    /// This is the unit-level guard that the manifest/CLI path (which was
+    /// previously broken — `config_error: external device 'epaper' references
+    /// missing connection 'spi3'`) now wires up correctly.
+    #[test]
+    fn attach_esp32_external_devices_registers_spi3_and_epaper() {
+        use labwired_config::{ExternalDevice, SystemManifest};
+        use std::collections::HashMap;
+
+        // Build a minimal manifest that declares the SSD1680 e-paper panel
+        // on spi3 — matching the real `configs/systems/esp32-wroom-epaper.yaml`.
+        let mut config = HashMap::new();
+        config.insert(
+            "cs_pin".to_string(),
+            serde_yaml::Value::String("GPIO5".to_string()),
+        );
+        let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "test-esp32-epaper".to_string(),
+            chip: "esp32.yaml".to_string(),
+            memory_overrides: std::collections::HashMap::new(),
+            peripherals: vec![],
+            external_devices: vec![ExternalDevice {
+                id: "epaper".to_string(),
+                r#type: "ssd1680_tricolor_290".to_string(),
+                connection: "spi3".to_string(),
+                config,
+            }],
+            board_io: vec![],
+        };
+
+        let mut bus = SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+
+        // spi3 must exist after configure_xtensa_esp32.
+        assert!(
+            bus.find_peripheral_index_by_name("spi3").is_some(),
+            "spi3 must be registered by configure_xtensa_esp32"
+        );
+
+        // Attaching external devices must succeed (no 'missing connection' error).
+        attach_esp32_external_devices(&mut bus, &manifest)
+            .expect("attach_esp32_external_devices must not error for spi3 + epaper");
+
+        // The SSD1680 panel must now be attached to spi3.
+        let idx = bus
+            .find_peripheral_index_by_name("spi3")
+            .expect("spi3 still present after attach");
+        let any = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .expect("spi3 supports as_any");
+        let spi = any
+            .downcast_ref::<crate::peripherals::esp32::spi::Esp32Spi>()
+            .expect("spi3 is Esp32Spi");
+        let panel_count = spi
+            .attached_devices
+            .iter()
+            .filter(|d| {
+                d.as_any()
+                    .and_then(|a| {
+                        a.downcast_ref::<crate::peripherals::components::Ssd1680Tricolor290>()
+                    })
+                    .is_some()
+            })
+            .count();
+        assert_eq!(
+            panel_count, 1,
+            "exactly one Ssd1680Tricolor290 should be attached to spi3"
+        );
+    }
+
+    /// `attach_esp32_external_devices` must return an error (not panic) when
+    /// the manifest references a peripheral name that doesn't exist on the bus.
+    #[test]
+    fn attach_esp32_external_devices_errors_on_missing_connection() {
+        use labwired_config::{ExternalDevice, SystemManifest};
+        use std::collections::HashMap;
+
+        let manifest = SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "test".to_string(),
+            chip: "esp32.yaml".to_string(),
+            memory_overrides: std::collections::HashMap::new(),
+            peripherals: vec![],
+            external_devices: vec![ExternalDevice {
+                id: "epaper".to_string(),
+                r#type: "ssd1680_tricolor_290".to_string(),
+                connection: "spi99".to_string(), // does not exist
+                config: std::collections::HashMap::new(),
+            }],
+            board_io: vec![],
+        };
+
+        let mut bus = SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+
+        let result = attach_esp32_external_devices(&mut bus, &manifest);
+        assert!(
+            result.is_err(),
+            "should error when connection peripheral is missing"
+        );
+        let msg = format!("{:#}", result.unwrap_err());
+        assert!(
+            msg.contains("spi99"),
+            "error message should name the missing peripheral; got: {msg}"
+        );
     }
 }
