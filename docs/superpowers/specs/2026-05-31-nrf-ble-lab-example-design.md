@@ -63,14 +63,24 @@ problem class. Uses **Mechanism A only**; never touches Mechanism B.
    ticked (200k cyc/16ms). Both share the virtual-air static → frames cross.
    No ChipsProvider/McuStrip/addChip involvement.
 
-4. **Packets.** `BleAnalyzer` already snapshots the air-trace
+4. **Packets + analyzer UX fix.** `BleAnalyzer` already snapshots the air-trace
    (`airTraceSnapshot()` exposes `AirFrameTrace` with `whitening_iv`),
-   de-whitens `bytes[..len-3]` (CRC appended post-whitening), and renders. No new
-   decoder work.
+   de-whitens `bytes[..len-3]` (CRC appended post-whitening), and renders the
+   decode correctly. BUT the panel itself is currently **frozen, unresizable,
+   and useless** as a floating widget. Required UX rework:
+   - **Move it into a Tools/Instruments menu** (toggle on/off from there) instead
+     of an always-on floating panel that blocks the canvas.
+   - **Make it resizable and scrollable** — the packet list must grow/shrink and
+     scroll; the panel must not freeze the UI or pin to an unusable fixed size.
+   - It should open empty and fill live as packets cross the air during Run.
+   - Decode logic (de-whitening/CRC) stays as-is — this is purely the panel's
+     mount point, sizing, and visibility control.
 
 5. **Proof before any merge (live, not typecheck):** load "nRF52840 BLE Lab" →
-   **two boards visible** → Run → **analyzer fills with packets** → reload →
-   still works. Plus a vitest for `mcuBoardForPart` attrs resolution.
+   **two boards visible** → open the analyzer from the Tools menu → Run →
+   **analyzer fills with packets**, is **resizable + scrollable**, does not
+   freeze → reload → still works. Plus a vitest for `mcuBoardForPart` attrs
+   resolution.
 
 ## Scope explicitly deferred (YAGNI)
 - The general Add-MCU-onto-canvas assembly UX.
@@ -92,7 +102,9 @@ problem class. Uses **Mechanism A only**; never touches Mechanism B.
   `fix/multichip-scratch-replace`.
 - Files likely touched: `bundled-configs.ts` (new lab entry + 2-MCU starter
   diagram with `attrs.boardId` on each part), `App.tsx` `mcuBoardForPart`
-  (attrs.boardId-first resolution).
+  (attrs.boardId-first resolution) + analyzer mount/visibility, the Tools/
+  Instruments menu component, `instruments/BleAnalyzer.tsx` (resizable +
+  scrollable container; decode logic untouched).
 - Dev server: `VITE_DISABLE_AUTH=true npx vite --port 5173 --strictPort`
   (run_in_background). Never `pkill -f vite` (kills own shell); use
   `fuser -k 5173/tcp`. Verify in browser via Playwright MCP.
