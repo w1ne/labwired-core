@@ -1730,7 +1730,9 @@ export function App() {
 
   // Command palette items
   const commandItems = useCommandPaletteItems({
-    boards: BOARD_CONFIGS.filter((b) => !b.hidden),
+    // Labs (kind: 'lab') are demos with prebuilt firmware — they belong in the
+    // Examples bucket (STARTER_LABS), not Boards. Boards = bare MCUs to build on.
+    boards: BOARD_CONFIGS.filter((b) => !b.hidden && b.kind !== 'lab'),
     onLoadBoard: handleBoardSelect,
     onPickLab: handlePickLab,
     onAddComponent: (type) => {
