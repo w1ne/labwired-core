@@ -64,6 +64,15 @@ jobs:
           npm ci --ignore-scripts
           npm run build
 
+      # Deterministic gate: block the deploy if the playground's unit tests fail.
+      # Covers the firmware-asset gate (every board's demoFirmwarePath ELF must be
+      # committed, non-empty, real ELF magic — so the live site never serves HTML
+      # in place of firmware → "Simulator init failed") and the lab/board UX
+      # invariants. A red test here stops the deploy BEFORE it reaches users.
+      - name: Test @labwired/playground (gate before deploy)
+        working-directory: packages/playground
+        run: npm run test
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
