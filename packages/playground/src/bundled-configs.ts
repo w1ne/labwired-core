@@ -432,6 +432,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     systemYaml: systemNrf52840Onboarding,
     mcuComponentType: 'nrf52840-dk',
     kind: 'lab',
+    runHint: 'Run the Sensor, then click the Collector and Run it too — open the Analyzer (toolbar) to watch frames.',
   },
 ];
 
