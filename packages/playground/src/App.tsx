@@ -55,6 +55,7 @@ import { usePerChipSims } from './multi-mcu/usePerChipSims';
 import { ChipWindow } from './multi-mcu/ChipWindow';
 import { ChipInspector } from './multi-mcu/ChipInspector';
 import { BleAnalyzer } from './instruments/BleAnalyzer';
+import { IoLinkAnalyzer } from './instruments/IoLinkAnalyzer';
 import { ToolsMenu } from './studio/ToolsMenu';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
@@ -621,6 +622,7 @@ export function App() {
   // Analyzer is an opt-in instrument now (was an always-on panel that froze the
   // canvas). Toggled from the SimDock Tools control; hidden by default.
   const [showAnalyzer, setShowAnalyzer] = useState(false);
+  const [showIolink, setShowIolink] = useState(false);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
 
@@ -2183,6 +2185,13 @@ export function App() {
                   active: showAnalyzer,
                   onToggle: () => setShowAnalyzer((v) => !v),
                 },
+                {
+                  id: 'iolink-analyzer',
+                  label: 'IO-Link Analyzer',
+                  description: 'Master↔device frames, CRC, link state',
+                  active: showIolink,
+                  onToggle: () => setShowIolink((v) => !v),
+                },
               ]}
             />
           </div>
@@ -2539,6 +2548,22 @@ export function App() {
         }
       >
         <BleAnalyzer bridge={bridge} running={running} />
+      </ChipWindow>
+    )}
+    {!isMobile && showIolink && (
+      <ChipWindow
+        initial={{ x: 900, y: 120 }}
+        width={540}
+        height={360}
+        zIndex={95}
+        onClose={() => setShowIolink(false)}
+        title={
+          <span className="truncate text-xs font-semibold text-fg-primary">
+            IO-Link Analyzer · master↔device
+          </span>
+        }
+      >
+        <IoLinkAnalyzer bridge={bridge} running={running} />
       </ChipWindow>
     )}
     </StudioShell>
