@@ -197,6 +197,15 @@ export class WasmSimulator {
     install_arduino_esp32_quirks(elf_bytes: Uint8Array): void;
     install_esp32_arduino_quirks(): void;
     /**
+     * Clear the IO-Link master's trace ring.
+     */
+    iolink_trace_clear(): void;
+    /**
+     * Snapshot of the IO-Link master's captured transactions (oldest→newest),
+     * for the IO-Link Analyzer instrument. Empty array if no master is wired.
+     */
+    iolink_trace_snapshot(): any;
+    /**
      * Total number of times the browser JIT has dispatched a
      * compiled block. Useful for confirming the JIT path actually
      * fired during a benchmark.
@@ -361,6 +370,8 @@ export interface InitOutput {
     readonly wasmsimulator_get_uc8151d_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
     readonly wasmsimulator_install_arduino_esp32_quirks: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_install_esp32_arduino_quirks: (a: number) => [number, number];
+    readonly wasmsimulator_iolink_trace_clear: (a: number) => void;
+    readonly wasmsimulator_iolink_trace_snapshot: (a: number) => any;
     readonly wasmsimulator_jit_hits: (a: number) => bigint;
     readonly wasmsimulator_jit_refusals: (a: number) => bigint;
     readonly wasmsimulator_keep_alive_esp32_dual_core: (a: number) => void;

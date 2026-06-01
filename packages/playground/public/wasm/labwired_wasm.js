@@ -432,6 +432,21 @@ export class WasmSimulator {
         }
     }
     /**
+     * Clear the IO-Link master's trace ring.
+     */
+    iolink_trace_clear() {
+        wasm.wasmsimulator_iolink_trace_clear(this.__wbg_ptr);
+    }
+    /**
+     * Snapshot of the IO-Link master's captured transactions (oldest→newest),
+     * for the IO-Link Analyzer instrument. Empty array if no master is wired.
+     * @returns {any}
+     */
+    iolink_trace_snapshot() {
+        const ret = wasm.wasmsimulator_iolink_trace_snapshot(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Total number of times the browser JIT has dispatched a
      * compiled block. Useful for confirming the JIT path actually
      * fired during a benchmark.
@@ -859,7 +874,7 @@ function __wbg_get_imports() {
             console.warn(getStringFromWasm0(arg0, arg1));
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1813, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1815, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hd749741175e04d09);
             return ret;
         },
