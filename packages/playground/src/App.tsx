@@ -847,11 +847,12 @@ export function App() {
         .filter(
           (p) =>
             p.type === 'ssd1680_tricolor_290' ||
-            p.type === 'uc8151d_tricolor_290',
+            p.type === 'uc8151d_tricolor_290' ||
+            p.type === 'pcd8544',
         )
         .map((p) => ({
           partId: p.id,
-          kind: p.type as 'ssd1680_tricolor_290' | 'uc8151d_tricolor_290',
+          kind: p.type as 'ssd1680_tricolor_290' | 'uc8151d_tricolor_290' | 'pcd8544',
           // GxEPD2's red-plane inversion only applies on the SSD1680 path
           // (writeImage emits an inverted bitmap then 0x26 commits). When
           // GxEPD2 falls through to UC8151D opcodes (DTM1/DTM2) it writes
