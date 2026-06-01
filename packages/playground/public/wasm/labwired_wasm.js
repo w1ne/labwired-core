@@ -199,15 +199,6 @@ export class WasmSimulator {
         return v2;
     }
     /**
-     * Read the IO-Link master peer's live state: `{ link_state, pd_valid,
-     * input_byte }`. Returns `null` if no master is wired.
-     * @returns {any}
-     */
-    get_iolink_master_state() {
-        const ret = wasm.wasmsimulator_get_iolink_master_state(this.__wbg_ptr);
-        return ret;
-    }
-    /**
      * Legacy LED state query (hardcoded GPIOB pin 5 for backward compat).
      * @returns {boolean}
      */
@@ -275,16 +266,6 @@ export class WasmSimulator {
      */
     get_register_names() {
         const ret = wasm.wasmsimulator_get_register_names(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
-     * no shifter is wired. Lets the UI reflect the device's real state rather
-     * than tracking it in JS.
-     * @returns {number}
-     */
-    get_sn74hc165_inputs() {
-        const ret = wasm.wasmsimulator_get_sn74hc165_inputs(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -666,28 +647,6 @@ export class WasmSimulator {
         }
     }
     /**
-     * Toggle a single 74HC165 input channel (0..=7) high or low.
-     * @param {number} channel
-     * @param {boolean} high
-     */
-    set_sn74hc165_channel(channel, high) {
-        const ret = wasm.wasmsimulator_set_sn74hc165_channel(this.__wbg_ptr, channel, high);
-        if (ret[1]) {
-            throw takeFromExternrefTable0(ret[0]);
-        }
-    }
-    /**
-     * Set all 8 digital inputs of the 74HC165 shift register at once
-     * (bit `i` = channel `i`). Returns an error if no shifter is wired.
-     * @param {number} value
-     */
-    set_sn74hc165_inputs(value) {
-        const ret = wasm.wasmsimulator_set_sn74hc165_inputs(this.__wbg_ptr, value);
-        if (ret[1]) {
-            throw takeFromExternrefTable0(ret[0]);
-        }
-    }
-    /**
      * @param {number} cycles
      */
     step(cycles) {
@@ -859,7 +818,7 @@ function __wbg_get_imports() {
             console.warn(getStringFromWasm0(arg0, arg1));
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1813, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1803, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hd749741175e04d09);
             return ret;
         },

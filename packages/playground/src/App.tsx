@@ -1223,6 +1223,27 @@ export function App() {
   const inspectorLabWidget = useMemo<ReactNode>(() => {
     if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
     const partType = inspectorSelection.partType;
+    if (partType === 'ultrasonic') {
+      // HC-SR04: live hand-distance slider. The engine models the echo pulse
+      // (width ∝ distance); this is the only way to drive it at runtime.
+      return (
+        <label className="block">
+          <div className="flex items-center justify-between text-fg-tertiary text-[11px] font-mono mb-1">
+            <span>Hand distance</span>
+            <span className="text-fg-primary">{hcsr04Distance.toFixed(0)} cm</span>
+          </div>
+          <input
+            type="range"
+            min={2}
+            max={200}
+            step={1}
+            value={hcsr04Distance}
+            onChange={(e) => handleDistanceChange(parseFloat(e.target.value))}
+            style={{ width: '100%' }}
+          />
+        </label>
+      );
+    }
     if (partType === 'oled-ssd1306') {
       return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
     }
@@ -1375,7 +1396,6 @@ export function App() {
   // duplicate) is dropped along with it; can be reintroduced as a
   // tab on the properties drawer if useful later.
   void inspectorSelection;
-  void inspectorLabWidget;
 
   const paletteComponents = useMemo<PaletteComponent[]>(
     () =>
@@ -2355,6 +2375,7 @@ export function App() {
               onDelete={editor.deleteSelected}
               onRotate={editor.rotatePart}
               onResize={editor.resizePart}
+              labWidget={inspectorLabWidget}
             />
           </div>
         )}
