@@ -1282,6 +1282,41 @@ export function App() {
         />
       );
     }
+    if (partType === 'sn74hc165') {
+      // 8 live toggles. State is read back from the Rust shift register (the
+      // device is the source of truth), not tracked in the UI.
+      const inputs = bridge.getSn74hc165Inputs();
+      const val = inputs < 0 ? 0 : inputs;
+      return (
+        <div className="grid grid-cols-4 gap-1.5">
+          {Array.from({ length: 8 }, (_, ch) => {
+            const high = (val & (1 << ch)) !== 0;
+            return (
+              <button
+                key={ch}
+                onClick={() => bridge.setSn74hc165Channel(ch, !high)}
+                className={`rounded px-2 py-1 text-[11px] font-mono ${high ? 'bg-emerald-600 text-white' : 'bg-bg-tertiary text-fg-secondary'}`}
+              >
+                D{ch} {high ? 'HI' : 'LO'}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+    if (partType === 'iolink-master') {
+      // Read-only readout of the IO-Link master peer's live process data.
+      const s = bridge.getIolinkMasterState();
+      return (
+        <table className="w-full text-[12px] font-mono">
+          <tbody>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Link</td><td className="text-fg-primary">{s?.link_state ?? 'offline'}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">PD valid</td><td className="text-fg-primary">{s?.pd_valid ? 'yes' : 'no'}</td></tr>
+            <tr><td className="py-0.5 pr-2 text-fg-secondary">Process data</td><td className="text-fg-primary">0x{(s?.input_byte ?? 0).toString(16).toUpperCase().padStart(2, '0')}</td></tr>
+          </tbody>
+        </table>
+      );
+    }
     if (partType !== 'adxl345' && partType !== 'mpu6050' && partType !== 'bme280') return undefined;
     const sensorStates = bridge.getI2cSensorStates();
     if (partType === 'adxl345') {

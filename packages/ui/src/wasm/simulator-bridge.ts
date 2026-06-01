@@ -74,6 +74,13 @@ export interface UartDeviceStateNeo6mGps {
 
 export type UartDeviceState = UartDeviceStateNeo6mGps;
 
+/** Live state of the IO-Link master peer (the AL2205-style DI demo). */
+export interface IolinkMasterState {
+  link_state: 'startup' | 'operate';
+  pd_valid: boolean;
+  input_byte: number;
+}
+
 export interface AdcDeviceStateNtcThermistor {
   id: string;
   kind: 'ntc-thermistor';
@@ -196,6 +203,12 @@ export interface WasmSimulatorInstance {
   set_gps_position(device_id: string, lat: number, lon: number): void;
   set_gps_fix(device_id: string, active: boolean): void;
   get_uart_device_states(): UartDeviceState[];
+
+  // IO-Link DI demo (74HC165 shifter + IO-Link master peer)
+  set_sn74hc165_inputs(value: number): void;
+  set_sn74hc165_channel(channel: number, high: boolean): void;
+  get_sn74hc165_inputs(): number;
+  get_iolink_master_state(): IolinkMasterState | null;
 
   // ADC analog source devices (NTC thermistor)
   set_ntc_temperature(device_id: string, temperature_c: number): void;
@@ -473,6 +486,26 @@ export class SimulatorBridge {
   /** Read state of UART stream devices (GPS modules, etc.). */
   getUartDeviceStates(): UartDeviceState[] {
     return this.sim.get_uart_device_states() ?? [];
+  }
+
+  /** Set all 8 digital inputs of the 74HC165 shift register at once. */
+  setSn74hc165Inputs(value: number): void {
+    this.sim.set_sn74hc165_inputs(value & 0xff);
+  }
+
+  /** Toggle one 74HC165 input channel (0..7) high or low. */
+  setSn74hc165Channel(channel: number, high: boolean): void {
+    this.sim.set_sn74hc165_channel(channel, high);
+  }
+
+  /** Read the 74HC165's live input byte from the device (-1 if none wired). */
+  getSn74hc165Inputs(): number {
+    return this.sim.get_sn74hc165_inputs();
+  }
+
+  /** Read the IO-Link master peer's live state, or null if none is wired. */
+  getIolinkMasterState(): IolinkMasterState | null {
+    return this.sim.get_iolink_master_state() ?? null;
   }
 
   /** Set temperature on an NTC thermistor device. All Steinhart-Hart math lives in Rust core. */
