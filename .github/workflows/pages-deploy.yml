@@ -96,6 +96,41 @@ jobs:
           test "$fail" -eq 0 || { echo "::error::deploy gate failed — refusing to publish a broken build"; exit 1; }
           echo "Deploy gate passed: ${#elfs[@]} firmware ELFs present + valid in dist."
 
+      # Engine-vs-config gate: the wasm engine is a committed prebuilt artifact
+      # that the deploy does NOT rebuild, so it can silently lag the pinned core
+      # (e.g. an L476 lab needs SPI profile 'stm32_fifo' but a stale wasm only
+      # knows 'stm32, nrf52' → "unsupported SPI register layout" at sim init).
+      # The engine carries a string literal per supported peripheral profile, so
+      # every `profile:` the bundled chip/system configs reference must appear as
+      # a byte string in the wasm. Pure grep, sub-second.
+      - name: Verify wasm engine supports bundled chip profiles (deploy gate)
+        working-directory: packages/playground
+        run: |
+          set -euo pipefail
+          wasm="dist/wasm/labwired_wasm_bg.wasm"
+          test -f "$wasm" || { echo "::error::$wasm missing — cannot verify engine/config sync"; exit 1; }
+
+          # YAML configs bundled into the app are the ?raw imports in
+          # bundled-configs.ts; resolve them from the repo root (this step's
+          # working-dir is packages/playground, so repo root is ../..).
+          mapfile -t cfgs < <(grep -oE 'core/[A-Za-z0-9._/-]+\.ya?ml' src/bundled-configs.ts | sort -u)
+          test "${#cfgs[@]}" -gt 0 || { echo "::error::no bundled YAML configs found in bundled-configs.ts — gate misconfigured"; exit 1; }
+
+          profiles=$(for c in "${cfgs[@]}"; do f="../../$c"; [ -f "$f" ] && grep -hoE 'profile:[[:space:]]*"?[A-Za-z0-9_]+' "$f" || true; done \
+            | sed -E 's/profile:[[:space:]]*"?//' | sort -u)
+          test -n "$profiles" || { echo "::error::no profile: values found in bundled configs — gate misconfigured"; exit 1; }
+
+          fail=0
+          for p in $profiles; do
+            if grep -aq -- "$p" "$wasm"; then
+              echo "ok: engine supports profile '$p'"
+            else
+              echo "::error::wasm engine has no '$p' profile but a bundled chip config uses it — stale/mismatched engine. Rebuild: wasm-pack build --release --target web --out-dir packages/playground/public/wasm  (from the core commit main pins)"; fail=1
+            fi
+          done
+          test "$fail" -eq 0 || { echo "::error::deploy gate failed — wasm engine out of sync with bundled chip configs"; exit 1; }
+          echo "Engine-profile gate passed: $(echo "$profiles" | wc -w) profiles all present in wasm."
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
