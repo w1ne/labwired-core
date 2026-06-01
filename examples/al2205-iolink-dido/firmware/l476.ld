@@ -13,5 +13,9 @@ SECTIONS
   _sidata = LOADADDR(.data);
   .data : { . = ALIGN(4); _sdata = .; *(.data*) . = ALIGN(4); _edata = .; } > RAM AT > FLASH
   .bss  : { . = ALIGN(4); _sbss = .; *(.bss*) *(COMMON) . = ALIGN(4); _ebss = .; } > RAM
+  /* Heap base for newlib _sbrk (malloc/snprintf). Heap grows toward the stack. */
+  . = ALIGN(8);
+  PROVIDE(end = .);
+  PROVIDE(_end = .);
   /DISCARD/ : { *(.ARM.exidx*) *(.note.gnu.build-id*) }
 }

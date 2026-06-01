@@ -8,3 +8,4 @@ limits:
   max_steps: 500000
 assertions:
   - uart_contains: "AL2205 BOOT"
+  - uart_contains: "IOLINK INIT OK"
