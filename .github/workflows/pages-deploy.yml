@@ -39,6 +39,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          # Full superproject history (not the default shallow depth-1) so that
+          # `github.event.before` is present in the local git object store. The
+          # "Detect whether this push changed core" step diffs BEFORE..AFTER to
+          # decide whether to rebuild the wasm; with depth-1 the before commit is
+          # absent, `git cat-file -e` fails, and we fall through to rebuild=true
+          # on EVERY push — defeating the playground-only fast path. depth 0
+          # makes the diff work for both single-commit pushes and merge commits.
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
