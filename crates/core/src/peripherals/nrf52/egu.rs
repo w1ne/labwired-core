@@ -58,12 +58,12 @@ impl Peripheral for Nrf52Egu {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_TRIGGER_0..=OFF_TASKS_TRIGGER_15 if offset.is_multiple_of(4) => {
-                if value & 1 != 0 {
-                    let i = ((offset - OFF_TASKS_TRIGGER_0) / 4) as usize;
-                    self.events_triggered[i] = 1;
-                    self.pending_triggers |= 1 << i;
-                }
+            OFF_TASKS_TRIGGER_0..=OFF_TASKS_TRIGGER_15
+                if offset.is_multiple_of(4) && value & 1 != 0 =>
+            {
+                let i = ((offset - OFF_TASKS_TRIGGER_0) / 4) as usize;
+                self.events_triggered[i] = 1;
+                self.pending_triggers |= 1 << i;
             }
             OFF_EVENTS_TRIGGERED_0..=OFF_EVENTS_TRIGGERED_15 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_TRIGGERED_0) / 4) as usize;

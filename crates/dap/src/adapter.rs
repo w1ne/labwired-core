@@ -1007,6 +1007,9 @@ fn gpio_offsets_for_peripheral(
             idr_offset: GPIO_V2_IDR_OFFSET,
             odr_offset: GPIO_V2_ODR_OFFSET,
         }),
+        // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
+        // skip it gracefully (callers use `?`, so None drops the binding).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,
     }
 }
 

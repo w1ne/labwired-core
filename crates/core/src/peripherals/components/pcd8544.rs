@@ -335,7 +335,7 @@ mod tests {
     fn column_wrap_advances_bank() {
         let mut lcd = Pcd8544::new("PB6".into(), "PC7".into());
         lcd.set_dc_level(false);
-        lcd.transfer(0x40 | 0); // bank 0
+        lcd.transfer(0x40); // bank 0
         lcd.transfer(0x80 | (WIDTH as u8 - 1)); // last column (83)
         lcd.set_dc_level(true);
         lcd.transfer(0x11);

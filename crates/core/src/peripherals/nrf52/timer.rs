@@ -125,34 +125,29 @@ impl Peripheral for Nrf52Timer {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_START => {
-                if value & 1 != 0 {
+            OFF_TASKS_START
+                if value & 1 != 0 => {
                     self.running = true;
                 }
-            }
-            OFF_TASKS_STOP | OFF_TASKS_SHUTDOWN => {
-                if value & 1 != 0 {
+            OFF_TASKS_STOP | OFF_TASKS_SHUTDOWN
+                if value & 1 != 0 => {
                     self.running = false;
                 }
-            }
-            OFF_TASKS_COUNT => {
+            OFF_TASKS_COUNT
                 // Counter mode advance — gated by MODE != Timer.
-                if value & 1 != 0 && self.mode != MODE_TIMER {
+                if value & 1 != 0 && self.mode != MODE_TIMER => {
                     self.counter = (self.counter.wrapping_add(1)) & self.counter_mask();
                 }
-            }
-            OFF_TASKS_CLEAR => {
-                if value & 1 != 0 {
+            OFF_TASKS_CLEAR
+                if value & 1 != 0 => {
                     self.counter = 0;
                     self.prescaler_accum = 0;
                 }
-            }
-            OFF_TASKS_CAPTURE0..=OFF_TASKS_CAPTURE5 if offset.is_multiple_of(4) => {
-                if value & 1 != 0 {
+            OFF_TASKS_CAPTURE0..=OFF_TASKS_CAPTURE5 if offset.is_multiple_of(4)
+                && value & 1 != 0 => {
                     let i = ((offset - OFF_TASKS_CAPTURE0) / 4) as usize;
                     self.cc[i] = self.counter;
                 }
-            }
 
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE5 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;

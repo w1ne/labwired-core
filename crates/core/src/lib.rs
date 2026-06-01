@@ -662,6 +662,7 @@ pub struct Machine<C: Cpu> {
     /// work (e.g. a UART with an RX stream attached before any MMIO write) get
     /// one chance to schedule their initial events. Always present; only read
     /// under the `event-scheduler` feature.
+    #[allow(dead_code)]
     scheduler_bootstrapped: bool,
 }
 

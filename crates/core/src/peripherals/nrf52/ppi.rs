@@ -177,7 +177,7 @@ mod tests {
     fn route_ppi_events_returns_tep_for_enabled_channels() {
         let mut p = Nrf52Ppi::new();
         // CH[0] routes TIMER0 EVENTS_COMPARE[0] -> GPIOTE TASKS_OUT[0].
-        p.write_u32(OFF_CH0_EEP + 0, 0x4000_8140).unwrap(); // TIMER0+0x140
+        p.write_u32(OFF_CH0_EEP, 0x4000_8140).unwrap(); // TIMER0+0x140
         p.write_u32(OFF_CH0_EEP + 4, 0x4000_6000).unwrap(); // GPIOTE+0x000
         p.write_u32(OFF_CHENSET, 1).unwrap();
 
@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn route_ppi_events_ignores_disabled_channels() {
         let mut p = Nrf52Ppi::new();
-        p.write_u32(OFF_CH0_EEP + 0, 0x4000_8140).unwrap();
+        p.write_u32(OFF_CH0_EEP, 0x4000_8140).unwrap();
         p.write_u32(OFF_CH0_EEP + 4, 0x4000_6000).unwrap();
         // CHEN bit 0 not set.
         let tasks = p.route_ppi_events(&[0x4000_8140]);
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn route_ppi_events_emits_fork_tep() {
         let mut p = Nrf52Ppi::new();
-        p.write_u32(OFF_CH0_EEP + 0, 0x4000_8140).unwrap();
+        p.write_u32(OFF_CH0_EEP, 0x4000_8140).unwrap();
         p.write_u32(OFF_CH0_EEP + 4, 0x4000_6000).unwrap();
         p.write_u32(OFF_FORK0_TEP, 0x4000_6004).unwrap();
         p.write_u32(OFF_CHENSET, 1).unwrap();
@@ -209,9 +209,9 @@ mod tests {
     #[test]
     fn channel_eep_tep_round_trip() {
         let mut p = Nrf52Ppi::new();
-        p.write_u32(OFF_CH0_EEP + 0, 0x4000_8140).unwrap();
+        p.write_u32(OFF_CH0_EEP, 0x4000_8140).unwrap();
         p.write_u32(OFF_CH0_EEP + 4, 0x4001_F500).unwrap();
-        assert_eq!(p.read_u32(OFF_CH0_EEP + 0).unwrap(), 0x4000_8140);
+        assert_eq!(p.read_u32(OFF_CH0_EEP).unwrap(), 0x4000_8140);
         assert_eq!(p.read_u32(OFF_CH0_EEP + 4).unwrap(), 0x4001_F500);
     }
 }

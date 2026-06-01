@@ -16,7 +16,7 @@ use labwired_core::cpu::cortex_m::CortexM;
 use labwired_core::peripherals::components::Pcd8544;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::Machine;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 type Cm = Machine<CortexM>;
@@ -62,7 +62,7 @@ fn ensure_firmware_built() -> PathBuf {
     elf
 }
 
-fn build_machine(elf: &PathBuf) -> Cm {
+fn build_machine(elf: &Path) -> Cm {
     let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples/nokia5110-invaders-lab/system.yaml");
     let manifest = SystemManifest::from_file(&system_path).expect("load manifest");

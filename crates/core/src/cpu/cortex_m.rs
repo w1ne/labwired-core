@@ -161,7 +161,7 @@ impl CortexM {
             1 => -3,
             2 => -2,
             3 => -1,
-            4 => ((self.shpr1.load(Ordering::Relaxed) >> 0) & 0xFF) as i32,
+            4 => (self.shpr1.load(Ordering::Relaxed) & 0xFF) as i32,
             5 => ((self.shpr1.load(Ordering::Relaxed) >> 8) & 0xFF) as i32,
             6 => ((self.shpr1.load(Ordering::Relaxed) >> 16) & 0xFF) as i32,
             11 => ((self.shpr2.load(Ordering::Relaxed) >> 24) & 0xFF) as i32,

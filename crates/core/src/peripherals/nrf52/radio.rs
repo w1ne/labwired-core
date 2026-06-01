@@ -243,6 +243,7 @@ const SHORT_DISABLED_RXEN: u32 = 1 << 3;
 const SHORT_ADDRESS_RSSISTART: u32 = 1 << 4;
 const SHORT_END_START: u32 = 1 << 5;
 const SHORT_ADDRESS_BCSTART: u32 = 1 << 6;
+#[allow(dead_code)]
 const SHORT_DISABLED_RSSISTOP: u32 = 1 << 8;
 
 // INTEN bits map to events 0..23 at corresponding bit positions
@@ -339,6 +340,7 @@ pub struct Nrf52Radio {
     /// Logical address (0..7) the current RX is listening for. RXADDRESSES
     /// bits map to BASE0/PREFIX0[0] for bit 0, BASE1/PREFIX0[1..3] for
     /// bits 1..3, BASE1/PREFIX1[0..3] for bits 4..7.
+    #[allow(dead_code)]
     rx_address_mask: u8,
     /// Frame currently being received (popped from virtual air, awaiting
     /// the bit-rate countdown to expire before becoming visible).
@@ -389,10 +391,8 @@ impl Nrf52Radio {
     /// Apply SHORTS-style automatic task triggers when an event fires.
     fn apply_event_shorts(&mut self, fired: u64) {
         match fired {
-            OFF_EVENTS_READY => {
-                if self.shorts & SHORT_READY_START != 0 {
-                    self.start_packet();
-                }
+            OFF_EVENTS_READY if self.shorts & SHORT_READY_START != 0 => {
+                self.start_packet();
             }
             OFF_EVENTS_END | OFF_EVENTS_PHYEND => {
                 if self.shorts & SHORT_END_DISABLE != 0 {
@@ -730,53 +730,45 @@ impl Peripheral for Nrf52Radio {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             // Tasks: trigger state transitions.
-            OFF_TASKS_TXEN => {
-                if value & 1 != 0 {
+            OFF_TASKS_TXEN
+                if value & 1 != 0 => {
                     self.tx_enable();
                 }
-            }
-            OFF_TASKS_RXEN => {
-                if value & 1 != 0 {
+            OFF_TASKS_RXEN
+                if value & 1 != 0 => {
                     self.rx_enable();
                 }
-            }
-            OFF_TASKS_START => {
-                if value & 1 != 0 {
+            OFF_TASKS_START
+                if value & 1 != 0 => {
                     self.start_packet();
                 }
-            }
-            OFF_TASKS_STOP => {
-                if value & 1 != 0 {
+            OFF_TASKS_STOP
+                if value & 1 != 0 => {
                     if self.state == STATE_TX {
                         self.state = STATE_TXIDLE;
                     } else if self.state == STATE_RX {
                         self.state = STATE_RXIDLE;
                     }
                 }
-            }
-            OFF_TASKS_DISABLE => {
-                if value & 1 != 0 {
+            OFF_TASKS_DISABLE
+                if value & 1 != 0 => {
                     self.disable();
                 }
-            }
-            OFF_TASKS_RSSISTART => {
+            OFF_TASKS_RSSISTART
                 // Sample RSSI immediately — real silicon needs a few µs
                 // but firmware just polls RSSISAMPLE after this task.
-                if value & 1 != 0 {
+                if value & 1 != 0 => {
                     self.rssisample = self.next_rssi_sample();
                 }
-            }
-            OFF_TASKS_BCSTART => {
-                if value & 1 != 0 {
+            OFF_TASKS_BCSTART
+                if value & 1 != 0 => {
                     self.bit_counter_armed = true;
                     self.bit_counter = 0;
                 }
-            }
-            OFF_TASKS_BCSTOP => {
-                if value & 1 != 0 {
+            OFF_TASKS_BCSTOP
+                if value & 1 != 0 => {
                     self.bit_counter_armed = false;
                 }
-            }
             OFF_TASKS_RSSISTOP | OFF_TASKS_EDSTART | OFF_TASKS_EDSTOP | OFF_TASKS_CCASTART
             | OFF_TASKS_CCASTOP => {}
 
@@ -1349,7 +1341,7 @@ mod tests {
 
         // TX in one instance, RX in another — verify the payload survives
         // a round trip through whitening + CRC.
-        let payload_orig = vec![0xC0, 0xFF, 0xEE, 0x42, 0x69];
+        let payload_orig = [0xC0, 0xFF, 0xEE, 0x42, 0x69];
         let mut bus_tx = SystemBus::new();
         bus_tx.write_u8(0x2000_0000, 0xAA).unwrap(); // S0
         bus_tx

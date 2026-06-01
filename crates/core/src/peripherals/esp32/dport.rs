@@ -256,7 +256,7 @@ impl Peripheral for Dport {
         let snap: Snap = bincode::deserialize(bytes).map_err(|e| {
             crate::SimulationError::NotImplemented(format!("Dport snapshot decode: {e}"))
         })?;
-        self.regs = Box::new([0u32; Self::WORDS]);
+        *self.regs = [0u32; Self::WORDS];
         for (off, val) in snap.regs {
             self.regs[(off >> 2) as usize] = val;
         }

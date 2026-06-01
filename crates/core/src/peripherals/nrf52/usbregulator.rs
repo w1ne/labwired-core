@@ -55,10 +55,8 @@ impl Peripheral for Nrf52UsbRegulator {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_USBPWRRDY_TASKS_START => {
-                if value & 1 != 0 {
-                    self.events_usbpwrrdy = 1;
-                }
+            OFF_USBPWRRDY_TASKS_START if value & 1 != 0 => {
+                self.events_usbpwrrdy = 1;
             }
             OFF_EVENTS_USBPWRRDY => self.events_usbpwrrdy = value & 1,
             OFF_INTEN => self.inten = value & 1,

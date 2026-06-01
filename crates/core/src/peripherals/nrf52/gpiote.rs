@@ -187,23 +187,17 @@ impl Peripheral for Nrf52Gpiote {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_OUT_0..=OFF_TASKS_OUT_7 if offset.is_multiple_of(4) => {
-                if value & 1 != 0 {
-                    let i = ((offset - OFF_TASKS_OUT_0) / 4) as usize;
-                    self.fire_task(i, TaskKind::Out);
-                }
+            OFF_TASKS_OUT_0..=OFF_TASKS_OUT_7 if offset.is_multiple_of(4) && value & 1 != 0 => {
+                let i = ((offset - OFF_TASKS_OUT_0) / 4) as usize;
+                self.fire_task(i, TaskKind::Out);
             }
-            OFF_TASKS_SET_0..=OFF_TASKS_SET_7 if offset.is_multiple_of(4) => {
-                if value & 1 != 0 {
-                    let i = ((offset - OFF_TASKS_SET_0) / 4) as usize;
-                    self.fire_task(i, TaskKind::Set);
-                }
+            OFF_TASKS_SET_0..=OFF_TASKS_SET_7 if offset.is_multiple_of(4) && value & 1 != 0 => {
+                let i = ((offset - OFF_TASKS_SET_0) / 4) as usize;
+                self.fire_task(i, TaskKind::Set);
             }
-            OFF_TASKS_CLR_0..=OFF_TASKS_CLR_7 if offset.is_multiple_of(4) => {
-                if value & 1 != 0 {
-                    let i = ((offset - OFF_TASKS_CLR_0) / 4) as usize;
-                    self.fire_task(i, TaskKind::Clr);
-                }
+            OFF_TASKS_CLR_0..=OFF_TASKS_CLR_7 if offset.is_multiple_of(4) && value & 1 != 0 => {
+                let i = ((offset - OFF_TASKS_CLR_0) / 4) as usize;
+                self.fire_task(i, TaskKind::Clr);
             }
 
             OFF_EVENTS_IN_0..=OFF_EVENTS_IN_7 if offset.is_multiple_of(4) => {

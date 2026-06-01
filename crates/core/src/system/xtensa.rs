@@ -1301,7 +1301,6 @@ mod tests {
     #[test]
     fn attach_esp32_external_devices_errors_on_missing_connection() {
         use labwired_config::{ExternalDevice, SystemManifest};
-        use std::collections::HashMap;
 
         let manifest = SystemManifest {
             walk_deleted: false,

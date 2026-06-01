@@ -167,33 +167,25 @@ impl Peripheral for Nrf52Clock {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_HFCLKSTART => {
-                if value & 1 != 0 {
-                    self.hfclkrun = 1;
-                    // HFCLKSTAT.STATE = running; SRC = bit 0 reflects LFCLKSRC bits — for
-                    // our purposes (Zephyr clock_init), reporting 1<<16 is sufficient.
-                    self.hfclkstat = (1 << 16) | 1; // xtal source, running
-                    self.pending_hfclk_started = true;
-                }
+            OFF_TASKS_HFCLKSTART if value & 1 != 0 => {
+                self.hfclkrun = 1;
+                // HFCLKSTAT.STATE = running; SRC = bit 0 reflects LFCLKSRC bits — for
+                // our purposes (Zephyr clock_init), reporting 1<<16 is sufficient.
+                self.hfclkstat = (1 << 16) | 1; // xtal source, running
+                self.pending_hfclk_started = true;
             }
-            OFF_TASKS_HFCLKSTOP => {
-                if value & 1 != 0 {
-                    self.hfclkrun = 0;
-                    self.hfclkstat = 0;
-                }
+            OFF_TASKS_HFCLKSTOP if value & 1 != 0 => {
+                self.hfclkrun = 0;
+                self.hfclkstat = 0;
             }
-            OFF_TASKS_LFCLKSTART => {
-                if value & 1 != 0 {
-                    self.lfclkrun = 1;
-                    self.lfclkstat = (1 << 16) | (self.lfclksrc & 0x3);
-                    self.pending_lfclk_started = true;
-                }
+            OFF_TASKS_LFCLKSTART if value & 1 != 0 => {
+                self.lfclkrun = 1;
+                self.lfclkstat = (1 << 16) | (self.lfclksrc & 0x3);
+                self.pending_lfclk_started = true;
             }
-            OFF_TASKS_LFCLKSTOP => {
-                if value & 1 != 0 {
-                    self.lfclkrun = 0;
-                    self.lfclkstat = 0;
-                }
+            OFF_TASKS_LFCLKSTOP if value & 1 != 0 => {
+                self.lfclkrun = 0;
+                self.lfclkstat = 0;
             }
             OFF_TASKS_CAL | OFF_TASKS_CTSTART | OFF_TASKS_CTSTOP => {}
 

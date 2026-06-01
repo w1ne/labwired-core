@@ -102,35 +102,31 @@ impl Peripheral for Nrf52Wdt {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_START => {
-                if value & 1 != 0 && !self.bitten {
+            OFF_TASKS_START
+                if value & 1 != 0 && !self.bitten => {
                     self.runstatus = 1;
                     self.counter = self.crv;
                     // On start every enabled channel needs a fresh ack.
                     self.reqstatus_pending = 0;
                 }
-            }
             OFF_EVENTS_TIMEOUT => self.events_timeout = value & 1,
             OFF_INTENSET => self.inten |= value & 1,
             OFF_INTENCLR => self.inten &= !value,
-            OFF_CRV => {
+            OFF_CRV
                 // Per PS §6.34.5 CRV is RO once running; drop writes silently.
-                if !self.running() {
+                if !self.running() => {
                     self.crv = value;
                 }
-            }
-            OFF_RREN => {
-                if !self.running() {
+            OFF_RREN
+                if !self.running() => {
                     self.rren = value & 0xFF;
                 }
-            }
-            OFF_CONFIG => {
-                if !self.running() {
+            OFF_CONFIG
+                if !self.running() => {
                     self.config = value & 0x9;
                 }
-            }
-            OFF_RR0..=OFF_RR7 if offset.is_multiple_of(4) => {
-                if self.running() && value == RR_RELOAD_KEY {
+            OFF_RR0..=OFF_RR7 if offset.is_multiple_of(4)
+                && self.running() && value == RR_RELOAD_KEY => {
                     let i = ((offset - OFF_RR0) / 4) as usize;
                     let bit = 1u32 << i;
                     // Only ack channels that are enabled.
@@ -143,7 +139,6 @@ impl Peripheral for Nrf52Wdt {
                         }
                     }
                 }
-            }
             _ => {}
         }
         Ok(())
