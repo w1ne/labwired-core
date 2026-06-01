@@ -4,9 +4,15 @@ import type { DisplayBuffer } from '../editor/types';
 
 /** A simulated display device polled by the loop. `partId` must match the
  *  diagram part id AND the `board_io.id` in the system YAML. */
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 export interface DisplayBinding {
   partId: string;
-  kind: 'ssd1680_tricolor_290' | 'uc8151d_tricolor_290';
+  kind: 'ssd1680_tricolor_290' | 'uc8151d_tricolor_290' | 'pcd8544';
   /**
    * GxEPD2 (the de-facto Arduino-ESP32 SSD1680 library)
    * inverts the source bitmap before SPI write — its "no red" source byte
@@ -154,6 +160,23 @@ export function useSimulationLoop(
               kind: 'uc8151d_tricolor_290',
               generation: gen,
               data: bytes,
+            };
+            displaysChanged = true;
+          } else if (d.kind === 'pcd8544') {
+            // No refresh-generation accessor for the PCD8544 — fetch the small
+            // (504-byte) framebuffer every poll and synthesise a generation
+            // that bumps only when the pixels actually change, so the component
+            // re-encodes its <image> at most once per real frame.
+            const data = b.getPcd8544Framebuffer(d.partId);
+            if (data === null) continue;
+            const prev = displayBufRef.current[d.partId];
+            if (prev && prev.kind === 'pcd8544' && bytesEqual(prev.data, data)) continue;
+            const gen = (displayGenRef.current[d.partId] ?? 0) + 1;
+            displayGenRef.current[d.partId] = gen;
+            displayBufRef.current[d.partId] = {
+              kind: 'pcd8544',
+              generation: gen,
+              data,
             };
             displaysChanged = true;
           }

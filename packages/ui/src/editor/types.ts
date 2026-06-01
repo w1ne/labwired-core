@@ -87,6 +87,10 @@ export interface ComponentState {
  *   - `uc8151d_tricolor_290`: same shape and encoding as SSD1680 — split
  *     exists because the controller decodes different opcodes (GxEPD2's
  *     PSR/PON/DTM1/DRF/DTM2 stream), not because the wire format differs.
+ *   - `pcd8544`: 504 bytes = 84 cols × 6 banks, bank-major. Pixel (x, y) is
+ *     bit `(y & 7)` of byte `[(y >> 3) * 84 + x]`; 1 = dark/on. The PCD8544
+ *     has no refresh-generation accessor in the sim, so `generation` is a
+ *     content-change counter synthesised by the poll loop.
  */
 export type DisplayBuffer =
   | {
@@ -96,6 +100,11 @@ export type DisplayBuffer =
     }
   | {
       kind: 'uc8151d_tricolor_290';
+      generation: number;
+      data: Uint8Array;
+    }
+  | {
+      kind: 'pcd8544';
       generation: number;
       data: Uint8Array;
     };
