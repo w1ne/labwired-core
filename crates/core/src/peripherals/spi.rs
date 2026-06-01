@@ -102,6 +102,10 @@ impl FromStr for SpiRegisterLayout {
     }
 }
 
+/// Event token for the one-shot SPI transfer-completion event (the SPI has a
+/// single kind of scheduled wakeup, so the value is arbitrary).
+const SPI_DONE_TOKEN: u32 = 0;
+
 /// STM32F1 compatible SPI peripheral
 #[derive(Default, serde::Serialize)]
 pub struct Spi {
@@ -120,6 +124,12 @@ pub struct Spi {
     transfer_in_progress: bool,
     transfer_cycles_remaining: u32,
     transfer_buffer: u8,
+    /// Event-scheduler bookkeeping: whether a completion event is in flight, so
+    /// `take_scheduled_events` arms exactly one per transfer. Only read under
+    /// the `event-scheduler` feature; inert (always false) otherwise. Transient
+    /// (skipped in snapshots, like `attached_devices`).
+    #[serde(skip)]
+    scheduled: bool,
 
     /// When true, completed transfers also load `transfer_buffer` into the
     /// RX path (`dr` + RXNE). Used by tests and integration scenarios that
@@ -436,6 +446,56 @@ impl crate::Peripheral for Spi {
             cycles: 0,
             ..Default::default()
         }
+    }
+
+    /// Phase 2B (issue #192): the STM32 SPI is migrated to the event scheduler.
+    /// The DR write delivers the byte to the slave synchronously and only the
+    /// completion flag-flip (BSY→0, TXE→1, optional RXNE, TXEIE IRQ) is timed,
+    /// so a single one-shot event replaces the per-cycle `tick()` countdown.
+    /// With the feature off this is ignored and `tick()` still drives it.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    /// After a DR write starts a transfer, arm one completion event
+    /// `transfer_cycles_remaining` ticks out — the exact count the legacy
+    /// `tick()` decremented to zero before flipping the flags.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.transfer_in_progress && !self.scheduled {
+            self.scheduled = true;
+            vec![(self.transfer_cycles_remaining as u64, SPI_DONE_TOKEN)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Completion: byte-for-byte the same state change as the legacy `tick()`
+    /// makes when `transfer_cycles_remaining` hits 0. Single-shot — no reschedule.
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        self.scheduled = false;
+        if !self.transfer_in_progress {
+            return crate::sched::EventResult::default();
+        }
+        self.transfer_in_progress = false;
+        self.transfer_cycles_remaining = 0;
+        self.sr &= !0x0080; // Clear BSY
+        self.sr |= 0x0002; // Set TXE
+        let mut res = crate::sched::EventResult::default();
+        if self.loopback {
+            self.dr = self.transfer_buffer as u16;
+            self.sr |= 0x0001; // RXNE
+        }
+        if (self.cr2 & (1 << 7)) != 0 {
+            // TXEIE → pend the SPI's configured NVIC line, as the legacy
+            // tick()'s `irq: true` did.
+            res.raise_own_irq = true;
+        }
+        res
     }
 
     fn snapshot(&self) -> serde_json::Value {

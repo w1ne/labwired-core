@@ -184,9 +184,10 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
-    /// HC-SR04 ultrasonic sensors wired to GPIO TRIG/ECHO pins. Serviced once
-    /// per peripheral-tick: the bus reads each sensor's TRIG output level and
-    /// drives the computed ECHO input level. Empty by default → zero cost.
+    /// HC-SR04 ultrasonic sensors wired to GPIO TRIG/ECHO pins. The echo window
+    /// is armed by the TRIG GPIO write-hook (`maybe_arm_hcsr04`); a cheap
+    /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,
+    /// touching the bus only on a transition. Empty by default → zero cost.
     pub hcsr04: Vec<crate::peripherals::hc_sr04::HcSr04>,
 }
 
@@ -578,22 +579,25 @@ impl SystemBus {
         Some((base + idr_off, bit))
     }
 
-    /// Service all HC-SR04 sensors for one tick: read each sensor's TRIG
-    /// output level, advance its echo window, and drive the resulting ECHO
-    /// input level. No-op when no sensors are wired.
+    /// Service all HC-SR04 sensors for one tick: compute each sensor's ECHO
+    /// level from its (write-hook-armed) echo window and drive it onto the ECHO
+    /// input register, touching the bus only on a level transition. TRIG is NOT
+    /// polled here — `maybe_arm_hcsr04` arms the window on the GPIO write, which
+    /// is cycle-exact (see `Machine::step`). No-op when no sensors are wired.
     pub(crate) fn service_hcsr04(&mut self) {
         if self.hcsr04.is_empty() {
             return;
         }
         let now = self.current_cycle;
         for i in 0..self.hcsr04.len() {
-            let trig_addr = self.hcsr04[i].trig_odr_addr;
-            let trig_bit = self.hcsr04[i].trig_bit;
-            let trig_high = self
-                .read_u32(trig_addr)
-                .map(|v| (v >> trig_bit) & 1 != 0)
-                .unwrap_or(false);
-            let echo_high = self.hcsr04[i].service(trig_high, now);
+            // TRIG is no longer polled here — `maybe_arm_hcsr04` arms the window
+            // on the GPIO write (cycle-exact, see the note in `Machine::step`).
+            // The per-cycle work is two integer comparisons plus, only on a
+            // transition, one read-modify-write of the ECHO input bit.
+            let echo_high = self.hcsr04[i].echo_high_at(now);
+            if echo_high == self.hcsr04[i].last_echo_high() {
+                continue;
+            }
             let echo_addr = self.hcsr04[i].echo_idr_addr;
             let echo_bit = self.hcsr04[i].echo_bit;
             let idr = self.read_u32(echo_addr).unwrap_or(0);
@@ -605,6 +609,49 @@ impl SystemBus {
             if new_idr != idr {
                 let _ = self.write_u32(echo_addr, new_idr);
             }
+            self.hcsr04[i].set_last_echo_high(echo_high);
+        }
+    }
+
+    /// Write-hook mirror of [`maybe_latch_dc`](Self::maybe_latch_dc) for the
+    /// HC-SR04: after an MMIO write to peripheral `idx`, if that peripheral is
+    /// the GPIO hosting any sensor's TRIG line, re-read the TRIG ODR bit and run
+    /// the sensor's rising-edge/arm logic at `now = self.current_cycle`.
+    ///
+    /// Because TRIG only changes via a GPIO write, edge detection on the write is
+    /// exactly equivalent to the old per-cycle TRIG poll, and `current_cycle`
+    /// here equals the value the immediately-following `service_hcsr04` tick sees
+    /// (see `Machine::step`), so the arming is cycle-exact.
+    fn maybe_arm_hcsr04(&mut self, idx: usize) {
+        if self.hcsr04.is_empty() {
+            return;
+        }
+        let now = self.current_cycle;
+        for i in 0..self.hcsr04.len() {
+            // Resolve & cache the TRIG GPIO's peripheral index on first use.
+            let trig_idx = match self.hcsr04[i].trig_peripheral_idx() {
+                Some(t) => t,
+                None => {
+                    let trig_addr = self.hcsr04[i].trig_odr_addr;
+                    match self.find_peripheral_index(trig_addr) {
+                        Some(t) => {
+                            self.hcsr04[i].set_trig_peripheral_idx(t);
+                            t
+                        }
+                        None => continue,
+                    }
+                }
+            };
+            if trig_idx != idx {
+                continue;
+            }
+            let trig_addr = self.hcsr04[i].trig_odr_addr;
+            let trig_bit = self.hcsr04[i].trig_bit;
+            let trig_high = self
+                .read_u32(trig_addr)
+                .map(|v| (v >> trig_bit) & 1 != 0)
+                .unwrap_or(false);
+            self.hcsr04[i].observe_trig(trig_high, now);
         }
     }
 
@@ -1885,6 +1932,11 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // Per-config walk-deletion opt-in. The field is only consulted under the
+        // `event-scheduler` feature (the legacy build always walks), so this is a
+        // no-op there. Safe only because the manifest author verified the
+        // firmware runs byte-identical walk-free (see the walk-identity test).
+        bus.legacy_walk_disabled = manifest.walk_deleted;
         Ok(bus)
     }
 
@@ -1950,6 +2002,7 @@ impl SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u32(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -2002,6 +2055,7 @@ impl SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u16(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -2418,6 +2472,7 @@ impl crate::Bus for SystemBus {
                 self.maybe_latch_dc(idx);
                 let p = &mut self.peripherals[idx];
                 let r = p.dev.write(addr - p.base, value);
+                self.maybe_arm_hcsr04(idx);
                 #[cfg(feature = "event-scheduler")]
                 self.collect_scheduled_events(idx);
                 r
@@ -2508,6 +2563,7 @@ impl crate::Bus for SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u16(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -2547,6 +2603,7 @@ impl crate::Bus for SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u32(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -2757,6 +2814,7 @@ mod tests {
             serde_yaml::Value::Number(0x53.into()),
         );
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),
@@ -2821,6 +2879,7 @@ mod tests {
         config: std::collections::HashMap<String, serde_yaml::Value>,
     ) -> labwired_config::SystemManifest {
         labwired_config::SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),

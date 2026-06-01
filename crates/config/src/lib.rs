@@ -148,6 +148,13 @@ pub struct SystemManifest {
     pub board_io: Vec<BoardIoBinding>,
     #[serde(default)]
     pub peripherals: Vec<PeripheralConfig>,
+    /// Opt-in: delete the per-cycle peripheral walk for this config (only takes
+    /// effect in `event-scheduler` builds; no-op otherwise). ONLY safe when
+    /// every peripheral the firmware actually drives is event-migrated (SPI,
+    /// UART) or inert for this firmware — the firmware MUST be verified
+    /// byte-identical walk-free first.
+    #[serde(default)]
+    pub walk_deleted: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
