@@ -351,7 +351,11 @@ impl Game {
             self.vy = -self.vy;
             self.by = PADDLE_Y - BALL_SZ;
             let center = self.paddle_x + PADDLE_W / 2;
-            self.vx = if self.bx + BALL_SZ / 2 < center { -1 } else { 1 };
+            self.vx = if self.bx + BALL_SZ / 2 < center {
+                -1
+            } else {
+                1
+            };
         }
 
         // Missed the paddle → relaunch from above it.

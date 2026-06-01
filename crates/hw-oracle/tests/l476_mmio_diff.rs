@@ -240,8 +240,8 @@ const PARITY_PATTERNS: &[u32] = &[0x0000_0000, 0xFFFF_FFFF, 0xA5A5_A5A5, 0x5A5A_
 /// Enable every peripheral clock the sweep touches in one shot (GPIOA-E/H,
 /// SPI1/2/3, TIM2) so all swept registers are accessible.
 const ENABLE_PREAMBLE: &[(u32, u32)] = &[
-    (RCC_AHB2ENR, 0x0000_009F),                       // GPIOA(0) B(1) C(2) D(3) E(4) H(7)
-    (RCC_APB2ENR, 1 << 12),                           // SPI1
+    (RCC_AHB2ENR, 0x0000_009F), // GPIOA(0) B(1) C(2) D(3) E(4) H(7)
+    (RCC_APB2ENR, 1 << 12),     // SPI1
     (RCC_APB1ENR1, (1 << 0) | (1 << 14) | (1 << 15)), // TIM2, SPI2, SPI3
 ];
 
@@ -254,35 +254,139 @@ struct ParityReg {
 const PARITY_REGS: &[ParityReg] = &[
     // GPIO configuration registers on debug-pin-free ports D and E. (GPIOA's
     // PA13/PA14 carry SWD — never swept here, the J-Link rides on them.)
-    ParityReg { label: "GPIOD MODER", addr: GPIOD_BASE + 0x00, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOD OTYPER", addr: GPIOD_BASE + 0x04, mask: 0x0000_FFFF },
-    ParityReg { label: "GPIOD OSPEEDR", addr: GPIOD_BASE + 0x08, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOD PUPDR", addr: GPIOD_BASE + 0x0C, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOD ODR", addr: GPIOD_BASE + 0x14, mask: 0x0000_FFFF },
-    ParityReg { label: "GPIOD AFRL", addr: GPIOD_BASE + 0x20, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOD AFRH", addr: GPIOD_BASE + 0x24, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOE MODER", addr: GPIOE_BASE + 0x00, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOE OSPEEDR", addr: GPIOE_BASE + 0x08, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOE PUPDR", addr: GPIOE_BASE + 0x0C, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOE AFRL", addr: GPIOE_BASE + 0x20, mask: 0xFFFF_FFFF },
-    ParityReg { label: "GPIOE AFRH", addr: GPIOE_BASE + 0x24, mask: 0xFFFF_FFFF },
+    ParityReg {
+        label: "GPIOD MODER",
+        addr: GPIOD_BASE + 0x00,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOD OTYPER",
+        addr: GPIOD_BASE + 0x04,
+        mask: 0x0000_FFFF,
+    },
+    ParityReg {
+        label: "GPIOD OSPEEDR",
+        addr: GPIOD_BASE + 0x08,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOD PUPDR",
+        addr: GPIOD_BASE + 0x0C,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOD ODR",
+        addr: GPIOD_BASE + 0x14,
+        mask: 0x0000_FFFF,
+    },
+    ParityReg {
+        label: "GPIOD AFRL",
+        addr: GPIOD_BASE + 0x20,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOD AFRH",
+        addr: GPIOD_BASE + 0x24,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOE MODER",
+        addr: GPIOE_BASE + 0x00,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOE OSPEEDR",
+        addr: GPIOE_BASE + 0x08,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOE PUPDR",
+        addr: GPIOE_BASE + 0x0C,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOE AFRL",
+        addr: GPIOE_BASE + 0x20,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "GPIOE AFRH",
+        addr: GPIOE_BASE + 0x24,
+        mask: 0xFFFF_FFFF,
+    },
     // SPI control registers (CR2 bit 15 reserved on L4 → masked out).
-    ParityReg { label: "SPI1 CR1", addr: SPI1_BASE + 0x00, mask: 0x0000_FFFF },
-    ParityReg { label: "SPI1 CR2", addr: SPI1_BASE + 0x04, mask: 0x0000_7FFF },
-    ParityReg { label: "SPI2 CR1", addr: SPI2_BASE + 0x00, mask: 0x0000_FFFF },
-    ParityReg { label: "SPI2 CR2", addr: SPI2_BASE + 0x04, mask: 0x0000_7FFF },
-    ParityReg { label: "SPI3 CR1", addr: SPI3_BASE + 0x00, mask: 0x0000_FFFF },
-    ParityReg { label: "SPI3 CR2", addr: SPI3_BASE + 0x04, mask: 0x0000_7FFF },
+    ParityReg {
+        label: "SPI1 CR1",
+        addr: SPI1_BASE + 0x00,
+        mask: 0x0000_FFFF,
+    },
+    ParityReg {
+        label: "SPI1 CR2",
+        addr: SPI1_BASE + 0x04,
+        mask: 0x0000_7FFF,
+    },
+    ParityReg {
+        label: "SPI2 CR1",
+        addr: SPI2_BASE + 0x00,
+        mask: 0x0000_FFFF,
+    },
+    ParityReg {
+        label: "SPI2 CR2",
+        addr: SPI2_BASE + 0x04,
+        mask: 0x0000_7FFF,
+    },
+    ParityReg {
+        label: "SPI3 CR1",
+        addr: SPI3_BASE + 0x00,
+        mask: 0x0000_FFFF,
+    },
+    ParityReg {
+        label: "SPI3 CR2",
+        addr: SPI3_BASE + 0x04,
+        mask: 0x0000_7FFF,
+    },
     // TIM2 (32-bit GP timer) data registers. CEN is never set, so CNT is
     // stable; CCMR masked to the low 16 implemented bits.
-    ParityReg { label: "TIM2 PSC", addr: TIM2_BASE + 0x28, mask: 0x0000_FFFF },
-    ParityReg { label: "TIM2 ARR", addr: TIM2_BASE + 0x2C, mask: 0xFFFF_FFFF },
-    ParityReg { label: "TIM2 CCR1", addr: TIM2_BASE + 0x34, mask: 0xFFFF_FFFF },
-    ParityReg { label: "TIM2 CCR2", addr: TIM2_BASE + 0x38, mask: 0xFFFF_FFFF },
-    ParityReg { label: "TIM2 CCR3", addr: TIM2_BASE + 0x3C, mask: 0xFFFF_FFFF },
-    ParityReg { label: "TIM2 CCR4", addr: TIM2_BASE + 0x40, mask: 0xFFFF_FFFF },
-    ParityReg { label: "TIM2 CCMR1", addr: TIM2_BASE + 0x18, mask: 0x0000_FFFF },
-    ParityReg { label: "TIM2 CCMR2", addr: TIM2_BASE + 0x1C, mask: 0x0000_FFFF },
+    ParityReg {
+        label: "TIM2 PSC",
+        addr: TIM2_BASE + 0x28,
+        mask: 0x0000_FFFF,
+    },
+    ParityReg {
+        label: "TIM2 ARR",
+        addr: TIM2_BASE + 0x2C,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "TIM2 CCR1",
+        addr: TIM2_BASE + 0x34,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "TIM2 CCR2",
+        addr: TIM2_BASE + 0x38,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "TIM2 CCR3",
+        addr: TIM2_BASE + 0x3C,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "TIM2 CCR4",
+        addr: TIM2_BASE + 0x40,
+        mask: 0xFFFF_FFFF,
+    },
+    ParityReg {
+        label: "TIM2 CCMR1",
+        addr: TIM2_BASE + 0x18,
+        mask: 0x0000_FFFF,
+    },
+    ParityReg {
+        label: "TIM2 CCMR2",
+        addr: TIM2_BASE + 0x1C,
+        mask: 0x0000_FFFF,
+    },
 ];
 
 // ── Sim bus construction ───────────────────────────────────────────────────────
@@ -312,7 +416,12 @@ fn sim_masked_read(sim: &mut SystemBus, case: &MmioCase) -> u32 {
             .unwrap_or_else(|e| panic!("sim prep write 0x{addr:08X}=0x{val:08X}: {e:?}"));
     }
     sim.write_u32(case.write.0 as u64, case.write.1)
-        .unwrap_or_else(|e| panic!("sim write 0x{:08X}=0x{:08X}: {e:?}", case.write.0, case.write.1));
+        .unwrap_or_else(|e| {
+            panic!(
+                "sim write 0x{:08X}=0x{:08X}: {e:?}",
+                case.write.0, case.write.1
+            )
+        });
     let v = sim
         .read_u32(case.read_addr as u64)
         .unwrap_or_else(|e| panic!("sim read 0x{:08X}: {e:?}", case.read_addr));
@@ -446,7 +555,10 @@ mod hw {
                 Outcome::BothDisagreeWithExpect { both: sim_m }
             }
         } else {
-            Outcome::Diverge { sim: sim_m, hw: hw_m }
+            Outcome::Diverge {
+                sim: sim_m,
+                hw: hw_m,
+            }
         }
     }
 
@@ -566,7 +678,10 @@ mod hw {
         oc.shutdown().ok();
 
         if std::env::var("L476_STRICT").is_ok() {
-            assert_eq!(diverged, 0, "parity sweep: {diverged} register-pattern(s) diverged");
+            assert_eq!(
+                diverged, 0,
+                "parity sweep: {diverged} register-pattern(s) diverged"
+            );
         }
     }
 }

@@ -3116,7 +3116,9 @@ fn run_test(args: TestArgs) -> ExitCode {
 
     // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system_from_manifest.
     if is_xtensa {
-        if let (Some(ref sys_path), Some(ref manifest)) = (system_path.as_ref(), esp32_manifest.as_ref()) {
+        if let (Some(ref sys_path), Some(ref manifest)) =
+            (system_path.as_ref(), esp32_manifest.as_ref())
+        {
             let uart_tx = Arc::new(Mutex::new(Vec::new()));
             let (mut esp_bus, esp_cpu) =
                 match labwired_core::system::builder::build_esp32_system_from_manifest(

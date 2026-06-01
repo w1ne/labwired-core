@@ -302,10 +302,7 @@ mod tests {
     fn config0_round_trips_writable_bits() {
         let mut g = Nrf52Gpiote::new();
         g.write_u32(OFF_CONFIG_0, 0x0003_0D03).unwrap();
-        assert_eq!(
-            g.read_u32(OFF_CONFIG_0).unwrap() & 0x0007_1F03,
-            0x0003_0D03
-        );
+        assert_eq!(g.read_u32(OFF_CONFIG_0).unwrap() & 0x0007_1F03, 0x0003_0D03);
     }
 
     #[test]
@@ -316,7 +313,10 @@ mod tests {
             .unwrap();
         g.write_u32(OFF_TASKS_SET_0, 1).unwrap();
         let res = g.tick();
-        assert_eq!(res.mmio_writes, vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 26)]);
+        assert_eq!(
+            res.mmio_writes,
+            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 26)]
+        );
     }
 
     #[test]
@@ -327,7 +327,10 @@ mod tests {
             .unwrap();
         g.write_u32(OFF_TASKS_CLR_0 + 4, 1).unwrap();
         let res = g.tick();
-        assert_eq!(res.mmio_writes, vec![(GPIO1_BASE + GPIO_OUTCLR_OFFSET, 1 << 5)]);
+        assert_eq!(
+            res.mmio_writes,
+            vec![(GPIO1_BASE + GPIO_OUTCLR_OFFSET, 1 << 5)]
+        );
     }
 
     #[test]
@@ -339,15 +342,24 @@ mod tests {
 
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res1 = g.tick();
-        assert_eq!(res1.mmio_writes, vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 13)]);
+        assert_eq!(
+            res1.mmio_writes,
+            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 13)]
+        );
 
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res2 = g.tick();
-        assert_eq!(res2.mmio_writes, vec![(GPIO0_BASE + GPIO_OUTCLR_OFFSET, 1 << 13)]);
+        assert_eq!(
+            res2.mmio_writes,
+            vec![(GPIO0_BASE + GPIO_OUTCLR_OFFSET, 1 << 13)]
+        );
 
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res3 = g.tick();
-        assert_eq!(res3.mmio_writes, vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 13)]);
+        assert_eq!(
+            res3.mmio_writes,
+            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 13)]
+        );
     }
 
     #[test]
@@ -370,7 +382,10 @@ mod tests {
             .unwrap();
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res = g.tick();
-        assert_eq!(res.mmio_writes, vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 7)]);
+        assert_eq!(
+            res.mmio_writes,
+            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 7)]
+        );
     }
 
     #[test]
@@ -381,6 +396,9 @@ mod tests {
             .unwrap();
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res = g.tick();
-        assert_eq!(res.mmio_writes, vec![(GPIO0_BASE + GPIO_OUTCLR_OFFSET, 1 << 2)]);
+        assert_eq!(
+            res.mmio_writes,
+            vec![(GPIO0_BASE + GPIO_OUTCLR_OFFSET, 1 << 2)]
+        );
     }
 }

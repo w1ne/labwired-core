@@ -93,7 +93,7 @@ mod tests {
         let mut d = Sn74hc165::new("PA4");
         d.set_inputs(0xA5);
         d.cs_select(); // SH/LD pulse → parallel load
-        // 74HC165 clocks out QH..QA MSB-first; SPI reads MSB-first → byte == inputs
+                       // 74HC165 clocks out QH..QA MSB-first; SPI reads MSB-first → byte == inputs
         assert_eq!(d.transfer(0x00), 0xA5);
     }
 

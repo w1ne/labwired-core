@@ -126,13 +126,8 @@ impl Peripheral for Nrf52Clock {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
             // CLOCK tasks read as 0.
-            OFF_TASKS_HFCLKSTART
-            | OFF_TASKS_HFCLKSTOP
-            | OFF_TASKS_LFCLKSTART
-            | OFF_TASKS_LFCLKSTOP
-            | OFF_TASKS_CAL
-            | OFF_TASKS_CTSTART
-            | OFF_TASKS_CTSTOP => 0,
+            OFF_TASKS_HFCLKSTART | OFF_TASKS_HFCLKSTOP | OFF_TASKS_LFCLKSTART
+            | OFF_TASKS_LFCLKSTOP | OFF_TASKS_CAL | OFF_TASKS_CTSTART | OFF_TASKS_CTSTOP => 0,
 
             OFF_EVENTS_HFCLKSTARTED => self.events_hfclkstarted,
             OFF_EVENTS_LFCLKSTARTED => self.events_lfclkstarted,

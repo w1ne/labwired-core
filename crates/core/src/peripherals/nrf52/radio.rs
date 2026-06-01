@@ -365,7 +365,7 @@ impl Nrf52Radio {
             // Reset values per PS table 226.
             state: STATE_DISABLED,
             frequency: 0,
-            mode: 0,           // Nrf_1Mbit
+            mode: 0, // Nrf_1Mbit
             pcnf0: 0,
             pcnf1: 0,
             base0: 0,
@@ -485,7 +485,7 @@ impl Nrf52Radio {
         false
     }
 
-    #[allow(dead_code)]  // reserved for future bit-rate model
+    #[allow(dead_code)] // reserved for future bit-rate model
     /// DACNF.ENA mask (low 8 bits) determines which of DAB[0..7] /
     /// DAP[0..7] are active. Returns true if any enabled slot's address
     /// matches the (base, prefix) on the wire.
@@ -530,12 +530,12 @@ impl Nrf52Radio {
     /// given MODE. MODE values per PS §6.20.12.10. One sim tick ≈ 1 µs.
     fn cycles_for_packet(mode: u32, total_bytes: u32) -> u32 {
         let cycles_per_byte = match mode & 0xF {
-            0 | 3 => 8,  // Nrf_1Mbit, Ble_1Mbit
-            1 | 4 => 4,  // Nrf_2Mbit, Ble_2Mbit
-            2 => 32,     // Nrf_250Kbit (deprecated)
-            5 => 64,     // Ble_LR125Kbit
-            6 => 16,     // Ble_LR500Kbit
-            15 => 32,    // Ieee802154_250Kbit
+            0 | 3 => 8, // Nrf_1Mbit, Ble_1Mbit
+            1 | 4 => 4, // Nrf_2Mbit, Ble_2Mbit
+            2 => 32,    // Nrf_250Kbit (deprecated)
+            5 => 64,    // Ble_LR125Kbit
+            6 => 16,    // Ble_LR500Kbit
+            15 => 32,   // Ieee802154_250Kbit
             _ => 8,
         };
         // Always at least 1 cycle so a zero-length packet still fires.
@@ -661,10 +661,17 @@ impl Peripheral for Nrf52Radio {
             OFF_EVENTS_DEVMATCH => self.events_devmatch,
             OFF_EVENTS_DEVMISS => self.events_devmiss,
             OFF_EVENTS_BCMATCH => self.events_bcmatch,
-            OFF_EVENTS_RSSIEND | OFF_EVENTS_CRCERROR | OFF_EVENTS_FRAMESTART
-            | OFF_EVENTS_EDEND | OFF_EVENTS_EDSTOPPED | OFF_EVENTS_CCAIDLE
-            | OFF_EVENTS_CCABUSY | OFF_EVENTS_CCASTOPPED | OFF_EVENTS_RATEBOOST
-            | OFF_EVENTS_MHRMATCH | OFF_EVENTS_SYNC => 0,
+            OFF_EVENTS_RSSIEND
+            | OFF_EVENTS_CRCERROR
+            | OFF_EVENTS_FRAMESTART
+            | OFF_EVENTS_EDEND
+            | OFF_EVENTS_EDSTOPPED
+            | OFF_EVENTS_CCAIDLE
+            | OFF_EVENTS_CCABUSY
+            | OFF_EVENTS_CCASTOPPED
+            | OFF_EVENTS_RATEBOOST
+            | OFF_EVENTS_MHRMATCH
+            | OFF_EVENTS_SYNC => 0,
             OFF_EVENTS_CRCOK => self.events_crcok,
             OFF_EVENTS_TXREADY => self.events_txready,
             OFF_EVENTS_RXREADY => self.events_rxready,
@@ -770,8 +777,8 @@ impl Peripheral for Nrf52Radio {
                     self.bit_counter_armed = false;
                 }
             }
-            OFF_TASKS_RSSISTOP | OFF_TASKS_EDSTART | OFF_TASKS_EDSTOP
-            | OFF_TASKS_CCASTART | OFF_TASKS_CCASTOP => {}
+            OFF_TASKS_RSSISTOP | OFF_TASKS_EDSTART | OFF_TASKS_EDSTOP | OFF_TASKS_CCASTART
+            | OFF_TASKS_CCASTOP => {}
 
             OFF_EVENTS_READY => self.events_ready = value & 1,
             OFF_EVENTS_ADDRESS => self.events_address = value & 1,
@@ -944,24 +951,26 @@ impl Peripheral for Nrf52Radio {
             // Read header bytes into a small staging buffer first.
             let mut header = Vec::new();
             for i in 0..desc.payload_offset() {
-                header.push(bus.read_u8((base as u64).wrapping_add(i as u64)).unwrap_or(0));
+                header.push(
+                    bus.read_u8((base as u64).wrapping_add(i as u64))
+                        .unwrap_or(0),
+                );
             }
 
             // LENGTH is the byte at offset s0len (right after S0).
             let length = if desc.lflen == 0 {
                 desc.statlen
             } else {
-                let len_byte = header
-                    .get(desc.s0len as usize)
-                    .copied()
-                    .unwrap_or(0);
+                let len_byte = header.get(desc.s0len as usize).copied().unwrap_or(0);
                 // Mask to LFLEN bits.
                 let mask = if desc.lflen >= 8 {
                     0xFFu8
                 } else {
                     ((1u16 << desc.lflen) - 1) as u8
                 };
-                (len_byte & mask).min(desc.maxlen).saturating_add(desc.statlen)
+                (len_byte & mask)
+                    .min(desc.maxlen)
+                    .saturating_add(desc.statlen)
             };
 
             // Read the payload right after the header bytes.
@@ -1220,7 +1229,7 @@ mod tests {
     fn config_regs_round_trip() {
         let mut r = Nrf52Radio::new();
         r.write_u32(OFF_FREQUENCY, 0x4E).unwrap(); // BLE advertising ch 37
-        r.write_u32(OFF_MODE, 0x3).unwrap();       // BLE_1Mbit
+        r.write_u32(OFF_MODE, 0x3).unwrap(); // BLE_1Mbit
         r.write_u32(OFF_PCNF0, 0x00010008).unwrap();
         r.write_u32(OFF_BASE0, 0xCAFEBABE).unwrap();
         r.write_u32(OFF_PREFIX0, 0xDEAD).unwrap();
@@ -1381,7 +1390,10 @@ mod tests {
         rx.tick();
         rx.tick_with_bus(&mut bus_rx);
 
-        assert_eq!(rx.crc_status, 1, "CRC must verify after whitening round-trip");
+        assert_eq!(
+            rx.crc_status, 1,
+            "CRC must verify after whitening round-trip"
+        );
         // Payload bytes should match the original after the round trip.
         for (i, expected) in payload_orig.iter().enumerate() {
             assert_eq!(
@@ -1402,7 +1414,7 @@ mod tests {
         // Sender configures address 0 = BASE0 + PREFIX0[0] = 0xCAFEBA + 0xBE.
         let mut bus_tx = SystemBus::new();
         bus_tx.write_u8(0x2000_0000, 0xAA).unwrap(); // S0
-        bus_tx.write_u8(0x2000_0001, 4).unwrap();    // LENGTH
+        bus_tx.write_u8(0x2000_0001, 4).unwrap(); // LENGTH
         bus_tx.write_u8(0x2000_0002, 0xDE).unwrap();
         bus_tx.write_u8(0x2000_0003, 0xAD).unwrap();
         bus_tx.write_u8(0x2000_0004, 0xBE).unwrap();
@@ -1505,8 +1517,6 @@ mod tests {
         // RAM should still be the reset value (0).
         assert_eq!(bus_rx.read_u8(0x2000_3000).unwrap(), 0);
     }
-
-
 
     #[test]
     fn bit_rate_timing_defers_events_end() {
@@ -1768,5 +1778,4 @@ mod tests {
         // RAM at PACKETPTR stays at reset 0; frame stays in the air.
         assert_eq!(bus_rx.read_u8(0x2000_7000).unwrap(), 0);
     }
-
 }

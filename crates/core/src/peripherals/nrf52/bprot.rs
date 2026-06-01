@@ -16,12 +16,18 @@ pub struct Nrf52Bprot {
 }
 
 impl Nrf52Bprot {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 impl Peripheral for Nrf52Bprot {
-    fn read(&self, _offset: u64) -> SimResult<u8> { Ok(0) }
-    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> { Ok(()) }
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(0)
+    }
+    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+        Ok(())
+    }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {

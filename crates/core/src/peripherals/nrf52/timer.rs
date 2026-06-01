@@ -79,10 +79,10 @@ impl Nrf52Timer {
     /// Mask the counter to the active BITMODE width.
     fn counter_mask(&self) -> u32 {
         match self.bitmode & 0x3 {
-            0 => 0x0000_FFFF,        // 16-bit (reset)
-            1 => 0x0000_00FF,        // 8-bit
-            2 => 0x00FF_FFFF,        // 24-bit
-            3 => 0xFFFF_FFFF,        // 32-bit
+            0 => 0x0000_FFFF, // 16-bit (reset)
+            1 => 0x0000_00FF, // 8-bit
+            2 => 0x00FF_FFFF, // 24-bit
+            3 => 0xFFFF_FFFF, // 32-bit
             _ => unreachable!(),
         }
     }
@@ -99,10 +99,7 @@ impl Peripheral for Nrf52Timer {
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let val = match offset {
-            OFF_TASKS_START
-            | OFF_TASKS_STOP
-            | OFF_TASKS_COUNT
-            | OFF_TASKS_CLEAR
+            OFF_TASKS_START | OFF_TASKS_STOP | OFF_TASKS_COUNT | OFF_TASKS_CLEAR
             | OFF_TASKS_SHUTDOWN => 0,
             OFF_TASKS_CAPTURE0..=OFF_TASKS_CAPTURE5 if offset.is_multiple_of(4) => 0,
 
@@ -262,13 +259,11 @@ mod tests {
         // BITMODE=3 (32-bit) so the full value survives CC masking.
         t.write_u32(OFF_BITMODE, 3).unwrap();
         for i in 0..6u64 {
-            t.write_u32(OFF_CC0 + i * 4, 0xDEAD_0000 | i as u32).unwrap();
+            t.write_u32(OFF_CC0 + i * 4, 0xDEAD_0000 | i as u32)
+                .unwrap();
         }
         for i in 0..6u64 {
-            assert_eq!(
-                t.read_u32(OFF_CC0 + i * 4).unwrap(),
-                0xDEAD_0000 | i as u32
-            );
+            assert_eq!(t.read_u32(OFF_CC0 + i * 4).unwrap(), 0xDEAD_0000 | i as u32);
         }
     }
 

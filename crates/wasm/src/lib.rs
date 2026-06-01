@@ -1038,7 +1038,10 @@ impl WasmSimulator {
             .bus
             .find_peripheral_index_by_name(&binding.peripheral)
             .ok_or_else(|| {
-                JsValue::from_str(&format!("SPI peripheral '{}' not found", binding.peripheral))
+                JsValue::from_str(&format!(
+                    "SPI peripheral '{}' not found",
+                    binding.peripheral
+                ))
             })?;
 
         let any = machine.bus.peripherals[idx]

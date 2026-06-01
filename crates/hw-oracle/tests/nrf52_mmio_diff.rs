@@ -229,8 +229,7 @@ fn build_sim_bus() -> SystemBus {
     let anchored = system_path.parent().unwrap().join(&manifest.chip);
     manifest.chip = anchored.to_str().unwrap().to_string();
 
-    SystemBus::from_config(&chip, &manifest)
-        .unwrap_or_else(|e| panic!("build sim bus: {e}"))
+    SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build sim bus: {e}"))
 }
 
 /// Outcome of a single MMIO case.

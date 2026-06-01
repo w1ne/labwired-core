@@ -32,11 +32,11 @@ pub struct Pcd8544 {
     dc_source: Option<(u64, u8)>,
 
     // Addressing
-    x: u8,            // column, 0..=83
-    y: u8,            // bank,   0..=5
+    x: u8,               // column, 0..=83
+    y: u8,               // bank,   0..=5
     vertical_addr: bool, // V bit: true = advance bank-first, false = column-first
-    extended: bool,   // H bit: true = extended instruction set selected
-    power_down: bool, // PD bit
+    extended: bool,      // H bit: true = extended instruction set selected
+    power_down: bool,    // PD bit
 
     // Display control (basic instruction set 0b0000_1D0E)
     display_mode: u8, // bits: D (0x04) and E (0x01)
@@ -142,7 +142,11 @@ impl Pcd8544 {
             // Bank-first.
             if (self.y as usize) >= BANKS - 1 {
                 self.y = 0;
-                self.x = if (self.x as usize) >= WIDTH - 1 { 0 } else { self.x + 1 };
+                self.x = if (self.x as usize) >= WIDTH - 1 {
+                    0
+                } else {
+                    self.x + 1
+                };
             } else {
                 self.y += 1;
             }
@@ -150,7 +154,11 @@ impl Pcd8544 {
             // Column-first (default).
             if (self.x as usize) >= WIDTH - 1 {
                 self.x = 0;
-                self.y = if (self.y as usize) >= BANKS - 1 { 0 } else { self.y + 1 };
+                self.y = if (self.y as usize) >= BANKS - 1 {
+                    0
+                } else {
+                    self.y + 1
+                };
             } else {
                 self.x += 1;
             }

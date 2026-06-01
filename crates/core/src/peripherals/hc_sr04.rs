@@ -140,7 +140,10 @@ mod tests {
         let pulse = (100.0 * US_PER_CM) as u64; // 5800 cycles
 
         // Rising edge at cycle 0 arms the window.
-        assert!(!s.service(true, 0), "echo not high immediately (within delay)");
+        assert!(
+            !s.service(true, 0),
+            "echo not high immediately (within delay)"
+        );
         // Still low during the trig→echo delay.
         assert!(!s.service(true, delay - 1));
         // High once the window opens, through its width.

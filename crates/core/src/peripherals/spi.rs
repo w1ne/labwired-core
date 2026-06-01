@@ -494,7 +494,11 @@ mod tests {
         spi.attach(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap(); // CR1: SPE
         spi.write_u16(0x0C, 0x00AB).unwrap(); // 16-bit DR write, DS=8 (reset 0x0700)
-        assert_eq!(captured(&spi), vec![0xAB, 0x00], "DS≤8 + 16-bit DR ⇒ 2 frames");
+        assert_eq!(
+            captured(&spi),
+            vec![0xAB, 0x00],
+            "DS≤8 + 16-bit DR ⇒ 2 frames"
+        );
     }
 
     /// The correct 8-bit DR access sends exactly one frame, even on FIFO parts.
