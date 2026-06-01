@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Part } from './types';
 import { COMPONENT_REGISTRY } from './components/index';
 
@@ -7,9 +8,12 @@ interface PropertyPanelProps {
   onDelete: () => void;
   onRotate: (id: string) => void;
   onResize?: (id: string, scale: number) => void;
+  /** Live, simulation-driven widget for the selected part (sensor sliders,
+   *  display framebuffers, etc.). Rendered below the static attributes. */
+  labWidget?: ReactNode;
 }
 
-export function PropertyPanel({ parts, onUpdateAttrs, onDelete, onRotate, onResize }: PropertyPanelProps) {
+export function PropertyPanel({ parts, onUpdateAttrs, onDelete, onRotate, onResize, labWidget }: PropertyPanelProps) {
   if (parts.length === 0) {
     return (
       <div className="editor-property-panel">
@@ -108,6 +112,13 @@ export function PropertyPanel({ parts, onUpdateAttrs, onDelete, onRotate, onResi
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {labWidget && (
+        <div className="panel-section">
+          <div className="panel-section-title">Live</div>
+          {labWidget}
         </div>
       )}
 

@@ -22,6 +22,7 @@ export const STARTER_LABS: StarterLab[] = [
   { id: 'labwired-ereader', name: 'ESP32 E-Reader', icon: '📖', locked: false },
   { id: 'nucleo-f401re', name: 'Nucleo F4', icon: '🔵', locked: false },
   { id: 'nrf52840-ble-lab', name: 'nRF BLE Lab', icon: '📶', locked: false },
+  { id: 'al2205-iolink-dido', name: 'IO-Link DI (AL2205)', icon: '🔌', locked: false },
 ];
 
 export interface ChipRowProps {
