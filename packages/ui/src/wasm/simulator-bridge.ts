@@ -81,6 +81,21 @@ export interface IolinkMasterState {
   input_byte: number;
 }
 
+/** One captured IO-Link master↔device transaction (see core IolinkXfer). */
+export interface IolinkXfer {
+  seq: number;
+  kind: 'wake_up' | 'idle' | 'operate_req' | 'cyclic';
+  com: 'com1' | 'com2' | 'com3';
+  pd_out: number[];
+  pd_in: number[];
+  od: number;
+  ck_ok: boolean | null;
+  pd_valid: boolean | null;
+  link_state: 'startup' | 'operate';
+  raw_master: number[];
+  raw_device: number[];
+}
+
 export interface AdcDeviceStateNtcThermistor {
   id: string;
   kind: 'ntc-thermistor';
@@ -217,6 +232,10 @@ export interface WasmSimulatorInstance {
   // Peripherals
   get_peripheral_snapshot(name: string): unknown;
   get_peripheral_list(): PeripheralInfo[];
+
+  // IO-Link master transaction trace
+  iolink_trace_snapshot(): unknown;
+  iolink_trace_clear(): void;
 
   // Virtual-air BLE trace (shared across all chips in this WASM instance)
   air_trace_snapshot(): unknown;
@@ -506,6 +525,17 @@ export class SimulatorBridge {
   /** Read the IO-Link master peer's live state, or null if none is wired. */
   getIolinkMasterState(): IolinkMasterState | null {
     return this.sim.get_iolink_master_state() ?? null;
+  }
+
+  /** Snapshot of the IO-Link master's captured transactions (oldest→newest). */
+  iolinkTraceSnapshot(): IolinkXfer[] {
+    const raw = this.sim.iolink_trace_snapshot() as unknown[] | null;
+    return (raw ?? []).map((x) => asPlainObject<IolinkXfer>(x));
+  }
+
+  /** Clear the IO-Link master's trace ring. */
+  iolinkTraceClear(): void {
+    this.sim.iolink_trace_clear();
   }
 
   /** Set temperature on an NTC thermistor device. All Steinhart-Hart math lives in Rust core. */

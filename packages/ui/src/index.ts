@@ -52,6 +52,8 @@ export type {
   SimulatorConfig,
   WasmModule,
   AirFrameTrace,
+  IolinkMasterState,
+  IolinkXfer,
 } from './wasm/simulator-bridge';
 
 // Editor
