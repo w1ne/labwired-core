@@ -89,6 +89,8 @@ export const COMPONENT_META: Record<string, ComponentMeta> = {
   diode: { label: 'Diode', category: 'passive' },
   transistor: { label: 'Transistor', category: 'passive' },
   '74hc595': { label: '74HC595', category: 'ic', boardIoKind: 'spi_device' },
+  sn74hc165: { label: '74HC165', category: 'ic', boardIoKind: 'spi_device' },
+  'iolink-master': { label: 'IO-Link Master', category: 'ic', boardIoKind: 'uart_device' },
   l293d: { label: 'L293D', category: 'ic', boardIoKind: 'pwm_output' },
 };
 

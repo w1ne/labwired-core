@@ -186,6 +186,8 @@ export function diagnoseDiagram(diagram: Diagram): Diagnostic[] {
   // 2. MCU-pin double-assignment + component multiple-wires.
   const mcuPinAssignments = new Map<string, string>();
   const componentMcuWireCount = new Map<string, number>();
+  // Signal-only wire count (power rails excluded) for the single-wire check.
+  const componentSignalWireCount = new Map<string, number>();
   for (const wire of diagram.wires) {
     const mcuEndpoint = getRole(diagram, wire.from).isMcu
       ? wire.from
@@ -198,6 +200,12 @@ export function diagnoseDiagram(diagram: Diagram): Diagnostic[] {
     if (!otherRole.boardIoKind) continue;
     const partId = otherEndpoint.part;
     componentMcuWireCount.set(partId, (componentMcuWireCount.get(partId) ?? 0) + 1);
+    // Power rails (VCC/GND/3V3/5V/…) fan out to every peripheral by design — a
+    // shared 3V3/GND rail is not an overloaded signal pin. Skip them here so
+    // multi-peripheral labs (e.g. Nokia 5110 + HC-SR04 both on the board's 3V3
+    // rail) don't false-error. Signal pins still get the single-owner check.
+    if (POWER_PINS.has(mcuEndpoint.pin.toUpperCase())) continue;
+    componentSignalWireCount.set(partId, (componentSignalWireCount.get(partId) ?? 0) + 1);
     const existingPart = mcuPinAssignments.get(mcuEndpoint.pin);
     if (existingPart && existingPart !== partId) {
       out.push({
@@ -214,11 +222,18 @@ export function diagnoseDiagram(diagram: Diagram): Diagnostic[] {
   // (LED, button). SPI/I2C/UART devices need multiple wires by design
   // (e.g. an SPI display has MOSI/SCK/CS plus DC/RST + power).
   const SINGLE_WIRE_KINDS = new Set(['led', 'button', 'adc_input', 'pwm_output']);
-  for (const [partId, count] of componentMcuWireCount) {
+  for (const [partId, count] of componentSignalWireCount) {
     if (count <= 1) continue;
     const part = diagram.parts.find((p) => p.id === partId);
     const def = part ? COMPONENT_REGISTRY.get(part.type) : null;
     if (!def?.boardIoKind || !SINGLE_WIRE_KINDS.has(def.boardIoKind)) continue;
+    // "Exactly one MCU wire" only holds for components that expose a single
+    // signal pin (LED, button, PIR, pot). Multi-signal devices that happen to
+    // share a SINGLE_WIRE_KIND — HC-SR04 (TRIG+ECHO, 'button'), a keypad/
+    // dip-switch (matrix), a rotary encoder (CLK/DT/SW) — legitimately use
+    // several MCU pins, so the rule doesn't apply to them.
+    const signalPinCount = def.pins.filter((p) => !POWER_PINS.has(p.id.toUpperCase())).length;
+    if (signalPinCount !== 1) continue;
     out.push({
       severity: 'error',
       code: 'BOARDIO_MULTIPLE_WIRES',
