@@ -28,4 +28,31 @@ describe('diagramToConfig', () => {
     expect(systemYaml).toContain('kind: "led"');
     expect(chipYaml).toContain('name: "stm32f103c8"');
   });
+
+  it('maps wired ultrasonic parts into HC-SR04 external devices', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'range1', type: 'ultrasonic', x: 200, y: 100, rotate: 0, attrs: { distance: '42' } },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PA8' }, to: { part: 'range1', pin: 'TRIG' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PB10' }, to: { part: 'range1', pin: 'ECHO' }, color: '#118AB2' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'range1', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'range1', pin: 'GND' }, color: '#888888' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('external_devices:');
+    expect(systemYaml).toContain('id: "range1"');
+    expect(systemYaml).toContain('type: "hc-sr04"');
+    expect(systemYaml).toContain('trig_pin: "PA8"');
+    expect(systemYaml).toContain('echo_pin: "PB10"');
+    expect(systemYaml).toContain('distance_cm: 42');
+    expect(systemYaml).not.toContain('kind: "button"');
+  });
 });
