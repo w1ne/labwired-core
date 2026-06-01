@@ -101,6 +101,8 @@ function getWorkspaceStorageKey(boardId: string, kind: WorkspaceKind): string {
 }
 
 function hasSavedWorkspace(boardId: string): boolean {
+  const config = BOARD_CONFIGS.find((c) => c.boardId === boardId);
+  if (config?.kind === 'lab') return false;
   return !!(
     localStorage.getItem(getWorkspaceStorageKey(boardId, 'diagram'))
     || localStorage.getItem(getWorkspaceStorageKey(boardId, 'source'))
@@ -482,6 +484,13 @@ function getDefaultSource(config: BoardConfig): string {
 }
 
 function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: string } {
+  if (config.kind === 'lab') {
+    return {
+      diagram: makeStarterDiagram(config),
+      source: getDefaultSource(config),
+    };
+  }
+
   const savedDiagram = localStorage.getItem(getWorkspaceStorageKey(config.boardId, 'diagram'));
   const savedSource = localStorage.getItem(getWorkspaceStorageKey(config.boardId, 'source'));
 
@@ -1034,15 +1043,26 @@ export function App() {
   }, [running, bridge]);
 
   const handleDistanceChange = useCallback(
-    (cm: number) => {
+    (cm: number, partId = 'dist') => {
       setHcsr04DistanceState(cm);
-      bridge?.setHcsr04Distance('dist', cm);
-      if (editor.state.diagram.parts.some((part) => part.id === 'dist' && part.type === 'ultrasonic')) {
-        editor.updateAttrs('dist', { distance: String(cm) });
+      bridge?.setHcsr04Distance(partId, cm);
+      if (editor.state.diagram.parts.some((part) => part.id === partId && part.type === 'ultrasonic')) {
+        editor.updateAttrs(partId, { distance: String(cm) });
       }
     },
     [bridge, editor],
   );
+
+  useEffect(() => {
+    if (!bridge) return;
+    for (const part of editor.state.diagram.parts) {
+      if (part.type !== 'ultrasonic') continue;
+      const cm = Number.parseFloat(part.attrs.distance ?? '');
+      if (!Number.isFinite(cm)) continue;
+      bridge.setHcsr04Distance(part.id, cm);
+      if (part.id === 'dist') setHcsr04DistanceState(cm);
+    }
+  }, [bridge, editor.state.diagram.parts]);
 
   // ILI9341 live framebuffer (153 KB @ 100 ms = ~1.5 MB/s WASM→JS)
   const [ili9341Framebuffer, setIli9341Framebuffer] = useState<Uint8Array | null>(null);
@@ -1253,30 +1273,34 @@ export function App() {
 
   // Build live sensor widget for selected I2C / UART devices
   const inspectorLabWidget = useMemo<ReactNode>(() => {
-    if (!bridge || !inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
+    if (!inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
     const partType = inspectorSelection.partType;
+    const selectedPart = editor.state.diagram.parts.find((part) => part.id === inspectorSelection.partId);
     if (partType === 'ultrasonic') {
+      const attrDistance = Number.parseFloat(selectedPart?.attrs.distance ?? '');
+      const distance = Number.isFinite(attrDistance) ? attrDistance : hcsr04Distance;
       // HC-SR04: live hand-distance slider. The engine models the echo pulse
       // (width ∝ distance); this is the only way to drive it at runtime.
       return (
         <label className="block">
           <div className="flex items-center justify-between text-fg-tertiary text-[11px] font-mono mb-1">
             <span>Hand distance</span>
-            <span className="text-fg-primary">{hcsr04Distance.toFixed(0)} cm</span>
+            <span className="text-fg-primary">{distance.toFixed(0)} cm</span>
           </div>
           <input
             type="range"
             min={2}
             max={200}
             step={1}
-            value={hcsr04Distance}
-            onChange={(e) => handleDistanceChange(parseFloat(e.target.value))}
+            value={distance}
+            onChange={(e) => handleDistanceChange(parseFloat(e.target.value), inspectorSelection.partId)}
             style={{ width: '100%' }}
           />
         </label>
       );
     }
     if (partType === 'oled-ssd1306') {
+      if (!bridge) return undefined;
       return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
     }
     if (partType === 'pcd8544' || partType === 'nokia-5110') {
@@ -1302,9 +1326,11 @@ export function App() {
       );
     }
     if (partType === 'ili9341') {
+      if (!bridge) return undefined;
       return <Ili9341Display framebuffer={ili9341Framebuffer} width={240} />;
     }
     if (partType === 'neo6m-gps') {
+      if (!bridge) return undefined;
       const gpsStates = bridge.getUartDeviceStates();
       const s = gpsStates.find((st) => st.kind === 'neo6m-gps' && st.id === inspectorSelection.partId)
         ?? gpsStates.find((st) => st.kind === 'neo6m-gps');
@@ -1320,6 +1346,7 @@ export function App() {
       );
     }
     if (partType === 'ntc-thermistor') {
+      if (!bridge) return undefined;
       const partId = inspectorSelection.partId;
       const s = adcDeviceStates.find((st) => st.kind === 'ntc-thermistor' && st.id === partId)
         ?? adcDeviceStates.find((st) => st.kind === 'ntc-thermistor');
@@ -1337,6 +1364,7 @@ export function App() {
       );
     }
     if (partType === 'sn74hc165') {
+      if (!bridge) return undefined;
       // 8 live toggles. State is read back from the Rust shift register (the
       // device is the source of truth), not tracked in the UI.
       const inputs = bridge.getSn74hc165Inputs();
@@ -1359,6 +1387,7 @@ export function App() {
       );
     }
     if (partType === 'iolink-master') {
+      if (!bridge) return undefined;
       // Read-only readout of the IO-Link master peer's live process data.
       const s = bridge.getIolinkMasterState();
       return (
@@ -1372,6 +1401,7 @@ export function App() {
       );
     }
     if (partType !== 'adxl345' && partType !== 'mpu6050' && partType !== 'bme280') return undefined;
+    if (!bridge) return undefined;
     const sensorStates = bridge.getI2cSensorStates();
     if (partType === 'adxl345') {
       const s = sensorStates.find((st) => st.kind === 'adxl345' && st.id === inspectorSelection.partId)
@@ -1420,7 +1450,7 @@ export function App() {
     }
     return undefined;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridge, inspectorSelection, simState.pc, ssd1306Framebuffer, pcd8544Framebuffer, hcsr04Distance, handleDistanceChange, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
+  }, [bridge, editor.state.diagram.parts, inspectorSelection, simState.pc, ssd1306Framebuffer, pcd8544Framebuffer, hcsr04Distance, handleDistanceChange, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
 
   // Right-side InspectorCard removed — Properties live in the
   // bottom drawer (per-chip Serial/Registers/Trace/Memory/Source/
@@ -1631,15 +1661,17 @@ export function App() {
   }, [handleRun]);
 
   useEffect(() => {
+    if (selectedBoard.kind === 'lab') return;
     localStorage.setItem(
       getWorkspaceStorageKey(selectedBoard.boardId, 'diagram'),
       JSON.stringify(editor.state.diagram),
     );
-  }, [editor.state.diagram, selectedBoard.boardId]);
+  }, [editor.state.diagram, selectedBoard]);
 
   useEffect(() => {
+    if (selectedBoard.kind === 'lab') return;
     localStorage.setItem(getWorkspaceStorageKey(selectedBoard.boardId, 'source'), source);
-  }, [source, selectedBoard.boardId]);
+  }, [source, selectedBoard]);
 
   // Export/Import
   const handleExport = useCallback(() => {
