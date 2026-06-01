@@ -146,6 +146,46 @@ fn collects_animated_frames() {
     );
 }
 
+/// The 16-px-wide player paddle (`PADDLE_W=16`, rows 45-47, bank 5) must render
+/// as one contiguous 16-wide run. Regression for the Thumb-2 decoder bug where
+/// `B<cond>.W` (T3) was mis-decoded as MOVW/ADDW/SBFX and never branched, which
+/// collapsed LLVM's fully-unrolled paddle `rect` to a single pixel.
+#[test]
+#[ignore = "slow: builds + runs the firmware in-sim (~20s)"]
+fn paddle_renders_full_width() {
+    let elf = ensure_firmware_built();
+    let mut machine = build_machine(&elf);
+    machine.bus.hcsr04[0].set_distance_cm(50.0);
+    step_frames(&mut machine, WARMUP_CYCLES);
+    // a few game-loop frames to settle the EMA-smoothed paddle position
+    for _ in 0..30 {
+        step_frames(&mut machine, CYCLES_PER_FRAME);
+    }
+    let fb = framebuffer(&machine);
+    let widest = {
+        let (mut best, mut start, mut len) = (0usize, 0usize, 0usize);
+        for x in 0..=W {
+            if x < W && fb[5 * W + x] != 0 {
+                if len == 0 {
+                    start = x;
+                }
+                len += 1;
+            } else {
+                if len > best {
+                    best = len;
+                }
+                let _ = start;
+                len = 0;
+            }
+        }
+        best
+    };
+    assert_eq!(
+        widest, 16,
+        "paddle should be one contiguous 16-px run in bank 5, got widest run {widest}"
+    );
+}
+
 fn pack(frames: &[Vec<u8>]) -> Vec<u8> {
     let mut out = Vec::with_capacity(12 + frames.len() * FRAME_BYTES);
     out.extend_from_slice(b"NK51"); // magic
