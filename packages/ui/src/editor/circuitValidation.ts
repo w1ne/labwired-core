@@ -99,7 +99,9 @@ export function validateWireConnection(diagram: Diagram, from: WireEndpoint, to:
 
   const mcuEndpoint = getRole(diagram, from).isMcu ? from : getRole(diagram, to).isMcu ? to : null;
   const boardIoRole = getRole(diagram, from).boardIoKind ? getRole(diagram, from) : getRole(diagram, to);
-  if (mcuEndpoint && boardIoRole.boardIoKind) {
+  // Power rails fan out to every peripheral — don't block a second VCC/GND/3V3
+  // wire the way we block a second signal-pin assignment.
+  if (mcuEndpoint && boardIoRole.boardIoKind && !POWER_PINS.has(mcuEndpoint.pin.toUpperCase())) {
     const collision = diagram.wires.find((wire) => {
       const endpoint = wire.from.part === 'mcu' ? wire.from : wire.to.part === 'mcu' ? wire.to : null;
       if (!endpoint) return false;
