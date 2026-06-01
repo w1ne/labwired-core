@@ -1628,6 +1628,30 @@ impl WasmSimulator {
         Err(JsValue::from_str("no 74HC165 shift register attached"))
     }
 
+    /// Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
+    /// no shifter is wired. Lets the UI reflect the device's real state rather
+    /// than tracking it in JS.
+    #[wasm_bindgen]
+    pub fn get_sn74hc165_inputs(&self) -> i32 {
+        let machine = self.machine.as_ref().unwrap();
+        for p in &machine.bus.peripherals {
+            let Some(any) = p.dev.as_any() else {
+                continue;
+            };
+            let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() else {
+                continue;
+            };
+            for device in &spi.attached_devices {
+                if let Some(sr) = device.as_any().and_then(|a| {
+                    a.downcast_ref::<labwired_core::peripherals::components::Sn74hc165>()
+                }) {
+                    return sr.inputs() as i32;
+                }
+            }
+        }
+        -1
+    }
+
     /// Toggle a single 74HC165 input channel (0..=7) high or low.
     #[wasm_bindgen]
     pub fn set_sn74hc165_channel(&mut self, channel: u8, high: bool) -> Result<(), JsValue> {
