@@ -55,6 +55,84 @@ jobs:
           npm ci --ignore-scripts
           npm run build
 
+      # ---------------------------------------------------------------------
+      # Auto-rebuild the wasm engine from the pinned core submodule.
+      #
+      # The wasm (packages/playground/public/wasm/labwired_wasm_bg.wasm + .js)
+      # is a committed prebuilt artifact; Vite copies public/ into dist/ at
+      # build time, so whatever wasm sits in public/wasm is what ships. When
+      # `core` is bumped without a manual `wasm-pack` rebuild, the deployed
+      # engine silently lags the pinned core (e.g. it lacks an SPI register
+      # layout a chip config needs → "Simulator init failed" at runtime). This
+      # has bitten twice. Rebuilding here — BEFORE the playground build, so the
+      # fresh engine is in public/wasm when Vite copies it to dist — makes the
+      # shipped wasm always match the pinned core. We do NOT commit it back
+      # (no commit-back loop): the rebuild lives only in the CI workspace.
+      #
+      # The "Verify wasm engine supports bundled chip profiles" gate below then
+      # becomes belt-and-suspenders, validating the freshly built engine.
+      #
+      # PERFORMANCE: the actual build (~2 min) is gated on this push actually
+      # touching core (the `core` gitlink, files inside `core/**`, or the wasm
+      # crate). Playground-only deploys skip it and ship the committed wasm,
+      # which is already correct. The toolchain/wasm-pack install + cargo cache
+      # steps run unconditionally — they're cheap on a warm cache and keep the
+      # gated build fast when it does run.
+      - name: Detect whether this push changed core
+        id: core_changed
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          rebuild=false
+          # workflow_dispatch (no before) or first push to a branch
+          # (before is all-zeros, no valid base to diff) → rebuild to be safe.
+          if [ -z "${BEFORE:-}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ]; then
+            echo "No usable base commit (manual run or first push) — rebuilding wasm."
+            rebuild=true
+          elif ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "Base commit ${BEFORE} not present locally — rebuilding wasm to be safe."
+            rebuild=true
+          else
+            changed=$(git diff --name-only "${BEFORE}" "${AFTER}" -- core 'core/**' || true)
+            if [ -n "${changed}" ]; then
+              echo "Core changed in this push:"
+              echo "${changed}"
+              rebuild=true
+            else
+              echo "Core unchanged in this push — keeping committed wasm."
+            fi
+          fi
+          echo "rebuild=${rebuild}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Rust toolchain (wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
+
+      - name: Rebuild wasm from pinned core
+        if: steps.core_changed.outputs.rebuild == 'true'
+        working-directory: core/crates/wasm
+        run: |
+          set -euo pipefail
+          # The wasm crate's Cargo.toml already enables the required
+          # `event-scheduler` feature on labwired-core — do not pass extra
+          # features. wasm-pack auto-downloads wasm-opt as needed.
+          wasm-pack build --release --target web \
+            --out-dir "${GITHUB_WORKSPACE}/packages/playground/public/wasm"
+          ls -l "${GITHUB_WORKSPACE}/packages/playground/public/wasm/labwired_wasm_bg.wasm"
+
       - name: Install + build @labwired/playground
         working-directory: packages/playground
         env:
