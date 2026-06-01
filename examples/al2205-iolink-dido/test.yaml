@@ -1,0 +1,10 @@
+# Headless run of the IO-Link DI device firmware in the simulator.
+# M1 gate: the firmware boots and prints its banner over the debug UART.
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "./firmware/al2205_dido.elf"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "AL2205 BOOT"

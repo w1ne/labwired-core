@@ -1,0 +1,7 @@
+# AL2205-style IO-Link DI device on a simulated NUCLEO-L476RG.
+# M1: bare board (no external devices yet). The IO-Link master and the
+# 74HC165 input shifter are attached in M3/M4.
+name: "al2205-iolink-dido"
+chip: "../../configs/chips/stm32l476.yaml"
+external_devices: []
+board_io: []
