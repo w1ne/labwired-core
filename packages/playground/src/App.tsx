@@ -68,6 +68,7 @@ import { ComponentInspector } from './multi-mcu/ComponentInspector';
 import { PartActions } from './multi-mcu/PartActions';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
+import { syncSensorAttributeToSimulator } from './sensor-attribute-sync';
 import {
   CheckIcon, UploadIcon, CodeIcon, PanelBottomIcon,
   ShareIcon, ExportIcon, ImportIcon, UndoIcon, RedoIcon,
@@ -1010,8 +1011,11 @@ export function App() {
     (cm: number) => {
       setHcsr04DistanceState(cm);
       bridge?.setHcsr04Distance('dist', cm);
+      if (editor.state.diagram.parts.some((part) => part.id === 'dist' && part.type === 'ultrasonic')) {
+        editor.updateAttrs('dist', { distance: String(cm) });
+      }
     },
-    [bridge],
+    [bridge, editor],
   );
 
   // ILI9341 live framebuffer (153 KB @ 100 ms = ~1.5 MB/s WASM→JS)
@@ -1489,6 +1493,26 @@ export function App() {
   );
 
   const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
+  const handlePartAttrChange = useCallback(
+    (partId: string, attrs: Record<string, string>) => {
+      editor.updateAttrs(partId, attrs);
+      const part = editor.state.diagram.parts.find((p) => p.id === partId);
+      if (!part) return;
+      for (const [key, value] of Object.entries(attrs)) {
+        const synced = syncSensorAttributeToSimulator({
+          partId,
+          partType: part.type,
+          key,
+          value,
+          bridge,
+        });
+        if (synced && part.type === 'ultrasonic' && key === 'distance') {
+          setHcsr04DistanceState(Number.parseFloat(value));
+        }
+      }
+    },
+    [bridge, editor],
+  );
   const currentExample = EXAMPLE_SKETCHES.find((sketch) => sketch.source === source) ?? null;
   const boardSummary = useMemo(() => {
     const componentCount = Math.max(editor.state.diagram.parts.length - 1, 0);
@@ -2380,7 +2404,7 @@ export function App() {
           <div className="editor-sidebar-right">
             <PropertyPanel
               parts={selectedParts}
-              onUpdateAttrs={editor.updateAttrs}
+              onUpdateAttrs={handlePartAttrChange}
               onDelete={editor.deleteSelected}
               onRotate={editor.rotatePart}
               onResize={editor.resizePart}
@@ -2538,7 +2562,7 @@ export function App() {
             attrs={part.attrs ?? {}}
             fields={def?.attrFields ?? []}
             live={live ? { active: live.active, analogValue: live.analogValue } : undefined}
-            onChange={(key, value) => editor.updateAttrs(partId, { [key]: value })}
+            onChange={(key, value) => handlePartAttrChange(partId, { [key]: value })}
             actions={
               <PartActions
                 onRotate={() => editor.rotatePart(partId)}
