@@ -95,6 +95,11 @@ export class WasmSimulator {
      */
     get_ili9341_framebuffer(device_id: string): Uint8Array;
     /**
+     * Read the IO-Link master peer's live state: `{ link_state, pd_valid,
+     * input_byte }`. Returns `null` if no master is wired.
+     */
+    get_iolink_master_state(): any;
+    /**
      * Legacy LED state query (hardcoded GPIOB pin 5 for backward compat).
      */
     get_led_state(): boolean;
@@ -118,6 +123,12 @@ export class WasmSimulator {
     get_peripheral_snapshot(name: string): any;
     get_register(id: number): number;
     get_register_names(): any;
+    /**
+     * Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
+     * no shifter is wired. Lets the UI reflect the device's real state rather
+     * than tracking it in JS.
+     */
+    get_sn74hc165_inputs(): number;
     /**
      * Read back the current state of each SPI sensor declared in `board_io`.
      * Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
@@ -185,6 +196,15 @@ export class WasmSimulator {
      */
     install_arduino_esp32_quirks(elf_bytes: Uint8Array): void;
     install_esp32_arduino_quirks(): void;
+    /**
+     * Clear the IO-Link master's trace ring.
+     */
+    iolink_trace_clear(): void;
+    /**
+     * Snapshot of the IO-Link master's captured transactions (oldest→newest),
+     * for the IO-Link Analyzer instrument. Empty array if no master is wired.
+     */
+    iolink_trace_snapshot(): any;
     /**
      * Total number of times the browser JIT has dispatched a
      * compiled block. Useful for confirming the JIT path actually
@@ -279,6 +299,15 @@ export class WasmSimulator {
      * `device_id` must match a `board_io` binding with `device_type: "ntc-thermistor"`.
      */
     set_ntc_temperature(device_id: string, temperature_c: number): void;
+    /**
+     * Toggle a single 74HC165 input channel (0..=7) high or low.
+     */
+    set_sn74hc165_channel(channel: number, high: boolean): void;
+    /**
+     * Set all 8 digital inputs of the 74HC165 shift register at once
+     * (bit `i` = channel `i`). Returns an error if no shifter is wired.
+     */
+    set_sn74hc165_inputs(value: number): void;
     step(cycles: number): void;
     /**
      * Execute up to max_cycles steps, returning the number actually executed.
@@ -323,6 +352,7 @@ export interface InitOutput {
     readonly wasmsimulator_get_disassembly: (a: number) => [number, number];
     readonly wasmsimulator_get_i2c_sensor_states: (a: number) => any;
     readonly wasmsimulator_get_ili9341_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly wasmsimulator_get_iolink_master_state: (a: number) => any;
     readonly wasmsimulator_get_led_state: (a: number) => number;
     readonly wasmsimulator_get_pc: (a: number) => number;
     readonly wasmsimulator_get_pcd8544_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
@@ -330,6 +360,7 @@ export interface InitOutput {
     readonly wasmsimulator_get_peripheral_snapshot: (a: number, b: number, c: number) => any;
     readonly wasmsimulator_get_register: (a: number, b: number) => number;
     readonly wasmsimulator_get_register_names: (a: number) => any;
+    readonly wasmsimulator_get_sn74hc165_inputs: (a: number) => number;
     readonly wasmsimulator_get_spi_device_states: (a: number) => any;
     readonly wasmsimulator_get_ssd1306_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
     readonly wasmsimulator_get_ssd1680_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
@@ -339,6 +370,8 @@ export interface InitOutput {
     readonly wasmsimulator_get_uc8151d_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
     readonly wasmsimulator_install_arduino_esp32_quirks: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_install_esp32_arduino_quirks: (a: number) => [number, number];
+    readonly wasmsimulator_iolink_trace_clear: (a: number) => void;
+    readonly wasmsimulator_iolink_trace_snapshot: (a: number) => any;
     readonly wasmsimulator_jit_hits: (a: number) => bigint;
     readonly wasmsimulator_jit_refusals: (a: number) => bigint;
     readonly wasmsimulator_keep_alive_esp32_dual_core: (a: number) => void;
@@ -355,6 +388,8 @@ export interface InitOutput {
     readonly wasmsimulator_set_jit_enabled: (a: number, b: number) => void;
     readonly wasmsimulator_set_max31855_temperature: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly wasmsimulator_set_ntc_temperature: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly wasmsimulator_set_sn74hc165_channel: (a: number, b: number, c: number) => [number, number];
+    readonly wasmsimulator_set_sn74hc165_inputs: (a: number, b: number) => [number, number];
     readonly wasmsimulator_step: (a: number, b: number) => [number, number];
     readonly wasmsimulator_step_batch: (a: number, b: number) => [number, number, number];
     readonly wasmsimulator_step_single: (a: number) => [number, number];
