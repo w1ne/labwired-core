@@ -241,6 +241,37 @@ export function diagramToConfig(
 
   // Build board_io entries from wires that connect components to MCU pins
   const boardIoEntries: string[] = [];
+  const externalDeviceEntries: string[] = [];
+
+  const mcuPinForPartPin = (partId: string, pinId: string): string | null => {
+    for (const wire of diagram.wires) {
+      if (wire.from.part === 'mcu' && wire.to.part === partId && wire.to.pin === pinId) {
+        return wire.from.pin;
+      }
+      if (wire.to.part === 'mcu' && wire.from.part === partId && wire.from.pin === pinId) {
+        return wire.to.pin;
+      }
+    }
+    return null;
+  };
+
+  for (const part of diagram.parts) {
+    if (part.type !== 'ultrasonic') continue;
+
+    const trigPin = mcuPinForPartPin(part.id, 'TRIG');
+    const echoPin = mcuPinForPartPin(part.id, 'ECHO');
+    if (!trigPin || !echoPin) continue;
+
+    const distance = Number.parseFloat(part.attrs.distance ?? '');
+    const distanceCm = Number.isFinite(distance) ? distance : 100;
+    externalDeviceEntries.push(`  - id: "${part.id}"
+    type: "hc-sr04"
+    connection: "gpio"
+    config:
+      trig_pin: "${trigPin}"
+      echo_pin: "${echoPin}"
+      distance_cm: ${distanceCm}`);
+  }
 
   for (const wire of diagram.wires) {
     // Find which end is the MCU and which is a component
@@ -260,6 +291,7 @@ export function diagramToConfig(
     // Look up the component to determine board_io kind
     const part = diagram.parts.find((p) => p.id === compEnd!.part);
     if (!part) continue;
+    if (part.type === 'ultrasonic') continue;
     const def = COMPONENT_REGISTRY.get(part.type);
     if (!def?.boardIoKind) continue;
 
@@ -294,6 +326,8 @@ export function diagramToConfig(
 
   const systemYaml = `name: "playground-board"
 chip: "inline"
+external_devices:
+${externalDeviceEntries.length > 0 ? externalDeviceEntries.join('\n') : '  []'}
 board_io:
 ${boardIoEntries.length > 0 ? boardIoEntries.join('\n') : '  []'}
 `;
