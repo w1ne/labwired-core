@@ -1,5 +1,10 @@
 name: "nokia5110-invaders-lab"
 chip: "../../configs/chips/stm32l476.yaml"
+# Walk-deletion (event-scheduler builds): the firmware drives only SPI1
+# (event-migrated) + GPIO (no-op tick); the HC-SR04 echo is serviced outside
+# the walk; every other peripheral is inert here. Verified byte-identical
+# walk-free — see the walk-identity check. ~2x sim throughput in the browser.
+walk_deleted: true
 # spi1, gpioa-e and rcc all come from the chip descriptor; we only attach the
 # external devices and declare the host-controllable I/O here.
 external_devices:
