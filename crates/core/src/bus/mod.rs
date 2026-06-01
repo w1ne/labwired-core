@@ -1767,6 +1767,11 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // Per-config walk-deletion opt-in. The field is only consulted under the
+        // `event-scheduler` feature (the legacy build always walks), so this is a
+        // no-op there. Safe only because the manifest author verified the
+        // firmware runs byte-identical walk-free (see the walk-identity test).
+        bus.legacy_walk_disabled = manifest.walk_deleted;
         Ok(bus)
     }
 
@@ -2639,6 +2644,7 @@ mod tests {
             serde_yaml::Value::Number(0x53.into()),
         );
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),
@@ -2703,6 +2709,7 @@ mod tests {
         config: std::collections::HashMap<String, serde_yaml::Value>,
     ) -> labwired_config::SystemManifest {
         labwired_config::SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),

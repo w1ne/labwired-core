@@ -46,6 +46,7 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
 
     // Create Manual System Manifest
     let dummy_manifest = labwired_config::SystemManifest {
+        walk_deleted: false,
         schema_version: "1.0".to_string(),
         name: "test-bench".to_string(),
         chip: path.to_string_lossy().to_string(),
