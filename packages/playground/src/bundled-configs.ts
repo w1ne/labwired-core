@@ -35,7 +35,9 @@ import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/sy
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
+import systemAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
+import sourceAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/firmware/main.c?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
 import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
@@ -172,6 +174,21 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'nucleo-l476rg',
     sourceCode: sourceNokia5110Invaders,
     sourceFilename: 'nokia5110-invaders-lab/src/main.rs',
+    kind: 'lab',
+  },
+  {
+    boardId: 'al2205-iolink-dido',
+    chipId: 'stm32l476',
+    name: 'IO-Link DI Device (AL2205)',
+    description:
+      'STM32L476 running the real iolinki IO-Link device stack as firmware: 8 digital inputs via a 74HC165 shift register, read over SPI and published as IO-Link process data to a master peer. Toggle the inputs and watch the process data update at the master.',
+    arch: 'ARM Cortex-M4',
+    chipYaml: chipStm32l476,
+    systemYaml: systemAl2205IolinkDido,
+    demoFirmwarePath: `${BASE}wasm/demo-al2205-iolink-dido.elf`,
+    mcuComponentType: 'nucleo-l476rg',
+    sourceCode: sourceAl2205IolinkDido,
+    sourceFilename: 'al2205-iolink-dido/firmware/main.c',
     kind: 'lab',
   },
   {
