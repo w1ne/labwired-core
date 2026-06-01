@@ -47,8 +47,12 @@ fn ensure_firmware_built() -> PathBuf {
     }
     let status = Command::new("cargo")
         .args([
-            "build", "-p", "nokia5110-invaders-lab",
-            "--target", "thumbv7em-none-eabihf", "--release",
+            "build",
+            "-p",
+            "nokia5110-invaders-lab",
+            "--target",
+            "thumbv7em-none-eabihf",
+            "--release",
         ])
         .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .status()
@@ -183,5 +187,9 @@ fn write_frames_bin() {
             .into_owned()
     });
     std::fs::write(&out, &bin).expect("write invaders-frames.bin");
-    println!("wrote {} bytes ({} frames) to {out}", bin.len(), frames.len());
+    println!(
+        "wrote {} bytes ({} frames) to {out}",
+        bin.len(),
+        frames.len()
+    );
 }
