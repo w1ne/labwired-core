@@ -40,6 +40,8 @@ import { diodeComponent } from './diode';
 import { transistorComponent } from './transistor';
 // ICs
 import { shiftRegister74hc595Component } from './shift-register-74hc595';
+import { sn74hc165Component } from './sn74hc165';
+import { iolinkMasterComponent } from './iolink-master';
 import { motorDriverL293dComponent } from './motor-driver-l293d';
 // Board MCUs
 import { arduinoUnoComponent } from './boards/arduino-uno';
@@ -109,6 +111,8 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [transistorComponent.type, transistorComponent],
   // ICs
   [shiftRegister74hc595Component.type, shiftRegister74hc595Component],
+  [sn74hc165Component.type, sn74hc165Component],
+  [iolinkMasterComponent.type, iolinkMasterComponent],
   [motorDriverL293dComponent.type, motorDriverL293dComponent],
 ]);
 
