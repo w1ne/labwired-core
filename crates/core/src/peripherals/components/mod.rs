@@ -28,7 +28,7 @@ pub use bme280::Bme280;
 pub use bmp280::Bmp280;
 pub use i2c_factory::build_i2c_device;
 pub use ili9341::Ili9341;
-pub use iolink_master::{IolinkComSpeed, IolinkLinkState, IolinkMaster};
+pub use iolink_master::{IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer};
 pub use max31855::Max31855;
 pub use mpu6050::Mpu6050;
 pub use neo6m::Neo6mGps;

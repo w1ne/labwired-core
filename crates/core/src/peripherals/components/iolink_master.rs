@@ -128,7 +128,6 @@ struct PendingXfer {
 }
 
 /// Max trace records retained (oldest dropped).
-#[allow(dead_code)]
 const TRACE_CAP: usize = 256;
 
 /// Ticks the master waits (one `poll` per UART tick) between frames. The
@@ -173,6 +172,15 @@ pub struct IolinkMaster {
     latest_pd: Vec<u8>,
     /// Latches true on the first valid cyclic frame and is intentionally sticky.
     pub pd_valid: bool,
+    /// Bounded ring of completed transactions (oldest→newest), for the analyzer.
+    #[serde(skip)]
+    trace: VecDeque<IolinkXfer>,
+    /// The frame currently in flight (request sent, response accumulating).
+    #[serde(skip)]
+    current: Option<PendingXfer>,
+    /// Monotonic per-frame sequence number.
+    #[serde(skip)]
+    frame_seq: u32,
 }
 
 impl IolinkMaster {
@@ -188,6 +196,9 @@ impl IolinkMaster {
             gap_ticks: 0,
             latest_pd: vec![0u8; pd_in_len.max(1)],
             pd_valid: false,
+            trace: VecDeque::new(),
+            current: None,
+            frame_seq: 0,
         };
         m.queue_next_frame(); // queue the wake-up immediately
         m
@@ -200,6 +211,16 @@ impl IolinkMaster {
 
     pub fn com_speed(&self) -> IolinkComSpeed {
         self.com
+    }
+
+    /// Snapshot of captured transactions, oldest→newest. Cloned for the UI.
+    pub fn trace_snapshot(&self) -> Vec<IolinkXfer> {
+        self.trace.iter().cloned().collect()
+    }
+
+    /// Clear the trace ring (the analyzer's "Clear" control).
+    pub fn trace_clear(&mut self) {
+        self.trace.clear();
     }
 
     fn operate_response_len(&self) -> usize {
@@ -236,25 +257,44 @@ impl IolinkMaster {
     }
 
     /// Queue the next frame in the startup/cyclic schedule and advance `step`.
+    /// Also finalizes the previous in-flight frame into the trace ring.
     fn queue_next_frame(&mut self) {
-        self.rx_accum.clear();
-        let idle_end = 1 + IDLE_FRAMES; // steps [1..=IDLE_FRAMES] are IDLE
-        if self.step == 0 {
-            self.tx_queue.push_back(0x55); // wake-up pulse (once)
-        } else if self.step < idle_end {
-            for b in encode_type0(0x00) {
-                self.tx_queue.push_back(b); // Type 0 IDLE → PREOPERATE
+        // Finalize the previous frame (its response accumulated during the gap).
+        if let Some(p) = self.current.take() {
+            let x = self.finalize_xfer(p);
+            if self.trace.len() >= TRACE_CAP {
+                self.trace.pop_front();
             }
-        } else if self.step == idle_end {
-            for b in encode_type0(0x0F) {
-                self.tx_queue.push_back(b); // OPERATE transition (MC=0x0F) → ESTAB_COM
-            }
-        } else {
-            for b in encode_type1_cycle(&[]) {
-                self.tx_queue.push_back(b); // cyclic Type 1 → OPERATE + process data
-            }
-            self.link_state = IolinkLinkState::Operate;
+            self.trace.push_back(x);
         }
+        self.rx_accum.clear();
+
+        let idle_end = 1 + IDLE_FRAMES; // steps [1..=IDLE_FRAMES] are IDLE
+        let (frame, kind): (Vec<u8>, IolinkFrameKind) = if self.step == 0 {
+            (vec![0x55], IolinkFrameKind::WakeUp) // wake-up pulse (once)
+        } else if self.step < idle_end {
+            (encode_type0(0x00), IolinkFrameKind::Idle) // Type 0 IDLE → PREOPERATE
+        } else if self.step == idle_end {
+            (encode_type0(0x0F), IolinkFrameKind::OperateReq) // OPERATE transition
+        } else {
+            self.link_state = IolinkLinkState::Operate;
+            (encode_type1_cycle(&[]), IolinkFrameKind::Cyclic) // cyclic Type 1
+        };
+
+        let pd_out: Vec<u8> = Vec::new(); // DI device: master sends no PD out
+        for &b in &frame {
+            self.tx_queue.push_back(b);
+        }
+        self.current = Some(PendingXfer {
+            seq: self.frame_seq,
+            kind,
+            pd_out,
+            link_state: self.link_state,
+            raw_master: frame,
+            raw_device: Vec::new(),
+        });
+        self.frame_seq = self.frame_seq.wrapping_add(1);
+
         // Hold `step` at the first cyclic index so it keeps repeating Type 1.
         if self.step <= idle_end {
             self.step += 1;
@@ -282,6 +322,11 @@ impl UartStreamDevice for IolinkMaster {
         // (OPERATE) response is complete, decode and latch the process data.
         if self.rx_accum.len() < 64 {
             self.rx_accum.push(byte);
+        }
+        if let Some(p) = self.current.as_mut() {
+            if p.raw_device.len() < 64 {
+                p.raw_device.push(byte);
+            }
         }
         if self.link_state == IolinkLinkState::Operate
             && self.rx_accum.len() >= self.operate_response_len()
@@ -426,6 +471,36 @@ mod tests {
         assert_eq!(drain(&mut m), vec![0x00, 0x00, 0x00, 0x09]);
         assert_eq!(m.link_state, IolinkLinkState::Operate);
         assert_eq!(drain(&mut m), vec![0x00, 0x00, 0x00, 0x09]);
+    }
+
+    #[test]
+    fn trace_ring_captures_startup_then_cyclic() {
+        let mut m = IolinkMaster::new(1, 1, IolinkComSpeed::Com2);
+        for _ in 0..(FRAME_GAP_TICKS as u64 * 10 + 64) {
+            let _ = m.poll(1000);
+        }
+        let trace = m.trace_snapshot();
+        assert!(trace.len() >= 5, "expected several frames, got {}", trace.len());
+        assert_eq!(trace[0].kind, IolinkFrameKind::WakeUp);
+        assert!(
+            trace.iter().any(|x| x.kind == IolinkFrameKind::Cyclic
+                && x.link_state == IolinkLinkState::Operate),
+            "expected a cyclic OPERATE frame in the trace"
+        );
+        for w in trace.windows(2) {
+            assert!(w[1].seq > w[0].seq);
+        }
+    }
+
+    #[test]
+    fn trace_clear_empties_ring() {
+        let mut m = IolinkMaster::new(1, 1, IolinkComSpeed::Com2);
+        for _ in 0..(FRAME_GAP_TICKS as u64 * 3 + 16) {
+            let _ = m.poll(1000);
+        }
+        assert!(!m.trace_snapshot().is_empty());
+        m.trace_clear();
+        assert!(m.trace_snapshot().is_empty());
     }
 
     #[test]
