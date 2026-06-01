@@ -229,6 +229,32 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
+  if (config.boardId === 'al2205-iolink-dido') {
+    // STM32L476 IO-Link DI device. Part ids match the lab's external_device
+    // ids ('di_shifter', 'iolink_master') so the 74HC165 input toggles and the
+    // IO-Link master state/PD readout resolve against the bridge.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'di_shifter', type: 'sn74hc165', x: 520, y: 70, rotate: 0, attrs: {} },
+        { id: 'iolink_master', type: 'iolink-master', x: 520, y: 300, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        // 74HC165 digital-input shift register on SPI1 (CS = PA4).
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'di_shifter', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'di_shifter', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'di_shifter', pin: 'CLK' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA6' }, to: { part: 'di_shifter', pin: 'QH' }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PA4' }, to: { part: 'di_shifter', pin: 'SH_LD' }, color: '#FFD166' },
+        // IO-Link master peer on USART2 (PA2 TX, PA3 RX).
+        { from: { part: 'mcu', pin: 'PA2' }, to: { part: 'iolink_master', pin: 'RX' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PA3' }, to: { part: 'iolink_master', pin: 'TX' }, color: '#118AB2' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'iolink_master', pin: 'L+' }, color: '#FF6B6B' },
+      ],
+    };
+  }
+
   if (config.boardId === 'mpu6050-sensor-lab') {
     return {
       ...createEmptyDiagram(config.chipId),
