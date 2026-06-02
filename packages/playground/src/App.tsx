@@ -23,7 +23,6 @@ import {
   compileCode,
   EXAMPLE_SKETCHES,
   useEditorState,
-  diagramToConfig,
   validateDiagram,
   validateWireConnection,
   COMPONENT_REGISTRY,
@@ -43,6 +42,7 @@ import { BOARD_CONFIGS, pickerBoards, type BoardConfig } from './bundled-configs
 import { resolveBoardForPart } from './board-resolve';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
+import { resolveRunSystemConfig } from './run-config';
 import { StudioShell } from './studio/StudioShell';
 import { ChipsProvider, useChips } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
@@ -832,18 +832,32 @@ export function App() {
 
       if (result?.success && result.elf) {
         firmware = result.elf;
-        // Use diagram-derived config with the run board's chip YAML
-        const config = diagramToConfig(editor.state.diagram, runBoard.chipYaml);
+        const config = resolveRunSystemConfig({
+          diagram: editor.state.diagram,
+          chipYaml: runBoard.chipYaml,
+          bundledSystemYaml: runBoard.systemYaml,
+          preferDiagram: true,
+        });
         systemYaml = config.systemYaml;
         chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUpload successful. Starting simulation...');
       } else if (runBoard.demoFirmwarePath) {
-        // Fall back to pre-built demo firmware with its matching YAML configs
+        // Fall back to pre-built demo firmware, but still use the current
+        // diagram YAML so edited sensor attributes reach the simulator.
         const resp = await fetch(runBoard.demoFirmwarePath);
         if (!resp.ok) throw new Error(`Failed to load firmware: ${runBoard.demoFirmwarePath}`);
         firmware = new Uint8Array(await resp.arrayBuffer());
-        systemYaml = runBoard.systemYaml;
-        chipYaml = runBoard.chipYaml;
+        const config = resolveRunSystemConfig({
+          diagram: editor.state.diagram,
+          chipYaml: runBoard.chipYaml,
+          bundledSystemYaml: runBoard.systemYaml,
+          preferDiagram: true,
+          onFallback: (msg) => {
+            setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
+          },
+        });
+        systemYaml = config.systemYaml;
+        chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUsing pre-built demo firmware.');
       } else {
         // No demo firmware and compile failed
@@ -1518,22 +1532,19 @@ export function App() {
         // boots standalone against its own board YAML — cross-chip comms ride
         // the shared BLE air, not wires.
         const target = drawerSubject.board;
-        let systemYaml = target.systemYaml;
-        let chipYaml = target.chipYaml;
-        if (drawerSubject.isPrimary) {
-          try {
-            const config = diagramToConfig(editor.state.diagram, target.chipYaml);
-            systemYaml = config.systemYaml;
-            chipYaml = config.chipYaml;
-          } catch (configErr) {
-            const msg = configErr instanceof Error ? configErr.message : String(configErr);
+        const config = resolveRunSystemConfig({
+          diagram: editor.state.diagram,
+          chipYaml: target.chipYaml,
+          bundledSystemYaml: target.systemYaml,
+          preferDiagram: drawerSubject.isPrimary,
+          onFallback: (msg) => {
             setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
-          }
-        }
+          },
+        });
 
         await launchSimulation({
-          systemYaml,
-          chipYaml,
+          systemYaml: config.systemYaml,
+          chipYaml: config.chipYaml,
           firmware,
           quirks: target.quirks,
           bootSnapshotUrl: target.bootSnapshotUrl,
