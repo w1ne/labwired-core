@@ -21,17 +21,33 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#12121a" />
+
   <style>
     html, body { margin: 0; height: 100%; background: #12121a; }
     #root { height: 100%; }
     #loading {
-      display: flex; align-items: center; justify-content: center;
-      height: 100%; color: #555; font: 13px/1 monospace; letter-spacing: .05em;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; height: 100%; color: #5b5f6b; font: 13px/1 monospace; letter-spacing: .05em;
     }
+    #loading svg { animation: lw-pulse 1.6s ease-in-out infinite; }
+    @keyframes lw-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
   </style>
 </head>
 <body>
-  <div id="root"><div id="loading">Loading…</div></div>
+  <div id="root"><div id="loading">
+    <svg width="40" height="40" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <path d="M10 7V19H25" stroke="#4d9fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="10" cy="7" r="3" fill="#e8eaed"/>
+      <circle cx="25" cy="19" r="3" fill="#4d9fff"/>
+    </svg>
+    Loading…
+  </div></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

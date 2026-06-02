@@ -141,8 +141,10 @@ export function ChevronRightIcon({ size = defaults.size, ...rest }: IconProps) {
 }
 
 export const LogoIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 20 20" width="18" height="18" {...props}>
-    <path d="M11 2 4 12h4l-1 6 8-10h-4l1-6z" fill="currentColor" />
+  <svg viewBox="0 0 32 32" width="18" height="18" fill="none" {...props}>
+    <path d="M10 7V19H25" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="10" cy="7" r="3" fill="currentColor" />
+    <circle cx="25" cy="19" r="3" fill="currentColor" />
   </svg>
 );
 

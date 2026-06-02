@@ -1,0 +1,11 @@
+{
+  "name": "LabWired Playground",
+  "short_name": "LabWired",
+  "icons": [
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+  ],
+  "theme_color": "#12121a",
+  "background_color": "#12121a",
+  "display": "standalone"
+}
