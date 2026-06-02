@@ -1044,6 +1044,10 @@ export function App() {
   // PCD8544 (Nokia 5110) live framebuffer + HC-SR04 hand distance
   const [pcd8544Framebuffer, setPcd8544Framebuffer] = useState<Uint8Array | null>(null);
   const [hcsr04Distance, setHcsr04DistanceState] = useState(30);
+  const bridgeRef = useRef<typeof bridge>(bridge);
+  useEffect(() => {
+    bridgeRef.current = bridge;
+  }, [bridge]);
 
   useEffect(() => {
     if (!running || !bridge) {
@@ -1062,12 +1066,12 @@ export function App() {
   const handleDistanceChange = useCallback(
     (cm: number, partId = 'dist') => {
       setHcsr04DistanceState(cm);
-      bridge?.setHcsr04Distance(partId, cm);
+      bridgeRef.current?.setHcsr04Distance(partId, cm);
       if (editor.state.diagram.parts.some((part) => part.id === partId && part.type === 'ultrasonic')) {
         editor.updateAttrs(partId, { distance: String(cm) });
       }
     },
-    [bridge, editor],
+    [editor],
   );
 
   useEffect(() => {
@@ -1574,14 +1578,14 @@ export function App() {
           partType: part.type,
           key,
           value,
-          bridge,
+          bridge: bridgeRef.current,
         });
         if (synced && part.type === 'ultrasonic' && key === 'distance') {
           setHcsr04DistanceState(Number.parseFloat(value));
         }
       }
     },
-    [bridge, editor],
+    [editor],
   );
   const currentExample = EXAMPLE_SKETCHES.find((sketch) => sketch.source === source) ?? null;
   const boardSummary = useMemo(() => {
@@ -2615,6 +2619,27 @@ export function App() {
       // Non-chip component → its own meaningful, editable properties.
       const def = COMPONENT_REGISTRY.get(part.type);
       const live = boardIoStateMap[partId];
+      const liveControl = part.type === 'ultrasonic' ? (() => {
+        const attrDistance = Number.parseFloat(part.attrs.distance ?? '');
+        const distance = Number.isFinite(attrDistance) ? attrDistance : hcsr04Distance;
+        return (
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wide text-fg-tertiary">Hand distance</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={2}
+                max={200}
+                step={1}
+                value={distance}
+                onChange={(e) => handleDistanceChange(parseFloat(e.target.value), partId)}
+                className="min-w-0 flex-1"
+              />
+              <span className="w-12 text-right font-mono text-xs text-fg-secondary">{distance.toFixed(0)} cm</span>
+            </div>
+          </label>
+        );
+      })() : undefined;
       return (
         <ChipWindow
           key={partId}
@@ -2635,6 +2660,7 @@ export function App() {
             fields={def?.attrFields ?? []}
             live={live ? { active: live.active, analogValue: live.analogValue } : undefined}
             onChange={(key, value) => handlePartAttrChange(partId, { [key]: value })}
+            liveControl={liveControl}
             actions={
               <PartActions
                 onRotate={() => editor.rotatePart(partId)}
