@@ -66,9 +66,18 @@ impl SpiMemFlash {
         let cmd = (self.reg(USER2) & 0xFFFF) as u8;
         // ESP32-S3 SPI_MEM_ADDR_REG carries the 24-bit flash byte address in
         // the high bits (the low 8 bits are the dummy/alignment slot).
-        let addr = (self.reg(ADDR) >> 8) as usize;
+        let addr_reg = self.reg(ADDR);
+        let addr = (addr_reg >> 8) as usize;
         // MISO_DLEN holds (bits - 1); bytes = (bits)/8.
         let read_bytes = ((self.reg(MISO_DLEN) as usize) + 1) / 8;
+        let debug = std::env::var("LABWIRED_SPI_DEBUG").is_ok();
+        if debug {
+            let f = self.flash.lock().unwrap();
+            let peek: Vec<u8> = (0..4).map(|i| f.get(addr + i).copied().unwrap_or(0xFF)).collect();
+            eprintln!(
+                "spimem1: cmd=0x{cmd:02x} ADDR_REG=0x{addr_reg:08x} addr=0x{addr:06x} bytes={read_bytes} flash[addr..]={peek:02x?}"
+            );
+        }
 
         match cmd {
             CMD_READ | CMD_FAST_READ => {

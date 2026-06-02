@@ -814,7 +814,7 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     let config = labwired_core::SimulationConfig::default();
     let mut steps = 0u64;
     // Ring buffer of recent PCs for post-mortem on exceptions.
-    const RING_LEN: usize = 64;
+    const RING_LEN: usize = 1024;
     let mut pc_ring: [u32; RING_LEN] = [0; RING_LEN];
     let mut ring_head: usize = 0;
     while steps < limit {
