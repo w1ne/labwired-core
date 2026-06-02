@@ -24,7 +24,7 @@
 //! [`observe_trig`]: HcSr04::observe_trig
 //! [`echo_high_at`]: HcSr04::echo_high_at
 //!
-//! `distance_cm` is host-controlled (e.g. a "hand distance" slider in the
+//! `distance_cm` is host-controlled (e.g. a distance control in the
 //! playground), which is what makes gesture control possible.
 //!
 //! Modelled from the ElecFreaks HC-SR04 datasheet:
