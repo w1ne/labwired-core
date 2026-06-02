@@ -25,6 +25,7 @@ export const ultrasonicComponent: ComponentDef = {
     const dist = attrs.distance || '100';
     return (
       <g>
+        <rect x={0} y={-12} width={W} height={H + 12} fill="transparent" pointerEvents="all" />
         <rect x={3} y={3} width={W - 6} height={H - 8} rx={4}
           fill="#1a6aaa" stroke={selected ? '#e83e8c' : '#0d4060'} strokeWidth={selected ? 2.5 : 1.5} />
         <circle cx={24} cy={22} r={14} fill="#ccc" stroke="#999" strokeWidth={1} />
