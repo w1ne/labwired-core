@@ -1042,9 +1042,8 @@ export function App() {
     return () => window.clearInterval(id);
   }, [running, bridge]);
 
-  // PCD8544 (Nokia 5110) live framebuffer + HC-SR04 hand distance
+  // PCD8544 (Nokia 5110) live framebuffer.
   const [pcd8544Framebuffer, setPcd8544Framebuffer] = useState<Uint8Array | null>(null);
-  const [hcsr04Distance, setHcsr04DistanceState] = useState(30);
   const bridgeRef = useRef<typeof bridge>(bridge);
   useEffect(() => {
     bridgeRef.current = bridge;
@@ -1064,17 +1063,6 @@ export function App() {
     return () => window.clearInterval(id);
   }, [running, bridge]);
 
-  const handleDistanceChange = useCallback(
-    (cm: number, partId = 'dist') => {
-      setHcsr04DistanceState(cm);
-      bridgeRef.current?.setHcsr04Distance(partId, cm);
-      if (editor.state.diagram.parts.some((part) => part.id === partId && part.type === 'ultrasonic')) {
-        editor.updateAttrs(partId, { distance: String(cm) });
-      }
-    },
-    [editor],
-  );
-
   useEffect(() => {
     if (!bridge) return;
     for (const part of editor.state.diagram.parts) {
@@ -1082,7 +1070,6 @@ export function App() {
       const cm = Number.parseFloat(part.attrs.distance ?? '');
       if (!Number.isFinite(cm)) continue;
       bridge.setHcsr04Distance(part.id, cm);
-      if (part.id === 'dist') setHcsr04DistanceState(cm);
     }
   }, [bridge, editor.state.diagram.parts]);
 
@@ -1297,55 +1284,12 @@ export function App() {
   const inspectorLabWidget = useMemo<ReactNode>(() => {
     if (!inspectorSelection || inspectorSelection.kind !== 'part') return undefined;
     const partType = inspectorSelection.partType;
-    const selectedPart = editor.state.diagram.parts.find((part) => part.id === inspectorSelection.partId);
-    if (partType === 'ultrasonic') {
-      const attrDistance = Number.parseFloat(selectedPart?.attrs.distance ?? '');
-      const distance = Number.isFinite(attrDistance) ? attrDistance : hcsr04Distance;
-      // HC-SR04: live hand-distance slider. The engine models the echo pulse
-      // (width ∝ distance); this is the only way to drive it at runtime.
-      return (
-        <label className="block">
-          <div className="flex items-center justify-between text-fg-tertiary text-[11px] font-mono mb-1">
-            <span>Hand distance</span>
-            <span className="text-fg-primary">{distance.toFixed(0)} cm</span>
-          </div>
-          <input
-            type="range"
-            min={2}
-            max={200}
-            step={1}
-            value={distance}
-            onChange={(e) => handleDistanceChange(parseFloat(e.target.value), inspectorSelection.partId)}
-            style={{ width: '100%' }}
-          />
-        </label>
-      );
-    }
     if (partType === 'oled-ssd1306') {
       if (!bridge) return undefined;
       return <Ssd1306Display framebuffer={ssd1306Framebuffer} width={256} />;
     }
     if (partType === 'pcd8544' || partType === 'nokia-5110') {
-      return (
-        <div className="flex flex-col gap-3">
-          <Pcd8544Display framebuffer={pcd8544Framebuffer} width={252} />
-          <label className="block">
-            <div className="flex items-center justify-between text-fg-tertiary text-[11px] font-mono mb-1">
-              <span>HC-SR04 hand distance</span>
-              <span className="text-fg-primary">{hcsr04Distance.toFixed(0)} cm</span>
-            </div>
-            <input
-              type="range"
-              min={2}
-              max={200}
-              step={1}
-              value={hcsr04Distance}
-              onChange={(e) => handleDistanceChange(parseFloat(e.target.value))}
-              style={{ width: '100%' }}
-            />
-          </label>
-        </div>
-      );
+      return <Pcd8544Display framebuffer={pcd8544Framebuffer} width={252} />;
     }
     if (partType === 'ili9341') {
       if (!bridge) return undefined;
@@ -1472,7 +1416,7 @@ export function App() {
     }
     return undefined;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridge, editor.state.diagram.parts, inspectorSelection, simState.pc, ssd1306Framebuffer, pcd8544Framebuffer, hcsr04Distance, handleDistanceChange, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
+  }, [bridge, editor.state.diagram.parts, inspectorSelection, simState.pc, ssd1306Framebuffer, pcd8544Framebuffer, ili9341Framebuffer, adcDeviceStates, ntcTemperatures]);
 
   // Right-side InspectorCard removed — Properties live in the
   // bottom drawer (per-chip Serial/Registers/Trace/Memory/Source/
@@ -1574,16 +1518,13 @@ export function App() {
       const part = editor.state.diagram.parts.find((p) => p.id === partId);
       if (!part) return;
       for (const [key, value] of Object.entries(attrs)) {
-        const synced = syncSensorAttributeToSimulator({
+        syncSensorAttributeToSimulator({
           partId,
           partType: part.type,
           key,
           value,
           bridge: bridgeRef.current,
         });
-        if (synced && part.type === 'ultrasonic' && key === 'distance') {
-          setHcsr04DistanceState(Number.parseFloat(value));
-        }
       }
     },
     [editor],
@@ -2622,27 +2563,6 @@ export function App() {
       // Non-chip component → its own meaningful, editable properties.
       const def = COMPONENT_REGISTRY.get(part.type);
       const live = boardIoStateMap[partId];
-      const liveControl = part.type === 'ultrasonic' ? (() => {
-        const attrDistance = Number.parseFloat(part.attrs.distance ?? '');
-        const distance = Number.isFinite(attrDistance) ? attrDistance : hcsr04Distance;
-        return (
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-fg-tertiary">Hand distance</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={2}
-                max={200}
-                step={1}
-                value={distance}
-                onChange={(e) => handleDistanceChange(parseFloat(e.target.value), partId)}
-                className="min-w-0 flex-1"
-              />
-              <span className="w-12 text-right font-mono text-xs text-fg-secondary">{distance.toFixed(0)} cm</span>
-            </div>
-          </label>
-        );
-      })() : undefined;
       return (
         <ChipWindow
           key={partId}
@@ -2663,7 +2583,6 @@ export function App() {
             fields={def?.attrFields ?? []}
             live={live ? { active: live.active, analogValue: live.analogValue } : undefined}
             onChange={(key, value) => handlePartAttrChange(partId, { [key]: value })}
-            liveControl={liveControl}
             actions={
               <PartActions
                 onRotate={() => editor.rotatePart(partId)}

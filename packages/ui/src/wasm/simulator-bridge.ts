@@ -202,7 +202,7 @@ export interface WasmSimulatorInstance {
   // PCD8544 (Nokia 5110) framebuffer (504 B: 6 banks × 84 cols, bank-major)
   get_pcd8544_framebuffer(device_id: string): Uint8Array;
 
-  // HC-SR04 ultrasonic: host-set "hand distance" in cm
+  // HC-SR04 ultrasonic: host-set target distance in cm
   set_hcsr04_distance(id: string, distance_cm: number): void;
 
   // ILI9341 TFT framebuffer

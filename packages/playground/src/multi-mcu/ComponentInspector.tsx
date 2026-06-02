@@ -1,8 +1,3 @@
-// Properties for a non-chip component (LED, resistor, button, sensor…).
-// Renders the component's OWN editable attribute fields (e.g. an LED's Color)
-// plus its live state (on/off, analog value) — not generic chrome. Driven by
-// the component's `attrFields` schema so every part shows what's meaningful
-// to it.
 import type { ReactNode } from 'react';
 
 export interface AttrField {
@@ -24,7 +19,6 @@ export interface ComponentInspectorProps {
   fields: AttrField[];
   live?: ComponentLiveState;
   onChange: (key: string, value: string) => void;
-  liveControl?: ReactNode;
   /** Standard part actions (Rotate/Size/Delete) — rendered at the bottom. */
   actions?: ReactNode;
 }
@@ -40,7 +34,6 @@ export function ComponentInspector({
   fields,
   live,
   onChange,
-  liveControl,
   actions,
 }: ComponentInspectorProps) {
   const hasLive = live && (live.active !== undefined || live.analogValue !== undefined);
@@ -100,8 +93,6 @@ export function ComponentInspector({
       )}
 
       {fieldNodes}
-
-      {liveControl}
 
       <div className="mt-auto font-mono text-[10px] text-fg-tertiary">{partType} · {partId}</div>
     </div>
