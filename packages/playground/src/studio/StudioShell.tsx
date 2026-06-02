@@ -11,6 +11,7 @@ export interface StudioShellProps {
   onShare?: () => void;
   onPickLab?: (labId: string) => void;
   onUploadFirmware?: (file: File) => void;
+  onOpenTools?: () => void;
   paletteComponents?: PaletteComponent[];
   onPaletteDrag?: (componentType: string) => void;
   inspector?: ReactNode;
@@ -37,6 +38,7 @@ export function StudioShell({
   onShare,
   onPickLab,
   onUploadFirmware,
+  onOpenTools,
   paletteComponents = [],
   onPaletteDrag,
   inspector,
@@ -65,6 +67,7 @@ export function StudioShell({
         onOpenCommand={layout.openCommand}
         onShare={onShare}
         onUploadFirmware={onUploadFirmware}
+        onOpenTools={onOpenTools}
         authSlot={authSlot}
         projectSlot={projectSlot}
       />
