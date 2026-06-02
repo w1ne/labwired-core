@@ -1217,7 +1217,7 @@ git add packages/api/wrangler.toml
 git commit -m "chore(api): BUILDER_URL var for the build-run loop"
 ```
 
-- [ ] **Step 4: Deploy decision** — Deploying the Worker replaces the live `/mcp` deployment, so reconcile first (the live tools.ts may differ from repo). Do NOT blind-deploy: confirm repo `tools.ts` == intended live surface, then `env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID npx wrangler deploy` from `packages/api`. Verify `labwired_list_boards`/`labwired_compile` appear via an authenticated `tools/list`.
+- [ ] **Step 4: Deploy decision** — Deploying the Worker replaces the live `/mcp` deployment, so reconcile first (the live tools.ts may differ from repo). Do NOT blind-deploy: confirm repo `tools.ts` == intended live surface, then merge through `main` and let `.github/workflows/api-worker-deploy.yml` run `npm test` + `npx wrangler deploy`. Use manual `wrangler deploy` only as an emergency fallback. Verify `labwired_list_boards`/`labwired_compile` appear via an authenticated `tools/list`.
 
 ---
 

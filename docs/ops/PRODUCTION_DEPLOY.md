@@ -19,15 +19,16 @@ so the same path can be re-walked when needed.
 - **Landing page:** Hosted MCP connector instructions are live on
   `labwired.com` and show the Codex hosted-URL flow without a custom scope:
   `codex mcp add labwired --url https://api.labwired.com/mcp && codex mcp login labwired`.
-- **API source:** The hosted MCP OAuth fix is merged in `w1ne/labwired#205`.
-  The Worker metadata/challenge should no longer advertise or request
-  `labwired:mcp`, because Clerk rejects that custom scope and the MCP resource
-  server only validates a Clerk bearer token.
-- **API production deploy:** Not automatic on GitHub merge. The `packages/api`
-  Worker still requires a manual `wrangler deploy` with a valid Cloudflare
-  account token. As of this update, `api.labwired.com` still returned
-  `scopes_supported:["labwired:mcp"]`, meaning the production Worker had not
-  yet picked up the merged source fix.
+- **API source + production:** The hosted MCP OAuth fix is merged in
+  `w1ne/labwired#205` and deployed to `api.labwired.com`. Worker
+  metadata/challenges no longer advertise or request `labwired:mcp`, because
+  Clerk rejects that custom scope and the MCP resource server only validates a
+  Clerk bearer token.
+- **API deploy automation:** `w1ne/labwired#210` added
+  `.github/workflows/api-worker-deploy.yml`. Pushes to `main` that touch
+  `packages/api/**` run `npm ci`, `npm test`, and `npx wrangler deploy` with
+  `CLOUDFLARE_API_WORKER_TOKEN` + `CLOUDFLARE_API_ACCOUNT_ID`. The first
+  successful production deploy was GitHub Actions run `26828719012`.
 
 ### Baseline — 2026-05-15
 
@@ -93,7 +94,7 @@ npx -y @labwired/mcp --help 2>&1 | head
 
 # Hosted MCP OAuth metadata
 curl -s https://api.labwired.com/.well-known/oauth-protected-resource/mcp
-# Current expected after the 2026-06-02 fix is deployed:
+# Expected:
 # - authorization_servers includes https://clerk.labwired.com
 # - scopes_supported is absent
 # - no labwired:mcp scope is advertised

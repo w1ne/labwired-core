@@ -151,8 +151,9 @@ export function ProjectsModal({
                 {projects.error?.includes('Not found') && (
                   <p style={{ marginTop: 8, fontSize: 11 }}>
                     The projects API isn't deployed yet. Backend code is in
-                    place; the worker needs <code>wrangler deploy</code> after
-                    creating the <code>KV_PROJECTS</code> namespace.
+                    place; the API Worker deploy workflow should run after
+                    merging the backend change to <code>main</code>. Confirm
+                    <code>KV_PROJECTS</code> exists if this persists.
                   </p>
                 )}
               </div>

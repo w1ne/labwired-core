@@ -26,9 +26,15 @@ Dashboard       → GET  /v1/workspaces/me   → workspace info (Bearer api_key)
 
 ## Deploy steps
 
-Run these commands yourself — the deploy requires your Cloudflare account.
-Merging to GitHub `main` runs API checks, but it does not deploy this Worker.
-`api.labwired.com` changes only after `wrangler deploy` succeeds.
+Production deploy is automated by `.github/workflows/api-worker-deploy.yml`.
+Pushes to GitHub `main` that touch `packages/api/**` run `npm ci`, `npm test`,
+and `npx wrangler deploy`. The workflow uses these repo secrets:
+
+- `CLOUDFLARE_API_WORKER_TOKEN`
+- `CLOUDFLARE_API_ACCOUNT_ID`
+
+Run the manual steps below only for initial setup, emergency redeploy, or
+rollback work that cannot wait for GitHub Actions.
 
 ### 1. Prerequisites
 
@@ -97,7 +103,7 @@ Option B — CNAME (if custom domains aren't available on your plan):
 1. Cloudflare Dashboard → DNS → Add record
 2. Type: CNAME, Name: `api`, Target: `labwired-api.<your-account>.workers.dev`, Proxy: enabled
 
-### 6. Deploy
+### 6. Deploy manually
 
 ```bash
 cd packages/api
@@ -121,7 +127,7 @@ curl https://api.labwired.com/v2/whatever
 
 # Hosted MCP OAuth metadata should not request Clerk custom scopes.
 curl -s https://api.labwired.com/.well-known/oauth-protected-resource/mcp
-# Expected after the hosted MCP OAuth fix:
+# Expected:
 # - authorization_servers contains https://clerk.labwired.com
 # - scopes_supported is absent
 # - response does not contain labwired:mcp
