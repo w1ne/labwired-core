@@ -97,9 +97,9 @@ export function GlobalLogo({ variant = 'light', className }: GlobalLogoProps) {
       title="LabWired home"
     >
       <svg viewBox="0 0 32 32" width="20" height="20" fill="none" aria-hidden="true">
-        <path d="M10 7V19H25" stroke="#4d9fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-        <circle cx="10" cy="7" r="3" fill="currentColor" />
-        <circle cx="25" cy="19" r="3" fill="#4d9fff" />
+        <path d="M11 7V23H23" stroke="#4d9fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="11" cy="7" r="3" fill="currentColor" />
+        <circle cx="23" cy="23" r="3" fill="#4d9fff" />
       </svg>
       LabWired
     </a>

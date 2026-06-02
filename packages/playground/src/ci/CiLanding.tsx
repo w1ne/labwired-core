@@ -563,9 +563,9 @@ export function CiLanding() {
         <div className="max-w-[1120px] mx-auto flex flex-wrap items-center justify-between gap-4 text-[13px] text-fg-tertiary">
           <div className="flex items-center gap-2 font-semibold">
             <svg viewBox="0 0 32 32" width="16" height="16" fill="none" aria-hidden>
-              <path d="M10 7V19H25" stroke="#0056b3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="10" cy="7" r="3" fill="#1a1a1a" />
-              <circle cx="25" cy="19" r="3" fill="#0056b3" />
+              <path d="M11 7V23H23" stroke="#0056b3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="11" cy="7" r="3" fill="#1a1a1a" />
+              <circle cx="23" cy="23" r="3" fill="#0056b3" />
             </svg>
             <span>LabWired · Deterministic firmware simulation</span>
           </div>
