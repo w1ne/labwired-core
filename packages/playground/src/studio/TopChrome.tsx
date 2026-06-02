@@ -6,11 +6,12 @@ export interface TopChromeProps {
   onOpenCommand: () => void;
   onShare?: () => void;
   onUploadFirmware?: (file: File) => void;
+  onOpenTools?: () => void;
   authSlot?: ReactNode;
   projectSlot?: ReactNode;
 }
 
-export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware, authSlot, projectSlot }: TopChromeProps) {
+export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware, onOpenTools, authSlot, projectSlot }: TopChromeProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   return (
     <header
@@ -74,7 +75,7 @@ export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware,
         </>
       )}
       <div className="hidden sm:flex items-center gap-1">
-        <GlobalNav active="playground" variant="dark" />
+        <GlobalNav active="playground" variant="dark" onToolsClick={onOpenTools} />
       </div>
       <div className="hidden sm:contents">{projectSlot}</div>
       {authSlot}

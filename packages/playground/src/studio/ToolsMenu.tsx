@@ -16,6 +16,7 @@ export interface ToolItem {
 
 interface ToolsMenuProps {
   tools: ToolItem[];
+  openSignal?: number;
 }
 
 function WrenchGlyph() {
@@ -60,11 +61,19 @@ function CaretGlyph() {
  * Add new tools by appending to the `tools` array passed in — each renders
  * as a toggleable menu row.
  */
-export function ToolsMenu({ tools }: ToolsMenuProps) {
+export function ToolsMenu({ tools, openSignal }: ToolsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const lastOpenSignalRef = useRef(openSignal);
 
   const anyActive = tools.some((t) => t.active);
+
+  useEffect(() => {
+    if (openSignal === undefined) return;
+    if (lastOpenSignalRef.current === openSignal) return;
+    lastOpenSignalRef.current = openSignal;
+    setOpen(true);
+  }, [openSignal]);
 
   useEffect(() => {
     if (!open) return;

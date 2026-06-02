@@ -50,6 +50,30 @@ describe('ToolsMenu', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
+  it('opens when requested by the app chrome', () => {
+    const { rerender } = render(
+      <ToolsMenu
+        openSignal={0}
+        tools={[
+          { id: 'air-tracer', label: 'Air Tracer · BLE', active: false, onToggle: () => {} },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText('Air Tracer · BLE')).toBeNull();
+
+    rerender(
+      <ToolsMenu
+        openSignal={1}
+        tools={[
+          { id: 'air-tracer', label: 'Air Tracer · BLE', active: false, onToggle: () => {} },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Air Tracer · BLE')).toBeTruthy();
+  });
+
   it('closes the dropdown on Escape', () => {
     render(
       <ToolsMenu

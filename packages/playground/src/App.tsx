@@ -660,6 +660,7 @@ export function App() {
   // canvas). Toggled from the SimDock Tools control; hidden by default.
   const [showAnalyzer, setShowAnalyzer] = useState(false);
   const [showIolink, setShowIolink] = useState(false);
+  const [toolsMenuOpenSignal, setToolsMenuOpenSignal] = useState(0);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
 
@@ -2128,6 +2129,7 @@ export function App() {
       boardName={activeProjectName ?? selectedBoard.name}
       isEmpty={isEmpty}
       onPickLab={handlePickLab}
+      onOpenTools={() => setToolsMenuOpenSignal((v) => v + 1)}
       // Upload now lives per-chip in ChipControls — a global top-bar
       // Upload is ambiguous about which chip it targets, so it's gone.
       onShare={handleShare}
@@ -2297,6 +2299,7 @@ export function App() {
               <SidebarRightIcon size={14} />
             </button>
             <ToolsMenu
+              openSignal={toolsMenuOpenSignal}
               tools={[
                 {
                   id: 'air-tracer',
