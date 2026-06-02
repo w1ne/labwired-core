@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 //
 // Offline capture harness: runs the real nokia5110-invaders-lab firmware,
-// scripts the host-controlled HC-SR04 "hand distance" so the ship sweeps
+// scripts the host-controlled HC-SR04 distance so the ship sweeps
 // back and forth, samples the PCD8544 framebuffer on a fixed cycle cadence,
 // and writes a packed `.bin` consumed by the landing-page hero renderer.
 //
@@ -103,7 +103,7 @@ fn step_frames(machine: &mut Cm, steps: u64) {
     }
 }
 
-/// Triangle sweep of the "hand distance" across the capture window: two full
+/// Triangle sweep of the HC-SR04 distance across the capture window: two full
 /// near->far->near passes, so the ship visibly tracks back and forth.
 fn scripted_distance_cm(frame: usize, total: usize) -> f32 {
     let phase = (frame as f32) / (total as f32) * 2.0; // 0..2 (two passes)
