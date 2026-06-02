@@ -960,6 +960,31 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_11e8, rom_thunks::rom_memset);
     bank.register(0x4000_1200, rom_thunks::rom_memmove);
     bank.register(0x4000_120c, rom_thunks::rom_memcmp);
+    // ROM cache-management API. A full ESP-IDF/Arduino image drives the whole
+    // family during flash/MMU bring-up; the esp-hal path only touched
+    // suspend/resume-DCache (0x4000_18b4 / 0x4000_18c0, registered above).
+    // We model flash-XIP as identity-mapped, so every cache op — enable,
+    // disable, freeze, occupy, MMU size/info — is a no-op for the simulator.
+    // Addresses are ESP32-S3 ROM symbol-table values.
+    for addr in [
+        0x4000_186c, // Cache_Disable_ICache
+        0x4000_1878, // Cache_Enable_ICache
+        0x4000_1884, // Cache_Disable_DCache
+        0x4000_1890, // Cache_Enable_DCache
+        0x4000_189c, // Cache_Suspend_ICache
+        0x4000_18a8, // Cache_Resume_ICache
+        0x4000_18e4, // Cache_Freeze_ICache_Enable
+        0x4000_18f0, // Cache_Freeze_ICache_Disable
+        0x4000_18fc, // Cache_Freeze_DCache_Enable
+        0x4000_1908, // Cache_Freeze_DCache_Disable
+        0x4000_1914, // Cache_Set_IDROM_MMU_Size
+        0x4000_1950, // Cache_Set_IDROM_MMU_Info
+        0x4000_1980, // Cache_Occupy_ICache_MEMORY
+        0x4000_198c, // Cache_Occupy_DCache_MEMORY
+        0x4000_19bc, // Cache_Count_Flash_Pages
+    ] {
+        bank.register(addr, rom_thunks::nop_return_zero);
+    }
 }
 
 // ── RamPeripheral helper ────────────────────────────────────────────────

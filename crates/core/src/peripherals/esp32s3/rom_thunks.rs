@@ -218,14 +218,28 @@ impl Peripheral for RomThunkBank {
 // built firmware and reading ESP-IDF's `rom/esp32s3.rom.ld`.
 // The implementations here are NOPs or zero-returns where appropriate.
 
-/// `Cache_Suspend_DCache(): u32` — returns 0 (cache wasn't suspended).
-pub fn cache_suspend_dcache(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+/// EXTMEM DCache state register (`EXTMEM + 0x130`). ESP-IDF's IRAM
+/// `Cache_Suspend_DCache` wrapper calls the ROM routine and then **busy-waits**
+/// on bits[23:12] of this register until they read `1` ("DCache idle"). On
+/// real silicon the cache controller sets that field once the cache drains;
+/// the simulator has no async cache, so the suspend/resume thunks drive the
+/// field directly. Without this the firmware spins here forever during flash
+/// bring-up, long before the scheduler.
+const EXTMEM_DCACHE_STATE: u64 = 0x600C_4130;
+const DCACHE_STATE_IDLE: u32 = 1 << 12; // bits[23:12] == 1
+
+/// `Cache_Suspend_DCache(): u32` — mark the DCache idle so the firmware's
+/// post-call status poll completes, then return 0 (no prior suspend state).
+pub fn cache_suspend_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    bus.write_u32(EXTMEM_DCACHE_STATE, DCACHE_STATE_IDLE)?;
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
 
-/// `Cache_Resume_DCache(prev: u32) -> u32` — returns 0.
-pub fn cache_resume_dcache(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+/// `Cache_Resume_DCache(prev: u32) -> u32` — clear the idle field (cache
+/// active again) and return 0.
+pub fn cache_resume_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    bus.write_u32(EXTMEM_DCACHE_STATE, 0)?;
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
