@@ -145,3 +145,31 @@ fn firmware_draws_and_ship_tracks_distance() {
         "ship should move right as the hand moves away: near_x={near}, far_x={far}"
     );
 }
+
+#[test]
+#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+fn firmware_tracks_minimum_hcsr04_distance() {
+    let elf = ensure_firmware_built();
+    let mut machine = build_machine(&elf);
+
+    // A user-entered 1 cm value is clamped by the HC-SR04 component to its
+    // datasheet minimum, 2 cm. The demo firmware must still observe that as a
+    // near reading rather than treating it as a missing echo and holding center.
+    machine.bus.hcsr04[0].set_distance_cm(2.0);
+    step_frames(&mut machine, 4_000_000);
+    let min = ship_left(&framebuffer(&machine)).expect("ship visible (minimum distance)");
+
+    assert!(
+        min <= 8,
+        "minimum distance should visibly move the paddle left, got min_x={min}"
+    );
+
+    machine.bus.hcsr04[0].set_distance_cm(200.0);
+    step_frames(&mut machine, 4_000_000);
+    let far = ship_left(&framebuffer(&machine)).expect("ship visible (far distance)");
+
+    assert!(
+        min < far,
+        "ship should move right as distance increases from minimum: min_x={min}, far_x={far}"
+    );
+}

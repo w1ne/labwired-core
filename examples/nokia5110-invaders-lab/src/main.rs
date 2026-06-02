@@ -409,7 +409,12 @@ impl Game {
 /// Map the echo-pulse count to a paddle X position (clamped in `step`).
 fn count_to_paddle_x(count: u32) -> i32 {
     let span = (W as i32 - PADDLE_W).max(1);
-    let v = (count / 16) as i32;
+    // The polling loop has a fixed overhead before it starts counting ECHO high
+    // time, so the HC-SR04's valid minimum distance lands around the centered
+    // startup position if the raw count is used directly. Subtract that floor
+    // and scale the remaining pulse width across the playable range.
+    let raw = (count / 16) as i32;
+    let v = (raw - span / 2) * 2;
     v.clamp(0, span)
 }
 
@@ -475,14 +480,16 @@ fn main() -> ! {
     delay(1_000_000);
 
     // Paddle control: HC-SR04 hand distance, smoothed (median-of-3 to drop
-    // spikes + an exponential moving average to tame jitter). On a missed
-    // echo we hold the last position rather than jump.
+    // spikes + an exponential moving average to tame jitter). A missed echo is
+    // treated as "hand is at the nearest edge" so the valid minimum distance
+    // remains visible even when the polling loop misses that very short pulse.
     let center = (W as i32 - PADDLE_W) / 2;
     let mut filt: i32 = center << 3; // paddle X in 1/8-px fixed point
     let mut c1 = 0u32;
     let mut c2 = 0u32;
     loop {
         let count = measure();
+        let mut target = 0;
         if count > 0 {
             if c1 == 0 {
                 c1 = count; // seed the window on the first reading
@@ -491,10 +498,10 @@ fn main() -> ! {
             let m = median3(count, c1, c2);
             c2 = c1;
             c1 = count;
-            let target = count_to_paddle_x(m);
-            // EMA, α = 1/4: filt += (target - filt) / 4, in 1/8-px units.
-            filt += ((target << 3) - filt) >> 2;
+            target = count_to_paddle_x(m);
         }
+        // EMA, α = 1/4: filt += (target - filt) / 4, in 1/8-px units.
+        filt += ((target << 3) - filt) >> 2;
         let paddle = (filt >> 3).clamp(0, W as i32 - PADDLE_W);
         game.step(paddle);
         unsafe {
