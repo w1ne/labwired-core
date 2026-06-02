@@ -43,6 +43,7 @@ import { resolveBoardForPart } from './board-resolve';
 import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { resolveRunSystemConfig } from './run-config';
+import { versionRuntimeAssetUrl } from './runtime-assets';
 import { StudioShell } from './studio/StudioShell';
 import { ChipsProvider, useChips } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
@@ -744,7 +745,8 @@ export function App() {
     // ~30 s to under a second.
     if (config.bootSnapshotUrl) {
       try {
-        const resp = await fetch(config.bootSnapshotUrl);
+        const snapshotUrl = versionRuntimeAssetUrl(config.bootSnapshotUrl, __BUILD_TIME__);
+        const resp = await fetch(snapshotUrl, { cache: 'no-store' });
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
         }
@@ -844,7 +846,8 @@ export function App() {
       } else if (runBoard.demoFirmwarePath) {
         // Fall back to pre-built demo firmware, but still use the current
         // diagram YAML so edited sensor attributes reach the simulator.
-        const resp = await fetch(runBoard.demoFirmwarePath);
+        const firmwareUrl = versionRuntimeAssetUrl(runBoard.demoFirmwarePath, __BUILD_TIME__);
+        const resp = await fetch(firmwareUrl, { cache: 'no-store' });
         if (!resp.ok) throw new Error(`Failed to load firmware: ${runBoard.demoFirmwarePath}`);
         firmware = new Uint8Array(await resp.arrayBuffer());
         const config = resolveRunSystemConfig({
