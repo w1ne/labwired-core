@@ -984,6 +984,21 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_23d0, rom_thunks::rom_lshrdi3); // __lshrdi3
     bank.register(0x4000_23f4, rom_thunks::rom_moddi3); // __moddi3
     bank.register(0x4000_2574, rom_thunks::rom_umoddi3); // __umoddi3
+    // eFuse config getters (flash pin/WP routing, UART/USB print-disable,
+    // boot-mode/security flags). The sim models none of these straps; return 0
+    // everywhere — the default SPI pin mapping and the permissive "feature not
+    // disabled" answer, which is what an unburned dev part reports.
+    for addr in [
+        0x4000_1f74, // ets_efuse_get_spiconfig / get_flash_gpio_info
+        0x4000_1f80, // ets_efuse_usb_print_is_disabled
+        0x4000_1f8c, // ets_efuse_usb_serial_jtag_print_is_disabled
+        0x4000_1f98, // ets_efuse_get_uart_print_control
+        0x4000_1fa4, // ets_efuse_get_wp_pad / get_flash_wp_gpio
+        0x4000_1fb0, // ets_efuse_legacy_spi_boot_mode_disabled
+        0x4000_1fbc, // ets_efuse_security_download_modes_enabled
+    ] {
+        bank.register(addr, rom_thunks::nop_return_zero);
+    }
     // ROM libc siblings of memcpy. A full ESP-IDF/Arduino image (unlike the
     // minimal esp-hal hello-world) calls these from the C runtime startup and
     // FreeRTOS init. Addresses are the ESP32-S3 ROM symbol table values.

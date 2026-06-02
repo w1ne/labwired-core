@@ -1398,6 +1398,20 @@ impl XtensaLx7 {
 
             // ── MUL family ────────────────────────────────────────────────────────
             // MULL: low 32 bits of unsigned 32×32 product (same bits as signed).
+            // SALT: AR[r] = (AR[s] < AR[t]) signed ? 1 : 0.
+            Salt { ar, as_, at } => {
+                let a = self.regs.read_logical(as_) as i32;
+                let b = self.regs.read_logical(at) as i32;
+                self.regs.write_logical(ar, u32::from(a < b));
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // SALTU: AR[r] = (AR[s] < AR[t]) unsigned ? 1 : 0.
+            Saltu { ar, as_, at } => {
+                let a = self.regs.read_logical(as_);
+                let b = self.regs.read_logical(at);
+                self.regs.write_logical(ar, u32::from(a < b));
+                self.pc = self.pc.wrapping_add(len);
+            }
             Mull { ar, as_, at } => {
                 let v = self
                     .regs

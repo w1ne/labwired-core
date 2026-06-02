@@ -350,6 +350,17 @@ pub enum Instruction {
         as_: u8,
         imm: u32,
     },
+    // -- SALT / SALTU: set 1 if AR[s] < AR[t] (signed / unsigned), else 0 --
+    Salt {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
+    Saltu {
+        ar: u8,
+        as_: u8,
+        at: u8,
+    },
     // -- MUL / DIV --
     Mull {
         ar: u8,
@@ -791,6 +802,19 @@ fn decode_qrst(w: u32) -> Instruction {
         //   quos a3,a4,a5 → 0xD23450  quou a3,a4,a5 → 0xC23450
         //   rems a3,a4,a5 → 0xF23450  remu a3,a4,a5 → 0xE23450
         0x2 => match op2 {
+            // SALT/SALTU: AR[r] = (AR[s] {< | <u} AR[t]) ? 1 : 0.
+            // HW-oracle (xtensa-esp32s3-elf objdump): `saltu a7,a5,a4` → 0x627540
+            // (op1=2,op2=6); `salt a2,a9,a8` → 0x722980 (op1=2,op2=7).
+            0x6 => Instruction::Saltu {
+                ar: r,
+                as_: s,
+                at: t,
+            },
+            0x7 => Instruction::Salt {
+                ar: r,
+                as_: s,
+                at: t,
+            },
             0x8 => Instruction::Mull {
                 ar: r,
                 as_: s,
@@ -1622,6 +1646,8 @@ impl Instruction {
             | Or { ar, as_, at }
             | Xor { ar, as_, at }
             | Src { ar, as_, at }
+            | Salt { ar, as_, at }
+            | Saltu { ar, as_, at }
             | Mull { ar, as_, at }
             | Muluh { ar, as_, at }
             | Mulsh { ar, as_, at }
@@ -1749,5 +1775,26 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self) // adequate for Plan 1; proper disassembly format later
+    }
+}
+
+#[cfg(test)]
+mod salt_saltu_tests {
+    use super::{decode, Instruction};
+
+    // Encodings captured from xtensa-esp32s3-elf objdump of a real ESP-IDF
+    // image (the firmware that exposed the missing instruction).
+    #[test]
+    fn decodes_saltu() {
+        // saltu a7, a5, a4  → 0x627540   (op0=0, op1=2, op2=6)
+        assert_eq!(decode(0x627540), Instruction::Saltu { ar: 7, as_: 5, at: 4 });
+        // saltu a8, a8, a9  → 0x628890
+        assert_eq!(decode(0x628890), Instruction::Saltu { ar: 8, as_: 8, at: 9 });
+    }
+
+    #[test]
+    fn decodes_salt() {
+        // salt a2, a9, a8   → 0x722980   (op0=0, op1=2, op2=7)
+        assert_eq!(decode(0x722980), Instruction::Salt { ar: 2, as_: 9, at: 8 });
     }
 }
