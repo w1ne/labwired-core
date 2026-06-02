@@ -27,6 +27,8 @@ Dashboard       → GET  /v1/workspaces/me   → workspace info (Bearer api_key)
 ## Deploy steps
 
 Run these commands yourself — the deploy requires your Cloudflare account.
+Merging to GitHub `main` runs API checks, but it does not deploy this Worker.
+`api.labwired.com` changes only after `wrangler deploy` succeeds.
 
 ### 1. Prerequisites
 
@@ -116,6 +118,13 @@ curl -X POST https://api.labwired.com/v1/keys/validate \
 
 # Should return 404
 curl https://api.labwired.com/v2/whatever
+
+# Hosted MCP OAuth metadata should not request Clerk custom scopes.
+curl -s https://api.labwired.com/.well-known/oauth-protected-resource/mcp
+# Expected after the hosted MCP OAuth fix:
+# - authorization_servers contains https://clerk.labwired.com
+# - scopes_supported is absent
+# - response does not contain labwired:mcp
 ```
 
 ### 8. End-to-end test
