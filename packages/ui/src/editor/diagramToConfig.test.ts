@@ -55,4 +55,43 @@ describe('diagramToConfig', () => {
     expect(systemYaml).toContain('distance_cm: 42');
     expect(systemYaml).not.toContain('kind: "button"');
   });
+
+  it('maps the Nokia 5110 lab diagram into reusable external device contracts', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'lcd', type: 'pcd8544', x: 500, y: 60, rotate: 0, attrs: {} },
+        { id: 'dist', type: 'ultrasonic', x: 500, y: 280, rotate: 0, attrs: { distance: '30' } },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'lcd', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'lcd', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'lcd', pin: 'CLK' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA7' }, to: { part: 'lcd', pin: 'DIN' }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PC7' }, to: { part: 'lcd', pin: 'DC' }, color: '#3DD68C' },
+        { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'lcd', pin: 'CE' }, color: '#FFD166' },
+        { from: { part: 'mcu', pin: 'PA9' }, to: { part: 'lcd', pin: 'RST' }, color: '#EF476F' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'dist', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'dist', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA8' }, to: { part: 'dist', pin: 'TRIG' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PB10' }, to: { part: 'dist', pin: 'ECHO' }, color: '#118AB2' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('id: "lcd"');
+    expect(systemYaml).toContain('type: "pcd8544"');
+    expect(systemYaml).toContain('connection: "spi1"');
+    expect(systemYaml).toContain('cs_pin: "PB6"');
+    expect(systemYaml).toContain('dc_pin: "PC7"');
+    expect(systemYaml).toContain('id: "dist"');
+    expect(systemYaml).toContain('type: "hc-sr04"');
+    expect(systemYaml).toContain('trig_pin: "PA8"');
+    expect(systemYaml).toContain('echo_pin: "PB10"');
+    expect(systemYaml).toContain('distance_cm: 30');
+    expect(systemYaml).toContain('cpu_hz: 4000000');
+  });
 });
