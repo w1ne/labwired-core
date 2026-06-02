@@ -92,6 +92,6 @@ describe('diagramToConfig', () => {
     expect(systemYaml).toContain('trig_pin: "PA8"');
     expect(systemYaml).toContain('echo_pin: "PB10"');
     expect(systemYaml).toContain('distance_cm: 30');
-    expect(systemYaml).toContain('cpu_hz: 4000000');
+    expect(systemYaml).toContain('cpu_hz: 250000');
   });
 });
