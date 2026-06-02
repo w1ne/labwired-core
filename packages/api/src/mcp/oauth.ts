@@ -1,7 +1,5 @@
 import type { Env } from '../types.js';
 
-const MCP_SCOPE = 'labwired:mcp';
-
 function originFromRequest(request: Request): string {
   const url = new URL(request.url);
   return url.origin;
@@ -19,7 +17,6 @@ export function hostedMcpAuthenticateHeader(request: Request): string {
   return [
     'Bearer realm="LabWired MCP"',
     `resource_metadata="${protectedResourceMetadataUrl(request)}"`,
-    `scope="${MCP_SCOPE}"`,
   ].join(', ');
 }
 
@@ -27,14 +24,12 @@ export function handleMcpProtectedResourceMetadata(request: Request, env: Env): 
   const body: {
     resource: string;
     resource_name: string;
-    scopes_supported: string[];
     bearer_methods_supported: string[];
     resource_documentation: string;
     authorization_servers?: string[];
   } = {
     resource: hostedMcpResourceUrl(request),
     resource_name: 'LabWired Engine MCP',
-    scopes_supported: [MCP_SCOPE],
     bearer_methods_supported: ['header'],
     resource_documentation: 'https://labwired.com/#agent-harness',
   };

@@ -4,9 +4,9 @@ import type { Env } from '../types.js';
 import type { HostedMcpIdentity } from './types.js';
 import { hostedMcpAuthenticateHeader } from './oauth.js';
 
-// The 401 must carry the full OAuth challenge (RFC 9728): realm +
-// resource_metadata pointer + scope. Clients read resource_metadata to start
-// the browser login; realm alone leaves them with nowhere to go.
+// The 401 must carry the OAuth challenge (RFC 9728): realm +
+// resource_metadata pointer. Clients read resource_metadata to start the browser
+// login; realm alone leaves them with nowhere to go.
 export function unauthorized(request: Request): Response {
   return new Response(JSON.stringify({ error: 'Unauthorized' }), {
     status: 401,

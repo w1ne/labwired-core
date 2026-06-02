@@ -332,7 +332,7 @@ describe('OAuth discovery for /mcp', () => {
     expect(Array.isArray(body.authorization_servers)).toBe(true);
     expect(body.authorization_servers).toContain('https://clerk.labwired.com');
     expect(body.resource).toBe('https://api.labwired.com/mcp');
-    expect(body.scopes_supported).toContain('labwired:mcp');
+    expect(body.scopes_supported).toBeUndefined();
     expect(body.bearer_methods_supported).toContain('header');
     // Browser-facing discovery → must be CORS-reachable.
     expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('*');
@@ -381,7 +381,7 @@ describe('OAuth discovery for /mcp', () => {
     const challenge = resp.headers.get('WWW-Authenticate') ?? '';
     expect(challenge).toContain('realm="LabWired MCP"');
     expect(challenge).toContain('resource_metadata=');
-    expect(challenge).toContain('scope="labwired:mcp"');
+    expect(challenge).not.toContain('scope="labwired:mcp"');
   });
 
   it('POST /mcp with a valid token handles initialize + tools/list', async () => {
