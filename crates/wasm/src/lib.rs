@@ -239,8 +239,11 @@ impl WasmSimulator {
         let register = match binding.kind {
             BoardIoKind::Led | BoardIoKind::PwmOutput => "odr",
             BoardIoKind::Button => "idr",
-            // Analog/bus kinds are not boolean — handled by get_board_io_analog_states
-            BoardIoKind::AdcInput | BoardIoKind::I2cDevice | BoardIoKind::SpiDevice => {
+            // Analog/bus kinds are not boolean and are exposed through typed state accessors.
+            BoardIoKind::AdcInput
+            | BoardIoKind::I2cDevice
+            | BoardIoKind::SpiDevice
+            | BoardIoKind::UartDevice => {
                 return false;
             }
         };

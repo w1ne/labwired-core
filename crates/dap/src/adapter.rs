@@ -938,6 +938,7 @@ fn board_io_kind_str(kind: labwired_config::BoardIoKind) -> &'static str {
         labwired_config::BoardIoKind::PwmOutput => "pwm_output",
         labwired_config::BoardIoKind::I2cDevice => "i2c_device",
         labwired_config::BoardIoKind::SpiDevice => "spi_device",
+        labwired_config::BoardIoKind::UartDevice => "uart_device",
     }
 }
 
