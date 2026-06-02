@@ -17,7 +17,9 @@ use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_INTR_SOURCE_I
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
 use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
 use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
-use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
+use crate::peripherals::esp32s3::system_stub::{
+    EfuseStub, FlashSpiMemStub, RtcCntlStub, SystemStub,
+};
 use crate::peripherals::esp32s3::systimer::Systimer;
 use crate::peripherals::esp32s3::tmp102::Tmp102;
 use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
@@ -824,6 +826,17 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(Esp32s3IntMatrix::new()),
     );
 
+    // ── SPIMEM1 flash-command controller (0x6000_2000) ───────────────────
+    // Must register BEFORE the 0x6000_0000 catch-all so its CMD register
+    // auto-clears (the bootloader_flash command path busy-waits on it).
+    bus.add_peripheral(
+        "spimem1",
+        0x6000_2000,
+        0x100,
+        None,
+        Box::new(FlashSpiMemStub::default()),
+    );
+
     // ── I²C0 + attached TMP102 (Plan 4) ──────────────────────────────────
     let mut i2c0 = Esp32s3I2c::new();
     i2c0.attach_slave(Box::new(Tmp102::new()));
@@ -958,6 +971,19 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // doesn't get garbage from the boot-init copy paths.
     bank.register(0x4000_11f4, rom_thunks::rom_memcpy);
     bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
+    // libgcc 64-bit arithmetic + bit/byte helpers, in ROM. The full ESP-IDF
+    // image pulls these from the C runtime (printf, timers, hashing). Each has
+    // a real emulation thunk.
+    bank.register(0x4000_21b4, rom_thunks::rom_ashldi3); // __ashldi3
+    bank.register(0x4000_21c0, rom_thunks::rom_ashrdi3); // __ashrdi3
+    bank.register(0x4000_21cc, rom_thunks::rom_bswapdi2); // __bswapdi2
+    bank.register(0x4000_21d8, rom_thunks::rom_bswapsi2); // __bswapsi2
+    bank.register(0x4000_2214, rom_thunks::rom_clzsi2); // __clzsi2
+    bank.register(0x4000_2238, rom_thunks::rom_ctzsi2); // __ctzsi2
+    bank.register(0x4000_225c, rom_thunks::rom_divdi3); // __divdi3
+    bank.register(0x4000_23d0, rom_thunks::rom_lshrdi3); // __lshrdi3
+    bank.register(0x4000_23f4, rom_thunks::rom_moddi3); // __moddi3
+    bank.register(0x4000_2574, rom_thunks::rom_umoddi3); // __umoddi3
     // ROM libc siblings of memcpy. A full ESP-IDF/Arduino image (unlike the
     // minimal esp-hal hello-world) calls these from the C runtime startup and
     // FreeRTOS init. Addresses are the ESP32-S3 ROM symbol table values.

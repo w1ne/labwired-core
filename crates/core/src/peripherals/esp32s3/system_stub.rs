@@ -114,6 +114,48 @@ impl Peripheral for SystemStub {
     }
 }
 
+/// SPIMEM1 flash-command controller stub (`0x6000_2000`). ESP-IDF's
+/// `bootloader_flash_execute_command_common` launches a user command by setting
+/// `SPI_MEM_USR` (CMD bit 18) and then busy-waits until the CMD register reads
+/// 0 — on silicon the command-trigger bits auto-clear when the command
+/// completes. The simulator has no flash-command latency, so we report
+/// completion immediately: the CMD register (offset 0) always reads 0. Every
+/// other register round-trips.
+///
+/// LIMITATION: command *results* (read data in the SPI_MEM_W0.. buffers) are
+/// not modeled — they read 0. This unblocks completion/config commands; a
+/// data-bearing flash read through this path would get zeros (the modeled data
+/// path is the memory-mapped `FlashXipPeripheral`, not this command interface).
+#[derive(Debug, Default)]
+pub struct FlashSpiMemStub {
+    words: HashMap<u64, u32>,
+}
+
+impl Peripheral for FlashSpiMemStub {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let word_off = offset & !3;
+        if word_off == 0 {
+            // CMD register: all command-trigger bits auto-clear on completion.
+            return Ok(0);
+        }
+        let word = self.words.get(&word_off).copied().unwrap_or(0);
+        Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let word_off = offset & !3;
+        let byte_off = (offset & 3) * 8;
+        let entry = self.words.entry(word_off).or_insert(0);
+        *entry &= !(0xFFu32 << byte_off);
+        *entry |= (value as u32) << byte_off;
+        Ok(())
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+}
+
 /// RTC / PMU / IO_MUX / RTC_IO / APB_CTRL peripheral stub. Round-trips
 /// every written word so that read-modify-write sequences observe the
 /// values esp-hal just wrote (e.g. clock-mux selectors, voltage rails,
