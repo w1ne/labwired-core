@@ -11,7 +11,7 @@ import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 //   • Formspree            → free 50/mo form endpoint, or replace with mailto:
 // ──────────────────────────────────────────────────────────────────────────
 const CALENDLY_ENTERPRISE = 'https://cal.com/andriishylenko/30min';
-const WAITLIST_FORM_ACTION = 'mailto:andrii@shylenko.com'; // swap for https://formspree.io/f/<id> when ready
+const WAITLIST_FORM_ACTION = 'mailto:contact@labwired.com'; // swap for https://formspree.io/f/<id> when ready
 const GITHUB_REPO = 'https://github.com/w1ne/labwired-core';
 
 const GITHUB_ACTION_SNIPPET = `name: Firmware Regression
@@ -522,8 +522,8 @@ export function CiLanding() {
               <div className="text-accent text-2xl mb-2 font-bold">✓ Thanks!</div>
               <p className="text-fg-secondary">
                 Your mail client should be open. If not, write us at{' '}
-                <a className="text-accent font-semibold underline" href="mailto:andrii@shylenko.com">
-                  andrii@shylenko.com
+                <a className="text-accent font-semibold underline" href="mailto:contact@labwired.com">
+                  contact@labwired.com
                 </a>
                 .
               </p>
@@ -570,7 +570,7 @@ export function CiLanding() {
           <div className="flex items-center gap-5">
             <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="/">Playground</a>
             <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="https://github.com/w1ne/labwired-core" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="mailto:andrii@shylenko.com">Contact</a>
+            <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="mailto:contact@labwired.com">Contact</a>
           </div>
         </div>
       </footer>
