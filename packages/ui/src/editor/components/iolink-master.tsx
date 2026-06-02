@@ -14,7 +14,7 @@ export const iolinkMasterComponent: ComponentDef = {
   width: W,
   height: H,
   // UART peer — typed loosely like neo6m-gps (not i2c_device / spi_device).
-  boardIoKind: 'uart_device' as never,
+  boardIoKind: 'uart_device',
   pins: [
     { id: 'TX', x: 0, y: 30, side: 'left', label: 'TX' },
     { id: 'RX', x: 0, y: 50, side: 'left', label: 'RX' },
