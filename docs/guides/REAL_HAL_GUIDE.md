@@ -40,7 +40,7 @@ Check if your chip is supported:
 ```bash
 ls core/configs/chips/
 ```
-If your exact chip isn't there, pick the closest match (e.g., `stm32f103.yaml` covers most F1 variants) or create a new one (see [Digital Twin Spec](DIGITAL_TWIN_SPEC.md)).
+If your exact chip isn't there, pick the closest match (e.g., `stm32f103.yaml` covers most F1 variants) or create a new one (see [Digital Twin Spec](../specs/DIGITAL_TWIN_SPEC.md)).
 
 ### Step C: Create a System Manifest
 Create `system.yaml` in your project root:

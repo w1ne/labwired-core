@@ -44,8 +44,8 @@ Interpretation:
 ## 4) Internal Evidence From This Repository (Launch Credibility)
 
 ### Deterministic showcase artifacts
-- `docs/showcase-evidence/simulation_result.json` records deterministic pass/fail schema, executed steps, and assertion results.
-- `docs/showcase-evidence/simulation_uart.log` includes expected success signal: `HIL Stress Test Passed`.
+- `docs/audit/showcase-evidence/simulation_result.json` records deterministic pass/fail schema, executed steps, and assertion results.
+- `docs/audit/showcase-evidence/simulation_uart.log` includes expected success signal: `HIL Stress Test Passed`.
 - `docs/HIL_DISPLACEMENT_SHOWCASE.md` documents methodology and engineering narrative for parity-style validation.
 
 ### Product surface already demonstrable

@@ -4,7 +4,7 @@ This document tracks the end-to-end ingestion and verification process for the A
 
 ## 📁 Source Information
 - **Device**: Analog Devices ADXL345 (Accelerometer)
-- **Datasheet**: [ADXL345.pdf](file:///home/andrii/Projects/labwired/ai/tests/fixtures/adxl345.pdf)
+- **Datasheet**: [ADXL345.pdf](../../../../ai/tests/fixtures/adxl345.pdf)
 - **Page Range**: 10-30 (Register definitions and behavior)
 
 ## 🛠️ Ingestion Pipeline Status

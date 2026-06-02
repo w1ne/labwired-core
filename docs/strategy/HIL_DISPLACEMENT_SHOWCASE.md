@@ -105,8 +105,8 @@ Our next milestone expands this fidelity to **Multi-Node Networking (Ethernet/PH
 
 ---
 **References & Technical Evidence**:
-- **[Simulation Result (JSON)](./showcase-evidence/simulation_result.json)**: Full cycle-accurate execution metrics.
-- **[Simulation UART Log (Plaintext)](./showcase-evidence/simulation_uart.log)**: High-fidelity firmware output trace.
-- **[Hardware Parity Trace (Aether)](./showcase-evidence/hardware_parity_trace.txt)**: Silicon validation data from NUCLEO-H563ZI.
-- **[ISA Postmortem: Analysis of Resolution](./postmortems/2026-02-23-hil-showcase-isa-gaps.md)**: Architectural deep-dive.
-- **[HIL Showcase Source Repository](file:///home/andrii/Projects/labwired/core/examples/hil-displacement-showcase/)**: Build-ready firmware and manifests.
+- **[Simulation Result (JSON)](../audit/showcase-evidence/simulation_result.json)**: Full cycle-accurate execution metrics.
+- **[Simulation UART Log (Plaintext)](../audit/showcase-evidence/simulation_uart.log)**: High-fidelity firmware output trace.
+- **[Hardware Parity Trace (Aether)](../audit/showcase-evidence/hardware_parity_trace.txt)**: Silicon validation data from NUCLEO-H563ZI.
+- **[ISA Postmortem: Analysis of Resolution](../audit/postmortems/2026-02-23-hil-showcase-isa-gaps.md)**: Architectural deep-dive.
+- **[HIL Showcase Source Repository](../../core/examples/hil-displacement-showcase/)**: Build-ready firmware and manifests.

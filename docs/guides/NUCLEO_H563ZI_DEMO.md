@@ -68,13 +68,13 @@ examples/nucleo-h563zi/scripts/run_video_demo.sh --mode all --port /dev/ttyACM0 
 Extend this demo with onboard Ethernet PHY (`LAN8742A`) to show a network scenario (ping/echo throughput) as the next visible milestone.
 
 ## Golden Reference & Verification
-- **Determinism Report**: [determinism_report_h563.json](../core/examples/nucleo-h563zi/golden-reference/determinism_report_h563.json)
-- **Hardware Trace**: [hw_trace.json](../core/examples/nucleo-h563zi/golden-reference/hw_trace.json)
-- **Simulation Trace**: [sim_trace.json](../core/examples/nucleo-h563zi/golden-reference/sim_trace.json)
+- **Determinism Report**: [determinism_report_h563.json](../../core/examples/nucleo-h563zi/golden-reference/determinism_report_h563.json)
+- **Hardware Trace**: [hw_trace.json](../../core/examples/nucleo-h563zi/golden-reference/hw_trace.json)
+- **Simulation Trace**: [sim_trace.json](../../core/examples/nucleo-h563zi/golden-reference/sim_trace.json)
 
 ## Technical Entry Point
 
-- Human runbook: `../core/examples/nucleo-h563zi/VALIDATION.md`
-- Example root: `../core/examples/nucleo-h563zi/README.md`
+- Human runbook: `../../core/examples/nucleo-h563zi/VALIDATION.md`
+- Example root: `../../core/examples/nucleo-h563zi/README.md`
 - Video runbook: `./NUCLEO_H563ZI_VIDEO_RUNBOOK.md`
 - Voiceover script: `./NUCLEO_H563ZI_VOICEOVER_SCRIPT.md`

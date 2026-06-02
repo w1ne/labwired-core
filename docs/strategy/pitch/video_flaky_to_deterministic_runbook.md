@@ -36,14 +36,14 @@ cargo build --release -p labwired-cli
 cd ..
 ```
 
-If live run is not ready, use existing evidence files in `docs/showcase-evidence/`.
+If live run is not ready, use existing evidence files in `docs/audit/showcase-evidence/`.
 
 ## 2) Shot-by-shot timeline
 
 ### Shot 1 (0:00-0:15) - Pain framing
 
 On screen:
-- Open [fixing-flaky-firmware-tests.md](/home/andrii/Projects/labwired/marketing/blog/fixing-flaky-firmware-tests.md)
+- Open `landing_page/blog/fixing-flaky-firmware-tests.html`
 - Scroll to the problem lines describing flaky reruns/HIL instability.
 
 Voiceover:
@@ -60,7 +60,7 @@ Live option:
 
 Artifact option (no compute risk):
 ```bash
-cat docs/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
+cat docs/audit/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
 ```
 
 Voiceover:
@@ -77,7 +77,7 @@ Live artifacts:
 
 Existing evidence artifacts:
 ```bash
-cat docs/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
+cat docs/audit/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
 ```
 
 Expected key proof to highlight:
@@ -98,7 +98,7 @@ strings /home/andrii/Projects/labwired/out/pitch-video/uart-ok/uart.log
 
 Existing evidence artifacts (UTF-16-safe display):
 ```bash
-strings docs/showcase-evidence/simulation_uart.log
+strings docs/audit/showcase-evidence/simulation_uart.log
 ```
 
 Expected key proof:
@@ -128,8 +128,8 @@ On screen:
 
 Suggested simulator command:
 ```bash
-cat docs/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
-strings docs/showcase-evidence/simulation_uart.log
+cat docs/audit/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
+strings docs/audit/showcase-evidence/simulation_uart.log
 ```
 
 Suggested board evidence:
@@ -166,8 +166,8 @@ Guardrail language:
 Use only static evidence and keep narrative intact:
 
 ```bash
-cat docs/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
-strings docs/showcase-evidence/simulation_uart.log
+cat docs/audit/showcase-evidence/simulation_result.json | jq '{status, stop_reason, assertions}'
+strings docs/audit/showcase-evidence/simulation_uart.log
 ```
 
 This still demonstrates deterministic pass + UART/assertion proof without live build risk.

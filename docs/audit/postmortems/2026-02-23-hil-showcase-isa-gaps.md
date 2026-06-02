@@ -4,7 +4,7 @@
 
 **Date**: 2026-02-23
 **Status**: Resolved
-**Related Artifacts**: [VALIDATION.md](file:///home/andrii/Projects/labwired/core/examples/hil-displacement-showcase/VALIDATION.md)
+**Related Artifacts**: [VALIDATION.md](../../../core/examples/hil-displacement-showcase/VALIDATION.md)
 
 ## Summary
 During the implementation of the **HIL Displacement Showcase**, the LabWired simulation platform encountered several "Unknown Instruction" errors and simulation stalls. These failures were traced to missing Thumb-32 instructions and incorrect peripheral IRQ mappings in the `stm32h563.yaml` chip descriptor.

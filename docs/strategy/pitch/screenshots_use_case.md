@@ -5,30 +5,30 @@
 ## 1) Ready Screenshot Assets
 
 Generated assets:
-- `docs/pitch/assets/landing-home.png`
-- `docs/pitch/assets/comparison-qemu.png`
-- `docs/pitch/assets/comparison-renode.png`
+- `docs/strategy/pitch/assets/landing-home.png`
+- `docs/strategy/pitch/assets/comparison-qemu.png`
+- `docs/strategy/pitch/assets/comparison-renode.png`
 
 Capture commands used:
 ```bash
-mkdir -p docs/pitch/assets
+mkdir -p docs/strategy/pitch/assets
 cd landing_page
 npx playwright screenshot --device='Desktop Chrome' \
-  file:///home/andrii/Projects/labwired/landing_page/index.html \
-  /home/andrii/Projects/labwired/docs/pitch/assets/landing-home.png
+  file://$PWD/index.html \
+  ../docs/strategy/pitch/assets/landing-home.png
 npx playwright screenshot --device='Desktop Chrome' \
-  file:///home/andrii/Projects/labwired/landing_page/comparisons/qemu.html \
-  /home/andrii/Projects/labwired/docs/pitch/assets/comparison-qemu.png
+  file://$PWD/comparisons/qemu.html \
+  ../docs/strategy/pitch/assets/comparison-qemu.png
 npx playwright screenshot --device='Desktop Chrome' \
-  file:///home/andrii/Projects/labwired/landing_page/comparisons/renode.html \
-  /home/andrii/Projects/labwired/docs/pitch/assets/comparison-renode.png
+  file://$PWD/comparisons/renode.html \
+  ../docs/strategy/pitch/assets/comparison-renode.png
 ```
 
 ## 2) Suggested Slide Placement
 
 1. `landing-home.png` on title/vision slide.
 2. `comparison-qemu.png` and `comparison-renode.png` on competitive context slide.
-3. Terminal/runtime evidence (text snippets from `docs/showcase-evidence/`) on proof slide.
+3. Terminal/runtime evidence (text snippets from `docs/audit/showcase-evidence/`) on proof slide.
 
 ## 3) Use Case (Pitch-Friendly)
 
@@ -60,5 +60,5 @@ Firmware lead at a 12-person embedded team shipping STM32-based industrial contr
 
 ## 5) Video Runbook
 
-- Full shot-by-shot script: `docs/pitch/video_flaky_to_deterministic_runbook.md`
-- Blinky + VS Code + Aether flow: `docs/pitch/video_blinky_vscode_aether_runbook.md`
+- Full shot-by-shot script: `docs/strategy/pitch/video_flaky_to_deterministic_runbook.md`
+- Blinky + VS Code + Aether flow: `docs/strategy/pitch/video_blinky_vscode_aether_runbook.md`
