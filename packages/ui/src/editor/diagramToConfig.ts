@@ -203,7 +203,7 @@ peripherals:
 };
 
 const DEFAULT_CPU_HZ_BY_BOARD: Record<string, number> = {
-  stm32l476: 4_000_000,
+  stm32l476: 250_000,
 };
 
 /**
