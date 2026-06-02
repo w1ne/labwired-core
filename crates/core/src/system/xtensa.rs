@@ -967,6 +967,14 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(SystemStub::with_unwritten_ones()),
     );
 
+    // Power-on register state the real boot ROM checks before booting from
+    // flash. Values captured from silicon over JTAG: without them the ROM reads
+    // reset-reason = 0 ("invalid reset") and boot-strap = 0 (DOWNLOAD mode) and
+    // never boots from flash (it traps at ets_main.c:691). Needed for --rom-boot;
+    // harmless for the fast-boot/thunk path (those don't read these regs).
+    let _ = bus.write_u32(0x6000_4038, 0x0000_0008); // GPIO_STRAP = SPI_FAST_FLASH_BOOT
+    let _ = bus.write_u32(0x6000_8038, 0x0000_f30c); // RTC_CNTL_RESET_STATE = valid reset cause
+
     let mut cpu = XtensaLx7::new();
     cpu.reset(bus).expect("xtensa reset");
 

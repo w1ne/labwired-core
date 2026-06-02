@@ -97,6 +97,10 @@ impl Esp32s3Gpio {
             0x20 => self.enable,
             0x24 => self.enable,
             0x28 => self.enable,
+            // GPIO_STRAP_REG: latched boot-mode straps. The real boot ROM reads
+            // this to choose flash-boot vs download. 0x8 = SPI_FAST_FLASH_BOOT
+            // (GPIO0 high), captured from silicon over JTAG.
+            0x38 => 0x0000_0008,
             0x3C => self.in_data,
             // PINn_REG at 0x74 + pin*4
             off if (0x74..0x74 + 32 * 4).contains(&off) => {
