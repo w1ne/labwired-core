@@ -202,6 +202,10 @@ peripherals:
 `,
 };
 
+const DEFAULT_CPU_HZ_BY_BOARD: Record<string, number> = {
+  stm32l476: 4_000_000,
+};
+
 /**
  * Parse an MCU pin label into { peripheral, pin } for various naming conventions.
  * Supports: PA5 (STM32), D0/A0 (Arduino), GPIO0 (ESP32), GP0 (RPi Pico), P0.00 (nRF).
@@ -255,6 +259,17 @@ export function diagramToConfig(
     return null;
   };
 
+  const spiPeripheralForPart = (partId: string): string | null => {
+    const spiPins = ['CLK', 'SCK', 'DIN', 'MOSI'];
+    for (const pinId of spiPins) {
+      const mcuPin = mcuPinForPartPin(partId, pinId);
+      if (!mcuPin) continue;
+      const spi = findPinFunction(diagram.board, mcuPin, 'spi');
+      if (spi) return spi.peripheral;
+    }
+    return null;
+  };
+
   for (const part of diagram.parts) {
     if (part.type !== 'ultrasonic') continue;
 
@@ -270,7 +285,35 @@ export function diagramToConfig(
     config:
       trig_pin: "${trigPin}"
       echo_pin: "${echoPin}"
-      distance_cm: ${distanceCm}`);
+      distance_cm: ${distanceCm}
+      cpu_hz: ${DEFAULT_CPU_HZ_BY_BOARD[diagram.board] ?? 80_000_000}`);
+  }
+
+  for (const part of diagram.parts) {
+    if (part.type !== 'pcd8544') continue;
+
+    const connection = spiPeripheralForPart(part.id);
+    const csPin = mcuPinForPartPin(part.id, 'CE');
+    const dcPin = mcuPinForPartPin(part.id, 'DC');
+    if (!connection || !csPin || !dcPin) continue;
+
+    externalDeviceEntries.push(`  - id: "${part.id}"
+    type: "pcd8544"
+    connection: "${connection}"
+    config:
+      cs_pin: "${csPin}"
+      dc_pin: "${dcPin}"`);
+
+    const csGpio = parseMcuPin(csPin);
+    if (csGpio) {
+      boardIoEntries.push(`  - id: "${part.id}"
+    kind: "spi_device"
+    peripheral: "${connection}"
+    pin: ${csGpio.pin}
+    signal: "input"
+    active_high: true
+    device_type: "pcd8544"`);
+    }
   }
 
   for (const wire of diagram.wires) {
@@ -292,6 +335,7 @@ export function diagramToConfig(
     const part = diagram.parts.find((p) => p.id === compEnd!.part);
     if (!part) continue;
     if (part.type === 'ultrasonic') continue;
+    if (part.type === 'pcd8544') continue;
     const def = COMPONENT_REGISTRY.get(part.type);
     if (!def?.boardIoKind) continue;
 
