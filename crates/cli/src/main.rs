@@ -760,6 +760,30 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         boot.entry, boot.stack, boot.segments_loaded,
     );
 
+    // ESP-IDF dual-core handshake. `system_early_init` busy-waits until both
+    // per-core init flags are set (s_cpu_inited[0]=PRO_CPU, [1]=APP_CPU), and
+    // later stages gate on s_cpu_up / s_system_inited / s_resume_cores /
+    // s_other_cpu_startup_done. The `run` path executes a single CPU, so the
+    // APP_CPU never sets its byte and the wait spins forever. Pre-paint the
+    // handshake bytes the absent core would have written — the same technique
+    // the snapshot-capture `arduino-esp32` profile uses. Done AFTER fast_boot
+    // so the ELF's zero-initialized .bss copies don't clobber them.
+    let symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
+    for (sym, span) in [
+        ("s_cpu_inited", 2u32),
+        ("s_cpu_up", 2),
+        ("s_system_inited", 2),
+        ("s_resume_cores", 1),
+        ("s_other_cpu_startup_done", 1),
+    ] {
+        if let Some(&addr) = symbol_addrs.get(sym) {
+            for off in 0..span {
+                let _ = bus.write_u8(addr as u64 + off as u64, 0x01);
+            }
+            eprintln!("labwired-cli run: handshake {sym} @0x{addr:08x} = 1");
+        }
+    }
+
     // Run the step loop.
     let limit = args.max_steps.unwrap_or(u64::MAX);
     let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
