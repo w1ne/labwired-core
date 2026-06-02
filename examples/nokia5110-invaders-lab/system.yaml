@@ -22,7 +22,7 @@ external_devices:
       trig_pin: "PA8"
       echo_pin: "PB10"
       distance_cm: 30.0
-      cpu_hz: 4000000
+      cpu_hz: 250000
 board_io:
   - id: "lcd"
     kind: "spi_device"
