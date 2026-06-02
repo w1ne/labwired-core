@@ -5,7 +5,14 @@
 
 export interface BoardIoBinding {
   id: string;
-  kind: 'led' | 'button' | 'adc_input' | 'pwm_output' | 'i2c_device' | 'spi_device';
+  kind:
+    | 'led'
+    | 'button'
+    | 'adc_input'
+    | 'pwm_output'
+    | 'i2c_device'
+    | 'spi_device'
+    | 'uart_device';
   peripheral: string;
   pin: number;
   signal: 'output' | 'input';

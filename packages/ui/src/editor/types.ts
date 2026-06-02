@@ -54,7 +54,14 @@ export interface ComponentDef {
   render: (attrs: Record<string, string>, state?: ComponentState) => ReactNode;
   defaultAttrs: Record<string, string>;
   /** If set, this component maps to a board_io binding in the simulator. */
-  boardIoKind?: 'led' | 'button' | 'adc_input' | 'pwm_output' | 'i2c_device' | 'spi_device';
+  boardIoKind?:
+    | 'led'
+    | 'button'
+    | 'adc_input'
+    | 'pwm_output'
+    | 'i2c_device'
+    | 'spi_device'
+    | 'uart_device';
   /** Attribute fields shown in PropertyPanel. */
   attrFields?: AttrFieldDef[];
 }

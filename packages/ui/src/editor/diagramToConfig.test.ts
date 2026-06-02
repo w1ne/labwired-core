@@ -56,6 +56,32 @@ describe('diagramToConfig', () => {
     expect(systemYaml).not.toContain('kind: "button"');
   });
 
+  it('emits UART device board_io bindings for UART components', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32f103',
+      parts: [
+        { id: 'mcu', type: 'stm32-dev', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'iolink_master', type: 'iolink-master', x: 200, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        {
+          from: { part: 'mcu', pin: 'PA2' },
+          to: { part: 'iolink_master', pin: 'TX' },
+          color: '#3f8cff',
+        },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('id: "iolink_master"');
+    expect(systemYaml).toContain('kind: "uart_device"');
+    expect(systemYaml).toContain('peripheral: "gpioa"');
+    expect(systemYaml).toContain('pin: 2');
+    expect(systemYaml).toContain('signal: "output"');
+  });
+
   it('maps the Nokia 5110 lab diagram into reusable external device contracts', () => {
     const diagram: Diagram = {
       version: 1,

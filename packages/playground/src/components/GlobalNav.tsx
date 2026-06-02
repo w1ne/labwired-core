@@ -24,12 +24,12 @@ const BUILD_EPOCH = '2026-05-22T16:31:00Z';
 
 // app.labwired.com is JUST the demo (the running simulator). Library, For
 // CI, pricing — every marketing/discovery surface — lives on labwired.com.
-// All four nav items below are external URLs so the playground always
-// exits back to the marketing domain when the user clicks anything except
-// the brand logo (which already goes to https://labwired.com).
+// The Tools entry opens the in-app tool panel; the rest exit back to the
+// marketing domain when the user clicks anything except the brand logo.
 export const NAV_ITEMS = [
   { id: 'playground', label: 'Playground', href: '/' },
   { id: 'library', label: 'Library', href: 'https://labwired.com/library.html', external: true },
+  { id: 'tools', label: 'Tools', href: '/?tools=1' },
   { id: 'ci', label: 'For CI', href: 'https://labwired.com/ci.html', external: true },
 ] as const;
 

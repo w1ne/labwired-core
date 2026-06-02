@@ -11,7 +11,7 @@ export const neo6mGpsComponent: ComponentDef = {
   category: 'sensor',
   width: W,
   height: H,
-  boardIoKind: 'uart_device' as never, // typed loosely — not i2c_device / spi_device
+  boardIoKind: 'uart_device',
   pins: [
     { id: 'VCC', x: W, y: 8,  side: 'right', label: 'VCC' },
     { id: 'GND', x: W, y: 18, side: 'right', label: 'GND' },
