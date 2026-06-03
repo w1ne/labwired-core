@@ -22,20 +22,20 @@ export const logicAnalyzerComponent: ComponentDef = {
     })),
     { id: 'GND', x: W / 2, y: H, side: 'bottom' as const, label: 'GND', probe: true },
   ],
-  defaultAttrs: { decoder: 'auto' },
+  defaultAttrs: { decoder: 'raw' },
   attrFields: [
     {
       key: 'decoder',
       label: 'Decoder',
       type: 'select',
-      options: ['auto', 'iolink'],
-      defaultValue: 'auto',
+      options: ['raw', 'iolink', 'uart', 'spi'],
+      defaultValue: 'raw',
     },
   ],
   render: (attrs, state) => {
     const selected = !!state?.selected;
     const uid = state?.id ?? 'logic-analyzer';
-    const decoder = attrs.decoder === 'iolink' ? 'IO-LINK' : 'AUTO';
+    const decoder = (attrs.decoder ?? 'raw').toUpperCase();
     return (
       <g>
         <defs>

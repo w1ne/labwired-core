@@ -2597,6 +2597,8 @@ export function App() {
               analyzerId={partId}
               bridge={bridge}
               running={running}
+              decoder={part.attrs.decoder ?? 'raw'}
+              onDecoderChange={(decoder) => handlePartAttrChange(partId, { decoder })}
             />
           </ChipWindow>
         );
