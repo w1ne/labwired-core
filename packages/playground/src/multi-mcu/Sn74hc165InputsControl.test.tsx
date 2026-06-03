@@ -19,4 +19,17 @@ describe('Sn74hc165InputsControl', () => {
     expect(onChannelChange).toHaveBeenCalledWith(2, false);
     expect(onChannelChange).toHaveBeenCalledWith(0, false);
   });
+
+  it('can set all inputs low or high as a byte', async () => {
+    const user = userEvent.setup();
+    const onByteChange = vi.fn();
+
+    render(<Sn74hc165InputsControl value={0xa5} onChannelChange={() => {}} onByteChange={onByteChange} />);
+
+    await user.click(screen.getByRole('button', { name: '00' }));
+    await user.click(screen.getByRole('button', { name: 'FF' }));
+
+    expect(onByteChange).toHaveBeenCalledWith(0);
+    expect(onByteChange).toHaveBeenCalledWith(255);
+  });
 });

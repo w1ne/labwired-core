@@ -66,7 +66,7 @@ import { DevDrawer } from './studio/DevDrawer';
 import { SimDock, type SimState as StudioSimState } from './studio/SimDock';
 import { type InspectorSelection } from './studio/InspectorCard';
 import { ComponentInspector } from './multi-mcu/ComponentInspector';
-import { Sn74hc165InputsControl } from './multi-mcu/Sn74hc165InputsControl';
+import { renderComponentRuntimeControl } from './multi-mcu/componentRuntimeControls';
 import { PartActions } from './multi-mcu/PartActions';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
@@ -1300,18 +1300,12 @@ export function App() {
     openWindow(id);
   };
 
-  const renderSn74hc165InputsControl = () => {
-    if (!bridge) return undefined;
-    const inputs = bridge.getSn74hc165Inputs();
-    const value = inputs < 0 ? 0 : inputs;
-    return (
-      <Sn74hc165InputsControl
-        value={value}
-        onChannelChange={(channel, high) => bridge.setSn74hc165Channel(channel, high)}
-        onByteChange={(nextValue) => bridge.setSn74hc165Inputs(nextValue)}
-      />
-    );
-  };
+  const renderRuntimeControl = (part: Part) =>
+    renderComponentRuntimeControl({
+      part,
+      bridge,
+      updateAttrs: (partId, attrs) => editor.updateAttrs(partId, attrs),
+    });
 
   // Build live sensor widget for selected I2C / UART devices
   const inspectorLabWidget = useMemo<ReactNode>(() => {
@@ -1363,7 +1357,8 @@ export function App() {
       );
     }
     if (partType === 'sn74hc165') {
-      return renderSn74hc165InputsControl();
+      const part = editor.state.diagram.parts.find((candidate) => candidate.id === inspectorSelection.partId);
+      return part ? renderRuntimeControl(part) : undefined;
     }
     if (partType === 'iolink-master') {
       if (!bridge) return undefined;
@@ -2621,7 +2616,7 @@ export function App() {
             fields={def?.attrFields ?? []}
             live={live ? { active: live.active, analogValue: live.analogValue } : undefined}
             onChange={(key, value) => handlePartAttrChange(partId, { [key]: value })}
-            runtimeControl={part.type === 'sn74hc165' ? renderSn74hc165InputsControl() : undefined}
+            runtimeControl={renderRuntimeControl(part)}
             actions={
               <PartActions
                 onRotate={() => editor.rotatePart(partId)}

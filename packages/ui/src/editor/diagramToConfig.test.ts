@@ -156,4 +156,25 @@ describe('diagramToConfig', () => {
     expect(systemYaml).toContain('cs_pin: "PA4"');
     expect(systemYaml).toContain('inputs: 165');
   });
+
+  it('uses the 74HC165 input attribute as the native Rust device initial byte', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'di_shifter', type: 'sn74hc165', x: 520, y: 70, rotate: 0, attrs: { inputs: '170' } },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'di_shifter', pin: 'CLK' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA6' }, to: { part: 'di_shifter', pin: 'QH' }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PA4' }, to: { part: 'di_shifter', pin: 'SH_LD' }, color: '#FFD166' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('type: "sn74hc165"');
+    expect(systemYaml).toContain('inputs: 170');
+  });
 });

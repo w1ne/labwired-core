@@ -31,4 +31,34 @@ describe('syncSensorAttributeToSimulator', () => {
     expect(synced).toBe(false);
     expect(bridge.setHcsr04Distance).not.toHaveBeenCalled();
   });
+
+  it('pushes 74HC165 input byte edits into the simulator model', () => {
+    const bridge = { setSn74hc165Inputs: vi.fn() };
+
+    const synced = syncSensorAttributeToSimulator({
+      partId: 'di_shifter',
+      partType: 'sn74hc165',
+      key: 'inputs',
+      value: '170',
+      bridge,
+    });
+
+    expect(synced).toBe(true);
+    expect(bridge.setSn74hc165Inputs).toHaveBeenCalledWith(170);
+  });
+
+  it('ignores invalid 74HC165 input byte edits', () => {
+    const bridge = { setSn74hc165Inputs: vi.fn() };
+
+    const synced = syncSensorAttributeToSimulator({
+      partId: 'di_shifter',
+      partType: 'sn74hc165',
+      key: 'inputs',
+      value: 'abc',
+      bridge,
+    });
+
+    expect(synced).toBe(false);
+    expect(bridge.setSn74hc165Inputs).not.toHaveBeenCalled();
+  });
 });
