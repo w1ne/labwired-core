@@ -1962,26 +1962,11 @@ impl WasmSimulator {
             handshake_bytes.clone(),
         );
 
-        // loopTask xCoreID patch — flip the `1` to `0` so loopTask runs
-        // on PRO_CPU (until full SMP is wired). Scans first 64 bytes of
-        // app_main for the `e9 01 0c 0d` sequence and swaps it.
+        // loopTask xCoreID patch — repin loopTask from APP_CPU to PRO_CPU
+        // (we model only PRO_CPU). Handles both the legacy and IDF-5.x
+        // app_main layouts. See rom_thunks::repin_loop_task.
         if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-            const SCAN_BYTES: u32 = 64;
-            let mut window = Vec::with_capacity(SCAN_BYTES as usize);
-            for off in 0..SCAN_BYTES {
-                match machine.bus.read_u8((app_main_addr + off) as u64) {
-                    Ok(b) => window.push(b),
-                    Err(_) => break,
-                }
-            }
-            let target = [0xE9_u8, 0x01, 0x0C, 0x0D];
-            let swap = [0x0C_u8, 0x0D, 0xD9, 0x01];
-            if let Some((i, _)) = window.windows(4).enumerate().find(|(_, w)| *w == target) {
-                let patch_addr = (app_main_addr + i as u32) as u64;
-                for (j, b) in swap.iter().enumerate() {
-                    let _ = machine.bus.write_u8(patch_addr + j as u64, *b);
-                }
-            }
+            let _ = rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr);
         }
 
         // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk.

@@ -404,6 +404,57 @@ pub fn set_appcpu_up_flags(addrs: Vec<u32>) {
     APPCPU_UP_FLAGS.with(|flags| *flags.borrow_mut() = addrs);
 }
 
+/// Repin arduino-esp32's `loopTask` from APP_CPU to PRO_CPU by rewriting the
+/// `xCoreID` immediate in `app_main`. arduino-esp32 pins `loopTask` to
+/// `CONFIG_ARDUINO_RUNNING_CORE` (=1, APP_CPU); the sim models only PRO_CPU
+/// (core 0), so a core-1 task is never scheduled and `setup()`/`loop()` never
+/// run. Two firmware shapes are handled (legacy first; the demo reference
+/// firmware matches it, newer IDF-5.x builds the second):
+///
+///  * Legacy: the 4-byte sequence `E9 01 0C 0D` → `0C 0D D9 01`.
+///  * IDF 5.x: `xCoreID` is `xTaskCreateUniversal`'s 7th (stack) arg —
+///    `movi.n aT, 1` whose value is stored via `s32i.n aT, a1, 0`. Recover
+///    `T` from the store (`[0x09|(T<<4), 0x01]`) and zero the `movi.n aT, 1`
+///    immediate (`[0x0C, 0x10|T]` → `[0x0C, T]`).
+///
+/// Returns `(patched_addr, which_shape)`, or `None` if neither matches
+/// (firmware already targets core 0, or an unrecognized layout).
+pub fn repin_loop_task(bus: &mut dyn Bus, app_main_addr: u32) -> Option<(u32, &'static str)> {
+    const SCAN: u32 = 96;
+    let mut w: Vec<u8> = Vec::with_capacity(SCAN as usize);
+    for off in 0..SCAN {
+        match bus.read_u8((app_main_addr + off) as u64) {
+            Ok(b) => w.push(b),
+            Err(_) => break,
+        }
+    }
+    // Legacy pattern.
+    let target = [0xE9_u8, 0x01, 0x0C, 0x0D];
+    let swap = [0x0C_u8, 0x0D, 0xD9, 0x01];
+    if let Some((i, _)) = w.windows(4).enumerate().find(|(_, x)| *x == target) {
+        let addr = app_main_addr + i as u32;
+        for (j, b) in swap.iter().enumerate() {
+            let _ = bus.write_u8(addr as u64 + j as u64, *b);
+        }
+        return Some((addr, "legacy"));
+    }
+    // IDF 5.x: locate `s32i.n aT, a1, 0`, recover T, zero its movi.n source.
+    for k in 0..w.len().saturating_sub(1) {
+        if (w[k] & 0x0F) == 0x09 && w[k + 1] == 0x01 {
+            let t = w[k] >> 4;
+            let movi_hi = 0x10 | t;
+            if let Some(mi) =
+                (0..w.len().saturating_sub(1)).find(|&m| w[m] == 0x0C && w[m + 1] == movi_hi)
+            {
+                let addr = app_main_addr + mi as u32 + 1;
+                let _ = bus.write_u8(addr as u64, t); // movi.n aT, 0
+                return Some((addr, "idf5"));
+            }
+        }
+    }
+    None
+}
+
 /// `_xtos_set_intlevel(intlevel) -> prev` — BROM helper that sets the
 /// CPU's PS.INTLEVEL field via `rsil`-equivalent. Returns the previous
 /// INTLEVEL. FreeRTOS-on-Xtensa critical-section exit calls this with the
