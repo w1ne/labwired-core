@@ -56,7 +56,7 @@ describe('diagramToConfig', () => {
     expect(systemYaml).not.toContain('kind: "button"');
   });
 
-  it('emits UART device board_io bindings for UART components', () => {
+  it('emits native IO-Link master devices for IO-Link components', () => {
     const diagram: Diagram = {
       version: 1,
       board: 'stm32f103',
@@ -76,10 +76,10 @@ describe('diagramToConfig', () => {
     const { systemYaml } = diagramToConfig(diagram);
 
     expect(systemYaml).toContain('id: "iolink_master"');
-    expect(systemYaml).toContain('kind: "uart_device"');
-    expect(systemYaml).toContain('peripheral: "gpioa"');
-    expect(systemYaml).toContain('pin: 2');
-    expect(systemYaml).toContain('signal: "output"');
+    expect(systemYaml).toContain('type: "iolink-master"');
+    expect(systemYaml).toContain('connection: "uart2"');
+    expect(systemYaml).toContain('pd_in_len: 1');
+    expect(systemYaml).toContain('com: "COM2"');
   });
 
   it('maps the Nokia 5110 lab diagram into reusable external device contracts', () => {
@@ -119,5 +119,41 @@ describe('diagramToConfig', () => {
     expect(systemYaml).toContain('echo_pin: "PB10"');
     expect(systemYaml).toContain('distance_cm: 30');
     expect(systemYaml).toContain('cpu_hz: 250000');
+  });
+
+  it('maps the IO-Link lab diagram into native external devices', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'di_shifter', type: 'sn74hc165', x: 520, y: 70, rotate: 0, attrs: {} },
+        { id: 'iolink_master', type: 'iolink-master', x: 520, y: 300, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'di_shifter', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'di_shifter', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'di_shifter', pin: 'CLK' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PA6' }, to: { part: 'di_shifter', pin: 'QH' }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PA4' }, to: { part: 'di_shifter', pin: 'SH_LD' }, color: '#FFD166' },
+        { from: { part: 'mcu', pin: 'PA2' }, to: { part: 'iolink_master', pin: 'RX' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PA3' }, to: { part: 'iolink_master', pin: 'TX' }, color: '#118AB2' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'iolink_master', pin: 'L+' }, color: '#FF6B6B' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('id: "iolink_master"');
+    expect(systemYaml).toContain('type: "iolink-master"');
+    expect(systemYaml).toContain('connection: "uart2"');
+    expect(systemYaml).toContain('pd_in_len: 1');
+    expect(systemYaml).toContain('m_seq_type: 1');
+    expect(systemYaml).toContain('com: "COM2"');
+    expect(systemYaml).toContain('id: "di_shifter"');
+    expect(systemYaml).toContain('type: "sn74hc165"');
+    expect(systemYaml).toContain('connection: "spi1"');
+    expect(systemYaml).toContain('cs_pin: "PA4"');
+    expect(systemYaml).toContain('inputs: 165');
   });
 });
