@@ -24,6 +24,31 @@ describe('ComponentInspector', () => {
     expect(screen.queryByText('Hand distance')).not.toBeInTheDocument();
   });
 
+  it('renders explicit runtime controls inside the properties body', async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+
+    render(
+      <ComponentInspector
+        partType="sn74hc165"
+        partId="di_shifter"
+        attrs={{}}
+        fields={[]}
+        onChange={() => {}}
+        runtimeControl={
+          <button type="button" onClick={() => onToggle(2, true)}>
+            D2 HI
+          </button>
+        }
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'D2 HI' }));
+
+    expect(screen.getByText('No editable properties.')).toBeInTheDocument();
+    expect(onToggle).toHaveBeenCalledWith(2, true);
+  });
+
   it('edits the component distance attribute through the single distance field', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

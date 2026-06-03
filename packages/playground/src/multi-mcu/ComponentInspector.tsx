@@ -23,6 +23,8 @@ export interface ComponentInspectorProps {
   fields: AttrField[];
   live?: ComponentLiveState;
   onChange: (key: string, value: string) => void;
+  /** Live simulator-backed controls that belong in the component properties body. */
+  runtimeControl?: ReactNode;
   /** Standard part actions (Rotate/Size/Delete) — rendered at the bottom. */
   actions?: ReactNode;
 }
@@ -38,6 +40,7 @@ export function ComponentInspector({
   fields,
   live,
   onChange,
+  runtimeControl,
   actions,
 }: ComponentInspectorProps) {
   const hasLive = live && (live.active !== undefined || live.analogValue !== undefined);
@@ -126,6 +129,7 @@ export function ComponentInspector({
       )}
 
       {fieldNodes}
+      {runtimeControl}
 
       <div className="mt-auto font-mono text-[10px] text-fg-tertiary">{partType} · {partId}</div>
     </div>
