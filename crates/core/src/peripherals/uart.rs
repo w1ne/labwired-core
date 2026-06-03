@@ -15,6 +15,14 @@ use std::sync::{Arc, Mutex};
 /// token — it has only one kind of wakeup ("do one tick of work"), so the
 /// value is arbitrary and never disambiguated in `on_event`.
 const UART_WAKE_TOKEN: u32 = 0;
+const UART_TRACE_LIMIT: usize = 512;
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct UartTraceEvent {
+    pub seq: u64,
+    pub direction: &'static str,
+    pub byte: u8,
+}
 
 /// A device that emits bytes through the UART's RX path (e.g. a GPS module).
 pub trait UartStreamDevice: Send {
@@ -76,6 +84,10 @@ pub struct Uart {
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
     pub attached_streams: Vec<Box<dyn UartStreamDevice>>,
+    #[serde(skip)]
+    trace: VecDeque<UartTraceEvent>,
+    #[serde(skip)]
+    trace_seq: u64,
     /// Microseconds accumulated since last stream tick.
     elapsed_us: u32,
     /// Phase 2B.3b (issue #192): whether a self-perpetuating scheduler WAKE
@@ -116,6 +128,8 @@ impl Uart {
             cr3: 0,
             dma_tx_pending: false,
             attached_streams: Vec::new(),
+            trace: VecDeque::new(),
+            trace_seq: 0,
             elapsed_us: 0,
             scheduled: false,
         }
@@ -160,12 +174,20 @@ impl Uart {
             let elapsed = self.elapsed_us;
             self.elapsed_us = 0; // consumed this tick
 
-            if let Ok(mut rx_guard) = self.rx_buf.lock() {
+            let rx_trace = if let Ok(mut rx_guard) = self.rx_buf.lock() {
+                let mut rx_trace = Vec::new();
                 for stream in &mut self.attached_streams {
                     if let Some(byte) = stream.poll(elapsed) {
                         rx_guard.push_back(byte);
+                        rx_trace.push(byte);
                     }
                 }
+                rx_trace
+            } else {
+                Vec::new()
+            };
+            for byte in rx_trace {
+                self.record_trace("rx", byte);
             }
         }
 
@@ -241,6 +263,8 @@ impl Uart {
     }
 
     fn push_tx(&mut self, value: u8) {
+        self.record_trace("tx", value);
+
         if let Some(sink) = &self.sink {
             if let Ok(mut guard) = sink.lock() {
                 guard.push(value);
@@ -263,6 +287,22 @@ impl Uart {
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
         self.sink = sink;
         self.echo_stdout = echo_stdout;
+    }
+
+    fn record_trace(&mut self, direction: &'static str, byte: u8) {
+        self.trace_seq = self.trace_seq.wrapping_add(1);
+        if self.trace.len() >= UART_TRACE_LIMIT {
+            self.trace.pop_front();
+        }
+        self.trace.push_back(UartTraceEvent {
+            seq: self.trace_seq,
+            direction,
+            byte,
+        });
+    }
+
+    pub fn trace_snapshot(&self) -> Vec<UartTraceEvent> {
+        self.trace.iter().cloned().collect()
     }
 }
 
@@ -566,5 +606,34 @@ mod tests {
         uart.write(0x00, 0x42).unwrap();
 
         assert_eq!(*seen.lock().unwrap(), vec![0x42]);
+    }
+
+    #[test]
+    fn uart_trace_snapshot_records_tx_and_rx_without_draining_buffers() {
+        use super::UartStreamDevice;
+
+        struct OneByte(Option<u8>);
+        impl UartStreamDevice for OneByte {
+            fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+                self.0.take()
+            }
+        }
+
+        let mut uart = Uart::new();
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+        uart.attach_stream(Box::new(OneByte(Some(0x33))));
+
+        uart.write(0x04, 0x42).unwrap();
+        uart.tick();
+
+        let trace = uart.trace_snapshot();
+        assert_eq!(trace.len(), 2);
+        assert_eq!(trace[0].direction, "tx");
+        assert_eq!(trace[0].byte, 0x42);
+        assert_eq!(trace[1].direction, "rx");
+        assert_eq!(trace[1].byte, 0x33);
+        assert_eq!(sink.lock().unwrap().as_slice(), &[0x42]);
+        assert_eq!(uart.read(0x04).unwrap(), 0x33);
     }
 }

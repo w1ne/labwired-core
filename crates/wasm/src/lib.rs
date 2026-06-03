@@ -676,6 +676,31 @@ impl WasmSimulator {
         }
     }
 
+    /// Non-consuming UART trace snapshot for instruments such as the logic analyzer.
+    #[wasm_bindgen]
+    pub fn uart_trace_snapshot(&self) -> JsValue {
+        let Some(machine) = self.machine.as_ref() else {
+            return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
+                .unwrap_or(JsValue::NULL);
+        };
+
+        let snapshots = machine
+            .bus
+            .peripherals
+            .iter()
+            .filter_map(|p| {
+                let any = p.dev.as_any()?;
+                let uart = any.downcast_ref::<labwired_core::peripherals::uart::Uart>()?;
+                Some(serde_json::json!({
+                    "peripheral": p.name,
+                    "events": uart.trace_snapshot(),
+                }))
+            })
+            .collect::<Vec<_>>();
+
+        serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
+    }
+
     /// Execute up to max_cycles steps, returning the number actually executed.
     #[wasm_bindgen]
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
