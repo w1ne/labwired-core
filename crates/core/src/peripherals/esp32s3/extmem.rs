@@ -44,7 +44,17 @@ const LAUNCH_DONE_REGS: [(u64, u32, u32); 1] = [(0x28, 0b111, 1 << 3)];
 ///         Func @0x4004e910 sets bit 0, polls bit 2 high; func @0x4004e950
 ///         clears bit 0, polls bit 2 low. A static seed can't satisfy both —
 ///         the ack must track the request.
-const ACK_MIRROR_REGS: [(u64, u32, u32); 1] = [(0x150, 1 << 0, 1 << 2)];
+/// 0x150/0x154/0x158/0x15c are the contiguous cache freeze/suspend/sync op
+/// registers (ROM cache routines + the SMP per-core cache ops), all bit0
+/// request / bit2 ack. The PRO_CPU's SMP cache op (ROM @0x4004e8a8) launches
+/// 0x154 and polls bit2 — without the mirror it spins forever, deadlocking the
+/// APP_CPU's call_start_cpu1 wait.
+const ACK_MIRROR_REGS: [(u64, u32, u32); 4] = [
+    (0x150, 1 << 0, 1 << 2),
+    (0x154, 1 << 0, 1 << 2),
+    (0x158, 1 << 0, 1 << 2),
+    (0x15c, 1 << 0, 1 << 2),
+];
 
 /// EXTMEM_CACHE_SYNC_CTRL_REG offset (referenced by tests/docs). bit0
 /// INVALIDATE_ENA, bit1 WRITEBACK_ENA, bit2 CLEAN_ENA, bit3 SYNC_DONE.
