@@ -46,6 +46,8 @@ export type {
   I2cSensorState,
   UartDeviceState,
   UartDeviceStateNeo6mGps,
+  UartTraceEvent,
+  UartTraceSnapshot,
   AdcDeviceState,
   AdcDeviceStateNtcThermistor,
   PeripheralInfo,

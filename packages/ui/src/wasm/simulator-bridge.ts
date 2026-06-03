@@ -81,6 +81,17 @@ export interface UartDeviceStateNeo6mGps {
 
 export type UartDeviceState = UartDeviceStateNeo6mGps;
 
+export interface UartTraceEvent {
+  seq: number;
+  direction: 'tx' | 'rx';
+  byte: number;
+}
+
+export interface UartTraceSnapshot {
+  peripheral: string;
+  events: UartTraceEvent[];
+}
+
 /** Live state of the IO-Link master peer (the AL2205-style DI demo). */
 export interface IolinkMasterState {
   link_state: 'startup' | 'operate';
@@ -186,6 +197,7 @@ export interface WasmSimulatorInstance {
   // UART
   drain_uart_output(): Uint8Array;
   feed_uart_input(data: Uint8Array): void;
+  uart_trace_snapshot(): UartTraceSnapshot[];
 
   // ADC / Analog
   set_adc_value(peripheral_name: string, value: number): void;
@@ -450,6 +462,11 @@ export class SimulatorBridge {
 
   feedUartInput(text: string): void {
     this.sim.feed_uart_input(new TextEncoder().encode(text));
+  }
+
+  uartTraceSnapshot(): UartTraceSnapshot[] {
+    const raw = this.sim.uart_trace_snapshot() as unknown[] | null;
+    return (raw ?? []).map((snapshot) => asPlainObject<UartTraceSnapshot>(snapshot));
   }
 
   setAdcValue(peripheral: string, value: number): void {

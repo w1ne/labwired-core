@@ -207,7 +207,7 @@ export function LogicAnalyzerPanel({
             <span>{uart.channels.map((channel) => `${channel.channel}:${channel.peripheral}.${channel.role.toUpperCase()}`).join('  ')}</span>
           </div>
           <div className="min-h-0 flex-1">
-            <UartAnalyzer bridge={bridge} running={running && armed} binding={uart} iolinkBinding={iolink} />
+            <UartAnalyzer bridge={bridge} running={running && armed} binding={uart} />
           </div>
         </>
       ) : (
