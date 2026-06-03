@@ -17,6 +17,8 @@ export interface ToolItem {
 interface ToolsMenuProps {
   tools: ToolItem[];
   openSignal?: number;
+  triggerClassName?: string;
+  showIcon?: boolean;
 }
 
 function WrenchGlyph() {
@@ -61,7 +63,7 @@ function CaretGlyph() {
  * Add new tools by appending to the `tools` array passed in — each renders
  * as a toggleable menu row.
  */
-export function ToolsMenu({ tools, openSignal }: ToolsMenuProps) {
+export function ToolsMenu({ tools, openSignal, triggerClassName, showIcon = true }: ToolsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const lastOpenSignalRef = useRef(openSignal);
@@ -99,13 +101,13 @@ export function ToolsMenu({ tools, openSignal }: ToolsMenuProps) {
     <div className="tools-menu" ref={rootRef}>
       <button
         type="button"
-        className={`toolbar-btn toolbar-btn-ghost tools-menu-trigger ${open || anyActive ? 'active' : ''}`}
+        className={`${triggerClassName ?? 'toolbar-btn toolbar-btn-ghost'} tools-menu-trigger ${open || anyActive ? 'active' : ''}`}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
         title="Tools"
       >
-        <WrenchGlyph />
+        {showIcon && <WrenchGlyph />}
         <span className="tools-menu-label">Tools</span>
         <CaretGlyph />
       </button>

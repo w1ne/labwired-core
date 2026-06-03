@@ -20,4 +20,27 @@ describe('TopChrome', () => {
     await userEvent.click(screen.getByRole('button', { name: /search components/i }));
     expect(onOpenCommand).toHaveBeenCalled();
   });
+
+  it('opens the visible tools menu from the top navigation', async () => {
+    render(
+      <TopChrome
+        boardName="Untitled"
+        onOpenCommand={() => {}}
+        tools={[
+          {
+            id: 'iolink-analyzer',
+            label: 'IO-Link Analyzer',
+            active: false,
+            onToggle: () => {},
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText('IO-Link Analyzer')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tools' }));
+
+    expect(screen.getByText('IO-Link Analyzer')).toBeInTheDocument();
+  });
 });

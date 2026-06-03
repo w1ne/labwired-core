@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
+import { ToolsMenu, type ToolItem } from './ToolsMenu';
 
 export interface TopChromeProps {
   boardName: string;
@@ -7,16 +8,19 @@ export interface TopChromeProps {
   onShare?: () => void;
   onUploadFirmware?: (file: File) => void;
   onOpenTools?: () => void;
+  tools?: ToolItem[];
   authSlot?: ReactNode;
   projectSlot?: ReactNode;
 }
 
-export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware, onOpenTools, authSlot, projectSlot }: TopChromeProps) {
+export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware, onOpenTools, tools = [], authSlot, projectSlot }: TopChromeProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const navToolTriggerClass =
+    'flex h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-150 items-center shrink-0 text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] border-0 bg-transparent';
   return (
     <header
       role="banner"
-      className="absolute top-0 inset-x-0 z-30 flex items-center gap-2 sm:gap-3 h-8 px-2 sm:px-3 bg-[rgba(13,14,18,0.6)] backdrop-blur overflow-hidden"
+      className="absolute top-0 inset-x-0 z-30 flex items-center gap-2 sm:gap-3 h-8 px-2 sm:px-3 bg-[rgba(13,14,18,0.6)] backdrop-blur overflow-visible"
     >
       <GlobalLogo variant="dark" />
       <span
@@ -75,7 +79,20 @@ export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware,
         </>
       )}
       <div className="hidden sm:flex items-center gap-1">
-        <GlobalNav active="playground" variant="dark" onToolsClick={onOpenTools} />
+        <GlobalNav
+          active="playground"
+          variant="dark"
+          onToolsClick={onOpenTools}
+          toolsSlot={
+            tools.length > 0 ? (
+              <ToolsMenu
+                tools={tools}
+                triggerClassName={navToolTriggerClass}
+                showIcon={false}
+              />
+            ) : undefined
+          }
+        />
       </div>
       <div className="hidden sm:contents">{projectSlot}</div>
       {authSlot}
