@@ -146,7 +146,7 @@ struct MqttClient {
 /// the key and the comma-separated args (with leading comma already consumed).
 /// Used for `AT+QSSLCFG="key",arg...` and `AT+QMTCFG="key",arg...` parsing
 /// where the subkey is quoted and the args may contain numbers or strings.
-fn parse_quoted_subkey<'a>(s: &'a str) -> Option<(&'a str, Vec<&'a str>)> {
+fn parse_quoted_subkey(s: &str) -> Option<(&str, Vec<&str>)> {
     let s = s.trim();
     let s = s.strip_prefix('"')?;
     let close = s.find('"')?;
@@ -2015,7 +2015,7 @@ impl QuectelBg770a {
             let storage = arg.trim().trim_matches('"');
             return match storage {
                 "UFS" => {
-                    let used: u32 = self.filesystem.iter().map(|(_, v)| v.len() as u32).sum();
+                    let used: u32 = self.filesystem.values().map(|v| v.len() as u32).sum();
                     let total: u32 = 3_776_512; // matches real-hw default capacity.
                     let free = total.saturating_sub(used);
                     self.emit(&format!("\r\n+QFLDS: {},{}\r\n", free, total));
