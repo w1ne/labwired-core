@@ -270,6 +270,16 @@ export function diagramToConfig(
     return null;
   };
 
+  const uartPeripheralForPart = (partId: string): string | null => {
+    for (const pinId of ['RX', 'TX']) {
+      const mcuPin = mcuPinForPartPin(partId, pinId);
+      if (!mcuPin) continue;
+      const uart = findPinFunction(diagram.board, mcuPin, 'uart');
+      if (uart) return uart.peripheral;
+    }
+    return null;
+  };
+
   for (const part of diagram.parts) {
     if (part.type !== 'ultrasonic') continue;
 
@@ -316,6 +326,36 @@ export function diagramToConfig(
     }
   }
 
+  for (const part of diagram.parts) {
+    if (part.type !== 'sn74hc165') continue;
+
+    const connection = spiPeripheralForPart(part.id);
+    const csPin = mcuPinForPartPin(part.id, 'SH_LD');
+    if (!connection || !csPin) continue;
+
+    externalDeviceEntries.push(`  - id: "${part.id}"
+    type: "sn74hc165"
+    connection: "${connection}"
+    config:
+      cs_pin: "${csPin}"
+      inputs: ${Number.parseInt(part.attrs.inputs ?? '165', 10) || 165}`);
+  }
+
+  for (const part of diagram.parts) {
+    if (part.type !== 'iolink-master') continue;
+
+    const connection = uartPeripheralForPart(part.id);
+    if (!connection) continue;
+
+    externalDeviceEntries.push(`  - id: "${part.id}"
+    type: "iolink-master"
+    connection: "${connection}"
+    config:
+      pd_in_len: 1
+      m_seq_type: 1
+      com: "COM2"`);
+  }
+
   for (const wire of diagram.wires) {
     // Find which end is the MCU and which is a component
     let mcuEnd: typeof wire.from | null = null;
@@ -336,6 +376,8 @@ export function diagramToConfig(
     if (!part) continue;
     if (part.type === 'ultrasonic') continue;
     if (part.type === 'pcd8544') continue;
+    if (part.type === 'sn74hc165') continue;
+    if (part.type === 'iolink-master') continue;
     const def = COMPONENT_REGISTRY.get(part.type);
     if (!def?.boardIoKind) continue;
 

@@ -39,7 +39,10 @@ describe('TopChrome', () => {
 
     expect(screen.queryByText('IO-Link Analyzer')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Tools' }));
+    const toolsButton = screen.getByRole('button', { name: 'Tools' });
+    expect(toolsButton.querySelector('svg')).toBeNull();
+
+    await userEvent.click(toolsButton);
 
     expect(screen.getByText('IO-Link Analyzer')).toBeInTheDocument();
   });

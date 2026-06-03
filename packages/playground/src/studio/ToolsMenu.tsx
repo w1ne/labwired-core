@@ -19,6 +19,7 @@ interface ToolsMenuProps {
   openSignal?: number;
   triggerClassName?: string;
   showIcon?: boolean;
+  showCaret?: boolean;
 }
 
 function WrenchGlyph() {
@@ -63,7 +64,7 @@ function CaretGlyph() {
  * Add new tools by appending to the `tools` array passed in — each renders
  * as a toggleable menu row.
  */
-export function ToolsMenu({ tools, openSignal, triggerClassName, showIcon = true }: ToolsMenuProps) {
+export function ToolsMenu({ tools, openSignal, triggerClassName, showIcon = true, showCaret = true }: ToolsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const lastOpenSignalRef = useRef(openSignal);
@@ -109,7 +110,7 @@ export function ToolsMenu({ tools, openSignal, triggerClassName, showIcon = true
       >
         {showIcon && <WrenchGlyph />}
         <span className="tools-menu-label">Tools</span>
-        <CaretGlyph />
+        {showCaret && <CaretGlyph />}
       </button>
 
       {open && (
