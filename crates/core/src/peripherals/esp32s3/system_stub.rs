@@ -181,9 +181,23 @@ impl RtcCntlStub {
         // until it goes high; on real silicon the BBPLL asserts within a few
         // microseconds of being requested. We seed it as locked.
         words.insert(0x6040, 0x0100_0000);
+        // APP_CPU software stall (RTC_CNTL_SW_CPU_STALL_REG @ +0xBC). On real
+        // silicon the ROM releases core 1 from reset early, then holds it with
+        // the SW stall; the application un-stalls it via esp_cpu_unstall(1).
+        // Seed the "stalled" magic (SW_STALL_APPCPU_C1 = 0x21 in bits[31:26])
+        // so the firmware's clear of it is a detectable un-stall edge — the
+        // faithful APP_CPU release trigger (no firmware-symbol hooks).
+        words.insert(0xBC, APPCPU_STALL_C1 << APPCPU_STALL_C1_SHIFT);
         Self { words }
     }
 }
+
+/// RTC_CNTL_SW_CPU_STALL_REG offset within the RTC_CNTL window.
+const SW_CPU_STALL_OFF: u64 = 0xBC;
+/// SW_STALL_APPCPU_C1 field (RTC_CNTL_SW_STALL_APPCPU_C1_S = 20): value 0x21 in
+/// bits[25:20] means "APP_CPU stalled". Clearing it (esp_cpu_unstall) releases.
+const APPCPU_STALL_C1: u32 = 0x21;
+const APPCPU_STALL_C1_SHIFT: u32 = 20;
 
 impl RtcCntlStub {
     /// Bincode-serialize the sparse word map for runtime snapshots.
@@ -240,6 +254,22 @@ impl Peripheral for RtcCntlStub {
                 let next = combined.wrapping_add(1024);
                 self.words.insert(0x10, (next & 0xFFFF_FFFF) as u32);
                 self.words.insert(0x14, (next >> 32) as u32);
+            }
+        }
+        // APP_CPU un-stall: SW_CPU_STALL_REG (0xBC) SW_STALL_APPCPU_C1 leaving
+        // the 0x21 "stalled" code (esp_cpu_unstall(1)) releases core 1. Signal
+        // the run loop to boot the APP_CPU from the real ROM reset vector.
+        if word_off == SW_CPU_STALL_OFF {
+            // Re-read from the map (not `entry`) so we don't extend its mutable
+            // borrow across the TIME_UPDATE block's `self.words.insert`.
+            let w = self.words.get(&word_off).copied().unwrap_or(0);
+            let c1 = (w >> APPCPU_STALL_C1_SHIFT) & 0x3F;
+            if std::env::var("LABWIRED_CCDBG").is_ok() {
+                eprintln!("rtc_cntl: SW_CPU_STALL write -> 0x{w:08x} (C1=0x{c1:02x})");
+            }
+            if c1 != APPCPU_STALL_C1 {
+                crate::peripherals::esp32s3::rom_thunks::APPCPU_RESET_RELEASED
+                    .with(|s| s.set(true));
             }
         }
         Ok(())

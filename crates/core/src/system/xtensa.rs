@@ -911,6 +911,17 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(Esp32s3IntMatrix::new()),
     );
+    // ── SYSTEM_CORE_1_CONTROL (0x600C_0000) ──────────────────────────────
+    // APP_CPU reset/clock-gate control. Registered BEFORE the 0x600C_0000
+    // "system" catch-all so the RESETING 1→0 edge (APP_CPU out of reset) is
+    // observed and the run loop can boot core 1 from the real ROM.
+    bus.add_peripheral(
+        "core1_control",
+        0x600C_0000,
+        0x8,
+        None,
+        Box::new(crate::peripherals::esp32s3::core1_control::Esp32s3Core1Control::new()),
+    );
     // ── EXTMEM cache controller (0x600C_4000) ────────────────────────────
     // The boot ROM drives cache invalidate/writeback/sync through this block
     // using a launch-bit/done-bit handshake (CACHE_SYNC_CTRL @+0x28: write an

@@ -745,19 +745,12 @@ fn run_firmware(args: RunArgs) -> ExitCode {
 
     let mut cpu = wiring.cpu;
 
-    // Dual-core (SMP): the APP_CPU (core 1). Created halted; released when the
-    // PRO_CPU programs its entry via `ets_set_appcpu_boot_addr` (ROM 0x40000720)
-    // and un-resets it through SYSTEM_CORE_1_CONTROL. Only used in --rom-boot.
+    // Dual-core (SMP): the APP_CPU (core 1). Created halted at the ROM reset
+    // vector; released when the PRO_CPU clears CORE_1_RESETING (real hardware
+    // edge, signalled via APPCPU_RESET_RELEASED). The APP_CPU then boots the
+    // real ROM exactly like silicon — no firmware-symbol hooks. --rom-boot only.
     let mut cpu1: Option<labwired_core::cpu::xtensa_lx7::XtensaLx7> = None;
-    // Whether the APP_CPU has been released yet.
     let mut appcpu_started = false;
-    // APP_CPU initial stack — the ELF's `port_IntStackTop` if present, else a
-    // safe high-DRAM address inside the mapped S3 DRAM window.
-    let mut appcpu_sp: u32 = 0x3FCE_0000;
-    // call_start_cpu1 (APP_CPU entry) + esp_cpu_unstall (the release trigger),
-    // resolved from the ELF symbol table.
-    let mut appcpu_entry: Option<u32> = None;
-    let mut esp_cpu_unstall_pc: Option<u32> = None;
 
     if args.rom_boot {
         // ── Faithful boot: run the real ROM from the reset vector ──────────
@@ -779,19 +772,13 @@ fn run_firmware(args: RunArgs) -> ExitCode {
             "labwired-cli run: ROM-boot from reset vector 0x{:08x} (real ROM + flash controller)",
             cpu.get_pc(),
         );
-        // Bring up the APP_CPU (halted until released). Resolve the stack,
-        // APP_CPU entry, and the unstall trigger from the ELF symbols.
-        let syms = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
-        if let Some(&sp) = syms.get("port_IntStackTop") {
-            appcpu_sp = sp;
-        }
-        appcpu_entry = syms.get("call_start_cpu1").copied();
-        esp_cpu_unstall_pc = syms.get("esp_cpu_unstall").copied();
-        cpu1 = Some(labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu());
+        // Bring up the APP_CPU (halted at the ROM reset vector 0x40000400).
+        let c1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
         eprintln!(
-            "labwired-cli run: APP_CPU created (halted); appcpu_sp=0x{appcpu_sp:08x} entry={:08x?} unstall={:08x?}",
-            appcpu_entry, esp_cpu_unstall_pc,
+            "labwired-cli run: APP_CPU created (halted at reset vector 0x{:08x})",
+            c1.get_pc(),
         );
+        cpu1 = Some(c1);
     } else {
         // Fast-boot.
         let boot = match fast_boot(
@@ -844,10 +831,6 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     const RING_LEN: usize = 1024;
     let mut pc_ring: [u32; RING_LEN] = [0; RING_LEN];
     let mut ring_head: usize = 0;
-    // ets_set_appcpu_boot_addr ROM entry (esp32s3.rom.ld): PRO_CPU calls it
-    // with the APP_CPU entry point in a2. Hook the PC to capture the entry
-    // without intercepting the ROM internals.
-    const ETS_SET_APPCPU_BOOT_ADDR: u32 = 0x4000_0720;
     while steps < limit {
         let pc_before = cpu.get_pc();
         pc_ring[ring_head] = pc_before;
@@ -857,37 +840,22 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         // points the APP_CPU at early DRAM stubs during its own bring-up; only
         // a real code entry (app IRAM/XIP, >= 0x4037_0000 — excludes ROM and
         // DRAM) is the application's `call_start_cpu1`.
-        // Release the APP_CPU when PRO_CPU calls esp_cpu_unstall(1). The boot
-        // ROM communicates the entry via ets_set_appcpu_boot_addr, but we start
-        // the core directly at the ELF's call_start_cpu1 (the value PRO_CPU
-        // would program), which is the faithful APP_CPU entry.
-        if let (false, Some(unstall), Some(entry)) =
-            (appcpu_started, esp_cpu_unstall_pc, appcpu_entry)
+        // Release the APP_CPU on the real hardware edge: the PRO_CPU clearing
+        // CORE_1_RESETING (signalled by the SYSTEM_CORE_1_CONTROL peripheral).
+        // The APP_CPU then boots the real ROM from its reset vector — exactly
+        // like silicon, no firmware-symbol hooks.
+        if !appcpu_started
+            && labwired_core::peripherals::esp32s3::rom_thunks::APPCPU_RESET_RELEASED
+                .with(|s| s.take())
         {
-            if pc_before == unstall {
-                // At the callee ENTRY, the window hasn't rotated yet, so the
-                // first arg lives in the caller's a(callinc*4+2), not a2.
-                let arg_slot = if cpu.ps.callinc() == 0 {
-                    2
-                } else {
-                    cpu.ps.callinc() * 4 + 2
-                };
-                let core = cpu.regs.read_logical(arg_slot);
-                eprintln!("labwired-cli run: esp_cpu_unstall(core={core}) @step {steps}");
-                if core == 1 {
-                    appcpu_started = true;
-                    if let Some(c1) = cpu1.as_mut() {
-                        c1.set_pc(entry);
-                        c1.set_sp(appcpu_sp);
-                        c1.halted = false;
-                    }
-                    eprintln!(
-                        "labwired-cli run: APP_CPU released → call_start_cpu1=0x{entry:08x} (step {steps})"
-                    );
-                }
+            appcpu_started = true;
+            if let Some(c1) = cpu1.as_mut() {
+                c1.halted = false;
             }
+            eprintln!(
+                "labwired-cli run: APP_CPU released from reset → booting real ROM (step {steps})"
+            );
         }
-        let _ = ETS_SET_APPCPU_BOOT_ADDR;
 
         match cpu.step(&mut bus, &observers, &config) {
             Ok(()) => {}

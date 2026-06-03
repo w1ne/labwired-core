@@ -854,6 +854,13 @@ thread_local! {
     /// `Machine`; concurrent machines on parallel threads each get their
     /// own slot. Cleared to None after Machine reads it.
     pub static APPCPU_BOOT_ADDR: core::cell::Cell<Option<u32>> = const { core::cell::Cell::new(None) };
+
+    /// Set by the SYSTEM_CORE_1_CONTROL peripheral when the PRO_CPU clears the
+    /// CORE_1_RESETING bit (the real APP_CPU-out-of-reset edge); drained by the
+    /// rom-boot run loop, which then unhalts the APP_CPU at the ROM reset
+    /// vector so it boots the real ROM exactly like silicon. Faithful path —
+    /// no firmware-symbol hooks.
+    pub static APPCPU_RESET_RELEASED: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
 }
 
 /// Monotonic-counter thunk for `esp_timer_impl_get_counter_reg()` and
