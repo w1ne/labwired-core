@@ -11,7 +11,9 @@
 
 use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
-use crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral;
+use crate::peripherals::esp32s3::flash_xip::{
+    new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral,
+};
 use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
 use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_INTR_SOURCE_ID, I2C0_SIZE};
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
@@ -746,27 +748,73 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(RamPeripheral::new(0x2000)),
     );
 
-    // ── Flash-XIP backings — one per window (see Esp32s3Wiring docs) ──────
-    let icache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
-    let dcache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
-    let mut icache = FlashXipPeripheral::new_shared(icache_backing.clone(), 0x4200_0000);
-    let mut dcache = FlashXipPeripheral::new_shared(dcache_backing.clone(), 0x3C00_0000);
-    icache.map_identity();
-    dcache.map_identity();
-    bus.add_peripheral(
-        "flash_icache",
-        0x4200_0000,
-        opts.flash_size as u64,
-        None,
-        Box::new(icache),
-    );
-    bus.add_peripheral(
-        "flash_dcache",
-        0x3C00_0000,
-        opts.flash_size as u64,
-        None,
-        Box::new(dcache),
-    );
+    // ── Flash-XIP windows ─────────────────────────────────────────────────
+    // Proper model (real ROM): both cache windows alias one physical flash
+    // backing and translate through the real hardware MMU table the firmware
+    // programs at DR_REG_MMU_TABLE (0x600C_5000) — exactly as silicon. The
+    // window spans the full 32 MiB linear range so the ROM's bootloader-load
+    // reads (e.g. virtual 0x3C80_0000) resolve. Fast-boot keeps the legacy
+    // per-window static identity mapping over separate 4 MiB backings.
+    let proper_model = std::env::var("LABWIRED_ESP32S3_ROM").is_ok();
+    // Shared flash backing for the proper-model path, loaded from the real
+    // flash image so XIP reads (and the SPI-flash controller below) return real
+    // bytes. In fast-boot this is unused; the legacy per-window backings apply.
+    let shared_flash_backing = {
+        let mut buf = vec![0xFFu8; opts.flash_size as usize];
+        if let Ok(p) = std::env::var("LABWIRED_ESP32S3_FLASH") {
+            if let Ok(bytes) = std::fs::read(&p) {
+                let n = bytes.len().min(buf.len());
+                buf[..n].copy_from_slice(&bytes[..n]);
+                eprintln!("configure_xtensa_esp32s3: loaded flash image ({n} bytes) from {p}");
+            }
+        }
+        Arc::new(Mutex::new(buf))
+    };
+    // Backings exposed on Esp32s3Wiring. In the proper model both windows alias
+    // one physical flash backing; in fast-boot they stay independent.
+    let (icache_backing, dcache_backing) = if proper_model {
+        let mmu_table = new_mmu_table();
+        const XIP_WINDOW: u64 = 0x0200_0000; // 32 MiB linear MMU window
+        let icache =
+            FlashXipPeripheral::new_mmu(shared_flash_backing.clone(), 0x4200_0000, mmu_table.clone());
+        let dcache =
+            FlashXipPeripheral::new_mmu(shared_flash_backing.clone(), 0x3C00_0000, mmu_table.clone());
+        bus.add_peripheral("flash_icache", 0x4200_0000, XIP_WINDOW, None, Box::new(icache));
+        bus.add_peripheral("flash_dcache", 0x3C00_0000, XIP_WINDOW, None, Box::new(dcache));
+        // The MMU table register block the firmware programs (512 × u32).
+        bus.add_peripheral(
+            "mmu_table",
+            0x600C_5000,
+            0x800,
+            None,
+            Box::new(Esp32s3MmuTable::new(mmu_table)),
+        );
+        (shared_flash_backing.clone(), shared_flash_backing.clone())
+    } else {
+        // Fast-boot: legacy per-window static identity mapping over separate
+        // 4 MiB backings (see Esp32s3Wiring docs).
+        let icache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
+        let dcache_backing = Arc::new(Mutex::new(vec![0u8; opts.flash_size as usize]));
+        let mut icache = FlashXipPeripheral::new_shared(icache_backing.clone(), 0x4200_0000);
+        let mut dcache = FlashXipPeripheral::new_shared(dcache_backing.clone(), 0x3C00_0000);
+        icache.map_identity();
+        dcache.map_identity();
+        bus.add_peripheral(
+            "flash_icache",
+            0x4200_0000,
+            opts.flash_size as u64,
+            None,
+            Box::new(icache),
+        );
+        bus.add_peripheral(
+            "flash_dcache",
+            0x3C00_0000,
+            opts.flash_size as u64,
+            None,
+            Box::new(dcache),
+        );
+        (icache_backing, dcache_backing)
+    };
 
     // ── ROM: real silicon image (proper model) or thunk bank (legacy stopgap) ─
     // The faithful model loads the chip's *actual* boot ROM (dumped from silicon
@@ -883,24 +931,13 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // the auto-clear stub. Registered BEFORE the 0x6000_0000 catch-all. The
     // backing is the raw flash image (LABWIRED_ESP32S3_FLASH = the flashed
     // firmware.bin/.factory.bin) so READ returns real bytes; 0xFF otherwise.
-    let spi_flash_backing = {
-        let mut buf = vec![0xFFu8; opts.flash_size as usize];
-        if let Ok(p) = std::env::var("LABWIRED_ESP32S3_FLASH") {
-            if let Ok(bytes) = std::fs::read(&p) {
-                let n = bytes.len().min(buf.len());
-                buf[..n].copy_from_slice(&bytes[..n]);
-                eprintln!("configure_xtensa_esp32s3: loaded flash image ({n} bytes) from {p}");
-            }
-        }
-        Arc::new(Mutex::new(buf))
-    };
     bus.add_peripheral(
         "spimem1",
         0x6000_2000,
         0x100,
         None,
         Box::new(crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-            spi_flash_backing,
+            shared_flash_backing.clone(),
         )),
     );
 

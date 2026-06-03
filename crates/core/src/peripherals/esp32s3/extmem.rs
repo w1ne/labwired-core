@@ -56,13 +56,34 @@ const SYNC_DONE_BIT: u32 = 1 << 3;
 /// launches — `(offset, idle value)`. These hold completion/state bits the
 /// controller asserts when no operation is pending. Every value was read off
 /// silicon via JTAG `mdw` while the chip sat idle:
-///   0x28 CACHE_SYNC_CTRL    = 0x8 (SYNC_DONE)        — also dynamically driven
-///   0x40 ICACHE_CTRL/state  = 0x2 (bit 1, idle)
-///   0x4c autoload/preload   = 0x8 (DONE)
-///   0xa0 autoload/preload   = 0x8 (DONE)
-/// We seed only these status registers — never the config / runtime MMU-tag
-/// registers, which the ROM programs itself from reset.
-const IDLE_STATUS_SEEDS: [(u64, u32); 4] = [(0x28, 1 << 3), (0x40, 1 << 1), (0x4c, 1 << 3), (0xa0, 1 << 3)];
+/// All the cache-block registers read off silicon as nonzero while idle. These
+/// hold completion/state/default bits the boot ROM (and the ROM cache routines
+/// the 2nd-stage bootloader calls) poll or read before programming:
+///   0x28  CACHE_SYNC_CTRL   = 0x8    (SYNC_DONE)      — also dynamically driven
+///   0x40  ICACHE state      = 0x2    (bit 1 done/idle; launch bit 0 ORs in)
+///   0x4c  autoload/preload  = 0x8    (DONE bit 3)
+///   0x60  cache config      = 0xf    (ways/size default)
+///   0x68  cache config      = 0x4
+///   0x7c  cache config      = 0x4
+///   0x88  cache op state    = 0x2    (bit 1 done/idle; launch bit 0 ORs in)
+///   0x94  DCACHE state      = 0x2    (bit 1 done/idle)
+///   0xa0  autoload/preload  = 0x8    (DONE bit 3)
+///   0x130 CACHE_STATE       = 0x1001 (ICACHE bits[11:0]=1, DCACHE bits[23:12]=1
+///                                     — both caches enabled/idle)
+/// We never seed the runtime MMU-tag / address registers (0xb0+), which the ROM
+/// programs itself from reset; those would corrupt a from-reset boot.
+const IDLE_STATUS_SEEDS: [(u64, u32); 10] = [
+    (0x28, 1 << 3),
+    (0x40, 1 << 1),
+    (0x4c, 1 << 3),
+    (0x60, 0xf),
+    (0x68, 0x4),
+    (0x7c, 0x4),
+    (0x88, 1 << 1),
+    (0x94, 1 << 1),
+    (0xa0, 1 << 3),
+    (0x130, 0x1001),
+];
 
 #[derive(Debug)]
 pub struct Esp32s3Extmem {
