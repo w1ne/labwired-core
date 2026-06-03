@@ -403,10 +403,7 @@ const SHAPE_GOLDEN: &[(&str, &str)] = &[
     ("AT+CIMI", "AT+CIMI\r\r\n{N}\r\n\r\nOK\r\n"),
     ("AT+QCCID", "AT+QCCID\r\r\n+QCCID: {H}\r\n\r\nOK\r\n"),
     ("AT+CSQ", "AT+CSQ\r\r\n+CSQ: {N},{N}\r\n\r\nOK\r\n"),
-    (
-        "AT+QCSQ",
-        "AT+QCSQ\r\r\n+QCSQ: \"NOSERVICE\"\r\n\r\nOK\r\n",
-    ),
+    ("AT+QCSQ", "AT+QCSQ\r\r\n+QCSQ: \"NOSERVICE\"\r\n\r\nOK\r\n"),
     ("AT+CEREG?", "AT+CEREG?\r\r\n+CEREG: {N},{N}\r\n\r\nOK\r\n"),
     ("AT+CREG?", "AT+CREG?\r\r\n+CREG: {N},{N}\r\n\r\nOK\r\n"),
     ("AT+COPS?", "AT+COPS?\r\r\n+COPS: {N}\r\n\r\nOK\r\n"),
@@ -417,10 +414,7 @@ const SHAPE_GOLDEN: &[(&str, &str)] = &[
     ("AT+CFUN?", "AT+CFUN?\r\r\n+CFUN: {N}\r\n\r\nOK\r\n"),
     ("AT+CMEE?", "AT+CMEE?\r\r\n+CMEE: {N}\r\n\r\nOK\r\n"),
     ("AT+CGATT?", "AT+CGATT?\r\r\n+CGATT: {N}\r\n\r\nOK\r\n"),
-    (
-        "AT+CGACT?",
-        "AT+CGACT?\r\r\n+CGACT: {N},{N}\r\n\r\nOK\r\n",
-    ),
+    ("AT+CGACT?", "AT+CGACT?\r\r\n+CGACT: {N},{N}\r\n\r\nOK\r\n"),
 ];
 
 /// Multi-command sequences captured from real hardware. Each entry is one

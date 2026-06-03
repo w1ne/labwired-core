@@ -497,15 +497,9 @@ impl QuectelBg770a {
 
     fn schedule_boot_urcs(&mut self) {
         self.schedule(URC_DELAY_RDY_US, b"\r\nRDY\r\n".to_vec());
-        self.schedule(
-            URC_DELAY_CPIN_READY_US,
-            b"\r\n+CPIN: READY\r\n".to_vec(),
-        );
+        self.schedule(URC_DELAY_CPIN_READY_US, b"\r\n+CPIN: READY\r\n".to_vec());
         self.schedule(URC_DELAY_QUSIM_US, b"\r\n+QUSIM: 1\r\n".to_vec());
-        self.schedule(
-            URC_DELAY_SMS_DONE_US,
-            b"\r\n+QIND: SMS DONE\r\n".to_vec(),
-        );
+        self.schedule(URC_DELAY_SMS_DONE_US, b"\r\n+QIND: SMS DONE\r\n".to_vec());
         self.schedule(URC_DELAY_PB_DONE_US, b"\r\n+QIND: PB DONE\r\n".to_vec());
     }
 
@@ -513,15 +507,9 @@ impl QuectelBg770a {
     /// minimum-functionality (`CFUN=0`). Sequence captured from the bench:
     /// SIM ready signalling and the SMS/PB init notifications repeat.
     fn schedule_cfun_resume_urcs(&mut self) {
-        self.schedule(
-            URC_DELAY_CPIN_READY_US,
-            b"\r\n+CPIN: READY\r\n".to_vec(),
-        );
+        self.schedule(URC_DELAY_CPIN_READY_US, b"\r\n+CPIN: READY\r\n".to_vec());
         self.schedule(URC_DELAY_QUSIM_US, b"\r\n+QUSIM: 1\r\n".to_vec());
-        self.schedule(
-            URC_DELAY_SMS_DONE_US,
-            b"\r\n+QIND: SMS DONE\r\n".to_vec(),
-        );
+        self.schedule(URC_DELAY_SMS_DONE_US, b"\r\n+QIND: SMS DONE\r\n".to_vec());
         self.schedule(URC_DELAY_PB_DONE_US, b"\r\n+QIND: PB DONE\r\n".to_vec());
     }
 
@@ -758,10 +746,7 @@ impl QuectelBg770a {
             return self.ok();
         }
         if upper == "AT+CSQ" {
-            self.emit(&format!(
-                "\r\n+CSQ: {},{}\r\n",
-                self.csq_rssi, self.csq_ber
-            ));
+            self.emit(&format!("\r\n+CSQ: {},{}\r\n", self.csq_rssi, self.csq_ber));
             return self.ok();
         }
         if upper == "AT+QCSQ" {
@@ -960,14 +945,15 @@ impl QuectelBg770a {
         // We model the minimum needed for the AT+QMTOPEN happy path:
         // a single PDP context (cid 1) that the MQTT subsystem rides on.
         if upper == "AT+QICSGP=?" {
-            self.emit(
-                "\r\n+QICSGP: (1-5),(1-3),<APN>,<username>,<password>,(0-2)\r\n",
-            );
+            self.emit("\r\n+QICSGP: (1-5),(1-3),<APN>,<username>,<password>,(0-2)\r\n");
             return self.ok();
         }
         if let Some(arg) = upper.strip_prefix("AT+QICSGP=") {
             // AT+QICSGP=<cid>,<ctx_type>,"<apn>","<user>","<pwd>",<auth>
-            let first = arg.split(',').next().and_then(|s| s.trim().parse::<u8>().ok());
+            let first = arg
+                .split(',')
+                .next()
+                .and_then(|s| s.trim().parse::<u8>().ok());
             return match first {
                 Some(1..=5) => self.ok(),
                 _ => self.error(),
@@ -1055,8 +1041,7 @@ impl QuectelBg770a {
         if let Some(args) = line.strip_prefix("AT+QMTCFG=") {
             if let Some((key, rest)) = parse_quoted_subkey(args) {
                 let key_lower = key.to_ascii_lowercase();
-                let nums: Vec<u8> =
-                    rest.iter().filter_map(|s| s.parse::<u8>().ok()).collect();
+                let nums: Vec<u8> = rest.iter().filter_map(|s| s.parse::<u8>().ok()).collect();
                 if key_lower == "ssl" {
                     return match nums.len() {
                         1 => {
@@ -1154,9 +1139,7 @@ impl QuectelBg770a {
             return self.ok();
         }
         if upper == "AT+QSSLOPEN=?" {
-            self.emit(
-                "\r\n+QSSLOPEN: (1-5),(0-5),(0-11),<serveraddr>,<server_port>,(0-2)\r\n",
-            );
+            self.emit("\r\n+QSSLOPEN: (1-5),(0-5),(0-11),<serveraddr>,<server_port>,(0-2)\r\n");
             return self.ok();
         }
 
@@ -1458,8 +1441,7 @@ impl QuectelBg770a {
                     let buf = &mut self.sockets[c as usize].rx_buffer;
                     let take = buf.len().min(max_len);
                     let drained: Vec<u8> = buf.drain(..take).collect();
-                    let mut payload =
-                        format!("\r\n+QIRD: {}\r\n", drained.len()).into_bytes();
+                    let mut payload = format!("\r\n+QIRD: {}\r\n", drained.len()).into_bytes();
                     payload.extend_from_slice(&drained);
                     if !drained.is_empty() {
                         payload.extend_from_slice(b"\r\n");
@@ -1496,7 +1478,9 @@ impl QuectelBg770a {
             return match (ctx_id, host) {
                 (Some(1..=5), Some(_)) => {
                     self.ok();
-                    let urc = b"\r\n+QIURC: \"dnsgip\",0,1\r\n+QIURC: \"dnsgip\",\"93.184.216.34\"\r\n".to_vec();
+                    let urc =
+                        b"\r\n+QIURC: \"dnsgip\",0,1\r\n+QIURC: \"dnsgip\",\"93.184.216.34\"\r\n"
+                            .to_vec();
                     self.deferred_urcs.push((URC_DELAY_QIDNS_US, urc));
                 }
                 _ => self.error(),
@@ -1692,7 +1676,11 @@ impl QuectelBg770a {
             return self.ok();
         }
         if let Some(arg) = upper.strip_prefix("AT+QGPS=") {
-            return match arg.split(',').next().and_then(|s| s.trim().parse::<u8>().ok()) {
+            return match arg
+                .split(',')
+                .next()
+                .and_then(|s| s.trim().parse::<u8>().ok())
+            {
                 Some(1) => {
                     self.gps_active = true;
                     self.ok()
@@ -1756,10 +1744,7 @@ impl QuectelBg770a {
             // Accept any args; we don't surface incoming-SMS URCs anyway.
             return self.ok();
         }
-        if upper == "AT+CMGS=?"
-            || upper == "AT+CMGR=?"
-            || upper == "AT+CSCA=?"
-        {
+        if upper == "AT+CMGS=?" || upper == "AT+CMGR=?" || upper == "AT+CSCA=?" {
             return self.ok();
         }
         // CMGS write — text mode (CMGF=1): AT+CMGS="number" → `> ` prompt →
@@ -1966,8 +1951,7 @@ impl QuectelBg770a {
                     let buf = &mut self.sockets[c as usize].rx_buffer;
                     let take = buf.len().min(max_len);
                     let drained: Vec<u8> = buf.drain(..take).collect();
-                    let mut payload =
-                        format!("\r\n+QSSLRECV: {}\r\n", drained.len()).into_bytes();
+                    let mut payload = format!("\r\n+QSSLRECV: {}\r\n", drained.len()).into_bytes();
                     payload.extend_from_slice(&drained);
                     if !drained.is_empty() {
                         payload.extend_from_slice(b"\r\n");
@@ -2031,11 +2015,7 @@ impl QuectelBg770a {
             let storage = arg.trim().trim_matches('"');
             return match storage {
                 "UFS" => {
-                    let used: u32 = self
-                        .filesystem
-                        .iter()
-                        .map(|(_, v)| v.len() as u32)
-                        .sum();
+                    let used: u32 = self.filesystem.iter().map(|(_, v)| v.len() as u32).sum();
                     let total: u32 = 3_776_512; // matches real-hw default capacity.
                     let free = total.saturating_sub(used);
                     self.emit(&format!("\r\n+QFLDS: {},{}\r\n", free, total));
@@ -2092,8 +2072,7 @@ impl QuectelBg770a {
                     let mut payload = b"\r\nCONNECT\r\n".to_vec();
                     payload.extend_from_slice(&data);
                     payload.extend_from_slice(
-                        format!("\r\nOK\r\n\r\n+QFDWL: {},0\r\n", data.len())
-                            .as_bytes(),
+                        format!("\r\nOK\r\n\r\n+QFDWL: {},0\r\n", data.len()).as_bytes(),
                     );
                     self.schedule(DELAY_DEFAULT_US, payload);
                 }
@@ -2126,24 +2105,17 @@ impl QuectelBg770a {
         if let Some(arg) = upper.strip_prefix("AT+QFREAD=") {
             let mut parts = arg.split(',');
             let handle = parts.next().and_then(|s| s.trim().parse::<u16>().ok());
-            let max_len = parts
-                .next()
-                .and_then(|s| s.trim().parse::<usize>().ok());
+            let max_len = parts.next().and_then(|s| s.trim().parse::<usize>().ok());
             return match handle.and_then(|h| {
                 let entry = self.open_files.get(&h)?.clone();
                 Some((h, entry))
             }) {
                 Some((h, (name, offset, _))) => {
-                    let data = self
-                        .filesystem
-                        .get(&name)
-                        .cloned()
-                        .unwrap_or_default();
+                    let data = self.filesystem.get(&name).cloned().unwrap_or_default();
                     let avail = data.len().saturating_sub(offset);
                     let take = max_len.unwrap_or(avail).min(avail);
                     let slice = &data[offset..offset + take];
-                    let mut payload =
-                        format!("\r\nCONNECT {}\r\n", take).into_bytes();
+                    let mut payload = format!("\r\nCONNECT {}\r\n", take).into_bytes();
                     payload.extend_from_slice(slice);
                     payload.extend_from_slice(b"\r\nOK\r\n");
                     self.schedule(DELAY_DEFAULT_US, payload);
@@ -2206,10 +2178,7 @@ impl QuectelBg770a {
         if upper.starts_with("AT+QNTP=") {
             self.ok();
             // Async URC: success result with the current simulated clock.
-            let urc = format!(
-                "\r\n+QNTP: 0,\"{}\"\r\n",
-                self.cclk
-            );
+            let urc = format!("\r\n+QNTP: 0,\"{}\"\r\n", self.cclk);
             self.deferred_urcs
                 .push((URC_DELAY_QIDNS_US, urc.into_bytes()));
             return;
@@ -2309,7 +2278,9 @@ impl QuectelBg770a {
         if upper == "AT%CERTCMD=?" {
             // Note the trailing space before the final \r\n — captured from
             // hardware verbatim, a Sequans-firmware quirk.
-            self.emit("\r\n%CERTCMD: (\"READ\",\"WRITE\",\"DELETE\",\"DIR\",\"COPY\"),(0,1,2,3) \r\n");
+            self.emit(
+                "\r\n%CERTCMD: (\"READ\",\"WRITE\",\"DELETE\",\"DIR\",\"COPY\"),(0,1,2,3) \r\n",
+            );
             return self.ok_compact();
         }
         if upper == "AT%MEAS=\"8\"" {
@@ -2350,10 +2321,7 @@ impl QuectelBg770a {
         if upper == "AT+VZWAPNE?" || upper == "AT+VZWAPNE=?" {
             return self.error();
         }
-        if upper == "AT+VZWRSRP?"
-            || upper == "AT+VZWRSRQ?"
-            || upper.starts_with("AT+VZWRSRP")
-        {
+        if upper == "AT+VZWRSRP?" || upper == "AT+VZWRSRQ?" || upper.starts_with("AT+VZWRSRP") {
             self.emit("\r\n+CME ERROR: operation not allowed\r\n");
             return;
         }
@@ -2416,10 +2384,7 @@ impl UartStreamDevice for QuectelBg770a {
                 let data = std::mem::take(&mut self.qfupl_buf);
                 self.filesystem.insert(name.clone(), data.clone());
                 self.awaiting_qfupl = None;
-                let reply = format!(
-                    "\r\n+QFUPL: {},0\r\n\r\nOK\r\n",
-                    data.len()
-                );
+                let reply = format!("\r\n+QFUPL: {},0\r\n\r\nOK\r\n", data.len());
                 self.schedule(DELAY_DEFAULT_US, reply.into_bytes());
             }
             return;
@@ -2433,10 +2398,7 @@ impl UartStreamDevice for QuectelBg770a {
                     self.awaiting_cmgs_payload = false;
                     self.cmgs_payload_buf.clear();
                     self.cmgs_mr = self.cmgs_mr.wrapping_add(1);
-                    let reply = format!(
-                        "\r\n+CMGS: {}\r\n\r\nOK\r\n",
-                        self.cmgs_mr
-                    );
+                    let reply = format!("\r\n+CMGS: {}\r\n\r\nOK\r\n", self.cmgs_mr);
                     self.schedule(URC_DELAY_QMTPUB_US, reply.into_bytes());
                 }
                 0x1B => {
@@ -2677,10 +2639,16 @@ mod tests {
         for ok in ["AT+CFUN=0", "AT+CFUN=1", "AT+CFUN=4"] {
             // CFUN=1 after CFUN=0 trails URCs after the OK, so check for OK
             // anywhere rather than at the end.
-            assert!(exchange(&mut m, ok).contains("\r\nOK\r\n"), "{ok} should OK");
+            assert!(
+                exchange(&mut m, ok).contains("\r\nOK\r\n"),
+                "{ok} should OK"
+            );
         }
         for bad in ["AT+CFUN=2", "AT+CFUN=7"] {
-            assert!(exchange(&mut m, bad).contains("ERROR"), "{bad} should ERROR");
+            assert!(
+                exchange(&mut m, bad).contains("ERROR"),
+                "{bad} should ERROR"
+            );
         }
     }
 
@@ -2987,7 +2955,10 @@ mod tests {
         while let Some(b) = m.poll(1_000_000) {
             prompt.push(b as char);
         }
-        assert!(prompt.contains("CONNECT"), "missing URL CONNECT: {prompt:?}");
+        assert!(
+            prompt.contains("CONNECT"),
+            "missing URL CONNECT: {prompt:?}"
+        );
         for b in b"http://example.com/" {
             m.on_tx_byte(*b);
         }
@@ -3091,10 +3062,7 @@ mod tests {
         // Open TLS socket on connectID 5 using SSL ctx 2.
         let r = exchange(&mut m, "AT+QSSLOPEN=1,2,5,\"secure.example\",443");
         assert!(r.contains("\r\nOK\r\n"));
-        assert!(
-            r.contains("+QSSLOPEN: 5,0"),
-            "missing TLS open URC: {r:?}"
-        );
+        assert!(r.contains("+QSSLOPEN: 5,0"), "missing TLS open URC: {r:?}");
         // Inject incoming data → QSSLRECV drains it.
         m.inject_socket_recv(5, b"encrypted payload");
         // Drain the +QIURC URC.
@@ -3163,10 +3131,7 @@ mod tests {
         let mut m = QuectelBg770a::new();
         let r = exchange(&mut m, "AT+QNTP=1,\"pool.ntp.org\"");
         assert!(r.contains("\r\nOK\r\n"));
-        assert!(
-            r.contains("+QNTP: 0,"),
-            "missing NTP success URC: {r:?}"
-        );
+        assert!(r.contains("+QNTP: 0,"), "missing NTP success URC: {r:?}");
     }
 
     #[test]
@@ -3212,19 +3177,16 @@ mod tests {
     #[test]
     fn file_handle_open_read_close_round_trip() {
         let mut m = QuectelBg770a::new();
-        m.put_file("certs/ca.pem", b"-----BEGIN CERTIFICATE-----\nMOCK\n".to_vec());
+        m.put_file(
+            "certs/ca.pem",
+            b"-----BEGIN CERTIFICATE-----\nMOCK\n".to_vec(),
+        );
         // Open for read.
         let o = exchange(&mut m, "AT+QFOPEN=\"certs/ca.pem\",1");
-        assert!(
-            o.contains("+QFOPEN: 1"),
-            "expected handle 1, got {o:?}"
-        );
+        assert!(o.contains("+QFOPEN: 1"), "expected handle 1, got {o:?}");
         // Read all.
         let r = exchange(&mut m, "AT+QFREAD=1,200");
-        assert!(
-            r.contains("CONNECT 33"),
-            "expected 33-byte file, got {r:?}"
-        );
+        assert!(r.contains("CONNECT 33"), "expected 33-byte file, got {r:?}");
         assert!(r.contains("-----BEGIN CERTIFICATE-----"));
         // Subsequent read returns 0 bytes (offset past EOF).
         let r2 = exchange(&mut m, "AT+QFREAD=1,200");
@@ -3263,7 +3225,10 @@ mod tests {
         assert!(exchange(&mut m, "AT+CGATT?").contains("+CGATT: 1"));
         // QCSQ should now have populated values, not NOSERVICE.
         let q = exchange(&mut m, "AT+QCSQ");
-        assert!(q.contains("+QCSQ: \"eMTC\","), "expected eMTC entry, got {q:?}");
+        assert!(
+            q.contains("+QCSQ: \"eMTC\","),
+            "expected eMTC entry, got {q:?}"
+        );
     }
 
     #[test]
@@ -3281,9 +3246,7 @@ mod tests {
     fn verizon_extensions_error_as_documented() {
         let mut m = QuectelBg770a::new();
         assert!(exchange(&mut m, "AT+VZWAPNE?").contains("\r\nERROR\r\n"));
-        assert!(
-            exchange(&mut m, "AT+VZWRSRP?").contains("+CME ERROR: operation not allowed")
-        );
+        assert!(exchange(&mut m, "AT+VZWRSRP?").contains("+CME ERROR: operation not allowed"));
     }
 
     #[test]
@@ -3335,6 +3298,9 @@ mod tests {
         while let Some(b) = m.poll(1_000_000) {
             out.push(b as char);
         }
-        assert!(out.is_empty(), "expected no URC when CEREG n=0, got {out:?}");
+        assert!(
+            out.is_empty(),
+            "expected no URC when CEREG n=0, got {out:?}"
+        );
     }
 }
