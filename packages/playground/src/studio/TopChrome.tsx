@@ -16,7 +16,7 @@ export interface TopChromeProps {
 export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware, onOpenTools, tools = [], authSlot, projectSlot }: TopChromeProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const navToolTriggerClass =
-    'flex h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-150 items-center shrink-0 text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] border-0 bg-transparent';
+    'flex h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-150 items-center shrink-0 text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] border-0 bg-transparent appearance-none';
   return (
     <header
       role="banner"
@@ -89,6 +89,7 @@ export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware,
                 tools={tools}
                 triggerClassName={navToolTriggerClass}
                 showIcon={false}
+                showCaret={false}
               />
             ) : undefined
           }
