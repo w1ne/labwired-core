@@ -244,6 +244,11 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
         mcu,
         { id: 'di_shifter', type: 'sn74hc165', x: 520, y: 70, rotate: 0, attrs: {} },
         { id: 'iolink_master', type: 'iolink-master', x: 520, y: 300, rotate: 0, attrs: {} },
+        // Logic Analyzer pre-probed on the IO-Link line and pre-armed to the
+        // IO-Link decoder, so opening the tool immediately shows the cyclic
+        // process data — and toggling the 74HC165 inputs highlights the PD
+        // change live (the "CHG" badge). No manual wiring needed for the demo.
+        { id: 'iolink_probe', type: 'logic-analyzer', x: 760, y: 300, rotate: 0, attrs: { decoder: 'iolink' } },
       ],
       wires: [
         // 74HC165 digital-input shift register on SPI1 (CS = PA4).
@@ -256,6 +261,9 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PA2' }, to: { part: 'iolink_master', pin: 'RX' }, color: '#06D6A0' },
         { from: { part: 'mcu', pin: 'PA3' }, to: { part: 'iolink_master', pin: 'TX' }, color: '#118AB2' },
         { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'iolink_master', pin: 'L+' }, color: '#FF6B6B' },
+        // Logic Analyzer probes: CH0 on the master TX, CH1 on the master RX.
+        { from: { part: 'iolink_probe', pin: 'CH0' }, to: { part: 'iolink_master', pin: 'TX' }, color: '#F5B642' },
+        { from: { part: 'iolink_probe', pin: 'CH1' }, to: { part: 'iolink_master', pin: 'RX' }, color: '#F5B642' },
       ],
     };
   }
