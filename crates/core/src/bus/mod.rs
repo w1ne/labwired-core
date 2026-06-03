@@ -1612,6 +1612,62 @@ impl SystemBus {
 
                     uart.attach_stream(Box::new(gps));
                 }
+                "bg770a-cellular" => {
+                    let idx = bus
+                        .find_peripheral_index_by_name(&ext.connection)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' references missing connection '{}'",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "External device '{}' type '{}' connection '{}' cannot be downcast",
+                            ext.id,
+                            ext.r#type,
+                            ext.connection
+                        )
+                    })?;
+
+                    let uart = any
+                        .downcast_mut::<crate::peripherals::uart::Uart>()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "External device '{}' type '{}' connection '{}' is not a UART peripheral",
+                                ext.id,
+                                ext.r#type,
+                                ext.connection
+                            )
+                        })?;
+
+                    let mut modem = crate::peripherals::components::QuectelBg770a::new();
+
+                    if matches!(
+                        ext.config.get("boot_urcs").and_then(|v| v.as_bool()),
+                        Some(true)
+                    ) {
+                        modem = modem.with_boot_urcs();
+                    }
+                    if let Some(apn) = ext.config.get("apn").and_then(|v| v.as_str()) {
+                        modem.set_apn(apn);
+                    }
+                    if let Some(rssi) = ext.config.get("rssi").and_then(|v| v.as_i64()) {
+                        let ber = ext.config.get("ber").and_then(|v| v.as_i64()).unwrap_or(99);
+                        modem.set_signal(rssi.clamp(0, 99) as u8, ber.clamp(0, 99) as u8);
+                    }
+                    if matches!(
+                        ext.config.get("auto_attach").and_then(|v| v.as_bool()),
+                        Some(true)
+                    ) {
+                        modem.complete_network_attach();
+                    }
+
+                    uart.attach_stream(Box::new(modem));
+                }
                 "iolink-master" => {
                     // UART stream device path
                     let idx = bus

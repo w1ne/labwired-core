@@ -55,6 +55,7 @@ members = [
     "examples/max31855-thermocouple-lab",
     "examples/ssd1306-hello-lab",
     "examples/neo6m-gps-lab",
+    "examples/quectel-bg770a-lab",
     "examples/ntc-thermistor-lab",
     "examples/ili9341-tft-lab",
     "examples/epaper-tricolor-lab",
@@ -191,6 +192,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.neo6m-gps-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.quectel-bg770a-lab]
 codegen-units = 1
 debug = true
 opt-level = "s"

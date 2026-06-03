@@ -2260,6 +2260,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quectel-bg770a-lab"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
