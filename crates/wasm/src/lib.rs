@@ -1952,6 +1952,15 @@ impl WasmSimulator {
             let _ = machine.bus.write_u8(addr as u64, 0x01);
             handshake_bytes.push(addr);
         }
+        // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
+        // newer arduino-esp32 cores whose `start_other_core` spin-waits
+        // with a tight cycle-count timeout see APP_CPU "up" without
+        // depending on the coarse 10k-cycle keep-alive in
+        // step_with_esp32_aids. Models APP_CPU bring-up; see
+        // labwired_core rom_thunks::ets_set_appcpu_boot_addr.
+        labwired_core::peripherals::esp32s3::rom_thunks::set_appcpu_up_flags(
+            handshake_bytes.clone(),
+        );
 
         // loopTask xCoreID patch — flip the `1` to `0` so loopTask runs
         // on PRO_CPU (until full SMP is wired). Scans first 64 bytes of

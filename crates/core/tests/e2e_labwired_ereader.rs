@@ -110,6 +110,10 @@ fn labwired_ereader_runs_to_panel_paint() {
         let _ = machine.bus.write_u8(addr as u64, 0x01);
         handshake_bytes.push(addr);
     }
+    // Re-assert these flags the instant PRO_CPU releases APP_CPU (models
+    // APP_CPU bring-up) so newer arduino-esp32 cores don't time out in
+    // start_other_core. See rom_thunks::ets_set_appcpu_boot_addr.
+    rom_thunks::set_appcpu_up_flags(handshake_bytes.clone());
 
     // loopTask xCoreID patch — scan first 64 bytes of app_main for the
     // `movi.n a8, 1; mov.n a9, a13` immediate pattern that pins
