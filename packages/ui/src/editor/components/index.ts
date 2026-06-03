@@ -43,6 +43,8 @@ import { shiftRegister74hc595Component } from './shift-register-74hc595';
 import { sn74hc165Component } from './sn74hc165';
 import { iolinkMasterComponent } from './iolink-master';
 import { motorDriverL293dComponent } from './motor-driver-l293d';
+// Tools
+import { logicAnalyzerComponent } from './logic-analyzer';
 // Board MCUs
 import { arduinoUnoComponent } from './boards/arduino-uno';
 import { esp32Component } from './boards/esp32';
@@ -114,6 +116,8 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [sn74hc165Component.type, sn74hc165Component],
   [iolinkMasterComponent.type, iolinkMasterComponent],
   [motorDriverL293dComponent.type, motorDriverL293dComponent],
+  // Tools
+  [logicAnalyzerComponent.type, logicAnalyzerComponent],
 ]);
 
 /** Component definitions grouped by category (excludes MCU). */

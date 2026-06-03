@@ -125,3 +125,39 @@ describe('power-rail fan-out interactive validation', () => {
     expect(err).toMatch(/already assigned/i);
   });
 });
+
+describe('logic analyzer probe wiring', () => {
+  const iolinkWithAnalyzer: Diagram = {
+    version: 1,
+    board: 'stm32l476',
+    parts: [
+      { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+      { id: 'iolink_master', type: 'iolink-master', x: 520, y: 300, rotate: 0, attrs: {} },
+      { id: 'analyzer', type: 'logic-analyzer', x: 360, y: 300, rotate: 0, attrs: { decoder: 'auto' } },
+    ],
+    wires: [
+      w('mcu', 'PA2', 'iolink_master', 'RX'),
+    ],
+  };
+
+  it('allows a probe channel to tap an already-wired IO-Link endpoint', () => {
+    const err = validateWireConnection(
+      iolinkWithAnalyzer,
+      { part: 'analyzer', pin: 'CH0' },
+      { part: 'iolink_master', pin: 'RX' },
+    );
+    expect(err).toBeNull();
+  });
+
+  it('keeps analyzer probe wires out of board-IO structural diagnostics', () => {
+    const diagram: Diagram = {
+      ...iolinkWithAnalyzer,
+      wires: [
+        ...iolinkWithAnalyzer.wires,
+        w('analyzer', 'CH0', 'iolink_master', 'RX'),
+      ],
+    };
+    const errors = diagnoseDiagram(diagram).filter((d) => d.severity === 'error');
+    expect(errors).toEqual([]);
+  });
+});

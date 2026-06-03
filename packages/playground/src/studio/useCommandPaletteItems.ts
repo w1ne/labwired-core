@@ -20,6 +20,7 @@ const CATEGORY_BY_TYPE: Record<string, PaletteCategory> = {
   dht22: 'misc', ultrasonic: 'misc', resistor: 'misc',
   capacitor: 'misc', diode: 'misc', transistor: 'misc',
   'shift-register-74hc595': 'misc',
+  'logic-analyzer': 'tools',
 };
 
 export interface CommandPaletteContext {

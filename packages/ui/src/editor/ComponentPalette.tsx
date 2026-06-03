@@ -7,9 +7,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   sensor: 'Sensors',
   display: 'Displays',
   ic: 'ICs',
+  tool: 'Tools',
 };
 
-const CATEGORY_ORDER = ['output', 'input', 'sensor', 'display', 'passive', 'ic'];
+const CATEGORY_ORDER = ['output', 'input', 'sensor', 'display', 'passive', 'ic', 'tool'];
 
 interface ComponentPaletteProps {
   onAddPart?: (type: string) => void;

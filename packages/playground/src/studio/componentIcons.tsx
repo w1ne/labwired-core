@@ -399,7 +399,9 @@ const CategoryFallback = ({ category }: { category: PaletteCategory }) => {
             ? '#f59e0b'
             : category === 'gpio'
               ? '#ec4899'
-              : '#9ca3af';
+              : category === 'tools'
+                ? '#38bdf8'
+                : '#9ca3af';
   return (
     <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden>
       <rect x="4" y="4" width="12" height="12" rx="2" fill={color} opacity="0.18" stroke={color} strokeWidth="1" />

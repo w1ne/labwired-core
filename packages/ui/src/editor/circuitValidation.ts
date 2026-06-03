@@ -2,6 +2,7 @@ import { COMPONENT_REGISTRY } from './components/index';
 import { getPinMapping } from './pin-mapping';
 import type { Diagram, WireEndpoint } from './types';
 import { diagnoseDiagram } from './circuitDiagnostics';
+import { hasProbeEndpoint, isProbeEndpoint } from './probeWiring';
 
 function getPart(diagram: Diagram, endpoint: WireEndpoint) {
   return diagram.parts.find((part) => part.id === endpoint.part) ?? null;
@@ -54,6 +55,9 @@ function validateWireEndpoints(diagram: Diagram, from: WireEndpoint, to: WireEnd
   const otherEnd = boardIoEnd === a ? b : a;
 
   if (boardIoEnd) {
+    if (hasProbeEndpoint(diagram, from, to)) {
+      return null;
+    }
     if (!otherEnd.isMcu) {
       return `${boardIoEnd.def?.label ?? 'This component'} must connect directly to the MCU.`;
     }
@@ -87,6 +91,7 @@ export function validateWireConnection(diagram: Diagram, from: WireEndpoint, to:
   for (const endpoint of newEndpoints) {
     const role = getRole(diagram, endpoint);
     if (!role.boardIoKind) continue;
+    if (newEndpoints.some((candidate) => isProbeEndpoint(diagram, candidate))) continue;
 
     const existing = diagram.wires.find((wire) =>
       (wire.from.part === endpoint.part && wire.to.part === 'mcu')

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
-export type PaletteCategory = 'i2c' | 'spi' | 'uart' | 'analog' | 'gpio' | 'misc';
+export type PaletteCategory = 'i2c' | 'spi' | 'uart' | 'analog' | 'gpio' | 'tools' | 'misc';
 
 export interface PaletteComponent {
   type: string;
@@ -26,6 +26,7 @@ const CATEGORIES: { id: PaletteCategory | 'all'; label: string }[] = [
   { id: 'uart', label: 'UART' },
   { id: 'analog', label: 'Analog' },
   { id: 'gpio', label: 'GPIO' },
+  { id: 'tools', label: 'Tools' },
   { id: 'misc', label: 'Misc' },
 ];
 

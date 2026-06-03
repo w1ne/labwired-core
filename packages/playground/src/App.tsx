@@ -57,6 +57,7 @@ import { ChipWindow } from './multi-mcu/ChipWindow';
 import { ChipInspector } from './multi-mcu/ChipInspector';
 import { BleAnalyzer } from './instruments/BleAnalyzer';
 import { IoLinkAnalyzer } from './instruments/IoLinkAnalyzer';
+import { LogicAnalyzerPanel } from './instruments/LogicAnalyzerPanel';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -565,6 +566,7 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   diode: 'misc',
   transistor: 'misc',
   'shift-register-74hc595': 'misc',
+  'logic-analyzer': 'tools',
 };
 
 // Wall-clock time the MCU has been running, mm:ss.
@@ -1277,6 +1279,25 @@ export function App() {
     });
   const closeWindow = (id: string) =>
     setOpenWindows((prev) => prev.filter((w) => w.id !== id));
+  const openLogicAnalyzerTool = () => {
+    const existing = editor.state.diagram.parts.find((part) => part.type === 'logic-analyzer');
+    if (existing) {
+      openWindow(existing.id);
+      return;
+    }
+    const def = COMPONENT_REGISTRY.get('logic-analyzer');
+    if (!def) return;
+    const id = nextPartId('logic-analyzer');
+    editor.addPart({
+      id,
+      type: 'logic-analyzer',
+      x: 620,
+      y: 180,
+      rotate: 0,
+      attrs: { ...def.defaultAttrs },
+    });
+    openWindow(id);
+  };
 
   // Build live sensor widget for selected I2C / UART devices
   const inspectorLabWidget = useMemo<ReactNode>(() => {
@@ -2042,6 +2063,7 @@ export function App() {
     );
   }
 
+  const logicAnalyzerPart = editor.state.diagram.parts.find((part) => part.type === 'logic-analyzer');
   const studioTools = [
     {
       id: 'air-tracer',
@@ -2051,11 +2073,11 @@ export function App() {
       onToggle: () => setShowAnalyzer((v) => !v),
     },
     {
-      id: 'iolink-analyzer',
-      label: 'IO-Link Analyzer',
-      description: 'Master↔device frames, CRC, link state',
-      active: showIolink,
-      onToggle: () => setShowIolink((v) => !v),
+      id: 'logic-analyzer',
+      label: 'Logic Analyzer',
+      description: 'Drop probe channels onto signal wires',
+      active: !!logicAnalyzerPart,
+      onToggle: openLogicAnalyzerTool,
     },
   ];
 
@@ -2551,6 +2573,30 @@ export function App() {
               traceEntries={traceEntries}
               stackMemory={stackMemory}
               stackBase={stackBase}
+            />
+          </ChipWindow>
+        );
+      }
+
+      if (part.type === 'logic-analyzer') {
+        return (
+          <ChipWindow
+            key={partId}
+            initial={{ x: w.x, y: w.y }}
+            width={580}
+            height={380}
+            zIndex={Math.min(60 + i, 95)}
+            onFocus={() => editor.select(partId)}
+            onClose={() => closeWindow(partId)}
+            title={
+              <span className="truncate text-xs font-semibold text-fg-primary">Logic Analyzer</span>
+            }
+          >
+            <LogicAnalyzerPanel
+              diagram={editor.state.diagram}
+              analyzerId={partId}
+              bridge={bridge}
+              running={running}
             />
           </ChipWindow>
         );

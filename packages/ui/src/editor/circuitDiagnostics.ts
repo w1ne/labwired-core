@@ -11,6 +11,7 @@
 import type { Diagram, WireEndpoint } from './types';
 import { COMPONENT_REGISTRY } from './components/index';
 import { findPinFunction, getPinMapping } from './pin-mapping';
+import { hasProbeEndpoint } from './probeWiring';
 
 export type DiagnosticSeverity = 'error' | 'warning';
 
@@ -143,6 +144,7 @@ function diagnoseWireEndpoints(diagram: Diagram, from: WireEndpoint, to: WireEnd
   const boardIoEnd = a.boardIoKind ? a : b.boardIoKind ? b : null;
   const otherEnd = boardIoEnd === a ? b : a;
   if (!boardIoEnd) return null;
+  if (hasProbeEndpoint(diagram, from, to)) return null;
 
   if (!otherEnd.isMcu) {
     return {

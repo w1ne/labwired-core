@@ -42,12 +42,14 @@ export interface PinDef {
   y: number;
   side: PinSide;
   label?: string;
+  /** Passive measurement point. Probe pins may tap an existing signal net. */
+  probe?: boolean;
 }
 
 export interface ComponentDef {
   type: string;
   label: string;
-  category: 'output' | 'input' | 'passive' | 'mcu' | 'sensor' | 'display' | 'ic';
+  category: 'output' | 'input' | 'passive' | 'mcu' | 'sensor' | 'display' | 'ic' | 'tool';
   width: number;
   height: number;
   pins: PinDef[];
