@@ -67,14 +67,22 @@ impl Rcc {
     }
 
     pub fn new_with_layout(layout: RccRegisterLayout) -> Self {
-        // L4 boots with MSI on at range 6 (4 MHz). CR reset value:
-        //   bit 0  MSION       = 1
-        //   bit 1  MSIRDY      = 1
-        //   bits 7:4 MSIRANGE   = 0110 = 6 (= 4 MHz)
-        // Total = 0x0000_0063. F1/F4/V2 don't have MSI; reset CR to
-        // just HSION (their canonical post-reset state).
+        // Per-family CR reset value. F1 path is silicon-verified against
+        // STM32F103C8 (Blue Pill, 2026-06-04); L4 against NUCLEO-L476RG.
+        // Each branch is independent — touching one cannot regress another.
         let cr_reset = match layout {
+            // L4 boots with MSI on at range 6 (4 MHz).
+            //   bit 0  MSION    = 1
+            //   bit 1  MSIRDY   = 1
+            //   bits 7:4 MSIRANGE = 0110 = 6 (= 4 MHz)
             RccRegisterLayout::Stm32L4 => 0x0000_0063,
+            // F1 verified on real STM32F103C8 silicon: 0x00004A83.
+            //   bit 0  HSION       = 1
+            //   bit 1  HSIRDY      = 1
+            //   bits 7:3 HSITRIM   = 0x10 (default trim, bit 7 set)
+            //   bits 15:8 HSICAL   = 0x4A (chip-specific calibration value)
+            RccRegisterLayout::Stm32F1 => 0x0000_4A83,
+            // F4/V2: just HSION; no per-silicon trim/cal in the model yet.
             _ => Self::CR_HSION,
         };
         let mut rcc = Self {

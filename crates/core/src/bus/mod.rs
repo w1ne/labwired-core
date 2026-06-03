@@ -1016,7 +1016,14 @@ impl SystemBus {
                     Box::new(crate::peripherals::spi::Spi::new_with_layout(layout))
                 }
                 "pwr" => Box::new(crate::peripherals::pwr::Pwr::new()),
-                "flash" | "flash_iface" => Box::new(crate::peripherals::flash::Flash::new()),
+                "flash" | "flash_iface" => {
+                    // Layout selected via `config: { profile: stm32f1 | stm32l4 }`
+                    // in the chip yaml. Missing/unknown profile keeps the L4
+                    // default — backward compatible with existing chip configs.
+                    let layout: crate::peripherals::flash::FlashRegisterLayout =
+                        Self::parse_profile_or_default(p_cfg, "FLASH")?;
+                    Box::new(crate::peripherals::flash::Flash::new_with_layout(layout))
+                }
                 "rng" => Box::new(crate::peripherals::rng::Rng::new()),
                 "crc" => Box::new(crate::peripherals::crc::Crc::new()),
                 "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
