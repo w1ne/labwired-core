@@ -32,6 +32,9 @@ serde_json = { workspace = true }
 # `runtime_snapshot` module for binary-format mid-flight resume snapshots.
 # The JSON `MachineSnapshot` stays in serde_json for the determinism gates.
 bincode = "1.3"
+# SHA-256 compression for the ESP32-S3 SHA accelerator model (bootloader
+# image-hash verification). Used only by the esp32s3 SHA peripheral.
+sha2 = { workspace = true, features = ["compress"] }
 goblin = { workspace = true }
 labwired-ir = { path = "../ir" }
 serde_yaml.workspace = true

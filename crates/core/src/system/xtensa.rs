@@ -1014,6 +1014,18 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(crate::peripherals::esp32s3::rng::Esp32s3Rng::new()),
     );
 
+    // ── SHA accelerator (DR_REG_SHA_BASE, 0x6003_B000) ───────────────────
+    // Real SHA-256 (sha2::compress256) so the boot ROM / bootloader can verify
+    // the app image's appended hash. Without it the digest reads 0xFF and every
+    // image is rejected. Registered before the mmio_rest catch-all.
+    bus.add_peripheral(
+        "sha",
+        0x6003_B000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::sha::Esp32s3Sha::new()),
+    );
+
     // Catch-all for the rest of the high-MMIO range that esp-hal / the boot
     // ROM / 2nd-stage bootloader poke during init (LEDC, RMT, GPIO matrix,
     // GDMA, APB_SARADC (bootloader RNG/entropy enable @0x6004_0000), LCD_CAM,

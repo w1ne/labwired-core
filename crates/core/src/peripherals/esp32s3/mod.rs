@@ -11,6 +11,7 @@ pub mod i2c;
 pub mod intmatrix;
 pub mod io_mux;
 pub mod rng;
+pub mod sha;
 pub mod rom_thunks;
 pub mod spi_mem_flash;
 pub mod system_stub;
