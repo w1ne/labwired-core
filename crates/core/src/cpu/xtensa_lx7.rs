@@ -108,6 +108,15 @@ pub struct XtensaLx7 {
     /// app-cpu boot address (mirrors real silicon's reset-hold). Default
     /// false; ESP32 dual-core setup sets it on cpu_secondary at boot.
     pub halted: bool,
+    /// Faithful windowed-register mode. When true, the CPU uses the REAL
+    /// Xtensa window machinery — per-access window-overflow checks that vector
+    /// to the firmware's OF{4,8,12} handlers (which spill to the stack save
+    /// chain), and RETW underflow to the UF handlers — with NO sim-level
+    /// "shadow" spill stack. Requires firmware that installs the window vectors
+    /// and builds a proper save chain (i.e. --rom-boot from a real reset).
+    /// Default false: fast-boot jumps mid-execution without a primed chain, so
+    /// it relies on the shadow mechanism instead.
+    pub faithful_windows: bool,
     /// IRAM/flash instruction-fetch slice cache (#119 Phase 1.2).
     fetch_cache: Option<(u64, u64, usize)>,
     /// Decode cache (#124 follow-on): direct-mapped PC → (tag, len, decoded
@@ -143,6 +152,7 @@ impl XtensaLx7 {
             pc: 0x4000_0400,
             branched: false,
             halted: false,
+            faithful_windows: false,
             fetch_cache: None,
             decode_cache: vec![None; DECODE_CACHE_SIZE],
             decode_gen: vec![0; DECODE_CACHE_SIZE],
@@ -494,6 +504,11 @@ impl XtensaLx7 {
     /// WS bit stays set (its data is just temporarily shadowed); on RETW
     /// from the callee we restore those four ARs.
     fn spill_shadow_on_call(&mut self, callinc: u8) {
+        // Faithful mode uses the real OF/UF handlers (stack save chain), not
+        // the sim shadow stack.
+        if self.faithful_windows {
+            return;
+        }
         let wb_old = self.regs.windowbase();
         let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
         // Caller's preserved area: slots wb_old..wb_old+n-1. Xtensa C ABI
@@ -543,8 +558,14 @@ impl XtensaLx7 {
         // — see Plan 3 case study and the design comment above. Kept here
         // (#[cfg(any())] gated) for future reference if we ever revisit the
         // canonical OF-vector firmware handler path.
-        #[cfg(any())]
-        if self.ps.woe() && !self.ps.excm() && !matches!(ins, Entry { .. }) {
+        // F5: per-access window-overflow check — faithful mode only. In
+        // shadow mode this stays off (the shadow spill on CALL handles wraps;
+        // vectoring here would double-fault on an unprimed save chain).
+        if self.faithful_windows
+            && self.ps.woe()
+            && !self.ps.excm()
+            && !matches!(ins, Entry { .. })
+        {
             let max_reg = ins.max_logical_reg();
             if max_reg >= 4 {
                 let w = (max_reg / 4) as u32; // slots ahead that need to be free
@@ -2151,6 +2172,7 @@ impl XtensaLx7 {
         self.pc = vecbase.wrapping_add(offset);
         Ok(())
     }
+
 }
 
 impl Default for XtensaLx7 {

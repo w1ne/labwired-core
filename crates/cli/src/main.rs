@@ -772,8 +772,14 @@ fn run_firmware(args: RunArgs) -> ExitCode {
             "labwired-cli run: ROM-boot from reset vector 0x{:08x} (real ROM + flash controller)",
             cpu.get_pc(),
         );
+        // Faithful windowed-register machinery: rom-boot runs the real ROM +
+        // firmware, which install the OF/UF window vectors and build a proper
+        // stack save chain — so use the real per-access overflow / RETW
+        // underflow path (no sim shadow stack).
+        cpu.faithful_windows = true;
         // Bring up the APP_CPU (halted at the ROM reset vector 0x40000400).
-        let c1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+        let mut c1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+        c1.faithful_windows = true;
         eprintln!(
             "labwired-cli run: APP_CPU created (halted at reset vector 0x{:08x})",
             c1.get_pc(),
