@@ -18,7 +18,7 @@ export const ultrasonicComponent: ComponentDef = {
   defaultAttrs: { distance: '100' },
   boardIoKind: 'button',
   attrFields: [
-    { key: 'distance', label: 'Distance (cm)', type: 'text' },
+    { key: 'distance', label: 'Distance (cm)', type: 'range', min: 1, max: 200, step: 1, defaultValue: '100' },
   ],
   render: (attrs, state) => {
     const selected = state?.selected;

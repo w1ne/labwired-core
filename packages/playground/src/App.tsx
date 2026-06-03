@@ -214,7 +214,7 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
       parts: [
         mcu,
         { id: 'lcd', type: 'pcd8544', x: 500, y: 60, rotate: 0, attrs: {} },
-        { id: 'dist', type: 'ultrasonic', x: 500, y: 280, rotate: 0, attrs: {} },
+        { id: 'dist', type: 'ultrasonic', x: 500, y: 280, rotate: 0, attrs: { distance: '100' } },
       ],
       wires: [
         { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'lcd', pin: 'VCC' }, color: '#FF6B6B' },

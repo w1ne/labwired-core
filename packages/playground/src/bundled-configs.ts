@@ -166,7 +166,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipId: 'stm32l476',
     name: 'Nokia 5110 Breakout',
     description:
-      'STM32L476 Breakout on a Nokia 5110 (PCD8544 84×48 LCD) over SPI, with an HC-SR04 ultrasonic sensor — move the hand-distance slider to steer the paddle.',
+      'STM32L476 Breakout on a Nokia 5110 (PCD8544 84×48 LCD) over SPI, with an HC-SR04 ultrasonic sensor — adjust Distance (cm) to steer the paddle.',
     arch: 'ARM Cortex-M4',
     chipYaml: chipStm32l476,
     systemYaml: systemNokia5110InvadersLab,

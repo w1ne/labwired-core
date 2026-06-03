@@ -3,8 +3,12 @@ import type { ReactNode } from 'react';
 export interface AttrField {
   key: string;
   label: string;
-  type: 'text' | 'select' | 'color';
+  type: 'text' | 'select' | 'color' | 'range';
   options?: string[];
+  min?: number;
+  max?: number;
+  step?: number;
+  defaultValue?: string;
 }
 
 export interface ComponentLiveState {
@@ -42,32 +46,61 @@ export function ComponentInspector({
   if (fields.length === 0) {
     fieldNodes = <div className="text-xs text-fg-tertiary">No editable properties.</div>;
   } else {
-    fieldNodes = fields.map((f) => (
-      <label key={f.key} className="flex flex-col gap-1">
-        <span className={labelCls}>{f.label}</span>
+    fieldNodes = fields.map((f) => {
+      const value = attrs[f.key] ?? f.defaultValue ?? '';
+      const inputId = `${partId}-${f.key}-input`;
+      const rangeId = `${partId}-${f.key}-range`;
+      return (
+      <div key={f.key} className="flex flex-col gap-1">
+        <label className={labelCls} htmlFor={inputId}>{f.label}</label>
         {f.type === 'select' ? (
-          <select className={inputCls} value={attrs[f.key] ?? ''} onChange={(e) => onChange(f.key, e.target.value)}>
+          <select id={inputId} className={inputCls} value={attrs[f.key] ?? ''} onChange={(e) => onChange(f.key, e.target.value)}>
             {(f.options ?? []).map((o) => (
               <option key={o} value={o}>{o}</option>
             ))}
           </select>
         ) : f.type === 'color' ? (
           <input
+            id={inputId}
             type="color"
             className="h-8 w-16 rounded-md border border-border bg-bg-elevated"
             value={attrs[f.key] ?? '#000000'}
             onChange={(e) => onChange(f.key, e.target.value)}
           />
+        ) : f.type === 'range' ? (
+          <div className="flex items-center gap-2">
+            <input
+              id={rangeId}
+              aria-label={f.label}
+              type="range"
+              min={f.min}
+              max={f.max}
+              step={f.step}
+              className="min-w-0 flex-1"
+              value={value}
+              onChange={(e) => onChange(f.key, e.target.value)}
+            />
+            <input
+              id={inputId}
+              type="text"
+              inputMode="decimal"
+              className={`${inputCls} w-20 text-right font-mono`}
+              value={value}
+              onChange={(e) => onChange(f.key, e.target.value)}
+            />
+          </div>
         ) : (
           <input
+            id={inputId}
             type="text"
             className={inputCls}
             value={attrs[f.key] ?? ''}
             onChange={(e) => onChange(f.key, e.target.value)}
           />
         )}
-      </label>
-    ));
+      </div>
+      );
+    });
   }
 
   return (

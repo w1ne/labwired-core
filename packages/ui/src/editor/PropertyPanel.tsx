@@ -100,6 +100,30 @@ export function PropertyPanel({ parts, onUpdateAttrs, onDelete, onRotate, onResi
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
+              ) : field.type === 'range' ? (
+                <>
+                  <input
+                    type="range"
+                    min={field.min}
+                    max={field.max}
+                    step={field.step}
+                    className="panel-slider"
+                    value={part.attrs[field.key] ?? field.defaultValue ?? ''}
+                    aria-label={field.label}
+                    onChange={(e) =>
+                      onUpdateAttrs(part.id, { [field.key]: e.target.value })
+                    }
+                  />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="panel-input panel-input-sm"
+                    value={part.attrs[field.key] ?? field.defaultValue ?? ''}
+                    onChange={(e) =>
+                      onUpdateAttrs(part.id, { [field.key]: e.target.value })
+                    }
+                  />
+                </>
               ) : (
                 <input
                   type="text"
