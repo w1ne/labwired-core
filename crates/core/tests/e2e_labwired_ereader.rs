@@ -28,6 +28,7 @@
 // `LABWIRED_EREADER_ELF` points.
 
 use labwired_core::bus::SystemBus;
+use labwired_core::cpu::xtensa_lx7::XtensaLx7;
 use labwired_core::peripherals::components::Uc8151dTricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::esp32s3::rom_thunks;
@@ -71,14 +72,23 @@ fn labwired_ereader_runs_to_panel_paint() {
     }
     bus.refresh_peripheral_index();
 
-    let mut machine = Machine::new(cpu, bus);
+    // Real dual-core: attach a second LX6 as APP_CPU (PRID 0xABAB →
+    // xPortGetCoreID()==1, starts halted until PRO_CPU releases it via
+    // ets_set_appcpu_boot_addr). Step 1 of the dual-core bring-up.
+    let mut machine = Machine::new(cpu, bus).with_secondary_cpu(XtensaLx7::new_app_cpu());
     machine.load_firmware(&image).expect("load firmware");
     machine.cpu.set_pc(image.entry_point as u32);
 
     // ── 2. SP seed — real silicon's BROM places SP near the top of
     //       DRAM before jumping to call_start_cpu0; we skip BROM in the
-    //       sim so seed it ourselves.
+    //       sim so seed it ourselves. Same for APP_CPU: the ROM sets its
+    //       SP before releasing it to call_start_cpu1 (whose first insn is
+    //       `entry a1,32`), so seed the secondary's SP in a separate DRAM
+    //       region (above .bss @0x3ffc5ce8, below PRO_CPU's stack).
     machine.cpu.set_sp(0x3FFE_0000);
+    if let Some(cpu1) = machine.cpu_secondary.as_mut() {
+        cpu1.set_sp(0x3FFD_8000);
+    }
 
     // ── 3. Symbol-driven thunk install. Resolves addresses from the
     //       ereader ELF and installs only the thunks for symbols
@@ -90,8 +100,14 @@ fn labwired_ereader_runs_to_panel_paint() {
         symbol_addrs.len()
     );
 
-    // Dual-core handshake bytes (pre-write to 0x01 + record for the
-    // keep-alive loop below so .bss zero-init can't wipe them).
+    // Boot rendezvous aid. The REAL APP_CPU now runs call_start_cpu1 and
+    // its scheduler/loopTask for real, but PRO_CPU's final startup barrier
+    // (app_startup.c: spin on s_other_cpu_startup_done, set by APP_CPU's
+    // IDLE-task idle hook) isn't yet completed by the two-core lockstep, so
+    // we still pre-assert the startup-handshake flags. This is a boot aid,
+    // NOT the loopTask fake (that's gone — loopTask genuinely runs on
+    // core 1). TODO(dual-core): drive the idle-hook rendezvous from the
+    // real APP_CPU and drop this.
     let mut handshake_bytes: Vec<u32> = Vec::new();
     for sym in &[
         "s_resume_cores",
@@ -110,19 +126,13 @@ fn labwired_ereader_runs_to_panel_paint() {
         let _ = machine.bus.write_u8(addr as u64, 0x01);
         handshake_bytes.push(addr);
     }
-    // Re-assert these flags the instant PRO_CPU releases APP_CPU (models
-    // APP_CPU bring-up) so newer arduino-esp32 cores don't time out in
-    // start_other_core. See rom_thunks::ets_set_appcpu_boot_addr.
+    // Re-assert the flags at the un-stall cycle (post-.bss) so .bss zero-init
+    // can't wipe them — see rom_thunks::ets_set_appcpu_boot_addr.
     rom_thunks::set_appcpu_up_flags(handshake_bytes.clone());
 
-    // loopTask xCoreID repin — arduino-esp32 pins loopTask to APP_CPU
-    // (CONFIG_ARDUINO_RUNNING_CORE=1), but the sim only models PRO_CPU, so a
-    // core-1 task never runs. Rewrite the xCoreID immediate to 0 in app_main.
-    if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-        if let Some((addr, msg)) = rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr) {
-            eprintln!("[ereader-sim] repinned loopTask xCoreID 1->0 ({msg}) @0x{addr:08x}");
-        }
-    }
+    // loopTask now runs on the REAL APP_CPU (core 1) — no repin. arduino-esp32
+    // pins loopTask to CONFIG_ARDUINO_RUNNING_CORE=1, which is genuinely
+    // modeled now. (Step 5 of dual-core bring-up: repin_loop_task deleted.)
 
     // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk.
     if let Some(&addr) = symbol_addrs.get("pxCurrentTCB") {
@@ -413,14 +423,6 @@ fn labwired_ereader_runs_to_panel_paint() {
     for _ in 0..MAX_STEPS {
         step_count += 1;
 
-        // Handshake keep-alive: re-write 0x01 to every recorded byte
-        // every 10k cycles so .bss zero-init can't wipe them.
-        if step_count.is_multiple_of(10_000) {
-            for &addr in &handshake_bytes {
-                let _ = machine.bus.write_u8(addr as u64, 0x01);
-            }
-        }
-
         // IPI bridge. DPORT_PRO_CPU_INTR_FROM_CPU_n_MAP_REG @ 0x3FF0_0164/_0168
         // captures the bit assignment, and writes to CPU_INTR_FROM_CPU_n
         // @ 0x3FF0_00DC/_00E0 trigger that bit on PRO_CPU.
@@ -476,6 +478,27 @@ fn labwired_ereader_runs_to_panel_paint() {
         }
         if step_count.is_multiple_of(SAMPLE_EVERY) {
             samples.push((step_count, pc));
+        }
+        // Early-exit once the panel has painted — keeps dual-core iteration
+        // fast (paint lands well before the 200M budget).
+        if step_count.is_multiple_of(200_000) {
+            if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
+                if let Some(p) = machine.bus.peripherals[idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<Esp32Spi>())
+                    .and_then(|spi| {
+                        spi.attached_devices.iter().find_map(|d| {
+                            d.as_any()
+                                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                        })
+                    })
+                {
+                    if p.refresh_generation() >= 2 {
+                        break;
+                    }
+                }
+            }
         }
     }
 
