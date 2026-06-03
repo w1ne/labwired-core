@@ -1001,6 +1001,19 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(SystemStub::new()),
     );
 
+    // ── RNG data register (WDEV_RND_REG, 0x6003_507C) ────────────────────
+    // Must register BEFORE the mmio_rest catch-all (which would return a
+    // constant). The 2nd-stage bootloader reads this for entropy and retries
+    // until it gets a non-zero random value; a constant makes that loop spin
+    // forever. Modeled with a deterministic PRNG (reproducible per LabWired).
+    bus.add_peripheral(
+        "rng",
+        0x6003_5000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::rng::Esp32s3Rng::new()),
+    );
+
     // Catch-all for the rest of the high-MMIO range that esp-hal / the boot
     // ROM / 2nd-stage bootloader poke during init (LEDC, RMT, GPIO matrix,
     // GDMA, APB_SARADC (bootloader RNG/entropy enable @0x6004_0000), LCD_CAM,

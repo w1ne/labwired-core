@@ -767,6 +767,21 @@ impl XtensaLx7 {
                 self.sr.write(SAR, shamt as u32 & 0x1F);
                 self.pc = self.pc.wrapping_add(len);
             }
+            // RER — Read External Register: AT = ext_read(AS). The ESP32-S3
+            // "external register" space (RF/PHY/config, accessed via a side
+            // bus) is not modeled; the boot path only probes config/feature
+            // bits here, for which the silicon default reads as 0. Returning 0
+            // keeps those checks on their default (feature-off) branch.
+            Rer { at, as_ } => {
+                let _addr = self.regs.read_logical(as_);
+                self.regs.write_logical(at, 0);
+                self.pc = self.pc.wrapping_add(len);
+            }
+            // WER — Write External Register: ext_write(AS, AT). Unmodeled
+            // external space — accept and drop, as a benign config write.
+            Wer { .. } => {
+                self.pc = self.pc.wrapping_add(len);
+            }
             // SSA8L as_: SAR = (as_ & 3) * 8. (little-endian byte-select; ISA RM §4.3.7)
             Ssa8l { as_ } => {
                 let v = (self.regs.read_logical(as_) & 3) * 8;

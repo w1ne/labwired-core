@@ -99,6 +99,17 @@ pub enum Instruction {
     Ssai {
         shamt: u8,
     },
+    /// RER — Read External Register: `AT = ext_read(AS)`. ESP32 uses this for
+    /// RF/PHY/config registers outside the normal address space.
+    Rer {
+        at: u8,
+        as_: u8,
+    },
+    /// WER — Write External Register: `ext_write(AS, AT)`.
+    Wer {
+        at: u8,
+        as_: u8,
+    },
     // -- Arith immediate --
     Addi {
         at: u8,
@@ -1116,6 +1127,9 @@ fn decode_st3_shiftsetup(w: u32, r: u8, s: u8, t: u8) -> Instruction {
         0x4 => Instruction::Ssai {
             shamt: ((t & 0x1) << 4) | s,
         },
+        // RER (r=6) / WER (r=7): external-register access (ESP32 RF/PHY/config).
+        0x6 => Instruction::Rer { at: t, as_: s },
+        0x7 => Instruction::Wer { at: t, as_: s },
         _ => Instruction::Unknown(w),
     }
 }
@@ -1737,6 +1751,7 @@ impl Instruction {
             // Windowed flow
             Entry { as_, .. } => as_,
             Movsp { at, as_ } => at.max(as_),
+            Rer { at, as_ } | Wer { at, as_ } => at.max(as_),
             Rotw { .. } => 0,
             Ret => 0,
             Retw => 0,
