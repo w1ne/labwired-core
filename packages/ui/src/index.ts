@@ -96,6 +96,7 @@ export {
   PERIPHERAL_MANIFEST_SCHEMA,
   findKit,
   findKitByBoardId,
+  kitLabs,
   kitsWithLabs,
 } from './peripherals/registry';
 export type {

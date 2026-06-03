@@ -46,7 +46,13 @@ export interface KitMetadata {
   transport: Transport;
   category: Category;
   config_keys: ConfigKey[];
-  lab: LabRef | null;
+  /**
+   * Starter labs the peripheral ships with. Zero entries = no demo lab
+   * yet (the kit is library-only). One entry is the common case. Multiple
+   * entries cover peripherals reused across chips (e.g. an e-paper model
+   * that has both STM32 and ESP32 labs).
+   */
+  labs: LabRef[];
 }
 
 interface Manifest {
@@ -57,7 +63,7 @@ interface Manifest {
 const MANIFEST = manifestRaw as Manifest;
 
 /** Schema version the TS side was built against. Generator must match. */
-export const PERIPHERAL_MANIFEST_SCHEMA = 1;
+export const PERIPHERAL_MANIFEST_SCHEMA = 2;
 
 if (MANIFEST.schema_version !== PERIPHERAL_MANIFEST_SCHEMA) {
   throw new Error(
@@ -74,14 +80,20 @@ export function findKit(deviceType: string): KitMetadata | undefined {
   return PERIPHERAL_KITS.find((k) => k.device_type === deviceType);
 }
 
-/** Lookup by the boardId of the kit's associated starter lab. */
+/** Lookup by the boardId of any of the kit's associated starter labs. */
 export function findKitByBoardId(boardId: string): KitMetadata | undefined {
-  return PERIPHERAL_KITS.find((k) => k.lab?.board_id === boardId);
+  return PERIPHERAL_KITS.find((k) => k.labs.some((l) => l.board_id === boardId));
 }
 
-/** All kits that ship a starter lab (every kit, currently — but the type
- *  allows lab-less kits, so we filter explicitly).
+/** All (kit, lab) pairs across every registered kit. A kit with two labs
+ * yields two pairs; a kit with zero labs yields none. Most surface gates
+ * want to assert against the pair, not the kit.
  */
+export function kitLabs(): { kit: KitMetadata; lab: LabRef }[] {
+  return PERIPHERAL_KITS.flatMap((kit) => kit.labs.map((lab) => ({ kit, lab })));
+}
+
+/** All kits that ship at least one starter lab. */
 export function kitsWithLabs(): KitMetadata[] {
-  return PERIPHERAL_KITS.filter((k): k is KitMetadata & { lab: LabRef } => k.lab !== null);
+  return PERIPHERAL_KITS.filter((k) => k.labs.length > 0);
 }

@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PERIPHERAL_KITS, kitsWithLabs } from '@labwired/ui';
+import { PERIPHERAL_KITS, kitLabs } from '@labwired/ui';
 
 import { BOARD_CONFIGS } from './bundled-configs';
 import { STARTER_LABS } from './studio/ChipRow';
@@ -32,39 +32,39 @@ describe('peripheral kits ↔ playground surfaces', () => {
     expect(PERIPHERAL_KITS.length).toBeGreaterThan(0);
   });
 
-  it.each(kitsWithLabs())(
-    'kit "$device_type" has a BOARD_CONFIGS entry matching its lab',
-    (kit) => {
-      const board = BOARD_CONFIGS.find((b) => b.boardId === kit.lab.board_id);
+  it.each(kitLabs())(
+    'kit "$kit.device_type" lab "$lab.board_id" has a BOARD_CONFIGS entry',
+    ({ kit, lab }) => {
+      const board = BOARD_CONFIGS.find((b) => b.boardId === lab.board_id);
       expect(
         board,
-        `kit '${kit.device_type}' lab '${kit.lab.board_id}' has no BOARD_CONFIGS entry`,
+        `kit '${kit.device_type}' lab '${lab.board_id}' has no BOARD_CONFIGS entry`,
       ).toBeDefined();
-      expect(board!.chipId).toBe(kit.lab.chip);
+      expect(board!.chipId).toBe(lab.chip);
       // The demo ELF the manifest declares must match what BOARD_CONFIGS
       // tells the browser to fetch — otherwise Run shows index.html.
-      expect(board!.demoFirmwarePath ?? '').toContain(kit.lab.demo_elf);
+      expect(board!.demoFirmwarePath ?? '').toContain(lab.demo_elf);
     },
   );
 
-  it.each(kitsWithLabs())(
-    'kit "$device_type" appears in STARTER_LABS (chip row)',
-    (kit) => {
-      const lab = STARTER_LABS.find((l) => l.id === kit.lab.board_id);
+  it.each(kitLabs())(
+    'kit "$kit.device_type" lab "$lab.board_id" appears in STARTER_LABS (chip row)',
+    ({ kit, lab }) => {
+      const entry = STARTER_LABS.find((l) => l.id === lab.board_id);
       expect(
-        lab,
-        `kit '${kit.device_type}' lab '${kit.lab.board_id}' is missing from STARTER_LABS`,
+        entry,
+        `kit '${kit.device_type}' lab '${lab.board_id}' is missing from STARTER_LABS`,
       ).toBeDefined();
     },
   );
 
-  it.each(kitsWithLabs())(
-    'kit "$device_type" appears in the Library',
-    (kit) => {
-      const tile = FEATURED_LABS.find((b) => b.id === kit.lab.board_id);
+  it.each(kitLabs())(
+    'kit "$kit.device_type" lab "$lab.board_id" appears in the Library',
+    ({ kit, lab }) => {
+      const tile = FEATURED_LABS.find((b) => b.id === lab.board_id);
       expect(
         tile,
-        `kit '${kit.device_type}' lab '${kit.lab.board_id}' is missing from FEATURED_LABS`,
+        `kit '${kit.device_type}' lab '${lab.board_id}' is missing from FEATURED_LABS`,
       ).toBeDefined();
     },
   );

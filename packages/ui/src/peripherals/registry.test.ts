@@ -39,12 +39,13 @@ describe('peripheral kit registry', () => {
     expect(findKit('this-does-not-exist')).toBeUndefined();
   });
 
-  it('kitsWithLabs preserves narrowed lab field', () => {
+  it('kitsWithLabs yields kits whose labs slice is non-empty', () => {
     for (const k of kitsWithLabs()) {
-      // TS narrows `lab` to non-null in the helper; runtime check too.
-      expect(k.lab).not.toBeNull();
-      expect(k.lab!.board_id.length).toBeGreaterThan(0);
-      expect(k.lab!.demo_elf.length).toBeGreaterThan(0);
+      expect(k.labs.length).toBeGreaterThan(0);
+      for (const lab of k.labs) {
+        expect(lab.board_id.length).toBeGreaterThan(0);
+        expect(lab.demo_elf.length).toBeGreaterThan(0);
+      }
     }
   });
 });

@@ -231,6 +231,24 @@ export const FEATURED_LABS: FeaturedLab[] = [
     accent: '#27c93f',
     icon: '📰',
   },
+  {
+    id: 'nokia5110-invaders-lab',
+    name: 'Nokia 5110 Breakout',
+    chip: 'STM32L476 · Cortex-M4',
+    description: 'PCD8544 84×48 monochrome LCD driven over SPI with a D/C GPIO discriminator.',
+    detail: 'The full PCD8544 framebuffer model — the bus resolves the D/C pin to its driving GPIO ODR address at attach time, then commands vs data are decoded purely from SPI transactions.',
+    accent: '#ffbd2e',
+    icon: '🕹️',
+  },
+  {
+    id: 'al2205-iolink-dido',
+    name: 'IO-Link DI (AL2205)',
+    chip: 'STM32L476 · Cortex-M4',
+    description: 'IO-Link master driving an AL2205-style 2-channel DI device over a UART link.',
+    detail: 'Full IO-Link master state machine in Rust core (wake-up → startup → operate cycles, m-sequence types, CRC6). A 74HC165 shift register surfaces the field-side switch state for the firmware to read over SPI.',
+    accent: '#3ec1d3',
+    icon: '🔌',
+  },
 ];
 
 const STATUS_LABEL: Record<SupportedBoard['status'], string> = {
