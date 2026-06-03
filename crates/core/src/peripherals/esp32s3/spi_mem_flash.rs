@@ -55,10 +55,19 @@ const FLASH_WREN: u32 = 1 << 30; // write enable
 const STATUS_WIP: u16 = 1 << 0; // write-in-progress (busy)
 const STATUS_WEL: u16 = 1 << 1; // write-enable latch
 
-/// Flash command opcodes the controller emulates.
+/// Flash command opcodes the controller emulates (USR-path `USER2` opcode).
 const CMD_READ: u8 = 0x03; // READ
 const CMD_FAST_READ: u8 = 0x0B; // FAST READ
-const CMD_RDSR: u8 = 0x05; // read status register
+const CMD_RDSR: u8 = 0x05; // read status register 1 (WIP/WEL)
+const CMD_RDSR2: u8 = 0x35; // read status register 2 (QE/…)
+const CMD_RDSR3: u8 = 0x15; // read status register 3
+const CMD_WRSR: u8 = 0x01; // write status register 1
+const CMD_WRSR2: u8 = 0x31; // write status register 2
+const CMD_WRSR3: u8 = 0x11; // write status register 3
+const CMD_WREN: u8 = 0x06; // write enable
+const CMD_WRDI: u8 = 0x04; // write disable
+const CMD_SFDP: u8 = 0x5A; // read SFDP
+const CMD_RDUID: u8 = 0x4B; // read unique ID (64-bit)
 const CMD_RDID: u8 = 0x9F; // read JEDEC id
 
 #[derive(Debug)]
@@ -163,13 +172,38 @@ impl SpiMemFlash {
                     self.set_reg(W0 + (w as u64) * 4, word);
                 }
             }
-            CMD_RDSR => {
-                // Status register: WIP (busy) = bit 0 = 0 → flash idle.
-                self.set_reg(W0, 0x0000_0000);
-            }
+            // Status register 1 (WIP/WEL) — must reflect the modeled status so
+            // the app's esp_flash WREN→RDSR→check-WEL and write-completion polls
+            // work through the USR path (not just the dedicated CMD bits).
+            CMD_RDSR => self.set_reg(W0, self.flash_status as u32),
+            // Status registers 2 (QE/...) and 3 — no quad enable / config bits
+            // set; the esp_flash chip probe just needs consistent reads.
+            CMD_RDSR2 | CMD_RDSR3 => self.set_reg(W0, 0),
             CMD_RDID => {
                 // JEDEC id: a generic 4 MB part (mfg 0x20, type 0x40, cap 0x16).
                 self.set_reg(W0, 0x0016_4020);
+            }
+            // Read 64-bit unique ID. esp_flash rejects all-zero / all-ones as
+            // ESP_ERR_INVALID_RESPONSE, so return a fixed non-trivial value.
+            CMD_RDUID => {
+                self.set_reg(W0, 0x1716_1514);
+                self.set_reg(W0 + 4, 0x1F1E_1D1C);
+            }
+            // SFDP: no parameter table modeled — return zeros so esp_flash falls
+            // back to RDID-based detection rather than reading stale data.
+            CMD_SFDP => {
+                for i in 0..read_bytes.max(1) {
+                    self.set_reg(W0 + (i as u64 / 4) * 4, 0);
+                }
+            }
+            // Write-enable / disable through the USR path (mirrors the dedicated
+            // bits) so WEL is coherent regardless of which path the app uses.
+            CMD_WREN => self.flash_status |= STATUS_WEL,
+            CMD_WRDI => self.flash_status &= !STATUS_WEL,
+            // Write status register: completes instantly, consuming the write-
+            // enable latch and leaving WIP clear (no write latency).
+            CMD_WRSR | CMD_WRSR2 | CMD_WRSR3 => {
+                self.flash_status &= !(STATUS_WEL | STATUS_WIP);
             }
             _ => {
                 // Unmodeled command: no data, just complete.

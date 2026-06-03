@@ -912,6 +912,24 @@ fn run_firmware(args: RunArgs) -> ExitCode {
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         }
+        // panic_abort(details) reason printer (gated): the ESP-IDF panic path
+        // stores the assert/abort string ptr in a2 just before the trap. Helps
+        // pinpoint firmware-level aborts during bring-up.
+        if std::env::var("LABWIRED_CCDBG").is_ok() {
+            for c in [Some(&cpu), cpu1.as_ref()].into_iter().flatten() {
+                if c.get_pc() == 0x4037_e0a3 {
+                    let p = c.regs.read_logical(2);
+                    let mut s = String::new();
+                    for i in 0..160u32 {
+                        match bus.read_u8(p as u64 + i as u64) {
+                            Ok(0) | Err(_) => break,
+                            Ok(b) => s.push(b as char),
+                        }
+                    }
+                    eprintln!("CCDBG: panic \"{s}\" step={steps}");
+                }
+            }
+        }
         // Step the APP_CPU round-robin (one instruction per PRO_CPU step).
         // A halted APP_CPU returns immediately from step(). S32C1I is atomic
         // within step(), so spinlocks between the cores behave correctly.
