@@ -2538,6 +2538,91 @@ impl UartStreamDevice for QuectelBg770a {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct QuectelBg770aKit;
+pub static BG770A_KIT: QuectelBg770aKit = QuectelBg770aKit;
+
+static BG770A_METADATA: KitMetadata = KitMetadata {
+    device_type: "bg770a-cellular",
+    label: "Quectel BG770A Cellular",
+    summary: "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
+    detail: "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, \
+             validated against real BG770A-GL hardware captures. Firmware sends AT commands, \
+             modem replies stream back over UART.",
+    transport: Transport::Uart,
+    category: Category::Uart,
+    config_keys: &[
+        ConfigKey {
+            name: "apn",
+            ty: ConfigType::Str,
+            doc: "APN to set on the PDP context (e.g. \"internet\").",
+        },
+        ConfigKey {
+            name: "rssi",
+            ty: ConfigType::Int,
+            doc: "Initial signal strength reported by AT+CSQ (0..99).",
+        },
+        ConfigKey {
+            name: "ber",
+            ty: ConfigType::Int,
+            doc: "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99).",
+        },
+        ConfigKey {
+            name: "boot_urcs",
+            ty: ConfigType::Bool,
+            doc: "If true, the modem emits the cold-boot URC sequence on attach.",
+        },
+        ConfigKey {
+            name: "auto_attach",
+            ty: ConfigType::Bool,
+            doc: "If true, the modem reports itself already registered + attached at boot.",
+        },
+    ],
+    lab: Some(LabRef {
+        board_id: "quectel-bg770a-lab",
+        chip: "stm32f103",
+        example_dir: "quectel-bg770a-lab",
+        demo_elf: "demo-quectel-bg770a-lab.elf",
+    }),
+};
+
+impl PeripheralKit for QuectelBg770aKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &BG770A_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let boot_urcs = matches!(ctx.config_bool("boot_urcs"), Some(true));
+        let apn = ctx.config_str("apn").map(str::to_string);
+        let rssi = ctx.config_i64("rssi");
+        let ber = ctx.config_i64("ber");
+        let auto_attach = matches!(ctx.config_bool("auto_attach"), Some(true));
+
+        let uart = ctx.uart()?;
+        let mut modem = QuectelBg770a::new();
+        if boot_urcs {
+            modem = modem.with_boot_urcs();
+        }
+        if let Some(apn) = apn {
+            modem.set_apn(&apn);
+        }
+        if let Some(rssi) = rssi {
+            let ber = ber.unwrap_or(99);
+            modem.set_signal(rssi.clamp(0, 99) as u8, ber.clamp(0, 99) as u8);
+        }
+        if auto_attach {
+            modem.complete_network_attach();
+        }
+        uart.attach_stream(Box::new(modem));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

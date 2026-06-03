@@ -1,0 +1,37 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+//
+// This software is released under the MIT License.
+// See the LICENSE file in the project root for full license information.
+
+//! The single source of truth for migrated peripherals.
+//!
+//! To add or migrate a peripheral: implement [`super::PeripheralKit`] for
+//! it (typically as a unit struct living next to the model), expose a
+//! `pub static` instance, and append it to the [`kits`] slice below. The
+//! peripheral_kit_gate test verifies each entry is well-formed and unique;
+//! the manifest generator (`labwired-peripherals-manifest`) iterates this
+//! slice to produce `peripherals-manifest.json` for the playground.
+
+use super::PeripheralKit;
+use crate::peripherals::components;
+
+/// All peripherals that have migrated to the [`PeripheralKit`] contract.
+/// Peripherals not listed here still use the legacy hand-written arms in
+/// `bus/mod.rs` — both paths coexist during migration.
+pub static KITS: &[&'static dyn PeripheralKit] = &[
+    &components::bg770a::BG770A_KIT,
+    &components::neo6m::NEO6M_KIT,
+];
+
+/// Borrow the registry slice.
+pub fn kits() -> &'static [&'static dyn PeripheralKit] {
+    KITS
+}
+
+/// Lookup a kit by the `device_type` string used in `system.yaml`.
+pub fn lookup(device_type: &str) -> Option<&'static dyn PeripheralKit> {
+    KITS.iter()
+        .copied()
+        .find(|k| k.metadata().device_type == device_type)
+}

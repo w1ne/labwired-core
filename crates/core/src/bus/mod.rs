@@ -1475,6 +1475,15 @@ impl SystemBus {
         }
 
         for ext in &manifest.external_devices {
+            // First-pass: peripherals that have migrated to the unified
+            // `PeripheralKit` contract are dispatched through the registry,
+            // so each one ships its own `attach` next to its model instead
+            // of a hand-written arm here.
+            if let Some(kit) = crate::peripherals::kit::registry::lookup(&ext.r#type) {
+                let mut ctx = crate::peripherals::kit::AttachCtx::new(&mut bus, ext);
+                kit.attach(&mut ctx)?;
+                continue;
+            }
             match ext.r#type.as_str() {
                 "ili9341" => {
                     // SPI device path
@@ -1568,106 +1577,8 @@ impl SystemBus {
                         ))),
                     }
                 }
-                "neo6m-gps" => {
-                    // UART stream device path
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let uart = any
-                        .downcast_mut::<crate::peripherals::uart::Uart>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not a UART peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let mut gps = crate::peripherals::components::Neo6mGps::new();
-
-                    // Optionally read initial position from config
-                    if let Some(lat) = ext.config.get("lat_deg").and_then(|v| v.as_f64()) {
-                        if let Some(lon) = ext.config.get("lon_deg").and_then(|v| v.as_f64()) {
-                            gps.set_position(lat, lon);
-                        }
-                    }
-
-                    uart.attach_stream(Box::new(gps));
-                }
-                "bg770a-cellular" => {
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let uart = any
-                        .downcast_mut::<crate::peripherals::uart::Uart>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not a UART peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let mut modem = crate::peripherals::components::QuectelBg770a::new();
-
-                    if matches!(
-                        ext.config.get("boot_urcs").and_then(|v| v.as_bool()),
-                        Some(true)
-                    ) {
-                        modem = modem.with_boot_urcs();
-                    }
-                    if let Some(apn) = ext.config.get("apn").and_then(|v| v.as_str()) {
-                        modem.set_apn(apn);
-                    }
-                    if let Some(rssi) = ext.config.get("rssi").and_then(|v| v.as_i64()) {
-                        let ber = ext.config.get("ber").and_then(|v| v.as_i64()).unwrap_or(99);
-                        modem.set_signal(rssi.clamp(0, 99) as u8, ber.clamp(0, 99) as u8);
-                    }
-                    if matches!(
-                        ext.config.get("auto_attach").and_then(|v| v.as_bool()),
-                        Some(true)
-                    ) {
-                        modem.complete_network_attach();
-                    }
-
-                    uart.attach_stream(Box::new(modem));
-                }
+                // neo6m-gps and bg770a-cellular dispatch through the
+                // PeripheralKit registry above — see `peripherals::kit`.
                 "iolink-master" => {
                     // UART stream device path
                     let idx = bus

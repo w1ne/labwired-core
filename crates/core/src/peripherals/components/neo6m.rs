@@ -165,6 +165,62 @@ impl UartStreamDevice for Neo6mGps {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Neo6mGpsKit;
+pub static NEO6M_KIT: Neo6mGpsKit = Neo6mGpsKit;
+
+static NEO6M_METADATA: KitMetadata = KitMetadata {
+    device_type: "neo6m-gps",
+    label: "NEO-6M GPS",
+    summary: "GPS module streaming NMEA sentences over UART RX.",
+    detail: "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. \
+             Firmware echoes the stream back to the host UART.",
+    transport: Transport::Uart,
+    category: Category::Uart,
+    config_keys: &[
+        ConfigKey {
+            name: "lat_deg",
+            ty: ConfigType::Float,
+            doc: "Initial latitude in decimal degrees (paired with lon_deg).",
+        },
+        ConfigKey {
+            name: "lon_deg",
+            ty: ConfigType::Float,
+            doc: "Initial longitude in decimal degrees (paired with lat_deg).",
+        },
+    ],
+    lab: Some(LabRef {
+        board_id: "neo6m-gps-lab",
+        chip: "stm32f103",
+        example_dir: "neo6m-gps-lab",
+        demo_elf: "demo-neo6m-gps-lab.elf",
+    }),
+};
+
+impl PeripheralKit for Neo6mGpsKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &NEO6M_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let lat = ctx.config_f64("lat_deg");
+        let lon = ctx.config_f64("lon_deg");
+
+        let uart = ctx.uart()?;
+        let mut gps = Neo6mGps::new();
+        if let (Some(lat), Some(lon)) = (lat, lon) {
+            gps.set_position(lat, lon);
+        }
+        uart.attach_stream(Box::new(gps));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
