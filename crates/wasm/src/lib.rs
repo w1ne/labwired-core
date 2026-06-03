@@ -2219,10 +2219,17 @@ impl WasmSimulator {
             rom_thunks::gxepd_write_data,
         );
 
-        // xthal_window_spill — semantic spill via shadow stack.
-        for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-            push_named(&mut thunks, sym, rom_thunks::xthal_window_spill_thunk);
-        }
+        // xthal_window_spill_nw — semantic spill via shadow stack. Only the
+        // `_nw` leaf is thunked; the `xthal_window_spill` wrapper is a thin
+        // CALL{n}-entered PS-save shell that must run its real
+        // `entry / call0 _nw / retw` natively — thunking it returns via a0
+        // (the caller's return addr, since the wrapper's clobbered ENTRY
+        // never set up a0), faulting in the first-task dispatch.
+        push_named(
+            &mut thunks,
+            "xthal_window_spill_nw",
+            rom_thunks::xthal_window_spill_thunk,
+        );
 
         // Real-silicon noreturn — abort_halt prints diagnostics and
         // halts the CPU rather than returning, to avoid tight

@@ -371,10 +371,19 @@ fn labwired_ereader_runs_to_panel_paint() {
         rom_thunks::gxepd_write_data,
     );
 
-    // xthal_window_spill — semantic spill via shadow stack.
-    for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-        push_named(&mut thunks, sym, rom_thunks::xthal_window_spill_thunk);
-    }
+    // xthal_window_spill_nw — semantic spill via shadow stack. Only the
+    // `_nw` leaf (the actual spill loop that would trap on the displaced
+    // frames) is thunked; the `xthal_window_spill` wrapper is a thin
+    // PS-save/restore shell that is CALL{n}-entered and must run its real
+    // `entry / call0 _nw / retw` natively — thunking it returns via a0,
+    // which is the *caller's* return address (the wrapper's ENTRY, which
+    // would set up a0, is clobbered by the thunk's BREAK), corrupting the
+    // return and faulting in xPortStartScheduler's first-task dispatch.
+    push_named(
+        &mut thunks,
+        "xthal_window_spill_nw",
+        rom_thunks::xthal_window_spill_thunk,
+    );
 
     // Real-silicon noreturn — halt the CPU rather than letting assert →
     // return turn into a tight loop.

@@ -1357,10 +1357,13 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // a working flow (spill writes valid save-area data the callee
     // later reads).
     if args.profile == "arduino-esp32" {
-        for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-            if let Some(&pc) = symbol_addrs.get(*sym) {
-                thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
-            }
+        // Only the `_nw` leaf (the spill loop that would trap) is thunked;
+        // the `xthal_window_spill` wrapper is a thin CALL{n}-entered
+        // PS-save shell that must run natively (its real ENTRY/RETW manage
+        // the window). Thunking the wrapper returns via a0 = the caller's
+        // return address, corrupting the first-task dispatch.
+        if let Some(&pc) = symbol_addrs.get("xthal_window_spill_nw") {
+            thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
         }
     }
     // xQueueCreateMutexStatic returns the caller's static buffer as the
