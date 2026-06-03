@@ -145,3 +145,45 @@ impl I2cDevice for Mpu6050 {
         Some(self)
     }
 }
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Mpu6050Kit;
+pub static MPU6050_KIT: Mpu6050Kit = Mpu6050Kit;
+
+static MPU6050_METADATA: KitMetadata = KitMetadata {
+    device_type: "mpu6050",
+    label: "MPU6050 IMU",
+    summary: "6-axis gyro + accelerometer over I2C.",
+    detail: "InvenSense MPU-6050 with WHO_AM_I = 0x68. Reports static sample values today; \
+             host stimulus hooks into the WASM bridge for live updates.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x68; 0x69 selects the AD0=high variant.",
+    }],
+    labs: &[LabRef {
+        board_id: "mpu6050-sensor-lab",
+        chip: "stm32f103",
+        example_dir: "mpu6050-sensor-lab",
+        demo_elf: "demo-mpu6050-sensor-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Mpu6050Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &MPU6050_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(0x68)?;
+        let i2c = ctx.i2c()?;
+        i2c.attach(Box::new(Mpu6050::new(address)));
+        Ok(())
+    }
+}

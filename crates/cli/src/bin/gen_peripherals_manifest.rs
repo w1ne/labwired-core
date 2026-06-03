@@ -52,7 +52,7 @@ fn main() -> Result<()> {
     }
 
     let manifest = Manifest {
-        schema_version: 1,
+        schema_version: 2,
         peripherals: registry::kits().iter().map(|k| k.metadata()).collect(),
     };
     let json = serde_json::to_string_pretty(&manifest)?;

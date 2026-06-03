@@ -194,12 +194,12 @@ static NEO6M_METADATA: KitMetadata = KitMetadata {
             doc: "Initial longitude in decimal degrees (paired with lat_deg).",
         },
     ],
-    lab: Some(LabRef {
+    labs: &[LabRef {
         board_id: "neo6m-gps-lab",
         chip: "stm32f103",
         example_dir: "neo6m-gps-lab",
         demo_elf: "demo-neo6m-gps-lab.elf",
-    }),
+    }],
 };
 
 impl PeripheralKit for Neo6mGpsKit {

@@ -350,6 +350,72 @@ impl UartStreamDevice for IolinkMaster {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct IolinkMasterKit;
+pub static IOLINK_MASTER_KIT: IolinkMasterKit = IolinkMasterKit;
+
+static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
+    device_type: "iolink-master",
+    label: "IO-Link Master",
+    summary: "IO-Link master state machine over UART.",
+    detail: "Drives wake-up / startup / operate cycles, m-sequence types, process-data \
+             exchange. The AL2205 DI device demo uses this to host two digital-input channels.",
+    transport: Transport::Uart,
+    category: Category::Uart,
+    config_keys: &[
+        ConfigKey {
+            name: "pd_in_len",
+            ty: ConfigType::Int,
+            doc: "Process-data input length in bytes. Defaults to 1 (single-byte DI device).",
+        },
+        ConfigKey {
+            name: "m_seq_type",
+            ty: ConfigType::Int,
+            doc: "M-sequence type (1..6). Used to derive od_len: types ≥ 4 use 2-byte OD frames.",
+        },
+        ConfigKey {
+            name: "com",
+            ty: ConfigType::Str,
+            doc: "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud).",
+        },
+    ],
+    labs: &[LabRef {
+        board_id: "al2205-iolink-dido",
+        chip: "stm32l476",
+        example_dir: "al2205-iolink-dido",
+        demo_elf: "demo-al2205-iolink-dido.elf",
+    }],
+};
+
+impl PeripheralKit for IolinkMasterKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &IOLINK_MASTER_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let pd_in_len = ctx.config_i64("pd_in_len").unwrap_or(1) as usize;
+        let m_seq_type = ctx.config_i64("m_seq_type").unwrap_or(1);
+        let od_len: usize = if m_seq_type >= 4 { 2 } else { 1 };
+        let com = match ctx
+            .config_str("com")
+            .unwrap_or("COM2")
+            .to_ascii_uppercase()
+            .as_str()
+        {
+            "COM1" => IolinkComSpeed::Com1,
+            "COM3" => IolinkComSpeed::Com3,
+            _ => IolinkComSpeed::Com2,
+        };
+        let uart = ctx.uart()?;
+        uart.attach_stream(Box::new(IolinkMaster::new(pd_in_len, od_len, com)));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -22,6 +22,17 @@ use crate::peripherals::components;
 pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::bg770a::BG770A_KIT,
     &components::neo6m::NEO6M_KIT,
+    &components::adxl345::ADXL345_KIT,
+    &components::mpu6050::MPU6050_KIT,
+    &components::bme280::BME280_KIT,
+    &components::ssd1306::SSD1306_KIT,
+    &components::ili9341::ILI9341_KIT,
+    &components::max31855::MAX31855_KIT,
+    &components::ssd1680_tricolor_290::SSD1680_TRICOLOR_290_KIT,
+    &components::sn74hc165::SN74HC165_KIT,
+    &components::pcd8544::PCD8544_KIT,
+    &components::iolink_master::IOLINK_MASTER_KIT,
+    &components::ntc_thermistor::NTC_THERMISTOR_KIT,
 ];
 
 /// Borrow the registry slice.

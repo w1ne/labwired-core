@@ -153,3 +153,45 @@ impl I2cDevice for Bme280 {
         Some(self)
     }
 }
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Bme280Kit;
+pub static BME280_KIT: Bme280Kit = Bme280Kit;
+
+static BME280_METADATA: KitMetadata = KitMetadata {
+    device_type: "bme280",
+    label: "BME280 Weather",
+    summary: "Bosch BME280 temp + humidity + pressure sensor over I2C.",
+    detail: "Returns the same factory dummy readings the real silicon ships with (≈25 °C, \
+             50 % RH, sea-level pressure). Real-time stimulus comes from the WASM bridge.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant.",
+    }],
+    labs: &[LabRef {
+        board_id: "bme280-weather-lab",
+        chip: "stm32f103",
+        example_dir: "bme280-weather-lab",
+        demo_elf: "demo-bme280-weather-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Bme280Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &BME280_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(0x76)?;
+        let i2c = ctx.i2c()?;
+        i2c.attach(Box::new(Bme280::new(address)));
+        Ok(())
+    }
+}

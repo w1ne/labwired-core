@@ -90,6 +90,61 @@ impl NtcThermistor {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct NtcThermistorKit;
+pub static NTC_THERMISTOR_KIT: NtcThermistorKit = NtcThermistorKit;
+
+static NTC_THERMISTOR_METADATA: KitMetadata = KitMetadata {
+    device_type: "ntc-thermistor",
+    label: "NTC Thermistor",
+    summary: "10 kΩ NTC + voltage divider on an ADC channel.",
+    detail: "Beta-equation thermistor model. Constructor takes a channel + initial temperature; \
+             the kit seeds the ADC channel with the corresponding divider voltage. Live updates \
+             come from the WASM bridge as the host moves the temperature slider.",
+    transport: Transport::Analog,
+    category: Category::Analog,
+    config_keys: &[
+        ConfigKey {
+            name: "channel",
+            ty: ConfigType::Int,
+            doc: "ADC channel index (0..N). Defaults to 0.",
+        },
+        ConfigKey {
+            name: "initial_temperature_c",
+            ty: ConfigType::Float,
+            doc: "Initial temperature in °C used to seed the channel voltage. Defaults to 25.0.",
+        },
+    ],
+    labs: &[LabRef {
+        board_id: "ntc-thermistor-lab",
+        chip: "stm32f103",
+        example_dir: "ntc-thermistor-lab",
+        demo_elf: "demo-ntc-thermistor-lab.elf",
+    }],
+};
+
+impl PeripheralKit for NtcThermistorKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &NTC_THERMISTOR_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let channel = ctx.config_i64("channel").unwrap_or(0).clamp(0, 255) as u8;
+        let initial_temp_c = ctx.config_f64("initial_temperature_c").unwrap_or(25.0) as f32;
+        // Compute the divider voltage up front; the NtcThermistor instance
+        // itself is not stored — the bus seeds the ADC channel once and the
+        // wasm bridge mutates that channel directly on host stimulus.
+        let mv = NtcThermistor::new(channel, initial_temp_c).divider_output_mv();
+        let adc = ctx.adc()?;
+        adc.set_channel_input(channel, mv);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

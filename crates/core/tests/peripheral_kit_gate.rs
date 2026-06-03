@@ -150,7 +150,7 @@ fn manifest_json_matches_registry() {
         peripherals: Vec<&'a labwired_core::peripherals::kit::KitMetadata>,
     }
     let expected_value = Manifest {
-        schema_version: 1,
+        schema_version: 2,
         peripherals: registry::kits().iter().map(|k| k.metadata()).collect(),
     };
     let mut expected = serde_json::to_string_pretty(&expected_value).unwrap();
@@ -175,24 +175,23 @@ fn manifest_json_matches_registry() {
 fn lab_example_dirs_exist_on_disk() {
     let examples = workspace_root().join("examples");
     for kit in registry::kits() {
-        let Some(lab) = kit.metadata().lab.as_ref() else {
-            continue;
-        };
-        let dir = examples.join(lab.example_dir);
-        assert!(
-            dir.is_dir(),
-            "kit '{}' references example_dir '{}' but {:?} is not a directory",
-            kit.metadata().device_type,
-            lab.example_dir,
-            dir
-        );
-        let system_yaml = dir.join("system.yaml");
-        assert!(
-            system_yaml.is_file(),
-            "kit '{}' lab '{}' is missing system.yaml at {:?}",
-            kit.metadata().device_type,
-            lab.example_dir,
-            system_yaml
-        );
+        for lab in kit.metadata().labs {
+            let dir = examples.join(lab.example_dir);
+            assert!(
+                dir.is_dir(),
+                "kit '{}' references example_dir '{}' but {:?} is not a directory",
+                kit.metadata().device_type,
+                lab.example_dir,
+                dir
+            );
+            let system_yaml = dir.join("system.yaml");
+            assert!(
+                system_yaml.is_file(),
+                "kit '{}' lab '{}' is missing system.yaml at {:?}",
+                kit.metadata().device_type,
+                lab.example_dir,
+                system_yaml
+            );
+        }
     }
 }

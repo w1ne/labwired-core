@@ -75,9 +75,11 @@ pub struct KitMetadata {
     /// `external_devices` entry. Used for docs + manifest schema; not (yet)
     /// enforced at parse time.
     pub config_keys: &'static [ConfigKey],
-    /// Optional starter-lab association — the boardId in `BOARD_CONFIGS`
-    /// that ships a one-click demo using this peripheral.
-    pub lab: Option<LabRef>,
+    /// Starter labs that ship a one-click demo using this peripheral. A
+    /// peripheral may appear in zero, one, or several labs (e.g. the same
+    /// e-paper model used in both an STM32 and ESP32 example). The first
+    /// entry is treated as the primary lab by tooling that wants a default.
+    pub labs: &'static [LabRef],
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]

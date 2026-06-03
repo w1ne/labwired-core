@@ -2583,12 +2583,12 @@ static BG770A_METADATA: KitMetadata = KitMetadata {
             doc: "If true, the modem reports itself already registered + attached at boot.",
         },
     ],
-    lab: Some(LabRef {
+    labs: &[LabRef {
         board_id: "quectel-bg770a-lab",
         chip: "stm32f103",
         example_dir: "quectel-bg770a-lab",
         demo_elf: "demo-quectel-bg770a-lab.elf",
-    }),
+    }],
 };
 
 impl PeripheralKit for QuectelBg770aKit {
