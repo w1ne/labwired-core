@@ -11,6 +11,7 @@ const CATEGORY_BY_TYPE: Record<string, PaletteCategory> = {
   adxl345: 'i2c', bme280: 'i2c', mpu6050: 'i2c', 'oled-ssd1306': 'i2c', lcd1602: 'i2c',
   ili9341: 'spi', max31855: 'spi',
   'neo6m-gps': 'uart',
+  'bg770a-cellular': 'uart',
   'ntc-thermistor': 'analog', potentiometer: 'analog', ldr: 'analog',
   led: 'gpio', button: 'gpio', 'rgb-led': 'gpio', buzzer: 'gpio',
   'seven-segment': 'gpio', 'led-matrix': 'gpio', neopixel: 'gpio',

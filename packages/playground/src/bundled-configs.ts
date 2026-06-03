@@ -31,6 +31,7 @@ import systemMax31855ThermocoupleLab from '../../../core/examples/max31855-therm
 import systemSsd1306HelloLab from '../../../core/examples/ssd1306-hello-lab/system.yaml?raw';
 import systemNokia5110InvadersLab from '../../../core/examples/nokia5110-invaders-lab/system.yaml?raw';
 import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
+import systemQuectelBg770aLab from '../../../core/examples/quectel-bg770a-lab/system.yaml?raw';
 import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
@@ -45,6 +46,7 @@ import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src
 import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
 import sourceNokia5110Invaders from '../../../core/examples/nokia5110-invaders-lab/src/main.rs?raw';
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
+import sourceQuectelBg770a from '../../../core/examples/quectel-bg770a-lab/src/main.rs?raw';
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
@@ -145,6 +147,20 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'stm32-dev',
     sourceCode: sourceNeo6mGps,
     sourceFilename: 'neo6m-gps-lab/src/main.rs',
+    kind: 'lab',
+  },
+  {
+    boardId: 'quectel-bg770a-lab',
+    chipId: 'stm32f103',
+    name: 'Quectel BG770A Cellular',
+    description: 'STM32F103 + Quectel BG770A-GL LTE-M / NB-IoT modem over simulated UART. Byte-exact AT command surface, V.250 echo/CMEE modes, MQTT/HTTP/GPS state machines.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemQuectelBg770aLab,
+    demoFirmwarePath: `${BASE}wasm/demo-quectel-bg770a-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceQuectelBg770a,
+    sourceFilename: 'quectel-bg770a-lab/src/main.rs',
     kind: 'lab',
   },
   {

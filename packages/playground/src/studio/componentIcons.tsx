@@ -254,6 +254,20 @@ const GpsIcon = () => (
     <circle cx="10" cy="10" r="1.2" fill="#10b981" />
   </svg>
 );
+const CellularModemIcon = () => (
+  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden>
+    <rect x="6" y="4" width="8" height="11" rx="1" fill="#0f0f12" stroke="#3ec1d3" strokeWidth="0.6" />
+    <rect x="7.2" y="5.4" width="5.6" height="3" rx="0.3" fill="#3ec1d3" opacity="0.6" />
+    <line x1="10" y1="2" x2="10" y2="4" stroke="#3ec1d3" strokeWidth="0.8" strokeLinecap="round" />
+    <path d="M 7.5 1.5 Q 10 0 12.5 1.5" stroke="#3ec1d3" strokeWidth="0.5" fill="none" opacity="0.7" />
+    <path d="M 6.5 0.5 Q 10 -1 13.5 0.5" stroke="#3ec1d3" strokeWidth="0.5" fill="none" opacity="0.4" />
+    <circle cx="8.5" cy="11.5" r="0.6" fill="#fff" />
+    <circle cx="11.5" cy="11.5" r="0.6" fill="#fff" />
+    <line x1="8" y1="17" x2="8" y2="19" stroke="#9ca3af" strokeWidth="0.5" />
+    <line x1="12" y1="17" x2="12" y2="19" stroke="#9ca3af" strokeWidth="0.5" />
+    <line x1="10" y1="15" x2="10" y2="19" stroke="#9ca3af" strokeWidth="0.5" />
+  </svg>
+);
 const NtcIcon = () => (
   <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden>
     <rect x="9" y="2" width="2" height="12" rx="1" fill="#fff" stroke="#6b7280" strokeWidth="0.5" />
@@ -442,6 +456,7 @@ const ICONS: Record<string, () => React.JSX.Element> = {
   bme280: BmeIcon,
   max31855: ThermocoupleIcon,
   'neo6m-gps': GpsIcon,
+  'bg770a-cellular': CellularModemIcon,
   'ntc-thermistor': NtcIcon,
 
   'seven-segment': SevenSegIcon,

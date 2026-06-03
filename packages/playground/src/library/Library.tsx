@@ -169,6 +169,15 @@ const FEATURED_LABS: FeaturedLab[] = [
     icon: '📡',
   },
   {
+    id: 'quectel-bg770a-lab',
+    name: 'Quectel BG770A Cellular',
+    chip: 'STM32F103 · UART',
+    description: 'LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.',
+    detail: 'Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART2.',
+    accent: '#3ec1d3',
+    icon: '📶',
+  },
+  {
     id: 'ntc-thermistor-lab',
     name: 'NTC Thermistor',
     chip: 'STM32F103 · ADC',

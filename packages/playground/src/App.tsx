@@ -369,6 +369,23 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
+  if (config.boardId === 'quectel-bg770a-lab') {
+    // STM32 USART1 ↔ modem (PA9 TX → modem RX, PA10 RX ← modem TX).
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'modem', type: 'bg770a-cellular', x: 540, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu',   pin: 'VCC'  }, to: { part: 'modem', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu',   pin: 'GND'  }, to: { part: 'modem', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu',   pin: 'PA9'  }, to: { part: 'modem', pin: 'RX'  }, color: '#B07BFF' },
+        { from: { part: 'mcu',   pin: 'PA10' }, to: { part: 'modem', pin: 'TX'  }, color: '#5BD8FF' },
+      ],
+    };
+  }
+
   // -------- Analog (ADC) --------
 
   if (config.boardId === 'ntc-thermistor-lab') {
@@ -542,6 +559,7 @@ const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   mpu6050: 'i2c',
   'oled-ssd1306': 'i2c',
   'neo6m-gps': 'uart',
+  'bg770a-cellular': 'uart',
   'ntc-thermistor': 'analog',
   lcd1602: 'i2c',
   dht22: 'misc',
