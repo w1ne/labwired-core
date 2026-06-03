@@ -12,7 +12,7 @@
 // chrome vs light marketing pages) are isolated to the `variant` prop.
 
 import clsx from 'clsx';
-import type { MouseEvent } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 
 export const LABWIRED_HOME_URL = 'https://labwired.com';
 
@@ -44,12 +44,16 @@ export interface GlobalNavProps {
   variant?: 'dark' | 'light';
   className?: string;
   onToolsClick?: () => void;
+  toolsSlot?: ReactNode;
 }
 
-export function GlobalNav({ active, variant = 'light', className, onToolsClick }: GlobalNavProps) {
+export function GlobalNav({ active, variant = 'light', className, onToolsClick, toolsSlot }: GlobalNavProps) {
   return (
     <nav className={clsx('flex items-center', variant === 'dark' ? 'gap-1' : 'gap-5 text-[14px]', className)}>
       {NAV_ITEMS.filter((item) => item.id !== active).map((item) => {
+        if (item.id === 'tools' && toolsSlot) {
+          return <div key={item.id}>{toolsSlot}</div>;
+        }
         const isActive = item.id === active;
         const external = 'external' in item && item.external;
         const handleClick =

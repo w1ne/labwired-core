@@ -57,7 +57,6 @@ import { ChipWindow } from './multi-mcu/ChipWindow';
 import { ChipInspector } from './multi-mcu/ChipInspector';
 import { BleAnalyzer } from './instruments/BleAnalyzer';
 import { IoLinkAnalyzer } from './instruments/IoLinkAnalyzer';
-import { ToolsMenu } from './studio/ToolsMenu';
 import { AuthPill } from './studio/AuthPill';
 import { getComponentIcon } from './studio/componentIcons';
 import { WatchOverlay } from './studio/WatchOverlay';
@@ -660,7 +659,6 @@ export function App() {
   // canvas). Toggled from the SimDock Tools control; hidden by default.
   const [showAnalyzer, setShowAnalyzer] = useState(false);
   const [showIolink, setShowIolink] = useState(false);
-  const [toolsMenuOpenSignal, setToolsMenuOpenSignal] = useState(0);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
 
@@ -2044,6 +2042,23 @@ export function App() {
     );
   }
 
+  const studioTools = [
+    {
+      id: 'air-tracer',
+      label: 'Air Tracer · BLE',
+      description: 'Catch virtual-air frames (CRC)',
+      active: showAnalyzer,
+      onToggle: () => setShowAnalyzer((v) => !v),
+    },
+    {
+      id: 'iolink-analyzer',
+      label: 'IO-Link Analyzer',
+      description: 'Master↔device frames, CRC, link state',
+      active: showIolink,
+      onToggle: () => setShowIolink((v) => !v),
+    },
+  ];
+
   return (
     <ChipsProvider initialBoard={selectedBoard}>
     <AddMcuRefSync addMcuRef={addMcuRef} />
@@ -2070,7 +2085,7 @@ export function App() {
       boardName={activeProjectName ?? selectedBoard.name}
       isEmpty={isEmpty}
       onPickLab={handlePickLab}
-      onOpenTools={() => setToolsMenuOpenSignal((v) => v + 1)}
+      tools={studioTools}
       // Upload now lives per-chip in ChipControls — a global top-bar
       // Upload is ambiguous about which chip it targets, so it's gone.
       onShare={handleShare}
@@ -2239,25 +2254,6 @@ export function App() {
             >
               <SidebarRightIcon size={14} />
             </button>
-            <ToolsMenu
-              openSignal={toolsMenuOpenSignal}
-              tools={[
-                {
-                  id: 'air-tracer',
-                  label: 'Air Tracer · BLE',
-                  description: 'Catch virtual-air frames (CRC)',
-                  active: showAnalyzer,
-                  onToggle: () => setShowAnalyzer((v) => !v),
-                },
-                {
-                  id: 'iolink-analyzer',
-                  label: 'IO-Link Analyzer',
-                  description: 'Master↔device frames, CRC, link state',
-                  active: showIolink,
-                  onToggle: () => setShowIolink((v) => !v),
-                },
-              ]}
-            />
           </div>
 
           <div className="header-separator" />

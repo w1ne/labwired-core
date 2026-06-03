@@ -3,6 +3,7 @@ import { TopChrome } from './TopChrome';
 import { ChipRow } from './ChipRow';
 import { PaletteDrawer, type PaletteComponent } from './PaletteDrawer';
 import { Toast } from './Toast';
+import type { ToolItem } from './ToolsMenu';
 import { useStudioLayout } from './useStudioLayout';
 
 export interface StudioShellProps {
@@ -12,6 +13,7 @@ export interface StudioShellProps {
   onPickLab?: (labId: string) => void;
   onUploadFirmware?: (file: File) => void;
   onOpenTools?: () => void;
+  tools?: ToolItem[];
   paletteComponents?: PaletteComponent[];
   onPaletteDrag?: (componentType: string) => void;
   inspector?: ReactNode;
@@ -39,6 +41,7 @@ export function StudioShell({
   onPickLab,
   onUploadFirmware,
   onOpenTools,
+  tools,
   paletteComponents = [],
   onPaletteDrag,
   inspector,
@@ -68,6 +71,7 @@ export function StudioShell({
         onShare={onShare}
         onUploadFirmware={onUploadFirmware}
         onOpenTools={onOpenTools}
+        tools={tools}
         authSlot={authSlot}
         projectSlot={projectSlot}
       />
