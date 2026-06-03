@@ -410,11 +410,11 @@ impl Game {
 fn count_to_paddle_x(count: u32) -> i32 {
     let span = (W as i32 - PADDLE_W).max(1);
     // The polling loop has a fixed overhead before it starts counting ECHO high
-    // time, so the HC-SR04's valid minimum distance lands around the centered
-    // startup position if the raw count is used directly. Subtract that floor
-    // and scale the remaining pulse width across the playable range.
+    // time. Subtract that floor, scale the remaining pulse width across the
+    // playable range, and invert the result so the demo's maximum distance
+    // reaches the left edge.
     let raw = (count / 16) as i32;
-    let v = (raw - span / 2) * 2;
+    let v = span - (((raw - span / 2) * 13) / 4);
     v.clamp(0, span)
 }
 

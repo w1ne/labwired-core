@@ -124,7 +124,7 @@ fn firmware_draws_and_ship_tracks_distance() {
     let elf = ensure_firmware_built();
     let mut machine = build_machine(&elf);
 
-    // Near hand → short echo → ship to the left.
+    // Near target → short echo → ship to the right edge.
     machine.bus.hcsr04[0].set_distance_cm(8.0);
     step_frames(&mut machine, 4_000_000);
     let fb_near = framebuffer(&machine);
@@ -134,15 +134,15 @@ fn firmware_draws_and_ship_tracks_distance() {
     );
     let near = ship_left(&fb_near).expect("ship visible (near)");
 
-    // Far hand → long echo → ship to the right.
+    // Far target → long echo → ship to the left edge.
     machine.bus.hcsr04[0].set_distance_cm(300.0);
     step_frames(&mut machine, 4_000_000);
     let fb_far = framebuffer(&machine);
     let far = ship_left(&fb_far).expect("ship visible (far)");
 
     assert!(
-        far > near,
-        "ship should move right as the hand moves away: near_x={near}, far_x={far}"
+        far < near,
+        "ship should move left as the target moves away: near_x={near}, far_x={far}"
     );
 }
 
@@ -160,8 +160,8 @@ fn firmware_tracks_minimum_hcsr04_distance() {
     let min = ship_left(&framebuffer(&machine)).expect("ship visible (minimum distance)");
 
     assert!(
-        min <= 8,
-        "minimum distance should visibly move the paddle left, got min_x={min}"
+        min >= 56,
+        "minimum distance should visibly move the paddle right, got min_x={min}"
     );
 
     machine.bus.hcsr04[0].set_distance_cm(200.0);
@@ -169,7 +169,7 @@ fn firmware_tracks_minimum_hcsr04_distance() {
     let far = ship_left(&framebuffer(&machine)).expect("ship visible (far distance)");
 
     assert!(
-        min < far,
-        "ship should move right as distance increases from minimum: min_x={min}, far_x={far}"
+        far <= 8,
+        "200 cm should move the paddle to the left edge: min_x={min}, far_x={far}"
     );
 }
