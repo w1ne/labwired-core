@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  annotatePdChanges,
   toHex,
   kindLabel,
   linkPhaseIndex,
@@ -63,5 +64,18 @@ describe('iolinkDecode', () => {
     expect(lines[0]).toBe('seq,kind,link_state,pd_out,pd_in,ck_ok,raw_master,raw_device');
     expect(lines[1]).toContain('3,cyclic,operate');
     expect(lines[1]).toContain('A5');
+  });
+
+  it('marks PD changes only after a previous valid input value exists', () => {
+    const rows = annotatePdChanges([
+      xfer({ seq: 1, pd_in: [0xa5], pd_valid: true }),
+      xfer({ seq: 2, pd_in: [0xa5], pd_valid: true }),
+      xfer({ seq: 3, pd_in: [0x5a], pd_valid: true }),
+      xfer({ seq: 4, pd_in: [0xff], pd_valid: false }),
+      xfer({ seq: 5, pd_in: [0x5a], pd_valid: true }),
+      xfer({ seq: 6, pd_in: [0x00], pd_valid: true }),
+    ]);
+
+    expect(rows.map((row) => row.pdInChanged)).toEqual([false, false, true, false, false, true]);
   });
 });

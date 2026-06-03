@@ -1,4 +1,4 @@
-import type { Diagram, WireEndpoint } from '@labwired/ui';
+import { getPinMapping, type Diagram, type WireEndpoint } from '@labwired/ui';
 
 export interface LogicAnalyzerChannelBinding {
   channel: string;
@@ -8,6 +8,11 @@ export interface LogicAnalyzerChannelBinding {
 export interface IolinkDecoderBinding {
   connected: boolean;
   channels: { channel: string; pin: 'TX' | 'RX' }[];
+}
+
+export interface UartDecoderBinding {
+  connected: boolean;
+  channels: { channel: string; peripheral: string; role: 'tx' | 'rx'; pin: string }[];
 }
 
 const ANALYZER_TYPE = 'logic-analyzer';
@@ -82,6 +87,53 @@ export function getIolinkDecoderBinding(diagram: Diagram, analyzerId: string): I
   const unique = channels.filter(
     (channel, index) =>
       channels.findIndex((candidate) => candidate.channel === channel.channel && candidate.pin === channel.pin) === index,
+  );
+
+  return { connected: unique.length > 0, channels: unique };
+}
+
+export function getUartDecoderBinding(diagram: Diagram, analyzerId: string): UartDecoderBinding {
+  const channels: UartDecoderBinding['channels'] = [];
+
+  for (const binding of getLogicAnalyzerChannelBindings(diagram, analyzerId)) {
+    for (const endpoint of binding.endpoints) {
+      const part = diagram.parts.find((candidate) => candidate.id === endpoint.part);
+      if (part?.type === 'iolink-master' && (endpoint.pin === 'TX' || endpoint.pin === 'RX')) {
+        channels.push({
+          channel: binding.channel,
+          peripheral: 'iolink',
+          role: endpoint.pin.toLowerCase() as 'tx' | 'rx',
+          pin: endpoint.pin,
+        });
+        continue;
+      }
+
+      if (endpoint.part !== 'mcu') continue;
+
+      const mapping = getPinMapping(diagram.board, endpoint.pin);
+      const uart = mapping?.functions.find(
+        (fn) => fn.type === 'uart' && (fn.role === 'tx' || fn.role === 'rx'),
+      );
+      if (!uart || (uart.role !== 'tx' && uart.role !== 'rx')) continue;
+
+      channels.push({
+        channel: binding.channel,
+        peripheral: uart.peripheral,
+        role: uart.role,
+        pin: endpoint.pin,
+      });
+    }
+  }
+
+  const unique = channels.filter(
+    (channel, index) =>
+      channels.findIndex(
+        (candidate) =>
+          candidate.channel === channel.channel &&
+          candidate.peripheral === channel.peripheral &&
+          candidate.role === channel.role &&
+          candidate.pin === channel.pin,
+      ) === index,
   );
 
   return { connected: unique.length > 0, channels: unique };

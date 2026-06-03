@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { IolinkXfer, SimulatorBridge } from '@labwired/ui';
 import {
   PHASES,
+  annotatePdChanges,
   ckState,
   errorCount,
   filterErrorsOnly,
@@ -40,8 +41,8 @@ export function IoLinkAnalyzer({ bridge, running, pollMs = 200 }: IoLinkAnalyzer
         /* bridge may be mid-teardown between Run/Stop; ignore one tick */
       }
     };
-    poll();
     if (!running) return;
+    poll();
     const id = window.setInterval(poll, pollMs);
     return () => {
       cancelled = true;
@@ -53,6 +54,7 @@ export function IoLinkAnalyzer({ bridge, running, pollMs = 200 }: IoLinkAnalyzer
   const errs = errorCount(rows);
   const com = rows.length ? rows[rows.length - 1].com.toUpperCase() : '—';
   const view = useMemo(() => (errorsOnly ? filterErrorsOnly(rows) : rows), [rows, errorsOnly]);
+  const annotatedView = useMemo(() => annotatePdChanges(view), [view]);
 
   const copy = () => {
     try {
@@ -126,10 +128,10 @@ export function IoLinkAnalyzer({ bridge, running, pollMs = 200 }: IoLinkAnalyzer
               </tr>
             </thead>
             <tbody>
-              {view
+              {annotatedView
                 .slice()
                 .reverse()
-                .map((r) => {
+                .map(({ row: r, pdInChanged }) => {
                   const ck = ckState(r);
                   const isExpanded = expanded === r.seq;
                   return (
@@ -137,6 +139,7 @@ export function IoLinkAnalyzer({ bridge, running, pollMs = 200 }: IoLinkAnalyzer
                       key={r.seq}
                       r={r}
                       ck={ck}
+                      pdInChanged={pdInChanged}
                       expanded={isExpanded}
                       onToggle={() => setExpanded(isExpanded ? null : r.seq)}
                     />
@@ -153,24 +156,31 @@ export function IoLinkAnalyzer({ bridge, running, pollMs = 200 }: IoLinkAnalyzer
 function FragmentRow({
   r,
   ck,
+  pdInChanged,
   expanded,
   onToggle,
 }: {
   r: IolinkXfer;
   ck: 'ok' | 'bad' | 'na';
+  pdInChanged: boolean;
   expanded: boolean;
   onToggle: () => void;
 }) {
   return (
     <>
       <tr
-        className={`border-t border-border/60 hover:bg-bg-canvas cursor-pointer ${ck === 'bad' ? 'bg-red-500/10' : ''}`}
+        className={`border-t border-border/60 hover:bg-bg-canvas cursor-pointer ${
+          ck === 'bad' ? 'bg-red-500/10' : pdInChanged ? 'bg-amber-500/10' : ''
+        }`}
         onClick={onToggle}
       >
         <td className="px-3 py-1 text-fg-tertiary">{r.seq}</td>
         <td className="px-3 py-1">{kindLabel(r.kind)}</td>
         <td className="px-3 py-1 text-fg-secondary">{toHex(r.pd_out)}</td>
-        <td className="px-3 py-1 text-fg-primary font-semibold">{toHex(r.pd_in)}</td>
+        <td className={`px-3 py-1 font-semibold ${pdInChanged ? 'text-amber-300' : 'text-fg-primary'}`}>
+          {toHex(r.pd_in)}
+          {pdInChanged && <span className="ml-2 rounded border border-amber-400/40 px-1 text-[9px] text-amber-300">CHG</span>}
+        </td>
         <td className="px-3 py-1 font-semibold">
           {ck === 'na' ? (
             <span className="text-fg-tertiary">—</span>

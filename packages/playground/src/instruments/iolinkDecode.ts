@@ -59,6 +59,30 @@ export function ckState(x: IolinkXfer): 'ok' | 'bad' | 'na' {
   return x.ck_ok ? 'ok' : 'bad';
 }
 
+export interface AnnotatedIolinkXfer {
+  row: IolinkXfer;
+  pdInChanged: boolean;
+}
+
+function bytesEqual(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => (value & 0xff) === (b[index] & 0xff));
+}
+
+/** Mark cyclic process-data changes against the previous valid PD input value. */
+export function annotatePdChanges(rows: IolinkXfer[]): AnnotatedIolinkXfer[] {
+  let previousPdIn: number[] | null = null;
+
+  return rows.map((row) => {
+    const hasValidPdIn = row.pd_valid !== false && row.pd_in.length > 0;
+    const pdInChanged = hasValidPdIn && previousPdIn !== null && !bytesEqual(row.pd_in, previousPdIn);
+
+    if (hasValidPdIn) previousPdIn = row.pd_in.slice();
+
+    return { row, pdInChanged };
+  });
+}
+
 /** Serialize a capture to CSV for the Copy button. */
 export function toCsv(rows: IolinkXfer[]): string {
   const header = 'seq,kind,link_state,pd_out,pd_in,ck_ok,raw_master,raw_device';

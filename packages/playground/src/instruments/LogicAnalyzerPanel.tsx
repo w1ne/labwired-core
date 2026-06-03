@@ -1,12 +1,17 @@
 import type { Diagram, SimulatorBridge } from '@labwired/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IoLinkAnalyzer } from './IoLinkAnalyzer';
+import { UartAnalyzer } from './UartAnalyzer';
 import {
   captureLogicAnalyzerSample,
   getDecoderAvailability,
   type LogicAnalyzerSample,
 } from './logicAnalyzerCapture';
-import { getIolinkDecoderBinding, getLogicAnalyzerChannelBindings } from './logicAnalyzerConnections';
+import {
+  getIolinkDecoderBinding,
+  getLogicAnalyzerChannelBindings,
+  getUartDecoderBinding,
+} from './logicAnalyzerConnections';
 
 export interface LogicAnalyzerPanelProps {
   diagram: Diagram;
@@ -40,6 +45,7 @@ export function LogicAnalyzerPanel({
   const [samples, setSamples] = useState<LogicAnalyzerSample[]>([]);
   const bindings = getLogicAnalyzerChannelBindings(diagram, analyzerId);
   const iolink = getIolinkDecoderBinding(diagram, analyzerId);
+  const uart = getUartDecoderBinding(diagram, analyzerId);
   const availability = getDecoderAvailability(diagram, analyzerId);
   const decoderId = DECODERS.some((candidate) => candidate.id === decoder) ? decoder : 'raw';
   const bridgeRef = useRef(bridge);
@@ -61,8 +67,8 @@ export function LogicAnalyzerPanel({
       setSamples((prev) => [...prev.slice(-(MAX_SAMPLES - 1)), sample]);
     };
 
-    capture();
     if (!running || !armed) return;
+    capture();
     const id = window.setInterval(capture, pollMs);
     return () => window.clearInterval(id);
   }, [analyzerId, armed, diagram, pollMs, running, bridge]);
@@ -191,7 +197,17 @@ export function LogicAnalyzerPanel({
             </span>
           </div>
           <div className="min-h-0 flex-1">
-            <IoLinkAnalyzer bridge={bridge} running={running} />
+            <IoLinkAnalyzer bridge={bridge} running={running && armed} />
+          </div>
+        </>
+      ) : decoderId === 'uart' && uart.connected ? (
+        <>
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5 font-mono text-[11px] text-fg-secondary">
+            <span>UART decoder armed</span>
+            <span>{uart.channels.map((channel) => `${channel.channel}:${channel.peripheral}.${channel.role.toUpperCase()}`).join('  ')}</span>
+          </div>
+          <div className="min-h-0 flex-1">
+            <UartAnalyzer bridge={bridge} running={running && armed} binding={uart} iolinkBinding={iolink} />
           </div>
         </>
       ) : (

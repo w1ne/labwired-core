@@ -58,7 +58,7 @@ describe('logic analyzer capture', () => {
     expect(getDecoderAvailability(diagram, 'analyzer')).toEqual({
       raw: true,
       iolink: true,
-      uart: false,
+      uart: true,
       spi: false,
     });
   });

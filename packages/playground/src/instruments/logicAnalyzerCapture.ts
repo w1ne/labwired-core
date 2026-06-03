@@ -1,5 +1,9 @@
 import { getPinMapping, type Diagram, type WireEndpoint } from '@labwired/ui';
-import { getIolinkDecoderBinding, getLogicAnalyzerChannelBindings } from './logicAnalyzerConnections';
+import {
+  getIolinkDecoderBinding,
+  getLogicAnalyzerChannelBindings,
+  getUartDecoderBinding,
+} from './logicAnalyzerConnections';
 
 export type LogicLevel = 0 | 1;
 
@@ -119,10 +123,11 @@ export function captureLogicAnalyzerSample({
 }
 
 export function getDecoderAvailability(diagram: Diagram, analyzerId: string): DecoderAvailability {
+  const iolinkConnected = getIolinkDecoderBinding(diagram, analyzerId).connected;
   return {
     raw: true,
-    iolink: getIolinkDecoderBinding(diagram, analyzerId).connected,
-    uart: false,
+    iolink: iolinkConnected,
+    uart: getUartDecoderBinding(diagram, analyzerId).connected,
     spi: false,
   };
 }
