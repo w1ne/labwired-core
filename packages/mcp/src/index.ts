@@ -7,7 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { listChips, runSimulation, validateSystem, runLab } from './cli.js';
-import { listBoards, getBoard, readBoardYamls } from './boards.js';
+import { listBoards, getBoard, readBoardYamls, boardSystemYamlPath } from './boards.js';
 import { putSnapshot, getSnapshot } from './snapshots.js';
 import { diagnoseDiagram, type ValidateDiagram } from './diagnostics.js';
 
@@ -452,8 +452,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // Use absolute repo path for systemYaml so relative refs
+      // (chip:, descriptor:) inside it resolve to core/configs/...
       const run = await runLab({
-        systemYaml: yamls.systemYaml,
+        systemYamlPath: boardSystemYamlPath(board),
         firmware,
         maxCycles: input.max_cycles,
       });

@@ -142,6 +142,16 @@ export async function readBoardYamls(
   return { chipYaml, systemYaml };
 }
 
+/** Absolute on-disk path to the board's system YAML in the labwired repo. */
+export function boardSystemYamlPath(board: BoardCatalogEntry): string {
+  if (!REPO_ROOT) {
+    throw new Error(
+      'Could not locate LabWired repo root. Set LABWIRED_REPO_ROOT env var.',
+    );
+  }
+  return join(REPO_ROOT, board.system_yaml);
+}
+
 export async function readDemoFirmware(board: BoardCatalogEntry): Promise<Buffer | null> {
   if (!board.demo_firmware || !REPO_ROOT) return null;
   try {

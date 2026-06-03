@@ -140,7 +140,18 @@ const GPIO_EVENT_CAP = 10_000;
 const UART_CAP_BYTES = 256 * 1024;
 
 export interface RunLabOpts {
-  systemYaml: string;
+  /**
+   * Path to the system YAML on disk. Preferred — preserves relative refs like
+   * `chip: ../../configs/chips/<x>.yaml` and `descriptor: ../../configs/...`
+   * which only resolve when the file is read from its real location.
+   */
+  systemYamlPath?: string;
+  /**
+   * Inline system YAML content. Written to a tempdir and used as the manifest.
+   * BREAKS relative refs in the YAML — only safe for self-contained manifests.
+   * If both are provided, `systemYamlPath` wins.
+   */
+  systemYaml?: string;
   chipYaml?: string; // currently unused — labwired-cli resolves chip from system manifest
   firmware: Buffer;
   maxCycles?: number;
@@ -162,26 +173,46 @@ export interface RunLabResult {
 }
 
 export async function runLab(opts: RunLabOpts): Promise<RunLabResult> {
+  if (!opts.systemYamlPath && !opts.systemYaml) {
+    throw new Error('runLab: provide either systemYamlPath or systemYaml');
+  }
   const work = await mkdtemp(join(tmpdir(), 'labwired-mcp-lab-'));
   try {
     const firmwarePath = join(work, 'firmware.elf');
-    const systemPath = join(work, 'system.yaml');
     const scriptPath = join(work, 'script.yaml');
     const outputDir = join(work, 'out');
 
     await writeFile(firmwarePath, opts.firmware);
-    await writeFile(systemPath, opts.systemYaml);
 
-    // Synthesize a minimal "run for N cycles, stop on no_progress" script.
+    // Use the on-disk path when available so relative `chip:` / `descriptor:`
+    // refs in the system YAML resolve correctly. Fall back to writing inline
+    // content into the tempdir (which breaks relative refs).
+    let systemPath: string;
+    if (opts.systemYamlPath) {
+      systemPath = opts.systemYamlPath;
+    } else {
+      systemPath = join(work, 'system.yaml');
+      await writeFile(systemPath, opts.systemYaml!);
+    }
+
+    // Synthesize a minimal "run for N cycles" script. We assert nothing
+    // about stop_reason because only one stop reason can be true per run,
+    // and multiple expected_stop_reason assertions all AND together (the
+    // CLI's "normal stop" rule already treats max_cycles / max_steps / and
+    // no_progress as success at the exit-code level when assertions pass).
+    // `inputs:` is required by schema 1.0 even though `--firmware` /
+    // `--system` flags override it.
     const maxCycles = opts.maxCycles ?? 10_000_000;
     const script = [
       'schema_version: "1.0"',
+      'inputs:',
+      `  firmware: ${JSON.stringify(firmwarePath)}`,
+      `  system: ${JSON.stringify(systemPath)}`,
       'limits:',
-      `  max_steps: ${maxCycles}`,
+      `  max_steps: ${maxCycles}`, // required by schema
+      `  max_cycles: ${maxCycles}`,
       `  no_progress_steps: 1000`,
-      'assertions:',
-      '  - expected_stop_reason: max_steps',
-      '  - expected_stop_reason: no_progress',
+      'assertions: []',
     ].join('\n') + '\n';
     await writeFile(scriptPath, script);
 
@@ -210,17 +241,27 @@ export async function runLab(opts: RunLabOpts): Promise<RunLabResult> {
     const serial_truncated = serial_output.length > UART_CAP_BYTES;
     if (serial_truncated) serial_output = serial_output.slice(-UART_CAP_BYTES);
 
-    // Tease out structured fields from raw_result. Schema (per CLI's TestResult):
-    //   { exit_code, exit_reason: "max_steps"|"no_progress"|..., total_cycles, final_pc, ... }
+    // Tease out structured fields from raw_result. Actual CLI schema:
+    //   { stop_reason: "max_cycles"|"max_steps"|"no_progress"|...,
+    //     cycles: number, cpu_state: { pc: number, ... }, ... }
     let exit_reason: string | undefined;
     let final_cycles: number | undefined;
     let final_pc_hex: string | undefined;
     if (raw_result && typeof raw_result === 'object') {
       const r = raw_result as Record<string, unknown>;
-      if (typeof r.exit_reason === 'string') exit_reason = r.exit_reason;
-      if (typeof r.total_cycles === 'number') final_cycles = r.total_cycles;
-      if (typeof r.final_pc === 'number') final_pc_hex = `0x${r.final_pc.toString(16).toUpperCase().padStart(8, '0')}`;
-      else if (typeof r.final_pc === 'string') final_pc_hex = r.final_pc;
+      if (typeof r.stop_reason === 'string') exit_reason = r.stop_reason;
+      else if (typeof r.exit_reason === 'string') exit_reason = r.exit_reason; // legacy
+      if (typeof r.cycles === 'number') final_cycles = r.cycles;
+      else if (typeof r.total_cycles === 'number') final_cycles = r.total_cycles; // legacy
+      const cpu = r.cpu_state;
+      if (cpu && typeof cpu === 'object' && typeof (cpu as { pc?: unknown }).pc === 'number') {
+        const pc = (cpu as { pc: number }).pc;
+        final_pc_hex = `0x${pc.toString(16).toUpperCase().padStart(8, '0')}`;
+      } else if (typeof r.final_pc === 'number') {
+        final_pc_hex = `0x${r.final_pc.toString(16).toUpperCase().padStart(8, '0')}`;
+      } else if (typeof r.final_pc === 'string') {
+        final_pc_hex = r.final_pc;
+      }
     }
 
     return {
