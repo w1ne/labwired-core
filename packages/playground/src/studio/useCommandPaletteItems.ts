@@ -7,7 +7,7 @@ import { getComponentIcon } from './componentIcons';
 import type { PaletteCategory } from './PaletteDrawer';
 
 // Mirror of App.tsx's PALETTE_CATEGORY so icon lookup uses the same category for fallbacks.
-const CATEGORY_BY_TYPE: Record<string, PaletteCategory> = {
+export const COMPONENT_CATEGORIES: Record<string, PaletteCategory> = {
   adxl345: 'i2c', bme280: 'i2c', mpu6050: 'i2c', 'oled-ssd1306': 'i2c', lcd1602: 'i2c',
   ili9341: 'spi', max31855: 'spi',
   'neo6m-gps': 'uart',
@@ -48,7 +48,7 @@ export function useCommandPaletteItems(ctx: CommandPaletteContext): CommandItem[
         bucket: 'Components',
         label: def?.label ?? type,
         hint: 'drop on canvas',
-        icon: getComponentIcon(type, CATEGORY_BY_TYPE[type] ?? 'misc'),
+        icon: getComponentIcon(type, COMPONENT_CATEGORIES[type] ?? 'misc'),
         action: () => ctx.onAddComponent(type),
       });
     }

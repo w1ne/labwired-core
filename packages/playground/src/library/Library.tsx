@@ -104,7 +104,7 @@ interface FeaturedLab {
   icon: string;
 }
 
-const FEATURED_LABS: FeaturedLab[] = [
+export const FEATURED_LABS: FeaturedLab[] = [
   {
     id: 'stm32f103-blinky',
     name: 'Blinky',

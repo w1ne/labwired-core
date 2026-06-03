@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "peripherals": [
+    {
+      "device_type": "bg770a-cellular",
+      "label": "Quectel BG770A Cellular",
+      "summary": "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
+      "detail": "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "apn",
+          "ty": "str",
+          "doc": "APN to set on the PDP context (e.g. \"internet\")."
+        },
+        {
+          "name": "rssi",
+          "ty": "int",
+          "doc": "Initial signal strength reported by AT+CSQ (0..99)."
+        },
+        {
+          "name": "ber",
+          "ty": "int",
+          "doc": "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99)."
+        },
+        {
+          "name": "boot_urcs",
+          "ty": "bool",
+          "doc": "If true, the modem emits the cold-boot URC sequence on attach."
+        },
+        {
+          "name": "auto_attach",
+          "ty": "bool",
+          "doc": "If true, the modem reports itself already registered + attached at boot."
+        }
+      ],
+      "lab": {
+        "board_id": "quectel-bg770a-lab",
+        "chip": "stm32f103",
+        "example_dir": "quectel-bg770a-lab",
+        "demo_elf": "demo-quectel-bg770a-lab.elf"
+      }
+    },
+    {
+      "device_type": "neo6m-gps",
+      "label": "NEO-6M GPS",
+      "summary": "GPS module streaming NMEA sentences over UART RX.",
+      "detail": "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. Firmware echoes the stream back to the host UART.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "lat_deg",
+          "ty": "float",
+          "doc": "Initial latitude in decimal degrees (paired with lon_deg)."
+        },
+        {
+          "name": "lon_deg",
+          "ty": "float",
+          "doc": "Initial longitude in decimal degrees (paired with lat_deg)."
+        }
+      ],
+      "lab": {
+        "board_id": "neo6m-gps-lab",
+        "chip": "stm32f103",
+        "example_dir": "neo6m-gps-lab",
+        "demo_elf": "demo-neo6m-gps-lab.elf"
+      }
+    }
+  ]
+}

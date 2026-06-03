@@ -89,3 +89,20 @@ export { encodeProject, decodeProject, isEmbedMode, generateShareUrl, generateEm
  * @deprecated Replaced by `InspectorCard` in the Playground Studio shell. Will be removed in a future release.
  */
 export { GuidedLab } from './components/GuidedLab/GuidedLab';
+
+// Unified peripheral kit contract (Rust source of truth → JSON manifest → TS).
+export {
+  PERIPHERAL_KITS,
+  PERIPHERAL_MANIFEST_SCHEMA,
+  findKit,
+  findKitByBoardId,
+  kitsWithLabs,
+} from './peripherals/registry';
+export type {
+  KitMetadata,
+  ConfigKey,
+  LabRef,
+  Transport,
+  Category,
+  ConfigType,
+} from './peripherals/registry';
