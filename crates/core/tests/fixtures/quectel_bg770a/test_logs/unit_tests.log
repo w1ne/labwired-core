@@ -1,0 +1,54 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (target/debug/deps/labwired_core-898808004b6caf0c)
+
+running 47 tests
+test peripherals::components::bg770a::tests::cfun_write_accepts_zero_one_four_only ... ok
+test peripherals::components::bg770a::tests::cereg_read_uses_configured_stat ... ok
+test peripherals::components::bg770a::tests::ate0_suppresses_echo ... ok
+test peripherals::components::bg770a::tests::cfun_zero_then_one_emits_sim_resume_urcs ... ok
+test peripherals::components::bg770a::tests::ati_emits_captured_identity_block ... ok
+test peripherals::components::bg770a::tests::at_returns_ok_with_echo ... ok
+test peripherals::components::bg770a::tests::cfun_write_takes_15_seconds_per_datasheet ... ok
+test peripherals::components::bg770a::tests::cclk_read_and_write_round_trip ... ok
+test peripherals::components::bg770a::tests::boot_urc_chain_is_emitted_when_requested ... ok
+test peripherals::components::bg770a::tests::cfun_read_returns_default_one ... ok
+test peripherals::components::bg770a::tests::cgatt_write_accepts_zero_and_one ... ok
+test peripherals::components::bg770a::tests::cmgf_round_trip_persists_message_format ... ok
+test peripherals::components::bg770a::tests::cmgs_prompt_mode_accepts_body_and_returns_mr ... ok
+test peripherals::components::bg770a::tests::cops_test_form_errors_unattached ... ok
+test peripherals::components::bg770a::tests::cpin_query_reports_ready ... ok
+test peripherals::components::bg770a::tests::cgmi_returns_quectel ... ok
+test peripherals::components::bg770a::tests::cpin_write_returns_cme3_when_cmee_verbose ... ok
+test peripherals::components::bg770a::tests::cpin_test_form_returns_bare_ok ... ok
+test peripherals::components::bg770a::tests::cpin_write_is_not_allowed_when_ready ... ok
+test peripherals::components::bg770a::tests::csq_reports_unknown_when_no_service ... ok
+test peripherals::components::bg770a::tests::echo_is_emitted_immediately_but_ok_waits_for_max_response_time ... ok
+test peripherals::components::bg770a::tests::gps_engine_toggle_and_location_reporting ... ok
+test peripherals::components::bg770a::tests::phonebook_commands_return_documented_errors ... ok
+test peripherals::components::bg770a::tests::complete_network_attach_updates_csq_cereg_cgatt ... ok
+test peripherals::components::bg770a::tests::cgdcont_write_updates_apn ... ok
+test peripherals::components::bg770a::tests::qidnsgip_returns_async_resolution_urc ... ok
+test peripherals::components::bg770a::tests::qntp_emits_async_success_urc ... ok
+test peripherals::components::bg770a::tests::mqtt_inject_recv_emits_qmtrecv_urc ... ok
+test peripherals::components::bg770a::tests::qmtopen_without_active_pdp_returns_failure_urc ... ok
+test peripherals::components::bg770a::tests::qnwinfo_returns_cached_network_info ... ok
+test peripherals::components::bg770a::tests::qpowd_emits_powered_down_and_then_modem_is_silent ... ok
+test peripherals::components::bg770a::tests::qsclk_round_trip_persists_sleep_mode ... ok
+test peripherals::components::bg770a::tests::http_get_happy_path_returns_response_code_and_body ... ok
+test peripherals::components::bg770a::tests::mqtt_publish_prompt_mode_accepts_payload_and_emits_qmtpub_urc ... ok
+test peripherals::components::bg770a::tests::sequans_at_percent_extensions_match_captured_shapes ... ok
+test peripherals::components::bg770a::tests::qiopen_without_active_pdp_returns_failure_urc ... ok
+test peripherals::components::bg770a::tests::set_registration_does_not_emit_urc_when_n_is_zero ... ok
+test peripherals::components::bg770a::tests::set_registration_emits_urc_when_n_is_enabled ... ok
+test peripherals::components::bg770a::tests::unknown_command_returns_bare_error ... ok
+test peripherals::components::bg770a::tests::verizon_extensions_error_as_documented ... ok
+test peripherals::components::bg770a::tests::qsslcfg_seclevel_round_trip_persists_per_context ... ok
+test peripherals::components::bg770a::tests::tls_socket_lifecycle_via_qsslopen_qsslsend_qsslrecv_qsslclose ... ok
+test peripherals::components::bg770a::tests::raw_tcp_socket_lifecycle_open_send_read_close ... ok
+test peripherals::components::bg770a::tests::qgpscfg_subkey_state_persists ... ok
+test peripherals::components::bg770a::tests::qmtcfg_ssl_round_trip_enables_tls_on_client ... ok
+test peripherals::components::bg770a::tests::qfupl_qfdwl_qfdel_round_trip_via_in_memory_filesystem ... ok
+test peripherals::components::bg770a::tests::file_handle_open_read_close_round_trip ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 565 filtered out; finished in 0.01s
+

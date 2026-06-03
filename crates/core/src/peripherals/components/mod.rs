@@ -6,6 +6,7 @@
 
 pub mod adxl345;
 pub mod aht20;
+pub mod bg770a;
 pub mod bme280;
 pub mod bmp280;
 pub mod i2c_factory;
@@ -24,6 +25,7 @@ pub mod uc8151d_tricolor_290;
 
 pub use adxl345::Adxl345;
 pub use aht20::Aht20;
+pub use bg770a::QuectelBg770a;
 pub use bme280::Bme280;
 pub use bmp280::Bmp280;
 pub use i2c_factory::build_i2c_device;
