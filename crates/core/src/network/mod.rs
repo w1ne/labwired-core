@@ -7,6 +7,7 @@
 use crate::SimResult;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
+pub mod mqtt;
 pub mod sim;
 
 /// Trait for virtual interconnects between machines.
