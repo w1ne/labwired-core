@@ -137,32 +137,41 @@ fn labwired_ereader_runs_to_panel_paint() {
             }
         };
 
-    // Heap caps suite (bump allocator).
-    push_named(
-        &mut thunks,
-        "heap_caps_init",
-        rom_thunks::esp_idf_heap_caps_init,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_malloc",
-        rom_thunks::esp_idf_heap_caps_malloc,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_calloc",
-        rom_thunks::esp_idf_heap_caps_calloc,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_free",
-        rom_thunks::esp_idf_heap_caps_free,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_realloc",
-        rom_thunks::esp_idf_heap_caps_realloc,
-    );
+    // Heap: the sim-side bump allocator (default). It's debt — the real
+    // ESP-IDF heap_caps should run on emulated DRAM. LABWIRED_REAL_HEAP=1
+    // un-thunks it, but that currently walls: the real heap_caps_init
+    // registers a heap region that collides with the harness's SEEDED stacks
+    // (we seed SP at 0x3FFE_0000 / 0x3FFD_8000 instead of the real top-of-DRAM
+    // layout), so a malloc'd struct lands on stack data and esp_intr_alloc
+    // dereferences "lock" (0x6b636f6c). Fix = faithful stack/heap layout, then
+    // delete this bump allocator. (Reproduce: LABWIRED_REAL_HEAP=1.)
+    if std::env::var("LABWIRED_REAL_HEAP").is_err() {
+        push_named(
+            &mut thunks,
+            "heap_caps_init",
+            rom_thunks::esp_idf_heap_caps_init,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_malloc",
+            rom_thunks::esp_idf_heap_caps_malloc,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_calloc",
+            rom_thunks::esp_idf_heap_caps_calloc,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_free",
+            rom_thunks::esp_idf_heap_caps_free,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_realloc",
+            rom_thunks::esp_idf_heap_caps_realloc,
+        );
+    }
 
     // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
     for sym in &[
@@ -391,7 +400,15 @@ fn labwired_ereader_runs_to_panel_paint() {
         step_count += 1;
 
         if let Err(e) = machine.step() {
-            step_err = Some(format!("{e}"));
+            let c1 = machine
+                .cpu_secondary
+                .as_ref()
+                .map(|c| c.get_pc())
+                .unwrap_or(0);
+            step_err = Some(format!(
+                "{e} (core0 pc=0x{:08x} core1 pc=0x{c1:08x})",
+                machine.cpu.get_pc()
+            ));
             break;
         }
         let pc = machine.cpu.get_pc();
