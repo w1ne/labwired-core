@@ -1240,6 +1240,57 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(crate::peripherals::esp32s3::hmac::Esp32s3Hmac::new(0)),
     );
+    // Digital Signature (DR_REG_DIGITAL_SIGNATURE_BASE, 0x6003_D000) — polled
+    // RSA-signature engine over modeled key params; no interrupt source.
+    bus.add_peripheral(
+        "ds",
+        0x6003_D000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::ds::Esp32s3Ds::new(0)),
+    );
+    // MCPWM0 / MCPWM1 (DR_REG_PWM0/1_BASE) — motor-control PWM, two units.
+    // ETS_PWM0_INTR_SOURCE = 38, ETS_PWM1_INTR_SOURCE = 39.
+    bus.add_peripheral(
+        "mcpwm0",
+        0x6001_E000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::mcpwm::Esp32s3Mcpwm::new(38)),
+    );
+    bus.add_peripheral(
+        "mcpwm1",
+        0x6002_C000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::mcpwm::Esp32s3Mcpwm::new(39)),
+    );
+    // SD/MMC host (DR_REG_SDMMC_BASE, 0x6002_8000). ETS_SDIO_HOST_INTR_SOURCE
+    // = 36. Liveness model of the register handshake (no physical card).
+    bus.add_peripheral(
+        "sdmmc",
+        0x6002_8000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::sdmmc::Esp32s3Sdmmc::new(36)),
+    );
+    // LCD_CAM (DR_REG_LCD_CAM_BASE, 0x6004_1000). ETS_LCD_CAM_INTR_SOURCE = 24.
+    bus.add_peripheral(
+        "lcd_cam",
+        0x6004_1000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam::new(24)),
+    );
+    // USB-OTG (DWC_otg core, DR_REG_USB_BASE, 0x6008_0000). ETS_USB_INTR_SOURCE
+    // = 23. Liveness model of the DWC2 register interface (no host/PHY attached).
+    bus.add_peripheral(
+        "usb_otg",
+        0x6008_0000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::usb_otg::Esp32s3UsbOtg::new(23)),
+    );
 
     // Power-on register state the real boot ROM checks before booting from
     // flash. Values captured from silicon over JTAG: without them the ROM reads
