@@ -177,11 +177,11 @@ impl Flash {
                     let prftbe = (self.acr >> 4) & 1;
                     (self.acr & !(1 << 5)) | (prftbe << 5)
                 }
-                0x04 => 0,         // KEYR write-only
-                0x08 => 0,         // OPTKEYR write-only
-                0x0C => self.sr,   // SR; BSY (bit 0) is RO, we never set busy.
-                0x10 => self.cr,   // CR; LOCK at bit 7 (NOT bit 31 like L4).
-                0x14 => 0,         // AR write-only
+                0x04 => 0,           // KEYR write-only
+                0x08 => 0,           // OPTKEYR write-only
+                0x0C => self.sr,     // SR; BSY (bit 0) is RO, we never set busy.
+                0x10 => self.cr,     // CR; LOCK at bit 7 (NOT bit 31 like L4).
+                0x14 => 0,           // AR write-only
                 0x1C => 0x03FF_FFFC, // OBR — verified on STM32F103C8 silicon.
                 0x20 => 0xFFFF_FFFF, // WRPR — no write protect.
                 _ => 0,
