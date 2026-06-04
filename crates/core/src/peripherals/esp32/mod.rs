@@ -18,6 +18,7 @@ pub mod dport;
 pub mod efuse;
 pub mod gpio;
 pub mod ledc;
+pub mod mcpwm;
 pub mod rtc_cntl;
 pub mod sdio_stub;
 pub mod sha;

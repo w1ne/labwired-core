@@ -673,6 +673,21 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32::twai::Esp32Twai::new()),
     );
 
+    // MCPWM0 — Motor Control PWM (TRM §16) at 0x3FF5_E000. Real model of the
+    // PWM-generation path: per-timer period/prescale → frequency, per-operator
+    // compare-A → duty, so mcpwm_get_duty()/mcpwm_get_frequency() read back
+    // what was set and a bound actuator (servo/ESC) tracks the live duty.
+    // Registered before the catch-all so its window wins over the pwm0 stub.
+    bus.add_peripheral(
+        "mcpwm0",
+        crate::peripherals::esp32::mcpwm::Mcpwm::BASE as u64,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::mcpwm::Mcpwm::new(
+            crate::peripherals::esp32::mcpwm::Mcpwm::BASE,
+        )),
+    );
+
     // Catch-all stubs for the rest of the APB peripheral block
     // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
     // (RTC_IO, SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
@@ -689,7 +704,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("uhci0", 0x3FF5_4000),
         ("i2s1", 0x3FF6_D000),
         ("uart2", 0x3FF6_E000),
-        ("pwm0", 0x3FF5_E000),
+        // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
         ("rmt", 0x3FF5_6000),
         ("pcnt", 0x3FF5_7000),
