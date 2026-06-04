@@ -97,8 +97,12 @@ pub struct F1Rcc {
 
 impl F1Rcc {
     fn new() -> Self {
+        // CR reset verified on real STM32F103C8 silicon (Blue Pill): 0x00004A83
+        //   bit0 HSION=1, bit1 HSIRDY=1, bits7:3 HSITRIM=0x10 (default trim),
+        //   bits15:8 HSICAL=0x4A (chip calibration). classic_cr_ready is a no-op
+        //   here (HSIRDY already set, no HSE/PLL).
         Self {
-            cr: classic_cr_ready(1 << 0),
+            cr: classic_cr_ready(0x0000_4A83),
             ..Default::default()
         }
     }

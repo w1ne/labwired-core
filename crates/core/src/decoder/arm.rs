@@ -1515,7 +1515,17 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let rt2 = ((h2 >> 8) & 0xF) as u8;
         let imm8 = (h2 & 0xFF) as u32;
 
-        if (h1 & 0x01F0) == 0x00D0 && (h2 & 0xFFF0) == 0xF000 {
+        // ARMv7-M TBB/TBH encoding T1:
+        //   1110100011010 Rn  1111 0000 000 H Rm
+        // h2 bits 15:12 = 0xF, bits 11:5 = 0, bit 4 = H (0=TBB, 1=TBH),
+        // bits 3:0 = Rm. The mask must exclude bit 4 (the H selector) OR
+        // TBH gets rejected and falls through to Unknown32. This was a real
+        // bug: pin_SetF1AFPin (and every stm32duino pin dispatcher) uses
+        // TBH at PC=0x08001804 → was returning Unknown32 → PC advance 4
+        // landed in the dispatch table → CPU executed table halfwords as
+        // instructions → eventual jump to a garbage address (e.g. 0x002B002F
+        // from table entry 0x002B002B + thumb prefetch).
+        if (h1 & 0x01F0) == 0x00D0 && (h2 & 0xFFE0) == 0xF000 {
             let rm = (h2 & 0xF) as u8;
             let is_tbh = (h2 & 0x0010) != 0;
             if is_tbh {

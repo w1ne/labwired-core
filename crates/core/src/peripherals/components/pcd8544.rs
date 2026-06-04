@@ -216,6 +216,62 @@ impl SpiDevice for Pcd8544 {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Pcd8544Kit;
+pub static PCD8544_KIT: Pcd8544Kit = Pcd8544Kit;
+
+static PCD8544_METADATA: KitMetadata = KitMetadata {
+    device_type: "pcd8544",
+    label: "Nokia 5110 LCD",
+    summary: "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI.",
+    detail: "Tracks the 504-byte (84×48 / 8) DDRAM, command vs data discrimination via a host \
+             GPIO D/C line that the bus resolves to a concrete GPIO ODR address at attach time.",
+    transport: Transport::Spi,
+    category: Category::Spi,
+    config_keys: &[
+        ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "Chip-select GPIO pin (e.g. \"PB6\"). Defaults to PB6.",
+        },
+        ConfigKey {
+            name: "dc_pin",
+            ty: ConfigType::Str,
+            doc: "Data/command GPIO pin (e.g. \"PC7\"). Defaults to PC7. \
+                  Resolved to the driving GPIO's ODR address at attach time.",
+        },
+    ],
+    labs: &[LabRef {
+        board_id: "nokia5110-invaders-lab",
+        chip: "stm32l476",
+        example_dir: "nokia5110-invaders-lab",
+        demo_elf: "demo-nokia5110-invaders-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Pcd8544Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &PCD8544_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PB6").to_string();
+        let dc_pin = ctx.config_str("dc_pin").unwrap_or("PC7").to_string();
+        let dc_src = ctx.resolve_pin_odr(&dc_pin);
+        let spi = ctx.spi()?;
+        let mut dev = Pcd8544::new(cs_pin, dc_pin);
+        if let Some((odr_addr, bit)) = dc_src {
+            crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
+        }
+        spi.attach(Box::new(dev));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

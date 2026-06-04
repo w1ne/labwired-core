@@ -110,30 +110,17 @@ fn labwired_ereader_runs_to_panel_paint() {
         let _ = machine.bus.write_u8(addr as u64, 0x01);
         handshake_bytes.push(addr);
     }
+    // Re-assert these flags the instant PRO_CPU releases APP_CPU (models
+    // APP_CPU bring-up) so newer arduino-esp32 cores don't time out in
+    // start_other_core. See rom_thunks::ets_set_appcpu_boot_addr.
+    rom_thunks::set_appcpu_up_flags(handshake_bytes.clone());
 
-    // loopTask xCoreID patch — scan first 64 bytes of app_main for the
-    // `movi.n a8, 1; mov.n a9, a13` immediate pattern that pins
-    // loopTask to APP_CPU and rewrite it to PRO_CPU (we're single-CPU).
+    // loopTask xCoreID repin — arduino-esp32 pins loopTask to APP_CPU
+    // (CONFIG_ARDUINO_RUNNING_CORE=1), but the sim only models PRO_CPU, so a
+    // core-1 task never runs. Rewrite the xCoreID immediate to 0 in app_main.
     if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-        const SCAN_BYTES: u32 = 64;
-        let mut window = Vec::with_capacity(SCAN_BYTES as usize);
-        for off in 0..SCAN_BYTES {
-            match machine.bus.read_u8((app_main_addr + off) as u64) {
-                Ok(b) => window.push(b),
-                Err(_) => break,
-            }
-        }
-        let target = [0xE9_u8, 0x01, 0x0C, 0x0D];
-        let swap = [0x0C_u8, 0x0D, 0xD9, 0x01];
-        if let Some((i, _)) = window.windows(4).enumerate().find(|(_, w)| *w == target) {
-            let patch_addr = (app_main_addr + i as u32) as u64;
-            for (j, b) in swap.iter().enumerate() {
-                let _ = machine.bus.write_u8(patch_addr + j as u64, *b);
-            }
-            eprintln!(
-                "[ereader-sim] patched loopTask xCoreID in app_main @0x{:08x}",
-                patch_addr as u32
-            );
+        if let Some((addr, msg)) = rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr) {
+            eprintln!("[ereader-sim] repinned loopTask xCoreID 1->0 ({msg}) @0x{addr:08x}");
         }
     }
 
@@ -367,10 +354,19 @@ fn labwired_ereader_runs_to_panel_paint() {
         rom_thunks::gxepd_write_data,
     );
 
-    // xthal_window_spill — semantic spill via shadow stack.
-    for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-        push_named(&mut thunks, sym, rom_thunks::xthal_window_spill_thunk);
-    }
+    // xthal_window_spill_nw — semantic spill via shadow stack. Only the
+    // `_nw` leaf (the actual spill loop that would trap on the displaced
+    // frames) is thunked; the `xthal_window_spill` wrapper is a thin
+    // PS-save/restore shell that is CALL{n}-entered and must run its real
+    // `entry / call0 _nw / retw` natively — thunking it returns via a0,
+    // which is the *caller's* return address (the wrapper's ENTRY, which
+    // would set up a0, is clobbered by the thunk's BREAK), corrupting the
+    // return and faulting in xPortStartScheduler's first-task dispatch.
+    push_named(
+        &mut thunks,
+        "xthal_window_spill_nw",
+        rom_thunks::xthal_window_spill_thunk,
+    );
 
     // Real-silicon noreturn — halt the CPU rather than letting assert →
     // return turn into a tight loop.

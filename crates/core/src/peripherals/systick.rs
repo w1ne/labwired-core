@@ -40,9 +40,15 @@ impl Systick {
         match offset {
             0x00 => {
                 self.csr = value & 0x7;
+                if std::env::var("LABWIRED_TRACE_SYSTICK").is_ok() {
+                    eprintln!("SYSTICK CSR <- 0x{:08X} (enable={} tickint={} clksrc={})", value, value & 1, (value >> 1) & 1, (value >> 2) & 1);
+                }
             }
             0x04 => {
                 self.rvr = value & 0x00FF_FFFF;
+                if std::env::var("LABWIRED_TRACE_SYSTICK").is_ok() {
+                    eprintln!("SYSTICK RVR <- 0x{:08X} ({})", value & 0x00FF_FFFF, value & 0x00FF_FFFF);
+                }
             }
             0x08 => {
                 self.cvr = 0;
