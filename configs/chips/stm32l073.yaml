@@ -1,0 +1,347 @@
+# LabWired - STM32L073RZ chip configuration
+#
+# Source references:
+# - RM0367 (STM32L0x3 reference manual): memory map, RCC layout, peripheral
+#   register offsets.
+# - DS10685 (STM32L073x8/xB/xZ datasheet): memory boundaries (192KB flash,
+#   20KB RAM, 6KB data EEPROM).
+# - UM1724 (STM32 Nucleo-64 user manual): board-level wiring (see the system
+#   manifest, not here).
+# - SILICON PROBE (2026-06-03): values below confirmed by reading a physical
+#   NUCLEO-L073RZ over SWD with an on-board ST-LINK V2 (serial 066CFF55...).
+#   st-info: chipid 0x447, flash 196608 (192KB, 128B pages), sram 20480,
+#   dev-type STM32L0xxx_Cat_5. DBGMCU_IDCODE @0x40015800 = 0x20086447
+#   (DEV_ID 0x447, REV_ID 0x2008). Core: Cortex-M0+ r0p1. Flash-size reg
+#   @0x1FF8007C = 0x00C0 (192). See examples/nucleo-l073rz/VALIDATION.md.
+#
+# Tier: hardware-validated (smoke). Memory map + device identity confirmed
+# against physical silicon; the boot + USART2 byte stream matches between
+# simulator and the real board. Peripherals beyond the GPIO/USART smoke path
+# (RCC clock tree, I2C/SPI/ADC) are still family-model approximations not yet
+# diffed against silicon — see VALIDATION.md "Known fidelity limits".
+#
+# Core: Cortex-M0+ (ARMv6-M / Thumb subset). The engine's `arch` field has no
+# M0+ token, so this uses the generic `arm` core. CAVEAT: the simulator does
+# NOT enforce the ARMv6-M instruction subset (it will happily execute Thumb-2
+# instructions a real M0+ would fault on) and it leaves SRAM/peripheral
+# bit-banding enabled even though Cortex-M0+ has no bit-band region. Firmware
+# is therefore built for `thumbv6m-none-eabi` so the *toolchain* enforces the
+# correct ISA up front. See VALIDATION.md "Known fidelity limits".
+
+name: "stm32l073rz"
+arch: "arm"
+registers_count: 200
+flash:
+  base: 0x08000000
+  size: "192KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+
+peripherals:
+  # --- Clock / power / system ---------------------------------------------
+  # RCC — STM32L0 RCC (RM0367 §7). Uses the dedicated `stm32l0` layout:
+  # CRRCR (HSI48) at 0x08 pushes CFGR to 0x0C, CR ready bits are L0-specific
+  # (HSI16RDY=bit2, MSI=bit8/9), AHBENR=0x30 / APB2ENR=0x34 / APB1ENR=0x38.
+  # Offsets, CR reset (0x300 = MSION+MSIRDY), and the SW->SWS clock-switch
+  # readback are validated against NUCLEO-L073RZ silicon over SWD.
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l0"
+
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+
+  # --- GPIO (IOPORT bus @ 0x50000000 — distinct from L4's 0x48000000) -------
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x50000400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x50000800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x50000C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x50001000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x50001C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+
+  # --- USART / LPUART (modern stm32v2 register layout: ISR 0x1C, TDR 0x28) --
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 28
+    config:
+      profile: "stm32v2"
+
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 27
+    config:
+      profile: "stm32v2"
+
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 14
+    config:
+      profile: "stm32v2"
+
+  - id: "uart5"
+    type: "uart"
+    base_address: 0x40005000
+    size: "1KB"
+    irq: 14
+    config:
+      profile: "stm32v2"
+
+  # LPUART1 — same USART register layout as the modern (stm32v2) USART.
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 29
+    config:
+      profile: "stm32v2"
+
+  # --- SPI (L0 has the CLASSIC SPI: no CR2.DS field, CR2 reset 0x0000) -------
+  # Verified against classic-SPI silicon (STM32F103, same IP family) over SWD:
+  # CR2 reset = 0x0000 (NOT the L4/FIFO 0x0700). Hence the `stm32` profile.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 25
+    config:
+      profile: "stm32"
+
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 26
+    config:
+      profile: "stm32"
+
+  # --- I2C (v2 TIMINGR-based controller, shared with L4/F7/G0) ---------------
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 23
+    config:
+      profile: "stm32l4"
+
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 24
+    config:
+      profile: "stm32l4"
+
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40007800
+    size: "1KB"
+    irq: 21
+    config:
+      profile: "stm32l4"
+
+  # --- ADC (12-bit SAR; L0 layout approximated by the l4 ADC model) ---------
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 12
+    config:
+      profile: "stm32l4"
+
+  - id: "dac"
+    type: "dac"
+    base_address: 0x40007400
+    size: "1KB"
+
+  # --- DMA (single controller, 7 channels on L0) ----------------------------
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    irq: 9
+
+  # --- Timers ---------------------------------------------------------------
+  # TIM2 — 32-bit general-purpose timer (RM0367 §21).
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 15
+    config:
+      width: 32
+
+  # TIM3 — 16-bit general-purpose timer.
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 16
+
+  # TIM6 / TIM7 — 16-bit basic timers (HAL time-base candidates).
+  - id: "tim6"
+    type: "timer"
+    base_address: 0x40001000
+    size: "1KB"
+    irq: 17
+
+  - id: "tim7"
+    type: "timer"
+    base_address: 0x40001400
+    size: "1KB"
+    irq: 18
+
+  # TIM21 / TIM22 — 16-bit general-purpose timers.
+  - id: "tim21"
+    type: "timer"
+    base_address: 0x40010800
+    size: "1KB"
+    irq: 20
+
+  - id: "tim22"
+    type: "timer"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 22
+
+  # LPTIM1 — low-power timer.
+  - id: "lptim1"
+    type: "lptim"
+    base_address: 0x40007C00
+    size: "1KB"
+    irq: 13
+
+  # --- Watchdogs / RTC ------------------------------------------------------
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+
+  # --- CRC / RNG ------------------------------------------------------------
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+
+  - id: "rng"
+    type: "rng"
+    base_address: 0x40025000
+    size: "1KB"
+    irq: 20
+
+  # --- EXTI (single-bank, <32 lines on L0 → stm32f1-style register file) ----
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+
+  # SYSCFG + COMP window — modeled as a stub (RM0367 §10).
+  - id: "syscfg"
+    type: "stub"
+    base_address: 0x40010000
+    size: "1KB"
+
+  # --- USB FS device (not modeled — stub so reads/writes don't fault) -------
+  - id: "usb_fs"
+    type: "stub"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 31
+
+  # LCD glass controller (the L073 superset feature vs L072) — stub.
+  - id: "lcd"
+    type: "stub"
+    base_address: 0x40002400
+    size: "1KB"
+
+  # --- Core debug / interrupt blocks ---------------------------------------
+  - id: "scb"
+    type: "scb"
+    base_address: 0xE000ED00
+    size: "1KB"
+
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+
+  # DBGMCU — on Cortex-M0+ this is an APB peripheral at 0x40015800 (RM0367
+  # §27.4), NOT the 0xE0042000 location used by Cortex-M3/M4 parts (e.g. L4).
+  # DBGMCU_IDCODE = 0x20086447, READ FROM REAL SILICON over SWD (2026-06-03):
+  # DEV_ID=0x447 (STM32L0x3 Cat.5), REV_ID=0x2008. This is the value firmware
+  # reads back as the "hardware oracle" device identity, and it matches the
+  # physical board byte-for-byte.
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0x40015800
+    size: "1KB"
+    config:
+      idcode: "0x20086447"

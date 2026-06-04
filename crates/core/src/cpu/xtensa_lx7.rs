@@ -149,11 +149,13 @@ pub struct XtensaLx7 {
     /// Default false: fast-boot jumps mid-execution without a primed chain, so
     /// it relies on the shadow mechanism instead.
     pub faithful_windows: bool,
-    /// SMP core identity: 0 = PRO_CPU, 1 = APP_CPU. Selects which half of
-    /// the bus's per-core pending-IRQ set this CPU observes and clears, so
-    /// the ESP32-S3 cross-core interrupt (FROM_CPU_n) reaches only its
-    /// target core. Set by `new()` (0) / `new_app_cpu()` (1).
-    pub core_id: u8,
+    /// True for the ESP32 APP_CPU (core 1). On real silicon a core's PRID
+    /// is fixed hardware (PRO_CPU 0xCDCD → core 0, APP_CPU 0xABAB → core 1)
+    /// and survives reset. We remember it so `reset()` restores the right
+    /// PRID — otherwise a reset re-news the SR to 0xCDCD, APP_CPU reads
+    /// core_id 0, and it corrupts PRO_CPU's per-core FreeRTOS state.
+    /// (SMP core identity itself is derived from PRID via `core_id()`.)
+    pub app_cpu: bool,
     /// IRAM/flash instruction-fetch slice cache (#119 Phase 1.2).
     fetch_cache: Option<(u64, u64, usize)>,
     /// Decode cache (#124 follow-on): direct-mapped PC → (tag, len, decoded
@@ -192,7 +194,7 @@ impl XtensaLx7 {
             branched: false,
             halted: false,
             faithful_windows: false,
-            core_id: 0,
+            app_cpu: false,
             fetch_cache: None,
             decode_cache: vec![None; DECODE_CACHE_SIZE],
             decode_gen: vec![0; DECODE_CACHE_SIZE],
@@ -257,7 +259,7 @@ impl XtensaLx7 {
         let mut cpu = Self::new();
         cpu.sr = XtensaSrFile::new_app_cpu();
         cpu.halted = true;
-        cpu.core_id = 1;
+        cpu.app_cpu = true;
         cpu
     }
 
@@ -1973,7 +1975,12 @@ impl XtensaLx7 {
                 // never dispatches to the user ISR (Plan 3 Task 10 case
                 // study).
                 if sr == INTERRUPT {
-                    v |= bus.pending_cpu_irqs(self.core_id);
+                    // Per-core IRQ routing handled by the bus aggregator:
+                    // PRO_CPU (core 0) gets peripheral source IRQs; both cores
+                    // get their own cross-core FROM_CPU IPIs. APP_CPU never
+                    // sees PRO_CPU's peripheral interrupts (which would unbalance
+                    // its critical nesting → vPortExitCritical "nesting > 0").
+                    v |= bus.pending_cpu_irqs(self.core_id());
                 }
                 self.regs.write_logical(at, v);
                 self.pc = self.pc.wrapping_add(len);
@@ -2327,6 +2334,14 @@ impl XtensaLx7 {
 
     // ── Interrupt dispatch helpers ────────────────────────────────────────────
 
+    /// This CPU's core id, derived from PRID exactly as the firmware does
+    /// (`xPortGetCoreID()` = `(PRID >> 13) & 1`): PRO_CPU PRID `0xCDCD` → 0,
+    /// APP_CPU PRID `0xABAB` → 1.
+    #[inline]
+    fn core_id(&self) -> u8 {
+        ((self.sr.read(crate::cpu::xtensa_sr::PRID) >> 13) & 1) as u8
+    }
+
     /// Compute the highest priority level of any pending-and-enabled interrupt.
     ///
     /// Returns `Some(level)` if `(INTERRUPT & INTENABLE) != 0`, else `None`.
@@ -2337,8 +2352,10 @@ impl XtensaLx7 {
         //   1. SR-file INTERRUPT register (firmware can software-trigger via WSR).
         //   2. Bus's pending_cpu_irqs (peripheral source IDs routed through
         //      the ESP32-S3 intmatrix in tick_peripherals_with_costs).
-        let pending =
-            (self.sr.read(INTERRUPT) | bus.pending_cpu_irqs(self.core_id)) & self.sr.read(INTENABLE);
+        // Per-core routing handled by the bus: PRO_CPU takes peripheral IRQs,
+        // both cores take their own cross-core FROM_CPU IPIs.
+        let bus_irqs = bus.pending_cpu_irqs(self.core_id());
+        let pending = (self.sr.read(INTERRUPT) | bus_irqs) & self.sr.read(INTENABLE);
         if pending == 0 {
             return None;
         }
@@ -2429,7 +2446,7 @@ impl XtensaLx7 {
         // before the source re-asserts.
         for slot in 0..32u8 {
             if IRQ_LEVELS[slot as usize] == level {
-                bus.clear_cpu_irq_pending(self.core_id, slot);
+                bus.clear_cpu_irq_pending(self.core_id(), slot);
             }
         }
 
@@ -2503,7 +2520,13 @@ impl Cpu for XtensaLx7 {
         // HW-verified: PS reset = 0x1F (EXCM=1, INTLEVEL=0xF — all ints masked).
         // Confirmed via OpenOCD `reset halt` on real S3-Zero: ps = 0x0000001f.
         self.ps = Ps::from_raw(0x1F);
-        self.sr = XtensaSrFile::new(); // sets VECBASE=0x40000000, PRID=0xCDCD
+        // VECBASE=0x40000000; PRID is fixed hardware per core and survives
+        // reset — restore APP_CPU's 0xABAB so it keeps core_id 1.
+        self.sr = if self.app_cpu {
+            XtensaSrFile::new_app_cpu()
+        } else {
+            XtensaSrFile::new()
+        };
         self.pc = 0x4000_0400;
         // Preserve halted state across reset — a CPU configured as
         // APP_CPU (halted at construction) must stay halted through the

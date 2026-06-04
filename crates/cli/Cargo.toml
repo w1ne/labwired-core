@@ -16,6 +16,10 @@ default-run = "labwired"
 name = "labwired"
 path = "src/main.rs"
 
+[[bin]]
+name = "gen-peripherals-manifest"
+path = "src/bin/gen_peripherals_manifest.rs"
+
 [dependencies]
 labwired-core = { path = "../core" }
 labwired-loader = { path = "../loader" }

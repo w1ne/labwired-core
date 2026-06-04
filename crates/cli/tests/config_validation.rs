@@ -136,12 +136,12 @@ fn test_external_device_attaches_to_i2c() {
         .expect("i2c1 peripheral must be the I2c type");
 
     assert_eq!(
-        i2c.attached_devices.len(),
+        i2c.attached_devices().len(),
         1,
         "demo-blinky declares one external_devices entry on i2c1 (tmp102)"
     );
     assert_eq!(
-        i2c.attached_devices[0].borrow().address(),
+        i2c.attached_devices()[0].borrow().address(),
         0x48,
         "tmp102 attaches at default address 0x48"
     );
@@ -178,7 +178,7 @@ fn test_nucleo_f407_i2c_attaches_aht20_and_bmp280() {
         .expect("i2c1 peripheral must be the I2c type");
 
     let addresses: Vec<u8> = i2c
-        .attached_devices
+        .attached_devices()
         .iter()
         .map(|d| d.borrow().address())
         .collect();

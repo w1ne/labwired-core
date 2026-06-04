@@ -424,6 +424,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
@@ -524,6 +525,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system-2".to_string(),
             chip: "test-chip-2".to_string(),
@@ -579,6 +581,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system-3".to_string(),
             chip: "test-chip-3".to_string(),
@@ -629,6 +632,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2".to_string(),
             chip: "test-chip-gpio-v2".to_string(),
@@ -685,6 +689,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system-uart-v2".to_string(),
             chip: "test-chip-uart-v2".to_string(),
@@ -738,6 +743,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-v2".to_string(),
             chip: "test-chip-rcc-v2".to_string(),
@@ -791,6 +797,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-f4".to_string(),
             chip: "test-chip-rcc-f4".to_string(),
@@ -844,6 +851,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2-alias".to_string(),
             chip: "test-chip-gpio-v2-alias".to_string(),

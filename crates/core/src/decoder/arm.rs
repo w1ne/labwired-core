@@ -1302,7 +1302,10 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     }
 
     // MOVW: 1111 0 i 10 0100 imm4 0 imm3 rd imm8 -> F24..
-    if (h1 & 0xFBF0) == 0xF240 {
+    // h2[15]==0 distinguishes the plain-immediate data-processing group from the
+    // branch/misc-control group (h2[15]==1); without it a B<cond>.W (T3) whose
+    // first halfword is 0xF24x (cond=LS) is mis-decoded as MOVW and never branches.
+    if (h1 & 0xFBF0) == 0xF240 && (h2 & 0x8000) == 0 {
         let i = (h1 >> 10) & 1;
         let imm4 = h1 & 0xF;
         let imm3 = (h2 >> 12) & 7;
@@ -1313,7 +1316,8 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     }
 
     // MOVT: 1111 0 i 10 1100 imm4 0 imm3 rd imm8 -> F2C..
-    if (h1 & 0xFBF0) == 0xF2C0 {
+    // (h2[15]==0 guard: see MOVW above — keeps B<cond>.W out of this arm.)
+    if (h1 & 0xFBF0) == 0xF2C0 && (h2 & 0x8000) == 0 {
         let i = (h1 >> 10) & 1;
         let imm4 = h1 & 0xF;
         let imm3 = (h2 >> 12) & 7;
@@ -1368,7 +1372,8 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // ADDW (T4 plain immediate, Rn != PC) / ADR.W (T3, Rn == PC, positive offset):
     //   1111 0 i 10 0000 nnnn 0 imm3 dddd imm8 -> F200..F20F (with i bit at 10).
     // imm12 = i:imm3:imm8, zero-extended to 32 bits — NOT ThumbExpandImm.
-    if (h1 & 0xFBF0) == 0xF200 {
+    // (h2[15]==0 guard: see MOVW above — F20x also collides with B<cond>.W, cond=HI.)
+    if (h1 & 0xFBF0) == 0xF200 && (h2 & 0x8000) == 0 {
         let i = (h1 >> 10) & 1;
         let rn = (h1 & 0xF) as u8;
         let imm3 = (h2 >> 12) & 7;
@@ -1384,7 +1389,8 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
 
     // SUBW (T4) / ADR.W (T2, Rn == PC, negative offset):
     //   1111 0 i 10 1010 nnnn 0 imm3 dddd imm8 -> F2A0..F2AF.
-    if (h1 & 0xFBF0) == 0xF2A0 {
+    // (h2[15]==0 guard: see MOVW above — keeps B<cond>.W out of this arm.)
+    if (h1 & 0xFBF0) == 0xF2A0 && (h2 & 0x8000) == 0 {
         let i = (h1 >> 10) & 1;
         let rn = (h1 & 0xF) as u8;
         let imm3 = (h2 >> 12) & 7;
@@ -1420,7 +1426,8 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     }
 
     // SBFX / UBFX
-    if (h1 & 0xFFF0) == 0xF340 || (h1 & 0xFFF0) == 0xF3C0 {
+    // (h2[15]==0 guard: see MOVW above — F34x also collides with B<cond>.W, cond=LE.)
+    if ((h1 & 0xFFF0) == 0xF340 || (h1 & 0xFFF0) == 0xF3C0) && (h2 & 0x8000) == 0 {
         let is_unsigned = (h1 & 0x0080) != 0; // F3C0 vs F340 (0x0080 bit)
         let rn = (h1 & 0xF) as u8;
         let rd = ((h2 >> 8) & 0xF) as u8;
@@ -1508,7 +1515,17 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let rt2 = ((h2 >> 8) & 0xF) as u8;
         let imm8 = (h2 & 0xFF) as u32;
 
-        if (h1 & 0x01F0) == 0x00D0 && (h2 & 0xFFF0) == 0xF000 {
+        // ARMv7-M TBB/TBH encoding T1:
+        //   1110100011010 Rn  1111 0000 000 H Rm
+        // h2 bits 15:12 = 0xF, bits 11:5 = 0, bit 4 = H (0=TBB, 1=TBH),
+        // bits 3:0 = Rm. The mask must exclude bit 4 (the H selector) OR
+        // TBH gets rejected and falls through to Unknown32. This was a real
+        // bug: pin_SetF1AFPin (and every stm32duino pin dispatcher) uses
+        // TBH at PC=0x08001804 → was returning Unknown32 → PC advance 4
+        // landed in the dispatch table → CPU executed table halfwords as
+        // instructions → eventual jump to a garbage address (e.g. 0x002B002F
+        // from table entry 0x002B002B + thumb prefetch).
+        if (h1 & 0x01F0) == 0x00D0 && (h2 & 0xFFE0) == 0xF000 {
             let rm = (h2 & 0xF) as u8;
             let is_tbh = (h2 & 0x0010) != 0;
             if is_tbh {
@@ -2055,6 +2072,45 @@ mod tests {
                 cond: 0,
                 offset: -6
             }
+        );
+    }
+
+    #[test]
+    fn test_decode_wide_cond_branch_t3() {
+        // B<cond>.W (T3, 32-bit). The first halfword shares its top bits with the
+        // plain-immediate data-processing group (MOVW/MOVT/ADDW/SUBW/SBFX), so the
+        // decoder must only pick those when h2[15]==0. With h2[15]==1 these must
+        // decode as conditional branches. Regression: BLS.W was mis-decoded as
+        // MOVW (h1=0xF240) and silently never branched — see the Nokia paddle bug.
+
+        // BLS.W +452: F240 80E2 (cond=LS=9). Real encoding from the invaders ELF.
+        assert_eq!(
+            decode_thumb_32(0xF240, 0x80E2),
+            Instruction::BranchCond {
+                cond: 0x9,
+                offset: 452
+            }
+        );
+        // BHI.W (cond=HI=8) shares h1 with ADDW (0xF200).
+        assert_eq!(
+            decode_thumb_32(0xF200, 0x8000),
+            Instruction::BranchCond {
+                cond: 0x8,
+                offset: 0
+            }
+        );
+        // BLE.W (cond=LE=D) shares h1 with SBFX (0xF340).
+        assert_eq!(
+            decode_thumb_32(0xF340, 0x8000),
+            Instruction::BranchCond {
+                cond: 0xD,
+                offset: 0
+            }
+        );
+        // The same h1 with h2[15]==0 must still decode as the data-processing op.
+        assert_eq!(
+            decode_thumb_32(0xF240, 0x0000),
+            Instruction::Movw { rd: 0, imm: 0 }
         );
     }
 

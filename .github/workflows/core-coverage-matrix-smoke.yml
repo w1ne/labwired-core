@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,riscv32i-unknown-none-elf
 

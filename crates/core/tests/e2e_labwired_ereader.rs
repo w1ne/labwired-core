@@ -13,8 +13,9 @@
 //
 // This is the native-Rust counterpart to the wasm playground path —
 // same panel attach, same SP seed, same handshake bytes, same ROM
-// thunks, same IPI bridge, same step budget. If this test paints,
-// the firmware paints in the playground too.
+// thunks, same step budget. The cross-core FROM_CPU yield IPI is
+// modeled in the core (DPORT interrupt matrix), not bridged here. If
+// this test paints, the firmware paints in the playground too.
 //
 // Heavy and slow (~200M cycles in the worst case), so `#[ignore]`d by
 // default. Run with:
@@ -28,11 +29,12 @@
 // `LABWIRED_EREADER_ELF` points.
 
 use labwired_core::bus::SystemBus;
+use labwired_core::cpu::xtensa_lx7::XtensaLx7;
 use labwired_core::peripherals::components::Uc8151dTricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::esp32s3::rom_thunks;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
-use labwired_core::{Bus, Cpu, Machine};
+use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
 
 const DEFAULT_ELF: &str = "/tmp/labwired-ereader/build/labwired-ereader.ino.elf";
@@ -71,14 +73,23 @@ fn labwired_ereader_runs_to_panel_paint() {
     }
     bus.refresh_peripheral_index();
 
-    let mut machine = Machine::new(cpu, bus);
+    // Real dual-core: attach a second LX6 as APP_CPU (PRID 0xABAB →
+    // xPortGetCoreID()==1, starts halted until PRO_CPU releases it via
+    // ets_set_appcpu_boot_addr). Step 1 of the dual-core bring-up.
+    let mut machine = Machine::new(cpu, bus).with_secondary_cpu(XtensaLx7::new_app_cpu());
     machine.load_firmware(&image).expect("load firmware");
     machine.cpu.set_pc(image.entry_point as u32);
 
     // ── 2. SP seed — real silicon's BROM places SP near the top of
     //       DRAM before jumping to call_start_cpu0; we skip BROM in the
-    //       sim so seed it ourselves.
+    //       sim so seed it ourselves. Same for APP_CPU: the ROM sets its
+    //       SP before releasing it to call_start_cpu1 (whose first insn is
+    //       `entry a1,32`), so seed the secondary's SP in a separate DRAM
+    //       region (above .bss @0x3ffc5ce8, below PRO_CPU's stack).
     machine.cpu.set_sp(0x3FFE_0000);
+    if let Some(cpu1) = machine.cpu_secondary.as_mut() {
+        cpu1.set_sp(0x3FFD_8000);
+    }
 
     // ── 3. Symbol-driven thunk install. Resolves addresses from the
     //       ereader ELF and installs only the thunks for symbols
@@ -90,52 +101,25 @@ fn labwired_ereader_runs_to_panel_paint() {
         symbol_addrs.len()
     );
 
-    // Dual-core handshake bytes (pre-write to 0x01 + record for the
-    // keep-alive loop below so .bss zero-init can't wipe them).
-    let mut handshake_bytes: Vec<u32> = Vec::new();
-    for sym in &[
-        "s_resume_cores",
-        "s_cpu_up",
-        "s_cpu_inited",
-        "s_system_inited",
-    ] {
-        if let Some(&addr) = symbol_addrs.get(*sym) {
-            let _ = machine.bus.write_u8(addr as u64, 0x01);
-            let _ = machine.bus.write_u8(addr as u64 + 1, 0x01);
-            handshake_bytes.push(addr);
-            handshake_bytes.push(addr + 1);
-        }
-    }
-    if let Some(&addr) = symbol_addrs.get("s_other_cpu_startup_done") {
-        let _ = machine.bus.write_u8(addr as u64, 0x01);
-        handshake_bytes.push(addr);
-    }
+    // No dual-core startup-handshake forges. With APP_CPU running for real,
+    // the firmware drives the whole rendezvous itself: PRO_CPU releases
+    // APP_CPU (ets_set_appcpu_boot_addr), APP_CPU runs call_start_cpu1 and
+    // marks s_cpu_up[1]/s_cpu_inited[1]/s_system_inited[1], PRO_CPU sets
+    // s_resume_cores, and APP_CPU's IDLE idle-hook sets s_other_cpu_startup_done
+    // — all with no help from the harness. (Verified: forging these vs not
+    // makes no difference to the paint; both ELFs reach refresh.) The
+    // cross-core yield IPI that quiesces APP_CPU to IDLE is delivered by the
+    // core's DPORT (Dport::cross_core_pending → bus.pending_cpu_irqs(core_id)),
+    // not bridged here.
+    //
+    // set_appcpu_up_flags stays available for SINGLE-CORE frontends (wasm/cli)
+    // where no APP_CPU exists to mark the flags; this dual-core test passes an
+    // empty list so the ets_set_appcpu_boot_addr re-assert is a no-op.
+    rom_thunks::set_appcpu_up_flags(Vec::new());
 
-    // loopTask xCoreID patch — scan first 64 bytes of app_main for the
-    // `movi.n a8, 1; mov.n a9, a13` immediate pattern that pins
-    // loopTask to APP_CPU and rewrite it to PRO_CPU (we're single-CPU).
-    if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-        const SCAN_BYTES: u32 = 64;
-        let mut window = Vec::with_capacity(SCAN_BYTES as usize);
-        for off in 0..SCAN_BYTES {
-            match machine.bus.read_u8((app_main_addr + off) as u64) {
-                Ok(b) => window.push(b),
-                Err(_) => break,
-            }
-        }
-        let target = [0xE9_u8, 0x01, 0x0C, 0x0D];
-        let swap = [0x0C_u8, 0x0D, 0xD9, 0x01];
-        if let Some((i, _)) = window.windows(4).enumerate().find(|(_, w)| *w == target) {
-            let patch_addr = (app_main_addr + i as u32) as u64;
-            for (j, b) in swap.iter().enumerate() {
-                let _ = machine.bus.write_u8(patch_addr + j as u64, *b);
-            }
-            eprintln!(
-                "[ereader-sim] patched loopTask xCoreID in app_main @0x{:08x}",
-                patch_addr as u32
-            );
-        }
-    }
+    // loopTask now runs on the REAL APP_CPU (core 1) — no repin. arduino-esp32
+    // pins loopTask to CONFIG_ARDUINO_RUNNING_CORE=1, which is genuinely
+    // modeled now. (Step 5 of dual-core bring-up: repin_loop_task deleted.)
 
     // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk.
     if let Some(&addr) = symbol_addrs.get("pxCurrentTCB") {
@@ -153,32 +137,41 @@ fn labwired_ereader_runs_to_panel_paint() {
             }
         };
 
-    // Heap caps suite (bump allocator).
-    push_named(
-        &mut thunks,
-        "heap_caps_init",
-        rom_thunks::esp_idf_heap_caps_init,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_malloc",
-        rom_thunks::esp_idf_heap_caps_malloc,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_calloc",
-        rom_thunks::esp_idf_heap_caps_calloc,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_free",
-        rom_thunks::esp_idf_heap_caps_free,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_realloc",
-        rom_thunks::esp_idf_heap_caps_realloc,
-    );
+    // Heap: the sim-side bump allocator (default). It's debt — the real
+    // ESP-IDF heap_caps should run on emulated DRAM. LABWIRED_REAL_HEAP=1
+    // un-thunks it, but that currently walls: the real heap_caps_init
+    // registers a heap region that collides with the harness's SEEDED stacks
+    // (we seed SP at 0x3FFE_0000 / 0x3FFD_8000 instead of the real top-of-DRAM
+    // layout), so a malloc'd struct lands on stack data and esp_intr_alloc
+    // dereferences "lock" (0x6b636f6c). Fix = faithful stack/heap layout, then
+    // delete this bump allocator. (Reproduce: LABWIRED_REAL_HEAP=1.)
+    if std::env::var("LABWIRED_REAL_HEAP").is_err() {
+        push_named(
+            &mut thunks,
+            "heap_caps_init",
+            rom_thunks::esp_idf_heap_caps_init,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_malloc",
+            rom_thunks::esp_idf_heap_caps_malloc,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_calloc",
+            rom_thunks::esp_idf_heap_caps_calloc,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_free",
+            rom_thunks::esp_idf_heap_caps_free,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_realloc",
+            rom_thunks::esp_idf_heap_caps_realloc,
+        );
+    }
 
     // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
     for sym in &[
@@ -275,24 +268,16 @@ fn labwired_ereader_runs_to_panel_paint() {
         "uartWrite",
         "uartWriteBuf",
         "_Z14serialEventRunv",
-        "vListInsert",
     ] {
         push_named(&mut thunks, sym, rom_thunks::nop_return_zero);
     }
 
-    // Non-NULL fake handle returns for FreeRTOS object creation.
-    for sym in &[
-        "xQueueCreateMutex",
-        "xQueueCreateMutexStatic",
-        "xQueueGenericCreate",
-        "xSemaphoreCreateMutex",
-        "xSemaphoreCreateBinary",
-        "xSemaphoreCreateCounting",
-        "xQueueCreateCountingSemaphore",
-        "xEventGroupCreate",
-    ] {
-        push_named(&mut thunks, sym, rom_thunks::nop_return_fake_ptr);
-    }
+    // Real FreeRTOS: queue/mutex/event-group create + vListInsert are NOT
+    // thunked — the firmware's own FreeRTOS runs on the emulated registers +
+    // heap. (The old fakes — nop'd vListInsert + fake-handle creates + always-
+    // succeed ops — were pure debt: faking the create functions left their
+    // list structures uninitialised, which forced faking everything built on
+    // them. Removing all of it still paints refresh_gen=2.)
 
     // SPI-flash lock stubs (real impl asserts on uninitialised mutex).
     for sym in &[
@@ -337,17 +322,8 @@ fn labwired_ereader_runs_to_panel_paint() {
         "xTaskGetCurrentTaskHandle",
         rom_thunks::x_task_get_current_task_handle,
     );
-    push_named(
-        &mut thunks,
-        "xQueueSemaphoreTake",
-        rom_thunks::return_pd_true,
-    );
-    push_named(&mut thunks, "xQueueGenericSend", rom_thunks::return_pd_true);
-    push_named(
-        &mut thunks,
-        "ulTaskGenericNotifyTake",
-        rom_thunks::return_pd_true,
-    );
+    // (Real FreeRTOS: xQueueSemaphoreTake / xQueueGenericSend /
+    // ulTaskGenericNotifyTake run for real — no always-succeed fakes.)
     push_named(&mut thunks, "spiStartBus", rom_thunks::spi_start_bus_fake);
     push_named(
         &mut thunks,
@@ -367,10 +343,19 @@ fn labwired_ereader_runs_to_panel_paint() {
         rom_thunks::gxepd_write_data,
     );
 
-    // xthal_window_spill — semantic spill via shadow stack.
-    for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-        push_named(&mut thunks, sym, rom_thunks::xthal_window_spill_thunk);
-    }
+    // xthal_window_spill_nw — semantic spill via shadow stack. Only the
+    // `_nw` leaf (the actual spill loop that would trap on the displaced
+    // frames) is thunked; the `xthal_window_spill` wrapper is a thin
+    // PS-save/restore shell that is CALL{n}-entered and must run its real
+    // `entry / call0 _nw / retw` natively — thunking it returns via a0,
+    // which is the *caller's* return address (the wrapper's ENTRY, which
+    // would set up a0, is clobbered by the thunk's BREAK), corrupting the
+    // return and faulting in xPortStartScheduler's first-task dispatch.
+    push_named(
+        &mut thunks,
+        "xthal_window_spill_nw",
+        rom_thunks::xthal_window_spill_thunk,
+    );
 
     // Real-silicon noreturn — halt the CPU rather than letting assert →
     // return turn into a tight loop.
@@ -395,9 +380,10 @@ fn labwired_ereader_runs_to_panel_paint() {
     eprintln!("[ereader-sim] installed {installed} flash thunks");
 
     // ── 4. Step loop. Mirrors step_with_esp32_aids: handshake keep-alive
-    //       every 10k cycles, plus the cross-core IPI bridge sampling
-    //       DPORT FROM_CPU_n mapping + trigger registers and synthesising
-    //       the matching CPU interrupt edge.
+    //       every 10k cycles. The cross-core FROM_CPU yield IPI that quiesces
+    //       APP_CPU to IDLE is now modeled inside the core (DPORT
+    //       `cross_core_pending` → per-core `bus.pending_cpu_irqs`), so this
+    //       harness no longer bridges it — `machine.step()` delivers it.
     const MAX_STEPS: u64 = 200_000_000;
     const SAMPLE_EVERY: u64 = 1_000_000;
     let mut step_count = 0u64;
@@ -407,58 +393,22 @@ fn labwired_ereader_runs_to_panel_paint() {
     let mut last_distinct: std::collections::VecDeque<u32> =
         std::collections::VecDeque::with_capacity(64);
 
-    // IPI bridge state.
-    let mut from_cpu_bit0: Option<u8> = None;
-    let mut from_cpu_bit1: Option<u8> = None;
-
     let mut step_err: Option<String> = None;
     let mut stalled = false;
 
     for _ in 0..MAX_STEPS {
         step_count += 1;
 
-        // Handshake keep-alive: re-write 0x01 to every recorded byte
-        // every 10k cycles so .bss zero-init can't wipe them.
-        if step_count.is_multiple_of(10_000) {
-            for &addr in &handshake_bytes {
-                let _ = machine.bus.write_u8(addr as u64, 0x01);
-            }
-        }
-
-        // IPI bridge. DPORT_PRO_CPU_INTR_FROM_CPU_n_MAP_REG @ 0x3FF0_0164/_0168
-        // captures the bit assignment, and writes to CPU_INTR_FROM_CPU_n
-        // @ 0x3FF0_00DC/_00E0 trigger that bit on PRO_CPU.
-        if let Ok(v) = machine.bus.read_u32(0x3FF0_0164) {
-            let bit = (v & 0x1F) as u8;
-            if v != 0 && bit < 32 {
-                from_cpu_bit0 = Some(bit);
-            }
-        }
-        if let Ok(v) = machine.bus.read_u32(0x3FF0_0168) {
-            let bit = (v & 0x1F) as u8;
-            if v != 0 && bit < 32 {
-                from_cpu_bit1 = Some(bit);
-            }
-        }
-        if let Ok(v0) = machine.bus.read_u32(0x3FF0_00DC) {
-            if v0 != 0 {
-                if let Some(bit) = from_cpu_bit0 {
-                    machine.cpu.raise_interrupt_bits(1u32 << bit);
-                }
-                let _ = machine.bus.write_u32(0x3FF0_00DC, 0);
-            }
-        }
-        if let Ok(v1) = machine.bus.read_u32(0x3FF0_00E0) {
-            if v1 != 0 {
-                if let Some(bit) = from_cpu_bit1 {
-                    machine.cpu.raise_interrupt_bits(1u32 << bit);
-                }
-                let _ = machine.bus.write_u32(0x3FF0_00E0, 0);
-            }
-        }
-
         if let Err(e) = machine.step() {
-            step_err = Some(format!("{e}"));
+            let c1 = machine
+                .cpu_secondary
+                .as_ref()
+                .map(|c| c.get_pc())
+                .unwrap_or(0);
+            step_err = Some(format!(
+                "{e} (core0 pc=0x{:08x} core1 pc=0x{c1:08x})",
+                machine.cpu.get_pc()
+            ));
             break;
         }
         let pc = machine.cpu.get_pc();
@@ -480,6 +430,27 @@ fn labwired_ereader_runs_to_panel_paint() {
         }
         if step_count.is_multiple_of(SAMPLE_EVERY) {
             samples.push((step_count, pc));
+        }
+        // Early-exit once the panel has painted — keeps dual-core iteration
+        // fast (paint lands well before the 200M budget).
+        if step_count.is_multiple_of(200_000) {
+            if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
+                if let Some(p) = machine.bus.peripherals[idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<Esp32Spi>())
+                    .and_then(|spi| {
+                        spi.attached_devices.iter().find_map(|d| {
+                            d.as_any()
+                                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                        })
+                    })
+                {
+                    if p.refresh_generation() >= 2 {
+                        break;
+                    }
+                }
+            }
         }
     }
 

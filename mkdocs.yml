@@ -64,28 +64,54 @@ nav:
     - Running Firmware: getting_started_firmware.md
     - Simulating Sensors (I2C): examples/i2c_sensor_example.md
     - Mastering DMA & Interrupts: examples/dma_exti_example.md
-    
+    - Integrated Test Walkthrough: examples/integrated_test_walkthrough.md
+
   - How-To Guides:
     - Board Onboarding: board_onboarding_playbook.md
     - CI/CD Integration: ci_integration.md
     - Developing Peripherals: peripheral_development.md
+    - Contributing Peripherals: CONTRIBUTING_PERIPHERALS.md
+    - Advanced Peripherals: advanced_peripherals.md
+    - Hardware Interaction Guide: hardware_interaction_guide.md
     - Debugging with VS Code: vscode_debugging.md
+    - GDB Integration: gdb_integration.md
     - Troubleshooting: troubleshooting.md
-    
+    - Debugging: debugging.md
+
   - Reference:
     - Configuration (YAML): configuration_reference.md
     - Declarative Registers: declarative_registers.md
     - CLI Commands: cli_reference.md
     - Test Script Schema: ci_test_runner.md
-    
+    - Client Flows: reference_client_flows.md
+    - ISA Coverage: isa_coverage.md
+    - Schema Compatibility: schema_compatibility.md
+    - Catalog Validation: catalog_validation.md
+    - Target Support Rubric: target_support_rubric.md
+
+  - Boards:
+    - STM32F103: boards/stm32f103.md
+    - STM32F401: boards/stm32f401.md
+    - STM32F407: boards/stm32f407.md
+    - NUCLEO-L476RG: boards/nucleo-l476rg.md
+    - STM32H563: boards/stm32h563.md
+    - STM32WBA52: boards/stm32wba52.md
+    - nRF52832: boards/nrf52832.md
+    - nRF52840: boards/nrf52840.md
+    - RP2040: boards/rp2040.md
+    - ESP32-C3: boards/esp32c3.md
+    - ESP32-S3: boards/esp32s3.md
+
   - Operations:
     - Release Strategy: release_strategy.md
+    - Release Determinism: RELEASE_DETERMINISM.md
     - Verification Audit: labwired_audit_protocol.md
+    - Supported Devices: supported_devices.md
+    - Coverage Scoreboard: coverage_scoreboard.md
     - Safety & Guardrails: safety.md
     - Demos: demos.md
-    - Advanced Peripherals: advanced_peripherals.md
     - Case Study (STM32): case_study_stm32.md
-    - Debugging: debugging.md
-    
+
   - Explanation:
-    - Architecture Overview: architecture.md
+    - Architecture Overview: architecture_overview.md
+    - Simulation Protocol: simulation_protocol.md

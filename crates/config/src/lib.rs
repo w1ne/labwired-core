@@ -104,6 +104,7 @@ pub enum BoardIoKind {
     PwmOutput,
     I2cDevice,
     SpiDevice,
+    UartDevice,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
@@ -148,6 +149,13 @@ pub struct SystemManifest {
     pub board_io: Vec<BoardIoBinding>,
     #[serde(default)]
     pub peripherals: Vec<PeripheralConfig>,
+    /// Opt-in: delete the per-cycle peripheral walk for this config (only takes
+    /// effect in `event-scheduler` builds; no-op otherwise). ONLY safe when
+    /// every peripheral the firmware actually drives is event-migrated (SPI,
+    /// UART) or inert for this firmware — the firmware MUST be verified
+    /// byte-identical walk-free first.
+    #[serde(default)]
+    pub walk_deleted: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -766,6 +774,24 @@ limits:
         let script: TestScript = serde_yaml::from_str(yaml).unwrap();
         let err = script.validate().unwrap_err();
         assert!(err.to_string().contains("firmware"));
+    }
+
+    #[test]
+    fn test_system_manifest_accepts_uart_device_board_io_kind() {
+        let yaml = r#"
+name: "uart-device-smoke"
+chip: "inline"
+board_io:
+  - id: "iolink_master"
+    kind: "uart_device"
+    peripheral: "uart2"
+    pin: 2
+    signal: "output"
+    active_high: true
+"#;
+
+        let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(manifest.board_io[0].kind, BoardIoKind::UartDevice);
     }
 
     fn write_temp_file(prefix: &str, contents: &str) -> std::path::PathBuf {

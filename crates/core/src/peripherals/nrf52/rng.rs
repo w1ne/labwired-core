@@ -106,15 +106,11 @@ impl Peripheral for Nrf52Rng {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_START => {
-                if value & 1 != 0 {
-                    self.running = true;
-                }
+            OFF_TASKS_START if value & 1 != 0 => {
+                self.running = true;
             }
-            OFF_TASKS_STOP => {
-                if value & 1 != 0 {
-                    self.running = false;
-                }
+            OFF_TASKS_STOP if value & 1 != 0 => {
+                self.running = false;
             }
             OFF_EVENTS_VALRDY => self.events_valrdy = value & 1,
             OFF_SHORTS => self.shorts = value & 1,

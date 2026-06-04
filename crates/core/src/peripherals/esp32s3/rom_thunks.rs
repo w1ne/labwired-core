@@ -292,6 +292,115 @@ pub fn xtos_restore_intlevel(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResu
     Ok(())
 }
 
+// ── BROM newlib syscall shims (open/close/read/write) ────────────────────────
+//
+// ESP-IDF >= 5.x sets up a UART console VFS at boot: `console_open` calls the
+// ROM newlib `open()` to obtain a console fd, then stdio routes through the
+// ROM `write()`. On silicon each ROM shim is a thin trampoline —
+//
+//     int open(const char *p, int f, int m) {
+//         return syscall_table_ptr_pro->_open_r(__getreent(), p, f, m);
+//     }
+//
+// dispatching through the per-core `syscall_table_ptr` (which ESP-IDF points
+// at its own `s_stub_table`, whose `_open_r` etc. are the `esp_vfs_*`
+// handlers). The classic-ESP32 BROM pages backing these aren't modeled, so we
+// reproduce that trampoline: read the table pointer, load the `_fn_r` slot,
+// prepend the reentrancy struct, and tail-call the firmware's esp_vfs handler.
+// Crucially this lets `esp_vfs_open` actually register the console fd in
+// `s_fd_table` — a return-fd stub would skip registration and newlib stdio
+// would then spin forever in `__swsetup_r`/`fstat` on the unregistered fd.
+
+/// `syscall_table_ptr_pro` — ESP32 ROM-fixed DRAM word holding the active
+/// PRO_CPU syscall stub table pointer (esp32.rom.ld). The sim runs on
+/// PRO_CPU (core 0).
+const ESP32_SYSCALL_TABLE_PTR_PRO: u64 = 0x3FFA_E024;
+/// `_global_impure_ptr` — ESP32 ROM-fixed DRAM word holding `&_GLOBAL_REENT`.
+/// The console VFS is brought up pre-scheduler, so the global reent is the
+/// correct reentrancy struct for these calls.
+const ESP32_GLOBAL_IMPURE_PTR: u64 = 0x3FFA_E0B0;
+// Byte offsets of the `_fn_r` slots within the ROM `syscall_stub_table`
+// (verified against the firmware's `s_stub_table` initializer).
+const STUB_OFF_CLOSE_R: u32 = 0x4C;
+const STUB_OFF_OPEN_R: u32 = 0x50;
+const STUB_OFF_WRITE_R: u32 = 0x54;
+const STUB_OFF_READ_R: u32 = 0x5C;
+
+/// Tail-call the firmware's `esp_vfs` handler for a ROM newlib shim. Reads
+/// `*syscall_table_ptr_pro`, loads the `_fn_r` pointer at `table_offset`,
+/// injects the reent pointer as the new first argument (shifting the shim's
+/// own args up one slot), and redirects PC to the handler — which runs in
+/// the shim's call frame and `retw`s straight back to the shim's caller.
+/// Returns `false` (caller should fall back) if the table isn't set up yet.
+fn trampoline_syscall(cpu: &mut XtensaLx7, bus: &mut dyn Bus, table_offset: u32) -> bool {
+    let tbl = match bus.read_u32(ESP32_SYSCALL_TABLE_PTR_PRO) {
+        Ok(v) if v != 0 => v,
+        _ => return false,
+    };
+    let target = match bus.read_u32(tbl as u64 + table_offset as u64) {
+        Ok(v) if v != 0 => v,
+        _ => return false,
+    };
+    let reent = bus.read_u32(ESP32_GLOBAL_IMPURE_PTR).unwrap_or(0);
+    // Callee arg registers sit at logical [callinc*4 + 2 ..] of the thunk's
+    // (caller's) window frame — same indexing the other ROM thunks use.
+    let base = if cpu.ps.callinc() == 0 {
+        2
+    } else {
+        cpu.ps.callinc() * 4 + 2
+    };
+    // Shift the shim's args (a2,a3,a4) up to (a3,a4,a5) and place the reent
+    // in a2 — the `_r` reentrant calling convention. Up to three args covers
+    // open/read/write (3) and close (1).
+    let arg0 = cpu.regs.read_logical(base);
+    let arg1 = cpu.regs.read_logical(base + 1);
+    let arg2 = cpu.regs.read_logical(base + 2);
+    cpu.regs.write_logical(base, reent);
+    cpu.regs.write_logical(base + 1, arg0);
+    cpu.regs.write_logical(base + 2, arg1);
+    cpu.regs.write_logical(base + 3, arg2);
+    cpu.pc = target;
+    true
+}
+
+/// `open(path, flags, mode) -> int` → `esp_vfs_open(reent, …)`.
+pub fn rom_open(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if !trampoline_syscall(cpu, bus, STUB_OFF_OPEN_R) {
+        RomThunkBank::return_with(cpu, u32::MAX); // -1: table not ready
+    }
+    Ok(())
+}
+
+/// `close(fd) -> int` → `esp_vfs_close(reent, fd)`.
+pub fn rom_close(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if !trampoline_syscall(cpu, bus, STUB_OFF_CLOSE_R) {
+        RomThunkBank::return_with(cpu, 0);
+    }
+    Ok(())
+}
+
+/// `read(fd, buf, len) -> ssize_t` → `esp_vfs_read(reent, fd, buf, len)`.
+pub fn rom_read(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if !trampoline_syscall(cpu, bus, STUB_OFF_READ_R) {
+        RomThunkBank::return_with(cpu, 0);
+    }
+    Ok(())
+}
+
+/// `write(fd, buf, len) -> ssize_t` → `esp_vfs_write(reent, fd, buf, len)`.
+pub fn rom_write(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if !trampoline_syscall(cpu, bus, STUB_OFF_WRITE_R) {
+        let base = if cpu.ps.callinc() == 0 {
+            2
+        } else {
+            cpu.ps.callinc() * 4 + 2
+        };
+        let len = cpu.regs.read_logical(base + 2);
+        RomThunkBank::return_with(cpu, len);
+    }
+    Ok(())
+}
+
 /// `esp_rom_spiflash_unlock(): u32` — returns 0 (success).
 pub fn esp_rom_spiflash_unlock(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0);
@@ -311,7 +420,7 @@ pub fn rom_config_instruction_cache_mode(cpu: &mut XtensaLx7, _bus: &mut dyn Bus
 /// next tick to unhalt `cpu_secondary` with PC = boot_addr. Single-core
 /// configs ignore the stash (no secondary CPU to wake), so the thunk
 /// stays safe for either configuration.
-pub fn ets_set_appcpu_boot_addr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+pub fn ets_set_appcpu_boot_addr(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     // Argument register: a2 (CALL0), or a[N*4+2] under CALLn windowing.
     let arg_slot = if cpu.ps.callinc() == 0 {
         2
@@ -325,9 +434,87 @@ pub fn ets_set_appcpu_boot_addr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimR
     // don't model APP_CPU stall/resume cycles, just the initial wake).
     if boot_addr != 0 {
         APPCPU_BOOT_ADDR.with(|slot| slot.set(Some(boot_addr)));
+
+        // Model APP_CPU bring-up. On silicon, releasing APP_CPU makes it
+        // run `call_start_cpu1`, which marks the per-core startup
+        // handshake flags (`s_cpu_up[1]`, `s_cpu_inited`, ...) up; PRO_CPU
+        // in `start_other_core` spin-waits on those flags and `abort()`s
+        // on timeout. We don't execute APP_CPU, so we model the
+        // *observable effect* of its boot: set those flags here, at the
+        // exact cycle PRO_CPU releases APP_CPU. This write lands after
+        // `.bss` zero-init and immediately before the spin-wait, so —
+        // unlike a periodic keep-alive — it cannot lose the race against
+        // newer arduino-esp32 cores whose timeout is shorter than the
+        // reseed interval. Empty unless a frontend resolved the flag
+        // addresses from the firmware ELF.
+        APPCPU_UP_FLAGS.with(|flags| {
+            for &addr in flags.borrow().iter() {
+                let _ = bus.write_u8(addr as u64, 0x01);
+            }
+        });
     }
     RomThunkBank::return_with(cpu, 0);
     Ok(())
+}
+
+/// Record the firmware DRAM byte addresses of the dual-core startup
+/// handshake flags so [`ets_set_appcpu_boot_addr`] can mark them up when
+/// PRO_CPU releases APP_CPU. Pass the resolved `s_cpu_up`/`s_cpu_up+1`/
+/// `s_cpu_inited`/… byte addresses (skip any that resolved to 0). Call
+/// once per firmware after symbol resolution; replaces any prior set.
+pub fn set_appcpu_up_flags(addrs: Vec<u32>) {
+    APPCPU_UP_FLAGS.with(|flags| *flags.borrow_mut() = addrs);
+}
+
+/// Repin arduino-esp32's `loopTask` from APP_CPU to PRO_CPU by rewriting the
+/// `xCoreID` immediate in `app_main`. arduino-esp32 pins `loopTask` to
+/// `CONFIG_ARDUINO_RUNNING_CORE` (=1, APP_CPU); the sim models only PRO_CPU
+/// (core 0), so a core-1 task is never scheduled and `setup()`/`loop()` never
+/// run. Two firmware shapes are handled (legacy first; the demo reference
+/// firmware matches it, newer IDF-5.x builds the second):
+///
+///  * Legacy: the 4-byte sequence `E9 01 0C 0D` → `0C 0D D9 01`.
+///  * IDF 5.x: `xCoreID` is `xTaskCreateUniversal`'s 7th (stack) arg —
+///    `movi.n aT, 1` whose value is stored via `s32i.n aT, a1, 0`. Recover
+///    `T` from the store (`[0x09|(T<<4), 0x01]`) and zero the `movi.n aT, 1`
+///    immediate (`[0x0C, 0x10|T]` → `[0x0C, T]`).
+///
+/// Returns `(patched_addr, which_shape)`, or `None` if neither matches
+/// (firmware already targets core 0, or an unrecognized layout).
+pub fn repin_loop_task(bus: &mut dyn Bus, app_main_addr: u32) -> Option<(u32, &'static str)> {
+    const SCAN: u32 = 96;
+    let mut w: Vec<u8> = Vec::with_capacity(SCAN as usize);
+    for off in 0..SCAN {
+        match bus.read_u8((app_main_addr + off) as u64) {
+            Ok(b) => w.push(b),
+            Err(_) => break,
+        }
+    }
+    // Legacy pattern.
+    let target = [0xE9_u8, 0x01, 0x0C, 0x0D];
+    let swap = [0x0C_u8, 0x0D, 0xD9, 0x01];
+    if let Some((i, _)) = w.windows(4).enumerate().find(|(_, x)| *x == target) {
+        let addr = app_main_addr + i as u32;
+        for (j, b) in swap.iter().enumerate() {
+            let _ = bus.write_u8(addr as u64 + j as u64, *b);
+        }
+        return Some((addr, "legacy"));
+    }
+    // IDF 5.x: locate `s32i.n aT, a1, 0`, recover T, zero its movi.n source.
+    for k in 0..w.len().saturating_sub(1) {
+        if (w[k] & 0x0F) == 0x09 && w[k + 1] == 0x01 {
+            let t = w[k] >> 4;
+            let movi_hi = 0x10 | t;
+            if let Some(mi) =
+                (0..w.len().saturating_sub(1)).find(|&m| w[m] == 0x0C && w[m + 1] == movi_hi)
+            {
+                let addr = app_main_addr + mi as u32 + 1;
+                let _ = bus.write_u8(addr as u64, t); // movi.n aT, 0
+                return Some((addr, "idf5"));
+            }
+        }
+    }
+    None
 }
 
 /// `_xtos_set_intlevel(intlevel) -> prev` — BROM helper that sets the
@@ -861,6 +1048,16 @@ thread_local! {
     /// vector so it boots the real ROM exactly like silicon. Faithful path —
     /// no firmware-symbol hooks.
     pub static APPCPU_RESET_RELEASED: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+
+    /// Firmware DRAM byte addresses of the dual-core startup handshake
+    /// flags. Populated per-firmware via [`set_appcpu_up_flags`] once the
+    /// symbols are resolved from the ELF; consumed by
+    /// [`ets_set_appcpu_boot_addr`] to model APP_CPU bring-up. Empty for
+    /// stripped/preset-PC profiles, in which case the thunk does nothing
+    /// extra. Thread-local for the same per-Machine isolation reason as
+    /// `APPCPU_BOOT_ADDR`.
+    pub static APPCPU_UP_FLAGS: core::cell::RefCell<Vec<u32>> =
+        const { core::cell::RefCell::new(Vec::new()) };
 }
 
 /// Monotonic-counter thunk for `esp_timer_impl_get_counter_reg()` and
@@ -1166,8 +1363,9 @@ pub fn esp_idf_heap_caps_free(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimRes
 }
 
 /// `heap_caps_realloc(void*, new_size, caps) -> void*` — degrades to malloc.
-pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;
+    let old_ptr = cpu.regs.read_logical(n + 2);
     let new_size = cpu.regs.read_logical(n + 3);
     let aligned = (new_size + 15) & !15;
     let ptr = unsafe {
@@ -1180,6 +1378,19 @@ pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> Sim
             start
         }
     };
+    // The bump allocator never reuses memory, so realloc relocates: copy the
+    // old buffer's bytes into the new region. Without this, anything that
+    // grows a buffer (e.g. Arduino `String` concatenation — how HTTPClient
+    // builds its request) silently loses the data it already wrote. We don't
+    // track allocation sizes, so copy up to `new_size`; for a grow the extra
+    // tail is unused-and-soon-overwritten, for a shrink it's the kept prefix.
+    if ptr != 0 && old_ptr != 0 && old_ptr != ptr {
+        for i in 0..new_size as u64 {
+            if let Ok(b) = bus.read_u8(old_ptr as u64 + i) {
+                let _ = bus.write_u8(ptr as u64 + i, b);
+            }
+        }
+    }
     RomThunkBank::return_with(cpu, ptr);
     Ok(())
 }

@@ -239,8 +239,11 @@ impl WasmSimulator {
         let register = match binding.kind {
             BoardIoKind::Led | BoardIoKind::PwmOutput => "odr",
             BoardIoKind::Button => "idr",
-            // Analog/bus kinds are not boolean — handled by get_board_io_analog_states
-            BoardIoKind::AdcInput | BoardIoKind::I2cDevice | BoardIoKind::SpiDevice => {
+            // Analog/bus kinds are not boolean and are exposed through typed state accessors.
+            BoardIoKind::AdcInput
+            | BoardIoKind::I2cDevice
+            | BoardIoKind::SpiDevice
+            | BoardIoKind::UartDevice => {
                 return false;
             }
         };
@@ -463,7 +466,7 @@ impl WasmSimulator {
             })?;
 
         let address = binding.i2c_address.unwrap_or(0x53);
-        for device in &mut i2c.attached_devices {
+        for device in i2c.attached_devices() {
             let mut device = device.borrow_mut();
             if device.address() != address {
                 continue;
@@ -528,7 +531,7 @@ impl WasmSimulator {
             })?;
 
         let address = binding.i2c_address.unwrap_or(0x68);
-        for device in &mut i2c.attached_devices {
+        for device in i2c.attached_devices() {
             let mut device = device.borrow_mut();
             if device.address() != address {
                 continue;
@@ -575,7 +578,7 @@ impl WasmSimulator {
 
             if device_type == "adxl345" {
                 let address = binding.i2c_address.unwrap_or(0x53);
-                for device in &i2c.attached_devices {
+                for device in i2c.attached_devices() {
                     let device = device.borrow();
                     if device.address() != address {
                         continue;
@@ -596,7 +599,7 @@ impl WasmSimulator {
                 }
             } else if device_type == "mpu6050" {
                 let address = binding.i2c_address.unwrap_or(0x68);
-                for device in &i2c.attached_devices {
+                for device in i2c.attached_devices() {
                     let device = device.borrow();
                     if device.address() != address {
                         continue;
@@ -621,7 +624,7 @@ impl WasmSimulator {
             } else if device_type == "bme280" {
                 // Static values: hard-coded factory calibration produces ~25°C / 50%RH / 1013hPa
                 let address = binding.i2c_address.unwrap_or(0x76);
-                for device in &i2c.attached_devices {
+                for device in i2c.attached_devices() {
                     let device = device.borrow();
                     if device.address() != address {
                         continue;
@@ -671,6 +674,31 @@ impl WasmSimulator {
         } else {
             Vec::new()
         }
+    }
+
+    /// Non-consuming UART trace snapshot for instruments such as the logic analyzer.
+    #[wasm_bindgen]
+    pub fn uart_trace_snapshot(&self) -> JsValue {
+        let Some(machine) = self.machine.as_ref() else {
+            return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
+                .unwrap_or(JsValue::NULL);
+        };
+
+        let snapshots = machine
+            .bus
+            .peripherals
+            .iter()
+            .filter_map(|p| {
+                let any = p.dev.as_any()?;
+                let uart = any.downcast_ref::<labwired_core::peripherals::uart::Uart>()?;
+                Some(serde_json::json!({
+                    "peripheral": p.name,
+                    "events": uart.trace_snapshot(),
+                }))
+            })
+            .collect::<Vec<_>>();
+
+        serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
     }
 
     /// Execute up to max_cycles steps, returning the number actually executed.
@@ -940,7 +968,7 @@ impl WasmSimulator {
             })?;
 
         let address = binding.i2c_address.unwrap_or(0x3C);
-        for device in &i2c.attached_devices {
+        for device in i2c.attached_devices() {
             let device = device.borrow();
             if device.address() != address {
                 continue;
@@ -1038,7 +1066,10 @@ impl WasmSimulator {
             .bus
             .find_peripheral_index_by_name(&binding.peripheral)
             .ok_or_else(|| {
-                JsValue::from_str(&format!("SPI peripheral '{}' not found", binding.peripheral))
+                JsValue::from_str(&format!(
+                    "SPI peripheral '{}' not found",
+                    binding.peripheral
+                ))
             })?;
 
         let any = machine.bus.peripherals[idx]
@@ -1598,6 +1629,176 @@ impl WasmSimulator {
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    //  IO-Link DI demo: 74HC165 input toggling + IO-Link master readout.
+    //  These find the device by iterating the bus (the shifter/master are
+    //  `external_devices`, not `board_io` bindings), which suits the single
+    //  shifter + single master of the AL2205-style demo.
+    // ──────────────────────────────────────────────────────────────────────
+
+    /// Set all 8 digital inputs of the 74HC165 shift register at once
+    /// (bit `i` = channel `i`). Returns an error if no shifter is wired.
+    #[wasm_bindgen]
+    pub fn set_sn74hc165_inputs(&mut self, value: u8) -> Result<(), JsValue> {
+        let machine = self.machine.as_mut().unwrap();
+        for p in &mut machine.bus.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            let Some(spi) = any.downcast_mut::<labwired_core::peripherals::spi::Spi>() else {
+                continue;
+            };
+            for device in &mut spi.attached_devices {
+                if let Some(sr) = device.as_any_mut().and_then(|a| {
+                    a.downcast_mut::<labwired_core::peripherals::components::Sn74hc165>()
+                }) {
+                    sr.set_inputs(value);
+                    return Ok(());
+                }
+            }
+        }
+        Err(JsValue::from_str("no 74HC165 shift register attached"))
+    }
+
+    /// Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
+    /// no shifter is wired. Lets the UI reflect the device's real state rather
+    /// than tracking it in JS.
+    #[wasm_bindgen]
+    pub fn get_sn74hc165_inputs(&self) -> i32 {
+        let machine = self.machine.as_ref().unwrap();
+        for p in &machine.bus.peripherals {
+            let Some(any) = p.dev.as_any() else {
+                continue;
+            };
+            let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() else {
+                continue;
+            };
+            for device in &spi.attached_devices {
+                if let Some(sr) = device.as_any().and_then(|a| {
+                    a.downcast_ref::<labwired_core::peripherals::components::Sn74hc165>()
+                }) {
+                    return sr.inputs() as i32;
+                }
+            }
+        }
+        -1
+    }
+
+    /// Toggle a single 74HC165 input channel (0..=7) high or low.
+    #[wasm_bindgen]
+    pub fn set_sn74hc165_channel(&mut self, channel: u8, high: bool) -> Result<(), JsValue> {
+        let machine = self.machine.as_mut().unwrap();
+        for p in &mut machine.bus.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            let Some(spi) = any.downcast_mut::<labwired_core::peripherals::spi::Spi>() else {
+                continue;
+            };
+            for device in &mut spi.attached_devices {
+                if let Some(sr) = device.as_any_mut().and_then(|a| {
+                    a.downcast_mut::<labwired_core::peripherals::components::Sn74hc165>()
+                }) {
+                    sr.set_channel(channel, high);
+                    return Ok(());
+                }
+            }
+        }
+        Err(JsValue::from_str("no 74HC165 shift register attached"))
+    }
+
+    /// Read the IO-Link master peer's live state: `{ link_state, pd_valid,
+    /// input_byte }`. Returns `null` if no master is wired.
+    #[wasm_bindgen]
+    pub fn get_iolink_master_state(&self) -> JsValue {
+        use labwired_core::peripherals::components::{IolinkLinkState, IolinkMaster};
+        let machine = self.machine.as_ref().unwrap();
+        for p in &machine.bus.peripherals {
+            let Some(any) = p.dev.as_any() else {
+                continue;
+            };
+            let Some(uart) = any.downcast_ref::<labwired_core::peripherals::uart::Uart>() else {
+                continue;
+            };
+            for stream in &uart.attached_streams {
+                if let Some(m) = stream
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<IolinkMaster>())
+                {
+                    let link = match m.link_state {
+                        IolinkLinkState::Startup => "startup",
+                        IolinkLinkState::Operate => "operate",
+                    };
+                    let v = serde_json::json!({
+                        "link_state": link,
+                        "pd_valid": m.pd_valid,
+                        "input_byte": m.input_byte(),
+                    });
+                    return serde_wasm_bindgen::to_value(&v).unwrap_or(JsValue::NULL);
+                }
+            }
+        }
+        JsValue::NULL
+    }
+
+    /// Snapshot of the IO-Link master's captured transactions (oldest→newest),
+    /// for the IO-Link Analyzer instrument. Empty array if no master is wired.
+    #[wasm_bindgen]
+    pub fn iolink_trace_snapshot(&self) -> JsValue {
+        use labwired_core::peripherals::components::IolinkMaster;
+        let Some(machine) = self.machine.as_ref() else {
+            return serde_wasm_bindgen::to_value(&Vec::<
+                labwired_core::peripherals::components::IolinkXfer,
+            >::new())
+            .unwrap_or(JsValue::NULL);
+        };
+        for p in &machine.bus.peripherals {
+            let Some(any) = p.dev.as_any() else { continue };
+            let Some(uart) = any.downcast_ref::<labwired_core::peripherals::uart::Uart>() else {
+                continue;
+            };
+            for stream in &uart.attached_streams {
+                if let Some(m) = stream
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<IolinkMaster>())
+                {
+                    let trace = m.trace_snapshot();
+                    return serde_wasm_bindgen::to_value(&trace).unwrap_or(JsValue::NULL);
+                }
+            }
+        }
+        serde_wasm_bindgen::to_value(
+            &Vec::<labwired_core::peripherals::components::IolinkXfer>::new(),
+        )
+        .unwrap_or(JsValue::NULL)
+    }
+
+    /// Clear the IO-Link master's trace ring.
+    #[wasm_bindgen]
+    pub fn iolink_trace_clear(&mut self) {
+        use labwired_core::peripherals::components::IolinkMaster;
+        let Some(machine) = self.machine.as_mut() else {
+            return;
+        };
+        for p in &mut machine.bus.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            let Some(uart) = any.downcast_mut::<labwired_core::peripherals::uart::Uart>() else {
+                continue;
+            };
+            for stream in &mut uart.attached_streams {
+                if let Some(m) = stream
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<IolinkMaster>())
+                {
+                    m.trace_clear();
+                    return;
+                }
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     //  Arduino-ESP32 bootstrap glue. Call after constructing the WasmSimulator
     //  with an ESP32-classic manifest + an Arduino-ESP32 firmware ELF (e.g.
     //  the reference firmware). Bakes in:
@@ -1779,27 +1980,21 @@ impl WasmSimulator {
             let _ = machine.bus.write_u8(addr as u64, 0x01);
             handshake_bytes.push(addr);
         }
+        // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
+        // newer arduino-esp32 cores whose `start_other_core` spin-waits
+        // with a tight cycle-count timeout see APP_CPU "up" without
+        // depending on the coarse 10k-cycle keep-alive in
+        // step_with_esp32_aids. Models APP_CPU bring-up; see
+        // labwired_core rom_thunks::ets_set_appcpu_boot_addr.
+        labwired_core::peripherals::esp32s3::rom_thunks::set_appcpu_up_flags(
+            handshake_bytes.clone(),
+        );
 
-        // loopTask xCoreID patch — flip the `1` to `0` so loopTask runs
-        // on PRO_CPU (until full SMP is wired). Scans first 64 bytes of
-        // app_main for the `e9 01 0c 0d` sequence and swaps it.
+        // loopTask xCoreID patch — repin loopTask from APP_CPU to PRO_CPU
+        // (we model only PRO_CPU). Handles both the legacy and IDF-5.x
+        // app_main layouts. See rom_thunks::repin_loop_task.
         if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-            const SCAN_BYTES: u32 = 64;
-            let mut window = Vec::with_capacity(SCAN_BYTES as usize);
-            for off in 0..SCAN_BYTES {
-                match machine.bus.read_u8((app_main_addr + off) as u64) {
-                    Ok(b) => window.push(b),
-                    Err(_) => break,
-                }
-            }
-            let target = [0xE9_u8, 0x01, 0x0C, 0x0D];
-            let swap = [0x0C_u8, 0x0D, 0xD9, 0x01];
-            if let Some((i, _)) = window.windows(4).enumerate().find(|(_, w)| *w == target) {
-                let patch_addr = (app_main_addr + i as u32) as u64;
-                for (j, b) in swap.iter().enumerate() {
-                    let _ = machine.bus.write_u8(patch_addr + j as u64, *b);
-                }
-            }
+            let _ = rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr);
         }
 
         // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk.
@@ -2037,10 +2232,17 @@ impl WasmSimulator {
             rom_thunks::gxepd_write_data,
         );
 
-        // xthal_window_spill — semantic spill via shadow stack.
-        for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-            push_named(&mut thunks, sym, rom_thunks::xthal_window_spill_thunk);
-        }
+        // xthal_window_spill_nw — semantic spill via shadow stack. Only the
+        // `_nw` leaf is thunked; the `xthal_window_spill` wrapper is a thin
+        // CALL{n}-entered PS-save shell that must run its real
+        // `entry / call0 _nw / retw` natively — thunking it returns via a0
+        // (the caller's return addr, since the wrapper's clobbered ENTRY
+        // never set up a0), faulting in the first-task dispatch.
+        push_named(
+            &mut thunks,
+            "xthal_window_spill_nw",
+            rom_thunks::xthal_window_spill_thunk,
+        );
 
         // Real-silicon noreturn — abort_halt prints diagnostics and
         // halts the CPU rather than returning, to avoid tight

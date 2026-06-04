@@ -3,6 +3,14 @@
 //
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
+//
+// ── Architectural separation ────────────────────────────────────────────────
+// The family-specific register STATE lives in the `SpiRegs` enum: an STM32 SPI
+// instance carries ONLY the STM32 registers, an nRF SPIM carries ONLY the
+// Nordic registers — neither can hold the other's state. The shared transfer
+// engine, attached-device routing and event-scheduler glue stay on `Spi`
+// (genuinely shared behaviour), so the public API (`attach`, `set_loopback`,
+// `as_any`) is unchanged. The chip-yaml `profile` selects the variant.
 
 use crate::SimResult;
 use std::any::Any;
@@ -102,10 +110,15 @@ impl FromStr for SpiRegisterLayout {
     }
 }
 
-/// STM32F1 compatible SPI peripheral
-#[derive(Default, serde::Serialize)]
-pub struct Spi {
-    layout: SpiRegisterLayout,
+/// Event token for the one-shot SPI transfer-completion event (the SPI has a
+/// single kind of scheduled wakeup, so the value is arbitrary).
+const SPI_DONE_TOKEN: u32 = 0;
+
+/// STM32 SPI register file (F1/F4/L0 classic and L4/F7/H5 FIFO share this map;
+/// `fifo` selects the FIFO DS/data-packing behaviour).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+struct Stm32SpiRegs {
+    fifo: bool,
     cr1: u16,
     cr2: u16,
     sr: u16,
@@ -115,33 +128,126 @@ pub struct Spi {
     txcrcr: u16,
     i2scfgr: u16,
     i2spr: u16,
+}
 
-    // Internal state
+impl Stm32SpiRegs {
+    fn read_reg(&self, offset: u64) -> u16 {
+        match offset {
+            0x00 => self.cr1,
+            0x04 => self.cr2,
+            0x08 => self.sr,
+            // DR read returns the RX FIFO contents (`self.dr`), which is
+            // distinct from what was last written. Real silicon has separate
+            // TX and RX paths; we model that with `dr` for RX.
+            0x0C => self.dr,
+            0x10 => self.crcpr,
+            0x14 => self.rxcrcr,
+            0x18 => self.txcrcr,
+            0x1C => self.i2scfgr,
+            0x20 => self.i2spr,
+            _ => 0,
+        }
+    }
+}
+
+/// Nordic nRF52 SPIM (EasyDMA) register file — Nordic-only state.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+struct Nrf52SpiRegs {
+    events_end: u32,
+    events_stopped: u32,
+    enable: u32,
+    psel_sck: u32,
+    psel_mosi: u32,
+    psel_miso: u32,
+    frequency: u32,
+    config: u32,
+    rxd_ptr: u32,
+    rxd_maxcnt: u32,
+    rxd_amount: u32,
+    txd_ptr: u32,
+    txd_maxcnt: u32,
+    txd_amount: u32,
+}
+
+impl Nrf52SpiRegs {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x104 => self.events_stopped,
+            0x118 => self.events_end,
+            0x500 => self.enable,
+            0x508 => self.psel_sck,
+            0x50C => self.psel_mosi,
+            0x510 => self.psel_miso,
+            0x524 => self.frequency,
+            0x534 => self.rxd_ptr,
+            0x538 => self.rxd_maxcnt,
+            0x53C => self.rxd_amount,
+            0x544 => self.txd_ptr,
+            0x548 => self.txd_maxcnt,
+            0x54C => self.txd_amount,
+            0x554 => self.config,
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x010 if value != 0 => {
+                self.events_end = 1;
+                self.txd_amount = self.txd_maxcnt;
+                self.rxd_amount = self.rxd_maxcnt;
+            }
+            0x014 if value != 0 => {
+                self.events_stopped = 1;
+            }
+            0x104 => self.events_stopped = value,
+            0x118 => self.events_end = value,
+            0x500 => self.enable = value,
+            0x508 => self.psel_sck = value,
+            0x50C => self.psel_mosi = value,
+            0x510 => self.psel_miso = value,
+            0x524 => self.frequency = value,
+            0x534 => self.rxd_ptr = value,
+            0x538 => self.rxd_maxcnt = value,
+            0x53C => self.rxd_amount = value,
+            0x544 => self.txd_ptr = value,
+            0x548 => self.txd_maxcnt = value,
+            0x54C => self.txd_amount = value,
+            0x554 => self.config = value,
+            _ => {}
+        }
+    }
+}
+
+/// Family-isolated SPI register state. STM32 and nRF register sets cannot
+/// coexist on one instance.
+#[derive(Debug, Clone, serde::Serialize)]
+enum SpiRegs {
+    Stm32(Stm32SpiRegs),
+    Nrf52(Nrf52SpiRegs),
+}
+
+impl Default for SpiRegs {
+    fn default() -> Self {
+        SpiRegs::Stm32(Stm32SpiRegs::default())
+    }
+}
+
+/// SPI peripheral: family-isolated registers (`regs`) + a shared transfer
+/// engine and attached-device routing.
+#[derive(Default, serde::Serialize)]
+pub struct Spi {
+    regs: SpiRegs,
+
+    // Shared transfer-engine state (architecture-independent).
     transfer_in_progress: bool,
     transfer_cycles_remaining: u32,
     transfer_buffer: u8,
-
-    /// When true, completed transfers also load `transfer_buffer` into the
-    /// RX path (`dr` + RXNE). Used by tests and integration scenarios that
-    /// don't have a real slave wired but want the firmware-side `read`
-    /// codepath exercised. Defaults to `false` (match real silicon with no
-    /// MISO data — RXNE stays clear, DR reads as 0).
+    #[serde(skip)]
+    scheduled: bool,
+    /// When true, completed transfers also load `transfer_buffer` into the RX
+    /// path (`dr` + RXNE), as if MOSI were jumpered to MISO. Defaults false.
     loopback: bool,
-
-    nrf_events_end: u32,
-    nrf_events_stopped: u32,
-    nrf_enable: u32,
-    nrf_psel_sck: u32,
-    nrf_psel_mosi: u32,
-    nrf_psel_miso: u32,
-    nrf_frequency: u32,
-    nrf_config: u32,
-    nrf_rxd_ptr: u32,
-    nrf_rxd_maxcnt: u32,
-    nrf_rxd_amount: u32,
-    nrf_txd_ptr: u32,
-    nrf_txd_maxcnt: u32,
-    nrf_txd_amount: u32,
 
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
@@ -150,9 +256,7 @@ pub struct Spi {
 impl core::fmt::Debug for Spi {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Spi")
-            .field("layout", &self.layout)
-            .field("cr1", &self.cr1)
-            .field("sr", &self.sr)
+            .field("regs", &self.regs)
             .field("transfer_in_progress", &self.transfer_in_progress)
             .field("loopback", &self.loopback)
             .field("attached_devices", &self.attached_devices.len())
@@ -166,26 +270,30 @@ impl Spi {
     }
 
     pub fn new_with_layout(layout: SpiRegisterLayout) -> Self {
+        let regs = match layout {
+            // CR2 reset is silicon-verified over SWD:
+            //   FIFO SPI (L4/F7/H5): CR2 = 0x0700 (DS=0b0111 8-bit + FRXTH).
+            //   Classic SPI (F1/F4/L0): CR2 = 0x0000 (no DS field).
+            SpiRegisterLayout::Stm32 => SpiRegs::Stm32(Stm32SpiRegs {
+                fifo: false,
+                cr2: 0x0000,
+                sr: 0x0002, // TXE = 1
+                ..Default::default()
+            }),
+            SpiRegisterLayout::Stm32Fifo => SpiRegs::Stm32(Stm32SpiRegs {
+                fifo: true,
+                cr2: 0x0700,
+                sr: 0x0002,
+                ..Default::default()
+            }),
+            SpiRegisterLayout::Nrf52Spim => SpiRegs::Nrf52(Nrf52SpiRegs::default()),
+        };
         Self {
-            layout,
-            // Reset values verified against real STM32L476RG silicon via
-            // SWD register dump on a NUCLEO-L476RG:
-            //   CR1 = 0x0000  CR2 = 0x0700  SR = 0x0002  DR = 0x0000
-            // CR2.DS[3:0] (data size, bits 11:8) defaults to 0b0111 (8-bit)
-            // on STM32L4 / F7 / H5 — newer SPI blocks. Older STM32F1
-            // resets CR2 to 0x0000, but the same Spi struct serves both
-            // and we go with the L4 convention since it's the one that
-            // matters for DS-aware firmware.
-            cr2: 0x0700,
-            sr: 0x0002, // TXE = 1
+            regs,
             ..Default::default()
         }
     }
 
-    /// Enable internal loopback: each completed transfer copies
-    /// `transfer_buffer` into the RX path (`dr` + RXNE), as if MOSI were
-    /// jumpered to MISO. Off by default; tests that exercise the read-
-    /// after-write codepath without wiring a slave should enable this.
     pub fn set_loopback(&mut self, on: bool) {
         self.loopback = on;
     }
@@ -194,72 +302,63 @@ impl Spi {
         self.attached_devices.push(device);
     }
 
-    fn read_reg(&self, offset: u64) -> u16 {
-        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
-            return self.read_nrf_reg(offset) as u16;
-        }
-        match offset {
-            0x00 => self.cr1,
-            0x04 => self.cr2,
-            0x08 => self.sr,
-            // DR read returns the RX FIFO contents (`self.dr`), which is
-            // distinct from what was last written. Real silicon has
-            // separate TX and RX paths; we model that with `dr` for RX
-            // and `transfer_buffer` for TX in flight.
-            0x0C => self.dr,
-            0x10 => self.crcpr,
-            0x14 => self.rxcrcr,
-            0x18 => self.txcrcr,
-            0x1C => self.i2scfgr,
-            0x20 => self.i2spr,
-            _ => 0,
-        }
+    fn is_nrf(&self) -> bool {
+        matches!(self.regs, SpiRegs::Nrf52(_))
     }
 
-    fn write_reg(&mut self, offset: u64, value: u16) {
-        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
-            self.write_nrf_reg(offset, value as u32);
-            return;
-        }
+    /// STM32 register write with transfer-engine side effects. Only called on
+    /// the STM32 variant.
+    fn write_stm32_reg(&mut self, offset: u64, value: u16) {
         match offset {
             0x00 => {
-                self.cr1 = value;
+                if let SpiRegs::Stm32(r) = &mut self.regs {
+                    r.cr1 = value;
+                }
             }
             0x04 => {
                 // STM32L4/F7/H5 SPI CR2: DS[3:0] (bits 11:8) select the data
-                // frame size. Values below 0b0011 are reserved and the
-                // hardware forces them to 0b0111 (8-bit). Verified on
-                // NUCLEO-L476RG over SWD: writing CR2=0x0000 reads back
-                // 0x0700. Model the clamp so a CR2 readback matches silicon
-                // bit-for-bit (l476_mmio_diff parity sweep).
-                let ds = (value >> 8) & 0xF;
-                self.cr2 = if ds < 0b0011 {
-                    (value & !0x0F00) | (0b0111 << 8)
-                } else {
-                    value
-                };
+                // frame size. Values below 0b0011 are reserved and hardware
+                // forces them to 0b0111 (8-bit) on FIFO parts — verified on
+                // NUCLEO-L476RG (CR2=0x0000 reads back 0x0700). Classic SPI
+                // has no DS field, so it stores the value verbatim.
+                if let SpiRegs::Stm32(r) = &mut self.regs {
+                    if r.fifo {
+                        let ds = (value >> 8) & 0xF;
+                        r.cr2 = if ds < 0b0011 {
+                            (value & !0x0F00) | (0b0111 << 8)
+                        } else {
+                            value
+                        };
+                    } else {
+                        r.cr2 = value;
+                    }
+                }
             }
             0x08 => {
                 // SR is mostly read-only; allow clearing OVR if modelled.
-                self.sr = value & 0xFFBF;
+                if let SpiRegs::Stm32(r) = &mut self.regs {
+                    r.sr = value & 0xFFBF;
+                }
             }
-            0x0C
-                // DR write goes to the TX path only. The TX byte ends up
-                // in the shifter (transfer_buffer); `self.dr` (RX) is
-                // untouched, so a subsequent DR read returns whatever
-                // came in on MISO — 0 with no slave wired.
-                if (self.cr1 & (1 << 6)) != 0 => {
-                    // SPE set: start a transfer
-                    self.sr &= !0x0002; // Clear TXE
-                    self.sr |= 0x0080; // Set BSY
+            0x0C => {
+                // DR write goes to the TX path only. Starts a transfer iff SPE.
+                let cr1 = match &self.regs {
+                    SpiRegs::Stm32(r) => r.cr1,
+                    _ => 0,
+                };
+                if (cr1 & (1 << 6)) != 0 {
+                    if let SpiRegs::Stm32(r) = &mut self.regs {
+                        r.sr &= !0x0002; // Clear TXE
+                        r.sr |= 0x0080; // Set BSY
+                    }
                     self.transfer_in_progress = true;
-                    let br = (self.cr1 >> 3) & 0x7;
-                    let divider = 1 << (br + 1);
+                    let br = (cr1 >> 3) & 0x7;
+                    let divider = 1u32 << (br + 1);
                     self.transfer_cycles_remaining = 8 * divider;
                     self.transfer_buffer = (value & 0xFF) as u8;
 
-                    // v1 routing: broadcast to all attached devices, use last non-zero response.
-                    // CS-pin-aware routing is Phase 2 (see concerns in commit).
+                    // v1 routing: broadcast to all attached devices, use last
+                    // non-zero response.
                     if !self.attached_devices.is_empty() {
                         let mosi = self.transfer_buffer;
                         let mut miso: u8 = 0;
@@ -272,54 +371,7 @@ impl Spi {
                         self.transfer_buffer = miso;
                     }
                 }
-            _ => {}
-        }
-    }
-
-    fn read_nrf_reg(&self, offset: u64) -> u32 {
-        match offset {
-            0x104 => self.nrf_events_stopped,
-            0x118 => self.nrf_events_end,
-            0x500 => self.nrf_enable,
-            0x508 => self.nrf_psel_sck,
-            0x50C => self.nrf_psel_mosi,
-            0x510 => self.nrf_psel_miso,
-            0x524 => self.nrf_frequency,
-            0x534 => self.nrf_rxd_ptr,
-            0x538 => self.nrf_rxd_maxcnt,
-            0x53C => self.nrf_rxd_amount,
-            0x544 => self.nrf_txd_ptr,
-            0x548 => self.nrf_txd_maxcnt,
-            0x54C => self.nrf_txd_amount,
-            0x554 => self.nrf_config,
-            _ => 0,
-        }
-    }
-
-    fn write_nrf_reg(&mut self, offset: u64, value: u32) {
-        match offset {
-            0x010 if value != 0 => {
-                self.nrf_events_end = 1;
-                self.nrf_txd_amount = self.nrf_txd_maxcnt;
-                self.nrf_rxd_amount = self.nrf_rxd_maxcnt;
             }
-            0x014 if value != 0 => {
-                self.nrf_events_stopped = 1;
-            }
-            0x104 => self.nrf_events_stopped = value,
-            0x118 => self.nrf_events_end = value,
-            0x500 => self.nrf_enable = value,
-            0x508 => self.nrf_psel_sck = value,
-            0x50C => self.nrf_psel_mosi = value,
-            0x510 => self.nrf_psel_miso = value,
-            0x524 => self.nrf_frequency = value,
-            0x534 => self.nrf_rxd_ptr = value,
-            0x538 => self.nrf_rxd_maxcnt = value,
-            0x53C => self.nrf_rxd_amount = value,
-            0x544 => self.nrf_txd_ptr = value,
-            0x548 => self.nrf_txd_maxcnt = value,
-            0x54C => self.nrf_txd_amount = value,
-            0x554 => self.nrf_config = value,
             _ => {}
         }
     }
@@ -329,17 +381,13 @@ impl crate::Peripheral for Spi {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
-        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
-            let reg_val = self.read_nrf_reg(reg_offset);
-            return Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8);
-        }
-        // Widen to u32 before the shift: SPI registers are u16 but byte
-        // accesses at offsets 2 and 3 read the upper byte of the next
-        // halfword. The CI release profile has overflow checks on, so
-        // `(u16 >> 16)` would panic; the `as u32` widen avoids that.
-        // (Result is identical to short-circuiting offsets 2..3 to 0,
-        // since `(u16 as u32) >> 16` is 0.)
-        let reg_val = self.read_reg(reg_offset) as u32;
+        let reg_val = match &self.regs {
+            SpiRegs::Nrf52(r) => r.read_reg(reg_offset),
+            // Widen u16→u32 before the shift: byte accesses at offsets 2/3 read
+            // the upper byte of the next halfword; `(u16 as u32) >> 16` is 0
+            // without an overflow panic under the CI release profile.
+            SpiRegs::Stm32(r) => r.read_reg(reg_offset) as u32,
+        };
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
     }
 
@@ -347,53 +395,52 @@ impl crate::Peripheral for Spi {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
-        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
-            let mut reg_val = self.read_nrf_reg(reg_offset);
+        if let SpiRegs::Nrf52(_) = &self.regs {
+            let cur = match &self.regs {
+                SpiRegs::Nrf52(r) => r.read_reg(reg_offset),
+                _ => 0,
+            };
             let mask: u32 = 0xFF << (byte_offset * 8);
-            reg_val &= !mask;
-            reg_val |= (value as u32) << (byte_offset * 8);
-            self.write_nrf_reg(reg_offset, reg_val);
+            let new = (cur & !mask) | ((value as u32) << (byte_offset * 8));
+            if let SpiRegs::Nrf52(r) = &mut self.regs {
+                r.write_reg(reg_offset, new);
+            }
             return Ok(());
         }
 
-        // Same widen-then-shift dance as read() to avoid u16 shift overflow.
-        // Writes to bytes 2..3 are naturally discarded because the final
-        // `write_reg(reg_offset, reg_val as u16)` truncates back to u16.
-        let mut reg_val = self.read_reg(reg_offset) as u32;
+        // STM32: same widen-then-shift dance to avoid u16 shift overflow; the
+        // final write truncates back to u16, discarding bytes 2..3.
+        let cur = match &self.regs {
+            SpiRegs::Stm32(r) => r.read_reg(reg_offset) as u32,
+            _ => 0,
+        };
         let mask: u32 = 0xFF << (byte_offset * 8);
-        reg_val &= !mask;
-        reg_val |= (value as u32) << (byte_offset * 8);
-
-        self.write_reg(reg_offset, reg_val as u16);
+        let new = (cur & !mask) | ((value as u32) << (byte_offset * 8));
+        self.write_stm32_reg(reg_offset, new as u16);
         Ok(())
     }
 
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
-        if matches!(self.layout, SpiRegisterLayout::Nrf52Spim) {
+        if self.is_nrf() {
             self.write(offset, (value & 0xFF) as u8)?;
             self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
             return Ok(());
         }
-        // SPI DR (offset 0x0C) MUST be atomic — a Thumb `strh` from firmware
-        // is one bus access, kicking off a single SPI transfer. The default
-        // trait impl byte-splits, which would start two transfers back-to-back
-        // and broadcast a spurious upper-byte (typically 0x00) to attached
-        // devices — devastating for protocol state machines that interpret
-        // every byte (SSD1680 e-paper command set). For 8-bit DFF (the default
-        // and only mode we support) only the low byte goes on the wire; the
-        // upper byte is discarded by silicon. For 16-bit DFF this would need
-        // a 16-cycle transfer; not modeled, low byte only is fine for now.
+        // SPI DR (offset 0x0C) MUST be atomic — a Thumb `strh` is one bus
+        // access kicking off a single transfer. Byte-splitting would start two
+        // transfers and broadcast a spurious upper byte to attached devices.
         if offset == 0x0C {
-            let ds = (self.cr2 >> 8) & 0xF;
-            if matches!(self.layout, SpiRegisterLayout::Stm32Fifo) && ds <= 0b0111 {
-                // FIFO data packing (RM0351 §40.4.9): a 16-bit DR access with
-                // DS≤8 enqueues TWO data frames (low byte, then high byte).
-                // Reproduces the silicon behaviour that bit firmware using a
-                // 16-bit DR write at 8-bit data size (spurious byte per write).
-                self.write_reg(0x0C, value & 0xFF);
-                self.write_reg(0x0C, (value >> 8) & 0xFF);
+            let (fifo, ds) = match &self.regs {
+                SpiRegs::Stm32(r) => (r.fifo, (r.cr2 >> 8) & 0xF),
+                _ => (false, 0),
+            };
+            if fifo && ds <= 0b0111 {
+                // FIFO data packing (RM0351 §40.4.9): a 16-bit DR access at
+                // DS≤8 enqueues TWO frames (low byte, then high byte).
+                self.write_stm32_reg(0x0C, value & 0xFF);
+                self.write_stm32_reg(0x0C, (value >> 8) & 0xFF);
             } else {
-                self.write_reg(0x0C, value);
+                self.write_stm32_reg(0x0C, value);
             }
             return Ok(());
         }
@@ -409,24 +456,21 @@ impl crate::Peripheral for Spi {
             self.transfer_cycles_remaining = self.transfer_cycles_remaining.saturating_sub(1);
             if self.transfer_cycles_remaining == 0 {
                 self.transfer_in_progress = false;
-                self.sr &= !0x0080; // Clear BSY
-                self.sr |= 0x0002; // Set TXE
-                if self.loopback {
-                    // Internal loopback: MOSI → MISO. Mirrors the data the
-                    // firmware just wrote back into the RX path so a
-                    // unit test (or "single-board echo" integration) sees
-                    // RXNE go high with the byte it transmitted.
-                    self.dr = self.transfer_buffer as u16;
-                    self.sr |= 0x0001; // RXNE
-                }
-                // Without loopback we deliberately do NOT auto-set RXNE
-                // or auto-fill DR: real STM32 silicon with no slave wired
-                // (or no MISO pin AF'd) doesn't drive anything onto MISO.
-                // Production smoke tests therefore see SR=0x0002 / DR=0
-                // after a write — matching NUCLEO-L476RG silicon.
-                if (self.cr2 & (1 << 7)) != 0 {
-                    // TXEIE
-                    irq = true;
+                let deliver_rx = self.loopback || !self.attached_devices.is_empty();
+                let buf = self.transfer_buffer;
+                if let SpiRegs::Stm32(r) = &mut self.regs {
+                    r.sr &= !0x0080; // Clear BSY
+                    r.sr |= 0x0002; // Set TXE
+                    if deliver_rx {
+                        // A wired slave drove its byte onto MISO (already in
+                        // `transfer_buffer`); loopback mirrors MOSI. Either way
+                        // the firmware sees RXNE high with the received byte.
+                        r.dr = buf as u16;
+                        r.sr |= 0x0001; // RXNE
+                    }
+                    if (r.cr2 & (1 << 7)) != 0 {
+                        irq = true; // TXEIE
+                    }
                 }
             }
         }
@@ -436,6 +480,48 @@ impl crate::Peripheral for Spi {
             cycles: 0,
             ..Default::default()
         }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.transfer_in_progress && !self.scheduled {
+            self.scheduled = true;
+            vec![(self.transfer_cycles_remaining as u64, SPI_DONE_TOKEN)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        self.scheduled = false;
+        if !self.transfer_in_progress {
+            return crate::sched::EventResult::default();
+        }
+        self.transfer_in_progress = false;
+        self.transfer_cycles_remaining = 0;
+        let deliver_rx = self.loopback || !self.attached_devices.is_empty();
+        let buf = self.transfer_buffer;
+        let mut res = crate::sched::EventResult::default();
+        if let SpiRegs::Stm32(r) = &mut self.regs {
+            r.sr &= !0x0080; // Clear BSY
+            r.sr |= 0x0002; // Set TXE
+            if deliver_rx {
+                r.dr = buf as u16;
+                r.sr |= 0x0001; // RXNE
+            }
+            if (r.cr2 & (1 << 7)) != 0 {
+                res.raise_own_irq = true; // TXEIE
+            }
+        }
+        res
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -494,7 +580,11 @@ mod tests {
         spi.attach(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap(); // CR1: SPE
         spi.write_u16(0x0C, 0x00AB).unwrap(); // 16-bit DR write, DS=8 (reset 0x0700)
-        assert_eq!(captured(&spi), vec![0xAB, 0x00], "DS≤8 + 16-bit DR ⇒ 2 frames");
+        assert_eq!(
+            captured(&spi),
+            vec![0xAB, 0x00],
+            "DS≤8 + 16-bit DR ⇒ 2 frames"
+        );
     }
 
     /// The correct 8-bit DR access sends exactly one frame, even on FIFO parts.
@@ -543,10 +633,7 @@ mod tests {
         let sr = spi.read(0x08).unwrap();
         assert_eq!(sr & 0x80, 0, "BSY cleared after transfer");
         assert_ne!(sr & 0x02, 0, "TXE set after transfer");
-        // No slave wired in this test → no MISO data → RXNE stays clear
-        // and DR read returns the RX register (initialised to 0). This
-        // matches what real STM32L476RG hardware does in the same setup;
-        // see firmware_survival's nucleo_l476rg_spi case for the trace.
+        // No slave wired → no MISO data → RXNE stays clear, DR reads 0.
         assert_eq!(sr & 0x01, 0, "RXNE NOT set without a slave");
         assert_eq!(spi.read(0x0C).unwrap(), 0x00, "DR=0 with no MISO data");
     }

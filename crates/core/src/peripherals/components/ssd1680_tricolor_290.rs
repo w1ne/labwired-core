@@ -443,6 +443,57 @@ impl SpiDevice for Ssd1680Tricolor290 {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Ssd1680Tricolor290Kit;
+pub static SSD1680_TRICOLOR_290_KIT: Ssd1680Tricolor290Kit = Ssd1680Tricolor290Kit;
+
+static SSD1680_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
+    device_type: "ssd1680_tricolor_290",
+    label: "SSD1680 Tri-Color E-Paper",
+    summary: "2.9\" tri-color (black/white/red) SSD1680 e-paper over SPI.",
+    detail: "Full SPI command + display-data RAM state machine, validated by the e2e e-paper \
+             integration test. Same model drives both the STM32F103 lab and the ESP32 \
+             playground board.",
+    transport: Transport::Spi,
+    category: Category::Spi,
+    config_keys: &[ConfigKey {
+        name: "cs_pin",
+        ty: ConfigType::Str,
+        doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
+    }],
+    labs: &[
+        LabRef {
+            board_id: "epaper-tricolor-lab",
+            chip: "stm32f103",
+            example_dir: "epaper-tricolor-lab",
+            demo_elf: "demo-epaper-tricolor-lab.elf",
+        },
+        LabRef {
+            board_id: "esp32-epaper-lab",
+            chip: "esp32",
+            example_dir: "esp32-epaper-lab",
+            demo_elf: "demo-esp32-epaper-lab.elf",
+        },
+    ],
+};
+
+impl PeripheralKit for Ssd1680Tricolor290Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &SSD1680_TRICOLOR_290_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
+        let spi = ctx.spi()?;
+        spi.attach(Box::new(Ssd1680Tricolor290::new(cs_pin)));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

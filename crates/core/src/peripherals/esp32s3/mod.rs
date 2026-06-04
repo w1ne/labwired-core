@@ -38,3 +38,4 @@ pub mod timer_group;
 pub mod uart;
 pub mod usb_otg;
 pub mod usb_serial_jtag;
+pub mod wifi_thunks;

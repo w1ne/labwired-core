@@ -90,9 +90,32 @@ fn test_spi_fidelity_in_machine() {
     let sr = bus.read_u8(0x40013008).unwrap();
     assert_ne!(sr & 0x80, 0);
 
-    // Step machine 32 cycles (8 bits * 4 divider)
+    // Advance the transfer to completion. Flag-off, the per-cycle walk drives
+    // the SPI countdown (8 bits × 4 divider = 32 ticks). Flag-on, the SPI is
+    // event-scheduled and the walk skips it, so fire its single completion
+    // event exactly as `Machine::drain_scheduler_events` does — swapping the
+    // peripheral out to satisfy the borrow checker.
+    #[cfg(not(feature = "event-scheduler"))]
     for _ in 0..32 {
         bus.tick_peripherals();
+    }
+    #[cfg(feature = "event-scheduler")]
+    {
+        use labwired_core::peripherals::stub::StubPeripheral;
+        use labwired_core::sched::EventScheduler;
+        // SystemBus::new() pre-populates UART/GPIO/RCC/SysTick, so the SPI is
+        // not at a fixed index — fire on_event on every scheduler-driven
+        // peripheral, exactly as Machine::drain_scheduler_events does.
+        let mut sched = EventScheduler::new();
+        for i in 0..bus.peripherals.len() {
+            if !bus.peripherals[i].dev.uses_scheduler() {
+                continue;
+            }
+            let placeholder: Box<dyn Peripheral> = Box::new(StubPeripheral::new(0));
+            let mut dev = std::mem::replace(&mut bus.peripherals[i].dev, placeholder);
+            dev.on_event(0, &mut sched, &mut bus);
+            bus.peripherals[i].dev = dev;
+        }
     }
 
     // Check BSY is cleared and TXE/RXNE set

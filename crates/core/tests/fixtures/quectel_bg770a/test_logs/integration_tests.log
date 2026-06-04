@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/bg770a_validation.rs (target/debug/deps/bg770a_validation-d3daaff91dc1bc2f)
+
+running 4 tests
+test shape_match_self_test ... ok
+test model_shape_matches_real_hardware_for_state_varying_commands ... ok
+test model_replays_real_hardware_sequences ... ok
+test model_byte_matches_real_hardware_for_deterministic_commands ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

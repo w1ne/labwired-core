@@ -71,6 +71,7 @@ impl Peripheral for Nrf52Nvmc {
                 // erased data may see stale content; acceptable for
                 // boot-path probing.
             }
+            #[allow(unreachable_patterns)]
             OFF_ERASEPAGEPARTIALCFG => self.erasepagepartialcfg = value & 0x3F,
             OFF_ICACHECNF => self.icachecnf = value & 0x101,
             OFF_IHIT => self.ihit = 0,

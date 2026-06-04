@@ -13,13 +13,18 @@
 //!
 //! Because the sensor observes one GPIO and drives another, it can't be a plain
 //! MMIO peripheral. Instead the [`SystemBus`](crate::bus::SystemBus) holds a
-//! list of [`HcSr04`] links and, once per peripheral-tick, reads the TRIG
-//! output bit and writes the computed ECHO level back into the input register.
+//! list of [`HcSr04`] links. A TRIG **write-hook** ([`observe_trig`]) arms the
+//! echo window on the GPIO write that toggles TRIG, and a cheap per-tick pass
+//! ([`echo_high_at`]) drives the computed ECHO level back into the input
+//! register, touching the bus only when that level changes.
 //! Timing is **window-based**: a TRIG rising edge arms an echo window measured
 //! in simulated CPU cycles, so the pulse the firmware times matches real
 //! hardware in simulated time regardless of how fast the host runs.
 //!
-//! `distance_cm` is host-controlled (e.g. a "hand distance" slider in the
+//! [`observe_trig`]: HcSr04::observe_trig
+//! [`echo_high_at`]: HcSr04::echo_high_at
+//!
+//! `distance_cm` is host-controlled (e.g. a distance control in the
 //! playground), which is what makes gesture control possible.
 //!
 //! Modelled from the ElecFreaks HC-SR04 datasheet:
@@ -64,6 +69,15 @@ pub struct HcSr04 {
     last_trig: bool,
     echo_start_cycle: u64,
     echo_end_cycle: u64,
+    /// Last ECHO level this sensor drove onto the input register. The per-cycle
+    /// pass only touches the bus when the computed level differs from this, so a
+    /// steady ECHO costs zero bus accesses.
+    last_echo_high: bool,
+    /// Cached peripheral index of the GPIO that hosts `trig_odr_addr`, resolved
+    /// lazily on the first TRIG write so the write-hook can tell in O(1) whether
+    /// a given peripheral write touches this sensor's TRIG line. `None` until
+    /// resolved.
+    trig_peripheral_idx: Option<usize>,
 }
 
 impl HcSr04 {
@@ -87,7 +101,30 @@ impl HcSr04 {
             last_trig: false,
             echo_start_cycle: 0,
             echo_end_cycle: 0,
+            last_echo_high: false,
+            trig_peripheral_idx: None,
         }
+    }
+
+    /// Cached peripheral index of the GPIO hosting `trig_odr_addr`, if resolved.
+    pub(crate) fn trig_peripheral_idx(&self) -> Option<usize> {
+        self.trig_peripheral_idx
+    }
+
+    /// Cache the resolved peripheral index of the TRIG GPIO (called once, lazily,
+    /// by the bus write-hook the first time this sensor's TRIG line is written).
+    pub(crate) fn set_trig_peripheral_idx(&mut self, idx: usize) {
+        self.trig_peripheral_idx = Some(idx);
+    }
+
+    /// The last ECHO level driven onto the input register.
+    pub(crate) fn last_echo_high(&self) -> bool {
+        self.last_echo_high
+    }
+
+    /// Record the ECHO level just driven onto the input register.
+    pub(crate) fn set_last_echo_high(&mut self, high: bool) {
+        self.last_echo_high = high;
     }
 
     /// Set the measured distance (the "hand position"), clamped to range.
@@ -111,6 +148,19 @@ impl HcSr04 {
     /// `[now + delay, now + delay + echo_µs]` (in cycles); ECHO reads high
     /// while `now` is inside it.
     pub fn service(&mut self, trig_high: bool, now: u64) -> bool {
+        self.observe_trig(trig_high, now);
+        self.echo_high_at(now)
+    }
+
+    /// Observe the live TRIG output level and, on a rising edge, arm the echo
+    /// window `[now + delay, now + delay + echo_µs]` (in cycles). Updates the
+    /// stored `last_trig` so the next call detects the next edge.
+    ///
+    /// This is the "arm" half of [`service`](Self::service): with TRIG only ever
+    /// changing via a GPIO write, calling this from the bus write-hook (with the
+    /// same `now` the per-cycle poll would have used — see the cycle-exactness
+    /// note in `bus::SystemBus`) is exactly equivalent to polling every cycle.
+    pub fn observe_trig(&mut self, trig_high: bool, now: u64) {
         if trig_high && !self.last_trig {
             let cpu = self.cycles_per_us();
             let delay = (TRIG_TO_ECHO_US as f64 * cpu) as u64;
@@ -119,6 +169,12 @@ impl HcSr04 {
             self.echo_end_cycle = self.echo_start_cycle + pulse.max(1);
         }
         self.last_trig = trig_high;
+    }
+
+    /// The ECHO input level for the current cycle: high while `now` is inside the
+    /// armed window `[echo_start, echo_end)`. Pure query — no state change — used
+    /// by the cheap per-cycle ECHO drive. Same `>=`/`<` rule as the legacy poll.
+    pub fn echo_high_at(&self, now: u64) -> bool {
         now >= self.echo_start_cycle && now < self.echo_end_cycle
     }
 }
@@ -140,7 +196,10 @@ mod tests {
         let pulse = (100.0 * US_PER_CM) as u64; // 5800 cycles
 
         // Rising edge at cycle 0 arms the window.
-        assert!(!s.service(true, 0), "echo not high immediately (within delay)");
+        assert!(
+            !s.service(true, 0),
+            "echo not high immediately (within delay)"
+        );
         // Still low during the trig→echo delay.
         assert!(!s.service(true, delay - 1));
         // High once the window opens, through its width.
@@ -179,7 +238,6 @@ mod tests {
     fn echo_driven_through_bus() {
         use crate::bus::SystemBus;
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
-        use crate::Bus;
 
         const GPIOA: u64 = 0x4800_0000; // stm32v2: ODR @ 0x14, IDR @ 0x10, BSRR @ 0x18
         let echo_bit = 9u8; // PA9 (ECHO input)

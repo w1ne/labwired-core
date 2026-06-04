@@ -888,6 +888,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-l073-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-l476-demo"
 version = "0.15.0"
 dependencies = [
@@ -2258,6 +2267,15 @@ dependencies = [
  "pyo3-build-config",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "quectel-bg770a-lab"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
 ]
 
 [[package]]
