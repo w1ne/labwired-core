@@ -44,6 +44,75 @@ def load_segments(elf: bytes):
             yield p_vaddr, p_paddr, elf[p_offset : p_offset + p_filesz]
 
 
+def progbits_sections(elf: bytes):
+    """Yield (sh_addr, bytes) for every SHT_PROGBITS section with addr+content."""
+    e_shoff = struct.unpack_from("<I", elf, 0x20)[0]
+    e_shentsize = struct.unpack_from("<H", elf, 0x2E)[0]
+    e_shnum = struct.unpack_from("<H", elf, 0x30)[0]
+    for i in range(e_shnum):
+        off = e_shoff + i * e_shentsize
+        sh_type = struct.unpack_from("<I", elf, off + 4)[0]
+        sh_addr = struct.unpack_from("<I", elf, off + 0x0C)[0]
+        sh_offset = struct.unpack_from("<I", elf, off + 0x10)[0]
+        sh_size = struct.unpack_from("<I", elf, off + 0x14)[0]
+        if sh_type == 1 and sh_size and sh_addr:
+            yield sh_addr, elf[sh_offset : sh_offset + sh_size]
+
+
+def populate_data_copy_sources(elf: bytes, irom: bytearray, irom_base: int):
+    """Reconstruct the ROM's data-init copy sources in the IROM image.
+
+    The boot ROM's startup copies `.data` from IROM-resident load addresses
+    (LMAs) into DRAM via a table of (dst_start, dst_end, src, 0) quadruples.
+    But Espressif's ROM ELF stores many `.data.interface.*` init values in
+    SECTIONS that are in no PT_LOAD segment, so those copy-source LMAs read 0
+    in a PT_LOAD-only image — and the ROM faithfully copies 0 over pointers
+    like rom_cache_internal_table_ptr (0x3FCEFFC4 → 0x3FF1E2B4), then calls a
+    null cache vtable method. We walk the in-image copy table and fill each
+    `src` LMA with the genuine bytes the matching DRAM `dst` section holds, so
+    the ROM's own copy lands the real values. Faithful: the bytes are the
+    ROM's, just relocated to where its copy loop reads them.
+    """
+    # VMA -> bytes lookup across all PROGBITS sections (covers .data.interface.*).
+    sections = sorted(progbits_sections(elf))
+
+    def vma_read(addr, n):
+        out = bytearray(n)
+        for sa, data in sections:
+            if sa <= addr + n and addr < sa + len(data):
+                lo = max(addr, sa)
+                hi = min(addr + n, sa + len(data))
+                out[lo - addr : hi - addr] = data[lo - sa : hi - sa]
+        return bytes(out)
+
+    DRAM_LO, DRAM_HI = 0x3FC8_8000, 0x3FD0_0000
+    IROM_HI = irom_base + len(irom)
+    entries = 0
+    off = 0
+    # Scan the IROM image for the contiguous copy table (16-byte quads).
+    while off + 16 <= len(irom):
+        dst_s, dst_e, src, term = struct.unpack_from("<4I", irom, off)
+        ok = (
+            DRAM_LO <= dst_s < DRAM_HI
+            and dst_s <= dst_e < DRAM_HI
+            and irom_base <= src < IROM_HI
+            and term == 0
+            and (dst_e - dst_s) < 0x1_0000
+        )
+        if ok:
+            n = dst_e - dst_s
+            if n:
+                vals = vma_read(dst_s, n)
+                if any(vals):  # only fill when the section actually has data
+                    rel = src - irom_base
+                    irom[rel : rel + n] = vals[: max(0, min(n, len(irom) - rel))]
+            entries += 1
+            off += 16
+        else:
+            off += 4
+    print(f"  data-copy table: populated {entries} source entries")
+
+
 def main():
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
@@ -69,6 +138,10 @@ def main():
                 n = min(len(data), size - rel)
                 img[rel : rel + n] = data[:n]
                 placed += 1
+        # Fill the boot ROM's `.data` copy-source LMAs from section content so
+        # the ROM's own startup copy lands real values (see function docstring).
+        if name in KEY_BY_PADDR:
+            populate_data_copy_sources(elf, img, base)
         (out / name).write_bytes(img)
         print(f"{out / name}: {size} bytes, {placed} segments (base 0x{base:08x})")
 
