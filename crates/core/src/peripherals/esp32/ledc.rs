@@ -203,12 +203,7 @@ impl Ledc {
 
     /// If `word_off` is a channel CONF1 offset, return the channel index.
     fn channel_of_conf1(word_off: u64) -> Option<u64> {
-        for ch in 0..(2 * CH_COUNT) {
-            if Self::ch_reg(ch, CH_CONF1) == word_off {
-                return Some(ch);
-            }
-        }
-        None
+        (0..(2 * CH_COUNT)).find(|&ch| Self::ch_reg(ch, CH_CONF1) == word_off)
     }
 
     /// Commit a channel's staged DUTY into its DUTY_R live shadow. The

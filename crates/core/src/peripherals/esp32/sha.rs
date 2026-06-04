@@ -284,8 +284,8 @@ impl Sha {
             h[1] = h[0];
             h[0] = t1.wrapping_add(t2);
         }
-        for i in 0..8 {
-            self.state256[i] = self.state256[i].wrapping_add(h[i]);
+        for (s, &hv) in self.state256.iter_mut().zip(h.iter()) {
+            *s = s.wrapping_add(hv);
         }
     }
 
