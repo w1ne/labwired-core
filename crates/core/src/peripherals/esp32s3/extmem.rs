@@ -58,8 +58,11 @@ const ACK_MIRROR_REGS: [(u64, u32, u32); 4] = [
 
 /// EXTMEM_CACHE_SYNC_CTRL_REG offset (referenced by tests/docs). bit0
 /// INVALIDATE_ENA, bit1 WRITEBACK_ENA, bit2 CLEAN_ENA, bit3 SYNC_DONE.
+#[allow(dead_code)]
 const CACHE_SYNC_CTRL: u64 = 0x28;
+#[allow(dead_code)]
 const SYNC_ENABLE_BITS: u32 = 0b111;
+#[allow(dead_code)]
 const SYNC_DONE_BIT: u32 = 1 << 3;
 
 /// Hardware-driven idle/status registers the boot ROM busy-polls but never
@@ -244,7 +247,11 @@ mod tests {
         // Func A: assert request bit 0 → ack bit 2 follows high (request stays).
         e.write_u32(0x150, 1 << 0).unwrap();
         let v = e.read_u32(0x150).unwrap();
-        assert_eq!(v & (1 << 0), 1 << 0, "request bit must persist (level-held)");
+        assert_eq!(
+            v & (1 << 0),
+            1 << 0,
+            "request bit must persist (level-held)"
+        );
         assert_eq!(v & (1 << 2), 1 << 2, "ack bit 2 should follow request high");
         // Func B: clear request bit 0 → ack bit 2 follows low.
         e.write_u32(0x150, v & !(1 << 0)).unwrap();

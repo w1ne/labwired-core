@@ -596,70 +596,194 @@ pub enum Instruction {
     // index the AR file. Encodings HW-oracle confirmed against
     // xtensa-esp32s3-elf-as + objdump (esp-15.2.0_20250920) — see decode_fp0.
     /// add.s fr, fs, ft : f[fr] = f[fs] + f[ft]
-    AddS { fr: u8, fs: u8, ft: u8 },
+    AddS {
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    },
     /// sub.s fr, fs, ft : f[fr] = f[fs] - f[ft]
-    SubS { fr: u8, fs: u8, ft: u8 },
+    SubS {
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    },
     /// mul.s fr, fs, ft : f[fr] = f[fs] * f[ft]
-    MulS { fr: u8, fs: u8, ft: u8 },
+    MulS {
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    },
     /// madd.s fr, fs, ft : f[fr] = f[fr] + f[fs] * f[ft]
-    MaddS { fr: u8, fs: u8, ft: u8 },
+    MaddS {
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    },
     /// msub.s fr, fs, ft : f[fr] = f[fr] - f[fs] * f[ft]
-    MsubS { fr: u8, fs: u8, ft: u8 },
+    MsubS {
+        fr: u8,
+        fs: u8,
+        ft: u8,
+    },
     /// abs.s fr, fs : f[fr] = |f[fs]|
-    AbsS { fr: u8, fs: u8 },
+    AbsS {
+        fr: u8,
+        fs: u8,
+    },
     /// neg.s fr, fs : f[fr] = -f[fs]
-    NegS { fr: u8, fs: u8 },
+    NegS {
+        fr: u8,
+        fs: u8,
+    },
     /// mov.s fr, fs : f[fr] = f[fs]
-    MovS { fr: u8, fs: u8 },
+    MovS {
+        fr: u8,
+        fs: u8,
+    },
     /// rfr ar, fs : AR[ar] = bits(f[fs])  (move FR → AR)
-    Rfr { ar: u8, fs: u8 },
+    Rfr {
+        ar: u8,
+        fs: u8,
+    },
     /// wfr fr, as_ : f[fr] = bits(AR[as_])  (move AR → FR)
-    Wfr { fr: u8, as_: u8 },
+    Wfr {
+        fr: u8,
+        as_: u8,
+    },
     /// float.s fr, as_, imm : f[fr] = (f32)(i32)AR[as_] / 2^imm
-    FloatS { fr: u8, as_: u8, imm: u8 },
+    FloatS {
+        fr: u8,
+        as_: u8,
+        imm: u8,
+    },
     /// ufloat.s fr, as_, imm : f[fr] = (f32)(u32)AR[as_] / 2^imm
-    UfloatS { fr: u8, as_: u8, imm: u8 },
+    UfloatS {
+        fr: u8,
+        as_: u8,
+        imm: u8,
+    },
     /// trunc.s ar, fs, imm : AR[ar] = (i32)(f[fs] * 2^imm)  (toward zero)
-    TruncS { ar: u8, fs: u8, imm: u8 },
+    TruncS {
+        ar: u8,
+        fs: u8,
+        imm: u8,
+    },
     /// utrunc.s ar, fs, imm : AR[ar] = (u32)(f[fs] * 2^imm)  (toward zero)
-    UtruncS { ar: u8, fs: u8, imm: u8 },
+    UtruncS {
+        ar: u8,
+        fs: u8,
+        imm: u8,
+    },
     /// round.s ar, fs, imm : AR[ar] = (i32) round-to-nearest(f[fs] * 2^imm)
-    RoundS { ar: u8, fs: u8, imm: u8 },
+    RoundS {
+        ar: u8,
+        fs: u8,
+        imm: u8,
+    },
     /// ceil.s ar, fs, imm : AR[ar] = (i32) ceil(f[fs] * 2^imm)
-    CeilS { ar: u8, fs: u8, imm: u8 },
+    CeilS {
+        ar: u8,
+        fs: u8,
+        imm: u8,
+    },
     /// floor.s ar, fs, imm : AR[ar] = (i32) floor(f[fs] * 2^imm)
-    FloorS { ar: u8, fs: u8, imm: u8 },
+    FloorS {
+        ar: u8,
+        fs: u8,
+        imm: u8,
+    },
     /// moveqz.s fr, fs, at : if AR[at] == 0 then f[fr] = f[fs]
-    MoveqzS { fr: u8, fs: u8, at: u8 },
+    MoveqzS {
+        fr: u8,
+        fs: u8,
+        at: u8,
+    },
     /// movnez.s fr, fs, at : if AR[at] != 0 then f[fr] = f[fs]
-    MovnezS { fr: u8, fs: u8, at: u8 },
+    MovnezS {
+        fr: u8,
+        fs: u8,
+        at: u8,
+    },
     /// movltz.s fr, fs, at : if (i32)AR[at]  < 0 then f[fr] = f[fs]
-    MovltzS { fr: u8, fs: u8, at: u8 },
+    MovltzS {
+        fr: u8,
+        fs: u8,
+        at: u8,
+    },
     /// movgez.s fr, fs, at : if (i32)AR[at] >= 0 then f[fr] = f[fs]
-    MovgezS { fr: u8, fs: u8, at: u8 },
+    MovgezS {
+        fr: u8,
+        fs: u8,
+        at: u8,
+    },
     /// movf.s fr, fs, bt : if BR[bt] == 0 then f[fr] = f[fs]
-    MovfS { fr: u8, fs: u8, bt: u8 },
+    MovfS {
+        fr: u8,
+        fs: u8,
+        bt: u8,
+    },
     /// movt.s fr, fs, bt : if BR[bt] == 1 then f[fr] = f[fs]
-    MovtS { fr: u8, fs: u8, bt: u8 },
+    MovtS {
+        fr: u8,
+        fs: u8,
+        bt: u8,
+    },
     /// FP compares (op1=0xB). Result written to boolean register BR[br].
     /// `kind` selects the predicate (ordered/unordered + relation).
-    CmpS { br: u8, fs: u8, ft: u8, kind: FpCmp },
+    CmpS {
+        br: u8,
+        fs: u8,
+        ft: u8,
+        kind: FpCmp,
+    },
     /// lsi ft, as_, imm : f[ft] = mem32[AR[as_] + imm]   (imm = imm8<<2)
-    Lsi { ft: u8, as_: u8, imm: u32 },
+    Lsi {
+        ft: u8,
+        as_: u8,
+        imm: u32,
+    },
     /// lsip ft, as_, imm : load then AR[as_] += imm (update form)
-    Lsiu { ft: u8, as_: u8, imm: u32 },
+    Lsiu {
+        ft: u8,
+        as_: u8,
+        imm: u32,
+    },
     /// ssi ft, as_, imm : mem32[AR[as_] + imm] = f[ft]
-    Ssi { ft: u8, as_: u8, imm: u32 },
+    Ssi {
+        ft: u8,
+        as_: u8,
+        imm: u32,
+    },
     /// ssip ft, as_, imm : store then AR[as_] += imm (update form)
-    Ssiu { ft: u8, as_: u8, imm: u32 },
+    Ssiu {
+        ft: u8,
+        as_: u8,
+        imm: u32,
+    },
     /// lsx fr, as_, at : f[fr] = mem32[AR[as_] + AR[at]]
-    Lsx { fr: u8, as_: u8, at: u8 },
+    Lsx {
+        fr: u8,
+        as_: u8,
+        at: u8,
+    },
     /// lsxp fr, as_, at : load then AR[as_] += AR[at] (update form)
-    Lsxu { fr: u8, as_: u8, at: u8 },
+    Lsxu {
+        fr: u8,
+        as_: u8,
+        at: u8,
+    },
     /// ssx fr, as_, at : mem32[AR[as_] + AR[at]] = f[fr]
-    Ssx { fr: u8, as_: u8, at: u8 },
+    Ssx {
+        fr: u8,
+        as_: u8,
+        at: u8,
+    },
     /// ssxp fr, as_, at : store then AR[as_] += AR[at] (update form)
-    Ssxu { fr: u8, as_: u8, at: u8 },
+    Ssxu {
+        fr: u8,
+        as_: u8,
+        at: u8,
+    },
     Unknown(u32),
 }
 
@@ -1112,10 +1236,26 @@ fn decode_qrst(w: u32) -> Instruction {
         //   ssx  f2, a1, a3 → 0x482130: op2=4
         //   ssxp f2, a1, a3 → 0x582130: op2=5
         0x8 => match op2 {
-            0x0 => Instruction::Lsx { fr: r, as_: s, at: t },
-            0x1 => Instruction::Lsxu { fr: r, as_: s, at: t },
-            0x4 => Instruction::Ssx { fr: r, as_: s, at: t },
-            0x5 => Instruction::Ssxu { fr: r, as_: s, at: t },
+            0x0 => Instruction::Lsx {
+                fr: r,
+                as_: s,
+                at: t,
+            },
+            0x1 => Instruction::Lsxu {
+                fr: r,
+                as_: s,
+                at: t,
+            },
+            0x4 => Instruction::Ssx {
+                fr: r,
+                as_: s,
+                at: t,
+            },
+            0x5 => Instruction::Ssxu {
+                fr: r,
+                as_: s,
+                at: t,
+            },
             _ => Instruction::Unknown(w),
         },
         // op1 = 0xA / 0xB — single-precision FPU. See decode_fp0 / decode_fp1.
@@ -1142,18 +1282,66 @@ fn decode_qrst(w: u32) -> Instruction {
 /// (round/trunc/utrunc/ceil/floor): r=ar, s=fs, t=imm.
 fn decode_fp0(w: u32, op2: u8, r: u8, s: u8, t: u8) -> Instruction {
     match op2 {
-        0x0 => Instruction::AddS { fr: r, fs: s, ft: t },
-        0x1 => Instruction::SubS { fr: r, fs: s, ft: t },
-        0x2 => Instruction::MulS { fr: r, fs: s, ft: t },
-        0x4 => Instruction::MaddS { fr: r, fs: s, ft: t },
-        0x5 => Instruction::MsubS { fr: r, fs: s, ft: t },
-        0x8 => Instruction::RoundS { ar: r, fs: s, imm: t },
-        0x9 => Instruction::TruncS { ar: r, fs: s, imm: t },
-        0xA => Instruction::FloorS { ar: r, fs: s, imm: t },
-        0xB => Instruction::CeilS { ar: r, fs: s, imm: t },
-        0xC => Instruction::FloatS { fr: r, as_: s, imm: t },
-        0xD => Instruction::UfloatS { fr: r, as_: s, imm: t },
-        0xE => Instruction::UtruncS { ar: r, fs: s, imm: t },
+        0x0 => Instruction::AddS {
+            fr: r,
+            fs: s,
+            ft: t,
+        },
+        0x1 => Instruction::SubS {
+            fr: r,
+            fs: s,
+            ft: t,
+        },
+        0x2 => Instruction::MulS {
+            fr: r,
+            fs: s,
+            ft: t,
+        },
+        0x4 => Instruction::MaddS {
+            fr: r,
+            fs: s,
+            ft: t,
+        },
+        0x5 => Instruction::MsubS {
+            fr: r,
+            fs: s,
+            ft: t,
+        },
+        0x8 => Instruction::RoundS {
+            ar: r,
+            fs: s,
+            imm: t,
+        },
+        0x9 => Instruction::TruncS {
+            ar: r,
+            fs: s,
+            imm: t,
+        },
+        0xA => Instruction::FloorS {
+            ar: r,
+            fs: s,
+            imm: t,
+        },
+        0xB => Instruction::CeilS {
+            ar: r,
+            fs: s,
+            imm: t,
+        },
+        0xC => Instruction::FloatS {
+            fr: r,
+            as_: s,
+            imm: t,
+        },
+        0xD => Instruction::UfloatS {
+            fr: r,
+            as_: s,
+            imm: t,
+        },
+        0xE => Instruction::UtruncS {
+            ar: r,
+            fs: s,
+            imm: t,
+        },
         0xF => match t {
             0x0 => Instruction::MovS { fr: r, fs: s },
             0x1 => Instruction::AbsS { fr: r, fs: s },
@@ -1194,12 +1382,36 @@ fn decode_fp1(w: u32, op2: u8, r: u8, s: u8, t: u8) -> Instruction {
         0x5 => cmp(Ult),
         0x6 => cmp(Ole),
         0x7 => cmp(Ule),
-        0x8 => Instruction::MoveqzS { fr: r, fs: s, at: t },
-        0x9 => Instruction::MovnezS { fr: r, fs: s, at: t },
-        0xA => Instruction::MovltzS { fr: r, fs: s, at: t },
-        0xB => Instruction::MovgezS { fr: r, fs: s, at: t },
-        0xC => Instruction::MovfS { fr: r, fs: s, bt: t },
-        0xD => Instruction::MovtS { fr: r, fs: s, bt: t },
+        0x8 => Instruction::MoveqzS {
+            fr: r,
+            fs: s,
+            at: t,
+        },
+        0x9 => Instruction::MovnezS {
+            fr: r,
+            fs: s,
+            at: t,
+        },
+        0xA => Instruction::MovltzS {
+            fr: r,
+            fs: s,
+            at: t,
+        },
+        0xB => Instruction::MovgezS {
+            fr: r,
+            fs: s,
+            at: t,
+        },
+        0xC => Instruction::MovfS {
+            fr: r,
+            fs: s,
+            bt: t,
+        },
+        0xD => Instruction::MovtS {
+            fr: r,
+            fs: s,
+            bt: t,
+        },
         _ => Instruction::Unknown(w),
     }
 }
@@ -1998,9 +2210,10 @@ impl Instruction {
             | CeilS { ar, .. }
             | FloorS { ar, .. } => ar,
             Lsi { as_, .. } | Lsiu { as_, .. } | Ssi { as_, .. } | Ssiu { as_, .. } => as_,
-            Lsx { as_, at, .. } | Lsxu { as_, at, .. } | Ssx { as_, at, .. } | Ssxu { as_, at, .. } => {
-                as_.max(at)
-            }
+            Lsx { as_, at, .. }
+            | Lsxu { as_, at, .. }
+            | Ssx { as_, at, .. }
+            | Ssxu { as_, at, .. } => as_.max(at),
             Unknown(_) => 0,
         }
     }
@@ -2021,14 +2234,35 @@ mod salt_saltu_tests {
     #[test]
     fn decodes_saltu() {
         // saltu a7, a5, a4  → 0x627540   (op0=0, op1=2, op2=6)
-        assert_eq!(decode(0x627540), Instruction::Saltu { ar: 7, as_: 5, at: 4 });
+        assert_eq!(
+            decode(0x627540),
+            Instruction::Saltu {
+                ar: 7,
+                as_: 5,
+                at: 4
+            }
+        );
         // saltu a8, a8, a9  → 0x628890
-        assert_eq!(decode(0x628890), Instruction::Saltu { ar: 8, as_: 8, at: 9 });
+        assert_eq!(
+            decode(0x628890),
+            Instruction::Saltu {
+                ar: 8,
+                as_: 8,
+                at: 9
+            }
+        );
     }
 
     #[test]
     fn decodes_salt() {
         // salt a2, a9, a8   → 0x722980   (op0=0, op1=2, op2=7)
-        assert_eq!(decode(0x722980), Instruction::Salt { ar: 2, as_: 9, at: 8 });
+        assert_eq!(
+            decode(0x722980),
+            Instruction::Salt {
+                ar: 2,
+                as_: 9,
+                at: 8
+            }
+        );
     }
 }

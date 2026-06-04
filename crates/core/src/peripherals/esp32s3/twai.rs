@@ -436,7 +436,11 @@ mod tests {
         t.status &= !STATUS_TX_COMPLETE;
         write_word(&mut t, 0x04, CMD_TX_REQ);
         let st = read_word(&t, 0x08);
-        assert_eq!(st & STATUS_TX_COMPLETE, STATUS_TX_COMPLETE, "tx_complete set");
+        assert_eq!(
+            st & STATUS_TX_COMPLETE,
+            STATUS_TX_COMPLETE,
+            "tx_complete set"
+        );
         assert_eq!(st & STATUS_TX_BUF, STATUS_TX_BUF, "tx_buf_st set");
         // tx_int latched (peek without read-clear via the Cell).
         assert_eq!(t.int_latch.get() & INT_TX, INT_TX, "tx_int latched");
@@ -446,8 +450,12 @@ mod tests {
     fn interrupt_register_read_and_clear() {
         let mut t = Esp32s3Twai::new(TWAI_SOURCE);
         write_word(&mut t, 0x04, CMD_TX_REQ); // latches tx_int
-        // First read returns the latched bit...
-        assert_eq!(read_word(&t, 0x0C) & INT_TX, INT_TX, "INTERRUPT returns latched");
+                                              // First read returns the latched bit...
+        assert_eq!(
+            read_word(&t, 0x0C) & INT_TX,
+            INT_TX,
+            "INTERRUPT returns latched"
+        );
         // ...and clears it.
         assert_eq!(read_word(&t, 0x0C), 0, "read-and-clear cleared the latch");
     }
@@ -458,7 +466,11 @@ mod tests {
         write_word(&mut t, 0x04, CMD_TX_REQ);
         // High byte read must NOT clear the latch.
         assert_eq!(t.read(0x0F).unwrap(), 0);
-        assert_eq!(t.int_latch.get() & INT_TX, INT_TX, "high-byte read preserved latch");
+        assert_eq!(
+            t.int_latch.get() & INT_TX,
+            INT_TX,
+            "high-byte read preserved latch"
+        );
         // LSB read clears.
         assert_eq!(t.read(0x0C).unwrap() & 0x02, 0x02);
         assert_eq!(t.int_latch.get(), 0, "LSB read cleared latch");
@@ -479,7 +491,10 @@ mod tests {
         assert_eq!(t.tick().explicit_irqs.as_deref(), Some(&[TWAI_SOURCE][..]));
         // Reading INTERRUPT clears the latch → IRQ de-asserts.
         let _ = read_word(&t, 0x0C);
-        assert!(t.tick().explicit_irqs.is_none(), "IRQ de-asserts after read-clear");
+        assert!(
+            t.tick().explicit_irqs.is_none(),
+            "IRQ de-asserts after read-clear"
+        );
     }
 
     #[test]
@@ -487,7 +502,10 @@ mod tests {
         let mut t = Esp32s3Twai::new(TWAI_SOURCE);
         // Latch tx_int but leave INTERRUPT_ENABLE = 0.
         write_word(&mut t, 0x04, CMD_TX_REQ);
-        assert!(t.tick().explicit_irqs.is_none(), "disabled int does not emit");
+        assert!(
+            t.tick().explicit_irqs.is_none(),
+            "disabled int does not emit"
+        );
         // Latch persists (not read yet); enabling it now emits.
         write_word(&mut t, 0x10, INT_TX);
         assert_eq!(t.tick().explicit_irqs.as_deref(), Some(&[TWAI_SOURCE][..]));

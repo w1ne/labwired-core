@@ -344,7 +344,10 @@ mod tests {
             assert_eq!(g.read_word(b + IN_INT_RAW), 0);
             assert_eq!(g.read_word(b + OUT_INT_RAW), 0);
             // PARK bit reads set (idle) on both links.
-            assert_eq!(g.read_word(b + IN_LINK) & IN_LINK_PARK_BIT, IN_LINK_PARK_BIT);
+            assert_eq!(
+                g.read_word(b + IN_LINK) & IN_LINK_PARK_BIT,
+                IN_LINK_PARK_BIT
+            );
             assert_eq!(
                 g.read_word(b + OUT_LINK) & OUT_LINK_PARK_BIT,
                 OUT_LINK_PARK_BIT

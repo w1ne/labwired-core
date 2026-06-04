@@ -329,29 +329,25 @@ impl Esp32s3Rsa {
         match offset {
             OFF_M_DASH => self.m_dash = value,
             OFF_LENGTH => self.mode = value & 0x7F, // 7-bit field (0..127)
-            OFF_QUERY_CLEAN => {} // RO
-            OFF_MODEXP_START => {
-                if value & 1 != 0 {
+            OFF_QUERY_CLEAN => {}                   // RO
+            OFF_MODEXP_START
+                if value & 1 != 0 => {
                     self.run_modexp();
                 }
-            }
-            OFF_MODMULT_START => {
-                if value & 1 != 0 {
+            OFF_MODMULT_START
+                if value & 1 != 0 => {
                     self.run_modmult();
                 }
-            }
-            OFF_MULT_START => {
-                if value & 1 != 0 {
+            OFF_MULT_START
+                if value & 1 != 0 => {
                     self.run_mult();
                 }
-            }
             OFF_QUERY_INTERRUPT => {} // RO
-            OFF_CLEAR_INTERRUPT => {
+            OFF_CLEAR_INTERRUPT
                 // W1C: writing 1 clears the done/idle + interrupt latch.
-                if value & 1 != 0 {
+                if value & 1 != 0 => {
                     self.done = false;
                 }
-            }
             OFF_CONSTANT_TIME => self.constant_time = value & 1,
             OFF_SEARCH_OPEN => self.search_open = value & 1,
             OFF_SEARCH_POS => self.search_pos = value & 0xFFF,

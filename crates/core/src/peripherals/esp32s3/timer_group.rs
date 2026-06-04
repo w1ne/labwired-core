@@ -563,7 +563,8 @@ mod tests {
 
     /// Helper: enable T0 with a given divider (up-counter, no alarm).
     fn enable_t0(tg: &mut Esp32s3TimerGroup, divider: u32) {
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | ((divider & 0xFFFF) << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | ((divider & 0xFFFF) << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
     }
 
@@ -681,7 +682,8 @@ mod tests {
         // Alarm at count 5, up-counter, divider 1, alarm_en, NO autoreload.
         tg.write_word(0x10, 5); // T0ALARMLO = 5
         tg.write_word(0x14, 0); // T0ALARMHI = 0
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         tg.write_word(0x70, INT_T0_BIT); // INT_ENA T0
 
@@ -709,7 +711,8 @@ mod tests {
         let mut tg = new_timg0();
         // Configure T1 (block at +0x24).
         tg.write_word(0x34, 3); // T1ALARMLO = 3
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x24, cfg);
         tg.write_word(0x70, INT_T1_BIT);
         let mut fired = None;
@@ -757,14 +760,19 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(second, Some(12), "autoreloaded alarm re-fires one period later");
+        assert_eq!(
+            second,
+            Some(12),
+            "autoreloaded alarm re-fires one period later"
+        );
     }
 
     #[test]
     fn int_clr_is_w1c() {
         let mut tg = new_timg0();
         tg.write_word(0x10, 2); // alarm = 2
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         tg.write_word(0x70, INT_T0_BIT);
         for _ in 0..30 {
@@ -784,7 +792,8 @@ mod tests {
     fn int_ena_gates_irq_emission_but_not_pending() {
         let mut tg = new_timg0();
         tg.write_word(0x10, 2);
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         // INT_ENA left 0 → no IRQ emitted, but pending still sets.
         for _ in 0..30 {
@@ -800,11 +809,19 @@ mod tests {
         // The bootloader's rtc_clk_cal busy-polls RTC_CALI_RDY after START;
         // without auto-completion the boot hangs (regression that this models).
         let mut tg = new_timg0();
-        assert_eq!(tg.read_word(0x68) & RTC_CALI_RDY, 0, "RDY clear before START");
+        assert_eq!(
+            tg.read_word(0x68) & RTC_CALI_RDY,
+            0,
+            "RDY clear before START"
+        );
         // Start a calibration with a max-cycle count in bits[31:13].
         let max = 1024u32;
         tg.write_word(0x68, RTC_CALI_START | (max << 13));
-        assert_eq!(tg.read_word(0x68) & RTC_CALI_RDY, RTC_CALI_RDY, "RDY latched on START");
+        assert_eq!(
+            tg.read_word(0x68) & RTC_CALI_RDY,
+            RTC_CALI_RDY,
+            "RDY latched on START"
+        );
         assert_ne!(tg.read_word(0x6C), 0, "RTCCALICFG1 holds a measured value");
         assert_eq!(tg.read_word(0x6C) & 1, 1, "value valid bit set");
     }
@@ -825,7 +842,11 @@ mod tests {
         assert!(!tg.wdt_unlocked());
         let before = tg.read_word(0x48);
         tg.write_word(0x48, 0xFFFF_FFFF); // should be ignored while locked
-        assert_eq!(tg.read_word(0x48), before, "locked: WDTCONFIG0 write ignored");
+        assert_eq!(
+            tg.read_word(0x48),
+            before,
+            "locked: WDTCONFIG0 write ignored"
+        );
         // Unlock with the key, then the write lands.
         tg.write_word(0x64, WDT_WKEY);
         assert!(tg.wdt_unlocked());
@@ -840,7 +861,7 @@ mod tests {
         tg.write_word(0x18, 10); // LOADLO = 10
         tg.write_word(0x20, 1); // LOAD → counter = 10
         tg.write_word(0x10, 5); // alarm = 5
-        // EN | (INCREASE cleared = down) | ALARM_EN | div1.
+                                // EN | (INCREASE cleared = down) | ALARM_EN | div1.
         let cfg = CONFIG_EN_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         tg.write_word(0x70, INT_T0_BIT);

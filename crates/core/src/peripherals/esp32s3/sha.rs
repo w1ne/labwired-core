@@ -162,7 +162,7 @@ mod tests {
         block[0..3].copy_from_slice(b"abc");
         block[3] = 0x80;
         block[63] = 0x18; // bit length = 24
-        // Firmware writes the block as 16 little-endian words to TEXT_BASE.
+                          // Firmware writes the block as 16 little-endian words to TEXT_BASE.
         for i in 0..16 {
             let w = u32::from_le_bytes(block[i * 4..i * 4 + 4].try_into().unwrap());
             sha.write_u32(TEXT_BASE + (i as u64) * 4, w).unwrap();
@@ -175,8 +175,7 @@ mod tests {
             let w = sha.read_u32(H_BASE + (i as u64) * 4).unwrap();
             digest[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
         }
-        let expected =
-            hex_literal_ba7816bf();
+        let expected = hex_literal_ba7816bf();
         assert_eq!(digest, expected, "SHA256(\"abc\") mismatch");
     }
 

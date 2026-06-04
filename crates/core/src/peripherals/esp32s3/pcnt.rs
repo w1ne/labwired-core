@@ -532,7 +532,11 @@ mod tests {
         // Assert unit 0's RST bit (bit 0): count clears to 0.
         p.write_u32(0x60, ctrl_rst_bit(0)).unwrap();
         assert_eq!(p.count(0), 0);
-        assert_eq!(p.read_u32(0x30).unwrap(), 0, "CNT reads 0 while held in reset");
+        assert_eq!(
+            p.read_u32(0x30).unwrap(),
+            0,
+            "CNT reads 0 while held in reset"
+        );
         // Injection is ignored while held in reset.
         p.inject_pulses(0, 3);
         assert_eq!(p.count(0), 0);
@@ -557,7 +561,8 @@ mod tests {
                                        // Unit 0 CONF1: THRES0 = 3 (bits[15:0]).
         p.write_u32(0x04, 3).unwrap();
         // CONF0: enable THRES0 comparator (keep defaults).
-        p.write_u32(0x00, CONF0_RESET | CONF0_THR_THRES0_EN).unwrap();
+        p.write_u32(0x00, CONF0_RESET | CONF0_THR_THRES0_EN)
+            .unwrap();
         // Enable IRQ delivery for unit 0.
         p.write_u32(0x48, 1).unwrap();
 

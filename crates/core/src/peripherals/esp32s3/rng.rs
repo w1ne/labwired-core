@@ -109,7 +109,10 @@ mod tests {
         let r1 = Esp32s3Rng::new();
         let r2 = Esp32s3Rng::new();
         for _ in 0..16 {
-            assert_eq!(r1.read_u32(RND_OFFSET).unwrap(), r2.read_u32(RND_OFFSET).unwrap());
+            assert_eq!(
+                r1.read_u32(RND_OFFSET).unwrap(),
+                r2.read_u32(RND_OFFSET).unwrap()
+            );
         }
     }
 }

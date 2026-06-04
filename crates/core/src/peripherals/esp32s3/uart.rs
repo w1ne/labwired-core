@@ -42,6 +42,7 @@
 //! * Latched edge (set on the event, cleared W1C via INT_CLR):
 //!   `TX_DONE`(b14) when the FIFO empties; `RXFIFO_OVF`(b4) on RX overflow;
 //!   `RXFIFO_TOUT`(b8) when RX data is waiting.
+//!
 //! `tick()` emits the UART interrupt-matrix source (UART0=27/1=28/2=29) while
 //! `INT_ST != 0`; the bus routes it through the per-core interrupt matrix like
 //! the systimer tick. Self-contained type, distinct from the STM32 `Uart`.
@@ -74,6 +75,7 @@ const INT_RXFIFO_OVF: u32 = 1 << 4;
 const INT_RXFIFO_TOUT: u32 = 1 << 8;
 const INT_TX_DONE: u32 = 1 << 14;
 /// Live (non-latched) interrupt conditions, recomputed from FIFO state.
+#[allow(dead_code)]
 const LEVEL_BITS: u32 = INT_RXFIFO_FULL | INT_TXFIFO_EMPTY;
 
 // CONF0 FIFO-reset bits.
@@ -177,7 +179,11 @@ impl Esp32s3Uart {
     /// scaled to CPU-clock ticks. Clamped to ≥1 so progress is always made.
     fn cycles_per_byte(&self) -> u64 {
         let clkdiv = (self.reg(OFF_CLKDIV) & 0xFFF) as u64;
-        let clkdiv = if clkdiv == 0 { RESET_CLKDIV as u64 } else { clkdiv };
+        let clkdiv = if clkdiv == 0 {
+            RESET_CLKDIV as u64
+        } else {
+            clkdiv
+        };
         (10 * clkdiv * CPU_CLOCK_HZ / UART_SCLK_HZ).max(1)
     }
 
@@ -356,7 +362,11 @@ mod tests {
         for &b in b"Hi!" {
             u.push_tx(b);
         }
-        assert_eq!((u.status_word() >> 16) & 0x3FF, 3, "TXFIFO_CNT reflects fill");
+        assert_eq!(
+            (u.status_word() >> 16) & 0x3FF,
+            3,
+            "TXFIFO_CNT reflects fill"
+        );
         assert!(sink.lock().unwrap().is_empty(), "nothing shifted out yet");
         drain_all(&mut u);
         assert_eq!(sink.lock().unwrap().as_slice(), b"Hi!");
@@ -378,7 +388,11 @@ mod tests {
         u.push_rx(b'A');
         u.push_rx(b'B');
         assert_eq!(u.status_word() & 0x3FF, 2, "RXFIFO_CNT=2");
-        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), b'A' as u32, "first read pops A");
+        assert_eq!(
+            u.read_u32(OFF_FIFO).unwrap(),
+            b'A' as u32,
+            "first read pops A"
+        );
         assert_eq!(u.status_word() & 0x3FF, 1, "one consumed");
         assert_eq!(u.read(OFF_FIFO).unwrap(), b'B', "byte read pops B");
         assert_eq!(u.status_word() & 0x3FF, 0, "RX FIFO empty");
@@ -415,7 +429,11 @@ mod tests {
             u.push_rx(i as u8);
         }
         assert_eq!(u.rx_fifo.borrow().len(), FIFO_LEN, "RX capped");
-        assert_eq!(u.int_raw() & INT_RXFIFO_OVF, INT_RXFIFO_OVF, "overflow latched");
+        assert_eq!(
+            u.int_raw() & INT_RXFIFO_OVF,
+            INT_RXFIFO_OVF,
+            "overflow latched"
+        );
         u.write_u32(OFF_INT_CLR, INT_RXFIFO_OVF).unwrap();
         assert_eq!(u.int_raw() & INT_RXFIFO_OVF, 0);
     }
@@ -426,7 +444,8 @@ mod tests {
         u.push_tx(b'x');
         u.push_rx(b'y');
         // TXFIFO_RST (b18) + RXFIFO_RST (b17) pulse → both FIFOs cleared.
-        u.write_u32(OFF_CONF0, CONF0_TXFIFO_RST | CONF0_RXFIFO_RST).unwrap();
+        u.write_u32(OFF_CONF0, CONF0_TXFIFO_RST | CONF0_RXFIFO_RST)
+            .unwrap();
         assert_eq!(u.tx_fifo.len(), 0, "TX FIFO flushed");
         assert_eq!(u.rx_fifo.borrow().len(), 0, "RX FIFO flushed");
     }

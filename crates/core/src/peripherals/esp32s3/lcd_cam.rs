@@ -308,7 +308,7 @@ impl Peripheral for Esp32s3LcdCam {
             // accept writes (masked) so test fixtures can seed raw bits.
             REG_LC_DMA_INT_RAW => self.int_raw = value & INT_ALL_BITS,
             REG_LC_DMA_INT_CLR => self.int_raw &= !value, // W1C
-            _ => {} // Accept-and-ignore other offsets.
+            _ => {}                                       // Accept-and-ignore other offsets.
         }
         Ok(())
     }
@@ -497,8 +497,11 @@ mod tests {
     #[test]
     fn int_clr_only_clears_targeted_bits() {
         let mut p = new_lcd_cam();
-        p.write_u32(REG_LC_DMA_INT_RAW, INT_LCD_TRANS_DONE | INT_CAM_VSYNC | INT_LCD_VSYNC)
-            .unwrap();
+        p.write_u32(
+            REG_LC_DMA_INT_RAW,
+            INT_LCD_TRANS_DONE | INT_CAM_VSYNC | INT_LCD_VSYNC,
+        )
+        .unwrap();
         p.write_u32(REG_LC_DMA_INT_CLR, INT_CAM_VSYNC).unwrap();
         assert_eq!(
             p.read_u32(REG_LC_DMA_INT_RAW).unwrap(),
@@ -560,10 +563,7 @@ mod tests {
             CAM_START_BIT
         );
         // Vsync not latched until a tick advances the frame.
-        assert_eq!(
-            p.read_u32(REG_LC_DMA_INT_RAW).unwrap() & INT_CAM_VSYNC,
-            0
-        );
+        assert_eq!(p.read_u32(REG_LC_DMA_INT_RAW).unwrap() & INT_CAM_VSYNC, 0);
         p.tick();
         assert_eq!(
             p.read_u32(REG_LC_DMA_INT_RAW).unwrap() & INT_CAM_VSYNC,

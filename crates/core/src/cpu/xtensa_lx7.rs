@@ -617,10 +617,7 @@ impl XtensaLx7 {
         // F5: per-access window-overflow check — faithful mode only. In
         // shadow mode this stays off (the shadow spill on CALL handles wraps;
         // vectoring here would double-fault on an unprimed save chain).
-        if self.faithful_windows
-            && self.ps.woe()
-            && !self.ps.excm()
-            && !matches!(ins, Entry { .. })
+        if self.faithful_windows && self.ps.woe() && !self.ps.excm() && !matches!(ins, Entry { .. })
         {
             let max_reg = ins.max_logical_reg();
             if max_reg >= 4 {
@@ -2158,7 +2155,8 @@ impl XtensaLx7 {
             RoundS { ar, fs, imm } => {
                 // round half-to-even (IEEE default), matching round.s.
                 let v = self.fget(fs) * (1u32 << imm) as f32;
-                self.regs.write_logical(ar, round_half_even(v) as i32 as u32);
+                self.regs
+                    .write_logical(ar, round_half_even(v) as i32 as u32);
                 self.pc = self.pc.wrapping_add(len);
             }
             CeilS { ar, fs, imm } => {
@@ -2497,11 +2495,14 @@ impl XtensaLx7 {
         let user_mode = (self.ps.as_raw() >> 5) & 1 == 1;
         self.ps.set_excm(true);
         let vecbase = self.sr.read(VECBASE);
-        let offset = if user_mode { 0x340 } else { KERNEL_VECTOR_OFFSET };
+        let offset = if user_mode {
+            0x340
+        } else {
+            KERNEL_VECTOR_OFFSET
+        };
         self.pc = vecbase.wrapping_add(offset);
         Ok(())
     }
-
 }
 
 impl Default for XtensaLx7 {
@@ -3014,7 +3015,7 @@ mod fp_tests {
         let mut cpu = XtensaLx7::new();
         let mut bus = RamBus::new();
         cpu.regs.write_logical(4, 0x4048_F5C3); // bits of 3.14
-        // wfr f3, a4 → 0xfa3450
+                                                // wfr f3, a4 → 0xfa3450
         run(&mut cpu, &mut bus, 0xfa3450);
         assert_eq!(cpu.fp[3], 0x4048_F5C3);
         // rfr a5, f3 → 0xfa5340 (ar=5, fs=3)

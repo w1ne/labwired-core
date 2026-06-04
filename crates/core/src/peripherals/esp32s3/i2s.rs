@@ -388,10 +388,12 @@ mod tests {
         let mut p = Esp32s3I2s::new(I2S0_INTR_SOURCE_ID);
         // Write TX_RESET | TX_FIFO_RESET pulses (bits 0,1). They must read
         // back as 0 — real silicon self-clears once reset completes.
-        p.write_u32(REG_TX_CONF, RESET_BIT | FIFO_RESET_BIT).unwrap();
+        p.write_u32(REG_TX_CONF, RESET_BIT | FIFO_RESET_BIT)
+            .unwrap();
         assert_eq!(p.read_u32(REG_TX_CONF).unwrap() & PULSE_BITS, 0);
 
-        p.write_u32(REG_RX_CONF, RESET_BIT | FIFO_RESET_BIT).unwrap();
+        p.write_u32(REG_RX_CONF, RESET_BIT | FIFO_RESET_BIT)
+            .unwrap();
         assert_eq!(p.read_u32(REG_RX_CONF).unwrap() & PULSE_BITS, 0);
     }
 
@@ -439,10 +441,7 @@ mod tests {
             .unwrap();
         // Clear only TX_DONE; the others remain.
         p.write_u32(REG_INT_CLR, INT_TX_DONE).unwrap();
-        assert_eq!(
-            p.read_u32(REG_INT_RAW).unwrap(),
-            INT_RX_DONE | INT_TX_HUNG
-        );
+        assert_eq!(p.read_u32(REG_INT_RAW).unwrap(), INT_RX_DONE | INT_TX_HUNG);
         // INT_CLR reads back as 0.
         assert_eq!(p.read_u32(REG_INT_CLR).unwrap(), 0);
     }

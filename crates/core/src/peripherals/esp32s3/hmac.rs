@@ -491,9 +491,13 @@ mod tests {
     fn control_round_trip_and_error_flag() {
         let mut hmac = Esp32s3Hmac::new(7);
 
-        hmac.write_u32(REG_SET_PARA_PURPOSE, PURPOSE_DOWN_DS).unwrap();
+        hmac.write_u32(REG_SET_PARA_PURPOSE, PURPOSE_DOWN_DS)
+            .unwrap();
         hmac.write_u32(REG_SET_PARA_KEY, 5).unwrap();
-        assert_eq!(hmac.read_u32(REG_SET_PARA_PURPOSE).unwrap(), PURPOSE_DOWN_DS);
+        assert_eq!(
+            hmac.read_u32(REG_SET_PARA_PURPOSE).unwrap(),
+            PURPOSE_DOWN_DS
+        );
         // key field is [2:0], so 5 round-trips intact.
         assert_eq!(hmac.read_u32(REG_SET_PARA_KEY).unwrap(), 5);
 
@@ -504,7 +508,11 @@ mod tests {
         // Unknown purpose => error asserted.
         hmac.write_u32(REG_SET_PARA_PURPOSE, 0xF).unwrap();
         hmac.write_u32(REG_SET_PARA_FINISH, 1).unwrap();
-        assert_eq!(hmac.read_u32(REG_QUERY_ERROR).unwrap(), 1, "bad purpose errors");
+        assert_eq!(
+            hmac.read_u32(REG_QUERY_ERROR).unwrap(),
+            1,
+            "bad purpose errors"
+        );
 
         // DATE register round-trips (masked to 30 bits).
         hmac.write_u32(REG_DATE, 0xFFFF_FFFF).unwrap();

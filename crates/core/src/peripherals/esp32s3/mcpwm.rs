@@ -131,9 +131,9 @@ const OP_GEN_A: u64 = 0x14; // generator A actions (round-trip)
 const OP_GEN_B: u64 = 0x18; // generator B actions (round-trip)
 const OP_DT_CFG: u64 = 0x1C; // dead-time config (round-trip)
 const OP_DT_FED: u64 = 0x20; // dead-time falling-edge delay (round-trip)
-// 0x24 would be DT_RED of the next op-stride; RED is folded into the overflow
-// map for fidelity — the three modeled DT words (CFG/FED + the carry) suffice
-// for the comparator/timer behaviour we expose.
+                             // 0x24 would be DT_RED of the next op-stride; RED is folded into the overflow
+                             // map for fidelity — the three modeled DT words (CFG/FED + the carry) suffice
+                             // for the comparator/timer behaviour we expose.
 
 // ── Interrupt block ──
 const REG_INT_ENA: u64 = 0x110;
@@ -160,8 +160,8 @@ const TIMER_MODE_DOWN: u32 = 2;
 const TIMER_MODE_UPDOWN: u32 = 3;
 const TIMER_CFG1_START_SHIFT: u32 = 3;
 const TIMER_CFG1_START_MASK: u32 = 0x3; // [4:3]
-// START field: 0 stop-at-TEZ, 1 stop-at-next-TEZ, 2 run-continuously (free
-// run). We treat any non-zero START as "running" once a count mode is set.
+                                        // START field: 0 stop-at-TEZ, 1 stop-at-next-TEZ, 2 run-continuously (free
+                                        // run). We treat any non-zero START as "running" once a count mode is set.
 
 // ── TIMERx_STATUS fields ──
 const TIMER_STATUS_VALUE_MASK: u32 = 0xFFFF; // [15:0]
@@ -404,8 +404,7 @@ impl Esp32s3Mcpwm {
                     // and reset the fractional accumulator so timing is
                     // deterministic from the start edge.
                     if !was_running && self.timers[t].running() {
-                        self.timers[t].counting_down =
-                            self.timers[t].mode() == TIMER_MODE_DOWN;
+                        self.timers[t].counting_down = self.timers[t].mode() == TIMER_MODE_DOWN;
                         self.timers[t].accum = 0;
                         if self.timers[t].mode() == TIMER_MODE_DOWN {
                             // Down mode begins from the period value.
@@ -441,7 +440,7 @@ impl Esp32s3Mcpwm {
             // INT_RAW is HW-set; firmware may force modeled bits (some drivers
             // do for self-test). Restrict to modeled bits.
             REG_INT_RAW => self.int_raw = value & INT_MODELED_MASK,
-            REG_INT_ST => {} // read-only
+            REG_INT_ST => {}                       // read-only
             REG_INT_CLR => self.int_raw &= !value, // W1C
             _ => {
                 self.overflow.insert(offset, value);
@@ -700,7 +699,8 @@ mod tests {
         assert_eq!(p.read_u32(REG_CLK_CFG).unwrap(), 0x0000_0007);
 
         // CFG0 / CFG1 round-trip verbatim for each timer, independently.
-        p.write_u32(timer_off(1, TIMER_CFG0), cfg0(3, 1000)).unwrap();
+        p.write_u32(timer_off(1, TIMER_CFG0), cfg0(3, 1000))
+            .unwrap();
         p.write_u32(timer_off(1, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         assert_eq!(p.read_u32(timer_off(1, TIMER_CFG0)).unwrap(), cfg0(3, 1000));
@@ -737,14 +737,18 @@ mod tests {
         for _ in 0..500 {
             p.tick();
         }
-        assert_eq!(p.read_word(timer_off(0, TIMER_STATUS)) & TIMER_STATUS_VALUE_MASK, 0);
+        assert_eq!(
+            p.read_word(timer_off(0, TIMER_STATUS)) & TIMER_STATUS_VALUE_MASK,
+            0
+        );
     }
 
     #[test]
     fn up_mode_counter_advances_at_prescale_rate() {
         let mut p = new_unit(); // cpu_per_apb == 1
                                 // prescale 0 → div (0+1)*(clk0+1)=1 → 1 count/tick. period large.
-        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000)).unwrap();
+        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000))
+            .unwrap();
         p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         for _ in 0..5 {
@@ -762,7 +766,8 @@ mod tests {
     fn timer_prescale_divides_count_rate() {
         let mut p = new_unit();
         // timer prescale 3 → (3+1)=4 ticks per count.
-        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(3, 10_000)).unwrap();
+        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(3, 10_000))
+            .unwrap();
         p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         for _ in 0..40 {
@@ -775,7 +780,8 @@ mod tests {
     fn clk_prescale_divides_count_rate() {
         let mut p = new_unit();
         p.write_u32(REG_CLK_CFG, 1).unwrap(); // (1+1) = 2 ticks per count
-        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000)).unwrap();
+        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000))
+            .unwrap();
         p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         for _ in 0..20 {
@@ -796,11 +802,19 @@ mod tests {
         p.tick();
         p.tick();
         assert_eq!(p.timer_value(0), 3);
-        assert_ne!(p.read_word(REG_INT_RAW) & int_tep_bit(0), 0, "TEP latched at period");
+        assert_ne!(
+            p.read_word(REG_INT_RAW) & int_tep_bit(0),
+            0,
+            "TEP latched at period"
+        );
         // Next tick wraps to 0 → TEZ latches.
         p.tick();
         assert_eq!(p.timer_value(0), 0);
-        assert_ne!(p.read_word(REG_INT_RAW) & int_tez_bit(0), 0, "TEZ latched at zero");
+        assert_ne!(
+            p.read_word(REG_INT_RAW) & int_tez_bit(0),
+            0,
+            "TEZ latched at zero"
+        );
     }
 
     #[test]
@@ -846,7 +860,8 @@ mod tests {
     #[test]
     fn int_clr_is_write_one_to_clear() {
         let mut p = new_unit();
-        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(1)).unwrap();
+        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(1))
+            .unwrap();
         assert_eq!(p.read_word(REG_INT_RAW), int_tez_bit(0) | int_tep_bit(1));
         // Clear only the TEZ bit.
         p.write_u32(REG_INT_CLR, int_tez_bit(0)).unwrap();
@@ -858,7 +873,8 @@ mod tests {
     #[test]
     fn int_st_masks_raw_with_ena() {
         let mut p = new_unit();
-        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(0)).unwrap();
+        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(0))
+            .unwrap();
         p.write_u32(REG_INT_ENA, int_tep_bit(0)).unwrap();
         assert_eq!(p.read_word(REG_INT_ST), int_tep_bit(0));
     }
@@ -893,7 +909,10 @@ mod tests {
                 break;
             }
         }
-        assert!(fired, "TEP IRQ should reach the matrix source while enabled");
+        assert!(
+            fired,
+            "TEP IRQ should reach the matrix source while enabled"
+        );
     }
 
     #[test]

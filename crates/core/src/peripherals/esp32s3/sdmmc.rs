@@ -109,17 +109,31 @@ use std::collections::HashMap;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 // ── Register offsets ──
+// Several entries map the full controller register file for documentation;
+// the model only drives the subset the boot-ROM probe touches today.
+#[allow(dead_code)]
 const CTRL: u64 = 0x00;
+#[allow(dead_code)]
 const PWREN: u64 = 0x04;
+#[allow(dead_code)]
 const CLKDIV: u64 = 0x08;
+#[allow(dead_code)]
 const CLKSRC: u64 = 0x0C;
+#[allow(dead_code)]
 const CLKENA: u64 = 0x10;
+#[allow(dead_code)]
 const TMOUT: u64 = 0x14;
+#[allow(dead_code)]
 const CTYPE: u64 = 0x18;
+#[allow(dead_code)]
 const BLKSIZ: u64 = 0x1C;
+#[allow(dead_code)]
 const BYTCNT: u64 = 0x20;
+#[allow(dead_code)]
 const INTMASK: u64 = 0x24;
+#[allow(dead_code)]
 const CMDARG: u64 = 0x28;
+#[allow(dead_code)]
 const CMD: u64 = 0x2C;
 const RESP0: u64 = 0x30;
 const RESP1: u64 = 0x34;
@@ -291,7 +305,7 @@ impl Esp32s3Sdmmc {
             self.pending_cmd = None;
         }
         let _ = CTRL_DMA_RESET; // documented; no DMA engine modeled
-        // Store CTRL with the self-clearing reset bits cleared.
+                                // Store CTRL with the self-clearing reset bits cleared.
         self.set_reg(CTRL, value & !CTRL_RESET_BITS);
     }
 
@@ -305,8 +319,8 @@ impl Esp32s3Sdmmc {
                 data_expected: value & CMD_DATA_EXPECTED != 0,
             });
             let _ = CMD_INDEX_MASK; // index is round-tripped, not acted upon
-            // Clear start_cmd: the controller deasserts it once the command is
-            // loaded into the command path.
+                                    // Clear start_cmd: the controller deasserts it once the command is
+                                    // loaded into the command path.
             self.set_reg(CMD, value & !CMD_START);
         } else {
             self.set_reg(CMD, value);
@@ -428,7 +442,10 @@ mod tests {
         // No interrupts latched, no response, FIFO empty.
         assert_eq!(h.read_u32(RINTSTS).unwrap(), 0);
         assert_eq!(h.read_u32(RESP0).unwrap(), 0);
-        assert_eq!(h.read_u32(STATUS).unwrap() & STATUS_FIFO_EMPTY, STATUS_FIFO_EMPTY);
+        assert_eq!(
+            h.read_u32(STATUS).unwrap() & STATUS_FIFO_EMPTY,
+            STATUS_FIFO_EMPTY
+        );
         // DATA_BUSY never asserted.
         assert_eq!(h.read_u32(STATUS).unwrap() & STATUS_DATA_BUSY, 0);
     }
@@ -461,11 +478,18 @@ mod tests {
     fn ctrl_reset_bits_self_clear() {
         let mut h = new_host();
         // INT_ENABLE should persist; the reset bits should read back 0.
-        h.write_u32(CTRL, CTRL_CONTROLLER_RESET | CTRL_FIFO_RESET | CTRL_DMA_RESET | CTRL_INT_ENABLE)
-            .unwrap();
+        h.write_u32(
+            CTRL,
+            CTRL_CONTROLLER_RESET | CTRL_FIFO_RESET | CTRL_DMA_RESET | CTRL_INT_ENABLE,
+        )
+        .unwrap();
         let ctrl = h.read_u32(CTRL).unwrap();
         assert_eq!(ctrl & CTRL_RESET_BITS, 0, "reset bits self-clear");
-        assert_eq!(ctrl & CTRL_INT_ENABLE, CTRL_INT_ENABLE, "INT_ENABLE persists");
+        assert_eq!(
+            ctrl & CTRL_INT_ENABLE,
+            CTRL_INT_ENABLE,
+            "INT_ENABLE persists"
+        );
     }
 
     #[test]
@@ -476,7 +500,11 @@ mod tests {
         // start_cmd auto-clears so the "command accepted" poll exits.
         assert_eq!(h.read_u32(CMD).unwrap() & CMD_START, 0, "start_cmd clears");
         // CMD_DONE not yet latched (one-cycle latency).
-        assert_eq!(h.read_u32(RINTSTS).unwrap() & INT_CMD_DONE, 0, "not done yet");
+        assert_eq!(
+            h.read_u32(RINTSTS).unwrap() & INT_CMD_DONE,
+            0,
+            "not done yet"
+        );
         // tick latches CMD_DONE.
         h.tick();
         assert_eq!(
@@ -507,7 +535,11 @@ mod tests {
         h.tick();
         let rint = h.read_u32(RINTSTS).unwrap();
         assert_eq!(rint & INT_CMD_DONE, INT_CMD_DONE, "CMD_DONE latched");
-        assert_eq!(rint & INT_DATA_OVER, INT_DATA_OVER, "DATA_OVER latched for data cmd");
+        assert_eq!(
+            rint & INT_DATA_OVER,
+            INT_DATA_OVER,
+            "DATA_OVER latched for data cmd"
+        );
     }
 
     #[test]
@@ -569,7 +601,10 @@ mod tests {
         let r = h.tick();
         assert_eq!(r.explicit_irqs.as_deref(), Some(&[SDIO_HOST_SOURCE][..]));
         // Level-sensitive: stays asserted while latched + unmasked + enabled.
-        assert_eq!(h.tick().explicit_irqs.as_deref(), Some(&[SDIO_HOST_SOURCE][..]));
+        assert_eq!(
+            h.tick().explicit_irqs.as_deref(),
+            Some(&[SDIO_HOST_SOURCE][..])
+        );
         // ACK via W1C → IRQ de-asserts.
         h.write_u32(RINTSTS, INT_CMD_DONE).unwrap();
         assert!(h.tick().explicit_irqs.is_none(), "IRQ de-asserts after ACK");
@@ -584,7 +619,10 @@ mod tests {
         assert!(h.tick().explicit_irqs.is_none(), "masked → no IRQ");
         // Unmask now → next tick emits (raw bit persists).
         h.write_u32(INTMASK, INT_CMD_DONE).unwrap();
-        assert_eq!(h.tick().explicit_irqs.as_deref(), Some(&[SDIO_HOST_SOURCE][..]));
+        assert_eq!(
+            h.tick().explicit_irqs.as_deref(),
+            Some(&[SDIO_HOST_SOURCE][..])
+        );
     }
 
     #[test]
@@ -598,7 +636,10 @@ mod tests {
         assert_eq!(h.read_u32(MINTSTS).unwrap() & INT_CMD_DONE, INT_CMD_DONE);
         // Turn the global enable on → next tick emits.
         h.write_u32(CTRL, CTRL_INT_ENABLE).unwrap();
-        assert_eq!(h.tick().explicit_irqs.as_deref(), Some(&[SDIO_HOST_SOURCE][..]));
+        assert_eq!(
+            h.tick().explicit_irqs.as_deref(),
+            Some(&[SDIO_HOST_SOURCE][..])
+        );
     }
 
     #[test]
@@ -615,7 +656,7 @@ mod tests {
         // Setting start_cmd via the high byte (bit 31 lives in CMD+3) launches.
         h.write(CMD, CMD_RESPONSE_EXPECT as u8).unwrap(); // low byte: response_expect
         h.write(CMD + 3, 0x80).unwrap(); // high byte sets bit 31 (start_cmd)
-        // start_cmd cleared after acceptance.
+                                         // start_cmd cleared after acceptance.
         assert_eq!(h.read_u32(CMD).unwrap() & CMD_START, 0);
         h.tick();
         assert_eq!(h.read_u32(RINTSTS).unwrap() & INT_CMD_DONE, INT_CMD_DONE);
@@ -635,7 +676,11 @@ mod tests {
         h.write_u32(CMD, CMD_START).unwrap();
         h.write_u32(CTRL, CTRL_FIFO_RESET).unwrap();
         h.tick();
-        assert_eq!(h.read_u32(RINTSTS).unwrap() & INT_CMD_DONE, 0, "pending cmd dropped by reset");
+        assert_eq!(
+            h.read_u32(RINTSTS).unwrap() & INT_CMD_DONE,
+            0,
+            "pending cmd dropped by reset"
+        );
     }
 
     #[test]

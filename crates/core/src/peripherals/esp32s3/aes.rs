@@ -223,11 +223,10 @@ impl Esp32s3Aes {
             }
             // TEXT_OUT is read-only on silicon; ignore writes.
             MODE_REG => self.mode = value & 0x7,
-            TRIGGER_REG => {
-                if value & 1 != 0 {
+            TRIGGER_REG
+                if value & 1 != 0 => {
                     self.trigger();
                 }
-            }
             // STATE is read-only.
             o if (IV_BASE..IV_BASE + 0x10).contains(&o) => {
                 self.iv[((o - IV_BASE) / 4) as usize] = value;
@@ -236,12 +235,11 @@ impl Esp32s3Aes {
             BLOCK_MODE_REG => self.block_mode = value,
             BLOCK_NUM_REG => self.block_num = value,
             INC_SEL_REG => self.inc_sel = value,
-            INT_CLEAR_REG => {
+            INT_CLEAR_REG
                 // W1C of the DMA-done interrupt (bit 0).
-                if value & 1 != 0 {
+                if value & 1 != 0 => {
                     self.int_raw = false;
                 }
-            }
             INT_ENA_REG => self.int_ena = value & 1 != 0,
             DMA_EXIT_REG => { /* release DMA: no persistent state to clear */ }
             _ => {}
@@ -282,12 +280,8 @@ impl Esp32s3Aes {
 
         // Write result to TEXT_OUT words (same LE packing).
         for i in 0..4 {
-            self.text_out[i] = u32::from_le_bytes([
-                out[i * 4],
-                out[i * 4 + 1],
-                out[i * 4 + 2],
-                out[i * 4 + 3],
-            ]);
+            self.text_out[i] =
+                u32::from_le_bytes([out[i * 4], out[i * 4 + 1], out[i * 4 + 2], out[i * 4 + 3]]);
         }
 
         // Typical mode: STATE goes DONE (we model the transform as
@@ -706,12 +700,8 @@ mod tests {
         ];
         let mut a = Esp32s3Aes::new(AES_SOURCE);
         for i in 0..8 {
-            let w = u32::from_le_bytes([
-                key[i * 4],
-                key[i * 4 + 1],
-                key[i * 4 + 2],
-                key[i * 4 + 3],
-            ]);
+            let w =
+                u32::from_le_bytes([key[i * 4], key[i * 4 + 1], key[i * 4 + 2], key[i * 4 + 3]]);
             wr(&mut a, KEY_BASE + (i as u64) * 4, w);
         }
         load_block(&mut a, TEXT_IN_BASE, &PT_128);

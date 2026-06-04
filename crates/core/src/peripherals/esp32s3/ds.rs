@@ -350,8 +350,8 @@ impl Esp32s3Ds {
     /// Write the 32-bit register at an aligned offset, dispatching triggers.
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            OFF_SET_START => {
-                if value & 1 != 0 {
+            OFF_SET_START
+                if value & 1 != 0 => {
                     // Arm the engine and assert busy; the modexp runs on the
                     // next tick. Reset stale result/status.
                     self.started = true;
@@ -362,21 +362,18 @@ impl Esp32s3Ds {
                         *w = 0;
                     }
                 }
-            }
-            OFF_SET_CONTINUE => {
+            OFF_SET_CONTINUE
                 // Operands now loaded → run. (Also the legacy SET_ME activate
                 // alias; treated identically.) Only meaningful after START.
-                if value & 1 != 0 && self.started {
+                if value & 1 != 0 && self.started => {
                     self.busy = true;
                 }
-            }
-            OFF_SET_FINISH => {
-                if value & 1 != 0 {
+            OFF_SET_FINISH
+                if value & 1 != 0 => {
                     // Return the engine to idle; the signature stays readable.
                     self.started = false;
                     self.busy = false;
                 }
-            }
             OFF_QUERY_BUSY | OFF_QUERY_KEY_WRONG | OFF_QUERY_CHECK => {} // RO
             OFF_DATE => self.date = value,
             // Operand windows (Y/M/RB/BOX); Z is read-only (ignored by

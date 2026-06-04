@@ -343,7 +343,7 @@ mod tests {
         p.write_u32(ch_off(0, CH_HPOINT), 0x1234 & HPOINT_FIELD_MASK)
             .unwrap();
         p.write_u32(ch_off(0, CH_DUTY), 0x0001_2340).unwrap(); // duty<<4
-        // CONF1 without DUTY_START — round-trips verbatim.
+                                                               // CONF1 without DUTY_START — round-trips verbatim.
         p.write_u32(ch_off(0, CH_CONF1), 0x4000_0000).unwrap(); // DUTY_INC only
 
         assert_eq!(p.read_u32(ch_off(0, CH_CONF0)).unwrap(), 0x0000_0007);

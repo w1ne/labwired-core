@@ -155,7 +155,9 @@ impl SpiMemFlash {
         let debug = std::env::var("LABWIRED_SPI_DEBUG").is_ok();
         if debug {
             let f = self.flash.lock().unwrap();
-            let peek: Vec<u8> = (0..4).map(|i| f.get(addr + i).copied().unwrap_or(0xFF)).collect();
+            let peek: Vec<u8> = (0..4)
+                .map(|i| f.get(addr + i).copied().unwrap_or(0xFF))
+                .collect();
             eprintln!(
                 "spimem1: cmd=0x{cmd:02x} ADDR_REG=0x{addr_reg:08x} addr=0x{addr:06x} bytes={read_bytes} flash[addr..]={peek:02x?}"
             );
@@ -317,12 +319,24 @@ mod tests {
         // FLASH_RDSR (bit 27): captures status into RD_STATUS (0x2C).
         c.write_u32(CMD, FLASH_RDSR).unwrap();
         let status = c.read_u32(RD_STATUS).unwrap();
-        assert_eq!(status & STATUS_WEL as u32, STATUS_WEL as u32, "WEL must be set");
-        assert_eq!(status & STATUS_WIP as u32, 0, "WIP must be clear (not busy)");
+        assert_eq!(
+            status & STATUS_WEL as u32,
+            STATUS_WEL as u32,
+            "WEL must be set"
+        );
+        assert_eq!(
+            status & STATUS_WIP as u32,
+            0,
+            "WIP must be clear (not busy)"
+        );
         // FLASH_WRDI (bit 29): clears the latch.
         c.write_u32(CMD, FLASH_WRDI).unwrap();
         c.write_u32(CMD, FLASH_RDSR).unwrap();
-        assert_eq!(c.read_u32(RD_STATUS).unwrap() & STATUS_WEL as u32, 0, "WEL cleared");
+        assert_eq!(
+            c.read_u32(RD_STATUS).unwrap() & STATUS_WEL as u32,
+            0,
+            "WEL cleared"
+        );
     }
 
     #[test]

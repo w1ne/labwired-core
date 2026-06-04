@@ -79,9 +79,7 @@ impl Peripheral for Esp32s3Core1Control {
             let prev = self.regs[i];
             self.regs[i] = value;
             if std::env::var("LABWIRED_CCDBG").is_ok() {
-                eprintln!(
-                    "core1_control: write CONTROL_{i} prev=0x{prev:08x} val=0x{value:08x}"
-                );
+                eprintln!("core1_control: write CONTROL_{i} prev=0x{prev:08x} val=0x{value:08x}");
             }
             // CONTROL_0: RESETING 1→0 == APP_CPU released from reset.
             if i == 0 && (prev & RESETING) != 0 && (value & RESETING) == 0 {

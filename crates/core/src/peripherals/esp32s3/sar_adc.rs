@@ -138,8 +138,12 @@ const INT_THRES1_HIGH: u32 = 1 << 28;
 const INT_THRES0_LOW: u32 = 1 << 27;
 const INT_THRES1_LOW: u32 = 1 << 26;
 /// Every interrupt bit the controller defines.
-const INT_MASK: u32 =
-    INT_ADC1_DONE | INT_ADC2_DONE | INT_THRES0_HIGH | INT_THRES1_HIGH | INT_THRES0_LOW | INT_THRES1_LOW;
+const INT_MASK: u32 = INT_ADC1_DONE
+    | INT_ADC2_DONE
+    | INT_THRES0_HIGH
+    | INT_THRES1_HIGH
+    | INT_THRES0_LOW
+    | INT_THRES1_LOW;
 
 /// Default value of CTRL_DATE register on real S3 silicon.
 const CTRL_DATE_DEFAULT: u32 = 0x0210_1180;
@@ -525,10 +529,15 @@ mod tests {
     #[test]
     fn forced_start_completes() {
         let mut a = Esp32s3SarAdc::new(SRC);
-        a.write_u32(CTRL, a.read_u32(CTRL).unwrap() | CTRL_START_FORCE | CTRL_START)
-            .unwrap();
+        a.write_u32(
+            CTRL,
+            a.read_u32(CTRL).unwrap() | CTRL_START_FORCE | CTRL_START,
+        )
+        .unwrap();
         assert_ne!(a.read_u32(INT_RAW).unwrap() & INT_ADC1_DONE, 0);
-        assert!(a.read_u32(SARADC1_DATA_STATUS).unwrap() & 0x0FFF <= 4095);
+        // DATA field is the low 12 bits; the conversion result must fit it.
+        let data = a.read_u32(SARADC1_DATA_STATUS).unwrap() & 0x0FFF;
+        assert!(data <= 4095);
     }
 
     #[test]
@@ -560,7 +569,10 @@ mod tests {
         }
         assert_eq!(seq_a, seq_b, "sample sequences diverged");
         // And the sequence actually varies (not a stuck constant).
-        assert!(seq_a.windows(2).any(|w| w[0] != w[1]), "samples never changed");
+        assert!(
+            seq_a.windows(2).any(|w| w[0] != w[1]),
+            "samples never changed"
+        );
     }
 
     #[test]

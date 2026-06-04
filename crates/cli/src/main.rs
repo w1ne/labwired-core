@@ -178,6 +178,7 @@ pub struct RunArgs {
     /// Boot from the real ROM reset vector (0x40000400) instead of fast-booting
     /// the ELF. The chip's real boot ROM runs and loads the 2nd-stage bootloader
     /// + app through the SPI-flash controller — the faithful chip-model path.
+    ///
     /// Requires LABWIRED_ESP32S3_ROM and LABWIRED_ESP32S3_FLASH to be set.
     #[arg(long)]
     pub rom_boot: bool,
@@ -989,7 +990,7 @@ fn run_firmware(args: RunArgs) -> ExitCode {
                     }
                 }
             }
-            if steps % 10_000_000 == 0 {
+            if steps.is_multiple_of(10_000_000) {
                 eprintln!(
                     "SMP: step {steps:>11}  pro=0x{:08x}  app=0x{:08x}",
                     cpu.get_pc(),

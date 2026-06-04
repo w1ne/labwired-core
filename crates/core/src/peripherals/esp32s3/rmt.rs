@@ -49,6 +49,7 @@
 //!   * latch that channel's `CHn_TX_END` bit in INT_RAW, and
 //!   * clear the stored `TX_START` bit (it is a write-trigger `WT` field that
 //!     self-clears on real silicon once the FSM consumes it).
+//!
 //! The interrupt then propagates through INT_ST/INT_ENA exactly like hardware.
 //!
 //! ## Interrupt source
@@ -145,11 +146,7 @@ impl Esp32s3Rmt {
             // RX CONF0 reset default: DIV_CNT=2 (bits[7:0]), IDLE_THRES=32767
             // (bits[22:8] = 0x7FFF<<8), MEM_SIZE=1 (bits[27:24]),
             // CARRIER_EN=1 (28), CARRIER_OUT_LV=1 (29).
-            rx_conf0: [(2)
-                | (0x7FFF << 8)
-                | (1 << 24)
-                | (1 << 28)
-                | (1 << 29); RX_CHANNELS],
+            rx_conf0: [(2) | (0x7FFF << 8) | (1 << 24) | (1 << 28) | (1 << 29); RX_CHANNELS],
             // RX CONF1 reset default: MEM_OWNER=1 (bit 3), RX_FILTER_THRES=15
             // (bits[12:5] = 15<<5 = 0x1E0) → 0x1E8.
             rx_conf1: [(1 << 3) | (15 << 5); RX_CHANNELS],

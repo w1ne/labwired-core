@@ -11,9 +11,7 @@
 
 use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
-use crate::peripherals::esp32s3::flash_xip::{
-    new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral,
-};
+use crate::peripherals::esp32s3::flash_xip::{new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral};
 use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
 use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_INTR_SOURCE_ID, I2C0_SIZE};
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
@@ -715,7 +713,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(RamPeripheral::new(0x2000)),
     );
 
-
     // WiFi MAC / PHY / RNG block (0x6000_0000..0x6004_3000 on real silicon).
     // The only register esp_random() touches at boot is RNG_DATA_REG at
     // 0x6003_5144 — a read returns 32 random bits. A round-tripping stub
@@ -857,12 +854,30 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     let (icache_backing, dcache_backing) = if proper_model {
         let mmu_table = new_mmu_table();
         const XIP_WINDOW: u64 = 0x0200_0000; // 32 MiB linear MMU window
-        let icache =
-            FlashXipPeripheral::new_mmu(shared_flash_backing.clone(), 0x4200_0000, mmu_table.clone());
-        let dcache =
-            FlashXipPeripheral::new_mmu(shared_flash_backing.clone(), 0x3C00_0000, mmu_table.clone());
-        bus.add_peripheral("flash_icache", 0x4200_0000, XIP_WINDOW, None, Box::new(icache));
-        bus.add_peripheral("flash_dcache", 0x3C00_0000, XIP_WINDOW, None, Box::new(dcache));
+        let icache = FlashXipPeripheral::new_mmu(
+            shared_flash_backing.clone(),
+            0x4200_0000,
+            mmu_table.clone(),
+        );
+        let dcache = FlashXipPeripheral::new_mmu(
+            shared_flash_backing.clone(),
+            0x3C00_0000,
+            mmu_table.clone(),
+        );
+        bus.add_peripheral(
+            "flash_icache",
+            0x4200_0000,
+            XIP_WINDOW,
+            None,
+            Box::new(icache),
+        );
+        bus.add_peripheral(
+            "flash_dcache",
+            0x3C00_0000,
+            XIP_WINDOW,
+            None,
+            Box::new(dcache),
+        );
         // The MMU table register block the firmware programs (512 × u32).
         bus.add_peripheral(
             "mmu_table",
@@ -926,7 +941,13 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         // ── ROM thunk bank (legacy) ──────────────────────────────────────
         let mut rom_bank = RomThunkBank::new(0x4000_0000, 0x6_0000);
         register_default_thunks(&mut rom_bank);
-        bus.add_peripheral("rom_thunks", 0x4000_0000, 0x6_0000, None, Box::new(rom_bank));
+        bus.add_peripheral(
+            "rom_thunks",
+            0x4000_0000,
+            0x6_0000,
+            None,
+            Box::new(rom_bank),
+        );
     }
 
     // ── ROM data (DROM) ───────────────────────────────────────────────────
@@ -944,7 +965,9 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
                         bytes.len().min(0x2_0000)
                     );
                 }
-                Err(e) => eprintln!("configure_xtensa_esp32s3: LABWIRED_ESP32S3_DROM unreadable ({e})"),
+                Err(e) => {
+                    eprintln!("configure_xtensa_esp32s3: LABWIRED_ESP32S3_DROM unreadable ({e})")
+                }
             }
         }
     }
@@ -1047,9 +1070,11 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x6000_2000,
         0x100,
         None,
-        Box::new(crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-            shared_flash_backing.clone(),
-        )),
+        Box::new(
+            crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
+                shared_flash_backing.clone(),
+            ),
+        ),
     );
 
     // ── I²C0 + attached TMP102 (Plan 4) ──────────────────────────────────
@@ -1170,21 +1195,27 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x6000_0000,
         0x100,
         None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(true, 27)),
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(
+            true, 27,
+        )),
     );
     bus.add_peripheral(
         "uart1_s3",
         0x6001_0000,
         0x100,
         None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false, 28)),
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(
+            false, 28,
+        )),
     );
     bus.add_peripheral(
         "uart2_s3",
         0x6002_E000,
         0x100,
         None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false, 29)),
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(
+            false, 29,
+        )),
     );
 
     // ── Peripheral digital twins (PCNT / LEDC / TIMG0 / TIMG1) ───────────
@@ -1213,18 +1244,14 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x6001_F000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::timer_group::Esp32s3TimerGroup::new(
-            50, 240_000_000,
-        )),
+        Box::new(crate::peripherals::esp32s3::timer_group::Esp32s3TimerGroup::new(50, 240_000_000)),
     );
     bus.add_peripheral(
         "timg1_s3",
         0x6002_0000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::timer_group::Esp32s3TimerGroup::new(
-            53, 240_000_000,
-        )),
+        Box::new(crate::peripherals::esp32s3::timer_group::Esp32s3TimerGroup::new(53, 240_000_000)),
     );
 
     // ── More twins (SAR-ADC / RMT / GP-SPI2 / GP-SPI3) ───────────────────
@@ -1434,8 +1461,8 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // BBPLL/clock tuning path on the full ESP-IDF image.
     bank.register(0x4000_5d54, rom_thunks::nop_return_zero); // esp_rom_regi2c_read_mask
     bank.register(0x4000_5d6c, rom_thunks::nop_return_zero); // esp_rom_regi2c_write_mask
-    // memcpy and __udivdi3 do real work — emulate them so the firmware
-    // doesn't get garbage from the boot-init copy paths.
+                                                             // memcpy and __udivdi3 do real work — emulate them so the firmware
+                                                             // doesn't get garbage from the boot-init copy paths.
     bank.register(0x4000_11f4, rom_thunks::rom_memcpy);
     bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
     // libgcc 64-bit arithmetic + bit/byte helpers, in ROM. The full ESP-IDF
@@ -1451,10 +1478,10 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_23d0, rom_thunks::rom_lshrdi3); // __lshrdi3
     bank.register(0x4000_23f4, rom_thunks::rom_moddi3); // __moddi3
     bank.register(0x4000_2574, rom_thunks::rom_umoddi3); // __umoddi3
-    // eFuse config getters (flash pin/WP routing, UART/USB print-disable,
-    // boot-mode/security flags). The sim models none of these straps; return 0
-    // everywhere — the default SPI pin mapping and the permissive "feature not
-    // disabled" answer, which is what an unburned dev part reports.
+                                                         // eFuse config getters (flash pin/WP routing, UART/USB print-disable,
+                                                         // boot-mode/security flags). The sim models none of these straps; return 0
+                                                         // everywhere — the default SPI pin mapping and the permissive "feature not
+                                                         // disabled" answer, which is what an unburned dev part reports.
     for addr in [
         0x4000_1f74, // ets_efuse_get_spiconfig / get_flash_gpio_info
         0x4000_1f80, // ets_efuse_usb_print_is_disabled

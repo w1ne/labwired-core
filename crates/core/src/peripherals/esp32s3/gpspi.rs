@@ -10,6 +10,7 @@
 //! `Esp32s3Spi` instance models one controller; the parent registers two:
 //!   * SPI2 / FSPI @ `0x6002_4000`, intr-matrix source `ETS_SPI2_INTR_SOURCE` = 21
 //!   * SPI3        @ `0x6002_5000`, intr-matrix source `ETS_SPI3_INTR_SOURCE` = 22
+//!
 //! (sources verified from `soc/esp32s3/include/soc/interrupts.h`: the enum
 //! anchors `ETS_GPIO_INTR_SOURCE = 16`, then GPIO_NMI=17, GPIO2=18, GPIO_NMI2=19,
 //! SPI1=20, SPI2=21, SPI3=22, with `ETS_LCD_CAM_INTR_SOURCE = 24` confirming the
@@ -348,7 +349,11 @@ mod tests {
         // 5-byte (40-bit) transfer → W0 fully 0xFF, W1 low byte 0xFF only.
         s.write_u32(MS_DLEN, 40 - 1).unwrap();
         s.write_u32(CMD, USR_BIT).unwrap();
-        assert_eq!(s.read_u32(W0).unwrap(), 0xFFFF_FFFF, "first 4 MISO bytes 0xFF");
+        assert_eq!(
+            s.read_u32(W0).unwrap(),
+            0xFFFF_FFFF,
+            "first 4 MISO bytes 0xFF"
+        );
         assert_eq!(
             s.read_u32(W0 + 4).unwrap(),
             0x0000_00FF,
@@ -364,7 +369,11 @@ mod tests {
         assert_eq!(s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE, TRANS_DONE);
         // W1C: writing the bit clears it; writing 0 leaves others intact.
         s.write_u32(DMA_INT_CLR, TRANS_DONE).unwrap();
-        assert_eq!(s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE, 0, "W1C cleared");
+        assert_eq!(
+            s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE,
+            0,
+            "W1C cleared"
+        );
     }
 
     #[test]
