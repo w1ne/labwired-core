@@ -127,7 +127,10 @@ fn main() -> ! {
         // SYSCLK -> HSI16 (16 MHz) for a real 9600 baud on silicon.
         write_volatile(RCC_CR, read_volatile(RCC_CR) | RCC_CR_HSI16ON);
         spin_until(|| read_volatile(RCC_CR) & RCC_CR_HSI16RDY != 0);
-        write_volatile(RCC_CFGR, (read_volatile(RCC_CFGR) & !0b11) | RCC_CFGR_SW_HSI16);
+        write_volatile(
+            RCC_CFGR,
+            (read_volatile(RCC_CFGR) & !0b11) | RCC_CFGR_SW_HSI16,
+        );
         spin_until(|| read_volatile(RCC_CFGR) & (0b11 << 2) == RCC_CFGR_SWS_HSI16);
 
         // HSI48 (RC48) — the RNG kernel clock on the L0. Without it the RNG
@@ -145,10 +148,7 @@ fn main() -> ! {
             RCC_APB2ENR,
             read_volatile(RCC_APB2ENR) | TIM21EN | ADC1EN | SPI1EN,
         );
-        write_volatile(
-            RCC_APB1ENR,
-            read_volatile(RCC_APB1ENR) | USART2EN | I2C1EN,
-        );
+        write_volatile(RCC_APB1ENR, read_volatile(RCC_APB1ENR) | USART2EN | I2C1EN);
 
         gpio_usart_init();
     }
@@ -163,8 +163,16 @@ fn main() -> ! {
 
     // --- behavioural ----------------------------------------------------
     print_str(if test_tim() { "TIM=UP\n" } else { "TIM=FLAT\n" });
-    print_str(if test_i2c_nack() { "I2C=NACK\n" } else { "I2C=?\n" });
-    print_str(if test_spi_txe() { "SPI=TXE\n" } else { "SPI=?\n" });
+    print_str(if test_i2c_nack() {
+        "I2C=NACK\n"
+    } else {
+        "I2C=?\n"
+    });
+    print_str(if test_spi_txe() {
+        "SPI=TXE\n"
+    } else {
+        "SPI=?\n"
+    });
 
     // --- informational (analog / random; need not match) ----------------
     print_kv("ADC", test_adc_vrefint());
@@ -216,7 +224,7 @@ fn test_dma() -> bool {
         write_volatile(DMA_CMAR1, (&src as *const u32) as u32); // source
         write_volatile(DMA_CPAR1, (&mut dst as *mut u32) as u32); // destination
         write_volatile(DMA_CNDTR1, 4); // 4 bytes (default 8-bit size)
-        // MEM2MEM(14) | MINC(7) | PINC(6) | DIR(4) | EN(0)
+                                       // MEM2MEM(14) | MINC(7) | PINC(6) | DIR(4) | EN(0)
         write_volatile(
             DMA_CCR1,
             (1 << 14) | (1 << 7) | (1 << 6) | (1 << 4) | (1 << 0),
@@ -245,7 +253,7 @@ fn test_tim() -> bool {
 fn test_i2c_nack() -> bool {
     unsafe {
         write_volatile(I2C1_CR1, 1); // PE
-        // addr 0x52<<1, NBYTES=1, START, write
+                                     // addr 0x52<<1, NBYTES=1, START, write
         write_volatile(I2C1_CR2, (0x52 << 1) | (1 << 16) | (1 << 13));
         let mut nack = false;
         let mut guard = 0u32;
@@ -266,7 +274,10 @@ fn test_i2c_nack() -> bool {
 fn test_spi_txe() -> bool {
     unsafe {
         // MSTR(2) | BR=fpclk/8(3:5=010) | SSM(9) | SSI(8) | SPE(6)
-        write_volatile(SPI1_CR1, (1 << 2) | (0b010 << 3) | (1 << 9) | (1 << 8) | (1 << 6));
+        write_volatile(
+            SPI1_CR1,
+            (1 << 2) | (0b010 << 3) | (1 << 9) | (1 << 8) | (1 << 6),
+        );
         let ok = read_volatile(SPI1_SR) & SPI_SR_TXE != 0;
         write_volatile(SPI1_CR1, 0);
         ok
@@ -315,7 +326,11 @@ unsafe fn gpio_usart_init() {
 }
 
 fn led_set(on: bool) {
-    let bits = if on { 1 << LED_PIN } else { 1 << (LED_PIN + 16) };
+    let bits = if on {
+        1 << LED_PIN
+    } else {
+        1 << (LED_PIN + 16)
+    };
     unsafe { write_volatile(GPIOA_BSRR, bits) };
 }
 
