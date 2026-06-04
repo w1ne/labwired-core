@@ -48,7 +48,7 @@ import { StudioShell } from './studio/StudioShell';
 import { ChipsProvider, useChips } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
-import { MobileMultiChipView } from './multi-mcu/MobileMultiChipView';
+import { MobileRunView } from './mobile/MobileRunView';
 import { PropertiesGate } from './multi-mcu/PropertiesGate';
 import { ChipTabsBar, DrawerCloseButton } from './multi-mcu/ChipTabsBar';
 import { ChipControls } from './multi-mcu/ChipControls';
@@ -950,6 +950,21 @@ export function App() {
     [editor.state.diagram.parts, selectedBoard.quirks],
   );
 
+  // Phone vs desktop. Below the md breakpoint we render the touch run view
+  // (MobileRunView) instead of the desktop editor; the flag also tightens the
+  // sim loop's frame budget and slows display polling to save the weaker GPU.
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // Drive the simulation loop. useSimulationLoop auto-tunes the per-frame
   // cycle batch to keep stepBatch under a ~14 ms budget — small for fast
   // firmware (Rust no_std blinky), big for heavy firmware (Arduino-ESP32
@@ -960,6 +975,7 @@ export function App() {
     running,
     cyclesPerFrame: 1_000_000,
     displays,
+    mobile: isMobile,
   });
 
   // Accumulate trace entries
@@ -1065,9 +1081,9 @@ export function App() {
       if (fb) setSsd1306Framebuffer(fb);
     };
     poll();
-    const id = window.setInterval(poll, 100);
+    const id = window.setInterval(poll, isMobile ? 250 : 100);
     return () => window.clearInterval(id);
-  }, [running, bridge]);
+  }, [running, bridge, isMobile]);
 
   // PCD8544 (Nokia 5110) live framebuffer.
   const [pcd8544Framebuffer, setPcd8544Framebuffer] = useState<Uint8Array | null>(null);
@@ -1086,9 +1102,9 @@ export function App() {
       if (fb) setPcd8544Framebuffer(fb);
     };
     poll();
-    const id = window.setInterval(poll, 100);
+    const id = window.setInterval(poll, isMobile ? 250 : 100);
     return () => window.clearInterval(id);
-  }, [running, bridge]);
+  }, [running, bridge, isMobile]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -1099,6 +1115,16 @@ export function App() {
       bridge.setHcsr04Distance(part.id, cm);
     }
   }, [bridge, editor.state.diagram.parts]);
+
+  // NTC thermistor temperature setter (same as the desktop inspector widget,
+  // extracted so the mobile inputs sheet can drive any thermistor part).
+  const handleNtcChange = useCallback(
+    (partId: string, tempC: number) => {
+      setNtcTemperatures((prev) => ({ ...prev, [partId]: tempC }));
+      bridge?.setNtcTemperature(partId, tempC);
+    },
+    [bridge],
+  );
 
   // ILI9341 live framebuffer (153 KB @ 100 ms = ~1.5 MB/s WASM→JS)
   const [ili9341Framebuffer, setIli9341Framebuffer] = useState<Uint8Array | null>(null);
@@ -1115,9 +1141,9 @@ export function App() {
       } catch { /* device not present in this lab */ }
     };
     poll();
-    const id = window.setInterval(poll, 100);
+    const id = window.setInterval(poll, isMobile ? 250 : 100);
     return () => window.clearInterval(id);
-  }, [running, bridge]);
+  }, [running, bridge, isMobile]);
 
   const analogStates = useMemo(() => bridge?.getAnalogStates() ?? [], [bridge, simState.pc]);
   const adcDeviceStates = useMemo(() => bridge?.getAdcDeviceStates() ?? [], [bridge, simState.pc]);
@@ -2028,20 +2054,46 @@ export function App() {
     );
   };
 
-  // Mobile-only demo shell: the desktop canvas editor is unusable on a phone.
-  // Render a focused single-screen view (board name → big e-paper preview →
-  // big Run button) below the md breakpoint instead of squeezing the editor.
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(max-width: 767px)').matches;
-  });
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 767px)');
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
+  // Saved-projects modal — rendered in both the desktop and mobile trees so the
+  // phone menu's "My projects" works too. Defined once to avoid duplicating the
+  // load/save wiring.
+  const projectsModalNode = (
+    <ProjectsModal
+      open={projectsModalOpen}
+      onClose={() => setProjectsModalOpen(false)}
+      currentBoardId={selectedBoard.boardId}
+      currentDiagramJson={JSON.stringify(editor.state.diagram)}
+      currentSourceCode={source}
+      activeProjectId={activeProjectId}
+      activeProjectName={activeProjectName}
+      onCreated={(p: ProjectRecord) => {
+        setActiveProjectId(p.id);
+        setActiveProjectName(p.name);
+      }}
+      onSaved={(p: ProjectRecord) => {
+        setActiveProjectId(p.id);
+        setActiveProjectName(p.name);
+      }}
+      onLoad={(p: ProjectRecord) => {
+        // Find the matching board config — projects are tied to a board for
+        // chip/system context, so we have to swap board too if the loaded
+        // project is for a different one.
+        const cfg = BOARD_CONFIGS.find((b: BoardConfig) => b.boardId === p.board_id);
+        if (cfg && cfg.boardId !== selectedBoard.boardId) {
+          handleBoardSelect(cfg);
+        }
+        try {
+          const parsed = JSON.parse(p.diagram_json);
+          editor.loadDiagram(parsed);
+        } catch {
+          /* malformed diagram in stored project — keep current canvas */
+        }
+        if (p.source_code !== null) setSource(p.source_code);
+        setActiveProjectId(p.id);
+        setActiveProjectName(p.name);
+      }}
+    />
+  );
 
   if (isMobile) {
     return (
@@ -2063,17 +2115,21 @@ export function App() {
           }}
         />
         <BackgroundChipTicker />
-        <MobileMultiChipView
-          propertiesContent={renderDevDrawer?.(true, 0)}
+        <MobileRunView
+          selectedBoard={selectedBoard}
+          editorState={editor.state}
+          boardIoStates={boardIoStateMap}
+          displayBuffers={simState.displayBuffers}
+          uartOutput={simState.uartOutput}
+          onButtonToggle={handleButtonToggle}
+          onAnalogChange={handleAnalogChange}
+          onUpdateAttr={(id, attrs) => editor.updateAttrs(id, attrs)}
+          ntcTemperatures={ntcTemperatures}
+          onNtcChange={handleNtcChange}
           simControls={simDockNode}
-          uartPreview={simState.uartOutput}
-          running={running}
-          cyclesActive={simState.cycles ?? 0}
-          canRun={!!source || !!bridge}
-          onRun={() => requireAuth(onSimRun)}
-          onPause={handlePause}
-          renderCommandPalette={renderCommandPalette}
+          onOpenProjects={() => setProjectsModalOpen(true)}
         />
+        {projectsModalNode}
       </ChipsProvider>
     );
   }
@@ -2486,41 +2542,7 @@ export function App() {
         </div>
       )}
     </div>
-    <ProjectsModal
-      open={projectsModalOpen}
-      onClose={() => setProjectsModalOpen(false)}
-      currentBoardId={selectedBoard.boardId}
-      currentDiagramJson={JSON.stringify(editor.state.diagram)}
-      currentSourceCode={source}
-      activeProjectId={activeProjectId}
-      activeProjectName={activeProjectName}
-      onCreated={(p: ProjectRecord) => {
-        setActiveProjectId(p.id);
-        setActiveProjectName(p.name);
-      }}
-      onSaved={(p: ProjectRecord) => {
-        setActiveProjectId(p.id);
-        setActiveProjectName(p.name);
-      }}
-      onLoad={(p: ProjectRecord) => {
-        // Find the matching board config — projects are tied to a board for
-        // chip/system context, so we have to swap board too if the loaded
-        // project is for a different one.
-        const cfg = BOARD_CONFIGS.find((b: BoardConfig) => b.boardId === p.board_id);
-        if (cfg && cfg.boardId !== selectedBoard.boardId) {
-          handleBoardSelect(cfg);
-        }
-        try {
-          const parsed = JSON.parse(p.diagram_json);
-          editor.loadDiagram(parsed);
-        } catch {
-          /* malformed diagram in stored project — keep current canvas */
-        }
-        if (p.source_code !== null) setSource(p.source_code);
-        setActiveProjectId(p.id);
-        setActiveProjectName(p.name);
-      }}
-    />
+    {projectsModalNode}
     {/* One floating property window per clicked component — draggable and
         arrangeable. Chips get the rich inspector (control surface + tabs);
         other parts get their properties. Clicking a window focuses its part. */}

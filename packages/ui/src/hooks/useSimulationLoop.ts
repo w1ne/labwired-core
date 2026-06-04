@@ -57,6 +57,12 @@ export interface UseSimulationLoopOptions {
   cyclesPerFrame?: number;
   /** Display devices to poll per frame (generation-gated). */
   displays?: DisplayBinding[];
+  /**
+   * Tune the loop for a phone / weak GPU: smaller default batch seed and a
+   * tighter frame budget so the auto-tune leaves more headroom for paint.
+   * Has no effect when an explicit `cyclesPerFrame` is given. Default false.
+   */
+  mobile?: boolean;
 }
 
 /** Auto-tune bounds. */
@@ -70,6 +76,11 @@ const CYCLES_MAX = 16_000_000;
 /** Frame-budget targets (ms). Under LOW: scale up. Over HIGH: scale down. */
 const FRAME_BUDGET_LOW = 8;
 const FRAME_BUDGET_HIGH = 14;
+/** Tighter budget + smaller seed for phones — leave room for paint on a weak GPU. */
+const MOBILE_FRAME_BUDGET_LOW = 6;
+const MOBILE_FRAME_BUDGET_HIGH = 10;
+const MOBILE_CYCLES_SEED = 10_000;
+const DESKTOP_CYCLES_SEED = 50_000;
 
 export interface UseSimulationLoopResult {
   state: SimulationState;
@@ -95,7 +106,10 @@ const INITIAL_STATE: SimulationState = {
 export function useSimulationLoop(
   options: UseSimulationLoopOptions,
 ): UseSimulationLoopResult {
-  const { bridge, running, cyclesPerFrame = 50_000, displays } = options;
+  const { bridge, running, cyclesPerFrame, displays, mobile = false } = options;
+  const seedCycles = cyclesPerFrame ?? (mobile ? MOBILE_CYCLES_SEED : DESKTOP_CYCLES_SEED);
+  const budgetLow = mobile ? MOBILE_FRAME_BUDGET_LOW : FRAME_BUDGET_LOW;
+  const budgetHigh = mobile ? MOBILE_FRAME_BUDGET_HIGH : FRAME_BUDGET_HIGH;
   const [state, setState] = useState<SimulationState>(INITIAL_STATE);
   const uartBufferRef = useRef('');
   const rafRef = useRef<number>(0);
@@ -106,7 +120,7 @@ export function useSimulationLoop(
   // Auto-tune batch size. Initial value is the prop; the loop adjusts based
   // on measured stepBatch wall time. Ref so the closure picks up the latest
   // value without re-running the effect.
-  const batchRef = useRef<number>(cyclesPerFrame);
+  const batchRef = useRef<number>(seedCycles);
 
   const pollState = useCallback(
     (b: SimulatorBridge) => {
@@ -199,8 +213,8 @@ export function useSimulationLoop(
 
   // Reset the auto-tune seed when the prop changes (e.g., new board).
   useEffect(() => {
-    batchRef.current = cyclesPerFrame;
-  }, [cyclesPerFrame]);
+    batchRef.current = seedCycles;
+  }, [seedCycles]);
 
   useEffect(() => {
     if (!bridge || !running) return;
@@ -223,9 +237,9 @@ export function useSimulationLoop(
       // cycles, so a too-small batch wastes the RAF call overhead and a
       // too-big batch starves the UI. Bound the next-frame batch to the
       // hard limits so a single slow tick can't permanently tank or peg us.
-      if (elapsed < FRAME_BUDGET_LOW) {
+      if (elapsed < budgetLow) {
         batchRef.current = Math.min(CYCLES_MAX, batchRef.current * 2);
-      } else if (elapsed > FRAME_BUDGET_HIGH) {
+      } else if (elapsed > budgetHigh) {
         batchRef.current = Math.max(CYCLES_MIN, Math.floor(batchRef.current / 2));
       }
       pollState(bridge);
@@ -239,7 +253,7 @@ export function useSimulationLoop(
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [bridge, running, pollState]);
+  }, [bridge, running, pollState, budgetLow, budgetHigh]);
 
   // Poll initial state when bridge first becomes available
   useEffect(() => {

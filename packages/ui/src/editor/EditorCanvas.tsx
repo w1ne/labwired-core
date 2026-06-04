@@ -11,8 +11,36 @@ function snap(v: number): number {
   return Math.round(v / GRID) * GRID;
 }
 
+type ViewBox = { x: number; y: number; w: number; h: number };
+
+/**
+ * Zoom a viewBox by `factor` around the svg-space anchor (anchorX, anchorY),
+ * keeping that anchor fixed on screen. Shared by wheel zoom (desktop) and
+ * pinch zoom (touch). factor < 1 zooms in, > 1 zooms out.
+ */
+function zoomedViewBox(vb: ViewBox, anchorX: number, anchorY: number, factor: number): ViewBox {
+  const newW = Math.min(Math.max(vb.w * factor, 200), 6000);
+  const newH = Math.min(Math.max(vb.h * factor, 150), 4500);
+  const scale = newW / vb.w;
+  return {
+    x: anchorX - (anchorX - vb.x) * scale,
+    y: anchorY - (anchorY - vb.y) * scale,
+    w: newW,
+    h: newH,
+  };
+}
+
+/** Movement (in client px) below which a pointerdown→up is treated as a tap. */
+const TAP_SLOP = 8;
+
 interface EditorCanvasProps {
   state: EditorState;
+  /**
+   * 'edit' (default) = full desktop authoring: drag parts, wire pins, select,
+   * resize. 'run' = touch-friendly read-only interaction: one-finger pan,
+   * two-finger pinch zoom, tap a button to press it. No authoring in run mode.
+   */
+  interactionMode?: 'edit' | 'run';
   boardIoStates?: Record<string, ComponentState>;
   /** Live display framebuffers, keyed by part id. */
   displayBuffers?: Record<string, DisplayBuffer>;
@@ -45,6 +73,7 @@ interface EditorCanvasProps {
 
 export function EditorCanvas({
   state,
+  interactionMode = 'edit',
   boardIoStates,
   displayBuffers,
   validationMessage,
@@ -85,6 +114,12 @@ export function EditorCanvas({
   } | null>(null);
   // Rubber-band selection
   const [selectBox, setSelectBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  // Active pointers (touch/mouse/pen) by pointerId, for multi-touch gestures.
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  // In-progress two-finger pinch zoom (run mode), anchored in svg space.
+  const pinchRef = useRef<{ startDist: number; startVB: ViewBox; anchorX: number; anchorY: number } | null>(null);
+  // In-progress run-mode button press (released on pointerup or when it becomes a pan).
+  const tapRef = useRef<{ partId: string; startX: number; startY: number } | null>(null);
   const invalidPinSet = new Set((invalidPins ?? []).map((pin) => `${pin.part}:${pin.pin}`));
 
   const clientToSvg = useCallback(
@@ -102,15 +137,39 @@ export function EditorCanvas({
     [viewBox],
   );
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
       if (e.button !== 0) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // Second finger down → start a pinch zoom and abandon any pan/drag/select.
+      if (pointersRef.current.size === 2) {
+        const pts = [...pointersRef.current.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const anchor = clientToSvg((pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+        pinchRef.current = { startDist: dist, startVB: { ...viewBox }, anchorX: anchor.x, anchorY: anchor.y };
+        setPanning(null);
+        setDragging(null);
+        setSelectBox(null);
+        return;
+      }
+      if (pointersRef.current.size > 2) return;
+
+      if (interactionMode === 'run') {
+        // Touch run mode: pan from anywhere. A tap on a button is handled by the
+        // part's own handler (which doesn't stop propagation), so panning is
+        // armed here too but is a no-op for a stationary tap.
+        svgRef.current?.setPointerCapture?.(e.pointerId);
+        setPanning({ startClientX: e.clientX, startClientY: e.clientY, startVB: { ...viewBox } });
+        return;
+      }
+
+      // Edit mode (desktop): rubber-band select / pan only from empty canvas.
       if ((e.target as Element).tagName === 'svg' || (e.target as Element).classList.contains('editor-grid')) {
         if (state.wireInProgress) {
           onCancelWire();
           return;
         }
-        // Start rubber-band selection (or pan if not shift)
         const pos = clientToSvg(e.clientX, e.clientY);
         if (e.shiftKey) {
           setSelectBox({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y });
@@ -120,11 +179,32 @@ export function EditorCanvas({
         }
       }
     },
-    [viewBox, clientToSvg, onSelect, onCancelWire, state.wireInProgress],
+    [viewBox, clientToSvg, onSelect, onCancelWire, state.wireInProgress, interactionMode],
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (pointersRef.current.has(e.pointerId)) {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      // Pinch zoom takes priority while two fingers are down.
+      if (pinchRef.current && pointersRef.current.size >= 2) {
+        const pts = [...pointersRef.current.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const factor = pinchRef.current.startDist / dist;
+        setViewBox(zoomedViewBox(pinchRef.current.startVB, pinchRef.current.anchorX, pinchRef.current.anchorY, factor));
+        return;
+      }
+
+      // Run-mode button press that turns into a drag → release it; pan takes over.
+      if (interactionMode === 'run' && tapRef.current) {
+        if (Math.abs(e.clientX - tapRef.current.startX) > TAP_SLOP || Math.abs(e.clientY - tapRef.current.startY) > TAP_SLOP) {
+          onButtonToggle?.(tapRef.current.partId, false);
+          tapRef.current = null;
+        }
+      }
+
       const pos = clientToSvg(e.clientX, e.clientY);
       setCursorSvg(pos);
 
@@ -165,11 +245,29 @@ export function EditorCanvas({
         onMovePart(dragging.partId, snappedX, snappedY);
       }
     },
-    [clientToSvg, panning, dragging, resizing, selectBox, onMovePart, onResizePart],
+    [clientToSvg, panning, dragging, resizing, selectBox, onMovePart, onResizePart, interactionMode, onButtonToggle],
   );
 
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+      if (interactionMode === 'run') svgRef.current?.releasePointerCapture?.(e.pointerId);
+
+      // Release an in-progress run-mode button press.
+      if (tapRef.current) {
+        onButtonToggle?.(tapRef.current.partId, false);
+        tapRef.current = null;
+      }
+      // End pinch once fewer than two fingers remain; require a fresh touch to pan.
+      if (pinchRef.current && pointersRef.current.size < 2) {
+        pinchRef.current = null;
+        setPanning(null);
+      }
+      if (interactionMode === 'run') {
+        setPanning(null);
+        return;
+      }
+
       // Finish rubber-band selection
       if (selectBox) {
         const minX = Math.min(selectBox.x1, selectBox.x2);
@@ -201,7 +299,7 @@ export function EditorCanvas({
       setDragging(null);
       setPanning(null);
     },
-    [dragging, resizing, selectBox, onSelect, onSelectRect, state.diagram.parts],
+    [dragging, resizing, selectBox, onSelect, onSelectRect, state.diagram.parts, interactionMode, onButtonToggle],
   );
 
   const handleWheel = useCallback(
@@ -209,21 +307,24 @@ export function EditorCanvas({
       e.preventDefault();
       const factor = e.deltaY > 0 ? 1.1 : 0.9;
       const pos = clientToSvg(e.clientX, e.clientY);
-      const newW = Math.min(Math.max(viewBox.w * factor, 200), 6000);
-      const newH = Math.min(Math.max(viewBox.h * factor, 150), 4500);
-      const scale = newW / viewBox.w;
-      setViewBox({
-        x: pos.x - (pos.x - viewBox.x) * scale,
-        y: pos.y - (pos.y - viewBox.y) * scale,
-        w: newW,
-        h: newH,
-      });
+      setViewBox(zoomedViewBox(viewBox, pos.x, pos.y, factor));
     },
     [clientToSvg, viewBox],
   );
 
-  const handlePartMouseDown = useCallback(
-    (e: React.MouseEvent, part: Part) => {
+  const handlePartPointerDown = useCallback(
+    (e: React.PointerEvent, part: Part) => {
+      // Run mode: tap a button to press it (released on pointerup / when it
+      // becomes a pan). Don't stop propagation so the svg pan tracker still arms.
+      if (interactionMode === 'run') {
+        const def = COMPONENT_REGISTRY.get(part.type);
+        if (def?.boardIoKind === 'button' && onButtonToggle) {
+          onButtonToggle(part.id, true);
+          tapRef.current = { partId: part.id, startX: e.clientX, startY: e.clientY };
+        }
+        return;
+      }
+      // Edit mode: begin dragging the part.
       e.stopPropagation();
       if (state.wireInProgress) return;
       const pos = clientToSvg(e.clientX, e.clientY);
@@ -236,7 +337,7 @@ export function EditorCanvas({
         moved: false,
       });
     },
-    [clientToSvg, state.wireInProgress],
+    [clientToSvg, state.wireInProgress, interactionMode, onButtonToggle],
   );
 
   const handlePinClick = useCallback(
@@ -327,11 +428,26 @@ export function EditorCanvas({
       ref={svgRef}
       className="editor-canvas"
       viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
-      style={{ width: '100%', height: '100%', background: '#1a1a2e', cursor: panning ? 'grabbing' : 'default' }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={() => { setDragging(null); setPanning(null); setSelectBox(null); setResizing(null); }}
+      style={{
+        width: '100%',
+        height: '100%',
+        background: '#1a1a2e',
+        cursor: panning ? 'grabbing' : 'default',
+        // Stop the browser from hijacking touch as page scroll / pinch-zoom so
+        // our own pan/pinch gestures work. Critical for run mode on phones.
+        touchAction: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerLeave={(e) => {
+        if (interactionMode === 'run') return; // captured; ignore spurious leaves
+        pointersRef.current.delete(e.pointerId);
+        setDragging(null); setPanning(null); setSelectBox(null); setResizing(null);
+      }}
       onWheel={handleWheel}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -382,8 +498,12 @@ export function EditorCanvas({
           <g
             key={part.id}
             transform={`translate(${part.x}, ${part.y})`}
-            style={{ cursor: dragging?.partId === part.id ? 'grabbing' : 'grab' }}
-            onMouseDown={(e) => handlePartMouseDown(e, part)}
+            style={{
+              cursor: interactionMode === 'run'
+                ? (def.boardIoKind === 'button' ? 'pointer' : 'default')
+                : (dragging?.partId === part.id ? 'grabbing' : 'grab'),
+            }}
+            onPointerDown={(e) => handlePartPointerDown(e, part)}
             onDoubleClick={(e) => handlePartDoubleClick(e, part)}
             onWheel={(e) => handlePartWheel(e, part)}
           >
@@ -435,8 +555,10 @@ export function EditorCanvas({
                     stroke={stroke}
                     strokeWidth={(isInvalid ? 1.5 : 1) / sc}
                     opacity={opacity}
-                    style={{ cursor: 'crosshair' }}
-                    onMouseDown={(e) => handlePinClick(e, part.id, pin.id)}
+                    // In run mode pins are decorative: let taps fall through to
+                    // the part so buttons can be pressed and gestures still pan.
+                    style={{ cursor: 'crosshair', pointerEvents: interactionMode === 'run' ? 'none' : undefined }}
+                    onPointerDown={(e) => handlePinClick(e, part.id, pin.id)}
                     onMouseEnter={() => setHoveredPin({ partId: part.id, pinId: pin.id })}
                     onMouseLeave={() => setHoveredPin(null)}
                   />
@@ -459,7 +581,7 @@ export function EditorCanvas({
                     x={hx - 4} y={hy - 4} width={8} height={8}
                     fill="#569cd6" stroke="#fff" strokeWidth={1}
                     style={{ cursor: 'nwse-resize' }}
-                    onMouseDown={(e) => {
+                    onPointerDown={(e) => {
                       e.stopPropagation();
                       const pos = clientToSvg(e.clientX, e.clientY);
                       const cx = part.x + sw / 2;
