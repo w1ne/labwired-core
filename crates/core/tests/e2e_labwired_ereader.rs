@@ -122,6 +122,11 @@ fn labwired_ereader_runs_to_panel_paint() {
             handshake_bytes.push(addr + 1);
         }
     }
+    // s_other_cpu_startup_done: still a boot aid. The real rendezvous is
+    // APP_CPU's IDLE task running other_cpu_startup_idle_hook_cb to set it,
+    // but APP_CPU's scheduler doesn't yet reach IDLE (a core-1 system task
+    // loops on xQueueReceive without all-blocking). TODO(dual-core): make
+    // APP_CPU's scheduler quiesce to IDLE, then drop this.
     if let Some(&addr) = symbol_addrs.get("s_other_cpu_startup_done") {
         let _ = machine.bus.write_u8(addr as u64, 0x01);
         handshake_bytes.push(addr);
@@ -448,8 +453,14 @@ fn labwired_ereader_runs_to_panel_paint() {
         }
         if let Ok(v1) = machine.bus.read_u32(0x3FF0_00E0) {
             if v1 != 0 {
+                // FROM_CPU_1 is the crosscore IRQ targeting APP_CPU (core 1):
+                // raise it on the SECONDARY, not PRO. This is what lets
+                // APP_CPU's self-yield (esp_crosscore_int_send_yield(1)) switch
+                // it to IDLE so the startup idle hook can run.
                 if let Some(bit) = from_cpu_bit1 {
-                    machine.cpu.raise_interrupt_bits(1u32 << bit);
+                    if let Some(c1) = machine.cpu_secondary.as_mut() {
+                        c1.raise_interrupt_bits(1u32 << bit);
+                    }
                 }
                 let _ = machine.bus.write_u32(0x3FF0_00E0, 0);
             }
