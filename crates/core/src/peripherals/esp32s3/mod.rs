@@ -19,4 +19,5 @@ pub mod spi_mem_flash;
 pub mod system_stub;
 pub mod systimer;
 pub mod tmp102;
+pub mod uart;
 pub mod usb_serial_jtag;

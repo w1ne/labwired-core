@@ -1794,12 +1794,18 @@ impl XtensaLx7 {
                 let next_idx = wb.wrapping_add(1) & 0x0F;
 
                 if self.regs.windowstart_bit(next_idx) {
-                    // Adjacent frame is live — the window must be spilled. Vector
-                    // to the firmware's AllocaCause (EXCCAUSE=5) handler and
-                    // continue; the handler spills one frame and RFEs back. (The
-                    // earlier abort path only suited fast-boot, where no handler
-                    // is installed.)
-                    return self.vector_exception(5);
+                    // Adjacent frame is live — the window must be spilled.
+                    if self.faithful_windows {
+                        // Faithful (rom-boot) mode: the firmware installed an
+                        // AllocaCause (EXCCAUSE=5) handler that spills one frame and
+                        // RFEs back. Vector to it, exactly like real silicon.
+                        return self.vector_exception(5);
+                    }
+                    // Fast-boot mode jumps mid-execution with no handler installed,
+                    // so surface AllocaCause as a hard exception instead of vectoring
+                    // into an unprimed handler. Gating keeps this faithful change out
+                    // of the non-rom-boot path (mirrors the F5 overflow gating).
+                    return self.raise_general_exception(5);
                 }
 
                 // Safe path: adjacent frame is free, simple register move.

@@ -634,6 +634,36 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(RamPeripheral::new(0x2000)),
     );
 
+    // ── UART0/1/2 — real ESP32-S3 layout (soc/uart_reg.h) ────────────────
+    // FIFO @0x0, STATUS @0x1C (TXFIFO_CNT[25:16]=0 → always room), CONF0 @0x20.
+    // Bases DR_REG_UART{,1,2}_BASE = 0x6000_0000 / 0x6001_0000 / 0x6002_E000.
+    // MUST register BEFORE the wide wifi_mac_phy catch-all below (which spans
+    // 0x6000_0000..0x6004_3000 and would otherwise shadow all three). A
+    // separate, self-contained type from the STM32 `Uart`, so the S3 layout
+    // never perturbs the ARM UART model. UART0 echoes TX to the host console
+    // (ESP-IDF / Arduino `Serial`); UART1/2 are capture-only.
+    bus.add_peripheral(
+        "uart0_s3",
+        0x6000_0000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(true)),
+    );
+    bus.add_peripheral(
+        "uart1_s3",
+        0x6001_0000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false)),
+    );
+    bus.add_peripheral(
+        "uart2_s3",
+        0x6002_E000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false)),
+    );
+
     // WiFi MAC / PHY / RNG block (0x6000_0000..0x6004_3000 on real silicon).
     // The only register esp_random() touches at boot is RNG_DATA_REG at
     // 0x6003_5144 — a read returns 32 random bits. A round-tripping stub
