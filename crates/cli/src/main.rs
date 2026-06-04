@@ -177,10 +177,21 @@ pub struct RunArgs {
 
     /// Boot from the real ROM reset vector (0x40000400) instead of fast-booting
     /// the ELF. The chip's real boot ROM runs and loads the 2nd-stage bootloader
-    /// + app through the SPI-flash controller — the faithful chip-model path.
+    /// and app through the SPI-flash controller — the faithful chip-model path.
     /// Requires LABWIRED_ESP32S3_ROM and LABWIRED_ESP32S3_FLASH to be set.
     #[arg(long)]
     pub rom_boot: bool,
+
+    /// Debug: PC address(es) (hex, e.g. `0x4004eacc`) to break on. On the
+    /// first time each is reached, dump a0..a15 + PS/window state and any
+    /// `--watch-mem` words, then continue. Repeatable. Works on `--rom-boot`.
+    #[arg(long = "break-at", value_name = "HEX")]
+    pub break_at: Vec<String>,
+
+    /// Debug: memory address(es) (hex) to read as u32 and print whenever a
+    /// `--break-at` fires — for tracing ROM pointer chains. Repeatable.
+    #[arg(long = "watch-mem", value_name = "HEX")]
+    pub watch_mem: Vec<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -862,10 +873,51 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         (0x42002040, "setup()", [false; 2]),
         (0x42001f90, "UnityBegin", [false; 2]),
     ];
+    // Debug breakpoints / memory watches (parse hex; ignore unparseable).
+    let parse_hex = |s: &str| -> Option<u32> {
+        u32::from_str_radix(s.trim_start_matches("0x").trim_start_matches("0X"), 16).ok()
+    };
+    let break_at: Vec<u32> = args.break_at.iter().filter_map(|s| parse_hex(s)).collect();
+    let watch_mem: Vec<u32> = args.watch_mem.iter().filter_map(|s| parse_hex(s)).collect();
+    let mut break_hit = vec![false; break_at.len()];
+    if !break_at.is_empty() {
+        eprintln!(
+            "labwired-cli run: breakpoints {:?} watch-mem {:?}",
+            break_at.iter().map(|a| format!("0x{a:08x}")).collect::<Vec<_>>(),
+            watch_mem.iter().map(|a| format!("0x{a:08x}")).collect::<Vec<_>>(),
+        );
+    }
+
     while steps < limit {
         let pc_before = cpu.get_pc();
         pc_ring[ring_head] = pc_before;
         ring_head = (ring_head + 1) % RING_LEN;
+
+        // Debug breakpoint: on first hit of each --break-at PC, dump CPU + watched memory.
+        if let Some(bi) = break_at.iter().position(|&b| b == pc_before) {
+            if !break_hit[bi] {
+                break_hit[bi] = true;
+                eprintln!(
+                    "labwired-cli run: BREAK-AT 0x{pc_before:08x} (step {steps}, core {})",
+                    if cpu.app_cpu { 1 } else { 0 },
+                );
+                for r in 0..16u8 {
+                    eprintln!("    a{:<2} = 0x{:08x}", r, cpu.regs.read_logical(r));
+                }
+                eprintln!(
+                    "    PS=0x{:08x} WB={} WS=0x{:04x}",
+                    cpu.ps.as_raw(),
+                    cpu.regs.windowbase(),
+                    cpu.regs.windowstart(),
+                );
+                for &m in &watch_mem {
+                    match bus.read_u32(m as u64) {
+                        Ok(v) => eprintln!("    mem[0x{m:08x}] = 0x{v:08x}"),
+                        Err(e) => eprintln!("    mem[0x{m:08x}] = <unmapped: {e}>"),
+                    }
+                }
+            }
+        }
 
         // Capture the APP_CPU entry when PRO_CPU programs it. The ROM also
         // points the APP_CPU at early DRAM stubs during its own bring-up; only
@@ -989,7 +1041,7 @@ fn run_firmware(args: RunArgs) -> ExitCode {
                     }
                 }
             }
-            if steps % 10_000_000 == 0 {
+            if steps.is_multiple_of(10_000_000) {
                 eprintln!(
                     "SMP: step {steps:>11}  pro=0x{:08x}  app=0x{:08x}",
                     cpu.get_pc(),
