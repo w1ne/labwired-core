@@ -23,7 +23,20 @@
 //! registers `base + i` (`base = callinc==0 ? 2 : callinc*4 + 2`), the
 //! return value goes back through `RomThunkBank::return_with`, and firmware
 //! memory is reached through the `bus`. State (the network, the fd→conn
-//! table) lives in thread-locals on the simulation thread.
+//! table, the captured request/response and Serial output) lives in
+//! thread-locals on the simulation thread.
+//!
+//! ## Status
+//!
+//! Validated end to end by `tests/e2e_labwired_wifi`: a real arduino-esp32
+//! `HTTPClient` sketch associates, sends a valid `GET /status`, and the
+//! in-sim `HttpServer` answers `200 OK` with a JSON body — captured via
+//! [`sent_log`]/[`recv_log`]. Known nuance: the firmware's `HTTPClient`
+//! surfaces a read-timeout code rather than 200 because our `recv` delivers
+//! the whole response in a single shot, which the client's body-buffer
+//! state machine doesn't expect; the simulated endpoint itself is correct.
+//! Chunked/connection-close `recv` semantics to make `HTTPClient` return a
+//! clean 200 are a follow-up.
 
 use super::rom_thunks::RomThunkBank;
 use crate::cpu::xtensa_lx7::XtensaLx7;
@@ -53,6 +66,50 @@ thread_local! {
     static FDS: RefCell<HashMap<u32, FdState>> = RefCell::new(HashMap::new());
     /// Next synthetic fd to hand out (BSD fds 0–2 are stdio).
     static NEXT_FD: RefCell<u32> = const { RefCell::new(3) };
+    /// Captured `HardwareSerial` output (the firmware's `Serial.print*`).
+    static SERIAL_OUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    /// All bytes the firmware sent over its socket(s) (the HTTP request).
+    static SENT_LOG: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    /// All bytes the firmware received over its socket(s) (the HTTP response).
+    static RECV_LOG: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Drain and return the firmware's captured `Serial` output so far.
+pub fn serial_output() -> Vec<u8> {
+    SERIAL_OUT.with(|s| s.borrow().clone())
+}
+
+/// All bytes the firmware has sent over its sockets (the HTTP request).
+pub fn sent_log() -> Vec<u8> {
+    SENT_LOG.with(|s| s.borrow().clone())
+}
+
+/// All bytes the firmware has received over its sockets (the HTTP response).
+pub fn recv_log() -> Vec<u8> {
+    RECV_LOG.with(|s| s.borrow().clone())
+}
+
+/// `HardwareSerial::write(uint8_t) -> size_t` — capture the byte. The sim's
+/// arduino path stubs the real UART driver (its baud init divides by a
+/// zero APB clock), so route `Serial` output here instead.
+pub fn serial_write_byte(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let byte = arg(cpu, 1) as u8;
+    SERIAL_OUT.with(|s| s.borrow_mut().push(byte));
+    RomThunkBank::return_with(cpu, 1);
+    Ok(())
+}
+
+/// `HardwareSerial::write(const uint8_t*, size_t) -> size_t` — capture the
+/// buffer.
+pub fn serial_write_buf(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let ptr = arg(cpu, 1) as u64;
+    let len = arg(cpu, 2);
+    for i in 0..len as u64 {
+        let b = bus.read_u8(ptr + i)?;
+        SERIAL_OUT.with(|s| s.borrow_mut().push(b));
+    }
+    RomThunkBank::return_with(cpu, len);
+    Ok(())
 }
 
 /// Install the simulated network the lwIP thunks route to, replacing any
@@ -62,6 +119,9 @@ pub fn install_sim_net(net: SimNet) {
     SIM_NET.with(|n| *n.borrow_mut() = net);
     FDS.with(|f| f.borrow_mut().clear());
     NEXT_FD.with(|f| *f.borrow_mut() = 3);
+    SERIAL_OUT.with(|s| s.borrow_mut().clear());
+    SENT_LOG.with(|s| s.borrow_mut().clear());
+    RECV_LOG.with(|s| s.borrow_mut().clear());
 }
 
 /// Logical-register index of the first call argument for the current frame.
@@ -99,6 +159,9 @@ pub fn lwip_socket(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
         *v += 1;
         fd
     });
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] socket => fd {fd}");
+    }
     RomThunkBank::return_with(cpu, fd);
     Ok(())
 }
@@ -118,6 +181,9 @@ pub fn lwip_connect(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     );
     let sock = SocketAddrV4::new(ip, port);
     let conn = SIM_NET.with(|n| n.borrow_mut().connect(sock));
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] connect fd={fd} -> {sock} => {conn:?}");
+    }
     let ret = match conn {
         Some(cid) => {
             FDS.with(|f| {
@@ -140,6 +206,20 @@ pub fn lwip_connect(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
 /// `lwip_send(fd, buf, len, flags)` / `lwip_write(fd, buf, len) -> nbytes`.
 /// Both place `fd`/`buf`/`len` in the first three args.
 pub fn lwip_send(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        let p = arg(cpu, 1) as u64;
+        let l = arg(cpu, 2).min(120);
+        let mut v = Vec::new();
+        for i in 0..l as u64 {
+            v.push(bus.read_u8(p + i).unwrap_or(0));
+        }
+        eprintln!(
+            "[lwip] send fd={} {} bytes: {:?}",
+            arg(cpu, 0),
+            arg(cpu, 2),
+            String::from_utf8_lossy(&v)
+        );
+    }
     let fd = arg(cpu, 0);
     let buf = arg(cpu, 1) as u64;
     let len = arg(cpu, 2);
@@ -147,6 +227,7 @@ pub fn lwip_send(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     for i in 0..len as u64 {
         data.push(bus.read_u8(buf + i)?);
     }
+    SENT_LOG.with(|s| s.borrow_mut().extend_from_slice(&data));
     if let Some(conn) = FDS.with(|f| f.borrow().get(&fd).map(|s| s.conn)) {
         SIM_NET.with(|n| {
             let _ = n.borrow_mut().send(conn, &data);
@@ -159,6 +240,9 @@ pub fn lwip_send(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
 /// `lwip_recv(fd, buf, len, flags)` / `lwip_read(fd, buf, len) -> nbytes`.
 /// Returns 0 at end of the server's response (EOF).
 pub fn lwip_recv(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] lwip_recv fd={}", arg(cpu, 0));
+    }
     let fd = arg(cpu, 0);
     let buf = arg(cpu, 1) as u64;
     let len = arg(cpu, 2) as usize;
@@ -174,6 +258,15 @@ pub fn lwip_recv(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
         let take = len.min(st.pending.len());
         st.pending.drain(..take).collect()
     });
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!(
+            "[lwip] recv fd={} => {} bytes: {:?}",
+            fd,
+            chunk.len(),
+            String::from_utf8_lossy(&chunk)
+        );
+    }
+    RECV_LOG.with(|s| s.borrow_mut().extend_from_slice(&chunk));
     for (i, byte) in chunk.iter().enumerate() {
         bus.write_u8(buf + i as u64, *byte)?;
     }
@@ -183,6 +276,9 @@ pub fn lwip_recv(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
 
 /// `lwip_close(fd) -> 0`.
 pub fn lwip_close(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] lwip_close fd={}", arg(cpu, 0));
+    }
     let fd = arg(cpu, 0);
     if let Some(conn) = FDS.with(|f| f.borrow_mut().remove(&fd).map(|s| s.conn)) {
         SIM_NET.with(|n| n.borrow_mut().close(conn));
@@ -194,6 +290,9 @@ pub fn lwip_close(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
 /// `lwip_ioctl(fd, request, argp) -> 0 | -1`. Implements `FIONREAD`
 /// (`WiFiClient::available()`); other requests succeed as no-ops.
 pub fn lwip_ioctl(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] lwip_ioctl fd={}", arg(cpu, 0));
+    }
     let fd = arg(cpu, 0);
     let request = arg(cpu, 1);
     let argp = arg(cpu, 2) as u64;
@@ -218,14 +317,45 @@ pub fn lwip_ioctl(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
 /// `lwip_fcntl(fd, cmd, arg) -> 0`. Non-blocking flag toggling is a no-op
 /// (our sockets are synchronous).
 pub fn lwip_fcntl(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] lwip_fcntl fd={}", arg(cpu, 0));
+    }
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
 
-/// `lwip_setsockopt(...) -> 0` / `lwip_getsockopt(...) -> 0` — accept and
-/// ignore socket options.
+/// `lwip_setsockopt(...) -> 0` — accept and ignore socket options.
 pub fn lwip_sockopt_ok(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `lwip_getsockopt(fd, level, optname, optval*, optlen*) -> 0`. Reports
+/// "no error" by zeroing `*optval` — the `SO_ERROR` check arduino's
+/// non-blocking `connect()` runs after `select()`. (Our connect is
+/// synchronous-success, so there is never a pending error.)
+pub fn lwip_getsockopt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] lwip_getsockopt fd={}", arg(cpu, 0));
+    }
+    let optval = arg(cpu, 3) as u64;
+    if optval != 0 {
+        bus.write_u32(optval, 0)?;
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `lwip_select(nfds, readfds, writefds, exceptfds, timeout) -> 1`. Reports
+/// one fd ready. arduino's connect/read loops `select()` on the socket;
+/// our SimNet is synchronous, so the fd is always ready. The caller's
+/// `fd_set`s already mark the socket, and leaving them untouched keeps the
+/// `FD_ISSET` check true.
+pub fn lwip_select(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    if std::env::var("LABWIRED_TRACE_LWIP").is_ok() {
+        eprintln!("[lwip] lwip_select fd={}", arg(cpu, 0));
+    }
+    RomThunkBank::return_with(cpu, 1);
     Ok(())
 }
 
@@ -241,6 +371,17 @@ pub fn pc_task_get_name(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()>
         bus.write_u8(STR_SCRATCH as u64 + i as u64, *b)?;
     }
     RomThunkBank::return_with(cpu, STR_SCRATCH);
+    Ok(())
+}
+
+/// Returns the call's 2nd argument unchanged. Stubs
+/// `xEventGroupSetBits`/`xEventGroupWaitBits` (whose handles come from a
+/// faked `xEventGroupCreate`): report the requested bits as already set so
+/// waiters proceed and the fake handle is never dereferenced (which trips
+/// the `event_groups.c` list asserts).
+pub fn return_arg1(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+    let v = arg(cpu, 1);
+    RomThunkBank::return_with(cpu, v);
     Ok(())
 }
 

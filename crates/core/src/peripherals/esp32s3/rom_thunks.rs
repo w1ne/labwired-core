@@ -1294,8 +1294,9 @@ pub fn esp_idf_heap_caps_free(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimRes
 }
 
 /// `heap_caps_realloc(void*, new_size, caps) -> void*` — degrades to malloc.
-pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;
+    let old_ptr = cpu.regs.read_logical(n + 2);
     let new_size = cpu.regs.read_logical(n + 3);
     let aligned = (new_size + 15) & !15;
     let ptr = unsafe {
@@ -1308,6 +1309,19 @@ pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> Sim
             start
         }
     };
+    // The bump allocator never reuses memory, so realloc relocates: copy the
+    // old buffer's bytes into the new region. Without this, anything that
+    // grows a buffer (e.g. Arduino `String` concatenation — how HTTPClient
+    // builds its request) silently loses the data it already wrote. We don't
+    // track allocation sizes, so copy up to `new_size`; for a grow the extra
+    // tail is unused-and-soon-overwritten, for a shrink it's the kept prefix.
+    if ptr != 0 && old_ptr != 0 && old_ptr != ptr {
+        for i in 0..new_size as u64 {
+            if let Ok(b) = bus.read_u8(old_ptr as u64 + i) {
+                let _ = bus.write_u8(ptr as u64 + i, b);
+            }
+        }
+    }
     RomThunkBank::return_with(cpu, ptr);
     Ok(())
 }
