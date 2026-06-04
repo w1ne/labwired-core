@@ -647,21 +647,21 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x6000_0000,
         0x100,
         None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(true)),
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(true, 27)),
     );
     bus.add_peripheral(
         "uart1_s3",
         0x6001_0000,
         0x100,
         None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false)),
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false, 28)),
     );
     bus.add_peripheral(
         "uart2_s3",
         0x6002_E000,
         0x100,
         None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false)),
+        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(false, 29)),
     );
 
     // WiFi MAC / PHY / RNG block (0x6000_0000..0x6004_3000 on real silicon).
