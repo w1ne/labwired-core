@@ -139,12 +139,29 @@ fn labwired_ereader_runs_to_panel_paint() {
 
     // Heap: the sim-side bump allocator (default). It's debt — the real
     // ESP-IDF heap_caps should run on emulated DRAM. LABWIRED_REAL_HEAP=1
-    // un-thunks it, but that currently walls: the real heap_caps_init
-    // registers a heap region that collides with the harness's SEEDED stacks
-    // (we seed SP at 0x3FFE_0000 / 0x3FFD_8000 instead of the real top-of-DRAM
-    // layout), so a malloc'd struct lands on stack data and esp_intr_alloc
-    // dereferences "lock" (0x6b636f6c). Fix = faithful stack/heap layout, then
-    // delete this bump allocator. (Reproduce: LABWIRED_REAL_HEAP=1.)
+    // un-thunks it, but that currently walls.
+    //
+    // Diagnosed root cause (2026-06-04, via the WiFi fixture — same wall):
+    // the real heap_caps_init mis-registers a heap region, so heap_caps_malloc
+    // hands out pointers into non-heap memory. A vector_desc node ends up
+    // pointing at memory whose first word is the bytes "lock" (0x6b636f6c),
+    // and APP_CPU's esp_intr_alloc_intrstatus_bind faults dereferencing it
+    // (node->next = "lock") while PRO_CPU spins in main_task waiting for
+    // s_other_cpu_startup_done.
+    //
+    // Eliminated hypotheses (don't re-tread):
+    //   * seeded-stack collision (#173) — moving SP to top-of-DRAM gives the
+    //     IDENTICAL crash, and "lock" is a fixed string, not stack noise;
+    //   * unbacked DRAM — 0x3FFA_0000..0x4000_0000 is fully RamPeripheral-backed;
+    //   * broken atomic CAS — S32C1I is correct and the sim interleaves cores
+    //     at instruction granularity, so spinlocks serialize;
+    //   * unshared memory — both cores step against the same SystemBus.
+    // Remaining suspect: the real heap_caps_init mis-registers a heap region
+    // (wrong soc_memory_regions read via flash XIP, or a subtle instruction
+    // mis-emulation in the TLSF/multi_heap registration path), so malloc
+    // returns an out-of-region pointer. Next step: trace heap_caps_malloc
+    // returns / multi_heap_register args under LABWIRED_REAL_HEAP=1. Real fix
+    // lands there; then delete this bump allocator.
     if std::env::var("LABWIRED_REAL_HEAP").is_err() {
         push_named(
             &mut thunks,

@@ -133,32 +133,36 @@ fn labwired_wifi_fixture_connects_and_gets() {
             }
         };
 
-    // Heap caps suite (bump allocator).
-    push_named(
-        &mut thunks,
-        "heap_caps_init",
-        rom_thunks::esp_idf_heap_caps_init,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_malloc",
-        rom_thunks::esp_idf_heap_caps_malloc,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_calloc",
-        rom_thunks::esp_idf_heap_caps_calloc,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_free",
-        rom_thunks::esp_idf_heap_caps_free,
-    );
-    push_named(
-        &mut thunks,
-        "heap_caps_realloc",
-        rom_thunks::esp_idf_heap_caps_realloc,
-    );
+    // Heap caps suite (bump allocator). Debt — the real ESP-IDF heap_caps
+    // should run on emulated DRAM. LABWIRED_REAL_HEAP=1 un-thunks it to let
+    // the firmware's own allocator run, for diagnosing the un-thunk path.
+    if std::env::var("LABWIRED_REAL_HEAP").is_err() {
+        push_named(
+            &mut thunks,
+            "heap_caps_init",
+            rom_thunks::esp_idf_heap_caps_init,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_malloc",
+            rom_thunks::esp_idf_heap_caps_malloc,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_calloc",
+            rom_thunks::esp_idf_heap_caps_calloc,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_free",
+            rom_thunks::esp_idf_heap_caps_free,
+        );
+        push_named(
+            &mut thunks,
+            "heap_caps_realloc",
+            rom_thunks::esp_idf_heap_caps_realloc,
+        );
+    }
 
     // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
     for sym in &[
@@ -473,7 +477,10 @@ fn labwired_wifi_fixture_connects_and_gets() {
 
     eprintln!("[wifi-sim] ── final state ─────────────────────────────────");
     eprintln!("[wifi-sim] cycles executed:    {step_count}");
-    eprintln!("[wifi-sim] final PC:           0x{final_pc:08x}");
+    eprintln!("[wifi-sim] final PC (PRO_CPU): 0x{final_pc:08x}");
+    if let Some(cpu1) = machine.cpu_secondary.as_ref() {
+        eprintln!("[wifi-sim] final PC (APP_CPU): 0x{:08x}", cpu1.get_pc());
+    }
     eprintln!("[wifi-sim] same-PC streak:     {same_pc_streak}");
     if let Some(e) = &step_err {
         eprintln!("[wifi-sim] cpu step error:    {e}");
