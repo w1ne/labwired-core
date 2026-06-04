@@ -276,6 +276,31 @@ impl crate::peripherals::esp32::ledc::LedcDutyObserver for LedcServoDriver {
     }
 }
 
+/// Binds an [`Mcpwm`](crate::peripherals::esp32::mcpwm::Mcpwm) operator to a
+/// [`Servo`] so each `mcpwm_set_duty` drives the servo's angle — the
+/// motor-control PWM peripheral driving the same actuator as LEDC. Register
+/// with `mcpwm.add_duty_observer(Arc::new(McpwmServoDriver::new(op, servo)))`.
+#[derive(Debug)]
+pub struct McpwmServoDriver {
+    operator: u64,
+    servo: Arc<Servo>,
+}
+
+impl McpwmServoDriver {
+    /// Drive `servo` from MCPWM `operator`'s duty.
+    pub fn new(operator: u64, servo: Arc<Servo>) -> Self {
+        Self { operator, servo }
+    }
+}
+
+impl crate::peripherals::esp32::mcpwm::McpwmDutyObserver for McpwmServoDriver {
+    fn on_duty_change(&self, operator: u64, duty_fraction: f64) {
+        if operator == self.operator {
+            self.servo.apply_duty_fraction(duty_fraction);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
