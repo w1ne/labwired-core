@@ -259,24 +259,16 @@ fn labwired_ereader_runs_to_panel_paint() {
         "uartWrite",
         "uartWriteBuf",
         "_Z14serialEventRunv",
-        "vListInsert",
     ] {
         push_named(&mut thunks, sym, rom_thunks::nop_return_zero);
     }
 
-    // Non-NULL fake handle returns for FreeRTOS object creation.
-    for sym in &[
-        "xQueueCreateMutex",
-        "xQueueCreateMutexStatic",
-        "xQueueGenericCreate",
-        "xSemaphoreCreateMutex",
-        "xSemaphoreCreateBinary",
-        "xSemaphoreCreateCounting",
-        "xQueueCreateCountingSemaphore",
-        "xEventGroupCreate",
-    ] {
-        push_named(&mut thunks, sym, rom_thunks::nop_return_fake_ptr);
-    }
+    // Real FreeRTOS: queue/mutex/event-group create + vListInsert are NOT
+    // thunked — the firmware's own FreeRTOS runs on the emulated registers +
+    // heap. (The old fakes — nop'd vListInsert + fake-handle creates + always-
+    // succeed ops — were pure debt: faking the create functions left their
+    // list structures uninitialised, which forced faking everything built on
+    // them. Removing all of it still paints refresh_gen=2.)
 
     // SPI-flash lock stubs (real impl asserts on uninitialised mutex).
     for sym in &[
@@ -321,17 +313,8 @@ fn labwired_ereader_runs_to_panel_paint() {
         "xTaskGetCurrentTaskHandle",
         rom_thunks::x_task_get_current_task_handle,
     );
-    push_named(
-        &mut thunks,
-        "xQueueSemaphoreTake",
-        rom_thunks::return_pd_true,
-    );
-    push_named(&mut thunks, "xQueueGenericSend", rom_thunks::return_pd_true);
-    push_named(
-        &mut thunks,
-        "ulTaskGenericNotifyTake",
-        rom_thunks::return_pd_true,
-    );
+    // (Real FreeRTOS: xQueueSemaphoreTake / xQueueGenericSend /
+    // ulTaskGenericNotifyTake run for real — no always-succeed fakes.)
     push_named(&mut thunks, "spiStartBus", rom_thunks::spi_start_bus_fake);
     push_named(
         &mut thunks,

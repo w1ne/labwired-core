@@ -257,24 +257,14 @@ fn labwired_wifi_fixture_connects_and_gets() {
         "uartWrite",
         "uartWriteBuf",
         "_Z14serialEventRunv",
-        "vListInsert",
     ] {
         push_named(&mut thunks, sym, rom_thunks::nop_return_zero);
     }
 
-    // Non-NULL fake handle returns for FreeRTOS object creation.
-    for sym in &[
-        "xQueueCreateMutex",
-        "xQueueCreateMutexStatic",
-        "xQueueGenericCreate",
-        "xSemaphoreCreateMutex",
-        "xSemaphoreCreateBinary",
-        "xSemaphoreCreateCounting",
-        "xQueueCreateCountingSemaphore",
-        "xEventGroupCreate",
-    ] {
-        push_named(&mut thunks, sym, rom_thunks::nop_return_fake_ptr);
-    }
+    // Real FreeRTOS: queue/mutex/event-group create + vListInsert are NOT
+    // thunked — the firmware's own FreeRTOS runs on the emulated registers +
+    // heap (proven by the e-reader e2e). Only xQueueCreateMutexStatic keeps
+    // its echo helper (returns the static buffer as the handle).
 
     // SPI-flash lock stubs (real impl asserts on uninitialised mutex).
     for sym in &[
@@ -319,17 +309,8 @@ fn labwired_wifi_fixture_connects_and_gets() {
         "xTaskGetCurrentTaskHandle",
         rom_thunks::x_task_get_current_task_handle,
     );
-    push_named(
-        &mut thunks,
-        "xQueueSemaphoreTake",
-        rom_thunks::return_pd_true,
-    );
-    push_named(&mut thunks, "xQueueGenericSend", rom_thunks::return_pd_true);
-    push_named(
-        &mut thunks,
-        "ulTaskGenericNotifyTake",
-        rom_thunks::return_pd_true,
-    );
+    // (Real FreeRTOS: xQueueSemaphoreTake/xQueueGenericSend/notify run for
+    // real — no always-succeed fakes.)
     // WiFi + lwIP socket thunks — the firmware-reachability layer. Resolve
     // each by its exact (possibly C++-mangled) symbol from the ELF and route
     // to the simulated network. WiFi.begin/status short-circuit the esp_wifi
@@ -367,25 +348,8 @@ fn labwired_wifi_fixture_connects_and_gets() {
     // arduino's NetworkClient::connect waits via the VFS select wrapper
     // (esp_vfs_select), not lwip_select directly — route it the same way.
     push_sym(&mut thunks, "esp_vfs_select", wifi_thunks::lwip_select);
-    // Event-group ops on the faked xEventGroupCreate handle would deref it
-    // and trip the FreeRTOS list asserts; stub set/wait to report bits set.
-    push_sym(&mut thunks, "xEventGroupSetBits", wifi_thunks::return_arg1);
-    push_sym(&mut thunks, "xEventGroupWaitBits", wifi_thunks::return_arg1);
-    push_sym(
-        &mut thunks,
-        "xEventGroupClearBits",
-        rom_thunks::nop_return_zero,
-    );
-    push_sym(
-        &mut thunks,
-        "xEventGroupGetBits",
-        rom_thunks::nop_return_zero,
-    );
-    push_sym(
-        &mut thunks,
-        "vEventGroupDelete",
-        rom_thunks::nop_return_zero,
-    );
+    // (Real FreeRTOS: event groups — create + set/wait/clear/get/delete — run
+    // for real, on the real handle, with real list ops. No fakes.)
     // IDF logging — its registered vprint func path aborts in the sim; the
     // firmware's own markers go through Serial, not esp_log. Not in the
     // fixed arduino-thunk set, so resolve it from the ELF.
