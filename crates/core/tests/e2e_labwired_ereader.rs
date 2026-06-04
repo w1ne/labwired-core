@@ -34,7 +34,7 @@ use labwired_core::peripherals::components::Uc8151dTricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::esp32s3::rom_thunks;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
-use labwired_core::{Bus, Cpu, Machine};
+use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
 
 const DEFAULT_ELF: &str = "/tmp/labwired-ereader/build/labwired-ereader.ino.elf";
@@ -101,39 +101,21 @@ fn labwired_ereader_runs_to_panel_paint() {
         symbol_addrs.len()
     );
 
-    // Boot rendezvous aid. The REAL APP_CPU runs call_start_cpu1 and its
-    // scheduler/loopTask for real. We still pre-assert the *early*
-    // startup-handshake flags (s_resume_cores / s_cpu_up / s_cpu_inited /
-    // s_system_inited) below — these mark BROM/early-boot milestones the sim
-    // skips. The FINAL barrier flag, s_other_cpu_startup_done, is NOT forged:
-    // APP_CPU's scheduler quiesces to IDLE and its idle hook sets it for real
-    // (see below). This is a boot aid, NOT the loopTask fake (gone — loopTask
-    // genuinely runs on core 1).
-    let mut handshake_bytes: Vec<u32> = Vec::new();
-    for sym in &[
-        "s_resume_cores",
-        "s_cpu_up",
-        "s_cpu_inited",
-        "s_system_inited",
-    ] {
-        if let Some(&addr) = symbol_addrs.get(*sym) {
-            let _ = machine.bus.write_u8(addr as u64, 0x01);
-            let _ = machine.bus.write_u8(addr as u64 + 1, 0x01);
-            handshake_bytes.push(addr);
-            handshake_bytes.push(addr + 1);
-        }
-    }
-    // s_other_cpu_startup_done is NO LONGER forged. APP_CPU's FreeRTOS
-    // scheduler now genuinely quiesces to its IDLE task, whose idle hook
-    // (other_cpu_startup_idle_hook_cb @ 0x400f8c08) writes this flag for
-    // real — letting PRO_CPU's startup barrier (app_startup.c spin on
-    // s_other_cpu_startup_done) clear. This works because the FROM_CPU_INTR1
-    // crosscore yield is now delivered to APP_CPU via the correct APP-side
-    // interrupt-matrix MAP register, modeled in the core's DPORT
-    // (Dport::cross_core_pending → bus.pending_cpu_irqs(core_id)).
-    // Re-assert the flags at the un-stall cycle (post-.bss) so .bss zero-init
-    // can't wipe them — see rom_thunks::ets_set_appcpu_boot_addr.
-    rom_thunks::set_appcpu_up_flags(handshake_bytes.clone());
+    // No dual-core startup-handshake forges. With APP_CPU running for real,
+    // the firmware drives the whole rendezvous itself: PRO_CPU releases
+    // APP_CPU (ets_set_appcpu_boot_addr), APP_CPU runs call_start_cpu1 and
+    // marks s_cpu_up[1]/s_cpu_inited[1]/s_system_inited[1], PRO_CPU sets
+    // s_resume_cores, and APP_CPU's IDLE idle-hook sets s_other_cpu_startup_done
+    // — all with no help from the harness. (Verified: forging these vs not
+    // makes no difference to the paint; both ELFs reach refresh.) The
+    // cross-core yield IPI that quiesces APP_CPU to IDLE is delivered by the
+    // core's DPORT (Dport::cross_core_pending → bus.pending_cpu_irqs(core_id)),
+    // not bridged here.
+    //
+    // set_appcpu_up_flags stays available for SINGLE-CORE frontends (wasm/cli)
+    // where no APP_CPU exists to mark the flags; this dual-core test passes an
+    // empty list so the ets_set_appcpu_boot_addr re-assert is a no-op.
+    rom_thunks::set_appcpu_up_flags(Vec::new());
 
     // loopTask now runs on the REAL APP_CPU (core 1) — no repin. arduino-esp32
     // pins loopTask to CONFIG_ARDUINO_RUNNING_CORE=1, which is genuinely
