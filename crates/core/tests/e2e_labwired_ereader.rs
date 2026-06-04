@@ -100,14 +100,14 @@ fn labwired_ereader_runs_to_panel_paint() {
         symbol_addrs.len()
     );
 
-    // Boot rendezvous aid. The REAL APP_CPU now runs call_start_cpu1 and
-    // its scheduler/loopTask for real, but PRO_CPU's final startup barrier
-    // (app_startup.c: spin on s_other_cpu_startup_done, set by APP_CPU's
-    // IDLE-task idle hook) isn't yet completed by the two-core lockstep, so
-    // we still pre-assert the startup-handshake flags. This is a boot aid,
-    // NOT the loopTask fake (that's gone — loopTask genuinely runs on
-    // core 1). TODO(dual-core): drive the idle-hook rendezvous from the
-    // real APP_CPU and drop this.
+    // Boot rendezvous aid. The REAL APP_CPU runs call_start_cpu1 and its
+    // scheduler/loopTask for real. We still pre-assert the *early*
+    // startup-handshake flags (s_resume_cores / s_cpu_up / s_cpu_inited /
+    // s_system_inited) below — these mark BROM/early-boot milestones the sim
+    // skips. The FINAL barrier flag, s_other_cpu_startup_done, is NOT forged:
+    // APP_CPU's scheduler quiesces to IDLE and its idle hook sets it for real
+    // (see below). This is a boot aid, NOT the loopTask fake (gone — loopTask
+    // genuinely runs on core 1).
     let mut handshake_bytes: Vec<u32> = Vec::new();
     for sym in &[
         "s_resume_cores",
@@ -122,15 +122,13 @@ fn labwired_ereader_runs_to_panel_paint() {
             handshake_bytes.push(addr + 1);
         }
     }
-    // s_other_cpu_startup_done: still a boot aid. The real rendezvous is
-    // APP_CPU's IDLE task running other_cpu_startup_idle_hook_cb to set it,
-    // but APP_CPU's scheduler doesn't yet reach IDLE (a core-1 system task
-    // loops on xQueueReceive without all-blocking). TODO(dual-core): make
-    // APP_CPU's scheduler quiesce to IDLE, then drop this.
-    if let Some(&addr) = symbol_addrs.get("s_other_cpu_startup_done") {
-        let _ = machine.bus.write_u8(addr as u64, 0x01);
-        handshake_bytes.push(addr);
-    }
+    // s_other_cpu_startup_done is NO LONGER forged. APP_CPU's FreeRTOS
+    // scheduler now genuinely quiesces to its IDLE task, whose idle hook
+    // (other_cpu_startup_idle_hook_cb @ 0x400f8c08) writes this flag for
+    // real — letting PRO_CPU's startup barrier (app_startup.c spin on
+    // s_other_cpu_startup_done) clear. This works because the FROM_CPU_INTR1
+    // crosscore yield is now delivered to APP_CPU via the correct APP-side
+    // interrupt-matrix MAP register (see the IPI bridge below).
     // Re-assert the flags at the un-stall cycle (post-.bss) so .bss zero-init
     // can't wipe them — see rom_thunks::ets_set_appcpu_boot_addr.
     rom_thunks::set_appcpu_up_flags(handshake_bytes.clone());
@@ -437,7 +435,16 @@ fn labwired_ereader_runs_to_panel_paint() {
                 from_cpu_bit0 = Some(bit);
             }
         }
-        if let Ok(v) = machine.bus.read_u32(0x3FF0_0168) {
+        // FROM_CPU_INTR1 (ESP32 source 25) is the crosscore IPI targeting
+        // APP_CPU. Its source→CPU-interrupt routing lives in the APP-side
+        // interrupt matrix MAP register: DPORT_APP_MAC_INTR_MAP_REG
+        // (0x3FF0_0208) + 25*4 = 0x3FF0_026C. The firmware programs it from
+        // APP_CPU's esp_crosscore_int_init→esp_intr_alloc→intr_matrix_set
+        // (our esp_rom_route_intr_matrix thunk). Reading the *PRO*-side
+        // binding (the old 0x3FF0_0168) always returns 0, so the yield IPI
+        // was never delivered and APP_CPU's Tmr Svc task spun on
+        // xQueueReceive→block→re-wake instead of quiescing to IDLE.
+        if let Ok(v) = machine.bus.read_u32(0x3FF0_026C) {
             let bit = (v & 0x1F) as u8;
             if v != 0 && bit < 32 {
                 from_cpu_bit1 = Some(bit);

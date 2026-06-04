@@ -525,6 +525,19 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32::dport::Dport::new()),
     );
 
+    // SHA hardware accelerator (TRM §24) at 0x3FF0_3000. Real FIPS-180-4
+    // SHA-1/SHA-256 block compression so firmware digests match silicon
+    // instead of round-tripping zeros through the analog-AHB catch-all.
+    // MUST register BEFORE dport_analog_ahb (first-registered-wins; the
+    // 0x3FF0_1000..0x3FF1_FFFF stub would otherwise shadow this window).
+    bus.add_peripheral(
+        "sha",
+        crate::peripherals::esp32::sha::Sha::BASE as u64,
+        crate::peripherals::esp32::sha::Sha::SIZE as u64,
+        None,
+        Box::new(crate::peripherals::esp32::sha::Sha::new()),
+    );
+
     // Analog AHB / reserved region immediately above DPORT
     // (0x3FF0_1000..0x3FF1_FFFF, 60 KiB). Arduino-ESP32's startup touches
     // a handful of analog calibration registers in this window; nothing
@@ -633,6 +646,33 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
     );
 
+    // LEDC — LED PWM controller (TRM §14) at 0x3FF5_9000. Real model: 8 HS +
+    // 8 LS channels over 4 HS / 4 LS timers, CONF1.DUTY_START latch so
+    // ledc_get_duty()/ledcRead() read back the committed duty, derived duty
+    // fraction + frequency. (PWM-edge emission to GPIO deferred.) Registered
+    // before the catch-all loop below so its window wins (first-registered).
+    bus.add_peripheral(
+        "ledc",
+        crate::peripherals::esp32::ledc::Ledc::BASE as u64,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::ledc::Ledc::new(
+            crate::peripherals::esp32::ledc::Ledc::BASE,
+        )),
+    );
+
+    // TWAI / CAN controller (TRM §27) at 0x3FF6_B000. SJA1000-derived:
+    // reset-mode handshake, single-shot TX completion + IRQ, SELF_RX, and
+    // the read-and-clear interrupt register so twai_driver_install()/
+    // twai_start() make forward progress instead of faulting.
+    bus.add_peripheral(
+        "twai",
+        0x3FF6_B000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::twai::Esp32Twai::new()),
+    );
+
     // Catch-all stubs for the rest of the APB peripheral block
     // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
     // (RTC_IO, SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
@@ -650,7 +690,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         ("uart2", 0x3FF6_E000),
         ("pwm0", 0x3FF5_E000),
-        ("ledc", 0x3FF5_9000),
         ("ledc2", 0x3FF6_8000),
         ("rmt", 0x3FF5_6000),
         ("pcnt", 0x3FF5_7000),
