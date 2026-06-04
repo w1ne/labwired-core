@@ -1181,6 +1181,39 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(crate::peripherals::esp32s3::sar_adc::Esp32s3SarAdc::new(64)),
     );
 
+    // ── More twins (GDMA / I2S0 / I2S1 / TWAI) ───────────────────────────
+    // After the catch-alls; *_s3 names for i2s avoid the classic-ESP32 i2s0/i2s1
+    // stub name collision in the snapshot. GDMA models registers + EOF
+    // completion (descriptor-walking memory movement is a documented follow-up).
+    bus.add_peripheral(
+        "gdma",
+        0x6003_F000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::gdma::Esp32s3Gdma::new(66)),
+    );
+    bus.add_peripheral(
+        "i2s0_s3",
+        0x6000_F000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::i2s::Esp32s3I2s::new(25)),
+    );
+    bus.add_peripheral(
+        "i2s1_s3",
+        0x6002_D000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::i2s::Esp32s3I2s::new(26)),
+    );
+    bus.add_peripheral(
+        "twai",
+        0x6002_B000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::twai::Esp32s3Twai::new(37)),
+    );
+
     // Power-on register state the real boot ROM checks before booting from
     // flash. Values captured from silicon over JTAG: without them the ROM reads
     // reset-reason = 0 ("invalid reset") and boot-strap = 0 (DOWNLOAD mode) and
