@@ -110,3 +110,46 @@ impl I2cDevice for Adxl345 {
         Some(self)
     }
 }
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Adxl345Kit;
+pub static ADXL345_KIT: Adxl345Kit = Adxl345Kit;
+
+static ADXL345_METADATA: KitMetadata = KitMetadata {
+    device_type: "adxl345",
+    label: "ADXL345 Tilt",
+    summary: "3-axis ±2/4/8/16 g digital accelerometer over I2C.",
+    detail: "Analog Devices ADXL345 with the canonical 0x53 / 0x1D 7-bit address pair. \
+             Wired through the simulated I2C bus; host stimulus seeds X/Y/Z and the firmware \
+             reads them through the DATAX/Y/Z registers.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x53; 0x1D selects the alternate-pin variant.",
+    }],
+    labs: &[LabRef {
+        board_id: "adxl345-sensor-lab",
+        chip: "stm32f103",
+        example_dir: "adxl345-sensor-lab",
+        demo_elf: "demo-adxl345-sensor-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Adxl345Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &ADXL345_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(0x53)?;
+        let i2c = ctx.i2c()?;
+        i2c.attach(Box::new(Adxl345::new(address)));
+        Ok(())
+    }
+}

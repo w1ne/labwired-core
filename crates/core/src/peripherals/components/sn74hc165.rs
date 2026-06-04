@@ -83,6 +83,60 @@ impl SpiDevice for Sn74hc165 {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Sn74hc165Kit;
+pub static SN74HC165_KIT: Sn74hc165Kit = Sn74hc165Kit;
+
+static SN74HC165_METADATA: KitMetadata = KitMetadata {
+    device_type: "sn74hc165",
+    label: "74HC165 Shift Register",
+    summary: "8-bit parallel-in / serial-out shift register over SPI.",
+    detail: "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the \
+             AL2205 IO-Link DI lab to surface field-side switch state.",
+    transport: Transport::Spi,
+    category: Category::Spi,
+    config_keys: &[
+        ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
+        },
+        ConfigKey {
+            name: "inputs",
+            ty: ConfigType::Int,
+            doc: "Optional initial 8-bit input state (0..0xFF) — useful for static test stimulus.",
+        },
+    ],
+    labs: &[LabRef {
+        board_id: "al2205-iolink-dido",
+        chip: "stm32l476",
+        example_dir: "al2205-iolink-dido",
+        demo_elf: "demo-al2205-iolink-dido.elf",
+    }],
+};
+
+impl PeripheralKit for Sn74hc165Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &SN74HC165_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
+        let inputs = ctx.config_i64("inputs");
+        let spi = ctx.spi()?;
+        let mut shifter = Sn74hc165::new(cs_pin);
+        if let Some(v) = inputs {
+            shifter.set_inputs(v as u8);
+        }
+        spi.attach(Box::new(shifter));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

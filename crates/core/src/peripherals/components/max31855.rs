@@ -107,6 +107,49 @@ impl SpiDevice for Max31855 {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Max31855Kit;
+pub static MAX31855_KIT: Max31855Kit = Max31855Kit;
+
+static MAX31855_METADATA: KitMetadata = KitMetadata {
+    device_type: "max31855",
+    label: "MAX31855 Thermocouple",
+    summary: "Cold-junction-compensated K-type thermocouple amplifier (read-only SPI).",
+    detail: "Returns the 32-bit MAX31855 response on every CS-framed transaction. Host \
+             stimulus seeds thermocouple + cold-junction temperatures; bit layout matches the \
+             real silicon's datasheet exactly.",
+    transport: Transport::Spi,
+    category: Category::Spi,
+    config_keys: &[ConfigKey {
+        name: "cs_pin",
+        ty: ConfigType::Str,
+        doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
+    }],
+    labs: &[LabRef {
+        board_id: "max31855-thermocouple-lab",
+        chip: "stm32f103",
+        example_dir: "max31855-thermocouple-lab",
+        demo_elf: "demo-max31855-thermocouple-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Max31855Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &MAX31855_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
+        let spi = ctx.spi()?;
+        spi.attach(Box::new(Max31855::new(cs_pin)));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Max31855;

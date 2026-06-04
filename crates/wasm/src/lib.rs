@@ -676,6 +676,31 @@ impl WasmSimulator {
         }
     }
 
+    /// Non-consuming UART trace snapshot for instruments such as the logic analyzer.
+    #[wasm_bindgen]
+    pub fn uart_trace_snapshot(&self) -> JsValue {
+        let Some(machine) = self.machine.as_ref() else {
+            return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
+                .unwrap_or(JsValue::NULL);
+        };
+
+        let snapshots = machine
+            .bus
+            .peripherals
+            .iter()
+            .filter_map(|p| {
+                let any = p.dev.as_any()?;
+                let uart = any.downcast_ref::<labwired_core::peripherals::uart::Uart>()?;
+                Some(serde_json::json!({
+                    "peripheral": p.name,
+                    "events": uart.trace_snapshot(),
+                }))
+            })
+            .collect::<Vec<_>>();
+
+        serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
+    }
+
     /// Execute up to max_cycles steps, returning the number actually executed.
     #[wasm_bindgen]
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
@@ -1955,27 +1980,21 @@ impl WasmSimulator {
             let _ = machine.bus.write_u8(addr as u64, 0x01);
             handshake_bytes.push(addr);
         }
+        // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
+        // newer arduino-esp32 cores whose `start_other_core` spin-waits
+        // with a tight cycle-count timeout see APP_CPU "up" without
+        // depending on the coarse 10k-cycle keep-alive in
+        // step_with_esp32_aids. Models APP_CPU bring-up; see
+        // labwired_core rom_thunks::ets_set_appcpu_boot_addr.
+        labwired_core::peripherals::esp32s3::rom_thunks::set_appcpu_up_flags(
+            handshake_bytes.clone(),
+        );
 
-        // loopTask xCoreID patch — flip the `1` to `0` so loopTask runs
-        // on PRO_CPU (until full SMP is wired). Scans first 64 bytes of
-        // app_main for the `e9 01 0c 0d` sequence and swaps it.
+        // loopTask xCoreID patch — repin loopTask from APP_CPU to PRO_CPU
+        // (we model only PRO_CPU). Handles both the legacy and IDF-5.x
+        // app_main layouts. See rom_thunks::repin_loop_task.
         if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-            const SCAN_BYTES: u32 = 64;
-            let mut window = Vec::with_capacity(SCAN_BYTES as usize);
-            for off in 0..SCAN_BYTES {
-                match machine.bus.read_u8((app_main_addr + off) as u64) {
-                    Ok(b) => window.push(b),
-                    Err(_) => break,
-                }
-            }
-            let target = [0xE9_u8, 0x01, 0x0C, 0x0D];
-            let swap = [0x0C_u8, 0x0D, 0xD9, 0x01];
-            if let Some((i, _)) = window.windows(4).enumerate().find(|(_, w)| *w == target) {
-                let patch_addr = (app_main_addr + i as u32) as u64;
-                for (j, b) in swap.iter().enumerate() {
-                    let _ = machine.bus.write_u8(patch_addr + j as u64, *b);
-                }
-            }
+            let _ = rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr);
         }
 
         // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk.
@@ -2213,10 +2232,17 @@ impl WasmSimulator {
             rom_thunks::gxepd_write_data,
         );
 
-        // xthal_window_spill — semantic spill via shadow stack.
-        for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-            push_named(&mut thunks, sym, rom_thunks::xthal_window_spill_thunk);
-        }
+        // xthal_window_spill_nw — semantic spill via shadow stack. Only the
+        // `_nw` leaf is thunked; the `xthal_window_spill` wrapper is a thin
+        // CALL{n}-entered PS-save shell that must run its real
+        // `entry / call0 _nw / retw` natively — thunking it returns via a0
+        // (the caller's return addr, since the wrapper's clobbered ENTRY
+        // never set up a0), faulting in the first-task dispatch.
+        push_named(
+            &mut thunks,
+            "xthal_window_spill_nw",
+            rom_thunks::xthal_window_spill_thunk,
+        );
 
         // Real-silicon noreturn — abort_halt prints diagnostics and
         // halts the CPU rather than returning, to avoid tight
