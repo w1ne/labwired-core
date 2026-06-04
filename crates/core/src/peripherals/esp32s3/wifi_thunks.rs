@@ -374,17 +374,6 @@ pub fn pc_task_get_name(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()>
     Ok(())
 }
 
-/// Returns the call's 2nd argument unchanged. Stubs
-/// `xEventGroupSetBits`/`xEventGroupWaitBits` (whose handles come from a
-/// faked `xEventGroupCreate`): report the requested bits as already set so
-/// waiters proceed and the fake handle is never dereferenced (which trips
-/// the `event_groups.c` list asserts).
-pub fn return_arg1(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
-    let v = arg(cpu, 1);
-    RomThunkBank::return_with(cpu, v);
-    Ok(())
-}
-
 /// Read a NUL-terminated C string from firmware memory (bounded).
 fn read_cstr(bus: &dyn Bus, ptr: u32, max: u64) -> String {
     if ptr == 0 {
