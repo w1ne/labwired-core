@@ -506,10 +506,12 @@ pub trait Bus {
         None
     }
 
-    /// Plan 3: bitmask of pending cpu0 IRQ slots aggregated by the bus
-    /// from peripheral tick results routed through the intmatrix. Default
-    /// returns 0; non-ESP32-S3 buses don't model this.
-    fn pending_cpu_irqs(&self) -> u32 {
+    /// Bitmask of pending CPU IRQ slots the bus has aggregated for the given
+    /// core (`core_id` 0 = PRO_CPU, 1 = APP_CPU). Combines peripheral source
+    /// IDs routed through the intmatrix (PRO_CPU only today) with cross-core
+    /// `FROM_CPU` IPIs delivered per-core via the DPORT interrupt matrix.
+    /// Default returns 0; non-ESP32 buses don't model this.
+    fn pending_cpu_irqs(&self, _core_id: u8) -> u32 {
         0
     }
 

@@ -39,12 +39,18 @@
 //!     directly observable on the next read, which our plain HashMap
 //!     storage satisfies.
 //!
+//! ## Cross-core IPIs
+//!
+//! `cross_core_pending(core)` resolves the `CPU_INTR_FROM_CPU_0..3`
+//! trigger registers against the per-core interrupt-matrix MAP registers
+//! and reports which CPU-interrupt slots that core should take. The bus
+//! ORs this into `pending_cpu_irqs(core_id)` so a `FROM_CPU` write made by
+//! one core's firmware is delivered as a real interrupt to the target
+//! core inside `Machine::step` — no external bridge. The receiving ISR
+//! de-asserts the source by writing the trigger register back to 0.
+//!
 //! ## What's intentionally NOT modeled
 //!
-//!   * No interrupt firing or side effects on writes to the FROM_CPU
-//!     trigger registers. The WASM IPI bridge is the policy layer that
-//!     observes those writes and raises the corresponding CPU INTERRUPT
-//!     bits; this peripheral is the storage layer.
 //!   * No clock-gate enforcement. PERIP_CLK_EN is seeded all-ones at
 //!     construction so any code that consults the bitmap before writing
 //!     it (rare, but it happens in vendor headers gated behind
@@ -97,10 +103,17 @@ pub const DPORT_CPU_INTR_FROM_CPU_0_OFFSET: u32 = 0x00DC;
 pub const DPORT_CPU_INTR_FROM_CPU_1_OFFSET: u32 = 0x00E0;
 pub const DPORT_CPU_INTR_FROM_CPU_2_OFFSET: u32 = 0x00E4;
 pub const DPORT_CPU_INTR_FROM_CPU_3_OFFSET: u32 = 0x00E8;
-/// DPORT_PRO_MAC_INTR_MAP_REG — first PRO_CPU intmatrix source entry.
-/// Subsequent peripheral source IDs are at +4 byte strides up to
-/// roughly `0x3FF0_0160`. Round-trips through `regs` like every other word.
-pub const DPORT_PRO_MAC_INTR_MAP_REG_OFFSET: u32 = 0x0100;
+/// DPORT_PRO_MAC_INTR_MAP_REG — first PRO_CPU intmatrix source entry
+/// (`DR_REG_DPORT_BASE + 0x104`, per ESP-IDF `dport_reg.h`). Source `s`
+/// maps at `base + s*4`, so e.g. the cross-core source 24 (`FROM_CPU_INTR0`)
+/// binding lives at `0x104 + 24*4 = 0x0164`. Round-trips through `regs`
+/// like every other word.
+pub const DPORT_PRO_MAC_INTR_MAP_REG_OFFSET: u32 = 0x0104;
+/// DPORT_APP_MAC_INTR_MAP_REG — first APP_CPU intmatrix source entry.
+/// The APP-side matrix mirrors the PRO-side layout (source `s` at
+/// `base + s*4`) but starts at 0x208, so e.g. the cross-core source 25
+/// (`FROM_CPU_INTR1`) binding lives at `0x208 + 25*4 = 0x026C`.
+pub const DPORT_APP_MAC_INTR_MAP_REG_OFFSET: u32 = 0x0208;
 /// DPORT_PRO_INTR_FROM_CPU_0..3 — PRO_CPU bindings for the FROM_CPU
 /// triggers above. The WASM bridge reads these to learn which CPU
 /// INTERRUPT bit to raise when a trigger fires.
@@ -180,6 +193,51 @@ impl Dport {
 
     fn write_word(&mut self, word_off: u32, value: u32) {
         self.regs[(word_off >> 2) as usize] = value;
+    }
+
+    /// Cross-core IPI delivery: which CPU-interrupt slots `core` should see
+    /// asserted right now, driven by the `CPU_INTR_FROM_CPU_0..3` trigger
+    /// registers.
+    ///
+    /// On real silicon each `CPU_INTR_FROM_CPU_n` register is a single
+    /// interrupt SOURCE — `ETS_FROM_CPU_INTR{n}_SOURCE` = `24 + n` — wired
+    /// into *both* the PRO and APP interrupt matrices. While its bit 0 is
+    /// set the source is level-asserted; each core delivers it to whatever
+    /// CPU interrupt its own matrix MAP register binds the source to (or
+    /// not at all if that core left it unmapped). The receiving ISR clears
+    /// the source by writing the trigger register back to 0
+    /// (`esp_crosscore_isr`), so this is a pure read of current register
+    /// state — no latch.
+    ///
+    /// ESP-IDF's `esp_crosscore_int_init` allocates
+    /// `ETS_FROM_CPU_INTR0_SOURCE + core_id`, so core 0 listens on source 24
+    /// (trigger `FROM_CPU_0`) and core 1 on source 25 (trigger `FROM_CPU_1`);
+    /// `esp_crosscore_int_send_yield(1)` writes `FROM_CPU_1` to yield APP_CPU.
+    pub fn cross_core_pending(&self, core: u8) -> u32 {
+        /// `ETS_FROM_CPU_INTR0_SOURCE` — the first cross-core interrupt source.
+        const FROM_CPU_INTR0_SOURCE: u32 = 24;
+        // Per-core interrupt-matrix MAP base: source `s` maps at `base + s*4`.
+        let map_base = if core == 0 {
+            DPORT_PRO_MAC_INTR_MAP_REG_OFFSET
+        } else {
+            DPORT_APP_MAC_INTR_MAP_REG_OFFSET
+        };
+        let mut slots = 0u32;
+        for n in 0..4u32 {
+            let trigger = self.read_word(DPORT_CPU_INTR_FROM_CPU_0_OFFSET + n * 4);
+            if trigger & 1 == 0 {
+                continue;
+            }
+            let source = FROM_CPU_INTR0_SOURCE + n;
+            let map = self.read_word(map_base + source * 4);
+            // The MAP register's low 5 bits select the CPU interrupt number.
+            // A value of 0 means this core left the source unbound (matches
+            // the reset state), so it takes no interrupt.
+            if map != 0 {
+                slots |= 1u32 << (map & 0x1F);
+            }
+        }
+        slots
     }
 }
 
@@ -313,6 +371,63 @@ mod tests {
         // (the bringup path is only entered when this reads non-zero).
         let p = Dport::new();
         assert_eq!(read_u32_at(&p, 0x30), 0);
+    }
+
+    #[test]
+    fn cross_core_yield_ipi_delivers_to_app_cpu_only() {
+        // The path that quiesces APP_CPU to IDLE in the e-reader boot:
+        // core 1 binds FROM_CPU_INTR1 (source 25) to a CPU interrupt via its
+        // APP-side matrix MAP (0x208 + 25*4 = 0x26C), then a FROM_CPU_1 write
+        // (esp_crosscore_int_send_yield(1)) delivers that interrupt to core 1
+        // — and to core 1 only, since PRO left source 25 unbound.
+        let mut p = Dport::new();
+        write_u32_at(
+            &mut p,
+            (DPORT_APP_MAC_INTR_MAP_REG_OFFSET + 25 * 4) as u64,
+            7,
+        );
+
+        assert_eq!(p.cross_core_pending(1), 0, "no IPI until the trigger fires");
+
+        write_u32_at(&mut p, DPORT_CPU_INTR_FROM_CPU_1_OFFSET as u64, 1);
+        assert_eq!(
+            p.cross_core_pending(1),
+            1 << 7,
+            "APP_CPU takes the CPU interrupt its matrix bound source 25 to"
+        );
+        assert_eq!(
+            p.cross_core_pending(0),
+            0,
+            "PRO_CPU left source 25 unbound, so it ignores FROM_CPU_1"
+        );
+
+        // The receiving ISR clears the trigger; the source de-asserts.
+        write_u32_at(&mut p, DPORT_CPU_INTR_FROM_CPU_1_OFFSET as u64, 0);
+        assert_eq!(p.cross_core_pending(1), 0);
+    }
+
+    #[test]
+    fn cross_core_trigger_with_unmapped_source_delivers_nothing() {
+        // A trigger whose per-core MAP is still at its reset value (0) must
+        // not synthesize a phantom interrupt 0.
+        let mut p = Dport::new();
+        write_u32_at(&mut p, DPORT_CPU_INTR_FROM_CPU_1_OFFSET as u64, 1);
+        assert_eq!(p.cross_core_pending(1), 0);
+    }
+
+    #[test]
+    fn cross_core_from_cpu_0_routes_source_24_to_pro_cpu() {
+        // FROM_CPU_0 is source 24, the core-0 crosscore IPI; PRO binds it in
+        // its own matrix (0x100 + 24*4 = 0x160).
+        let mut p = Dport::new();
+        write_u32_at(
+            &mut p,
+            (DPORT_PRO_MAC_INTR_MAP_REG_OFFSET + 24 * 4) as u64,
+            13,
+        );
+        write_u32_at(&mut p, DPORT_CPU_INTR_FROM_CPU_0_OFFSET as u64, 1);
+        assert_eq!(p.cross_core_pending(0), 1 << 13);
+        assert_eq!(p.cross_core_pending(1), 0);
     }
 
     #[test]
