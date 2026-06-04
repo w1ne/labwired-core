@@ -96,10 +96,6 @@ bitflags = "2.4"
 human-size = "0.4"
 serde_json = "1.0"
 sha2 = "0.10"
-# Crypto-accelerator twins (AES / RSA) — functionally-exact block/bignum math,
-# pure-Rust (wasm-compatible), mirroring the SHA twin's use of sha2.
-aes = "0.8"
-num-bigint = "0.4"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "0.2"

@@ -35,9 +35,6 @@ bincode = "1.3"
 # SHA-256 compression for the ESP32-S3 SHA accelerator model (bootloader
 # image-hash verification). Used only by the esp32s3 SHA peripheral.
 sha2 = { workspace = true, features = ["compress"] }
-# Functionally-exact AES (block cipher) and RSA (bignum modexp) accelerator twins.
-aes = { workspace = true }
-num-bigint = { workspace = true }
 goblin = { workspace = true }
 labwired-ir = { path = "../ir" }
 serde_yaml.workspace = true

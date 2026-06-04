@@ -1213,6 +1213,33 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(crate::peripherals::esp32s3::twai::Esp32s3Twai::new(37)),
     );
+    // AES accelerator (DR_REG_AES_BASE, 0x6003_A000) — functionally-exact
+    // FIPS-197 Rijndael (ECB block), ETS_AES_INTR_SOURCE = 77.
+    bus.add_peripheral(
+        "aes",
+        0x6003_A000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::aes::Esp32s3Aes::new(77)),
+    );
+    // RSA accelerator (DR_REG_RSA_BASE, 0x6003_C000) — functionally-exact
+    // bignum modular exponentiation, ETS_RSA_INTR_SOURCE = 76.
+    bus.add_peripheral(
+        "rsa",
+        0x6003_C000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::rsa::Esp32s3Rsa::new(76)),
+    );
+    // HMAC accelerator (DR_REG_HMAC_BASE, 0x6003_E000) — HMAC-SHA256 over a
+    // modeled efuse key; firmware polls QUERY_BUSY, so no interrupt source.
+    bus.add_peripheral(
+        "hmac",
+        0x6003_E000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::hmac::Esp32s3Hmac::new(0)),
+    );
 
     // Power-on register state the real boot ROM checks before booting from
     // flash. Values captured from silicon over JTAG: without them the ROM reads
