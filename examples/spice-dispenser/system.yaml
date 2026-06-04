@@ -1,0 +1,24 @@
+# LabWired — SpiceDispenser board (ESP32-S3) faithful rom-boot system.
+#
+# This models the SpiceDispenser hardware: an ESP32-S3 that drives two hobby
+# servos (revolver-select + shutter) through a PCA9685 I2C PWM expander, so a
+# voice/BLE command rotates to a compartment and pulses the shutter.
+#
+# It is exercised with the FAITHFUL --rom-boot path: the genuine ESP32-S3 boot
+# ROM runs from the reset vector, the real 2nd-stage bootloader loads the app
+# from the SPI-flash controller, and execution enters the unmodified
+# application image — exactly like silicon (no fast-boot, no firmware-symbol
+# hooks). See RUNBOOK.md.
+#
+# The CPU/peripheral model comes from the esp32s3-zero chip descriptor. The
+# dispenser's external actuation hardware (below) is documented here for
+# fidelity; PCA9685 + servo digital-twins attach once the app boot reaches the
+# I2C driver (see VALIDATION.md for the current boot frontier).
+name: "spice-dispenser"
+chip: "../../configs/chips/esp32s3-zero.yaml"
+
+# External actuation hardware on the real board (wiring per SpiceDispenser README):
+#   ESP32-S3 GPIO5 (SDA) / GPIO6 (SCL) --> PCA9685 @ I2C 0x40, 400 kHz, 50 Hz PWM
+#   PCA9685 channel 8  --> revolver servo  (compartment select: 15deg + 30deg*(n-1))
+#   PCA9685 channel 12 --> shutter servo   (closed 20deg -> open 120deg, per dose)
+external_devices: []
