@@ -879,7 +879,40 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     };
     let break_at: Vec<u32> = args.break_at.iter().filter_map(|s| parse_hex(s)).collect();
     let watch_mem: Vec<u32> = args.watch_mem.iter().filter_map(|s| parse_hex(s)).collect();
-    let mut break_hit = vec![false; break_at.len()];
+    let mut break_hit = vec![false; break_at.len()]; // PRO_CPU first-hit flags
+    let mut break_hit1 = vec![false; break_at.len()]; // APP_CPU first-hit flags
+    // On the first time a core's PC reaches a --break-at address, dump its
+    // a0..a15 + window state and the --watch-mem words. Covers both cores so an
+    // APP_CPU fault is observable too.
+    macro_rules! check_break {
+        ($c:expr, $pc:expr, $hits:expr) => {
+            if let Some(bi) = break_at.iter().position(|&b| b == $pc) {
+                if !$hits[bi] {
+                    $hits[bi] = true;
+                    eprintln!(
+                        "labwired-cli run: BREAK-AT 0x{:08x} (step {steps}, core {})",
+                        $pc,
+                        if $c.app_cpu { 1 } else { 0 }
+                    );
+                    for r in 0..16u8 {
+                        eprintln!("    a{:<2} = 0x{:08x}", r, $c.regs.read_logical(r));
+                    }
+                    eprintln!(
+                        "    PS=0x{:08x} WB={} WS=0x{:04x}",
+                        $c.ps.as_raw(),
+                        $c.regs.windowbase(),
+                        $c.regs.windowstart()
+                    );
+                    for &m in &watch_mem {
+                        match bus.read_u32(m as u64) {
+                            Ok(v) => eprintln!("    mem[0x{m:08x}] = 0x{v:08x}"),
+                            Err(e) => eprintln!("    mem[0x{m:08x}] = <unmapped: {e}>"),
+                        }
+                    }
+                }
+            }
+        };
+    }
     if !break_at.is_empty() {
         eprintln!(
             "labwired-cli run: breakpoints {:?} watch-mem {:?}",
@@ -893,31 +926,8 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         pc_ring[ring_head] = pc_before;
         ring_head = (ring_head + 1) % RING_LEN;
 
-        // Debug breakpoint: on first hit of each --break-at PC, dump CPU + watched memory.
-        if let Some(bi) = break_at.iter().position(|&b| b == pc_before) {
-            if !break_hit[bi] {
-                break_hit[bi] = true;
-                eprintln!(
-                    "labwired-cli run: BREAK-AT 0x{pc_before:08x} (step {steps}, core {})",
-                    if cpu.app_cpu { 1 } else { 0 },
-                );
-                for r in 0..16u8 {
-                    eprintln!("    a{:<2} = 0x{:08x}", r, cpu.regs.read_logical(r));
-                }
-                eprintln!(
-                    "    PS=0x{:08x} WB={} WS=0x{:04x}",
-                    cpu.ps.as_raw(),
-                    cpu.regs.windowbase(),
-                    cpu.regs.windowstart(),
-                );
-                for &m in &watch_mem {
-                    match bus.read_u32(m as u64) {
-                        Ok(v) => eprintln!("    mem[0x{m:08x}] = 0x{v:08x}"),
-                        Err(e) => eprintln!("    mem[0x{m:08x}] = <unmapped: {e}>"),
-                    }
-                }
-            }
-        }
+        // Debug breakpoint (PRO_CPU): dump on first hit.
+        check_break!(cpu, pc_before, break_hit);
 
         // Capture the APP_CPU entry when PRO_CPU programs it. The ROM also
         // points the APP_CPU at early DRAM stubs during its own bring-up; only
@@ -1011,6 +1021,8 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         // A halted APP_CPU returns immediately from step(). S32C1I is atomic
         // within step(), so spinlocks between the cores behave correctly.
         if let Some(c1) = cpu1.as_mut() {
+            // Debug breakpoint (APP_CPU): dump on first hit.
+            check_break!(c1, c1.get_pc(), break_hit1);
             match c1.step(&mut bus, &observers, &config) {
                 Ok(()) | Err(SimulationError::BreakpointHit(_)) => {}
                 Err(e) => {
