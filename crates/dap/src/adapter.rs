@@ -938,6 +938,7 @@ fn board_io_kind_str(kind: labwired_config::BoardIoKind) -> &'static str {
         labwired_config::BoardIoKind::PwmOutput => "pwm_output",
         labwired_config::BoardIoKind::I2cDevice => "i2c_device",
         labwired_config::BoardIoKind::SpiDevice => "spi_device",
+        labwired_config::BoardIoKind::UartDevice => "uart_device",
     }
 }
 
@@ -1007,6 +1008,9 @@ fn gpio_offsets_for_peripheral(
             idr_offset: GPIO_V2_IDR_OFFSET,
             odr_offset: GPIO_V2_ODR_OFFSET,
         }),
+        // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
+        // skip it gracefully (callers use `?`, so None drops the binding).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,
     }
 }
 
@@ -1094,6 +1098,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
@@ -1144,6 +1149,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
@@ -1207,6 +1213,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),

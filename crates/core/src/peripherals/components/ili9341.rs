@@ -328,6 +328,49 @@ impl SpiDevice for Ili9341 {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Ili9341Kit;
+pub static ILI9341_KIT: Ili9341Kit = Ili9341Kit;
+
+static ILI9341_METADATA: KitMetadata = KitMetadata {
+    device_type: "ili9341",
+    label: "ILI9341 TFT",
+    summary: "240×320 RGB565 SPI TFT display.",
+    detail: "Implements the cmd / RAMWR SPI protocol against an in-memory framebuffer. \
+             The playground surfaces pixels through the simulator bridge so the host can render \
+             the display verbatim.",
+    transport: Transport::Spi,
+    category: Category::Spi,
+    config_keys: &[ConfigKey {
+        name: "cs_pin",
+        ty: ConfigType::Str,
+        doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
+    }],
+    labs: &[LabRef {
+        board_id: "ili9341-tft-lab",
+        chip: "stm32f103",
+        example_dir: "ili9341-tft-lab",
+        demo_elf: "demo-ili9341-tft-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Ili9341Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &ILI9341_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
+        let spi = ctx.spi()?;
+        spi.attach(Box::new(Ili9341::new(cs_pin)));
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

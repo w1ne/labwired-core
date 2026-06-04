@@ -176,10 +176,25 @@ impl OpenOcd {
         // dirty state left by a previous (unclean) OpenOCD session.
         reset_esp_usb_jtag();
 
-        // Build the full argument list: user args + `init` command so the
-        // target is brought up and the TCL port starts listening.
-        let mut full_args: Vec<&str> = args.to_vec();
-        full_args.extend_from_slice(&["-c", "init"]);
+        // Build the full argument list (owned, so we can splice in a runtime
+        // serial). When LABWIRED_STLINK_SERIAL is set and an ST-Link interface
+        // is in use, select that specific probe — necessary when more than one
+        // ST-Link is attached (e.g. an STM32 and an nRF board at once). The
+        // `adapter serial` command must follow the interface cfg that selects
+        // the driver, so it is spliced in right after `interface/stlink.cfg`.
+        let mut full_args: Vec<String> = Vec::new();
+        let stlink_serial = std::env::var("LABWIRED_STLINK_SERIAL").ok();
+        for a in args {
+            full_args.push((*a).to_string());
+            if let Some(serial) = &stlink_serial {
+                if *a == "interface/stlink.cfg" {
+                    full_args.push("-c".to_string());
+                    full_args.push(format!("adapter serial {serial}"));
+                }
+            }
+        }
+        full_args.push("-c".to_string());
+        full_args.push("init".to_string());
 
         // Allow overriding the OpenOCD binary (e.g. a distro build that has
         // the J-Link driver compiled in, when the PATH default does not).

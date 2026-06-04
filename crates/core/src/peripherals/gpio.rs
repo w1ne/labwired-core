@@ -3,6 +3,14 @@
 //
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
+//
+// ── Architectural separation ────────────────────────────────────────────────
+// GPIO is one struct PER FAMILY behind the `GpioPort` enum. The STM32F1
+// config registers (CRL/CRH), the STM32v2 registers (MODER/OTYPER/…/AFRH) and
+// the nRF52 registers (DIR/PIN_CNF) each live ONLY in their own variant — a
+// register from one family cannot exist on another. The chip-yaml `profile`
+// selects the variant; the `Peripheral` impl and the `odr_offset`/`idr_offset`
+// bus helpers dispatch to the active family.
 
 use crate::SimResult;
 use std::str::FromStr;
@@ -33,23 +41,163 @@ impl FromStr for GpioRegisterLayout {
     }
 }
 
-/// STM32 GPIO peripheral with selectable register layout (STM32F1 or STM32v2/H5-style).
+// ── STM32F1 (CRL/CRH config registers) ───────────────────────────────────────
 #[derive(Debug, Default, serde::Serialize)]
-pub struct GpioPort {
-    layout: GpioRegisterLayout,
-    crl: u32,     // 0x00: configuration register low
-    crh: u32,     // 0x04: configuration register high
-    moder: u32,   // 0x00: mode register (STM32v2)
-    otyper: u32,  // 0x04: output type register (STM32v2)
-    ospeedr: u32, // 0x08: output speed register (STM32v2)
-    pupdr: u32,   // 0x0C: pull-up/pull-down register (STM32v2)
-    idr: u32,     // 0x08: input data register
-    odr: u32,     // 0x0C: output data register
-    lckr: u32,    // 0x18: configuration lock register
-    afrl: u32,    // 0x20: alternate function low register (STM32v2)
-    afrh: u32,    // 0x24: alternate function high register (STM32v2)
-    dir: u32,     // 0x514: direction register (nRF52)
+pub struct F1Gpio {
+    crl: u32,  // 0x00
+    crh: u32,  // 0x04
+    idr: u32,  // 0x08
+    odr: u32,  // 0x0C
+    lckr: u32, // 0x18
+}
+
+impl F1Gpio {
+    fn new() -> Self {
+        // Reset value: floating input on every pin.
+        Self {
+            crl: 0x4444_4444,
+            crh: 0x4444_4444,
+            ..Default::default()
+        }
+    }
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.crl,
+            0x04 => self.crh,
+            0x08 => self.idr,
+            0x0C => self.odr,
+            0x18 => self.lckr,
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.crl = value,
+            0x04 => self.crh = value,
+            0x0C => self.odr = value & 0xFFFF,
+            0x10 => {
+                // BSRR: low 16 set, high 16 reset; BS has priority over BR.
+                let set = value & 0xFFFF;
+                let reset = (value >> 16) & 0xFFFF;
+                self.odr &= !reset;
+                self.odr |= set;
+            }
+            0x14 => {
+                // BRR: reset selected ODR bits.
+                self.odr &= !(value & 0xFFFF);
+            }
+            0x18 => self.lckr = value,
+            _ => {}
+        }
+    }
+}
+
+// ── STM32v2 / H5-style (MODER/OTYPER/OSPEEDR/PUPDR/AFR) ───────────────────────
+#[derive(Debug, Default, serde::Serialize)]
+pub struct V2Gpio {
+    moder: u32,   // 0x00
+    otyper: u32,  // 0x04
+    ospeedr: u32, // 0x08
+    pupdr: u32,   // 0x0C
+    idr: u32,     // 0x10
+    odr: u32,     // 0x14
+    lckr: u32,    // 0x1C
+    afrl: u32,    // 0x20
+    afrh: u32,    // 0x24
+}
+
+impl V2Gpio {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.moder,
+            0x04 => self.otyper,
+            0x08 => self.ospeedr,
+            0x0C => self.pupdr,
+            0x10 => self.idr,
+            0x14 => self.odr,
+            0x1C => self.lckr,
+            0x20 => self.afrl,
+            0x24 => self.afrh,
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.moder = value,
+            0x04 => self.otyper = value & 0xFFFF,
+            0x08 => self.ospeedr = value,
+            0x0C => self.pupdr = value,
+            0x10 => self.idr = value & 0xFFFF,
+            0x14 => self.odr = value & 0xFFFF,
+            0x18 => {
+                // BSRR: low 16 set, high 16 reset; BS has priority over BR.
+                let set = value & 0xFFFF;
+                let reset = (value >> 16) & 0xFFFF;
+                self.odr &= !reset;
+                self.odr |= set;
+            }
+            0x1C => self.lckr = value,
+            0x20 => self.afrl = value,
+            0x24 => self.afrh = value,
+            0x28 => {
+                // BRR: reset selected ODR bits.
+                self.odr &= !(value & 0xFFFF);
+            }
+            _ => {}
+        }
+    }
+}
+
+// ── nRF52 (DIR / OUT / IN / PIN_CNF) ──────────────────────────────────────────
+#[derive(Debug, Default, serde::Serialize)]
+pub struct Nrf52Gpio {
+    odr: u32, // OUT 0x504
+    idr: u32, // IN  0x510 (latched input)
+    dir: u32, // DIR 0x514
     pin_cnf: [u32; 32],
+}
+
+impl Nrf52Gpio {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x504 => self.odr,
+            // IN reflects the physical pin level: output pins (DIR=1) track
+            // OUT; input pins return the latched IDR. (Nordic PS §6.10.)
+            0x510 => (self.odr & self.dir) | (self.idr & !self.dir),
+            0x514 => self.dir,
+            0x700..=0x77C if offset % 4 == 0 => self.pin_cnf[((offset - 0x700) / 4) as usize],
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x504 => self.odr = value,
+            0x508 => self.odr |= value,
+            0x50C => self.odr &= !value,
+            0x510 => self.idr = value,
+            0x514 => self.dir = value,
+            0x518 => self.dir |= value,
+            0x51C => self.dir &= !value,
+            0x700..=0x77C if offset % 4 == 0 => {
+                self.pin_cnf[((offset - 0x700) / 4) as usize] = value;
+            }
+            _ => {}
+        }
+    }
+}
+
+/// GPIO port — one variant per chip family. Register sets are fully isolated.
+#[derive(Debug, serde::Serialize)]
+pub enum GpioPort {
+    Stm32F1(F1Gpio),
+    Stm32V2(V2Gpio),
+    Nrf52(Nrf52Gpio),
+}
+
+impl Default for GpioPort {
+    fn default() -> Self {
+        Self::Stm32F1(F1Gpio::new())
+    }
 }
 
 impl GpioPort {
@@ -58,166 +206,46 @@ impl GpioPort {
     }
 
     pub fn new_with_layout(layout: GpioRegisterLayout) -> Self {
-        let mut port = Self {
-            layout,
-            ..Default::default()
-        };
-
-        if matches!(layout, GpioRegisterLayout::Stm32F1) {
-            // Reset value: floating input
-            port.crl = 0x4444_4444;
-            port.crh = 0x4444_4444;
-        } else {
-            // Generic STM32v2-like default: all pins input, push-pull, low speed, no pull-up/down.
-            port.moder = 0x0000_0000;
-            port.otyper = 0x0000_0000;
-            port.ospeedr = 0x0000_0000;
-            port.pupdr = 0x0000_0000;
+        match layout {
+            GpioRegisterLayout::Stm32F1 => Self::Stm32F1(F1Gpio::new()),
+            GpioRegisterLayout::Stm32V2 => Self::Stm32V2(V2Gpio::default()),
+            GpioRegisterLayout::Nrf52 => Self::Nrf52(Nrf52Gpio::default()),
         }
-
-        port
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
-        match self.layout {
-            GpioRegisterLayout::Stm32F1 => match offset {
-                0x00 => self.crl,
-                0x04 => self.crh,
-                0x08 => self.idr,
-                0x0C => self.odr,
-                0x18 => self.lckr,
-                _ => 0,
-            },
-            GpioRegisterLayout::Stm32V2 => match offset {
-                0x00 => self.moder,
-                0x04 => self.otyper,
-                0x08 => self.ospeedr,
-                0x0C => self.pupdr,
-                0x10 => self.idr,
-                0x14 => self.odr,
-                0x1C => self.lckr,
-                0x20 => self.afrl,
-                0x24 => self.afrh,
-                _ => 0,
-            },
-            GpioRegisterLayout::Nrf52 => match offset {
-                0x504 => self.odr,
-                // IN reflects the physical pin level. For pins configured
-                // as output (DIR bit = 1) it tracks OUT; for input pins it
-                // returns whatever was last latched into IDR. This matches
-                // Nordic PS §6.10 "PIN reads the value present on the pin"
-                // — for output pins driving the line, that value is the
-                // output driver state.
-                0x510 => (self.odr & self.dir) | (self.idr & !self.dir),
-                0x514 => self.dir,
-                0x700..=0x77C if offset % 4 == 0 => {
-                    let idx = ((offset - 0x700) / 4) as usize;
-                    self.pin_cnf[idx]
-                }
-                _ => 0,
-            },
+        match self {
+            Self::Stm32F1(g) => g.read_reg(offset),
+            Self::Stm32V2(g) => g.read_reg(offset),
+            Self::Nrf52(g) => g.read_reg(offset),
         }
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
-        match self.layout {
-            GpioRegisterLayout::Stm32F1 => match offset {
-                0x00 => self.crl = value,
-                0x04 => self.crh = value,
-                0x0C => self.odr = value & 0xFFFF,
-                0x10 => {
-                    // BSRR: Bit Set/Reset Register
-                    let set = value & 0xFFFF;
-                    let reset = (value >> 16) & 0xFFFF;
-                    // According to RM: If both BSx and BRx are set, BSx has priority.
-                    self.odr &= !reset;
-                    self.odr |= set;
-                }
-                0x14 => {
-                    // BRR: Bit Reset Register
-                    let reset = value & 0xFFFF;
-                    self.odr &= !reset;
-                }
-                0x18 => self.lckr = value,
-                _ => {}
-            },
-            GpioRegisterLayout::Stm32V2 => match offset {
-                0x00 => self.moder = value,
-                0x04 => self.otyper = value & 0xFFFF,
-                0x08 => self.ospeedr = value,
-                0x0C => self.pupdr = value,
-                0x10 => self.idr = value & 0xFFFF,
-                0x14 => self.odr = value & 0xFFFF,
-                0x18 => {
-                    // BSRR: lower 16 bits set, upper 16 bits reset.
-                    let set = value & 0xFFFF;
-                    let reset = (value >> 16) & 0xFFFF;
-                    // According to RM: If both BSx and BRx are set, BSx has priority.
-                    self.odr &= !reset;
-                    self.odr |= set;
-                }
-                0x1C => self.lckr = value,
-                0x20 => self.afrl = value,
-                0x24 => self.afrh = value,
-                0x28 => {
-                    // BRR: reset selected ODR bits.
-                    let reset = value & 0xFFFF;
-                    self.odr &= !reset;
-                }
-                _ => {}
-            },
-            GpioRegisterLayout::Nrf52 => match offset {
-                0x504 => self.odr = value,
-                0x508 => self.odr |= value,
-                0x50C => self.odr &= !value,
-                0x510 => self.idr = value,
-                0x514 => self.dir = value,
-                0x518 => self.dir |= value,
-                0x51C => self.dir &= !value,
-                0x700..=0x77C if offset % 4 == 0 => {
-                    let idx = ((offset - 0x700) / 4) as usize;
-                    self.pin_cnf[idx] = value;
-                }
-                _ => {}
-            },
+        match self {
+            Self::Stm32F1(g) => g.write_reg(offset, value),
+            Self::Stm32V2(g) => g.write_reg(offset, value),
+            Self::Nrf52(g) => g.write_reg(offset, value),
         }
     }
 
-    /// Register offset of the output data register (ODR) for this layout.
+    /// Register offset of the output data register (ODR) for this family.
     /// Used by the bus to resolve a display's D/C line to a concrete address.
     pub fn odr_offset(&self) -> u64 {
-        match self.layout {
-            GpioRegisterLayout::Stm32F1 => 0x0C,
-            GpioRegisterLayout::Stm32V2 => 0x14,
-            GpioRegisterLayout::Nrf52 => 0x504,
+        match self {
+            Self::Stm32F1(_) => 0x0C,
+            Self::Stm32V2(_) => 0x14,
+            Self::Nrf52(_) => 0x504,
         }
     }
 
-    /// Register offset of the input data register (IDR) for this layout.
+    /// Register offset of the input data register (IDR) for this family.
     /// Used by the bus to resolve a sensor's input line (e.g. HC-SR04 ECHO).
     pub fn idr_offset(&self) -> u64 {
-        match self.layout {
-            GpioRegisterLayout::Stm32F1 => 0x08,
-            GpioRegisterLayout::Stm32V2 => 0x10,
-            GpioRegisterLayout::Nrf52 => 0x510,
-        }
-    }
-
-    #[allow(dead_code)]
-    fn bsrr_offset(&self) -> u64 {
-        match self.layout {
-            GpioRegisterLayout::Stm32F1 => 0x10,
-            GpioRegisterLayout::Stm32V2 => 0x18,
-            GpioRegisterLayout::Nrf52 => 0x508,
-        }
-    }
-
-    #[allow(dead_code)]
-    fn brr_offset(&self) -> u64 {
-        match self.layout {
-            GpioRegisterLayout::Stm32F1 => 0x14,
-            GpioRegisterLayout::Stm32V2 => 0x28,
-            GpioRegisterLayout::Nrf52 => 0x50C,
+        match self {
+            Self::Stm32F1(_) => 0x08,
+            Self::Stm32V2(_) => 0x10,
+            Self::Nrf52(_) => 0x510,
         }
     }
 }
@@ -239,7 +267,6 @@ impl crate::Peripheral for GpioPort {
         }
 
         let mut reg_val = self.read_reg(reg_offset);
-
         let mask = 0xFF << (byte_offset * 8);
         reg_val &= !mask;
         reg_val |= (value as u32) << (byte_offset * 8);
@@ -249,7 +276,15 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn snapshot(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+        // Serialize the active family's register struct directly (flat), so the
+        // snapshot keeps registers like `odr` at top level (no variant tag) —
+        // matching the pre-split format the snapshot contract depends on.
+        match self {
+            Self::Stm32F1(g) => serde_json::to_value(g),
+            Self::Stm32V2(g) => serde_json::to_value(g),
+            Self::Nrf52(g) => serde_json::to_value(g),
+        }
+        .unwrap_or(serde_json::Value::Null)
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -266,72 +301,69 @@ mod tests {
     use super::{GpioPort, GpioRegisterLayout};
     use crate::Peripheral;
 
+    /// Read a full 32-bit register via the byte interface.
+    fn rd32(g: &GpioPort, off: u64) -> u32 {
+        let b0 = g.read(off).unwrap() as u32;
+        let b1 = g.read(off + 1).unwrap() as u32;
+        let b2 = g.read(off + 2).unwrap() as u32;
+        let b3 = g.read(off + 3).unwrap() as u32;
+        b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+    }
+
     #[test]
     fn test_gpio_reset_values() {
         let gpio = GpioPort::new();
-        assert_eq!(gpio.crl, 0x4444_4444);
-        assert_eq!(gpio.crh, 0x4444_4444);
-        assert_eq!(gpio.odr, 0);
+        assert_eq!(rd32(&gpio, 0x00), 0x4444_4444); // CRL
+        assert_eq!(rd32(&gpio, 0x04), 0x4444_4444); // CRH
+        assert_eq!(rd32(&gpio, 0x0C) & 0xFFFF, 0); // ODR
     }
 
     #[test]
     fn test_gpio_odr_write() {
         let mut gpio = GpioPort::new();
-        // Write to ODR (offset 0x0C)
-        gpio.write(0x0C, 0x55).unwrap(); // Write byte 0
-        gpio.write(0x0D, 0xAA).unwrap(); // Write byte 1
-        assert_eq!(gpio.odr, 0xAA55);
+        gpio.write(0x0C, 0x55).unwrap(); // ODR byte 0
+        gpio.write(0x0D, 0xAA).unwrap(); // ODR byte 1
+        assert_eq!(rd32(&gpio, 0x0C) & 0xFFFF, 0xAA55);
     }
 
     #[test]
     fn test_gpio_bsrr_set() {
         let mut gpio = GpioPort::new();
-        // BSRR is 32-bit, offset 0x10. Writing to lower 16 bits sets ODR bits.
-        // Direct partial writes are now supported.
-        gpio.write(0x10, 0x01).unwrap();
-        assert_eq!(gpio.odr, 0x0001);
+        gpio.write(0x10, 0x01).unwrap(); // BSRR set pin 0
+        assert_eq!(rd32(&gpio, 0x0C) & 0xFFFF, 0x0001);
     }
 
     #[test]
     fn test_gpio_bsrr_reset() {
         let mut gpio = GpioPort::new();
-        gpio.odr = 0xFFFF;
-        // BSRR upper 16 bits reset ODR bits.
-        gpio.write(0x12, 0x01).unwrap();
-        assert_eq!(gpio.odr, 0xFFFE);
+        gpio.write(0x0C, 0xFF).unwrap();
+        gpio.write(0x0D, 0xFF).unwrap(); // ODR = 0xFFFF
+        gpio.write(0x12, 0x01).unwrap(); // BSRR high half: reset pin 0
+        assert_eq!(rd32(&gpio, 0x0C) & 0xFFFF, 0xFFFE);
     }
 
     #[test]
     fn test_gpio_v2_moder_and_odr() {
         let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
-
         // MODER @ 0x00
         gpio.write(0x00, 0xAA).unwrap();
         gpio.write(0x01, 0x55).unwrap();
-        assert_eq!(gpio.moder & 0xFFFF, 0x55AA);
-
+        assert_eq!(rd32(&gpio, 0x00) & 0xFFFF, 0x55AA);
         // ODR @ 0x14
         gpio.write(0x14, 0x34).unwrap();
         gpio.write(0x15, 0x12).unwrap();
-        assert_eq!(gpio.odr, 0x1234);
+        assert_eq!(rd32(&gpio, 0x14) & 0xFFFF, 0x1234);
     }
 
     #[test]
     fn test_gpio_v2_bsrr_and_brr() {
         let mut gpio = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
-
         // BSRR @ 0x18 (set pin 0, reset pin 1)
         gpio.write(0x18, 0x01).unwrap();
-        gpio.write(0x19, 0x00).unwrap();
         gpio.write(0x1A, 0x02).unwrap();
-        gpio.write(0x1B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0003, 0x0001);
-
+        assert_eq!(rd32(&gpio, 0x14) & 0x0003, 0x0001);
         // BRR @ 0x28 (reset pin 0)
         gpio.write(0x28, 0x01).unwrap();
-        gpio.write(0x29, 0x00).unwrap();
-        gpio.write(0x2A, 0x00).unwrap();
-        gpio.write(0x2B, 0x00).unwrap();
-        assert_eq!(gpio.odr & 0x0001, 0x0000);
+        assert_eq!(rd32(&gpio, 0x14) & 0x0001, 0x0000);
     }
 }

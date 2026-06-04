@@ -40,3 +40,6 @@ fixtures/
 /tmp/
 /run_debug.json
 /system.yaml
+
+# mkdocs build output
+/site/

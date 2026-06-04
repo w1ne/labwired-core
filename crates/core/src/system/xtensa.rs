@@ -23,6 +23,7 @@ use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStu
 use crate::peripherals::esp32s3::systimer::Systimer;
 use crate::peripherals::esp32s3::tmp102::Tmp102;
 use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+use crate::Bus;
 use crate::Cpu;
 use std::sync::{Arc, Mutex};
 
@@ -282,6 +283,40 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(RamPeripheral::new(0x400000)),
     );
 
+    // Synthesize the `esp_image_header` at the start of the data XIP
+    // window. On silicon the flash MMU maps the app partition's first
+    // page (flash 0x10000, beginning with the 24-byte image header) to
+    // 0x3F40_0000, so the header's 0xE9 magic is visible there. The sim
+    // loads ELF *segments* (DROM data starts at 0x3F40_0020), leaving the
+    // 32-byte header slot empty — which reads as 0. ESP-IDF >= 5.x's
+    // `system_early_init` self-checks `*(uint8_t*)0x3F40_0000 == 0xE9`
+    // and `abort()`s with "Invalid app image header" otherwise (older
+    // cores lacked this check, so the gap surfaced only on newer
+    // arduino-esp32). We reconstruct a minimal valid ESP32 header; only
+    // the magic is validated at runtime (the BROM/bootloader that would
+    // consume the rest is modeled as already-done), but the remaining
+    // fields are filled with sane values for faithfulness. The ELF load
+    // that follows never touches 0x3F40_0000..0x3F40_001F, so this
+    // persists.
+    const ESP32_IMAGE_HEADER: [u8; 24] = [
+        0xE9, // magic
+        0x03, // segment_count
+        0x02, // spi_mode = DIO
+        0x10, // spi_speed (40 MHz) | spi_size (2 MB)
+        0x00, 0x00, 0x00, 0x00, // entry_addr (unused post-BROM)
+        0xEE, // wp_pin (disabled)
+        0x00, 0x00, 0x00, // spi_pin_drv[3]
+        0x00, 0x00, // chip_id = ESP32 (0)
+        0x00, // min_chip_rev (deprecated)
+        0x00, 0x00, // min_chip_rev_full
+        0x00, 0x00, // max_chip_rev_full
+        0x00, 0x00, 0x00, 0x00, // reserved[4]
+        0x00, // hash_appended
+    ];
+    for (i, &b) in ESP32_IMAGE_HEADER.iter().enumerate() {
+        let _ = bus.write_u8(0x3F40_0000 + i as u64, b);
+    }
+
     // External SRAM (PSRAM) data view at 0x3F800000-0x3FC00000.
     // Arduino-ESP32's startup probes this region during PSRAM
     // detection — accesses should be tolerable even on chips without
@@ -376,6 +411,13 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4000_689c, rom_thunks::ets_set_appcpu_boot_addr); // releases APP_CPU
                                                                           // UART putc / printf install hooks — called by call_start_cpu1 to
                                                                           // wire CPU 1's stdout. We don't model UART output, so no-op.
+                                                                          // BROM newlib syscalls — ESP-IDF >= 5.x console/stdio VFS init
+                                                                          // (console_open) calls these; unmodeled ROM pages would fault. They
+                                                                          // trampoline through the firmware's syscall table to esp_vfs_*.
+    rom_bank.register(0x4000_178c, rom_thunks::rom_open); // newlib open
+    rom_bank.register(0x4000_1778, rom_thunks::rom_close); // newlib close
+    rom_bank.register(0x4000_17dc, rom_thunks::rom_read); // newlib read
+    rom_bank.register(0x4000_181c, rom_thunks::rom_write); // newlib write
     rom_bank.register(0x4000_7d18, rom_thunks::nop_return_zero); // ets_install_putc1
     rom_bank.register(0x4000_7d28, rom_thunks::nop_return_zero); // ets_install_uart_printf
     rom_bank.register(0x4000_7d38, rom_thunks::nop_return_zero); // ets_install_putc2
@@ -483,6 +525,19 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         crate::peripherals::esp32::dport::Dport::SIZE as u64,
         None,
         Box::new(crate::peripherals::esp32::dport::Dport::new()),
+    );
+
+    // SHA hardware accelerator (TRM §24) at 0x3FF0_3000. Real FIPS-180-4
+    // SHA-1/SHA-256 block compression so firmware digests match silicon
+    // instead of round-tripping zeros through the analog-AHB catch-all.
+    // MUST register BEFORE dport_analog_ahb (first-registered-wins; the
+    // 0x3FF0_1000..0x3FF1_FFFF stub would otherwise shadow this window).
+    bus.add_peripheral(
+        "sha",
+        crate::peripherals::esp32::sha::Sha::BASE as u64,
+        crate::peripherals::esp32::sha::Sha::SIZE as u64,
+        None,
+        Box::new(crate::peripherals::esp32::sha::Sha::new()),
     );
 
     // Analog AHB / reserved region immediately above DPORT
@@ -593,6 +648,33 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
     );
 
+    // LEDC — LED PWM controller (TRM §14) at 0x3FF5_9000. Real model: 8 HS +
+    // 8 LS channels over 4 HS / 4 LS timers, CONF1.DUTY_START latch so
+    // ledc_get_duty()/ledcRead() read back the committed duty, derived duty
+    // fraction + frequency. (PWM-edge emission to GPIO deferred.) Registered
+    // before the catch-all loop below so its window wins (first-registered).
+    bus.add_peripheral(
+        "ledc",
+        crate::peripherals::esp32::ledc::Ledc::BASE as u64,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::ledc::Ledc::new(
+            crate::peripherals::esp32::ledc::Ledc::BASE,
+        )),
+    );
+
+    // TWAI / CAN controller (TRM §27) at 0x3FF6_B000. SJA1000-derived:
+    // reset-mode handshake, single-shot TX completion + IRQ, SELF_RX, and
+    // the read-and-clear interrupt register so twai_driver_install()/
+    // twai_start() make forward progress instead of faulting.
+    bus.add_peripheral(
+        "twai",
+        0x3FF6_B000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32::twai::Esp32Twai::new()),
+    );
+
     // Catch-all stubs for the rest of the APB peripheral block
     // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
     // (RTC_IO, SAR ADC, I2S0/1, BB, UART1/2, I2C0/1, MCPWM, PCNT, RMT,
@@ -610,7 +692,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         ("uart2", 0x3FF6_E000),
         ("pwm0", 0x3FF5_E000),
-        ("ledc", 0x3FF5_9000),
         ("ledc2", 0x3FF6_8000),
         ("rmt", 0x3FF5_6000),
         ("pcnt", 0x3FF5_7000),
@@ -1746,6 +1827,7 @@ mod tests {
             serde_yaml::Value::String("GPIO5".to_string()),
         );
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test-esp32-epaper".to_string(),
             chip: "esp32.yaml".to_string(),
@@ -1806,9 +1888,9 @@ mod tests {
     #[test]
     fn attach_esp32_external_devices_errors_on_missing_connection() {
         use labwired_config::{ExternalDevice, SystemManifest};
-        use std::collections::HashMap;
 
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "test".to_string(),
             chip: "esp32.yaml".to_string(),

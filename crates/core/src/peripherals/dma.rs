@@ -54,8 +54,14 @@ impl Dma1 {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.isr,
+            // IFCR is write-1-to-clear; it reads as 0. Handling it explicitly
+            // also avoids the `offset - 0x08` underflow below (a byte write to
+            // IFCR does a read-modify-write, which would otherwise panic).
+            0x04 => 0,
             0xA8 => self.cselr, // L4 channel-selection register
-            _ => {
+            // Channel register block starts at 0x08; guard against any stray
+            // sub-0x08 access so the subtraction can never underflow.
+            _ if offset >= 0x08 => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
                 let reg_off = (offset - 0x08) % 20;
                 if chan_idx < 7 {
@@ -70,11 +76,13 @@ impl Dma1 {
                     0
                 }
             }
+            _ => 0, // sub-0x08 offsets other than ISR/IFCR read as 0
         }
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
+            0x00 => {} // ISR is read-only; ignore writes (and avoid underflow)
             0x04 => {
                 // IFCR: Write 1 to clear corresponding ISR bits
                 self.isr &= !value;
@@ -83,7 +91,7 @@ impl Dma1 {
                 // CSELR: only the low 28 bits are valid (4 bits × 7 channels).
                 self.cselr = value & 0x0FFF_FFFF;
             }
-            _ => {
+            _ if offset >= 0x08 => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
                 let reg_off = (offset - 0x08) % 20;
                 if chan_idx < 7 {
@@ -107,6 +115,7 @@ impl Dma1 {
                     }
                 }
             }
+            _ => {} // sub-0x08 offsets other than ISR/IFCR: ignore
         }
     }
 }

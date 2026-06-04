@@ -3,6 +3,17 @@
 //
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
+//
+// ── Architectural separation ────────────────────────────────────────────────
+// I2C is one struct PER FAMILY behind the `I2c` enum:
+//   * `F1I2c` — the legacy peripheral (CR1/CR2/OAR/DR/SR1/SR2/CCR/TRISE) AND
+//     the full transaction state machine. START/STOP live in CR1.
+//   * `L4I2c` — the modern peripheral (CR1/CR2/OAR/TIMINGR/ISR/ICR/RXDR/TXDR),
+//     register-fidelity latching (START/STOP in CR2; no transaction engine).
+// Each variant owns ALL of its own registers and state — an F1 I2C cannot
+// carry TIMINGR/ISR, an L4 I2C cannot carry SR1/DR. CR1/CR2/OAR and the
+// attached-device list exist on both because both families genuinely have
+// them. The chip-yaml `profile` selects the variant.
 
 use crate::SimResult;
 use std::cell::{Cell, RefCell};
@@ -23,18 +34,15 @@ pub trait I2cDevice: Send {
 }
 
 /// I2C register layout selector. STM32F1/F2/F4 share the legacy I2C
-/// peripheral (CR1/CR2/OAR1/OAR2/DR/SR1/SR2/CCR/TRISE, all 16-bit).
-/// STM32L4/F7/H5/G0/etc share the modern peripheral (CR1/CR2/OAR1/OAR2/
-/// TIMINGR/TIMEOUTR/ISR/ICR/PECR/RXDR/TXDR, all 32-bit). Bit semantics
-/// in CR1 / CR2 differ substantially between the two — START/STOP bits
-/// live in CR1 on F1, CR2 on L4, etc.
+/// peripheral; STM32L4/F7/H5/G0 share the modern peripheral. The config-facing
+/// value maps 1:1 to a dedicated family struct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum I2cRegisterLayout {
     #[default]
     Stm32F1,
-    /// STM32L4 family (also F7/H5/G0). Verified against real
-    /// NUCLEO-L476RG silicon via SWD register dump.
+    /// STM32L4 family (also F7/H5/G0). Verified against real NUCLEO-L476RG
+    /// silicon via SWD register dump.
     Stm32L4,
 }
 
@@ -54,75 +62,48 @@ impl FromStr for I2cRegisterLayout {
     }
 }
 
-/// I2C peripheral with selectable register layout. Storage is u32 for
-/// both layouts so the L4-only TIMINGR / 32-bit CR2 fit; F1 mode just
-/// uses the lower 16 bits of each register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, Default)]
+enum I2cState {
+    #[default]
+    Idle,
+    StartPending,
+    AddressPending,
+    DataPending,
+}
+
+// ── STM32F1 legacy I2C (registers + transaction state machine) ───────────────
 #[derive(serde::Serialize)]
-pub struct I2c {
-    layout: I2cRegisterLayout,
+pub struct F1I2c {
     cr1: u32,
     cr2: u32,
     oar1: u32,
     oar2: u32,
-    // Legacy F1-only:
     dr: u32,
     sr1: u32,
     sr2: u32,
     ccr: u32,
     trise: u32,
-    // Modern L4-only:
-    timingr: u32,
-    timeoutr: u32,
-    isr: u32,
-    icr: u32,
-    pecr: u32,
-    rxdr: u32,
-    txdr: u32,
 
-    // Internal state (legacy state machine; L4 has its own simpler
-    // semantics driven by ISR/CR2 directly).
     state: I2cState,
     cycles_remaining: u32,
 
     #[serde(skip)]
-    pub attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
     current_target: Option<usize>,
     #[serde(skip)]
     is_reading: bool,
-    /// CR1.STOP requested by firmware while a data transaction was in
-    /// flight. Real silicon defers the stop condition until the current
-    /// byte has finished shifting; we mirror that by queueing the
-    /// transition here and firing it after DataPending completes.
     #[serde(skip)]
     stop_requested: bool,
-    /// Set when firmware reads DR while SR1.RXNE is set. On real silicon
-    /// reading DR clears RXNE in hardware; the simulator's `Peripheral::read`
-    /// is `&self` so we mark the consumption here (via interior mutability)
-    /// and clear the flag on the next tick. Without this, subsequent
-    /// `poll_sr1(RXNE)` calls see a stale RXNE and the firmware reads
-    /// stale DR values.
     #[serde(skip)]
     rxne_consumed: Cell<bool>,
-    /// Tracks whether the *current* cached `dr` byte has been delivered
-    /// to firmware yet. Starts `true` (no byte cached). Goes to `false`
-    /// when the state machine latches a slave read byte, then back to
-    /// `true` after firmware consumes it. Used by the multi-byte read
-    /// path to auto-fetch the next byte from the attached slave.
     #[serde(skip)]
     read_dr_consumed: Cell<bool>,
 }
 
-impl core::fmt::Debug for I2c {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("I2c").field("state", &self.state).finish()
-    }
-}
-
-impl Default for I2c {
+impl Default for F1I2c {
     fn default() -> Self {
         Self {
-            layout: I2cRegisterLayout::Stm32F1,
             cr1: 0,
             cr2: 0,
             oar1: 0,
@@ -131,17 +112,10 @@ impl Default for I2c {
             sr1: 0,
             sr2: 0,
             ccr: 0,
-            trise: 0,
-            timingr: 0,
-            timeoutr: 0,
-            // L4 reset value: TXE=1 (bit 0). When this struct is built
-            // with the L4 layout the reset state surfaces this; for F1
-            // mode the field is unused.
-            isr: 0x0000_0001,
-            icr: 0,
-            pecr: 0,
-            rxdr: 0,
-            txdr: 0,
+            // TRISE reset value is 0x0002 (RM0008 §26.6.9) — silicon-confirmed
+            // on STM32F103 over SWD (reads 0x00000002 after RCC clock enable,
+            // before any write).
+            trise: 0x0002,
             state: I2cState::Idle,
             cycles_remaining: 0,
             attached_devices: Vec::new(),
@@ -154,75 +128,23 @@ impl Default for I2c {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, Default)]
-enum I2cState {
-    #[default]
-    Idle,
-    StartPending,
-    AddressPending,
-    DataPending,
-    // StopPending was a deferred-stop state from an earlier version of
-    // the model. STOP is now processed synchronously in the CR1 write
-    // handler (or queued via `stop_requested` if a data phase is in
-    // flight, then processed when DataPending fires) so the variant is
-    // no longer reachable.
-}
-
-impl I2c {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn new_with_layout(layout: I2cRegisterLayout) -> Self {
-        Self {
-            layout,
-            ..Self::default()
-        }
-    }
-
-    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
-        self.attached_devices.push(RefCell::new(device));
-    }
-
+impl F1I2c {
     fn read_reg(&self, offset: u64) -> u32 {
-        match self.layout {
-            I2cRegisterLayout::Stm32F1 => match offset {
-                0x00 => self.cr1,
-                0x04 => self.cr2,
-                0x08 => self.oar1,
-                0x0C => self.oar2,
-                0x10 => self.dr,
-                0x14 => self.sr1,
-                0x18 => self.sr2,
-                0x1C => self.ccr,
-                0x20 => self.trise,
-                _ => 0,
-            },
-            I2cRegisterLayout::Stm32L4 => match offset {
-                0x00 => self.cr1,
-                0x04 => self.cr2,
-                0x08 => self.oar1,
-                0x0C => self.oar2,
-                0x10 => self.timingr,
-                0x14 => self.timeoutr,
-                0x18 => self.isr,
-                0x1C => self.icr,
-                0x20 => self.pecr,
-                0x24 => self.rxdr,
-                0x28 => self.txdr,
-                _ => 0,
-            },
+        match offset {
+            0x00 => self.cr1,
+            0x04 => self.cr2,
+            0x08 => self.oar1,
+            0x0C => self.oar2,
+            0x10 => self.dr,
+            0x14 => self.sr1,
+            0x18 => self.sr2,
+            0x1C => self.ccr,
+            0x20 => self.trise,
+            _ => 0,
         }
     }
 
-    fn write_reg(&mut self, offset: u64, value: u32) {
-        match self.layout {
-            I2cRegisterLayout::Stm32F1 => self.write_reg_f1(offset, value as u16),
-            I2cRegisterLayout::Stm32L4 => self.write_reg_l4(offset, value),
-        }
-    }
-
-    fn write_reg_f1(&mut self, offset: u64, value: u16) {
+    fn write_reg(&mut self, offset: u64, value: u16) {
         match offset {
             0x00 => {
                 self.cr1 = value as u32;
@@ -231,15 +153,9 @@ impl I2c {
                     self.cycles_remaining = 1;
                 }
                 if (value & 0x0200) != 0 {
-                    // STOP requested. If a data phase is in flight, defer
-                    // until that DataPending tick fires so RXNE/BTF latch
-                    // first (silicon clocks STOP after the current byte
-                    // shifts out — the standard HAL "set NACK + STOP →
-                    // poll RXNE → read DR" pattern depends on this
-                    // ordering). Otherwise complete the stop synchronously:
-                    // notify the device, clear MSL/BUSY in SR2, but leave
-                    // SR1 alone so any latched RXNE/BTF stays readable
-                    // until firmware consumes DR.
+                    // STOP requested. Defer if a data phase is in flight so
+                    // RXNE/BTF latch first (HAL "NACK+STOP → poll RXNE → read
+                    // DR" ordering); otherwise complete synchronously.
                     if matches!(self.state, I2cState::DataPending | I2cState::AddressPending) {
                         self.stop_requested = true;
                     } else {
@@ -268,11 +184,6 @@ impl I2c {
                             .attached_devices
                             .iter()
                             .position(|d| d.borrow().address() == addr);
-                        // Notify the device that a new transaction is
-                        // starting at *this* address. Address is now
-                        // latched and current_target is fresh — doing
-                        // this in StartPending instead would pass a
-                        // stale target (or None after a previous STOP).
                         if let Some(idx) = self.current_target {
                             self.attached_devices[idx].borrow_mut().start();
                         }
@@ -297,110 +208,56 @@ impl I2c {
         }
     }
 
-    fn write_reg_l4(&mut self, offset: u64, value: u32) {
-        match offset {
-            0x00 => self.cr1 = value & 0x00FF_E1FF, // PE, ANFOFF, DNF, etc.
-            0x04 => {
-                self.cr2 = value;
-                // CR2.START (bit 13): hardware sets ISR.BUSY (bit 15)
-                // when a master start is requested. Real silicon also
-                // begins clocking SCL after this; we just reflect the
-                // BUSY flag for register-fidelity purposes — driving
-                // an actual transfer requires a slave device model.
-                if (value & (1 << 13)) != 0 {
-                    self.isr |= 1 << 15;
-                }
-                if (value & (1 << 14)) != 0 {
-                    // STOP — clear BUSY.
-                    self.isr &= !(1 << 15);
-                }
-            }
-            0x08 => self.oar1 = value,
-            0x0C => self.oar2 = value,
-            0x10 => self.timingr = value,
-            0x14 => self.timeoutr = value,
-            0x18 => {
-                // ISR is mostly read-only; some bits are W1C handled via ICR.
-                // Allow direct writes only to RW bits — TXE (bit 0) is RW
-                // (write 1 to flush TXDR). Conservative: allow setting/
-                // clearing the writable bits, leave the rest as-is.
-                let rw_mask: u32 = 0x0000_0001;
-                self.isr = (self.isr & !rw_mask) | (value & rw_mask);
-            }
-            0x1C => {
-                // ICR: writing 1 clears the corresponding ISR flag.
-                // Bits cleared: ADDRCF=3, NACKCF=4, STOPCF=5, BERRCF=8,
-                // ARLOCF=9, OVRCF=10, PECCF=11, TIMOUTCF=12, ALERTCF=13.
-                let clearable: u32 = 0x0000_3F38;
-                self.isr &= !(value & clearable);
-                self.icr = 0; // ICR self-clears after write.
-            }
-            0x20 => self.pecr = value,
-            0x24 => self.rxdr = value & 0xFF,
-            0x28 => {
-                self.txdr = value & 0xFF;
-                // Writing TXDR clears TXE (bit 0) and TXIS (bit 1).
-                self.isr &= !0x0000_0003;
-            }
-            _ => {}
-        }
-    }
-}
-
-impl crate::Peripheral for I2c {
-    fn read(&self, offset: u64) -> SimResult<u8> {
+    fn read(&self, offset: u64) -> u8 {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         if reg_offset == 0x10 && byte_offset == 0 && self.is_reading && (self.sr1 & 0x0040) != 0 {
             if !self.read_dr_consumed.replace(true) {
-                return Ok((self.dr & 0xFF) as u8);
+                return (self.dr & 0xFF) as u8;
             }
-
             if let Some(idx) = self.current_target {
-                return Ok(self.attached_devices[idx].borrow_mut().read());
+                return self.attached_devices[idx].borrow_mut().read();
             }
         }
 
         let reg_val = self.read_reg(reg_offset);
-        // Silicon clears RXNE when firmware reads DR. The trait method
-        // is `&self`, so we mark the consumption through interior
-        // mutability and the next tick performs the actual SR1 clear.
-        // This only fires on byte 0 of a 32-bit DR read — subsequent
-        // byte reads of the same word would otherwise double-consume.
+        // Silicon clears RXNE when firmware reads DR; mark for next tick.
         if reg_offset == 0x10 && byte_offset == 0 && (self.sr1 & 0x40) != 0 {
             self.rxne_consumed.set(true);
         }
-        Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
+        ((reg_val >> (byte_offset * 8)) & 0xFF) as u8
     }
 
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+    fn write(&mut self, offset: u64, value: u8) {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let mut reg_val = self.read_reg(reg_offset);
         let mask: u32 = 0xFF << (byte_offset * 8);
         reg_val &= !mask;
         reg_val |= (value as u32) << (byte_offset * 8);
-        self.write_reg(reg_offset, reg_val);
-        Ok(())
+        self.write_reg(reg_offset, reg_val as u16);
     }
 
-    fn tick(&mut self) -> crate::PeripheralTickResult {
+    fn peek(&self, offset: u64) -> u8 {
+        let reg_offset = offset & !3;
+        let byte_offset = (offset % 4) as u32;
+        let reg_val = self.read_reg(reg_offset);
+        if byte_offset < 2 {
+            ((reg_val >> (byte_offset * 8)) & 0xFF) as u8
+        } else {
+            0
+        }
+    }
+
+    /// One tick of the transaction state machine. Returns whether an IRQ
+    /// should be raised. Logic relocated verbatim from the pre-split model.
+    fn tick(&mut self) -> bool {
         let mut irq = false;
 
-        // Mirror silicon's "RXNE clears on DR read" outside the main
-        // state-machine block so it fires even when the bus is Idle
-        // between transactions.
+        // "RXNE clears on DR read" mirror, fires even when Idle.
         if self.rxne_consumed.replace(false) {
             self.sr1 &= !0x0040;
-            // BTF is tied to the same shift register on a receive.
-            self.sr1 &= !0x0004;
-            // For a multi-byte read we have to feed the next byte
-            // ourselves — silicon would clock it in continuously while
-            // ACK is asserted. If the firmware is still in a read
-            // transaction (current_target set, is_reading=true), re-arm
-            // DataPending so the next tick latches another byte. The
-            // STOP handler clears current_target, which is how this
-            // chain naturally terminates after the final NACK+STOP byte.
+            self.sr1 &= !0x0004; // BTF tied to the same shift register
             if self.is_reading && self.current_target.is_some() {
                 self.state = I2cState::DataPending;
                 self.cycles_remaining = 1;
@@ -412,94 +269,51 @@ impl crate::Peripheral for I2c {
             if self.cycles_remaining == 0 {
                 match self.state {
                     I2cState::StartPending => {
-                        // Wipe any stale data-phase flags from the
-                        // previous transaction. On silicon those would
-                        // have been cleared by firmware's SR1+SR2/DR
-                        // read patterns; we don't model those side
-                        // effects (Peripheral::read is &self), so
-                        // a fresh transaction needs a fresh SR1 or
-                        // subsequent polls see stale ADDR/TXE/BTF and
-                        // exit prematurely on the next address-send.
                         self.sr1 = 0x0001; // Only SB set
-                                           // Hardware auto-clears the START request bit after
-                                           // the start condition has been generated.
-                        self.cr1 &= !0x0100;
+                        self.cr1 &= !0x0100; // auto-clear START request
                         self.state = I2cState::Idle;
-                        // device.start() is deferred to AddressPending —
-                        // current_target isn't known yet at this point.
                     }
                     I2cState::AddressPending => {
                         self.sr1 &= !0x0001; // Clear SB
 
-                        // No slave at the addressed address → NACK on real
-                        // silicon. Real silicon raises SR1.AF (bit 10,
-                        // "Acknowledge Failure") and leaves ADDR/MSL/BUSY
-                        // clear. Surfaced by F407 Round 2 capture: writing
-                        // an address byte with `external_devices: []` in
-                        // the system manifest had sim setting SR1=0x82
-                        // (ADDR+TXE) while real silicon (with proper bus)
-                        // would have set SR1=0x400 (AF). Firmware that
-                        // probes for a chip's presence via the AF flag
-                        // depends on this.
+                        // No slave at this address → NACK (SR1.AF), bus stays
+                        // master+BUSY until firmware STOPs (matches F407 silicon).
                         if self.current_target.is_none() {
                             self.sr1 |= 0x0400; // AF
-                                                // Per silicon: after a NACK the bus stays
-                                                // in master mode with BUSY set until firmware
-                                                // generates STOP. Round 2 capture showed
-                                                // SR2=0x03 on real F407 after AF; sim was
-                                                // leaving SR2=0.
                             self.sr2 |= 0x0001; // MSL
                             self.sr2 |= 0x0002; // BUSY
                             self.state = I2cState::Idle;
-                            // ITERR (CR2 bit 8) raises IRQ on AF when set.
                             if (self.cr2 & (1 << 8)) != 0 {
-                                irq = true;
+                                irq = true; // ITERR
                             }
-                            return crate::PeripheralTickResult {
-                                irq,
-                                cycles: 0,
-                                ..Default::default()
-                            };
+                            return irq;
                         }
 
-                        self.sr1 |= 0x0002; // Set ADDR
-                        self.sr2 |= 0x0001; // MSL (Master mode) set
-                        self.sr2 |= 0x0002; // BUSY set
+                        self.sr1 |= 0x0002; // ADDR
+                        self.sr2 |= 0x0001; // MSL
+                        self.sr2 |= 0x0002; // BUSY
 
-                        // If it's a read, automatically transition to grabbing the first byte
                         if self.is_reading {
                             self.state = I2cState::DataPending;
                             self.cycles_remaining = 20;
                         } else {
-                            // Write transaction: on real silicon TXE is high
-                            // immediately after the address ACK because the
-                            // shift register is empty and ready for the first
-                            // data byte. Firmware (e.g. STM32 HAL_I2C_Master_Transmit)
-                            // polls TXE before writing DR; without this latch
-                            // the polling loop never exits.
-                            self.sr1 |= 0x0080; // Set TXE
+                            self.sr1 |= 0x0080; // TXE
                             self.state = I2cState::Idle;
                         }
                     }
                     I2cState::DataPending => {
                         if self.is_reading {
-                            self.sr1 |= 0x0040; // Set RXNE
+                            self.sr1 |= 0x0040; // RXNE
                             if let Some(idx) = self.current_target {
                                 self.dr = self.attached_devices[idx].borrow_mut().read() as u32;
                                 self.read_dr_consumed.set(false);
                             }
                             self.state = I2cState::Idle;
                         } else {
-                            self.sr1 |= 0x0080; // Set TXE
-                            self.sr1 |= 0x0004; // Set BTF
+                            self.sr1 |= 0x0080; // TXE
+                            self.sr1 |= 0x0004; // BTF
                             self.state = I2cState::Idle;
                         }
-                        // Honour a STOP that the firmware queued before
-                        // the current byte finished shifting (the standard
-                        // STM32 HAL "set NACK+STOP, then poll RXNE" flow).
-                        // Apply STOP synchronously: clear MSL/BUSY in SR2
-                        // and notify the device, but keep SR1 untouched
-                        // so RXNE/BTF stay readable until firmware reads DR.
                         if self.stop_requested {
                             self.stop_requested = false;
                             self.cr1 &= !0x0200;
@@ -514,12 +328,205 @@ impl crate::Peripheral for I2c {
                 }
 
                 if (self.cr2 & (1 << 9)) != 0 || (self.cr2 & (1 << 10)) != 0 {
-                    // ITEVTEN or ITBUFEN
-                    irq = true;
+                    irq = true; // ITEVTEN or ITBUFEN
                 }
             }
         }
 
+        irq
+    }
+}
+
+// ── STM32L4 modern I2C (register-fidelity latching; no engine) ───────────────
+#[derive(serde::Serialize)]
+pub struct L4I2c {
+    cr1: u32,
+    cr2: u32,
+    oar1: u32,
+    oar2: u32,
+    timingr: u32,
+    timeoutr: u32,
+    isr: u32,
+    icr: u32,
+    pecr: u32,
+    rxdr: u32,
+    txdr: u32,
+    #[serde(skip)]
+    attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+}
+
+impl Default for L4I2c {
+    fn default() -> Self {
+        Self {
+            cr1: 0,
+            cr2: 0,
+            oar1: 0,
+            oar2: 0,
+            timingr: 0,
+            timeoutr: 0,
+            isr: 0x0000_0001, // TXE=1 at reset
+            icr: 0,
+            pecr: 0,
+            rxdr: 0,
+            txdr: 0,
+            attached_devices: Vec::new(),
+        }
+    }
+}
+
+impl L4I2c {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr1,
+            0x04 => self.cr2,
+            0x08 => self.oar1,
+            0x0C => self.oar2,
+            0x10 => self.timingr,
+            0x14 => self.timeoutr,
+            0x18 => self.isr,
+            0x1C => self.icr,
+            0x20 => self.pecr,
+            0x24 => self.rxdr,
+            0x28 => self.txdr,
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr1 = value & 0x00FF_E1FF,
+            0x04 => {
+                self.cr2 = value;
+                if (value & (1 << 13)) != 0 {
+                    self.isr |= 1 << 15; // START → BUSY
+                }
+                if (value & (1 << 14)) != 0 {
+                    self.isr &= !(1 << 15); // STOP → clear BUSY
+                }
+            }
+            0x08 => self.oar1 = value,
+            0x0C => self.oar2 = value,
+            0x10 => self.timingr = value,
+            0x14 => self.timeoutr = value,
+            0x18 => {
+                let rw_mask: u32 = 0x0000_0001; // TXE is RW
+                self.isr = (self.isr & !rw_mask) | (value & rw_mask);
+            }
+            0x1C => {
+                let clearable: u32 = 0x0000_3F38;
+                self.isr &= !(value & clearable);
+                self.icr = 0;
+            }
+            0x20 => self.pecr = value,
+            0x24 => self.rxdr = value & 0xFF,
+            0x28 => {
+                self.txdr = value & 0xFF;
+                self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
+            }
+            _ => {}
+        }
+    }
+
+    fn read(&self, offset: u64) -> u8 {
+        let reg_offset = offset & !3;
+        let byte_offset = (offset % 4) as u32;
+        let reg_val = self.read_reg(reg_offset);
+        ((reg_val >> (byte_offset * 8)) & 0xFF) as u8
+    }
+
+    fn write(&mut self, offset: u64, value: u8) {
+        let reg_offset = offset & !3;
+        let byte_offset = (offset % 4) as u32;
+        let mut reg_val = self.read_reg(reg_offset);
+        let mask: u32 = 0xFF << (byte_offset * 8);
+        reg_val &= !mask;
+        reg_val |= (value as u32) << (byte_offset * 8);
+        self.write_reg(reg_offset, reg_val);
+    }
+
+    fn peek(&self, offset: u64) -> u8 {
+        let reg_offset = offset & !3;
+        let byte_offset = (offset % 4) as u32;
+        let reg_val = self.read_reg(reg_offset);
+        if byte_offset < 2 {
+            ((reg_val >> (byte_offset * 8)) & 0xFF) as u8
+        } else {
+            0
+        }
+    }
+}
+
+/// I2C peripheral — one variant per chip family. Register sets fully isolated.
+#[derive(serde::Serialize)]
+pub enum I2c {
+    Stm32F1(F1I2c),
+    Stm32L4(L4I2c),
+}
+
+impl core::fmt::Debug for I2c {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            I2c::Stm32F1(i) => f.debug_struct("I2c::F1").field("state", &i.state).finish(),
+            I2c::Stm32L4(_) => f.debug_struct("I2c::L4").finish(),
+        }
+    }
+}
+
+impl Default for I2c {
+    fn default() -> Self {
+        Self::Stm32F1(F1I2c::default())
+    }
+}
+
+impl I2c {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn new_with_layout(layout: I2cRegisterLayout) -> Self {
+        match layout {
+            I2cRegisterLayout::Stm32F1 => Self::Stm32F1(F1I2c::default()),
+            I2cRegisterLayout::Stm32L4 => Self::Stm32L4(L4I2c::default()),
+        }
+    }
+
+    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
+        match self {
+            Self::Stm32F1(i) => i.attached_devices.push(RefCell::new(device)),
+            Self::Stm32L4(i) => i.attached_devices.push(RefCell::new(device)),
+        }
+    }
+
+    /// Attached I2C devices (used by config/bus validation + tests).
+    pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+        match self {
+            Self::Stm32F1(i) => &i.attached_devices,
+            Self::Stm32L4(i) => &i.attached_devices,
+        }
+    }
+}
+
+impl crate::Peripheral for I2c {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok(match self {
+            Self::Stm32F1(i) => i.read(offset),
+            Self::Stm32L4(i) => i.read(offset),
+        })
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        match self {
+            Self::Stm32F1(i) => i.write(offset, value),
+            Self::Stm32L4(i) => i.write(offset, value),
+        }
+        Ok(())
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        let irq = match self {
+            Self::Stm32F1(i) => i.tick(),
+            Self::Stm32L4(_) => false, // L4 has no transaction engine
+        };
         crate::PeripheralTickResult {
             irq,
             cycles: 0,
@@ -528,14 +535,10 @@ impl crate::Peripheral for I2c {
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
-        let reg_offset = offset & !3;
-        let byte_offset = (offset % 4) as u32;
-        let reg_val = self.read_reg(reg_offset);
-        if byte_offset < 2 {
-            Some(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
-        } else {
-            Some(0)
-        }
+        Some(match self {
+            Self::Stm32F1(i) => i.peek(offset),
+            Self::Stm32L4(i) => i.peek(offset),
+        })
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -547,7 +550,11 @@ impl crate::Peripheral for I2c {
     }
 
     fn snapshot(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+        match self {
+            Self::Stm32F1(i) => serde_json::to_value(i),
+            Self::Stm32L4(i) => serde_json::to_value(i),
+        }
+        .unwrap_or(serde_json::Value::Null)
     }
 }
 
@@ -575,83 +582,66 @@ mod tests {
         fn address(&self) -> u8 {
             self.address
         }
-
         fn read(&mut self) -> u8 {
             self.reads.fetch_add(1, Ordering::SeqCst) as u8
         }
-
         fn write(&mut self, _data: u8) {}
     }
 
     #[test]
     fn test_i2c_reset_values() {
         let i2c = I2c::new();
-        assert_eq!(i2c.cr1, 0);
-        assert_eq!(i2c.cr2, 0);
+        assert_eq!(i2c.read(0x00).unwrap(), 0); // CR1
+        assert_eq!(i2c.read(0x04).unwrap(), 0); // CR2
     }
 
     #[test]
     fn test_i2c_start_bit() {
         let mut i2c = I2c::new();
-        // Set SB (Start Bit) in CR1 (bit 8)
-        i2c.write(0x01, 0x01).unwrap();
-
-        // Should NOT be set immediately
-        assert_eq!(i2c.sr1 & 0x01, 0);
-
-        // Tick 10 times
+        i2c.write(0x01, 0x01).unwrap(); // CR1 SB (bit 8)
+        assert_eq!(i2c.peek(0x14).unwrap() & 0x01, 0); // not immediate
         for _ in 0..10 {
             i2c.tick();
         }
-
-        assert_ne!(i2c.sr1 & 0x01, 0); // SB bit in SR1 set after ticks
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0); // SB set after ticks
     }
 
     #[test]
     fn test_i2c_full_transfer_flow() {
         use crate::peripherals::components::Mpu6050;
         let mut i2c = I2c::new();
-        // Attach a real slave so the address phase ACKs. Without an
-        // attached device the address phase now raises SR1.AF instead
-        // of setting ADDR (Round 2 F407 fix); the test below exercises
-        // the happy-path data flow, so we need a slave.
         i2c.attach(Box::new(Mpu6050::new(0x50)));
 
-        // 1. START
-        i2c.write(0x01, 0x01).unwrap();
+        i2c.write(0x01, 0x01).unwrap(); // START
         for _ in 0..10 {
             i2c.tick();
         }
-        assert_ne!(i2c.sr1 & 0x01, 0); // SB set
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0); // SB
 
-        // 2. Address — 0xA0 = (0x50 << 1) | W, matches the attached Mpu6050.
-        i2c.write(0x10, 0xA0).unwrap();
+        i2c.write(0x10, 0xA0).unwrap(); // addr 0x50<<1 | W
         for _ in 0..20 {
             i2c.tick();
         }
-        assert_eq!(i2c.sr1 & 0x01, 0); // SB cleared
-        assert_ne!(i2c.sr1 & 0x02, 0); // ADDR set
-        assert_ne!(i2c.sr2 & 0x01, 0); // MSL set
+        assert_eq!(i2c.peek(0x14).unwrap() & 0x01, 0); // SB cleared
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x02, 0); // ADDR
+        assert_ne!(i2c.peek(0x18).unwrap() & 0x01, 0); // MSL
 
-        // 3. Data
-        // Clear ADDR by reading SR1 followed by SR2 (simplified in our model by just writing DR)
         i2c.write(0x10, 0x42).unwrap();
-        // ADDR cleared effectively by state transition
         for _ in 0..20 {
             i2c.tick();
         }
-        assert_ne!(i2c.sr1 & 0x80, 0); // TXE set
-        assert_ne!(i2c.sr1 & 0x04, 0); // BTF set
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x80, 0); // TXE
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x04, 0); // BTF
 
-        // 4. STOP — silicon clears MSL/BUSY in SR2 but leaves SR1 set
-        // (firmware is expected to clear data-phase flags via DR reads /
-        // SR1+SR2 sequences). STARTPending of the next transaction
-        // resets SR1, so stale flags here don't leak.
-        i2c.write(0x01, 0x02).unwrap(); // STOP bit 9
+        i2c.write(0x01, 0x02).unwrap(); // STOP (bit 9)
         for _ in 0..10 {
             i2c.tick();
         }
-        assert_eq!(i2c.sr2 & 0x0003, 0, "STOP must clear MSL+BUSY in SR2");
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & 0x03,
+            0,
+            "STOP must clear MSL+BUSY"
+        );
     }
 
     #[test]

@@ -1,0 +1,20 @@
+# LabWired test script used by PlatformIO's `test_testing_command`.
+#
+# `inputs.firmware` is a placeholder: PlatformIO passes the freshly-built ELF
+# with `--firmware`, which overrides this value. The placeholder only has to be
+# non-empty to satisfy schema validation.
+schema_version: "1.0"
+inputs:
+  firmware: "PLACEHOLDER_OVERRIDDEN_BY_PIO.elf"
+  system: "nrf52840.system.yaml"
+limits:
+  # Generous budget: the firmware parks in a spin loop after the tests finish,
+  # so it runs until max_steps. This bound just has to exceed the work the
+  # Unity suite does before parking.
+  max_steps: 2000000
+  wall_time_ms: 15000
+assertions:
+  # Let PlatformIO be the judge of individual test PASS/FAIL from the Unity
+  # output on stdout. LabWired only asserts that the firmware ran to its budget
+  # rather than crashing or faulting, so the runner exits 0 on a clean run.
+  - expected_stop_reason: "max_steps"

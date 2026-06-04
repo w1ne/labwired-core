@@ -99,29 +99,25 @@ impl Peripheral for Nrf52Rtc {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_START => {
-                if value & 1 != 0 {
+            OFF_TASKS_START
+                if value & 1 != 0 => {
                     self.running = true;
                 }
-            }
-            OFF_TASKS_STOP => {
-                if value & 1 != 0 {
+            OFF_TASKS_STOP
+                if value & 1 != 0 => {
                     self.running = false;
                 }
-            }
-            OFF_TASKS_CLEAR => {
-                if value & 1 != 0 {
+            OFF_TASKS_CLEAR
+                if value & 1 != 0 => {
                     self.counter = 0;
                     self.prescaler_accum = 0;
                 }
-            }
-            OFF_TASKS_TRIGOVRFLW => {
+            OFF_TASKS_TRIGOVRFLW
                 // Per PS §6.21.5: sets COUNTER to 0x00FFFFF0 to trigger overflow
                 // 16 ticks later. Useful for test programs.
-                if value & 1 != 0 {
+                if value & 1 != 0 => {
                     self.counter = 0x00FF_FFF0;
                 }
-            }
             OFF_EVENTS_TICK => self.events_tick = value & 1,
             OFF_EVENTS_OVRFLW => self.events_ovrflw = value & 1,
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE3 if offset.is_multiple_of(4) => {
@@ -135,12 +131,11 @@ impl Peripheral for Nrf52Rtc {
             OFF_EVTENCLR => self.evten &= !value,
             // COUNTER is RO.
             OFF_COUNTER => {}
-            OFF_PRESCALER => {
+            OFF_PRESCALER
                 // PS §6.21.5: PRESCALER can only be written while STOPPED.
-                if !self.running {
+                if !self.running => {
                     self.prescaler = value & PRESCALER_MASK;
                 }
-            }
             OFF_CC0..=OFF_CC3 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_CC0) / 4) as usize;
                 self.cc[i] = value & COUNTER_MASK;

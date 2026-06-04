@@ -650,6 +650,24 @@ SR1=00000400\r\n\
 SR2=00000000\r\n\
 DONE\r\n",
     },
+    SurvivalCase {
+        // Hardware-validated against real NUCLEO-L073RZ silicon (Cortex-M0+,
+        // ST-LINK V2 over SWD): the byte stream below was captured from the
+        // Virtual COM Port and matches the simulator verbatim. It locks the
+        // L0 chip config, the dedicated `stm32l0` RCC layout (CLK=00000004
+        // proves the SW->SWS clock-switch readback), the CRC peripheral
+        // (B874177A — read off silicon too), DMA mem-to-mem, and the M0+
+        // (ARMv6-M) decoder. Drift means a regression in any of those.
+        // Appended at the end so the index-based test fns above stay aligned.
+        name: "nucleo_l073rz_smoke",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "stm32l073",
+        system: "nucleo-l073rz",
+        fixture: "nucleo-l073rz-demo.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0802_FFFF), (0x2000_0000, 0x2000_4FFF)],
+        expected_uart_output: b"DEV=20086447\nCLK=00000004\nCRC=B874177A\nDMA=OK\n",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -1000,6 +1018,14 @@ fn test_nucleo_f407_i2c_survival() {
     eprintln!("--- END ---");
     eprintln!("escaped: {:?}", String::from_utf8_lossy(&uart));
     assert_uart_contains(&uart, case.expected_uart_output, case.name);
+}
+
+#[test]
+fn test_nucleo_l073rz_smoke_survival() {
+    // Index 24: appended L073 case (see SURVIVAL_CASES). Byte-for-byte gate
+    // against real NUCLEO-L073RZ silicon — locks the stm32l0 RCC layout,
+    // CRC, DMA, and the M0+ decoder.
+    run_survival_case(&SURVIVAL_CASES[24]);
 }
 
 #[test]

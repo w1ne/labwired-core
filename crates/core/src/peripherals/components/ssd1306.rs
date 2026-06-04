@@ -225,3 +225,46 @@ impl I2cDevice for Ssd1306 {
         Some(self)
     }
 }
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+pub struct Ssd1306Kit;
+pub static SSD1306_KIT: Ssd1306Kit = Ssd1306Kit;
+
+static SSD1306_METADATA: KitMetadata = KitMetadata {
+    device_type: "oled-ssd1306",
+    label: "SSD1306 OLED",
+    summary: "128×64 monochrome OLED display over I2C with a paged framebuffer.",
+    detail: "Solomon Systech SSD1306 with the canonical 0x3C / 0x3D address pair. Tracks the \
+             8-page-by-128-column framebuffer; the WASM bridge surfaces pixel state for the \
+             playground's display overlay.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant.",
+    }],
+    labs: &[LabRef {
+        board_id: "ssd1306-hello-lab",
+        chip: "stm32f103",
+        example_dir: "ssd1306-hello-lab",
+        demo_elf: "demo-ssd1306-hello-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Ssd1306Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &SSD1306_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(0x3C)?;
+        let i2c = ctx.i2c()?;
+        i2c.attach(Box::new(Ssd1306::new(address)));
+        Ok(())
+    }
+}

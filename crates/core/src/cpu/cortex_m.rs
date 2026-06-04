@@ -161,7 +161,7 @@ impl CortexM {
             1 => -3,
             2 => -2,
             3 => -1,
-            4 => ((self.shpr1.load(Ordering::Relaxed) >> 0) & 0xFF) as i32,
+            4 => (self.shpr1.load(Ordering::Relaxed) & 0xFF) as i32,
             5 => ((self.shpr1.load(Ordering::Relaxed) >> 8) & 0xFF) as i32,
             6 => ((self.shpr1.load(Ordering::Relaxed) >> 16) & 0xFF) as i32,
             11 => ((self.shpr2.load(Ordering::Relaxed) >> 24) & 0xFF) as i32,
@@ -389,6 +389,9 @@ impl Cpu for CortexM {
         self.sp = val;
     }
     fn set_exception_pending(&mut self, exception_num: u32) {
+        if std::env::var("LABWIRED_TRACE_EXC").is_ok() {
+            eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
+        }
         if exception_num < 64 {
             self.pending_exceptions |= 1u64 << exception_num;
         }
@@ -667,6 +670,13 @@ impl CortexM {
 
             (instr, op, pincr as u32, cyc)
         };
+
+        // Per-instruction PC trace gated on LABWIRED_TRACE_INSN env var.
+        // Use only for short runs — VERY chatty. Format suitable for grepping:
+        //   INSN pc=0xPPPPPPPP op=0xOOOOOOOO
+        if std::env::var("LABWIRED_TRACE_INSN").is_ok() {
+            eprintln!("INSN pc=0x{:08X} op=0x{:08X}", self.pc, opcode);
+        }
 
         if !_observers.is_empty() {
             for observer in _observers {

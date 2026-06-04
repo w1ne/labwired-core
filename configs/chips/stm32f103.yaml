@@ -75,3 +75,93 @@ peripherals:
     type: "dma"
     base_address: 0x40020000
     size: "1KB"
+  # ─── STM32F1-family peripherals, reset values verified against ─────────
+  # ─── STM32F103C8 silicon (Blue Pill, ST-LINK V2, 2026-06-04). ──────────
+  # Each `profile` selects the chip-family layout in the peripheral model
+  # so adding F1 entries here cannot regress L4/F4/V2 deployments.
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      idcode: "0x20036410"  # STM32F103C8 — silicon-verified
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+  # bxCAN + USB share SRAM @ 0x4000_6000; bxCAN registers at 0x6400.
+  - id: "bxcan1"
+    type: "stub"
+    base_address: 0x40006400
+    size: "1KB"
+  - id: "usb_dev"
+    type: "stub"
+    base_address: 0x40005C00
+    size: "1KB"
+  - id: "bkp"
+    type: "stub"
+    base_address: 0x40006C00
+    size: "1KB"
+  # Timers & ADC — modelled (the timer model is width-configurable, 16-bit =
+  # F1 general-purpose layout; the ADC model defaults to its Stm32F1 layout).
+  # Reset values silicon-confirmed on STM32F103 over SWD: TIM2 ARR=0xFFFF,
+  # TIMx_CR1=0, ADCx CR1/CR2=0. Addresses + IRQs per RM0008 / CMSIS.
+  # TIM1 is the advanced-control timer (BDTR/RCR/dead-time).
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 25
+    config:
+      advanced: true
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 18
+  - id: "adc2"
+    type: "adc"
+    base_address: 0x40012800
+    size: "1KB"
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39

@@ -88,5 +88,60 @@ The UART artifact must contain `NRF52840_SMOKE_OK`.
   P0; LabWired's current bus model expects non-overlapping peripheral ranges.
 - SPIM0 implements register/task smoke behavior only. EasyDMA memory movement
   and SPI device byte routing are future work.
-- Hardware validation is USB enumeration, bootloader entry, and serial
-  availability only until SWD or external measurement hardware is attached.
+- GPIO1 uses a synthetic non-overlapping LabWired base address (see above);
+  this is a model convenience, not a silicon divergence.
+
+## Silicon validation over SWD (2026-06-03)
+
+The board was connected to an ST-Link/V2 (SWDIO/SWCLK/GND/3V3) and both the
+hardware-oracle diff banks were run against the physical chip — **all green**:
+
+| Harness | Cases | Result |
+|---------|-------|--------|
+| `nrf52_mmio_diff` (GPIO0 OUT/DIR, UART0 ENABLE, SPIM0 PSEL/FREQ/MAXCNT, …) | 16 | match=16 diverge=0 |
+| `nrf52_onboarding_diff` (FICR, RADIO, USBD, SAADC, RNG, TIMER0, RTC0, PWM0, QSPI, NFCT, NVMC, GPIOTE, PPI, ECB, COMP, TEMP, WDT, QDEC, EGU0, PDM, ACL, CRYPTOCELL) | 30 | match=30 diverge=0 |
+
+Identity read straight off the silicon: CPUID `0x410FC241` (Cortex-M4 r0p1),
+FICR `INFO.PART = 0x52840`, RAM 256 KB, FLASH 1 MB, APPROTECT unlocked — all
+match the simulator's FICR model. (FICR `INFO.VARIANT` is chip-batch specific —
+this unit reads `AAD0` — so it is intentionally not asserted.)
+
+**Firmware execution on silicon (flash + run).** `firmware-nrf52840-demo` was
+flashed to the chip over SWD (`program … verify reset` — OpenOCD reported
+`nRF52840-xxAA(build code: D0)`, matching FICR VARIANT `AAD0`) and run. Halting
+and reading back over SWD confirms it executed the same register writes the
+simulator models for the same ELF:
+
+| Register | Silicon | Simulator |
+|----------|---------|-----------|
+| UART0.ENABLE `0x40002500` | `0x4` | `0x4` |
+| SPIM0.TXD.MAXCNT `0x40003548` | `0x4` | `0x4` |
+| SPIM0.TXD.PTR `0x40003544` | →`SPI_SMOKE_BYTES` | →`SPI_SMOKE_BYTES` |
+| UART0.TXD stream | `NRF52840_SMOKE_OK` (to pin) | `NRF52840_SMOKE_OK` (UART sink) |
+
+(The plain ST-Link/V2 has no VCP and the demo's UART pin isn't wired out, so the
+TXD byte stream is captured on the sim side and proven on silicon via the
+register state + the running loop. Flashing overwrote the XIAO UF2 bootloader,
+as expected for a bare-metal SWD flash; re-flash the Seeed bootloader to restore
+USB-UF2.)
+
+Reproduce (works with multiple ST-Links attached — select the nRF probe by
+serial via the env var added to the OpenOCD helper):
+
+```bash
+LABWIRED_STLINK_SERIAL=<nrf-stlink-serial> \
+  cargo test -p labwired-hw-oracle --test nrf52_mmio_diff \
+    --features hw-oracle-nrf52 -- --ignored --nocapture
+LABWIRED_STLINK_SERIAL=<nrf-stlink-serial> \
+  cargo test -p labwired-hw-oracle --test nrf52_onboarding_diff \
+    --features hw-oracle-nrf52 -- --ignored --nocapture
+```
+
+### Regression protection
+
+- **CI (no hardware):** `test_nrf52840_demo_survival` (asserts `NRF52840_SMOKE_OK`)
+  and the `seeed-xiao-nrf52840-sense` strict-onboarding `[PASS]`. The survival
+  test had been crashing on a latent DMA-model underflow (DMA `ISR`/`IFCR`
+  read at offset `0x00`/`0x04` did `offset - 0x08`); fixed in
+  `crates/core/src/peripherals/dma.rs`.
+- **Manual silicon re-check:** the two hardware diff banks above.

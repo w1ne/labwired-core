@@ -15,6 +15,14 @@ use std::sync::{Arc, Mutex};
 /// token — it has only one kind of wakeup ("do one tick of work"), so the
 /// value is arbitrary and never disambiguated in `on_event`.
 const UART_WAKE_TOKEN: u32 = 0;
+const UART_TRACE_LIMIT: usize = 512;
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct UartTraceEvent {
+    pub seq: u64,
+    pub direction: &'static str,
+    pub byte: u8,
+}
 
 /// A device that emits bytes through the UART's RX path (e.g. a GPS module).
 pub trait UartStreamDevice: Send {
@@ -22,6 +30,10 @@ pub trait UartStreamDevice: Send {
     /// or None if no byte is pending. Implementations should respect `elapsed_us` to
     /// pace output (e.g. 9600 baud → ~1 ms/byte → emit one byte per ~1000 us tick).
     fn poll(&mut self, elapsed_us: u32) -> Option<u8>;
+    /// Observe a byte transmitted by firmware on the TX path. Default: ignore.
+    /// Bidirectional peers (e.g. an IO-Link master) override this to receive the
+    /// device's responses, complementing `poll` which drives the RX path.
+    fn on_tx_byte(&mut self, _byte: u8) {}
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
@@ -56,6 +68,57 @@ impl FromStr for UartRegisterLayout {
     }
 }
 
+/// The complete per-family UART register map: register offsets plus the
+/// interrupt-enable bit masks. **Every** family difference lives in this one
+/// descriptor — the TX sink / RX buffer / stream / scheduler engine on `Uart`
+/// is architecture-independent and shared. Adding or changing a family touches
+/// only its arm of `regmap`, never another family's.
+#[derive(Debug, Clone, Copy)]
+struct UartRegMap {
+    status: u64,
+    tx: u64,
+    rx: u64,
+    cr3: u64,
+    /// CR1 base offset, or `None` for families with no CR1 interrupt concept.
+    cr1: Option<u64>,
+    txeie_mask: u32,
+    tcie_mask: u32,
+}
+
+impl UartRegisterLayout {
+    fn regmap(self) -> UartRegMap {
+        match self {
+            UartRegisterLayout::Stm32F1 => UartRegMap {
+                status: 0x00, // SR
+                tx: 0x04,     // DR
+                rx: 0x04,     // DR
+                cr3: 0x14,
+                cr1: Some(0x0C),
+                txeie_mask: 1 << 7, // TXEIE
+                tcie_mask: 1 << 6,  // TCIE
+            },
+            UartRegisterLayout::Stm32V2 => UartRegMap {
+                status: 0x1C, // ISR
+                tx: 0x28,     // TDR
+                rx: 0x24,     // RDR
+                cr3: 0x08,
+                cr1: Some(0x00),
+                txeie_mask: 1 << 3, // TXEIE/TXFNFIE
+                tcie_mask: 1 << 6,  // TCIE
+            },
+            UartRegisterLayout::Nrf52 => UartRegMap {
+                status: 0x400, // EVENTS_TXDRDY
+                tx: 0x51C,     // TXD
+                rx: 0x518,     // RXD
+                cr3: 0x500,    // ENABLE
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+            },
+        }
+    }
+}
+
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
@@ -72,6 +135,10 @@ pub struct Uart {
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
     pub attached_streams: Vec<Box<dyn UartStreamDevice>>,
+    #[serde(skip)]
+    trace: VecDeque<UartTraceEvent>,
+    #[serde(skip)]
+    trace_seq: u64,
     /// Microseconds accumulated since last stream tick.
     elapsed_us: u32,
     /// Phase 2B.3b (issue #192): whether a self-perpetuating scheduler WAKE
@@ -112,6 +179,8 @@ impl Uart {
             cr3: 0,
             dma_tx_pending: false,
             attached_streams: Vec::new(),
+            trace: VecDeque::new(),
+            trace_seq: 0,
             elapsed_us: 0,
             scheduled: false,
         }
@@ -156,12 +225,20 @@ impl Uart {
             let elapsed = self.elapsed_us;
             self.elapsed_us = 0; // consumed this tick
 
-            if let Ok(mut rx_guard) = self.rx_buf.lock() {
+            let rx_trace = if let Ok(mut rx_guard) = self.rx_buf.lock() {
+                let mut rx_trace = Vec::new();
                 for stream in &mut self.attached_streams {
                     if let Some(byte) = stream.poll(elapsed) {
                         rx_guard.push_back(byte);
+                        rx_trace.push(byte);
                     }
                 }
+                rx_trace
+            } else {
+                Vec::new()
+            };
+            for byte in rx_trace {
+                self.record_trace("rx", byte);
             }
         }
 
@@ -173,63 +250,31 @@ impl Uart {
         (txeie_set || tcie_set, dma_signals)
     }
 
+    // The 7 accessors below all read from the single per-family `regmap()`
+    // descriptor, so a family's register map lives in exactly one place.
     fn status_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x00,
-            UartRegisterLayout::Stm32V2 => 0x1C, // ISR
-            UartRegisterLayout::Nrf52 => 0x400,  // EVENTS_TXDRDY
-        }
+        self.layout.regmap().status
     }
-
     fn tx_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x04, // DR
-            UartRegisterLayout::Stm32V2 => 0x28, // TDR
-            UartRegisterLayout::Nrf52 => 0x51C,  // TXD
-        }
+        self.layout.regmap().tx
     }
-
     fn rx_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x04, // DR
-            UartRegisterLayout::Stm32V2 => 0x24, // RDR
-            UartRegisterLayout::Nrf52 => 0x518,  // RXD
-        }
+        self.layout.regmap().rx
     }
-
     fn cr3_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x14,
-            UartRegisterLayout::Stm32V2 => 0x08,
-            UartRegisterLayout::Nrf52 => 0x500, // ENABLE
-        }
+        self.layout.regmap().cr3
     }
-
-    /// Offset of the CR1 register. Returns None for layouts without a CR1 interrupt concept.
+    /// Offset of the CR1 register. `None` for layouts without a CR1 interrupt concept.
     fn cr1_offset(&self) -> Option<u64> {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => Some(0x0C),
-            UartRegisterLayout::Stm32V2 => Some(0x00),
-            UartRegisterLayout::Nrf52 => None,
-        }
+        self.layout.regmap().cr1
     }
-
     /// Bitmask of the TXEIE bit within CR1 for interrupt-driven TX detection.
     fn txeie_mask(&self) -> u32 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 1 << 7, // TXEIE = bit 7 in STM32F1 CR1
-            UartRegisterLayout::Stm32V2 => 1 << 3, // TXEIE/TXFNFIE = bit 3 in STM32V2 CR1
-            UartRegisterLayout::Nrf52 => 0,
-        }
+        self.layout.regmap().txeie_mask
     }
-
     /// Bitmask of the transmission-complete interrupt enable bit within CR1.
     fn tcie_mask(&self) -> u32 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 1 << 6,
-            UartRegisterLayout::Stm32V2 => 1 << 6,
-            UartRegisterLayout::Nrf52 => 0,
-        }
+        self.layout.regmap().tcie_mask
     }
 
     fn status_ready_value(&self) -> u8 {
@@ -237,10 +282,16 @@ impl Uart {
     }
 
     fn push_tx(&mut self, value: u8) {
+        self.record_trace("tx", value);
+
         if let Some(sink) = &self.sink {
             if let Ok(mut guard) = sink.lock() {
                 guard.push(value);
             }
+        }
+
+        for stream in &mut self.attached_streams {
+            stream.on_tx_byte(value);
         }
 
         if self.echo_stdout {
@@ -255,6 +306,22 @@ impl Uart {
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
         self.sink = sink;
         self.echo_stdout = echo_stdout;
+    }
+
+    fn record_trace(&mut self, direction: &'static str, byte: u8) {
+        self.trace_seq = self.trace_seq.wrapping_add(1);
+        if self.trace.len() >= UART_TRACE_LIMIT {
+            self.trace.pop_front();
+        }
+        self.trace.push_back(UartTraceEvent {
+            seq: self.trace_seq,
+            direction,
+            byte,
+        });
+    }
+
+    pub fn trace_snapshot(&self) -> Vec<UartTraceEvent> {
+        self.trace.iter().cloned().collect()
     }
 }
 
@@ -532,5 +599,60 @@ mod tests {
         let rx = uart.rx_buffer();
         uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
         assert_eq!(rx.lock().unwrap().front().copied(), Some(b'G'));
+    }
+
+    #[test]
+    fn attached_stream_observes_firmware_tx_bytes() {
+        use super::UartStreamDevice;
+        use std::sync::{Arc, Mutex};
+
+        struct Recorder(Arc<Mutex<Vec<u8>>>);
+        impl UartStreamDevice for Recorder {
+            fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+                None
+            }
+            fn on_tx_byte(&mut self, byte: u8) {
+                self.0.lock().unwrap().push(byte);
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let mut uart = Uart::new(); // Stm32F1 layout
+        uart.set_sink(None, false); // disable stdout echo
+        uart.attach_stream(Box::new(Recorder(seen.clone())));
+
+        // Stm32F1: writing the DR alias at offset 0x00 transmits a byte.
+        uart.write(0x00, 0x42).unwrap();
+
+        assert_eq!(*seen.lock().unwrap(), vec![0x42]);
+    }
+
+    #[test]
+    fn uart_trace_snapshot_records_tx_and_rx_without_draining_buffers() {
+        use super::UartStreamDevice;
+
+        struct OneByte(Option<u8>);
+        impl UartStreamDevice for OneByte {
+            fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+                self.0.take()
+            }
+        }
+
+        let mut uart = Uart::new();
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+        uart.attach_stream(Box::new(OneByte(Some(0x33))));
+
+        uart.write(0x04, 0x42).unwrap();
+        uart.tick();
+
+        let trace = uart.trace_snapshot();
+        assert_eq!(trace.len(), 2);
+        assert_eq!(trace[0].direction, "tx");
+        assert_eq!(trace[0].byte, 0x42);
+        assert_eq!(trace[1].direction, "rx");
+        assert_eq!(trace[1].byte, 0x33);
+        assert_eq!(sink.lock().unwrap().as_slice(), &[0x42]);
+        assert_eq!(uart.read(0x04).unwrap(), 0x33);
     }
 }

@@ -16,7 +16,7 @@
 //! HC-SR04 (5V module; ECHO needs a divider to 3V3 on real hardware):
 //!   TRIG → PA8 (output)              ECHO → PB10 (input)
 //!
-//! Hand distance → ship X: the firmware counts loop iterations while ECHO is
+//! HC-SR04 distance → ship X: the firmware counts loop iterations while ECHO is
 //! high. Because the echo pulse is a fixed number of CPU cycles (sim and HW
 //! both run 4 MHz), the count — and therefore the ship position — is identical
 //! on silicon and in the simulator.
@@ -277,7 +277,7 @@ const PADDLE_Y: i32 = (H as i32) - PADDLE_H; // bottom row
 const BALL_SZ: i32 = 2;
 
 /// Breakout: a ball smashes the brick grid; the player moves the paddle (via
-/// the HC-SR04 hand distance) to bounce it back up.
+/// the HC-SR04 distance) to bounce it back up.
 struct Game {
     bricks: [[bool; BCOLS]; BROWS],
     paddle_x: i32,
@@ -351,7 +351,11 @@ impl Game {
             self.vy = -self.vy;
             self.by = PADDLE_Y - BALL_SZ;
             let center = self.paddle_x + PADDLE_W / 2;
-            self.vx = if self.bx + BALL_SZ / 2 < center { -1 } else { 1 };
+            self.vx = if self.bx + BALL_SZ / 2 < center {
+                -1
+            } else {
+                1
+            };
         }
 
         // Missed the paddle → relaunch from above it.
@@ -405,7 +409,12 @@ impl Game {
 /// Map the echo-pulse count to a paddle X position (clamped in `step`).
 fn count_to_paddle_x(count: u32) -> i32 {
     let span = (W as i32 - PADDLE_W).max(1);
-    let v = (count / 16) as i32;
+    // The polling loop has a fixed overhead before it starts counting ECHO high
+    // time. Subtract that floor, scale the remaining pulse width across the
+    // playable range, and invert the result so the demo's maximum distance
+    // reaches the left edge.
+    let raw = (count / 16) as i32;
+    let v = span - (((raw - span / 2) * 13) / 4);
     v.clamp(0, span)
 }
 
@@ -470,15 +479,17 @@ fn main() -> ! {
     }
     delay(1_000_000);
 
-    // Paddle control: HC-SR04 hand distance, smoothed (median-of-3 to drop
-    // spikes + an exponential moving average to tame jitter). On a missed
-    // echo we hold the last position rather than jump.
+    // Paddle control: HC-SR04 distance, smoothed (median-of-3 to drop
+    // spikes + an exponential moving average to tame jitter). A missed echo is
+    // treated as "object is at the nearest edge" so the valid minimum distance
+    // remains visible even when the polling loop misses that very short pulse.
     let center = (W as i32 - PADDLE_W) / 2;
     let mut filt: i32 = center << 3; // paddle X in 1/8-px fixed point
     let mut c1 = 0u32;
     let mut c2 = 0u32;
     loop {
         let count = measure();
+        let mut target = 0;
         if count > 0 {
             if c1 == 0 {
                 c1 = count; // seed the window on the first reading
@@ -487,10 +498,10 @@ fn main() -> ! {
             let m = median3(count, c1, c2);
             c2 = c1;
             c1 = count;
-            let target = count_to_paddle_x(m);
-            // EMA, α = 1/4: filt += (target - filt) / 4, in 1/8-px units.
-            filt += ((target << 3) - filt) >> 2;
+            target = count_to_paddle_x(m);
         }
+        // EMA, α = 1/4: filt += (target - filt) / 4, in 1/8-px units.
+        filt += ((target << 3) - filt) >> 2;
         let paddle = (filt >> 3).clamp(0, W as i32 - PADDLE_W);
         game.step(paddle);
         unsafe {

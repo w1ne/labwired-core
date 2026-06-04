@@ -16,6 +16,6 @@ validation:
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-05-31T00:21:38.649091+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/26698744111/attempts/1
+  timestamp_utc: '2026-06-01T15:45:08.140405+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/26765396309/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/litex_vexriscv_micropython.md

@@ -1,0 +1,20 @@
+name: "quectel-bg770a-lab"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "modem"
+    type: "bg770a-cellular"
+    connection: "uart1"
+    config:
+      apn: "internet"
+      rssi: 22
+      ber: 0
+      boot_urcs: true
+      auto_attach: true
+board_io:
+  - id: "modem"
+    kind: "uart_device"
+    peripheral: "uart1"
+    pin: 0
+    signal: "input"
+    active_high: true
+    device_type: "bg770a-cellular"

@@ -1,0 +1,29 @@
+# Example GitHub Actions workflow: run PlatformIO unit tests inside the
+# LabWired simulator. Copy this to .github/workflows/firmware-tests.yml.
+#
+# Nothing is installed on your machine — GitHub's runner provisions
+# PlatformIO and the LabWired CLI, builds the firmware, and runs the tests
+# in the simulator. You just push.
+name: Firmware tests (LabWired simulator)
+
+on: [push, pull_request]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PlatformIO
+        run: pipx install platformio
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the LabWired CLI and put it on PATH
+        run: |
+          cargo build --release -p labwired-cli
+          echo "$PWD/target/release" >> "$GITHUB_PATH"
+
+      - name: Run unit tests in the simulator
+        working-directory: examples/platformio/nrf52840-unity
+        run: pio test -e nrf52840_dk

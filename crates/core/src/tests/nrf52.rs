@@ -351,7 +351,10 @@ fn nrf52840_onboarding_gpiote_event_in_fires_on_edge() {
         1,
         "EVENTS_IN[0] should be set after rising edge on watched pin"
     );
-    assert!(irq_seen, "GPIOTE IRQ 6 should pend when INTEN.IN[0] enabled");
+    assert!(
+        irq_seen,
+        "GPIOTE IRQ 6 should pend when INTEN.IN[0] enabled"
+    );
 }
 
 /// End-to-end PPI test: TIMER0 EVENTS_COMPARE[0] → PPI CH[0] →
@@ -400,12 +403,14 @@ fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
     // 1. GPIOTE channel 0: Task mode, port 0, pin 26, polarity = Toggle.
     let gpiote_cfg = 3       // MODE = Task
         | (LED_RED_PIN << 8) // PSEL
-        | (3u32 << 16);      // POLARITY = Toggle
+        | (3u32 << 16); // POLARITY = Toggle
     bus.write_u32(GPIOTE_CONFIG_0, gpiote_cfg).unwrap();
 
     // 2. PPI channel 0: TIMER0.EVENTS_COMPARE[0] → GPIOTE.TASKS_OUT[0].
-    bus.write_u32(PPI_CH0_EEP, TIMER0_EVENTS_COMPARE0 as u32).unwrap();
-    bus.write_u32(PPI_CH0_TEP, GPIOTE_TASKS_OUT_0 as u32).unwrap();
+    bus.write_u32(PPI_CH0_EEP, TIMER0_EVENTS_COMPARE0 as u32)
+        .unwrap();
+    bus.write_u32(PPI_CH0_TEP, GPIOTE_TASKS_OUT_0 as u32)
+        .unwrap();
     bus.write_u32(PPI_CHENSET, 1).unwrap();
 
     // 3. TIMER0: 32-bit, no prescaler, CC[0]=4, auto-clear on compare.
@@ -459,8 +464,8 @@ fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
 /// (instead of failing CI on a missing artifact).
 #[test]
 fn nrf52840_onboarding_real_firmware_toggles_led() {
-    use crate::Machine;
     use crate::cpu::cortex_m::CortexM;
+    use crate::Machine;
 
     let elf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/thumbv7em-none-eabi/release/firmware-nrf52840-timer-blinky");
@@ -765,12 +770,13 @@ fn nrf52840_ble_loopback_through_virtual_air() {
     let first = rx_machine.bus.read_u32(rx_first_payload_addr).unwrap_or(0);
     let crc = rx_machine.bus.read_u32(rx_crc_addr).unwrap_or(0);
 
-    println!(
-        "BLE loopback: length={length} first_payload_byte=0x{first:02X} crc_status={crc}"
-    );
+    println!("BLE loopback: length={length} first_payload_byte=0x{first:02X} crc_status={crc}");
 
     assert_eq!(length, 4, "RX should have observed LENGTH=4");
-    assert_eq!(first, 0xC0, "RX should have observed first payload byte 0xC0");
+    assert_eq!(
+        first, 0xC0,
+        "RX should have observed first payload byte 0xC0"
+    );
     assert_eq!(crc, 1, "CRC should validate end-to-end");
 }
 
@@ -803,8 +809,7 @@ fn nrf52840_ble_loopback_through_virtual_air() {
 fn nrf52840_arduino_blink_toggles_gpio() {
     use crate::Machine;
 
-    let elf_path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/arduino-blink.elf");
+    let elf_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/arduino-blink.elf");
     if !elf_path.exists() {
         println!(
             "SKIPPED: build the Arduino sketch first:\n  \
@@ -846,7 +851,9 @@ fn nrf52840_arduino_blink_toggles_gpio() {
             elf_bytes[ph.p_offset as usize..(ph.p_offset + ph.p_filesz) as usize].to_vec(),
         );
     }
-    machine.load_firmware(&image).expect("load Arduino firmware");
+    machine
+        .load_firmware(&image)
+        .expect("load Arduino firmware");
 
     // The Adafruit Bluefruit bootloader sets VTOR=0x26000 and jumps to
     // the application Reset_Handler whose address sits at 0x26004. We
@@ -856,7 +863,10 @@ fn nrf52840_arduino_blink_toggles_gpio() {
     // PendSV (priority 0xFF) which then performs the context switch into
     // loopTask, which calls setup() once then loops loop().
     const APP_VTOR: u32 = 0x0002_6000;
-    let sp = machine.bus.read_u32(APP_VTOR as u64).expect("SP from app VT");
+    let sp = machine
+        .bus
+        .read_u32(APP_VTOR as u64)
+        .expect("SP from app VT");
     let reset_handler = machine
         .bus
         .read_u32((APP_VTOR + 4) as u64)

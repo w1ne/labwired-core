@@ -90,11 +90,8 @@ impl Peripheral for Nrf52Qspi {
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
-            OFF_TASKS_ACTIVATE
-            | OFF_TASKS_READSTART
-            | OFF_TASKS_WRITESTART
-            | OFF_TASKS_ERASESTART
-            | OFF_TASKS_DEACTIVATE => 0,
+            OFF_TASKS_ACTIVATE | OFF_TASKS_READSTART | OFF_TASKS_WRITESTART
+            | OFF_TASKS_ERASESTART | OFF_TASKS_DEACTIVATE => 0,
             OFF_EVENTS_READY => self.events_ready,
             OFF_INTEN | OFF_INTENSET | OFF_INTENCLR => self.inten,
             OFF_ENABLE => self.enable & 1,
@@ -125,11 +122,8 @@ impl Peripheral for Nrf52Qspi {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_ACTIVATE
-            | OFF_TASKS_READSTART
-            | OFF_TASKS_WRITESTART
-            | OFF_TASKS_ERASESTART
-            | OFF_TASKS_DEACTIVATE => {}
+            OFF_TASKS_ACTIVATE | OFF_TASKS_READSTART | OFF_TASKS_WRITESTART
+            | OFF_TASKS_ERASESTART | OFF_TASKS_DEACTIVATE => {}
             OFF_EVENTS_READY => self.events_ready = value & 1,
             OFF_INTEN => self.inten = value,
             OFF_INTENSET => self.inten |= value,

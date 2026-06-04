@@ -15,6 +15,11 @@
 //! EVENTCAUSE.READY in its init loop will see it (we synthesise it
 //! after a TASKS_STARTEPIN/OUT write).
 
+// The OFF_* constants below document the full nRF52840 USBD register surface;
+// not every offset is referenced yet (the dynamic USB state machine is
+// unmodeled), so allow dead code for the register map.
+#![allow(dead_code)]
+
 use crate::{Peripheral, SimResult};
 use std::collections::BTreeMap;
 

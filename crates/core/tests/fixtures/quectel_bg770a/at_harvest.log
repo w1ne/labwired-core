@@ -1,0 +1,579 @@
+### ATE1   [805 ms]
+ATE1
+OK
+---
+### AT   [803 ms]
+AT
+OK
+---
+### ATI   [801 ms]
+ATI
+Quectel
+BG770A-GL
+Revision: BG770AGLAAR01A05
+
+OK
+---
+### AT+CGMI   [804 ms]
+AT+CGMI
+Quectel
+
+OK
+---
+### AT+CGMM   [804 ms]
+AT+CGMM
+BG770A-GL
+
+OK
+---
+### AT+CGMR   [803 ms]
+AT+CGMR
+BG770AGLAAR01A05
+
+OK
+---
+### AT+CGSN   [802 ms]
+AT+CGSN
+863593057609372
+
+OK
+---
+### AT+GMI   [803 ms]
+AT+GMI
+Quectel
+
+OK
+---
+### AT+GMM   [804 ms]
+AT+GMM
+BG770A-GL
+
+OK
+---
+### AT+GMR   [805 ms]
+AT+GMR
+BG770AGLAAR01A05
+
+OK
+---
+### AT+CLAC   [3005 ms]
+AT+CLAC
+ATD*99
+ATDPPPLOC
+ATDT*99
+ATE
+ATE0
+ATE1
+ATI
+ATI1
+ATI2
+ATI3
+ATI4
+ATI5
+ATI6
+ATI7
+ATQ
+ATQ0
+ATQ0V1E0
+ATQ1
+ATS0
+ATS10
+ATS2
+ATS3
+ATS4
+ATS5
+ATS6
+ATS7
+ATS8
+ATV
+ATV0
+ATV1
+ATZ
+ATZ8
+ATZ9
+AT&C0
+AT&C1
+AT&F
+AT&F0
+AT&K
+AT&K0
+AT&K3
+AT&V
+AT&W
+AT+APPTCPIPLOG
+AT+CCHC
+AT+CCHO
+AT+CCIOTOPT
+AT+CCLK
+AT+CEDRXRDP
+AT+CEDRXS
+AT+CEER
+AT+CEINFO
+AT+CEMODE
+AT+CEPPI
+AT+CEREG
+AT+CESQ
+AT+CEVDP
+AT+CFUN
+AT+CGACT
+AT+CGATT
+AT+CGAUTH
+AT+CGCMOD
+AT+CGCONTRDP
+AT+CGDCONT
+AT+CGDSCONT
+AT+CGEREP
+AT+CGLA
+AT+CGMI
+AT+CGMM
+AT+CGMR
+AT+CGPADDR
+AT+CGSMS
+AT+CGSN
+AT+CGTFT
+AT+CGTFTRDP
+AT+CIMI
+AT+CIPCA
+AT+CLAC
+AT+CLCK
+AT+CMEE
+AT+CMGC
+AT+CMGD
+AT+CMGF
+AT+CMGL
+AT+CMGR
+AT+CMGS
+AT+CMGW
+AT+CMGW
+AT+CMMS
+AT+CMSS
+AT+CNEC
+AT+CNMA
+AT+CNMI
+AT+CNMPSD
+AT+CNUM
+AT+COPN
+AT+COPS
+AT+CPBF
+AT+CPBR
+AT+CPBS
+AT+CPBW
+AT+CPIN
+AT+CPINR
+AT+CPLS
+AT+CPMS
+AT+CPNER
+AT+CPNET
+AT+CPNSTAT
+AT+CPOL
+AT+CPSMS
+AT+CPWD
+AT+CRCES
+AT+CREG
+AT+CRES
+AT+CRLA
+AT+CRSM
+AT+CRTDCP
+AT+CSAS
+AT
+---
+### AT+CFUN=?   [800 ms]
++QGPSXTRADATA
+AT+QGPSXTRATIME
+AT+QHTTPCFG
+AT+QHTTPGET
+AT+QHTTPPOST
+AT+QHTTPPOSTFILE
+AT+QHTTPPUT
+AT+QHTTPPUTFILE
+AT+QHTTPREAD
+AT+QHTTPREADFILE
+AT+QHTTPURL
+AT+QHVN
+AT+QIACT
+AT+QICFG
+AT+QICLOSE
+AT+QICSGP
+AT+QIDEACT
+AT+QIDNSCFG
+AT+QIDNSGIP
+AT+QIGETERROR
+AT+QIOPEN
+AT+QIOTCFG
+AT+QIOTFOTA
+AT+QIOTRD
+AT+QIOTREG
+AT+QIOTSEND
+AT+QIOTSTATE
+AT+QIRD
+AT+QISDE
+AT+QISEND
+AT+QISENDEX
+AT+QISTATE
+AT+QISWTMD
+AT+QJDCFG
+AT+QJDR
+AT+QKTFOTA
+AT+QLAPI
+AT+QLBS
+AT+QLBSCFG
+AT+QLTS
+AT+QLWCFG
+AT+QLWSVC
+AT+QMEMINFO
+AT+QMTCFG
+AT+QMTCLOSE
+AT+QMTCONN
+AT+QMTDISC
+AT+QMTOPEN
+AT+QMTPUB
+AT+QMTPUBEX
+AT+QMTRECV
+AT+QMTSUB
+AT+QMTUNS
+AT+QNTP
+AT+QNWCFG
+AT+QNWINFO
+AT+QOTPDEV
+AT+QPINC
+AT+QPING
+AT+QPOWD
+AT+QPRTPARA
+AT+QPSMCFG
+AT+QPSMEXTCFG
+AT+QPSMS
+AT+QPTWEDRXS
+AT+QRETRYCTL
+AT+QRFTEST
+AT+QRFTESTMODE
+AT+QRXFTM
+AT+QSCLK
+AT+QSIMSTAT
+AT+QSSLCFG
+AT+QSSLCLOSE
+AT+QSSLCRYPT
+AT+QSSLOPEN
+AT+QSSLRECV
+AT+QSSLSEND
+AT+QSSLSTATE
+AT+QSUB
+AT+QSVN
+AT+QTESTSLOWCMD
+AT+QTESTVAR
+AT+QURCCFG
+AT+VZ
+---
+### AT+CPIN=?   [804 ms]
+MQTTEV
+AT%NETUPD
+AT%NOTIFYEV
+AT%NVRESCFG
+AT%NWOPER
+AT%OTDOACMD
+AT%OTPCMD
+AT%PBCMD
+AT%PCOINFO
+AT%PCONI
+AT%PDNACT
+AT%PDNRDP
+AT%PDNSET
+AT%PDNSTAT
+AT%PINGCMD
+AT%PPPAUTH
+AT%PPPCFG
+AT%PPPLOC
+AT%PWRSVCMD
+AT%RATACT
+AT%RATEV
+AT%RATIMGSEL
+AT%RATSW
+AT%RESETCID
+AT%RSTINFO
+AT%SCACHECMD
+AT%SCAN
+AT%SCANCFG
+AT%SCANCMD
+AT%SETACFG
+AT%SETBDELAY
+AT%SETCFG
+AT%SETLOG
+AT%SETPCO
+AT%SETPROP
+AT%SETSYSCFG
+AT%SETURLIP
+AT%SIMCMD
+AT%SIMOTA
+AT%SIMVAL
+AT%SMMA
+AT%SMSAPI
+AT%SMSCMD
+AT%SMSEV
+AT%SMSEXEV
+AT%SMSINFO
+AT%SOCKETCMD
+AT%SOCKETDATA
+AT%SOCKETEV
+AT%SRVCHANGE
+AT%STATCM
+AT%STATEV
+AT%STATUS
+AT%TESTCFG
+AT%TIMEREV
+AT%TRSHCMD
+AT%TSTCAT
+AT%TSTEXT
+AT%TSTRF
+AT%TSTSIM
+AT%UPGCMD
+AT%USMSF
+AT%VER
+A/
+
+OK
+AT+CFUN=?
++CFUN: (0-1,4),(0-1)
+
+OK
+AT+CPIN=?
+OK
+---
+### AT+CGDCONT=?   [804 ms]
+AT+CGDCONT=?
++CGDCONT: (1-5),"IP",,,(0),(0),(0)
++CGDCONT: (1-5),"IPV6",,,(0),(0),(0)
++CGDCONT: (1-5),"IPV4V6",,,(0),(0),(0)
++CGDCONT: (1-5),"Non-IP",,,(0),(0),(0)
+
+OK
+---
+### AT+CEREG=?   [805 ms]
+AT+CEREG=?
++CEREG: (0-2,4)
+
+OK
+---
+### AT+CREG=?   [801 ms]
+AT+CREG=?
++CREG: (0-2)
+
+OK
+---
+### AT+COPS=?   [802 ms]
+AT+COPS=?
++CME ERROR: 515
+---
+### AT+CSQ=?   [805 ms]
+AT+CSQ=?
++CSQ: (0-31,99),(0-7,99)
+
+OK
+---
+### AT+QCFG=?   [800 ms]
+AT+QCFG=?
++QCFG: "airplanecontrol",(0,1)
++QCFG: "apn/display",(0,1)
++QCFG: "apready",(0,1),(0,1),(100-3000)
++QCFG: "band",(0),(0-0x2000000000f0e189f),(0-200000000090f189f),(0,1)
++QCFG: "bandrestore"
++QCFG: "celevel",(0-2)
++QCFG: "edrxusimact",(0-2)
++QCFG: "emux/urcport",(0-3)
++QCFG: "epco",(0,1)
++QCFG: "gpio",(1-3),(1,8,9,33,40,57,63),(0,1),(0-3),(0,1,3,5),(0,1),(0,1)
++QCFG: "nwscanmode",(0,3),(0,1)
++QCFG: "iotopmode",(0-2),(0,1)
++QCFG: "lapiconf",2,(0,1)
++QCFG: "lte/bandprior","<band>"
++QCFG: "cdrx",(0,1),(0,1)
++QCFG: "autopwrkey",(0,1)
++QCFG: "lwm2m",(0,1)
++QCFG: "netupd",("nwname"),(0,1)
++QCFG: "nwoper",("AUTO","default","vzw","cmcc","rjil","kddi","att","uscc","docomo","softbank","lgu+","kt","t-mobile","skt","ctc","vodafone","telstra","truphone")
++QCFG: "nwscanseq",(00,02,03,0203,0302),(0,1)
++QCFG: "ps_dev_mob_type",(1,2)
++QCFG: "extmobility",(0-4)
++QCFG: "psm/enter",(0,1)
++QCFG: "psm/urc",(0,1)
++QCFG: "risignaltype",("respective","physical")
++QCFG: "servicedomain",(1)
++QCFG
+---
+### AT+QICSGP=?   [805 ms]
+AT+QICSGP=?
++QICSGP: (1-5),(1-3),<APN>,<username>,<password>,(0-2)
+
+OK
+---
+### AT+QIACT=?   [801 ms]
+AT+QIACT=?
++QIACT: (1-5)
+
+OK
+---
+### AT+QMTCFG=?   [801 ms]
+AT+QMTCFG=?
++QMTCFG: "version",(0-5),(3,4)
++QMTCFG: "pdpcid",(0-5),(1-5)
++QMTCFG: "ssl",(0-5),(0,1),(0-5)
++QMTCFG: "keepalive",(0-5),(0-3600)
++QMTCFG: "session",(0-5),(0,1)
++QMTCFG: "timeout",(0-5),(1-60),(0-10),(0,1)
++QMTCFG: "will",(0-5),(0,1),(0-2),(0,1),<will_topic>,<will_message>
++QMTCFG: "recv/mode",(0-5),(0,1),(0,1)
++QMTCFG: "aliauth",(0-5),<product_key>,<device_name>,<device_secret>
+
+OK
+---
+### AT+QMTOPEN=?   [801 ms]
+AT+QMTOPEN=?
++QMTOPEN: (0-5),<host_name>,(0-65535)
+OK
+---
+### AT+CGATT=?   [801 ms]
+AT+CGATT=?
++CGATT: (0-1)
+
+OK
+---
+### AT+CFUN?   [801 ms]
+AT+CFUN?
++CFUN: 1
+
+OK
+---
+### AT+CGDCONT?   [805 ms]
+AT+CGDCONT?
++CGDCONT: 1,"IP","iot.truphone.com","0.0.0.0",0,0,0
+
+OK
+---
+### AT+CEREG?   [805 ms]
+AT+CEREG?
++CEREG: 0,2
+
+OK
+---
+### AT+CREG?   [801 ms]
+AT+CREG?
++CREG: 0,2
+
+OK
+---
+### AT+COPS?   [800 ms]
+AT+COPS?
++COPS: 0
+
+OK
+---
+### AT+CSQ   [804 ms]
+AT+CSQ
++CSQ: 99,99
+
+OK
+---
+### AT+QCSQ   [804 ms]
+AT+QCSQ
++QCSQ: "NOSERVICE"
+
+OK
+---
+### AT+QCFG="band"   [801 ms]
+AT+QCFG="band"
++QCFG: "band",0x0,0x2000000000f0e189f,0x200000000090f189f
+
+OK
+---
+### AT+QCFG="iotopmode"   [800 ms]
+AT+QCFG="iotopmode"
++QCFG: "iotopmode",2
+
+OK
+---
+### AT+QCFG="nwscanseq"   [800 ms]
+AT+QCFG="nwscanseq"
++QCFG: "nwscanseq",0203
+
+OK
+---
+### AT+QCFG="nwscanmode"   [805 ms]
+AT+QCFG="nwscanmode"
++QCFG: "nwscanmode",3
+
+OK
+---
+### AT+QCFG="servicedomain"   [805 ms]
+AT+QCFG="servicedomain"
++QCFG: "servicedomain",1
+
+OK
+---
+### AT+QCFG="roamservice"   [803 ms]
+AT+QCFG="roamservice"
+ERROR
+---
+### AT+QCFG="celevel"   [805 ms]
+AT+QCFG="celevel"
+ERROR
+---
+### AT+QCFG="psm/enter"   [804 ms]
+AT+QCFG="psm/enter"
++QCFG: "psm/enter",0
+
+OK
+---
+### AT+QCFG="sleepind/level"   [800 ms]
+AT+QCFG="sleepind/level"
+ERROR
+---
+### AT+QCFG="apready"   [803 ms]
+AT+QCFG="apready"
++QCFG: "apready",0,0,500
+
+OK
+---
+### AT+QCFG="urc/cache"   [805 ms]
+AT+QCFG="urc/cache"
+ERROR
+---
+### AT+QCFG="ledmode"   [804 ms]
+AT+QCFG="ledmode"
++QCFG: "ledmode",0
+
+OK
+---
+### ATBOGUS   [800 ms]
+ATBOGUS
+ERROR
+---
+### AT+NONEXISTENT   [805 ms]
+AT+NONEXISTENT
+ERROR
+---
+### AT+CPIN="0000"   [802 ms]
+AT+CPIN="0000"
++CME ERROR: 3
+---
+### AT+QCFG="nope"   [803 ms]
+AT+QCFG="nope"
+ERROR
+---
+### AT   [801 ms]
+AT
+OK
+---
+### AT   [805 ms]
+AT
+OK
+---
+### AT   [802 ms]
+AT
+OK
+---
+### AT   [805 ms]
+AT
+OK
+---
+### AT   [804 ms]
+AT
+OK
+---

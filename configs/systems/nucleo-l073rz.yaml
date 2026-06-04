@@ -1,0 +1,27 @@
+# LabWired - NUCLEO-L073RZ system manifest
+#
+# Board pinout per UM1724 (STM32 Nucleo-64 user manual). The L073RZ shares
+# the Nucleo-64 layout with the L476RG: LD2 (green user LED) on PA5; B1 (blue
+# user button) on PC13. USART2 PA2 (TX, AF4) / PA3 (RX, AF4) is wired to the
+# on-board ST-LINK V2-1 Virtual COM Port.
+#
+# NOTE: USART2 uses alternate function AF4 on the STM32L073 (vs AF7 on the
+# L476). The on-board debug probe is ST-LINK/V2-1 exposing SWD only — the
+# Cortex-M0+ has no JTAG TAP, so debug/flash is over the 2-wire SWD interface.
+
+name: "nucleo-l073rz"
+chip: "../chips/stm32l073.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

@@ -79,10 +79,7 @@ impl Peripheral for Nrf52Pwm {
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
-            OFF_TASKS_STOP
-            | OFF_TASKS_SEQSTART0
-            | OFF_TASKS_SEQSTART1
-            | OFF_TASKS_NEXTSTEP => 0,
+            OFF_TASKS_STOP | OFF_TASKS_SEQSTART0 | OFF_TASKS_SEQSTART1 | OFF_TASKS_NEXTSTEP => 0,
 
             OFF_EVENTS_STOPPED => self.events_stopped,
             OFF_EVENTS_SEQSTARTED0 => self.events_seqstarted[0],
@@ -120,10 +117,7 @@ impl Peripheral for Nrf52Pwm {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            OFF_TASKS_STOP
-            | OFF_TASKS_SEQSTART0
-            | OFF_TASKS_SEQSTART1
-            | OFF_TASKS_NEXTSTEP => {}
+            OFF_TASKS_STOP | OFF_TASKS_SEQSTART0 | OFF_TASKS_SEQSTART1 | OFF_TASKS_NEXTSTEP => {}
 
             OFF_EVENTS_STOPPED => self.events_stopped = value & 1,
             OFF_EVENTS_SEQSTARTED0 => self.events_seqstarted[0] = value & 1,

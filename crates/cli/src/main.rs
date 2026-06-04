@@ -1158,52 +1158,16 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         .copied()
         .unwrap_or(0x3FFB_F3A0);
 
-    // loopTask xCoreID arg-clobber: Arduino-ESP32's app_main calls
-    // xTaskCreateUniversal(loopTask, ..., xCoreID=1) which pins loopTask
-    // to APP_CPU. The 7th arg goes on the stack as `s32i.n a14, a1, 0`
-    // where a14=1 (reused from priority). Until DC7 fixes the FreeRTOS
-    // SMP race blocking cpu1 from running, we patch loopTask to land on
-    // PRO_CPU instead by swapping the last two instructions:
-    //
-    // Before: ... e9 01 0d 0c ...  (s32i.n a14,a1,0 then movi.n a13,0)
-    // After:  ... 0d 0c d9 01 ...  (movi.n a13,0 then s32i.n a13,a1,0)
-    //
-    // a14 (= priority 1) stays untouched. a13 is set to 0 first, then
-    // stored to SP+0 (= xCoreID arg). Same 4 bytes, same memory layout.
+    // loopTask xCoreID repin: Arduino-ESP32's app_main calls
+    // xTaskCreateUniversal(loopTask, ..., xCoreID=1), pinning loopTask to
+    // APP_CPU. We model only PRO_CPU, so rewrite the xCoreID immediate to 0.
+    // Handles both legacy and IDF-5.x app_main layouts. See
+    // rom_thunks::repin_loop_task.
     if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-        const SCAN_BYTES: u32 = 64;
-        let mut window: Vec<u8> = Vec::with_capacity(SCAN_BYTES as usize);
-        for off in 0..SCAN_BYTES {
-            match machine.bus.read_u8((app_main_addr + off) as u64) {
-                Ok(b) => window.push(b),
-                Err(_) => break,
-            }
-        }
-        // Find the 4-byte sequence `E9 01 0C 0D` (s32i.n a14,a1,0
-        // followed by movi.n a13,0). Memory layout (LE) for each
-        // 16-bit narrow instruction is empirically encoded as
-        // `e9 01` for s32i.n a14,a1,0 and `0c 0d` for movi.n a13,0.
-        let target = [0xE9, 0x01, 0x0C, 0x0D];
-        let swap = [0x0C, 0x0D, 0xD9, 0x01];
-        let hit = window
-            .windows(4)
-            .enumerate()
-            .find(|(_, w)| *w == target)
-            .map(|(i, _)| i);
-        if let Some(i) = hit {
-            let patch_addr = (app_main_addr + i as u32) as u64;
-            let mut ok = true;
-            for (j, b) in swap.iter().enumerate() {
-                if machine.bus.write_u8(patch_addr + j as u64, *b).is_err() {
-                    ok = false;
-                    break;
-                }
-            }
-            if ok {
-                eprintln!(
-                    "labwired-cli snapshot: patched loopTask xCoreID at 0x{patch_addr:08x} (1→0, loopTask runs on PRO_CPU)"
-                );
-            }
+        if let Some((addr, shape)) = rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr) {
+            eprintln!(
+                "labwired-cli snapshot: repinned loopTask xCoreID at 0x{addr:08x} (1→0, {shape}; runs on PRO_CPU)"
+            );
         }
     }
 
@@ -1231,6 +1195,16 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01); // s_system_inited[1]
         let _ = machine.bus.write_u8(0x3FFC_7190, 0x01); // s_other_cpu_startup_done
         let _ = machine.bus.write_u8(0x400E_90DE, 0x08); // loopTask -> PRO_CPU
+                                                         // Re-assert the same flags the instant PRO_CPU releases APP_CPU
+                                                         // (models APP_CPU bring-up; see rom_thunks::ets_set_appcpu_boot_addr).
+        rom_thunks::set_appcpu_up_flags(vec![
+            0x3FFC_6F04,
+            0x3FFC_6F01,
+            0x3FFC_6F02,
+            0x3FFC_6FFD,
+            0x3FFC_6FFE,
+            0x3FFC_7190,
+        ]);
     } else {
         s_resume_cores = resolve_data("s_resume_cores", 0);
         s_cpu_up = resolve_data("s_cpu_up", 0);
@@ -1255,6 +1229,27 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         if s_other_cpu_startup_done != 0 {
             let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
         }
+        // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
+        // newer arduino-esp32 cores (whose `start_other_core` spin-waits
+        // with a tight timeout) see APP_CPU "up" without depending on the
+        // coarse 10k-cycle keep-alive below. Models APP_CPU bring-up; see
+        // rom_thunks::ets_set_appcpu_boot_addr.
+        let mut appcpu_up_flags: Vec<u32> = Vec::new();
+        for (base, two_byte) in [
+            (s_cpu_up, true),
+            (s_cpu_inited, true),
+            (s_system_inited, true),
+            (s_resume_cores, false),
+            (s_other_cpu_startup_done, false),
+        ] {
+            if base != 0 {
+                appcpu_up_flags.push(base);
+                if two_byte {
+                    appcpu_up_flags.push(base + 1);
+                }
+            }
+        }
+        rom_thunks::set_appcpu_up_flags(appcpu_up_flags);
     }
     // RTC XTAL-freq probe = 40 MHz.
     let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
@@ -1539,10 +1534,13 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // a working flow (spill writes valid save-area data the callee
     // later reads).
     if args.profile == "arduino-esp32" {
-        for sym in &["xthal_window_spill_nw", "xthal_window_spill"] {
-            if let Some(&pc) = symbol_addrs.get(*sym) {
-                thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
-            }
+        // Only the `_nw` leaf (the spill loop that would trap) is thunked;
+        // the `xthal_window_spill` wrapper is a thin CALL{n}-entered
+        // PS-save shell that must run natively (its real ENTRY/RETW manage
+        // the window). Thunking the wrapper returns via a0 = the caller's
+        // return address, corrupting the first-task dispatch.
+        if let Some(&pc) = symbol_addrs.get("xthal_window_spill_nw") {
+            thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
         }
     }
     // xQueueCreateMutexStatic returns the caller's static buffer as the
@@ -3329,7 +3327,7 @@ fn run_test(args: TestArgs) -> ExitCode {
 
     // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system_from_manifest.
     if is_xtensa {
-        if let (Some(ref sys_path), Some(ref manifest)) = (system_path.as_ref(), esp32_manifest.as_ref()) {
+        if let (Some(sys_path), Some(manifest)) = (system_path.as_ref(), esp32_manifest.as_ref()) {
             let uart_tx = Arc::new(Mutex::new(Vec::new()));
             let (mut esp_bus, esp_cpu) =
                 match labwired_core::system::builder::build_esp32_system_from_manifest(

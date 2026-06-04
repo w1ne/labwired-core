@@ -12,9 +12,7 @@ use crate::peripherals::uart::Uart;
 use crate::peripherals::uart::UartRegisterLayout;
 use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
 use anyhow::Context;
-use labwired_config::{
-    parse_size, ChipDescriptor, ExternalDevice, PeripheralConfig, SystemManifest,
-};
+use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -185,9 +183,10 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
-    /// HC-SR04 ultrasonic sensors wired to GPIO TRIG/ECHO pins. Serviced once
-    /// per peripheral-tick: the bus reads each sensor's TRIG output level and
-    /// drives the computed ECHO input level. Empty by default → zero cost.
+    /// HC-SR04 ultrasonic sensors wired to GPIO TRIG/ECHO pins. The echo window
+    /// is armed by the TRIG GPIO write-hook (`maybe_arm_hcsr04`); a cheap
+    /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,
+    /// touching the bus only on a transition. Empty by default → zero cost.
     pub hcsr04: Vec<crate::peripherals::hc_sr04::HcSr04>,
 }
 
@@ -365,136 +364,6 @@ impl SystemBus {
         }
     }
 
-    fn adxl345_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
-        let Some(value) = ext.config.get("i2c_address") else {
-            return Ok(0x53);
-        };
-
-        let Some(address) = value.as_u64() else {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                serde_yaml::to_string(value)
-                    .unwrap_or_else(|_| "<unprintable>".to_string())
-                    .trim()
-            ));
-        };
-
-        if address > 0x7f {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                address
-            ));
-        }
-
-        Ok(address as u8)
-    }
-
-    fn mpu6050_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
-        let Some(value) = ext.config.get("i2c_address") else {
-            return Ok(0x68);
-        };
-
-        let Some(address) = value.as_u64() else {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                serde_yaml::to_string(value)
-                    .unwrap_or_else(|_| "<unprintable>".to_string())
-                    .trim()
-            ));
-        };
-
-        if address > 0x7f {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                address
-            ));
-        }
-
-        Ok(address as u8)
-    }
-
-    fn bme280_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
-        let Some(value) = ext.config.get("i2c_address") else {
-            return Ok(0x76);
-        };
-
-        let Some(address) = value.as_u64() else {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                serde_yaml::to_string(value)
-                    .unwrap_or_else(|_| "<unprintable>".to_string())
-                    .trim()
-            ));
-        };
-
-        if address > 0x7f {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                address
-            ));
-        }
-
-        Ok(address as u8)
-    }
-
-    fn max31855_cs_pin(ext: &ExternalDevice) -> String {
-        ext.config
-            .get("cs_pin")
-            .and_then(|v| v.as_str())
-            .unwrap_or("PA4")
-            .to_string()
-    }
-
-    fn ili9341_cs_pin(ext: &ExternalDevice) -> String {
-        ext.config
-            .get("cs_pin")
-            .and_then(|v| v.as_str())
-            .unwrap_or("PA4")
-            .to_string()
-    }
-
-    fn ssd1680_cs_pin(ext: &ExternalDevice) -> String {
-        ext.config
-            .get("cs_pin")
-            .and_then(|v| v.as_str())
-            .unwrap_or("PA4")
-            .to_string()
-    }
-
-    fn pcd8544_cs_pin(ext: &ExternalDevice) -> String {
-        ext.config
-            .get("cs_pin")
-            .and_then(|v| v.as_str())
-            .unwrap_or("PB6")
-            .to_string()
-    }
-
-    fn pcd8544_dc_pin(ext: &ExternalDevice) -> String {
-        ext.config
-            .get("dc_pin")
-            .and_then(|v| v.as_str())
-            .unwrap_or("PC7")
-            .to_string()
-    }
-
     /// Parse an STM32 pin label like "PC7" into `("gpioc", 7)`.
     fn parse_stm32_pin(pin: &str) -> Option<(String, u8)> {
         let s = pin.trim();
@@ -515,6 +384,12 @@ impl SystemBus {
 
     /// Resolve an STM32 pin label to its `(ODR address, bit)` so a display's
     /// D/C line can be sampled directly from the driving GPIO's output register.
+    /// Public wrapper exposed via [`AttachCtx::resolve_pin_odr`] so kits can
+    /// hook MCU GPIO outputs into a SPI device's D/C line.
+    pub fn resolve_pin_odr_pub(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
+        Self::resolve_pin_odr(bus, pin)
+    }
+
     fn resolve_pin_odr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
         let (port_name, bit) = Self::parse_stm32_pin(pin)?;
         let idx = bus.find_peripheral_index_by_name(&port_name)?;
@@ -541,22 +416,25 @@ impl SystemBus {
         Some((base + idr_off, bit))
     }
 
-    /// Service all HC-SR04 sensors for one tick: read each sensor's TRIG
-    /// output level, advance its echo window, and drive the resulting ECHO
-    /// input level. No-op when no sensors are wired.
+    /// Service all HC-SR04 sensors for one tick: compute each sensor's ECHO
+    /// level from its (write-hook-armed) echo window and drive it onto the ECHO
+    /// input register, touching the bus only on a level transition. TRIG is NOT
+    /// polled here — `maybe_arm_hcsr04` arms the window on the GPIO write, which
+    /// is cycle-exact (see `Machine::step`). No-op when no sensors are wired.
     pub(crate) fn service_hcsr04(&mut self) {
         if self.hcsr04.is_empty() {
             return;
         }
         let now = self.current_cycle;
         for i in 0..self.hcsr04.len() {
-            let trig_addr = self.hcsr04[i].trig_odr_addr;
-            let trig_bit = self.hcsr04[i].trig_bit;
-            let trig_high = self
-                .read_u32(trig_addr)
-                .map(|v| (v >> trig_bit) & 1 != 0)
-                .unwrap_or(false);
-            let echo_high = self.hcsr04[i].service(trig_high, now);
+            // TRIG is no longer polled here — `maybe_arm_hcsr04` arms the window
+            // on the GPIO write (cycle-exact, see the note in `Machine::step`).
+            // The per-cycle work is two integer comparisons plus, only on a
+            // transition, one read-modify-write of the ECHO input bit.
+            let echo_high = self.hcsr04[i].echo_high_at(now);
+            if echo_high == self.hcsr04[i].last_echo_high() {
+                continue;
+            }
             let echo_addr = self.hcsr04[i].echo_idr_addr;
             let echo_bit = self.hcsr04[i].echo_bit;
             let idr = self.read_u32(echo_addr).unwrap_or(0);
@@ -568,6 +446,49 @@ impl SystemBus {
             if new_idr != idr {
                 let _ = self.write_u32(echo_addr, new_idr);
             }
+            self.hcsr04[i].set_last_echo_high(echo_high);
+        }
+    }
+
+    /// Write-hook mirror of [`maybe_latch_dc`](Self::maybe_latch_dc) for the
+    /// HC-SR04: after an MMIO write to peripheral `idx`, if that peripheral is
+    /// the GPIO hosting any sensor's TRIG line, re-read the TRIG ODR bit and run
+    /// the sensor's rising-edge/arm logic at `now = self.current_cycle`.
+    ///
+    /// Because TRIG only changes via a GPIO write, edge detection on the write is
+    /// exactly equivalent to the old per-cycle TRIG poll, and `current_cycle`
+    /// here equals the value the immediately-following `service_hcsr04` tick sees
+    /// (see `Machine::step`), so the arming is cycle-exact.
+    fn maybe_arm_hcsr04(&mut self, idx: usize) {
+        if self.hcsr04.is_empty() {
+            return;
+        }
+        let now = self.current_cycle;
+        for i in 0..self.hcsr04.len() {
+            // Resolve & cache the TRIG GPIO's peripheral index on first use.
+            let trig_idx = match self.hcsr04[i].trig_peripheral_idx() {
+                Some(t) => t,
+                None => {
+                    let trig_addr = self.hcsr04[i].trig_odr_addr;
+                    match self.find_peripheral_index(trig_addr) {
+                        Some(t) => {
+                            self.hcsr04[i].set_trig_peripheral_idx(t);
+                            t
+                        }
+                        None => continue,
+                    }
+                }
+            };
+            if trig_idx != idx {
+                continue;
+            }
+            let trig_addr = self.hcsr04[i].trig_odr_addr;
+            let trig_bit = self.hcsr04[i].trig_bit;
+            let trig_high = self
+                .read_u32(trig_addr)
+                .map(|v| (v >> trig_bit) & 1 != 0)
+                .unwrap_or(false);
+            self.hcsr04[i].observe_trig(trig_high, now);
         }
     }
 
@@ -613,36 +534,6 @@ impl SystemBus {
                 }
             }
         }
-    }
-
-    fn ssd1306_i2c_address(ext: &ExternalDevice) -> anyhow::Result<u8> {
-        let Some(value) = ext.config.get("i2c_address") else {
-            return Ok(0x3C);
-        };
-
-        let Some(address) = value.as_u64() else {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has invalid i2c_address '{}'",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                serde_yaml::to_string(value)
-                    .unwrap_or_else(|_| "<unprintable>".to_string())
-                    .trim()
-            ));
-        };
-
-        if address > 0x7f {
-            return Err(anyhow::anyhow!(
-                "External device '{}' type '{}' on connection '{}' has out-of-range 7-bit i2c_address 0x{:x}",
-                ext.id,
-                ext.r#type,
-                ext.connection,
-                address
-            ));
-        }
-
-        Ok(address as u8)
     }
 
     fn is_peripheral_addr(p: &PeripheralEntry, addr: u64) -> bool {
@@ -908,6 +799,21 @@ impl SystemBus {
         None
     }
 
+    /// Cross-core `FROM_CPU` IPI slots currently asserted for `core_id`,
+    /// read live from the ESP32-classic DPORT interrupt matrix. Replaces the
+    /// old test-harness IPI bridge that polled the same registers from
+    /// outside the core. Returns 0 when no DPORT is mapped (non-ESP32 buses).
+    fn dport_cross_core_pending(&self, core_id: u8) -> u32 {
+        for p in &self.peripherals {
+            if let Some(any) = p.dev.as_any() {
+                if let Some(dport) = any.downcast_ref::<crate::peripherals::esp32::dport::Dport>() {
+                    return dport.cross_core_pending(core_id);
+                }
+            }
+        }
+        0
+    }
+
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
@@ -1133,7 +1039,14 @@ impl SystemBus {
                     Box::new(crate::peripherals::spi::Spi::new_with_layout(layout))
                 }
                 "pwr" => Box::new(crate::peripherals::pwr::Pwr::new()),
-                "flash" | "flash_iface" => Box::new(crate::peripherals::flash::Flash::new()),
+                "flash" | "flash_iface" => {
+                    // Layout selected via `config: { profile: stm32f1 | stm32l4 }`
+                    // in the chip yaml. Missing/unknown profile keeps the L4
+                    // default — backward compatible with existing chip configs.
+                    let layout: crate::peripherals::flash::FlashRegisterLayout =
+                        Self::parse_profile_or_default(p_cfg, "FLASH")?;
+                    Box::new(crate::peripherals::flash::Flash::new_with_layout(layout))
+                }
                 "rng" => Box::new(crate::peripherals::rng::Rng::new()),
                 "crc" => Box::new(crate::peripherals::crc::Crc::new()),
                 "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
@@ -1398,264 +1311,22 @@ impl SystemBus {
         }
 
         for ext in &manifest.external_devices {
+            // First-pass: peripherals that have migrated to the unified
+            // `PeripheralKit` contract are dispatched through the registry,
+            // so each one ships its own `attach` next to its model instead
+            // of a hand-written arm here.
+            if let Some(kit) = crate::peripherals::kit::registry::lookup(&ext.r#type) {
+                let mut ctx = crate::peripherals::kit::AttachCtx::new(&mut bus, ext);
+                kit.attach(&mut ctx)?;
+                continue;
+            }
             match ext.r#type.as_str() {
-                "ili9341" => {
-                    // SPI device path
-                    let cs_pin = Self::ili9341_cs_pin(ext);
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let spi = any
-                        .downcast_mut::<crate::peripherals::spi::Spi>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    spi.attach(Box::new(crate::peripherals::components::Ili9341::new(
-                        cs_pin,
-                    )));
-                }
-                "adxl345" | "mpu6050" | "bme280" | "oled-ssd1306" => {
-                    // I2C device path
-                    let address = match ext.r#type.as_str() {
-                        "mpu6050" => Self::mpu6050_i2c_address(ext)?,
-                        "bme280" => Self::bme280_i2c_address(ext)?,
-                        "oled-ssd1306" => Self::ssd1306_i2c_address(ext)?,
-                        _ => Self::adxl345_i2c_address(ext)?,
-                    };
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let i2c = any
-                        .downcast_mut::<crate::peripherals::i2c::I2c>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not an I2C peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    match ext.r#type.as_str() {
-                        "mpu6050" => i2c.attach(Box::new(
-                            crate::peripherals::components::Mpu6050::new(address),
-                        )),
-                        "bme280" => i2c.attach(Box::new(
-                            crate::peripherals::components::Bme280::new(address),
-                        )),
-                        "oled-ssd1306" => i2c.attach(Box::new(
-                            crate::peripherals::components::Ssd1306::new(address),
-                        )),
-                        _ => i2c.attach(Box::new(crate::peripherals::components::Adxl345::new(
-                            address,
-                        ))),
-                    }
-                }
-                "neo6m-gps" => {
-                    // UART stream device path
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let uart = any
-                        .downcast_mut::<crate::peripherals::uart::Uart>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not a UART peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let mut gps = crate::peripherals::components::Neo6mGps::new();
-
-                    // Optionally read initial position from config
-                    if let Some(lat) = ext.config.get("lat_deg").and_then(|v| v.as_f64()) {
-                        if let Some(lon) = ext.config.get("lon_deg").and_then(|v| v.as_f64()) {
-                            gps.set_position(lat, lon);
-                        }
-                    }
-
-                    uart.attach_stream(Box::new(gps));
-                }
-                "max31855" => {
-                    // SPI device path
-                    let cs_pin = Self::max31855_cs_pin(ext);
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let spi = any
-                        .downcast_mut::<crate::peripherals::spi::Spi>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    spi.attach(Box::new(crate::peripherals::components::Max31855::new(
-                        cs_pin,
-                    )));
-                }
-                "ssd1680_tricolor_290" | "epd-2in9-tricolor" => {
-                    // SPI device path — Waveshare 2.9" tri-color e-paper.
-                    let cs_pin = Self::ssd1680_cs_pin(ext);
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let spi = any
-                        .downcast_mut::<crate::peripherals::spi::Spi>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    spi.attach(Box::new(
-                        crate::peripherals::components::Ssd1680Tricolor290::new(cs_pin),
-                    ));
-                }
-                "pcd8544" | "nokia-5110" => {
-                    // SPI device path — Nokia 5110 (PCD8544) monochrome LCD.
-                    // Distinguishes command vs data by a D/C GPIO line, which
-                    // we resolve to a concrete ODR address up front.
-                    let cs_pin = Self::pcd8544_cs_pin(ext);
-                    let dc_pin = Self::pcd8544_dc_pin(ext);
-                    let dc_src = Self::resolve_pin_odr(&bus, &dc_pin);
-
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let spi = any
-                        .downcast_mut::<crate::peripherals::spi::Spi>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not an SPI peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let mut dev = crate::peripherals::components::Pcd8544::new(cs_pin, dc_pin);
-                    if let Some((odr_addr, bit)) = dc_src {
-                        crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
-                    }
-                    spi.attach(Box::new(dev));
-                }
+                // ili9341, adxl345/mpu6050/bme280/oled-ssd1306, neo6m-gps,
+                // and bg770a-cellular dispatch through the PeripheralKit
+                // registry above — see `peripherals::kit`.
+                // iolink-master dispatches through the PeripheralKit registry above.
+                // max31855, sn74hc165, ssd1680_tricolor_290, and pcd8544
+                // dispatch through the PeripheralKit registry above.
                 "hc-sr04" | "hcsr04" => {
                     // GPIO-wired ultrasonic sensor — no SPI/I2C connection. The
                     // bus services it each tick: reads TRIG (an MCU output) and
@@ -1711,57 +1382,7 @@ impl SystemBus {
                         distance_cm,
                     ));
                 }
-                "ntc-thermistor" => {
-                    // Analog source path: NTC connects directly to an ADC channel.
-                    // Read channel + initial temperature from config.
-                    let channel = ext
-                        .config
-                        .get("channel")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as u8;
-                    let initial_temp_c = ext
-                        .config
-                        .get("initial_temperature_c")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(25.0) as f32;
-
-                    // Find the ADC peripheral by the connection name.
-                    let idx = bus
-                        .find_peripheral_index_by_name(&ext.connection)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' references missing connection '{}'",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' type '{}' connection '{}' cannot be downcast",
-                            ext.id,
-                            ext.r#type,
-                            ext.connection
-                        )
-                    })?;
-
-                    let adc = any
-                        .downcast_mut::<crate::peripherals::adc::Adc>()
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "External device '{}' type '{}' connection '{}' is not an ADC peripheral",
-                                ext.id,
-                                ext.r#type,
-                                ext.connection
-                            )
-                        })?;
-
-                    // Seed the ADC channel with the initial temperature's voltage.
-                    let ntc =
-                        crate::peripherals::components::NtcThermistor::new(channel, initial_temp_c);
-                    adc.set_channel_input(channel, ntc.divider_output_mv());
-                }
+                // ntc-thermistor dispatches through the PeripheralKit registry above.
                 _ => {
                     tracing::warn!(
                         "Unsupported external device '{}' type '{}' on connection '{}'; skipping",
@@ -1775,6 +1396,11 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // Per-config walk-deletion opt-in. The field is only consulted under the
+        // `event-scheduler` feature (the legacy build always walks), so this is a
+        // no-op there. Safe only because the manifest author verified the
+        // firmware runs byte-identical walk-free (see the walk-identity test).
+        bus.legacy_walk_disabled = manifest.walk_deleted;
         Ok(bus)
     }
 
@@ -1840,6 +1466,7 @@ impl SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u32(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -1892,6 +1519,7 @@ impl SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u16(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -2301,6 +1929,9 @@ impl crate::Bus for SystemBus {
             return p.dev.read(addr - p.base);
         }
 
+        if std::env::var("LABWIRED_TRACE_VIOLATIONS").is_ok() {
+            eprintln!("BUS_VIOLATION read_u8 addr=0x{:08X}", addr);
+        }
         Err(SimulationError::MemoryViolation(addr))
     }
 
@@ -2342,10 +1973,17 @@ impl crate::Bus for SystemBus {
                 self.maybe_latch_dc(idx);
                 let p = &mut self.peripherals[idx];
                 let r = p.dev.write(addr - p.base, value);
+                self.maybe_arm_hcsr04(idx);
                 #[cfg(feature = "event-scheduler")]
                 self.collect_scheduled_events(idx);
                 r
             } else {
+                if std::env::var("LABWIRED_TRACE_VIOLATIONS").is_ok() {
+                    eprintln!(
+                        "BUS_VIOLATION write_u8 addr=0x{:08X} val=0x{:02X}",
+                        addr, value
+                    );
+                }
                 Err(SimulationError::MemoryViolation(addr))
             }
         };
@@ -2432,6 +2070,7 @@ impl crate::Bus for SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u16(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -2471,6 +2110,7 @@ impl crate::Bus for SystemBus {
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
             let r = p.dev.write_u32(addr - p.base, value);
+            self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             return r;
@@ -2573,7 +2213,15 @@ impl crate::Bus for SystemBus {
     }
 
     fn pending_cpu_irqs(&self, core_id: u8) -> u32 {
-        self.pending_cpu_irqs[(core_id & 1) as usize]
+        // Two cross-core delivery paths coexist after the dual-core merge:
+        //   * ESP32-S3 (intmatrix registered): the aggregator routes every
+        //     asserting source — including the FROM_CPU IPI sources
+        //     79→core0 / 80→core1 — into this per-core array.
+        //   * ESP32-classic (no intmatrix, DPORT instead): the array stays
+        //     empty and cross-core FROM_CPU IPIs come from the DPORT matrix.
+        // Each path contributes 0 on the other chip, so OR-ing is safe and
+        // keeps both dual-core models working.
+        self.pending_cpu_irqs[(core_id & 1) as usize] | self.dport_cross_core_pending(core_id)
     }
 
     fn clear_cpu_irq_pending(&mut self, core_id: u8, slot: u8) {
@@ -2681,6 +2329,7 @@ mod tests {
             serde_yaml::Value::Number(0x53.into()),
         );
         let manifest = SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),
@@ -2699,7 +2348,7 @@ mod tests {
         let i2c_idx = bus.find_peripheral_index_by_name("i2c1").unwrap();
         let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
         let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
-        assert_eq!(i2c.attached_devices.len(), 1);
+        assert_eq!(i2c.attached_devices().len(), 1);
     }
 
     fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
@@ -2745,6 +2394,7 @@ mod tests {
         config: std::collections::HashMap<String, serde_yaml::Value>,
     ) -> labwired_config::SystemManifest {
         labwired_config::SystemManifest {
+            walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),
@@ -2832,7 +2482,7 @@ mod tests {
         let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
         let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
 
-        assert_eq!(i2c.attached_devices.len(), 0);
+        assert_eq!(i2c.attached_devices().len(), 0);
     }
 
     #[test]

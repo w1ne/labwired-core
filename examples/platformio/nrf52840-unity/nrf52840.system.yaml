@@ -1,0 +1,5 @@
+# LabWired - PlatformIO + LabWired integration example
+# System manifest: a bare nRF52840 with no external devices wired.
+name: "nrf52840-platformio-unity"
+chip: "../../../configs/chips/nrf52840.yaml"
+external_devices: []

@@ -386,8 +386,7 @@ fn build_onboarding_bus() -> SystemBus {
     let anchored = system_path.parent().unwrap().join(&manifest.chip);
     manifest.chip = anchored.to_str().unwrap().to_string();
 
-    SystemBus::from_config(&chip, &manifest)
-        .unwrap_or_else(|e| panic!("build onboarding bus: {e}"))
+    SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build onboarding bus: {e}"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -449,7 +448,10 @@ fn nrf52840_onboarding_diff() {
     oc.halt().expect("halt failed");
 
     println!();
-    println!("nRF52840 onboarding-peripherals diff — {} cases", CASES.len());
+    println!(
+        "nRF52840 onboarding-peripherals diff — {} cases",
+        CASES.len()
+    );
     println!("{:-<100}", "");
 
     let mut by_peripheral: std::collections::BTreeMap<&str, (u32, u32, u32, u32)> =
@@ -505,10 +507,7 @@ fn nrf52840_onboarding_diff() {
     oc.shutdown().ok();
 
     if std::env::var("NRF52_STRICT").is_ok() {
-        let total_bad: u32 = by_peripheral
-            .values()
-            .map(|(_, d, _, s)| d + s)
-            .sum();
+        let total_bad: u32 = by_peripheral.values().map(|(_, d, _, s)| d + s).sum();
         assert_eq!(total_bad, 0, "onboarding diff: {total_bad} bad case(s)");
     }
 }
