@@ -39,7 +39,7 @@ pub use mpu6050::Mpu6050;
 pub use neo6m::Neo6mGps;
 pub use ntc_thermistor::NtcThermistor;
 pub use pcd8544::Pcd8544;
-pub use servo::{Servo, ServoCal};
+pub use servo::{LedcServoDriver, Servo, ServoCal};
 pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
 pub use ssd1306::Ssd1306;

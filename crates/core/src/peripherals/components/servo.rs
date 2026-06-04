@@ -34,7 +34,7 @@
 //! state lives behind a `Mutex`. Hold the servo as `Arc<Servo>` — register
 //! a clone as a GPIO observer and keep a clone to read the angle back.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Pulse-width ↔ angle calibration for a hobby servo.
 #[derive(Debug, Clone, Copy)]
@@ -248,6 +248,31 @@ impl crate::peripherals::esp32s3::gpio::GpioObserver for Servo {
 impl crate::peripherals::esp32::gpio::GpioObserver for Servo {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_gpio_edge(pin, to, sim_cycle);
+    }
+}
+
+/// Binds an [`Ledc`](crate::peripherals::esp32::ledc::Ledc) PWM channel to a
+/// [`Servo`] so each `ledcWrite` drives the servo's angle with no polling.
+/// Register with `ledc.add_duty_observer(Arc::new(LedcServoDriver::new(ch,
+/// servo)))` and keep an `Arc<Servo>` clone to read the angle back.
+#[derive(Debug)]
+pub struct LedcServoDriver {
+    channel: u64,
+    servo: Arc<Servo>,
+}
+
+impl LedcServoDriver {
+    /// Drive `servo` from LEDC `channel`'s duty.
+    pub fn new(channel: u64, servo: Arc<Servo>) -> Self {
+        Self { channel, servo }
+    }
+}
+
+impl crate::peripherals::esp32::ledc::LedcDutyObserver for LedcServoDriver {
+    fn on_duty_change(&self, channel: u64, duty_fraction: f64) {
+        if channel == self.channel {
+            self.servo.apply_duty_fraction(duty_fraction);
+        }
     }
 }
 

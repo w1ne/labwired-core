@@ -70,6 +70,16 @@
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Notified when a channel commits a new duty via the `CONF1.DUTY_START`
+/// strobe (i.e. on each `ledcWrite`). Lets PWM-driven actuators — a servo,
+/// an ESC, an LED dimmer — react to the live duty without polling. The
+/// `duty_fraction` is `duty / 2^DUTY_RES` for the channel's bound timer,
+/// the same value [`Ledc::channel_duty_fraction`] returns.
+pub trait LedcDutyObserver: Send + Sync + std::fmt::Debug {
+    fn on_duty_change(&self, channel: u64, duty_fraction: f64);
+}
 
 // ── Channel block geometry (TRM §14.5) ───────────────────────────────────
 /// First HS channel register block starts at offset 0.
@@ -153,6 +163,9 @@ pub struct Ledc {
     /// Word-aligned register backing store. Every offset round-trips
     /// here; side-effecting offsets are intercepted before storing.
     regs: HashMap<u64, u32>,
+    /// Actuators driven by this controller's PWM output, notified on each
+    /// duty latch. Runtime wiring — not part of the register snapshot.
+    duty_observers: Vec<Arc<dyn LedcDutyObserver>>,
 }
 
 impl Default for Ledc {
@@ -170,7 +183,17 @@ impl Ledc {
     pub fn new(base: u32) -> Self {
         let mut regs = HashMap::new();
         regs.insert(DATE, DATE_RESET);
-        Self { base, regs }
+        Self {
+            base,
+            regs,
+            duty_observers: Vec::new(),
+        }
+    }
+
+    /// Register an actuator to be notified whenever a channel latches a new
+    /// duty (each `ledcWrite`). See [`LedcDutyObserver`].
+    pub fn add_duty_observer(&mut self, obs: Arc<dyn LedcDutyObserver>) {
+        self.duty_observers.push(obs);
     }
 
     /// Base MMIO address (debug helper).
@@ -282,6 +305,14 @@ impl Ledc {
             // fire-and-forget command and re-asserts on each update).
             if self.word(word_off) & CONF1_DUTY_START_BIT != 0 {
                 self.latch_duty(ch);
+                // Push the freshly-latched duty to any bound actuators — the
+                // `ledcWrite` → servo-moves path, with no polling.
+                if !self.duty_observers.is_empty() {
+                    let frac = self.channel_duty_fraction(ch);
+                    for obs in &self.duty_observers {
+                        obs.on_duty_change(ch, frac);
+                    }
+                }
             }
             return;
         }
@@ -543,6 +574,35 @@ mod tests {
         assert!(
             (servo.angle_degrees() - 90.0).abs() < 1.0,
             "servo angle {}",
+            servo.angle_degrees()
+        );
+    }
+
+    #[test]
+    fn ledc_write_drives_a_bound_servo_with_no_glue() {
+        use crate::peripherals::components::servo::{LedcServoDriver, Servo};
+        use std::sync::Arc;
+        // Bind a servo to LEDC channel 0 via the duty-observer hook, then move
+        // it purely by writing LEDC registers (ledcSetup + ledcWrite) — no
+        // manual apply_duty_fraction. This is the firmware-drives-actuator path.
+        let mut p = Ledc::new(Ledc::BASE);
+        let servo = Arc::new(Servo::standard(5));
+        p.add_duty_observer(Arc::new(LedcServoDriver::new(0, Arc::clone(&servo))));
+
+        // ledcSetup: timer 0, 14-bit resolution (period = 16384).
+        write_u32(&mut p, Ledc::timer_reg(0, TIMER_CONF), 14);
+
+        // ledcWrite(0, 819): 819/16384 ≈ 0.05 → 1.0 ms → 0°.
+        write_u32(&mut p, Ledc::ch_reg(0, CH_DUTY), 819u32 << 4);
+        write_u32(&mut p, Ledc::ch_reg(0, CH_CONF1), CONF1_DUTY_START_BIT);
+        assert!(servo.angle_degrees() < 2.0, "min={}", servo.angle_degrees());
+
+        // ledcWrite(0, 1638): 1638/16384 ≈ 0.10 → 2.0 ms → 180°.
+        write_u32(&mut p, Ledc::ch_reg(0, CH_DUTY), 1638u32 << 4);
+        write_u32(&mut p, Ledc::ch_reg(0, CH_CONF1), CONF1_DUTY_START_BIT);
+        assert!(
+            (servo.angle_degrees() - 180.0).abs() < 2.0,
+            "max={}",
             servo.angle_degrees()
         );
     }
