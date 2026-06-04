@@ -179,6 +179,9 @@ impl Peripheral for Esp32s3I2c {
             }
             _ => 0,
         };
+        if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
+            eprintln!("I2C R [0x{offset:02x}] = 0x{v:08x}");
+        }
         Ok(v)
     }
 
@@ -188,6 +191,9 @@ impl Peripheral for Esp32s3I2c {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
+            eprintln!("I2C W [0x{offset:02x}] = 0x{value:08x}");
+        }
         match offset {
             REG_CTR => {
                 self.ctr = value;
@@ -231,9 +237,19 @@ impl Peripheral for Esp32s3I2c {
 
     fn tick(&mut self) -> PeripheralTickResult {
         let mut explicit = Vec::new();
-        if self.irq_pending {
+        // LEVEL interrupt: assert source 49 every tick while any enabled INT
+        // bit is set, mirroring real silicon (INT_RAW stays asserted until the
+        // ISR writes INT_CLR). The previous one-shot pulse (`irq_pending`
+        // drained in a single tick) was fine for esp-hal's *polling* driver
+        // but was LOST by ESP-IDF's interrupt-driven `i2c_master` driver if the
+        // CPU happened to be masked the tick the transaction completed — the
+        // driver then blocked on its ISR semaphore forever and timed out
+        // (ESP_ERR_INVALID_STATE). De-asserts when the ISR clears INT_RAW
+        // (INT_CLR) or disables INT_ENA; esp-hal leaves INT_ENA clear so its
+        // path is unaffected.
+        self.irq_pending = false;
+        if self.int_raw & self.int_ena != 0 {
             explicit.push(I2C0_INTR_SOURCE_ID);
-            self.irq_pending = false;
         }
         PeripheralTickResult {
             explicit_irqs: if explicit.is_empty() {
