@@ -60,6 +60,57 @@ impl FromStr for UartRegisterLayout {
     }
 }
 
+/// The complete per-family UART register map: register offsets plus the
+/// interrupt-enable bit masks. **Every** family difference lives in this one
+/// descriptor — the TX sink / RX buffer / stream / scheduler engine on `Uart`
+/// is architecture-independent and shared. Adding or changing a family touches
+/// only its arm of `regmap`, never another family's.
+#[derive(Debug, Clone, Copy)]
+struct UartRegMap {
+    status: u64,
+    tx: u64,
+    rx: u64,
+    cr3: u64,
+    /// CR1 base offset, or `None` for families with no CR1 interrupt concept.
+    cr1: Option<u64>,
+    txeie_mask: u32,
+    tcie_mask: u32,
+}
+
+impl UartRegisterLayout {
+    fn regmap(self) -> UartRegMap {
+        match self {
+            UartRegisterLayout::Stm32F1 => UartRegMap {
+                status: 0x00, // SR
+                tx: 0x04,     // DR
+                rx: 0x04,     // DR
+                cr3: 0x14,
+                cr1: Some(0x0C),
+                txeie_mask: 1 << 7, // TXEIE
+                tcie_mask: 1 << 6,  // TCIE
+            },
+            UartRegisterLayout::Stm32V2 => UartRegMap {
+                status: 0x1C, // ISR
+                tx: 0x28,     // TDR
+                rx: 0x24,     // RDR
+                cr3: 0x08,
+                cr1: Some(0x00),
+                txeie_mask: 1 << 3, // TXEIE/TXFNFIE
+                tcie_mask: 1 << 6,  // TCIE
+            },
+            UartRegisterLayout::Nrf52 => UartRegMap {
+                status: 0x400, // EVENTS_TXDRDY
+                tx: 0x51C,     // TXD
+                rx: 0x518,     // RXD
+                cr3: 0x500,    // ENABLE
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+            },
+        }
+    }
+}
+
 /// Minimal UART mock with selectable register layout.
 #[derive(serde::Serialize)]
 pub struct Uart {
@@ -177,63 +228,31 @@ impl Uart {
         (txeie_set || tcie_set, dma_signals)
     }
 
+    // The 7 accessors below all read from the single per-family `regmap()`
+    // descriptor, so a family's register map lives in exactly one place.
     fn status_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x00,
-            UartRegisterLayout::Stm32V2 => 0x1C, // ISR
-            UartRegisterLayout::Nrf52 => 0x400,  // EVENTS_TXDRDY
-        }
+        self.layout.regmap().status
     }
-
     fn tx_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x04, // DR
-            UartRegisterLayout::Stm32V2 => 0x28, // TDR
-            UartRegisterLayout::Nrf52 => 0x51C,  // TXD
-        }
+        self.layout.regmap().tx
     }
-
     fn rx_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x04, // DR
-            UartRegisterLayout::Stm32V2 => 0x24, // RDR
-            UartRegisterLayout::Nrf52 => 0x518,  // RXD
-        }
+        self.layout.regmap().rx
     }
-
     fn cr3_offset(&self) -> u64 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 0x14,
-            UartRegisterLayout::Stm32V2 => 0x08,
-            UartRegisterLayout::Nrf52 => 0x500, // ENABLE
-        }
+        self.layout.regmap().cr3
     }
-
-    /// Offset of the CR1 register. Returns None for layouts without a CR1 interrupt concept.
+    /// Offset of the CR1 register. `None` for layouts without a CR1 interrupt concept.
     fn cr1_offset(&self) -> Option<u64> {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => Some(0x0C),
-            UartRegisterLayout::Stm32V2 => Some(0x00),
-            UartRegisterLayout::Nrf52 => None,
-        }
+        self.layout.regmap().cr1
     }
-
     /// Bitmask of the TXEIE bit within CR1 for interrupt-driven TX detection.
     fn txeie_mask(&self) -> u32 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 1 << 7, // TXEIE = bit 7 in STM32F1 CR1
-            UartRegisterLayout::Stm32V2 => 1 << 3, // TXEIE/TXFNFIE = bit 3 in STM32V2 CR1
-            UartRegisterLayout::Nrf52 => 0,
-        }
+        self.layout.regmap().txeie_mask
     }
-
     /// Bitmask of the transmission-complete interrupt enable bit within CR1.
     fn tcie_mask(&self) -> u32 {
-        match self.layout {
-            UartRegisterLayout::Stm32F1 => 1 << 6,
-            UartRegisterLayout::Stm32V2 => 1 << 6,
-            UartRegisterLayout::Nrf52 => 0,
-        }
+        self.layout.regmap().tcie_mask
     }
 
     fn status_ready_value(&self) -> u8 {
