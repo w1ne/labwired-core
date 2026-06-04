@@ -2283,7 +2283,7 @@ mod tests {
         let i2c_idx = bus.find_peripheral_index_by_name("i2c1").unwrap();
         let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
         let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
-        assert_eq!(i2c.attached_devices.len(), 1);
+        assert_eq!(i2c.attached_devices().len(), 1);
     }
 
     fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
@@ -2417,7 +2417,7 @@ mod tests {
         let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
         let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
 
-        assert_eq!(i2c.attached_devices.len(), 0);
+        assert_eq!(i2c.attached_devices().len(), 0);
     }
 
     #[test]

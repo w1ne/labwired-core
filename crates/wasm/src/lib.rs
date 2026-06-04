@@ -466,7 +466,7 @@ impl WasmSimulator {
             })?;
 
         let address = binding.i2c_address.unwrap_or(0x53);
-        for device in &mut i2c.attached_devices {
+        for device in i2c.attached_devices() {
             let mut device = device.borrow_mut();
             if device.address() != address {
                 continue;
@@ -531,7 +531,7 @@ impl WasmSimulator {
             })?;
 
         let address = binding.i2c_address.unwrap_or(0x68);
-        for device in &mut i2c.attached_devices {
+        for device in i2c.attached_devices() {
             let mut device = device.borrow_mut();
             if device.address() != address {
                 continue;
@@ -578,7 +578,7 @@ impl WasmSimulator {
 
             if device_type == "adxl345" {
                 let address = binding.i2c_address.unwrap_or(0x53);
-                for device in &i2c.attached_devices {
+                for device in i2c.attached_devices() {
                     let device = device.borrow();
                     if device.address() != address {
                         continue;
@@ -599,7 +599,7 @@ impl WasmSimulator {
                 }
             } else if device_type == "mpu6050" {
                 let address = binding.i2c_address.unwrap_or(0x68);
-                for device in &i2c.attached_devices {
+                for device in i2c.attached_devices() {
                     let device = device.borrow();
                     if device.address() != address {
                         continue;
@@ -624,7 +624,7 @@ impl WasmSimulator {
             } else if device_type == "bme280" {
                 // Static values: hard-coded factory calibration produces ~25°C / 50%RH / 1013hPa
                 let address = binding.i2c_address.unwrap_or(0x76);
-                for device in &i2c.attached_devices {
+                for device in i2c.attached_devices() {
                     let device = device.borrow();
                     if device.address() != address {
                         continue;
@@ -968,7 +968,7 @@ impl WasmSimulator {
             })?;
 
         let address = binding.i2c_address.unwrap_or(0x3C);
-        for device in &i2c.attached_devices {
+        for device in i2c.attached_devices() {
             let device = device.borrow();
             if device.address() != address {
                 continue;
