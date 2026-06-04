@@ -520,4 +520,30 @@ mod tests {
         assert_eq!(restored.channel_duty(0), 300);
         assert_eq!(read_u32(&restored, DATE), DATE_RESET);
     }
+
+    #[test]
+    fn ledc_duty_drives_a_servo_to_center() {
+        use crate::peripherals::components::servo::Servo;
+        // Mirror the Arduino `ledcSetup(ch, 50 Hz, 14-bit)` + `ledcWrite(ch,
+        // duty)` sequence at the register level, then let a servo read the
+        // resulting duty fraction back — the end-to-end PWM-drives-actuator
+        // path. Channel 0 selects timer 0 by reset default (CONF0.TIMER_SEL=0).
+        let mut p = Ledc::new(Ledc::BASE);
+        // Timer 0: 14-bit duty resolution → period = 2^14 = 16384.
+        write_u32(&mut p, Ledc::timer_reg(0, TIMER_CONF), 14);
+        // ledcWrite(0, 1229): 1229 / 16384 ≈ 0.075 duty = 1.5 ms / 20 ms.
+        write_u32(&mut p, Ledc::ch_reg(0, CH_DUTY), 1229u32 << 4);
+        write_u32(&mut p, Ledc::ch_reg(0, CH_CONF1), CONF1_DUTY_START_BIT);
+
+        let frac = p.channel_duty_fraction(0);
+        assert!((frac - 0.075).abs() < 0.001, "duty fraction {frac}");
+
+        let servo = Servo::standard(5);
+        servo.apply_duty_fraction(frac);
+        assert!(
+            (servo.angle_degrees() - 90.0).abs() < 1.0,
+            "servo angle {}",
+            servo.angle_degrees()
+        );
+    }
 }
