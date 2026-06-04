@@ -791,6 +791,21 @@ impl SystemBus {
         None
     }
 
+    /// Cross-core `FROM_CPU` IPI slots currently asserted for `core_id`,
+    /// read live from the ESP32-classic DPORT interrupt matrix. Replaces the
+    /// old test-harness IPI bridge that polled the same registers from
+    /// outside the core. Returns 0 when no DPORT is mapped (non-ESP32 buses).
+    fn dport_cross_core_pending(&self, core_id: u8) -> u32 {
+        for p in &self.peripherals {
+            if let Some(any) = p.dev.as_any() {
+                if let Some(dport) = any.downcast_ref::<crate::peripherals::esp32::dport::Dport>() {
+                    return dport.cross_core_pending(core_id);
+                }
+            }
+        }
+        0
+    }
+
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
@@ -2155,8 +2170,16 @@ impl crate::Bus for SystemBus {
         SystemBus::route_irq_source_to_cpu_irq(self, source_id)
     }
 
-    fn pending_cpu_irqs(&self) -> u32 {
-        self.pending_cpu_irqs
+    fn pending_cpu_irqs(&self, core_id: u8) -> u32 {
+        // PRO_CPU (core 0) sees peripheral source IRQs routed through the
+        // intmatrix aggregator. Both cores additionally see cross-core
+        // FROM_CPU IPIs delivered per-core by the DPORT interrupt matrix.
+        let peripheral_irqs = if core_id == 0 {
+            self.pending_cpu_irqs
+        } else {
+            0
+        };
+        peripheral_irqs | self.dport_cross_core_pending(core_id)
     }
 
     fn clear_cpu_irq_pending(&mut self, slot: u8) {

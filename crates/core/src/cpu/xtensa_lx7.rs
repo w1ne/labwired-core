@@ -1858,14 +1858,13 @@ impl XtensaLx7 {
                 // in here, otherwise the firmware sees INTERRUPT=0 and
                 // never dispatches to the user ISR (Plan 3 Task 10 case
                 // study).
-                if sr == INTERRUPT && self.core_id() == 0 {
-                    // Per-core IRQ routing: only PRO_CPU (core 0) receives
-                    // peripheral IRQs from the bus aggregator today. APP_CPU
-                    // (core 1) must not take PRO_CPU's interrupts — doing so
-                    // runs ISRs that unbalance its critical nesting
-                    // (vPortExitCritical "nesting > 0"). Cross-core delivery
-                    // to APP_CPU is modeled separately (FROM_CPU).
-                    v |= bus.pending_cpu_irqs();
+                if sr == INTERRUPT {
+                    // Per-core IRQ routing handled by the bus aggregator:
+                    // PRO_CPU (core 0) gets peripheral source IRQs; both cores
+                    // get their own cross-core FROM_CPU IPIs. APP_CPU never
+                    // sees PRO_CPU's peripheral interrupts (which would unbalance
+                    // its critical nesting → vPortExitCritical "nesting > 0").
+                    v |= bus.pending_cpu_irqs(self.core_id());
                 }
                 self.regs.write_logical(at, v);
                 self.pc = self.pc.wrapping_add(len);
@@ -1997,12 +1996,9 @@ impl XtensaLx7 {
         //   1. SR-file INTERRUPT register (firmware can software-trigger via WSR).
         //   2. Bus's pending_cpu_irqs (peripheral source IDs routed through
         //      the ESP32-S3 intmatrix in tick_peripherals_with_costs).
-        // Per-core routing: only PRO_CPU (core 0) takes bus peripheral IRQs.
-        let bus_irqs = if self.core_id() == 0 {
-            bus.pending_cpu_irqs()
-        } else {
-            0
-        };
+        // Per-core routing handled by the bus: PRO_CPU takes peripheral IRQs,
+        // both cores take their own cross-core FROM_CPU IPIs.
+        let bus_irqs = bus.pending_cpu_irqs(self.core_id());
         let pending = (self.sr.read(INTERRUPT) | bus_irqs) & self.sr.read(INTENABLE);
         if pending == 0 {
             return None;

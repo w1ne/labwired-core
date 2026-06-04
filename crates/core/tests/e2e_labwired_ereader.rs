@@ -13,8 +13,9 @@
 //
 // This is the native-Rust counterpart to the wasm playground path —
 // same panel attach, same SP seed, same handshake bytes, same ROM
-// thunks, same IPI bridge, same step budget. If this test paints,
-// the firmware paints in the playground too.
+// thunks, same step budget. The cross-core FROM_CPU yield IPI is
+// modeled in the core (DPORT interrupt matrix), not bridged here. If
+// this test paints, the firmware paints in the playground too.
 //
 // Heavy and slow (~200M cycles in the worst case), so `#[ignore]`d by
 // default. Run with:
@@ -128,7 +129,8 @@ fn labwired_ereader_runs_to_panel_paint() {
     // real — letting PRO_CPU's startup barrier (app_startup.c spin on
     // s_other_cpu_startup_done) clear. This works because the FROM_CPU_INTR1
     // crosscore yield is now delivered to APP_CPU via the correct APP-side
-    // interrupt-matrix MAP register (see the IPI bridge below).
+    // interrupt-matrix MAP register, modeled in the core's DPORT
+    // (Dport::cross_core_pending → bus.pending_cpu_irqs(core_id)).
     // Re-assert the flags at the un-stall cycle (post-.bss) so .bss zero-init
     // can't wipe them — see rom_thunks::ets_set_appcpu_boot_addr.
     rom_thunks::set_appcpu_up_flags(handshake_bytes.clone());
@@ -404,9 +406,10 @@ fn labwired_ereader_runs_to_panel_paint() {
     eprintln!("[ereader-sim] installed {installed} flash thunks");
 
     // ── 4. Step loop. Mirrors step_with_esp32_aids: handshake keep-alive
-    //       every 10k cycles, plus the cross-core IPI bridge sampling
-    //       DPORT FROM_CPU_n mapping + trigger registers and synthesising
-    //       the matching CPU interrupt edge.
+    //       every 10k cycles. The cross-core FROM_CPU yield IPI that quiesces
+    //       APP_CPU to IDLE is now modeled inside the core (DPORT
+    //       `cross_core_pending` → per-core `bus.pending_cpu_irqs`), so this
+    //       harness no longer bridges it — `machine.step()` delivers it.
     const MAX_STEPS: u64 = 200_000_000;
     const SAMPLE_EVERY: u64 = 1_000_000;
     let mut step_count = 0u64;
@@ -416,62 +419,11 @@ fn labwired_ereader_runs_to_panel_paint() {
     let mut last_distinct: std::collections::VecDeque<u32> =
         std::collections::VecDeque::with_capacity(64);
 
-    // IPI bridge state.
-    let mut from_cpu_bit0: Option<u8> = None;
-    let mut from_cpu_bit1: Option<u8> = None;
-
     let mut step_err: Option<String> = None;
     let mut stalled = false;
 
     for _ in 0..MAX_STEPS {
         step_count += 1;
-
-        // IPI bridge. DPORT_PRO_CPU_INTR_FROM_CPU_n_MAP_REG @ 0x3FF0_0164/_0168
-        // captures the bit assignment, and writes to CPU_INTR_FROM_CPU_n
-        // @ 0x3FF0_00DC/_00E0 trigger that bit on PRO_CPU.
-        if let Ok(v) = machine.bus.read_u32(0x3FF0_0164) {
-            let bit = (v & 0x1F) as u8;
-            if v != 0 && bit < 32 {
-                from_cpu_bit0 = Some(bit);
-            }
-        }
-        // FROM_CPU_INTR1 (ESP32 source 25) is the crosscore IPI targeting
-        // APP_CPU. Its source→CPU-interrupt routing lives in the APP-side
-        // interrupt matrix MAP register: DPORT_APP_MAC_INTR_MAP_REG
-        // (0x3FF0_0208) + 25*4 = 0x3FF0_026C. The firmware programs it from
-        // APP_CPU's esp_crosscore_int_init→esp_intr_alloc→intr_matrix_set
-        // (our esp_rom_route_intr_matrix thunk). Reading the *PRO*-side
-        // binding (the old 0x3FF0_0168) always returns 0, so the yield IPI
-        // was never delivered and APP_CPU's Tmr Svc task spun on
-        // xQueueReceive→block→re-wake instead of quiescing to IDLE.
-        if let Ok(v) = machine.bus.read_u32(0x3FF0_026C) {
-            let bit = (v & 0x1F) as u8;
-            if v != 0 && bit < 32 {
-                from_cpu_bit1 = Some(bit);
-            }
-        }
-        if let Ok(v0) = machine.bus.read_u32(0x3FF0_00DC) {
-            if v0 != 0 {
-                if let Some(bit) = from_cpu_bit0 {
-                    machine.cpu.raise_interrupt_bits(1u32 << bit);
-                }
-                let _ = machine.bus.write_u32(0x3FF0_00DC, 0);
-            }
-        }
-        if let Ok(v1) = machine.bus.read_u32(0x3FF0_00E0) {
-            if v1 != 0 {
-                // FROM_CPU_1 is the crosscore IRQ targeting APP_CPU (core 1):
-                // raise it on the SECONDARY, not PRO. This is what lets
-                // APP_CPU's self-yield (esp_crosscore_int_send_yield(1)) switch
-                // it to IDLE so the startup idle hook can run.
-                if let Some(bit) = from_cpu_bit1 {
-                    if let Some(c1) = machine.cpu_secondary.as_mut() {
-                        c1.raise_interrupt_bits(1u32 << bit);
-                    }
-                }
-                let _ = machine.bus.write_u32(0x3FF0_00E0, 0);
-            }
-        }
 
         if let Err(e) = machine.step() {
             step_err = Some(format!("{e}"));
