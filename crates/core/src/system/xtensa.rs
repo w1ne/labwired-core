@@ -60,6 +60,7 @@ impl Default for Esp32s3Opts {
 /// later-loaded segment would overwrite the earlier one. So each window
 /// gets its own backing buffer; fast_boot picks the correct one based on
 /// which window the segment's vaddr falls into.
+
 /// Which ROM path the ESP32-S3 model booted on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Esp32s3BootMode {
@@ -847,7 +848,17 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // window spans the full 32 MiB linear range so the ROM's bootloader-load
     // reads (e.g. virtual 0x3C80_0000) resolve. Fast-boot keeps the legacy
     // per-window static identity mapping over separate 4 MiB backings.
-    let proper_model = std::env::var("LABWIRED_ESP32S3_ROM").is_ok();
+    // The proper model is selected whenever a real ROM is resolved — either
+    // from explicit env-pinned bins (LABWIRED_ESP32S3_ROM/_DROM) or
+    // auto-provisioned from the installed toolchain. Without a real ROM blob
+    // we fall back to fast-boot XIP with the thunk harness.
+    // Resolve the ROM once, up front: a real boot ROM (faithful path) drives the
+    // proper MMU-aware XIP model; without one we use fast-boot XIP + the thunk
+    // harness. proper_model and boot_mode are derived from the SAME decision so
+    // they can never diverge (the real ROM may be auto-provisioned from the
+    // toolchain with no env var, so keying proper_model on the env var was wrong).
+    let rom_images = crate::boot::esp32s3_rom::provision_rom_images();
+    let proper_model = rom_images.is_some();
     // Shared flash backing for the proper-model path, loaded from the real
     // flash image so XIP reads (and the SPI-flash controller below) return real
     // bytes. In fast-boot this is unused; the legacy per-window backings apply.
@@ -912,7 +923,7 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // provision_rom_images() resolves the ROM either from explicit pre-extracted
     // bins (LABWIRED_ESP32S3_ROM/_DROM) or by discovering + extracting the ROM
     // ELF from the installed toolchain. None → no blob available → thunk harness.
-    let boot_mode = match crate::boot::esp32s3_rom::provision_rom_images() {
+    let boot_mode = match rom_images {
         Some(images) => {
             let rom = RamPeripheral::with_image(0x6_0000, &images.irom);
             bus.add_peripheral("rom", 0x4000_0000, 0x6_0000, None, Box::new(rom));
@@ -926,6 +937,8 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
             Esp32s3BootMode::Faithful
         }
         None => {
+            // DROM (0x3FF0_0000) is intentionally not mapped in harness mode;
+            // only the faithful path loads the real DROM image.
             let mut rom_bank = RomThunkBank::new(0x4000_0000, 0x6_0000);
             register_default_thunks(&mut rom_bank);
             bus.add_peripheral("rom_thunks", 0x4000_0000, 0x6_0000, None, Box::new(rom_bank));
