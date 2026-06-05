@@ -55,6 +55,7 @@ fn build_window(elf: &Elf, bytes: &[u8], base: u32, size: usize, by_paddr: bool)
             let rel = (addr - base) as usize;
             let off = ph.p_offset as usize;
             let n = (ph.p_filesz as usize).min(size - rel);
+            // Skip a segment whose file bytes are truncated/out-of-file (defensive; a genuine ROM ELF never hits this).
             if off + n <= bytes.len() {
                 img[rel..rel + n].copy_from_slice(&bytes[off..off + n]);
             }
@@ -110,10 +111,11 @@ fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_bas
         let mut out = vec![0u8; n];
         for (sa, data) in &sections {
             let sa = *sa;
-            let end = sa + data.len() as u32;
-            if sa <= addr + n as u32 && addr < end {
+            let end = sa as u64 + data.len() as u64;
+            if (sa as u64) <= addr as u64 + n as u64 && (addr as u64) < end {
+                // lo/hi are proven in-range once the overlap check above passes.
                 let lo = addr.max(sa);
-                let hi = (addr + n as u32).min(end);
+                let hi = (addr + n as u32).min(end as u32);
                 out[(lo - addr) as usize..(hi - addr) as usize]
                     .copy_from_slice(&data[(lo - sa) as usize..(hi - sa) as usize]);
             }
@@ -135,7 +137,7 @@ fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_bas
             && irom_base <= src
             && src < irom_hi
             && term == 0
-            && dst_e.wrapping_sub(dst_s) < 0x1_0000;
+            && dst_e - dst_s < 0x1_0000;
         if ok {
             let n = (dst_e - dst_s) as usize;
             if n != 0 {
@@ -188,6 +190,189 @@ mod tests {
         elf[ph + 28..ph + 32].copy_from_slice(&4u32.to_le_bytes());
         elf[p_offset as usize..].copy_from_slice(payload);
         elf
+    }
+
+    /// Build a minimal ELF32 with one PT_LOAD **and** one SHT_PROGBITS section.
+    ///
+    /// Layout (all offsets are fixed / pre-calculated):
+    ///   offset   0: ELF header (52 bytes)
+    ///   offset  52: program header (32 bytes)
+    ///   offset  84: PT_LOAD payload (`ph_payload`, length ph_payload.len())
+    ///   offset  84+P: PROGBITS section data (`sh_payload`, length sh_payload.len())
+    ///   offset  84+P+S: section name string table ("\0.text\0", 8 bytes)
+    ///   offset  84+P+S+8: section headers — [null(40), PROGBITS(40), STRTAB(40)]
+    ///                      i.e. 3 × 40 = 120 bytes
+    ///
+    /// Returns the raw ELF bytes.
+    fn synthetic_elf_ptload_and_section(
+        ph_vaddr: u32,
+        ph_paddr: u32,
+        ph_payload: &[u8],
+        sh_addr: u32,
+        sh_payload: &[u8],
+    ) -> Vec<u8> {
+        let p = ph_payload.len();
+        let s = sh_payload.len();
+
+        // Fixed layout positions
+        let e_phoff: u32 = 52;
+        let ph_data_off: u32 = 52 + 32; // = 84
+        let sh_data_off: u32 = ph_data_off + p as u32;
+        let strtab_off: u32 = sh_data_off + s as u32;
+        let strtab: &[u8] = b"\0.text\0"; // 7 bytes; ".text" at offset 1
+        let strtab_len: u32 = strtab.len() as u32;
+        let e_shoff: u32 = strtab_off + strtab_len;
+        let total = (e_shoff + 3 * 40) as usize;
+
+        let mut elf = vec![0u8; total];
+
+        // ---- ELF header ----
+        elf[0..4].copy_from_slice(b"\x7fELF");
+        elf[4] = 1; // ELFCLASS32
+        elf[5] = 1; // little-endian
+        elf[6] = 1; // EI_VERSION
+        elf[16..18].copy_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        elf[18..20].copy_from_slice(&94u16.to_le_bytes()); // EM_XTENSA
+        elf[20..24].copy_from_slice(&1u32.to_le_bytes()); // e_version
+        elf[28..32].copy_from_slice(&e_phoff.to_le_bytes()); // e_phoff
+        elf[32..36].copy_from_slice(&e_shoff.to_le_bytes()); // e_shoff
+        elf[40..42].copy_from_slice(&52u16.to_le_bytes()); // e_ehsize
+        elf[42..44].copy_from_slice(&32u16.to_le_bytes()); // e_phentsize
+        elf[44..46].copy_from_slice(&1u16.to_le_bytes()); // e_phnum
+        elf[46..48].copy_from_slice(&40u16.to_le_bytes()); // e_shentsize
+        elf[48..50].copy_from_slice(&3u16.to_le_bytes()); // e_shnum (null + progbits + strtab)
+        elf[50..52].copy_from_slice(&2u16.to_le_bytes()); // e_shstrndx = 2
+
+        // ---- Program header (PT_LOAD) ----
+        let ph = e_phoff as usize;
+        elf[ph..ph + 4].copy_from_slice(&1u32.to_le_bytes()); // PT_LOAD
+        elf[ph + 4..ph + 8].copy_from_slice(&ph_data_off.to_le_bytes()); // p_offset
+        elf[ph + 8..ph + 12].copy_from_slice(&ph_vaddr.to_le_bytes()); // p_vaddr
+        elf[ph + 12..ph + 16].copy_from_slice(&ph_paddr.to_le_bytes()); // p_paddr
+        elf[ph + 16..ph + 20].copy_from_slice(&(p as u32).to_le_bytes()); // p_filesz
+        elf[ph + 20..ph + 24].copy_from_slice(&(p as u32).to_le_bytes()); // p_memsz
+        elf[ph + 24..ph + 28].copy_from_slice(&5u32.to_le_bytes()); // flags R|X
+        elf[ph + 28..ph + 32].copy_from_slice(&4u32.to_le_bytes()); // align
+
+        // ---- PT_LOAD payload ----
+        elf[ph_data_off as usize..ph_data_off as usize + p].copy_from_slice(ph_payload);
+
+        // ---- PROGBITS section payload ----
+        elf[sh_data_off as usize..sh_data_off as usize + s].copy_from_slice(sh_payload);
+
+        // ---- String table ----
+        elf[strtab_off as usize..strtab_off as usize + strtab_len as usize]
+            .copy_from_slice(strtab);
+
+        // ---- Section headers ----
+        // [0] SHT_NULL — all zeros (already zero)
+
+        // [1] SHT_PROGBITS
+        let sh1 = e_shoff as usize + 40; // index 1
+        elf[sh1..sh1 + 4].copy_from_slice(&1u32.to_le_bytes()); // sh_name = offset 1 → ".text"
+        elf[sh1 + 4..sh1 + 8].copy_from_slice(&1u32.to_le_bytes()); // sh_type = SHT_PROGBITS
+        elf[sh1 + 8..sh1 + 12].copy_from_slice(&2u32.to_le_bytes()); // sh_flags = SHF_ALLOC
+        elf[sh1 + 12..sh1 + 16].copy_from_slice(&sh_addr.to_le_bytes()); // sh_addr
+        elf[sh1 + 16..sh1 + 20].copy_from_slice(&sh_data_off.to_le_bytes()); // sh_offset
+        elf[sh1 + 20..sh1 + 24].copy_from_slice(&(s as u32).to_le_bytes()); // sh_size
+
+        // [2] SHT_STRTAB
+        let sh2 = e_shoff as usize + 80; // index 2
+        elf[sh2..sh2 + 4].copy_from_slice(&0u32.to_le_bytes()); // sh_name = 0 → ""
+        elf[sh2 + 4..sh2 + 8].copy_from_slice(&3u32.to_le_bytes()); // sh_type = SHT_STRTAB
+        elf[sh2 + 16..sh2 + 20].copy_from_slice(&strtab_off.to_le_bytes()); // sh_offset
+        elf[sh2 + 20..sh2 + 24].copy_from_slice(&strtab_len.to_le_bytes()); // sh_size
+
+        elf
+    }
+
+    #[test]
+    fn overlay_only_fills_zero_bytes() {
+        // DROM window: base = DROM_BASE, keyed by vaddr.
+        // PT_LOAD covers [DROM_BASE+0x100 .. DROM_BASE+0x108] with bytes 0xAA..
+        // PROGBITS section covers [DROM_BASE+0x100 .. DROM_BASE+0x10C]:
+        //   first 8 bytes overlap PT_LOAD (should NOT be clobbered),
+        //   last 4 bytes are outside PT_LOAD (zero → should be filled from section).
+        let ph_payload = [0xAAu8; 8];
+        let sh_payload = [0xBBu8; 12]; // overlaps PT_LOAD for first 8, extends 4 more
+        let sh_addr = DROM_BASE + 0x100;
+        let ph_vaddr = DROM_BASE + 0x100;
+        let ph_paddr = 0xDEAD_0000u32; // irrelevant for DROM (vaddr-keyed)
+
+        let elf_bytes =
+            synthetic_elf_ptload_and_section(ph_vaddr, ph_paddr, &ph_payload, sh_addr, &sh_payload);
+        let images = extract_rom_images(&elf_bytes).expect("extract");
+
+        // PT_LOAD bytes must NOT be overwritten by the overlay
+        assert_eq!(
+            &images.drom[0x100..0x108],
+            &[0xAAu8; 8],
+            "PT_LOAD bytes must not be clobbered by overlay"
+        );
+        // The 4 bytes beyond the PT_LOAD (zero region) should be filled from the section
+        assert_eq!(
+            &images.drom[0x108..0x10C],
+            &[0xBBu8; 4],
+            "zero bytes after PT_LOAD region should be filled from PROGBITS overlay"
+        );
+    }
+
+    #[test]
+    fn copy_table_reconstructs_data_source() {
+        // Craft an IROM-keyed ELF (by_paddr = true) whose PT_LOAD payload contains
+        // a valid copy-table quad followed by arbitrary data at the `src` position.
+        //
+        // Copy-table quad:
+        //   dst_s = DRAM_LO           (= 0x3FC8_8000)
+        //   dst_e = DRAM_LO + 8       (copy 8 bytes)
+        //   src   = IROM_BASE + 0x20  (source in IROM window)
+        //   term  = 0
+        //
+        // A PROGBITS section lives at sh_addr = dst_s = DRAM_LO and holds
+        // SECTION_BYTES (non-zero).  The copy-table logic should read those bytes
+        // via vma_read(dst_s, 8) and write them into irom[0x20..0x28].
+
+        const SECTION_BYTES: [u8; 8] = [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
+
+        // Build the PT_LOAD payload (must be large enough to hold the quad at
+        // offset 0x00 and the destination slot at offset 0x20).
+        // Layout within payload: [16-byte quad][padding][8-byte src slot]
+        // quad starts at payload[0], src slot at payload[0x20].
+        // Total payload: 0x28 bytes.
+        let mut ph_payload = vec![0u8; 0x28];
+
+        let dst_s: u32 = DRAM_LO;
+        let dst_e: u32 = DRAM_LO + 8;
+        let src: u32 = IROM_BASE + 0x20;
+
+        ph_payload[0..4].copy_from_slice(&dst_s.to_le_bytes());
+        ph_payload[4..8].copy_from_slice(&dst_e.to_le_bytes());
+        ph_payload[8..12].copy_from_slice(&src.to_le_bytes());
+        ph_payload[12..16].copy_from_slice(&0u32.to_le_bytes()); // term = 0
+        // src slot at payload[0x20..0x28] — left as zero initially
+
+        // ph_paddr = IROM_BASE (so the PT_LOAD lands at window offset 0)
+        // ph_vaddr = anything outside DROM (so DROM doesn't see it)
+        let ph_vaddr: u32 = 0xDEAD_0000;
+        let ph_paddr: u32 = IROM_BASE;
+
+        // PROGBITS section at dst_s = DRAM_LO holding SECTION_BYTES
+        let elf_bytes = synthetic_elf_ptload_and_section(
+            ph_vaddr,
+            ph_paddr,
+            &ph_payload,
+            dst_s,
+            &SECTION_BYTES,
+        );
+
+        let images = extract_rom_images(&elf_bytes).expect("extract");
+
+        // After copy-table reconstruction, irom[0x20..0x28] should hold SECTION_BYTES
+        assert_eq!(
+            &images.irom[0x20..0x28],
+            &SECTION_BYTES,
+            "copy-table source slot in IROM must be populated from PROGBITS section bytes"
+        );
     }
 
     #[test]
