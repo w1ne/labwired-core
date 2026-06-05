@@ -1292,8 +1292,8 @@
     "unmodelled_regs": []
   },
   "SYSTEM": {
-    "modelled": 0,
-    "indeterminate": 42,
+    "modelled": 42,
+    "indeterminate": 0,
     "unmodelled": 0,
     "total": 42,
     "unmodelled_regs": []
