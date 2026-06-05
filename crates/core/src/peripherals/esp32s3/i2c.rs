@@ -47,6 +47,7 @@ pub const I2C0_SIZE: u64 = 0x1000;
 /// interrupt-driven `i2c_master` returned `ESP_ERR_INVALID_STATE`.)
 pub const I2C0_INTR_SOURCE_ID: u32 = 42;
 
+// Core FSM / status registers
 const REG_CTR: u64 = 0x04;
 const REG_SR: u64 = 0x08;
 const REG_SLAVE_ADDR: u64 = 0x10;
@@ -59,6 +60,24 @@ const REG_INT_ENA: u64 = 0x28;
 const REG_INT_ST: u64 = 0x2C;
 const REG_CMD0: u64 = 0x58;
 const REG_CMD7: u64 = 0x74;
+
+// Config / timing registers (SVD-sourced offsets, reset values, write masks)
+const REG_SCL_LOW_PERIOD: u64 = 0x00;
+const REG_TO: u64 = 0x0C;
+const REG_SDA_HOLD: u64 = 0x30;
+const REG_SDA_SAMPLE: u64 = 0x34;
+const REG_SCL_HIGH_PERIOD: u64 = 0x38;
+const REG_SCL_START_HOLD: u64 = 0x40;
+const REG_SCL_RSTART_SETUP: u64 = 0x44;
+const REG_SCL_STOP_HOLD: u64 = 0x48;
+const REG_SCL_STOP_SETUP: u64 = 0x4C;
+const REG_FILTER_CFG: u64 = 0x50;
+const REG_CLK_CONF: u64 = 0x54;
+const REG_SCL_ST_TIME_OUT: u64 = 0x78;
+const REG_SCL_MAIN_ST_TIME_OUT: u64 = 0x7C;
+const REG_SCL_SP_CONF: u64 = 0x80;
+const REG_SCL_STRETCH_CONF: u64 = 0x84;
+const REG_DATE: u64 = 0xF8;
 
 const CTR_TRANS_START_BIT: u32 = 1 << 5;
 /// CTR bit 11: CONF_UPGATE — self-clearing config-sync trigger.
@@ -97,22 +116,65 @@ pub struct Esp32s3I2c {
     /// Set when a command-list run sets TRANS_COMPLETE & INT_ENA has it.
     /// Drained by `tick()` into the interrupt-matrix source aggregation.
     irq_pending: bool,
+
+    // Config / timing registers — masked storage (SVD-accurate reset values).
+    // On write: stored = (stored & !mask) | (value & mask).  Reserved bits
+    // read back their reset value, not arbitrary written data.
+    reg_scl_low_period: u32,      // 0x00  reset 0x0000_0000  mask 0x0000_01FF
+    reg_to: u32,                   // 0x0C  reset 0x0000_0010  mask 0x0000_003F
+    reg_sda_hold: u32,             // 0x30  reset 0x0000_0000  mask 0x0000_01FF
+    reg_sda_sample: u32,           // 0x34  reset 0x0000_0000  mask 0x0000_01FF
+    reg_scl_high_period: u32,      // 0x38  reset 0x0000_0000  mask 0x0000_FFFF
+    reg_scl_start_hold: u32,       // 0x40  reset 0x0000_0008  mask 0x0000_01FF
+    reg_scl_rstart_setup: u32,     // 0x44  reset 0x0000_0008  mask 0x0000_01FF
+    reg_scl_stop_hold: u32,        // 0x48  reset 0x0000_0008  mask 0x0000_01FF
+    reg_scl_stop_setup: u32,       // 0x4C  reset 0x0000_0008  mask 0x0000_01FF
+    reg_filter_cfg: u32,           // 0x50  reset 0x0000_0300  mask 0x0000_03FF
+    reg_clk_conf: u32,             // 0x54  reset 0x0020_0000  mask 0x003F_FFFF
+    reg_scl_st_time_out: u32,      // 0x78  reset 0x0000_0010  mask 0x0000_001F
+    reg_scl_main_st_time_out: u32, // 0x7C  reset 0x0000_0010  mask 0x0000_001F
+    reg_scl_sp_conf: u32,          // 0x80  reset 0x0000_0000  mask 0x0000_00FF
+    reg_scl_stretch_conf: u32,     // 0x84  reset 0x0000_0000  mask 0x0000_3FFF
+    reg_date: u32,                 // 0xF8  reset 0x2007_0201  mask 0xFFFF_FFFF
 }
 
 impl Esp32s3I2c {
     pub fn new() -> Self {
         Self {
-            ctr: 0,
+            // SVD reset values for core FSM registers.
+            // CTR reset 0x020B: SCL_FORCE_OUT(0)|SDA_FORCE_OUT(1)|SAMPLE_SCL_LEVEL(3)|RX_FULL_ACK_LEVEL(9).
+            ctr: 0x0000_020B,
             sr: 0,
             slave_addr: 0,
-            int_raw: 0,
+            // INT_RAW bit 1 (TXFIFO_WM_INT_RAW) is set at reset: TX FIFO is empty,
+            // which is at or below the watermark threshold.
+            int_raw: 0x0000_0002,
             int_ena: 0,
-            fifo_conf: 0,
+            // FIFO_CONF reset 0x408B: RXFIFO_WM_THRHD[0:4]=0xB, TXFIFO_WM_THRHD[5:9]=0x4.
+            fifo_conf: 0x0000_408B,
             cmds: [0; NUM_CMDS],
             tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
             irq_pending: false,
+
+            // Config / timing registers initialised to SVD reset values.
+            reg_scl_low_period: 0x0000_0000,
+            reg_to: 0x0000_0010,
+            reg_sda_hold: 0x0000_0000,
+            reg_sda_sample: 0x0000_0000,
+            reg_scl_high_period: 0x0000_0000,
+            reg_scl_start_hold: 0x0000_0008,
+            reg_scl_rstart_setup: 0x0000_0008,
+            reg_scl_stop_hold: 0x0000_0008,
+            reg_scl_stop_setup: 0x0000_0008,
+            reg_filter_cfg: 0x0000_0300,
+            reg_clk_conf: 0x0020_0000,
+            reg_scl_st_time_out: 0x0000_0010,
+            reg_scl_main_st_time_out: 0x0000_0010,
+            reg_scl_sp_conf: 0x0000_0000,
+            reg_scl_stretch_conf: 0x0000_0000,
+            reg_date: 0x2007_0201,
         }
     }
 
@@ -139,10 +201,12 @@ impl Esp32s3I2c {
         // Per ESP32-S3 PAC `i2c0::sr`:
         //   bit  0      RESP_REC (slave acked the most recent byte)
         //   bits 8..13  RXFIFO_CNT
+        //   bits 14..15 STRETCH_CAUSE — reset value 0b11 (silicon default)
         //   bits 18..23 TXFIFO_CNT
+        const SR_STRETCH_CAUSE_RESET: u32 = 0x0000_C000;
         let rx = (self.rx_fifo.borrow().len() as u32) & 0x3F;
         let tx = (self.tx_fifo.len() as u32) & 0x3F;
-        (self.sr & SR_RESP_REC) | (rx << 8) | (tx << 18)
+        (self.sr & SR_RESP_REC) | SR_STRETCH_CAUSE_RESET | (rx << 8) | (tx << 18)
     }
 }
 
@@ -174,8 +238,10 @@ impl Peripheral for Esp32s3I2c {
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let v = match offset {
+            REG_SCL_LOW_PERIOD => self.reg_scl_low_period,
             REG_CTR => self.ctr,
             REG_SR => self.status_register(),
+            REG_TO => self.reg_to,
             REG_SLAVE_ADDR => self.slave_addr,
             REG_DATA => self.rx_fifo.borrow_mut().pop_front().unwrap_or(0) as u32,
             REG_FIFO_CONF => self.fifo_conf,
@@ -184,10 +250,24 @@ impl Peripheral for Esp32s3I2c {
             REG_INT_ENA => self.int_ena,
             REG_INT_ST => self.int_raw & self.int_ena,
             REG_FIFO_ST => self.fifo_status(),
+            REG_SDA_HOLD => self.reg_sda_hold,
+            REG_SDA_SAMPLE => self.reg_sda_sample,
+            REG_SCL_HIGH_PERIOD => self.reg_scl_high_period,
+            REG_SCL_START_HOLD => self.reg_scl_start_hold,
+            REG_SCL_RSTART_SETUP => self.reg_scl_rstart_setup,
+            REG_SCL_STOP_HOLD => self.reg_scl_stop_hold,
+            REG_SCL_STOP_SETUP => self.reg_scl_stop_setup,
+            REG_FILTER_CFG => self.reg_filter_cfg,
+            REG_CLK_CONF => self.reg_clk_conf,
             REG_CMD0..=REG_CMD7 => {
                 let idx = ((offset - REG_CMD0) / 4) as usize;
                 self.cmds.get(idx).copied().unwrap_or(0)
             }
+            REG_SCL_ST_TIME_OUT => self.reg_scl_st_time_out,
+            REG_SCL_MAIN_ST_TIME_OUT => self.reg_scl_main_st_time_out,
+            REG_SCL_SP_CONF => self.reg_scl_sp_conf,
+            REG_SCL_STRETCH_CONF => self.reg_scl_stretch_conf,
+            REG_DATE => self.reg_date,
             _ => 0,
         };
         if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
@@ -205,7 +285,14 @@ impl Peripheral for Esp32s3I2c {
         if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
             eprintln!("I2C W [0x{offset:02x}] = 0x{value:08x}");
         }
+        /// Apply write mask: only writable bits store; reserved bits keep their reset value.
+        #[inline(always)]
+        fn masked_write(stored: &mut u32, value: u32, mask: u32) {
+            *stored = (*stored & !mask) | (value & mask);
+        }
+
         match offset {
+            REG_SCL_LOW_PERIOD => masked_write(&mut self.reg_scl_low_period, value, 0x0000_01FF),
             REG_CTR => {
                 self.ctr = value;
                 if value & CTR_TRANS_START_BIT != 0 {
@@ -221,6 +308,7 @@ impl Peripheral for Esp32s3I2c {
                 // transfer (ESP_ERR_INVALID_STATE). esp-hal never sets it.
                 self.ctr &= !CTR_CONF_UPGATE;
             }
+            REG_TO => masked_write(&mut self.reg_to, value, 0x0000_003F),
             REG_SLAVE_ADDR => self.slave_addr = value,
             // Byte 0 of value goes into TX FIFO (per esp-hal usage).
             // Drop the byte silently if the FIFO is full — esp-hal checks
@@ -242,13 +330,35 @@ impl Peripheral for Esp32s3I2c {
             }
             REG_INT_CLR => self.int_raw &= !value,
             REG_INT_ENA => self.int_ena = value,
+            REG_SDA_HOLD => masked_write(&mut self.reg_sda_hold, value, 0x0000_01FF),
+            REG_SDA_SAMPLE => masked_write(&mut self.reg_sda_sample, value, 0x0000_01FF),
+            REG_SCL_HIGH_PERIOD => masked_write(&mut self.reg_scl_high_period, value, 0x0000_FFFF),
+            REG_SCL_START_HOLD => masked_write(&mut self.reg_scl_start_hold, value, 0x0000_01FF),
+            REG_SCL_RSTART_SETUP => {
+                masked_write(&mut self.reg_scl_rstart_setup, value, 0x0000_01FF)
+            }
+            REG_SCL_STOP_HOLD => masked_write(&mut self.reg_scl_stop_hold, value, 0x0000_01FF),
+            REG_SCL_STOP_SETUP => masked_write(&mut self.reg_scl_stop_setup, value, 0x0000_01FF),
+            REG_FILTER_CFG => masked_write(&mut self.reg_filter_cfg, value, 0x0000_03FF),
+            REG_CLK_CONF => masked_write(&mut self.reg_clk_conf, value, 0x003F_FFFF),
             REG_CMD0..=REG_CMD7 => {
                 let idx = ((offset - REG_CMD0) / 4) as usize;
                 if let Some(slot) = self.cmds.get_mut(idx) {
                     *slot = value;
                 }
             }
-            _ => {} // Accept-and-ignore (timing regs, etc.)
+            REG_SCL_ST_TIME_OUT => {
+                masked_write(&mut self.reg_scl_st_time_out, value, 0x0000_001F)
+            }
+            REG_SCL_MAIN_ST_TIME_OUT => {
+                masked_write(&mut self.reg_scl_main_st_time_out, value, 0x0000_001F)
+            }
+            REG_SCL_SP_CONF => masked_write(&mut self.reg_scl_sp_conf, value, 0x0000_00FF),
+            REG_SCL_STRETCH_CONF => {
+                masked_write(&mut self.reg_scl_stretch_conf, value, 0x0000_3FFF)
+            }
+            REG_DATE => self.reg_date = value, // fully writable (mask = 0xFFFF_FFFF)
+            _ => {}                            // Accept-and-ignore (unmapped offsets)
         }
         Ok(())
     }
@@ -630,5 +740,121 @@ mod tests {
 
         assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x60);
         assert_eq!(p.read_u32(REG_DATA).unwrap(), 0xA0);
+    }
+
+    // ── Config / timing register tests ───────────────────────────────────────
+
+    #[test]
+    fn i2c_config_registers_reset_values() {
+        let p = Esp32s3I2c::new();
+        assert_eq!(p.read_u32(REG_SCL_LOW_PERIOD).unwrap(), 0x0000_0000, "SCL_LOW_PERIOD");
+        assert_eq!(p.read_u32(REG_TO).unwrap(), 0x0000_0010, "TO");
+        assert_eq!(p.read_u32(REG_SDA_HOLD).unwrap(), 0x0000_0000, "SDA_HOLD");
+        assert_eq!(p.read_u32(REG_SDA_SAMPLE).unwrap(), 0x0000_0000, "SDA_SAMPLE");
+        assert_eq!(p.read_u32(REG_SCL_HIGH_PERIOD).unwrap(), 0x0000_0000, "SCL_HIGH_PERIOD");
+        assert_eq!(p.read_u32(REG_SCL_START_HOLD).unwrap(), 0x0000_0008, "SCL_START_HOLD");
+        assert_eq!(p.read_u32(REG_SCL_RSTART_SETUP).unwrap(), 0x0000_0008, "SCL_RSTART_SETUP");
+        assert_eq!(p.read_u32(REG_SCL_STOP_HOLD).unwrap(), 0x0000_0008, "SCL_STOP_HOLD");
+        assert_eq!(p.read_u32(REG_SCL_STOP_SETUP).unwrap(), 0x0000_0008, "SCL_STOP_SETUP");
+        assert_eq!(p.read_u32(REG_FILTER_CFG).unwrap(), 0x0000_0300, "FILTER_CFG");
+        assert_eq!(p.read_u32(REG_CLK_CONF).unwrap(), 0x0020_0000, "CLK_CONF");
+        assert_eq!(p.read_u32(REG_SCL_ST_TIME_OUT).unwrap(), 0x0000_0010, "SCL_ST_TIME_OUT");
+        assert_eq!(
+            p.read_u32(REG_SCL_MAIN_ST_TIME_OUT).unwrap(),
+            0x0000_0010,
+            "SCL_MAIN_ST_TIME_OUT"
+        );
+        assert_eq!(p.read_u32(REG_SCL_SP_CONF).unwrap(), 0x0000_0000, "SCL_SP_CONF");
+        assert_eq!(p.read_u32(REG_SCL_STRETCH_CONF).unwrap(), 0x0000_0000, "SCL_STRETCH_CONF");
+        assert_eq!(p.read_u32(REG_DATE).unwrap(), 0x2007_0201, "DATE");
+    }
+
+    #[test]
+    fn i2c_config_register_write_mask() {
+        let mut p = Esp32s3I2c::new();
+
+        // SCL_LOW_PERIOD: mask 0x1FF — upper bits must not store.
+        p.write_u32(REG_SCL_LOW_PERIOD, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(REG_SCL_LOW_PERIOD).unwrap(), 0x0000_01FF);
+
+        // FILTER_CFG: mask 0x3FF.
+        p.write_u32(REG_FILTER_CFG, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(REG_FILTER_CFG).unwrap(), 0x0000_03FF);
+
+        // SCL_SP_CONF: mask 0xFF.
+        p.write_u32(REG_SCL_SP_CONF, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(REG_SCL_SP_CONF).unwrap(), 0x0000_00FF);
+
+        // TO: mask 0x3F — bits 6..31 are reserved, read back reset (0x10 & ~0x3F == 0,
+        // so reserved bits are 0; full write reads back 0x3F only).
+        p.write_u32(REG_TO, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(REG_TO).unwrap(), 0x0000_003F);
+
+        // CLK_CONF: mask 0x3F_FFFF.
+        p.write_u32(REG_CLK_CONF, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(REG_CLK_CONF).unwrap(), 0x003F_FFFF);
+
+        // SCL_ST_TIME_OUT: mask 0x1F.
+        p.write_u32(REG_SCL_ST_TIME_OUT, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(REG_SCL_ST_TIME_OUT).unwrap(), 0x0000_001F);
+
+        // DATE: fully writable.
+        p.write_u32(REG_DATE, 0xDEAD_BEEF).unwrap();
+        assert_eq!(p.read_u32(REG_DATE).unwrap(), 0xDEAD_BEEF);
+    }
+
+    #[test]
+    fn ctr_reset_is_silicon_default() {
+        // Fresh model must read CTR == 0x20B before any write.
+        let p = Esp32s3I2c::new();
+        assert_eq!(
+            p.read_u32(REG_CTR).unwrap(),
+            0x0000_020B,
+            "CTR reset value must match silicon default 0x20B"
+        );
+    }
+
+    #[test]
+    fn fifo_conf_reset_is_silicon_default() {
+        // Fresh model must read FIFO_CONF == 0x408B before any write.
+        let p = Esp32s3I2c::new();
+        assert_eq!(
+            p.read_u32(REG_FIFO_CONF).unwrap(),
+            0x0000_408B,
+            "FIFO_CONF reset value must match silicon default 0x408B"
+        );
+    }
+
+    #[test]
+    fn sr_reset_has_stretch_cause() {
+        // A fresh model's SR must have STRETCH_CAUSE bits[15:14] == 0b11.
+        let p = Esp32s3I2c::new();
+        let sr = p.read_u32(REG_SR).unwrap();
+        assert_eq!(
+            sr & 0x0000_C000,
+            0x0000_C000,
+            "SR STRETCH_CAUSE[15:14] must be 0b11 at reset, SR=0x{sr:08x}"
+        );
+    }
+
+    #[test]
+    fn int_raw_reset_has_txfifo_wm_set() {
+        // TXFIFO_WM_INT_RAW (bit 1) is set at reset: TX FIFO starts empty
+        // which is at or below the watermark threshold.
+        let p = Esp32s3I2c::new();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & 0x2,
+            0x2,
+            "INT_RAW bit 1 (TXFIFO_WM) must be set at reset"
+        );
+    }
+
+    #[test]
+    fn unmapped_offset_between_regs_reads_zero() {
+        // Offset 0xC0 is between SCL_STRETCH_CONF (0x84) and DATE (0xF8) —
+        // not a real register; catch-all must return 0 and ignore writes.
+        let mut p = Esp32s3I2c::new();
+        p.write_u32(0xC0, 0xDEAD_BEEF).unwrap();
+        assert_eq!(p.read_u32(0xC0).unwrap(), 0, "unmapped 0xC0 must read 0");
     }
 }
