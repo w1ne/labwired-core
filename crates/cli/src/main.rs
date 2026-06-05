@@ -17,7 +17,7 @@ use tracing::{error, info};
 
 mod api_client;
 mod asset_validation;
-mod coverage;
+use labwired_cli::coverage;
 mod gpio_observer;
 mod size_limited_writer;
 mod vcd_trace;
