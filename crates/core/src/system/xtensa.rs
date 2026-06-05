@@ -1804,9 +1804,13 @@ mod tests {
         // Real silicon shares the SPI flash between both windows but each has
         // its own MMU page table; for fast-boot we model this as two distinct
         // backing buffers so that ELFs with .rodata at 0x3c000020 and .text at
-        // 0x42000020 don't collide on the same physical offset.
+        // 0x42000020 don't collide on the same physical offset. Force fast-boot
+        // so the assertion is deterministic regardless of whether the host has
+        // the ESP toolchain ROM installed (which would auto-select faithful mode).
+        std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
         let mut bus = SystemBus::new();
         let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
         wiring.icache_backing.lock().unwrap()[0] = 0xCA;
         wiring.dcache_backing.lock().unwrap()[0] = 0xFE;
         assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache alias");

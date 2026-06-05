@@ -159,9 +159,21 @@ fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_bas
 /// Resolve the ROM images for the faithful path, or `None` to fall back to
 /// the thunk harness.
 ///
-/// Order: explicit pre-extracted `LABWIRED_ESP32S3_ROM`/`_DROM` bins (back-compat)
-/// → discover the toolchain ROM ELF, extract (cached by ELF content hash), load.
+/// Order:
+///   0. If `LABWIRED_ESP32S3_FASTBOOT` is set (any value), immediately return
+///      `None` to force the fast-boot/thunk path regardless of toolchain
+///      availability. Use this for the playground fast-boot path and for unit
+///      tests that assert fast-boot-specific wiring.
+///   1. Explicit pre-extracted `LABWIRED_ESP32S3_ROM`/`_DROM` bins (back-compat).
+///   2. Discover the toolchain ROM ELF, extract (cached by ELF content hash), load.
 pub fn provision_rom_images() -> Option<RomImages> {
+    // 0. Explicit opt-out: force fast-boot/harness even when a real ROM is
+    //    available (used by the fast-boot playground path and by unit tests that
+    //    assert fast-boot-specific wiring). Set LABWIRED_ESP32S3_FASTBOOT=1.
+    if std::env::var_os("LABWIRED_ESP32S3_FASTBOOT").is_some() {
+        return None;
+    }
+
     // 1. Back-compat: explicit pre-extracted flat bins still win.
     if let (Ok(rp), Ok(dp)) = (
         std::env::var("LABWIRED_ESP32S3_ROM"),
