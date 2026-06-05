@@ -79,6 +79,48 @@ New dev tool: `xtask svd-coverage --chip esp32s3` (or a `cargo test` lane):
 This matrix is the living definition of "full chip model" — the chip is full
 when every in-scope peripheral row is green.
 
+### 4.1 Shipped (2026-06-05) — `labwired coverage`
+
+Implemented as a CLI subcommand (not an xtask), since it reuses the wired bus:
+
+```
+cargo run -p labwired-cli -- coverage [--svd <path>] [--json-out <path>]
+```
+
+The introspection method (user decision) is a **behavioral probe**, not a declared
+table — so the number cannot be self-graded. The pure engine lives in
+`crates/core/src/coverage/probe.rs`; the SVD/bus driver in `crates/cli/src/coverage.rs`.
+For each SVD register the probe drives the *wired* model and classifies:
+
+- **Modelled** — the register retains a written sentinel (two complementary
+  patterns catch any writable bit) OR reads a value distinct from the
+  peripheral's own unmapped-offset catch-all baseline.
+- **Unmodelled** — a read-write register that behaves *exactly* like an unmapped
+  offset (write ignored, read == catch-all): an accept-and-ignore stub.
+- **Indeterminate** — cannot be decided by probing: a write-only/read-only
+  register reading the catch-all value, or a peripheral whose catch-all itself
+  round-trips arbitrary writes (generic `HashMap`/`overflow`-backed storage — it
+  scores Indeterminate, NEVER Modelled; this is the anti-gaming guarantee).
+
+Authoritative SVD discovered from the toolchain (`LABWIRED_ESP32S3_SVD` override,
+else the PlatformIO espressif32 path); not vendored (Espressif-licensed). Snapshot
+committed at `docs/coverage/esp32s3-coverage.json`; the gated ratchet test
+`crates/cli/tests/svd_coverage_ratchet.rs` fails if any peripheral's `modelled`
+count drops below it.
+
+**Baseline (2026-06-05):** ~1995 Modelled / 1008 Indeterminate / 1192 Unmodelled
+of 4195 SVD registers across 54 peripherals. I2C0 = 14/0/22 of 36 (the 22
+unmodelled are the SCL-timing/config registers the model accept-and-ignores).
+
+**Known probe limitations** (resolved by the per-peripheral FSM tests in S4+, not
+by changing the probe): reactive read-only status registers that read 0 when idle
+(e.g. I2C0 `SR`) score Unmodelled because they're indistinguishable from a stub
+without a live transaction; write-only trigger registers with no read-back side
+effect score Indeterminate; peripherals backed by generic round-trip storage
+(SHA, MCPWM) score all-Indeterminate even where real FSMs exist. The probe drives
+*real* model behavior, so a model that panics on a sentinel write must be fixed
+in the model (there is no `catch_unwind` net — the workspace builds `panic=abort`).
+
 ## 5. Architecture / components
 
 ### 5.1 ROM auto-provisioning (`boot::esp32s3::rom_provision`)
