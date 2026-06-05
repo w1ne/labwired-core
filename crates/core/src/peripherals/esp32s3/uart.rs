@@ -18,6 +18,7 @@
 //! | 0x0C   | INT_ENA | enable mask                                           |
 //! | 0x10   | INT_CLR | W1C — clears the latched (edge) raw bits              |
 //! | 0x14   | CLKDIV  | clkdiv[11:0] → baud = sclk / clkdiv                   |
+//! | 0x18   | RX_FILT | glitch filter threshold                               |
 //! | 0x1C   | STATUS  | RXFIFO_CNT[9:0], TXFIFO_CNT[25:16] — live occupancy   |
 //! | 0x20   | CONF0   | RXFIFO_RST(b17) / TXFIFO_RST(b18) flush the FIFOs     |
 //! | 0x24   | CONF1   | RXFIFO_FULL_THRHD[9:0], TXFIFO_EMPTY_THRHD[19:10]     |
@@ -62,11 +63,34 @@ const OFF_INT_ST: u64 = 0x08;
 const OFF_INT_ENA: u64 = 0x0C;
 const OFF_INT_CLR: u64 = 0x10;
 const OFF_CLKDIV: u64 = 0x14;
+const OFF_RX_FILT: u64 = 0x18;
 const OFF_STATUS: u64 = 0x1C;
 const OFF_CONF0: u64 = 0x20;
 const OFF_CONF1: u64 = 0x24;
-/// Pure round-trip config registers (interpreted elsewhere).
-const ROUND_TRIP: [u64; 4] = [OFF_INT_ENA, OFF_CLKDIV, OFF_CONF0, OFF_CONF1];
+// Read-only status registers (constant reset value, writes ignored).
+const OFF_LOWPULSE: u64 = 0x28;
+const OFF_HIGHPULSE: u64 = 0x2C;
+const OFF_RXD_CNT: u64 = 0x30;
+const OFF_FLOW_CONF: u64 = 0x34;
+const OFF_SLEEP_CONF: u64 = 0x38;
+const OFF_SWFC_CONF0: u64 = 0x3C;
+const OFF_SWFC_CONF1: u64 = 0x40;
+const OFF_TXBRK_CONF: u64 = 0x44;
+const OFF_IDLE_CONF: u64 = 0x48;
+const OFF_RS485_CONF: u64 = 0x4C;
+const OFF_AT_CMD_PRECNT: u64 = 0x50;
+const OFF_AT_CMD_POSTCNT: u64 = 0x54;
+const OFF_AT_CMD_GAPTOUT: u64 = 0x58;
+const OFF_AT_CMD_CHAR: u64 = 0x5C;
+const OFF_MEM_CONF: u64 = 0x60;
+const OFF_MEM_TX_STATUS: u64 = 0x64;
+const OFF_MEM_RX_STATUS: u64 = 0x68;
+const OFF_FSM_STATUS: u64 = 0x6C;
+const OFF_POSPULSE: u64 = 0x70;
+const OFF_NEGPULSE: u64 = 0x74;
+const OFF_CLK_CONF: u64 = 0x78;
+const OFF_DATE: u64 = 0x7C;
+const OFF_ID: u64 = 0x80;
 
 // INT_RAW / INT_ENA / INT_ST bit positions (`uart_ll.h`).
 const INT_RXFIFO_FULL: u32 = 1 << 0;
@@ -82,14 +106,106 @@ const LEVEL_BITS: u32 = INT_RXFIFO_FULL | INT_TXFIFO_EMPTY;
 const CONF0_RXFIFO_RST: u32 = 1 << 17;
 const CONF0_TXFIFO_RST: u32 = 1 << 18;
 
+/// STATUS static bits: TXD/RXD/DSR/CTS idle-high line states (bits 29..28..27..26 and
+/// the reserved/always-1 bits that read back as 0xE000C000 on idle silicon).
+const STATUS_IDLE_BITS: u32 = 0xE000_C000;
+
 /// Hardware TX/RX FIFO depth (`SOC_UART_FIFO_LEN`).
 const FIFO_LEN: usize = 128;
 /// UART source clock (APB) and CPU/tick clock — scale baud timing into ticks.
 const UART_SCLK_HZ: u64 = 80_000_000;
 const CPU_CLOCK_HZ: u64 = 240_000_000;
-/// Reset defaults from `uart_reg.h`: CLKDIV=694 (115200 @ 80 MHz), thrhd=96.
-const RESET_CLKDIV: u32 = 694;
-const RESET_THRHD: u32 = 96;
+
+// SVD reset values for config registers.
+const RESET_CLKDIV: u32 = 0x0000_02B6; // 694 decimal
+const RESET_RX_FILT: u32 = 0x0000_0008;
+const RESET_CONF0: u32 = 0x1000_001C;
+const RESET_CONF1: u32 = 0x0001_8060;
+const RESET_FLOW_CONF: u32 = 0x0000_0000;
+const RESET_SLEEP_CONF: u32 = 0x0000_00F0;
+const RESET_SWFC_CONF0: u32 = 0x0000_4CE0;
+const RESET_SWFC_CONF1: u32 = 0x0000_4400;
+const RESET_TXBRK_CONF: u32 = 0x0000_000A;
+const RESET_IDLE_CONF: u32 = 0x0004_0100;
+const RESET_RS485_CONF: u32 = 0x0000_0000;
+const RESET_AT_CMD_PRECNT: u32 = 0x0000_0901;
+const RESET_AT_CMD_POSTCNT: u32 = 0x0000_0901;
+const RESET_AT_CMD_GAPTOUT: u32 = 0x0000_000B;
+const RESET_AT_CMD_CHAR: u32 = 0x0000_032B;
+const RESET_MEM_CONF: u32 = 0x0014_0012;
+const RESET_CLK_CONF: u32 = 0x0370_1000;
+const RESET_DATE: u32 = 0x0200_8270;
+const RESET_ID: u32 = 0x4000_0500; // HW-validated
+
+// SVD write masks for config registers (reserved/RO bits don't store data).
+const MASK_CLKDIV: u32 = 0x00F0_0FFF;
+const MASK_RX_FILT: u32 = 0x0000_01FF;
+const MASK_CONF0: u32 = 0x1FFF_FFFF;
+const MASK_CONF1: u32 = 0x00FF_FFFF;
+const MASK_FLOW_CONF: u32 = 0x0000_003F;
+const MASK_SLEEP_CONF: u32 = 0x0000_03FF;
+const MASK_SWFC_CONF0: u32 = 0x0003_FFFF;
+const MASK_SWFC_CONF1: u32 = 0x0003_FFFF;
+const MASK_TXBRK_CONF: u32 = 0x0000_00FF;
+const MASK_IDLE_CONF: u32 = 0x000F_FFFF;
+const MASK_RS485_CONF: u32 = 0x0000_03FF;
+const MASK_AT_CMD_PRECNT: u32 = 0x0000_FFFF;
+const MASK_AT_CMD_POSTCNT: u32 = 0x0000_FFFF;
+const MASK_AT_CMD_GAPTOUT: u32 = 0x0000_FFFF;
+const MASK_AT_CMD_CHAR: u32 = 0x0000_FFFF;
+const MASK_MEM_CONF: u32 = 0x1FFF_FFFE;
+const MASK_CLK_CONF: u32 = 0x0FFF_FFFF;
+const MASK_DATE: u32 = 0xFFFF_FFFF;
+const MASK_ID: u32 = 0xFFFF_FFFF;
+
+// SVD reset values for read-only status registers (return constant; writes ignored).
+const RESET_LOWPULSE: u32 = 0x0000_0FFF;
+const RESET_HIGHPULSE: u32 = 0x0000_0FFF;
+const RESET_RXD_CNT: u32 = 0x0000_0000;
+const RESET_MEM_TX_STATUS: u32 = 0x0000_0000;
+const RESET_MEM_RX_STATUS: u32 = 0x0010_0200;
+const RESET_FSM_STATUS: u32 = 0x0000_0000;
+const RESET_POSPULSE: u32 = 0x0000_0FFF;
+const RESET_NEGPULSE: u32 = 0x0000_0FFF;
+
+/// Config registers that are simple masked storage: (offset, reset, mask).
+/// Written with mask applied; read back stored value. Includes CONF0/CONF1/CLKDIV
+/// (already in ROUND_TRIP before) and all newly-modeled config registers.
+const CONFIG_REGS: &[(u64, u32, u32)] = &[
+    (OFF_CLKDIV, RESET_CLKDIV, MASK_CLKDIV),
+    (OFF_RX_FILT, RESET_RX_FILT, MASK_RX_FILT),
+    (OFF_CONF0, RESET_CONF0, MASK_CONF0),
+    (OFF_CONF1, RESET_CONF1, MASK_CONF1),
+    (OFF_FLOW_CONF, RESET_FLOW_CONF, MASK_FLOW_CONF),
+    (OFF_SLEEP_CONF, RESET_SLEEP_CONF, MASK_SLEEP_CONF),
+    (OFF_SWFC_CONF0, RESET_SWFC_CONF0, MASK_SWFC_CONF0),
+    (OFF_SWFC_CONF1, RESET_SWFC_CONF1, MASK_SWFC_CONF1),
+    (OFF_TXBRK_CONF, RESET_TXBRK_CONF, MASK_TXBRK_CONF),
+    (OFF_IDLE_CONF, RESET_IDLE_CONF, MASK_IDLE_CONF),
+    (OFF_RS485_CONF, RESET_RS485_CONF, MASK_RS485_CONF),
+    (OFF_AT_CMD_PRECNT, RESET_AT_CMD_PRECNT, MASK_AT_CMD_PRECNT),
+    (OFF_AT_CMD_POSTCNT, RESET_AT_CMD_POSTCNT, MASK_AT_CMD_POSTCNT),
+    (OFF_AT_CMD_GAPTOUT, RESET_AT_CMD_GAPTOUT, MASK_AT_CMD_GAPTOUT),
+    (OFF_AT_CMD_CHAR, RESET_AT_CMD_CHAR, MASK_AT_CMD_CHAR),
+    (OFF_MEM_CONF, RESET_MEM_CONF, MASK_MEM_CONF),
+    (OFF_CLK_CONF, RESET_CLK_CONF, MASK_CLK_CONF),
+    (OFF_DATE, RESET_DATE, MASK_DATE),
+    (OFF_ID, RESET_ID, MASK_ID),
+    // INT_ENA — kept here (previously in ROUND_TRIP).
+    (OFF_INT_ENA, 0x0000_0000, 0x0001_FFFF),
+];
+
+/// Read-only status registers: return constant reset value; writes are ignored.
+const READONLY_REGS: &[(u64, u32)] = &[
+    (OFF_LOWPULSE, RESET_LOWPULSE),
+    (OFF_HIGHPULSE, RESET_HIGHPULSE),
+    (OFF_RXD_CNT, RESET_RXD_CNT),
+    (OFF_MEM_TX_STATUS, RESET_MEM_TX_STATUS),
+    (OFF_MEM_RX_STATUS, RESET_MEM_RX_STATUS),
+    (OFF_FSM_STATUS, RESET_FSM_STATUS),
+    (OFF_POSPULSE, RESET_POSPULSE),
+    (OFF_NEGPULSE, RESET_NEGPULSE),
+];
 
 #[derive(Default)]
 pub struct Esp32s3Uart {
@@ -97,7 +213,7 @@ pub struct Esp32s3Uart {
     echo_stdout: bool,
     /// Interrupt-matrix source ID (UART0=27, UART1=28, UART2=29).
     source_id: u32,
-    /// Round-trip config register storage (INT_ENA/CLKDIV/CONF0/CONF1).
+    /// Config register storage: keyed by word offset, stores masked value.
     regs: HashMap<u64, u32>,
     /// TX FIFO (≤ FIFO_LEN); shifts out at the baud rate.
     tx_fifo: VecDeque<u8>,
@@ -130,8 +246,9 @@ impl Esp32s3Uart {
     /// keeps it capture-only. `source_id` is the intr-matrix source (27/28/29).
     pub fn new(echo_stdout: bool, source_id: u32) -> Self {
         let mut regs = HashMap::new();
-        regs.insert(OFF_CLKDIV, RESET_CLKDIV);
-        regs.insert(OFF_CONF1, RESET_THRHD | (RESET_THRHD << 10));
+        for &(off, reset, _mask) in CONFIG_REGS {
+            regs.insert(off, reset);
+        }
         Self {
             sink: None,
             echo_stdout,
@@ -167,6 +284,24 @@ impl Esp32s3Uart {
         self.regs.get(&off).copied().unwrap_or(0)
     }
 
+    /// Look up write mask for a config register offset. Returns None if not a
+    /// config register (caller should ignore write).
+    fn config_mask(off: u64) -> Option<u32> {
+        CONFIG_REGS
+            .iter()
+            .find(|&&(o, _, _)| o == off)
+            .map(|&(_, _, mask)| mask)
+    }
+
+    /// Return constant reset value for a read-only status register, or None if
+    /// `off` is not in the read-only table.
+    fn readonly_value(off: u64) -> Option<u32> {
+        READONLY_REGS
+            .iter()
+            .find(|&&(o, _)| o == off)
+            .map(|&(_, reset)| reset)
+    }
+
     fn txfifo_empty_thrhd(&self) -> usize {
         ((self.reg(OFF_CONF1) >> 10) & 0x3FF) as usize
     }
@@ -195,10 +330,11 @@ impl Esp32s3Uart {
         v
     }
 
-    /// STATUS (0x1C): live RXFIFO_CNT[9:0] + TXFIFO_CNT[25:16].
+    /// STATUS (0x1C): live RXFIFO_CNT[9:0] + TXFIFO_CNT[25:16] + static line-idle bits.
     fn status_word(&self) -> u32 {
-        ((self.rx_fifo.borrow().len() as u32) & 0x3FF)
-            | (((self.tx_fifo.len() as u32) & 0x3FF) << 16)
+        let dynamic = ((self.rx_fifo.borrow().len() as u32) & 0x3FF)
+            | (((self.tx_fifo.len() as u32) & 0x3FF) << 16);
+        dynamic | STATUS_IDLE_BITS
     }
 
     /// Word value for a non-FIFO register read.
@@ -207,8 +343,17 @@ impl Esp32s3Uart {
             OFF_INT_RAW => self.int_raw(),
             OFF_INT_ST => self.int_raw() & self.reg(OFF_INT_ENA),
             OFF_STATUS => self.status_word(),
-            o if ROUND_TRIP.contains(&o) => self.reg(o),
-            _ => 0,
+            o => {
+                // Check read-only status registers first (constant return).
+                if let Some(val) = Self::readonly_value(o) {
+                    return val;
+                }
+                // Config registers: return stored (masked) value.
+                if Self::config_mask(o).is_some() {
+                    return self.reg(o);
+                }
+                0
+            }
         }
     }
 
@@ -235,6 +380,18 @@ impl Esp32s3Uart {
             self.drain_accum = 0;
         }
     }
+
+    /// Write a config register word, applying mask and CONF0 side-effects.
+    fn write_config_reg(&mut self, off: u64, value: u32) {
+        if let Some(mask) = Self::config_mask(off) {
+            let masked = value & mask;
+            self.regs.insert(off, masked);
+            if off == OFF_CONF0 {
+                self.apply_conf0(masked);
+            }
+        }
+        // If not a config register: silently ignored (read-only or unmapped).
+    }
 }
 
 impl Peripheral for Esp32s3Uart {
@@ -259,17 +416,21 @@ impl Peripheral for Esp32s3Uart {
         match word_off {
             OFF_FIFO if offset & 3 == 0 => self.push_tx(value),
             OFF_INT_CLR => self.int_raw_sticky &= !((value as u32) << ((offset & 3) * 8)),
-            o if ROUND_TRIP.contains(&o) => {
-                let mut w = self.reg(o);
-                let shift = (offset & 3) * 8;
-                w &= !(0xFFu32 << shift);
-                w |= (value as u32) << shift;
-                self.regs.insert(o, w);
-                if o == OFF_CONF0 {
-                    self.apply_conf0(w);
+            // Read-only status registers: ignore writes.
+            o if Self::readonly_value(o).is_some() => {}
+            // STATUS: ignore writes.
+            OFF_STATUS => {}
+            o => {
+                // Config register: read-modify-write the byte lane.
+                if Self::config_mask(o).is_some() {
+                    let mut w = self.reg(o);
+                    let shift = (offset & 3) * 8;
+                    w &= !(0xFFu32 << shift);
+                    w |= (value as u32) << shift;
+                    self.write_config_reg(o, w);
                 }
+                // Unmapped offsets: silently ignored.
             }
-            _ => {}
         }
         Ok(())
     }
@@ -278,14 +439,13 @@ impl Peripheral for Esp32s3Uart {
         match offset & !3 {
             OFF_FIFO => self.push_tx((value & 0xFF) as u8),
             OFF_INT_CLR => self.int_raw_sticky &= !value, // W1C
-            OFF_CONF0 => {
-                self.regs.insert(OFF_CONF0, value);
-                self.apply_conf0(value);
+            // Read-only status registers: ignore writes.
+            o if Self::readonly_value(o).is_some() => {}
+            // STATUS: ignore writes.
+            OFF_STATUS => {}
+            o => {
+                self.write_config_reg(o, value);
             }
-            o if ROUND_TRIP.contains(&o) => {
-                self.regs.insert(o, value);
-            }
-            _ => {}
         }
         Ok(())
     }
@@ -436,6 +596,7 @@ mod tests {
     #[test]
     fn baud_timing_scales_with_clkdiv() {
         let u = Esp32s3Uart::new(false, 27);
+        // RESET_CLKDIV=0x2B6=694; 10*694*240/80=20820 ticks/byte.
         assert_eq!(u.cycles_per_byte(), 20820); // 115200: 10*694*240/80
     }
 
@@ -444,7 +605,81 @@ mod tests {
         let mut u = Esp32s3Uart::new(false, 27);
         u.write_u32(OFF_CLKDIV, 0x0030_015b).unwrap();
         u.write_u32(OFF_CONF1, 0x0080_0078).unwrap();
-        assert_eq!(u.read_u32(OFF_CLKDIV).unwrap(), 0x0030_015b);
-        assert_eq!(u.read_u32(OFF_CONF1).unwrap(), 0x0080_0078);
+        // Mask is applied: CLKDIV mask=0x00F00FFF, CONF1 mask=0x00FFFFFF.
+        assert_eq!(u.read_u32(OFF_CLKDIV).unwrap(), 0x0030_015b & MASK_CLKDIV);
+        assert_eq!(u.read_u32(OFF_CONF1).unwrap(), 0x0080_0078 & MASK_CONF1);
+    }
+
+    // ---- New tests for faithful register coverage ----
+
+    #[test]
+    fn uart_config_registers_reset_values() {
+        let u = Esp32s3Uart::new(false, 27);
+        assert_eq!(u.read_u32(OFF_CONF0).unwrap(), 0x1000_001C, "CONF0 reset");
+        assert_eq!(u.read_u32(OFF_CONF1).unwrap(), 0x0001_8060, "CONF1 reset");
+        assert_eq!(u.read_u32(OFF_CLKDIV).unwrap(), 0x0000_02B6, "CLKDIV reset");
+        assert_eq!(u.read_u32(OFF_SWFC_CONF0).unwrap(), 0x0000_4CE0, "SWFC_CONF0 reset");
+        assert_eq!(u.read_u32(OFF_AT_CMD_CHAR).unwrap(), 0x0000_032B, "AT_CMD_CHAR reset");
+        assert_eq!(u.read_u32(OFF_MEM_CONF).unwrap(), 0x0014_0012, "MEM_CONF reset");
+        assert_eq!(u.read_u32(OFF_CLK_CONF).unwrap(), 0x0370_1000, "CLK_CONF reset");
+        assert_eq!(u.read_u32(OFF_DATE).unwrap(), 0x0200_8270, "DATE reset");
+        assert_eq!(u.read_u32(OFF_ID).unwrap(), 0x4000_0500, "ID reset (HW-validated)");
+        assert_eq!(u.read_u32(OFF_IDLE_CONF).unwrap(), 0x0004_0100, "IDLE_CONF reset");
+    }
+
+    #[test]
+    fn uart_config_register_write_mask() {
+        let mut u = Esp32s3Uart::new(false, 27);
+        // RX_FILT: mask=0x1FF
+        u.write_u32(OFF_RX_FILT, 0xFFFF_FFFF).unwrap();
+        assert_eq!(u.read_u32(OFF_RX_FILT).unwrap(), 0x0000_01FF, "RX_FILT masked to 9 bits");
+        // FLOW_CONF: mask=0x3F
+        u.write_u32(OFF_FLOW_CONF, 0xFFFF_FFFF).unwrap();
+        assert_eq!(u.read_u32(OFF_FLOW_CONF).unwrap(), 0x0000_003F, "FLOW_CONF masked to 6 bits");
+        // RS485_CONF: mask=0x3FF
+        u.write_u32(OFF_RS485_CONF, 0xFFFF_FFFF).unwrap();
+        assert_eq!(u.read_u32(OFF_RS485_CONF).unwrap(), 0x0000_03FF, "RS485_CONF masked to 10 bits");
+    }
+
+    #[test]
+    fn uart_readonly_status_registers() {
+        let mut u = Esp32s3Uart::new(false, 27);
+        // Read constants match SVD reset values.
+        assert_eq!(u.read_u32(OFF_LOWPULSE).unwrap(), 0x0000_0FFF, "LOWPULSE constant");
+        assert_eq!(u.read_u32(OFF_HIGHPULSE).unwrap(), 0x0000_0FFF, "HIGHPULSE constant");
+        assert_eq!(u.read_u32(OFF_POSPULSE).unwrap(), 0x0000_0FFF, "POSPULSE constant");
+        assert_eq!(u.read_u32(OFF_NEGPULSE).unwrap(), 0x0000_0FFF, "NEGPULSE constant");
+        assert_eq!(u.read_u32(OFF_MEM_RX_STATUS).unwrap(), 0x0010_0200, "MEM_RX_STATUS constant");
+        // Writes are ignored; read returns unchanged constant.
+        u.write_u32(OFF_LOWPULSE, 0xDEAD_BEEF).unwrap();
+        assert_eq!(u.read_u32(OFF_LOWPULSE).unwrap(), 0x0000_0FFF, "LOWPULSE unchanged after write");
+        u.write_u32(OFF_MEM_RX_STATUS, 0xDEAD_BEEF).unwrap();
+        assert_eq!(u.read_u32(OFF_MEM_RX_STATUS).unwrap(), 0x0010_0200, "MEM_RX_STATUS unchanged after write");
+    }
+
+    #[test]
+    fn uart_status_has_idle_line_bits() {
+        let u = Esp32s3Uart::new(false, 27);
+        let status = u.read_u32(OFF_STATUS).unwrap();
+        assert_eq!(
+            status & STATUS_IDLE_BITS,
+            STATUS_IDLE_BITS,
+            "STATUS must have 0xE000C000 idle-line bits set: got {:#010x}",
+            status
+        );
+    }
+
+    #[test]
+    fn uart_status_dynamic_fifo_counts_preserved() {
+        let mut u = Esp32s3Uart::new(false, 27);
+        u.push_rx(b'A');
+        u.push_rx(b'B');
+        u.push_tx(b'X');
+        let status = u.read_u32(OFF_STATUS).unwrap();
+        // RXFIFO_CNT[9:0]=2, TXFIFO_CNT[25:16]=1
+        assert_eq!(status & 0x3FF, 2, "RXFIFO_CNT=2");
+        assert_eq!((status >> 16) & 0x3FF, 1, "TXFIFO_CNT=1");
+        // Static idle bits still present.
+        assert_eq!(status & STATUS_IDLE_BITS, STATUS_IDLE_BITS);
     }
 }
