@@ -232,7 +232,7 @@ fn fnv1a_64(bytes: &[u8]) -> u64 {
 ///   1. `LABWIRED_ESP32S3_ROM_ELF` env var (explicit path).
 ///   2. PlatformIO: `~/.platformio/tools/tool-esp-rom-elfs/esp32s3_rev0_rom.elf`.
 ///   3. ESP-IDF: `~/.espressif/tools/esp-rom-elfs/<ver>/esp32s3_rev0_rom.elf`.
-pub fn discover_rom_elf() -> Option<PathBuf> {
+pub(crate) fn discover_rom_elf() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("LABWIRED_ESP32S3_ROM_ELF") {
         let p = PathBuf::from(p);
         if p.is_file() {

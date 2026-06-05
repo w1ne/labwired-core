@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **ESP32-S3 Faithful ROM Auto-Provisioning** (`crates/core/src/boot/esp32s3_rom.rs`): the real Espressif boot ROM is now discovered and extracted automatically from the installed toolchain (PlatformIO/ESP-IDF), cached by ELF content hash, and loaded by default — so `--rom-boot` needs only `LABWIRED_ESP32S3_FLASH` (no manual `make_esp32s3_rom_bins.py` step or `LABWIRED_ESP32S3_ROM/_DROM` env vars). The Rust extractor is byte-identical to the previous Python script. `LABWIRED_ESP32S3_ROM_ELF` overrides the ELF path; pre-extracted `LABWIRED_ESP32S3_ROM/_DROM` bins still work.
+- **`Esp32s3BootMode` telemetry**: `Esp32s3Wiring.boot_mode` reports `Faithful` (real ROM) vs `Harness` (no blob found → thunk fallback); the CLI `--rom-boot` path uses it to fail clearly when no real ROM is available.
+- **`LABWIRED_ESP32S3_FASTBOOT`** opt-out: forces the fast-boot/thunk path even when a real ROM is available (playground speed; deterministic fast-boot tests).
+
+### Changed
+- **ESP32-S3 I2C0 interrupt source corrected** to `ETS_I2C_EXT0_INTR_SOURCE = 42` (was 49). The wrong source left the interrupt parked at a disabled CPU interrupt, so ESP-IDF's interrupt-driven `i2c_master` never completed and returned `ESP_ERR_INVALID_STATE`. The unmodified SpiceDispenser firmware now drives its PCA9685 servos over I2C on the faithful path.
+- **`proper_model` (XIP flash-cache wiring) unified** with the resolved ROM: both the MMU-aware XIP model and the boot mode now derive from a single `provision_rom_images()` call, so they can never diverge.
+
 ## [0.15.0] - 2026-05-23
 
 ### Added
