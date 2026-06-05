@@ -22,24 +22,33 @@ So the model is faithful through: real boot ROM (`.data` copy-source
 reconstruction, cache/flash MMU), the SPI-flash controller, the real 2nd-stage
 bootloader, and the app entry jump.
 
-## App stage — divergence isolates a model bug
+## App stage — runs the real ESP-IDF dispense path ✅
 
-After `entry 0x403c88b8`:
+After `entry 0x403c88b8`, the model boots the full ESP-IDF/Arduino app: ROM
+`memory_layout` bring-up, the SMP scheduler, `Wire`/`i2c_master` init, and the
+dispense loop. Attaching the PCA9685 twin (`LABWIRED_ESP32S3_PCA9685=1`):
 
-- **Real hardware:** boots the full ESP-IDF/Arduino app. On this bare board (no
-  PCA9685 wired) the dispense loop runs and logs
-  `i2c_master_transmit failed: ESP_ERR_INVALID_STATE` — i.e. the firmware is
-  executing the real dispense path and only the external I²C device is absent.
-- **Model:** aborts in ESP-IDF `memory_layout` init —
-  `SOC_RESERVE_MEMORY_REGION region range 0x00000000 - 0x3fcf0000 overlaps with
-  0x3c000000 - 0x3e000000`.
+- **Real hardware (bare board, no PCA9685):** the dispense loop logs
+  `i2c_master_transmit failed: ESP_ERR_INVALID_STATE` — the real driver runs but
+  no device ACKs on the bus.
+- **Model (with PCA9685 twin):** the interrupt-driven `i2c_master` transaction
+  **completes** — the modeled PCA9685 ACKs, the firmware programs its PWM
+  registers, and the run logs `PCA9685: channel N servo -> …°`. The full dispense
+  actuation path executes in simulation, which the bare oracle board cannot show.
 
-Because real silicon sails past this point, the abort is a **model bug**, not a
-firmware issue. Investigation (via `--break-at`/`--watch-mem`) localised it to a
-DROM/flash read used by the reserved-memory-region check resolving to 0 in the
-model; it is complicated by (a) SMP boot non-determinism and (b) `firmware.elf`
-symbol addresses not lining up linearly with the running `firmware.factory.bin`
-DROM page mapping. Tracked as the open boot frontier.
+### Boot frontier history
+
+Two model bugs were found and fixed past app entry:
+
+1. **`memory_layout` abort** (`SOC_RESERVE_MEMORY_REGION … overlaps …`): a
+   DROM/flash read used by the reserved-region check resolved to 0 in the model.
+   Fixed by reconstructing `ets_rom_layout_p`.
+2. **I²C `ESP_ERR_INVALID_STATE`**: ESP-IDF's interrupt-driven `i2c_master` never
+   saw its completion ISR, so `i2c_master->status` never reached DONE. Root cause
+   (traced register→intmatrix→CPU `INTENABLE`): the I2C0 interrupt source was
+   modeled as **49** instead of `ETS_I2C_EXT0_INTR_SOURCE = 42`, so the firmware
+   left source 49 parked at the disabled default CPU interrupt and the ISR was
+   never dispatched. Fixed by asserting source **42**.
 
 ## Bottom line
 
@@ -47,6 +56,6 @@ DROM page mapping. Tracked as the open boot frontier.
   initialises I²C, drives the dispense loop) — wiring a PCA9685 + servos makes it
   physically dispense.
 - LabWired's ESP32-S3 model is **silicon-faithful through the 2nd-stage
-  bootloader and app entry**, validated bit-for-bit against the real chip.
-- The remaining gap is a model-side bug in ESP-IDF `memory_layout` bring-up,
-  confirmed by the hardware oracle.
+  bootloader and app entry** (validated bit-for-bit against the real chip) **and
+  now runs the ESP-IDF app's interrupt-driven I²C dispense path** to completion
+  against the PCA9685 twin.

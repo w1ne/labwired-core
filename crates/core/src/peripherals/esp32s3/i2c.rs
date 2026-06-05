@@ -35,8 +35,17 @@ use crate::{Peripheral, PeripheralTickResult, SimResult};
 pub const I2C0_BASE: u32 = 0x6001_3000;
 pub const I2C0_SIZE: u64 = 0x1000;
 
-/// ESP32-S3 I_I2C_EXT0_INT_SOURCE per TRM §9.4 table 9-1.
-pub const I2C0_INTR_SOURCE_ID: u32 = 49;
+/// ESP32-S3 I2C0 (I2C_EXT0) peripheral interrupt source number.
+///
+/// This is the interrupt-matrix source index the firmware uses to program the
+/// `INTERRUPT_CORE{n}_I2C_EXT0_MAP_REG` (at matrix offset `4 * source`) and the
+/// value ESP-IDF's `esp_intr_alloc` routes — it MUST match the ESP-IDF
+/// `ets_isr_source_t` ordinal, i.e. `ETS_I2C_EXT0_INTR_SOURCE = 42`, NOT the
+/// general interrupt-status bit numbering. (It was previously 49, which is an
+/// unrelated source the firmware leaves parked at the disabled default CPU
+/// interrupt 6, so I2C0 completion interrupts were never delivered and ESP-IDF's
+/// interrupt-driven `i2c_master` returned `ESP_ERR_INVALID_STATE`.)
+pub const I2C0_INTR_SOURCE_ID: u32 = 42;
 
 const REG_CTR: u64 = 0x04;
 const REG_SR: u64 = 0x08;
@@ -246,8 +255,8 @@ impl Peripheral for Esp32s3I2c {
 
     fn tick(&mut self) -> PeripheralTickResult {
         let mut explicit = Vec::new();
-        // LEVEL interrupt: assert source 49 every tick while any enabled INT
-        // bit is set, mirroring real silicon (INT_RAW stays asserted until the
+        // LEVEL interrupt: assert the I2C0 source every tick while any enabled
+        // INT bit is set, mirroring real silicon (INT_RAW stays asserted until the
         // ISR writes INT_CLR). The previous one-shot pulse (`irq_pending`
         // drained in a single tick) was fine for esp-hal's *polling* driver
         // but was LOST by ESP-IDF's interrupt-driven `i2c_master` driver if the
@@ -412,6 +421,19 @@ mod tests {
     const CMD_READ: u8 = 3;
     const CMD_END: u8 = 4;
     const CMD_RSTART: u8 = 6;
+
+    #[test]
+    fn i2c0_interrupt_source_is_ets_i2c_ext0() {
+        // Regression guard: ESP-IDF routes I2C0 (I2C_EXT0) through interrupt
+        // source 42 — its `ets_isr_source_t` ordinal (`ETS_I2C_EXT0_INTR_SOURCE
+        // = 42` on ESP32-S3, verified against the toolchain SoC headers). The
+        // interrupt matrix MAP register the firmware programs is at offset
+        // `4 * source`, so `tick()` MUST assert this exact source for ESP-IDF's
+        // interrupt-driven `i2c_master` ISR to be dispatched. A wrong value
+        // (it was once 49) leaves the source parked at the disabled default
+        // CPU interrupt and the driver fails with `ESP_ERR_INVALID_STATE`.
+        assert_eq!(I2C0_INTR_SOURCE_ID, 42);
+    }
 
     #[test]
     fn ctr_round_trip() {
