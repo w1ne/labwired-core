@@ -1082,6 +1082,55 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(SystemStub::new()),
     );
+    // ── SYSTEM clock/reset register file (0x600C_0000..0x600C_1000) ───────
+    // Faithful fixed-register model for the 42 architected SYSTEM registers
+    // (silicon reset values + per-register write masks; unmapped offsets read
+    // as zero and ignore writes — NOT round-trip). Registered AFTER the broad
+    // `system` SystemStub above so that, by the bus router's last-start-wins
+    // tie-break on the shared 0x600C_0000 base, this narrower model serves the
+    // register-block window while the SystemStub keeps serving the
+    // accelerator/interrupt-map region above 0x600C_1000.
+    //
+    // CRITICAL — the model is registered as TWO windows straddling a HOLE at
+    // 0x600C_0030..0x600C_0040 so it never overlaps `crosscore_ipi` (the
+    // stateful SMP doorbell whose tick() re-asserts level sources 79/80). The
+    // bus's `peripheral_hint` cache short-circuits to the last peripheral that
+    // *contains* an address, so a single 0x1000-wide window covering the
+    // doorbell would swallow a doorbell write at runtime once any neighbouring
+    // SYSTEM register had been accessed first — deadlocking SMP boot. Leaving
+    // the hole means `crosscore_ipi` is the ONLY narrow peripheral covering
+    // 0x030..0x03F and always wins it. `core1_control` shares the 0x600C_0000
+    // base; its sole behavior (the CORE_1_CONTROL_0 RESETING 1→0 edge that
+    // releases the APP_CPU) is replicated by this model, so APP_CPU boot is
+    // preserved even though window A shadows 0x000/0x004. `resolve_window(
+    // 0x600C_0000)` returns window A (NON-round-tripping), giving the coverage
+    // probe a clean baseline. The empirical routing test
+    // (`system_register_block_routing`) pins all of this down.
+    //
+    // Window A: 0x600C_0000..0x600C_0030 (CORE_1_CONTROL_0/1 .. BT_LPCK_DIV_*).
+    bus.add_peripheral(
+        "system_regs",
+        0x600C_0000,
+        crate::peripherals::esp32s3::crosscore_ipi::BASE - 0x600C_0000, // 0x30
+        None,
+        Box::new(crate::peripherals::esp32s3::system::Esp32s3System::new()),
+    );
+    // Window B: 0x600C_0040..0x600C_1000 (RSA_PD_CTRL .. PVT .. DATE@0xFFC).
+    // The second instance carries window_base=0x40 so its base-relative offsets
+    // map back onto the architected (absolute) register offsets.
+    let win_b_base = crate::peripherals::esp32s3::crosscore_ipi::BASE
+        + crate::peripherals::esp32s3::crosscore_ipi::SIZE; // 0x600C_0040
+    bus.add_peripheral(
+        "system_regs_hi",
+        win_b_base,
+        0x600C_0000 + crate::peripherals::esp32s3::system::SIZE - win_b_base, // up to 0x1000
+        None,
+        Box::new(
+            crate::peripherals::esp32s3::system::Esp32s3System::with_window_base(
+                win_b_base - 0x600C_0000, // 0x40
+            ),
+        ),
+    );
     // RTC_CNTL through APB_CTRL/SYSCON are a contiguous block of register
     // banks ESP-HAL pokes during init (clock muxing, voltage rails, GPIO
     // mux, sensor ADC, PMS). Cover [0x6000_8000, 0x6001_0000) with a single
@@ -1674,6 +1723,94 @@ mod tests {
         assert!(bus.read_u8(0x600C_0000).is_ok(), "SYSTEM");
         assert!(bus.read_u8(0x6000_8000).is_ok(), "RTC_CNTL");
         assert!(bus.read_u8(0x6000_7000).is_ok(), "EFUSE");
+    }
+
+    /// Empirical routing proof for the layered 0x600C_0000 SYSTEM region.
+    /// Verifies WHICH peripheral the bus router dispatches each probe offset to
+    /// (by the distinct window each owns) and that behavior is correct:
+    ///   * crosscore_ipi (size 0x10) still serves 0x030..0x03C,
+    ///   * the faithful SYSTEM model (windows A/B) serves the register block
+    ///     and `resolve_window(0x600C_0000)` (window A, NON-round-tripping),
+    ///   * the big SystemStub (size 0x1_0000) still serves ≥ 0x600C_1000.
+    #[test]
+    fn system_register_block_routing() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+
+        let ipi_base = crate::peripherals::esp32s3::crosscore_ipi::BASE; // 0x600C_0030
+        let ipi_size = crate::peripherals::esp32s3::crosscore_ipi::SIZE; // 0x10
+
+        // 1. resolve_window(0x600C_0000) must return the faithful model's
+        //    window A (base 0x600C_0000, size 0x30) — NON-round-tripping, so
+        //    the probe builds a clean baseline and credits the modeled
+        //    registers. (The model is split into two windows straddling the
+        //    crosscore_ipi hole; window A is what the probe resolves.)
+        let (base, size) = bus.resolve_window(0x600C_0000).expect("SYSTEM window");
+        assert_eq!(base, 0x600C_0000);
+        assert_eq!(size, ipi_base - 0x600C_0000, "window A size = 0x30");
+
+        // 2. crosscore_ipi (size 0x10) still serves 0x030..0x03C — the boot
+        //    doorbell must NOT be shadowed by the SYSTEM model. The hole in the
+        //    SYSTEM windows guarantees this regardless of the hint cache, so
+        //    re-query after touching a neighbouring SYSTEM register to prove
+        //    the cache does not pull it back into a SYSTEM window.
+        let _ = bus.read_u32(0x600C_0008); // pollute hint with window A
+        for off in [0x030u64, 0x034, 0x038, 0x03C] {
+            let (b, s) = bus.resolve_window(0x600C_0000 + off).expect("ipi window");
+            assert_eq!(
+                (b, s),
+                (ipi_base, ipi_size),
+                "offset {off:#x} must route to crosscore_ipi (hole preserved)"
+            );
+        }
+
+        // 3a. Window A serves an architected register (PERIP_CLK_EN0 @ 0x018):
+        //     reads its HW reset value and round-trips a masked write.
+        assert_eq!(
+            bus.read_u32(0x600C_0018).unwrap(),
+            0xF9C1_E06F,
+            "PERIP_CLK_EN0 reads its HW-validated reset value"
+        );
+        bus.write_u32(0x600C_0018, 0x1234_5678).unwrap();
+        assert_eq!(
+            bus.read_u32(0x600C_0018).unwrap(),
+            0x1234_5678,
+            "PERIP_CLK_EN0 round-trips a write under its mask"
+        );
+
+        // 3b. Window B serves the high registers (RTC_FASTMEM_CONFIG @ 0x050,
+        //     DATE @ 0xFFC) with correct absolute-offset translation.
+        assert_eq!(
+            bus.read_u32(0x600C_0050).unwrap(),
+            0x7FF0_0000,
+            "RTC_FASTMEM_CONFIG reset value (window B, base-offset translated)"
+        );
+        assert_eq!(
+            bus.read_u32(0x600C_0FFC).unwrap(),
+            0x0210_1220,
+            "DATE constant (window B tail)"
+        );
+
+        // 3c. An unmapped offset inside window B reads as zero and does NOT
+        //     round-trip (the anti-gaming property the coverage probe relies on).
+        assert_eq!(bus.read_u32(0x600C_0100).unwrap(), 0, "unmapped reads 0");
+        bus.write_u32(0x600C_0100, 0xFFFF_FFFF).unwrap();
+        assert_eq!(
+            bus.read_u32(0x600C_0100).unwrap(),
+            0,
+            "unmapped offset must NOT round-trip"
+        );
+
+        // 4. The big SystemStub (size 0x1_0000) still serves the region above
+        //    the register block, e.g. 0x600C_1800 (interrupt-map / accelerator).
+        let (b, s) = bus.resolve_window(0x600C_1800).expect("stub window");
+        assert_eq!(
+            (b, s),
+            (0x600C_0000, 0x1_0000),
+            "0x600C_1800 → big SystemStub"
+        );
+        bus.write_u32(0x600C_1800, 0xDEAD_BEEF).unwrap();
+        assert_eq!(bus.read_u32(0x600C_1800).unwrap(), 0xDEAD_BEEF);
     }
 
     #[test]
