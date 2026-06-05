@@ -18,6 +18,7 @@
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::section_header::SHT_PROGBITS;
 use goblin::elf::Elf;
+use std::path::PathBuf;
 
 pub const IROM_BASE: u32 = 0x4000_0000;
 pub const IROM_SIZE: usize = 0x6_0000; // 384 KiB
@@ -153,6 +154,41 @@ fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_bas
             off += 4;
         }
     }
+}
+
+/// Locate the genuine ESP32-S3 ROM ELF in the user's installed toolchain.
+///
+/// Preference order:
+///   1. `LABWIRED_ESP32S3_ROM_ELF` env var (explicit path).
+///   2. PlatformIO: `~/.platformio/tools/tool-esp-rom-elfs/esp32s3_rev0_rom.elf`.
+///   3. ESP-IDF: `~/.espressif/tools/esp-rom-elfs/<ver>/esp32s3_rev0_rom.elf`.
+pub fn discover_rom_elf() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("LABWIRED_ESP32S3_ROM_ELF") {
+        let p = PathBuf::from(p);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    let home = std::env::var("HOME").ok()?;
+
+    let pio = PathBuf::from(format!(
+        "{home}/.platformio/tools/tool-esp-rom-elfs/esp32s3_rev0_rom.elf"
+    ));
+    if pio.is_file() {
+        return Some(pio);
+    }
+
+    // ESP-IDF nests the elfs under a version directory; scan one level.
+    let idf_root = PathBuf::from(format!("{home}/.espressif/tools/esp-rom-elfs"));
+    if let Ok(entries) = std::fs::read_dir(&idf_root) {
+        for entry in entries.flatten() {
+            let candidate = entry.path().join("esp32s3_rev0_rom.elf");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -393,5 +429,17 @@ mod tests {
         let images = extract_rom_images(&elf).expect("extract");
         assert_eq!(images.drom.len(), DROM_SIZE);
         assert_eq!(&images.drom[0x200..0x204], &payload);
+    }
+
+    #[test]
+    fn explicit_env_override_wins_for_discovery() {
+        // A path set via LABWIRED_ESP32S3_ROM_ELF that exists is returned as-is.
+        let tmp = std::env::temp_dir().join("labwired_test_rom_elf.bin");
+        std::fs::write(&tmp, b"\x7fELF").unwrap();
+        std::env::set_var("LABWIRED_ESP32S3_ROM_ELF", &tmp);
+        let found = discover_rom_elf().expect("env override should resolve");
+        assert_eq!(found, tmp);
+        std::env::remove_var("LABWIRED_ESP32S3_ROM_ELF");
+        let _ = std::fs::remove_file(&tmp);
     }
 }
