@@ -157,6 +157,14 @@ pub struct SystemBus {
         std::collections::HashMap<u32, crate::peripherals::esp32s3::rom_thunks::RomThunkFn>,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
+    /// Cached index of the classic-ESP32 DPORT peripheral, if one is
+    /// registered (`None` otherwise — the common case, incl. every ESP32-S3
+    /// bus). Recomputed in `rebuild_peripheral_ranges` on each peripheral
+    /// add/refresh, same staleness contract as `peripheral_ranges`. Lets
+    /// `dport_cross_core_pending` — called on the per-step interrupt path —
+    /// skip an O(peripherals) scan that would otherwise return 0 every step
+    /// on buses with no DPORT.
+    dport_idx: Option<usize>,
     /// Last-known IN value of GPIO ports 0 and 1, used by the per-tick
     /// edge-detection pass that drives GPIOTE EVENTS_IN. Both default to
     /// 0 at construction; the first tick after a GPIO write will produce
@@ -553,6 +561,14 @@ impl SystemBus {
             .collect();
         self.peripheral_ranges.sort_by_key(|r| r.start);
         self.peripheral_hint.set(None);
+        // Cache the DPORT index (classic-ESP32 only) so the per-step
+        // cross-core IPI read is O(1) instead of scanning every peripheral.
+        self.dport_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::dport::Dport>())
+                .is_some()
+        });
     }
 
     pub fn refresh_peripheral_index(&mut self) {
@@ -650,6 +666,7 @@ impl SystemBus {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
+            dport_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -678,6 +695,7 @@ impl SystemBus {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
+            dport_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -804,14 +822,15 @@ impl SystemBus {
     /// old test-harness IPI bridge that polled the same registers from
     /// outside the core. Returns 0 when no DPORT is mapped (non-ESP32 buses).
     fn dport_cross_core_pending(&self, core_id: u8) -> u32 {
-        for p in &self.peripherals {
-            if let Some(any) = p.dev.as_any() {
-                if let Some(dport) = any.downcast_ref::<crate::peripherals::esp32::dport::Dport>() {
-                    return dport.cross_core_pending(core_id);
-                }
-            }
-        }
-        0
+        // O(1) via the index cached in `rebuild_peripheral_ranges`. No DPORT
+        // (every ESP32-S3 bus) → no scan, just return 0.
+        let Some(idx) = self.dport_idx else { return 0 };
+        self.peripherals
+            .get(idx)
+            .and_then(|p| p.dev.as_any())
+            .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::dport::Dport>())
+            .map(|dport| dport.cross_core_pending(core_id))
+            .unwrap_or(0)
     }
 
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
@@ -859,6 +878,7 @@ impl SystemBus {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: matches!(chip.arch, labwired_config::Arch::Arm),
             pending_cpu_irqs: [0; 2],
+            dport_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -2553,6 +2573,7 @@ mod tests {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
+            dport_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -2605,6 +2626,7 @@ mod tests {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
+            dport_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -2659,6 +2681,7 @@ mod tests {
             config: crate::SimulationConfig::default(),
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
+            dport_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
