@@ -209,6 +209,12 @@ impl Esp32s3Rsa {
         let x = BigUint::from_le_words(&self.x_mem[..n]);
         let y = BigUint::from_le_words(&self.y_mem[..n]);
         let m = BigUint::from_le_words(&self.m_mem[..n]);
+        // Hardware behaviour with a zero modulus is undefined; silently
+        // complete without storing a result (probe-safe guard).
+        if m.is_zero() {
+            self.complete();
+            return;
+        }
         let z = x.modpow(&y, &m);
         self.store_z(&z, n);
         self.complete();
@@ -220,6 +226,12 @@ impl Esp32s3Rsa {
         let x = BigUint::from_le_words(&self.x_mem[..n]);
         let y = BigUint::from_le_words(&self.y_mem[..n]);
         let m = BigUint::from_le_words(&self.m_mem[..n]);
+        // Hardware behaviour with a zero modulus is undefined; silently
+        // complete without storing a result (probe-safe guard).
+        if m.is_zero() {
+            self.complete();
+            return;
+        }
         let prod = x.mul(&y);
         let z = prod.rem(&m);
         self.store_z(&z, n);
@@ -535,7 +547,7 @@ impl BigUint {
     /// Modular exponentiation `self^exp mod modulus` (square-and-multiply).
     /// Mirrors `num_bigint::BigUint::modpow`.
     fn modpow(&self, exp: &BigUint, modulus: &BigUint) -> BigUint {
-        assert!(!modulus.is_zero(), "RSA modulus is zero");
+        debug_assert!(!modulus.is_zero(), "RSA modulus is zero");
         // mod 1 == 0 for every base/exponent.
         if modulus.cmp(&BigUint::one()) == std::cmp::Ordering::Equal {
             return BigUint::zero();

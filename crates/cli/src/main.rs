@@ -115,6 +115,25 @@ enum Commands {
     /// fast-replay in the playground. Produces an `.lwrs` blob that
     /// `WasmSimulator::apply_runtime_snapshot` can restore.
     Snapshot(SnapshotArgs),
+
+    /// Report ESP32-S3 register-level peripheral coverage against the SVD.
+    ///
+    /// Probes every register in the SVD behaviorally (read/write sentinel) and
+    /// classifies each as Modelled / Indeterminate / Unmodelled. Prints a
+    /// human-readable table and optionally writes the full matrix as JSON.
+    Coverage(CoverageArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct CoverageArgs {
+    /// Path to the ESP32-S3 SVD (else auto-discovered from PlatformIO or
+    /// LABWIRED_ESP32S3_SVD env var).
+    #[arg(long)]
+    pub svd: Option<PathBuf>,
+
+    /// Write the coverage matrix as JSON to this path.
+    #[arg(long = "json-out", id = "coverage_json_out")]
+    pub json_out: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug)]
@@ -693,6 +712,7 @@ fn main() -> ExitCode {
         Some(Commands::Asset(args)) => run_asset(args),
         Some(Commands::Run(args)) => run_firmware(args),
         Some(Commands::Snapshot(args)) => run_snapshot(args),
+        Some(Commands::Coverage(args)) => run_coverage(args),
         None => run_interactive(cli),
     }
 }
@@ -1125,6 +1145,30 @@ fn run_firmware(args: RunArgs) -> ExitCode {
 fn run_snapshot(args: SnapshotArgs) -> ExitCode {
     match args.command {
         SnapshotCommands::Capture(a) => run_snapshot_capture(a),
+    }
+}
+
+fn run_coverage(args: CoverageArgs) -> ExitCode {
+    if let Some(p) = &args.svd {
+        std::env::set_var("LABWIRED_ESP32S3_SVD", p);
+    }
+    match coverage::run() {
+        Some((matrix, text)) => {
+            print!("{text}");
+            if let Some(out) = &args.json_out {
+                let json = serde_json::to_string_pretty(&matrix).expect("serialize matrix");
+                std::fs::write(out, &json).expect("write json");
+                eprintln!("wrote {}", out.display());
+            }
+            ExitCode::SUCCESS
+        }
+        None => {
+            eprintln!(
+                "error: ESP32-S3 SVD not found; set --svd or LABWIRED_ESP32S3_SVD, \
+                 or install the espressif32 PlatformIO platform"
+            );
+            ExitCode::from(EXIT_CONFIG_ERROR)
+        }
     }
 }
 
