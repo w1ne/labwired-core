@@ -1319,9 +1319,9 @@
     "unmodelled_regs": []
   },
   "SYSTIMER": {
-    "modelled": 17,
+    "modelled": 18,
     "indeterminate": 0,
-    "unmodelled": 19,
+    "unmodelled": 18,
     "total": 36,
     "unmodelled_regs": [
       "UNIT0_VALUE_HI",
@@ -1341,8 +1341,7 @@
       "REAL_TARGET1_LO",
       "REAL_TARGET1_HI",
       "REAL_TARGET2_LO",
-      "REAL_TARGET2_HI",
-      "DATE"
+      "REAL_TARGET2_HI"
     ]
   },
   "TIMG0": {
