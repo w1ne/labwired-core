@@ -75,7 +75,10 @@ fn compute_baseline(target: &mut dyn ProbeTarget, regs: &[ProbeReg], window_size
         off -= 4;
     }
     if unmapped.is_empty() {
-        unmapped.push(window_size & !3);
+        // Window fully covered by registers: fall back to the last in-window
+        // word (may coincide with a register — a slightly degraded baseline is
+        // acceptable; reading PAST the window would hit the next peripheral).
+        unmapped.push((window_size.saturating_sub(4)) & !3);
     }
 
     let reads: Vec<u32> = unmapped
@@ -114,18 +117,25 @@ fn classify(target: &mut dyn ProbeTarget, reg: &ProbeReg, base: &Baseline) -> Re
     let r0 = target.probe_read(reg.offset).unwrap_or(base.read);
     let read_distinct = r0 != base.read;
 
-    let sentinel = if base.read == SENTINEL { SENTINEL_ALT } else { SENTINEL };
-    let wrote = target.probe_write(reg.offset, sentinel);
-    let r1 = target.probe_read(reg.offset).unwrap_or(base.read);
-    target.probe_write(reg.offset, r0); // restore
-    let retains = wrote && r1 != r0 && r1 != base.read;
+    // Write-retention: does the read-back DEPEND on what we wrote? Two
+    // bitwise-complementary patterns differ in every bit, so any single
+    // writable bit makes the two read-backs differ. Robust to reset value and
+    // to which bits are writable (a single sentinel misses bits it writes as 0).
+    const PAT_A: u32 = 0xAAAA_AAAA;
+    const PAT_B: u32 = 0x5555_5555;
+    let wrote_a = target.probe_write(reg.offset, PAT_A);
+    let ra = target.probe_read(reg.offset).unwrap_or(base.read);
+    let wrote_b = target.probe_write(reg.offset, PAT_B);
+    let rb = target.probe_read(reg.offset).unwrap_or(base.read);
+    target.probe_write(reg.offset, r0); // best-effort restore
+    let retains = wrote_a && wrote_b && ra != rb;
 
+    // Generic-storage peripherals (write_roundtrips == true) can round-trip
+    // any value at any offset, so write-retention proves nothing about register
+    // semantics. Score every register Indeterminate; the per-peripheral FSM
+    // tests confirm those registers.
     if base.write_roundtrips {
-        if read_distinct && reg.reset_value != 0 && r0 == reg.reset_value {
-            RegStatus::Modelled
-        } else {
-            RegStatus::Indeterminate
-        }
+        RegStatus::Indeterminate
     } else if retains {
         RegStatus::Modelled
     } else if read_distinct {
@@ -240,5 +250,41 @@ mod tests {
         }];
         let out = probe_peripheral(&mut m, &regs, 0x100);
         assert_eq!(out[0].status, RegStatus::Indeterminate);
+    }
+
+    #[test]
+    fn prewritten_storage_with_matching_reset_value_is_not_modelled() {
+        // A generic-storage peripheral whose cell already holds a register's
+        // reset value must NOT be credited as Modelled (the anti-gaming hole).
+        let mut s = StorageStub::default();
+        s.mem.insert(0x08, 0x11); // pre-written, coincides with reset_value below
+        let regs = vec![ProbeReg {
+            name: "MAGIC".into(), offset: 0x08, access: Access::ReadOnly, reset_value: 0x11,
+        }];
+        let out = probe_peripheral(&mut s, &regs, 0x100);
+        assert_ne!(out[0].status, RegStatus::Modelled,
+            "generic storage must never score Modelled, even when a cell holds the reset value");
+    }
+
+    #[test]
+    fn register_with_only_even_bit_writable_scores_modelled() {
+        // A RW register where the only writable bit is one that 0xA5A5_A5A5 writes
+        // as 0 must still be detected as Modelled (two-sentinel retention).
+        struct Bit1Only { v: u32 }
+        impl ProbeTarget for Bit1Only {
+            fn probe_read(&self, offset: u64) -> Option<u32> {
+                if offset == 0x00 { Some(self.v) } else { Some(0) }
+            }
+            fn probe_write(&mut self, offset: u64, value: u32) -> bool {
+                if offset == 0x00 { self.v = value & 0b10; } // only bit 1 writable
+                true
+            }
+        }
+        let regs = vec![ProbeReg {
+            name: "CFG".into(), offset: 0x00, access: Access::ReadWrite, reset_value: 0,
+        }];
+        let out = probe_peripheral(&mut Bit1Only { v: 0 }, &regs, 0x100);
+        assert_eq!(out[0].status, RegStatus::Modelled,
+            "a register with a single writable bit must be detected regardless of sentinel bit pattern");
     }
 }
