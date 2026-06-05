@@ -130,6 +130,17 @@ const WDT_STG1_HOLD_DEFAULT: u32 = 0x07FF_FFFF; // 134217727
 const WDT_STG2_HOLD_DEFAULT: u32 = 0x000F_FFFF; // 1048575
 const WDT_STG3_HOLD_DEFAULT: u32 = 0x000F_FFFF; // 1048575
 
+/// RTCCALICFG2 (0x80): extra RTC-calibration config. SVD reset 0xFFFF_FF98;
+/// bits[2:0] (RTC_CALI_TIMEOUT / _RDY / _THRES low) are read-only, so only
+/// bits[31:3] are firmware-writable.
+const RTCCALICFG2_RESET: u32 = 0xFFFF_FF98;
+const RTCCALICFG2_WMASK: u32 = 0xFFFF_FFF8;
+/// NTIMERS_DATE (0xF8): IP version register. SVD reset 0x0200_3071, read-only.
+const NTIMERS_DATE: u32 = 0x0200_3071;
+/// REGCLK (0xFC): only bit31 (REGCLK clock-gate force-enable) is writable;
+/// SVD reset 0.
+const REGCLK_WMASK: u32 = 0x8000_0000;
+
 /// State for one general-purpose 64-bit timer (T0 or T1).
 #[derive(Debug, Clone, Copy)]
 struct TimerState {
@@ -234,6 +245,11 @@ pub struct Esp32s3TimerGroup {
     /// busy-polls RTC_CALI_RDY — without auto-completion it spins forever.
     rtccalicfg: u32,
     rtccalicfg1: u32,
+    /// RTCCALICFG2 (0x80): extra calibration config (reset 0xFFFF_FF98).
+    rtccalicfg2: u32,
+
+    /// REGCLK (0xFC): register-clock gate control (bit31 writable, reset 0).
+    regclk: u32,
 
     /// Interrupt-matrix source id for T0. T1 = +1, WDT = +2.
     base_source_id: u32,
@@ -264,6 +280,8 @@ impl Esp32s3TimerGroup {
             wdt_pending: false,
             rtccalicfg: 0,
             rtccalicfg1: 0,
+            rtccalicfg2: RTCCALICFG2_RESET,
+            regclk: 0,
             base_source_id,
         }
     }
@@ -340,6 +358,11 @@ impl Esp32s3TimerGroup {
             0x74 => self.int_raw_word(),
             0x78 => self.int_raw_word() & self.int_ena,
             // 0x7C INT_CLR is W1C; reads as 0.
+
+            // ── Misc config / version ──
+            0x80 => self.rtccalicfg2,
+            0xF8 => NTIMERS_DATE,
+            0xFC => self.regclk,
             _ => 0,
         }
     }
@@ -425,6 +448,13 @@ impl Esp32s3TimerGroup {
                     self.wdt_pending = false;
                 }
             }
+
+            // ── Misc config (NTIMERS_DATE @0xF8 is RO → catch-all) ──
+            0x80 => {
+                self.rtccalicfg2 =
+                    (self.rtccalicfg2 & !RTCCALICFG2_WMASK) | (value & RTCCALICFG2_WMASK)
+            }
+            0xFC => self.regclk = value & REGCLK_WMASK,
             // Unhandled / read-only offsets: ignore (matches systimer).
             _ => {}
         }
@@ -563,7 +593,8 @@ mod tests {
 
     /// Helper: enable T0 with a given divider (up-counter, no alarm).
     fn enable_t0(tg: &mut Esp32s3TimerGroup, divider: u32) {
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | ((divider & 0xFFFF) << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | ((divider & 0xFFFF) << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
     }
 
@@ -676,12 +707,38 @@ mod tests {
     }
 
     #[test]
+    fn misc_config_registers_reset_and_access() {
+        let mut tg = new_timg0();
+        // NTIMERS_DATE (0xF8): RO version constant.
+        assert_eq!(tg.read_word(0xF8), 0x0200_3071);
+        tg.write_word(0xF8, 0xDEAD_BEEF); // RO: write ignored
+        assert_eq!(tg.read_word(0xF8), 0x0200_3071);
+
+        // RTCCALICFG2 (0x80): reset 0xFFFF_FF98; bits[2:0] read-only.
+        assert_eq!(tg.read_word(0x80), 0xFFFF_FF98);
+        tg.write_word(0x80, 0x0000_0000);
+        // Writable bits cleared; RO bits[2:0] keep their reset (0).
+        assert_eq!(tg.read_word(0x80), 0x0000_0000);
+        tg.write_word(0x80, 0xFFFF_FFFF);
+        // bits[2:0] stay 0 (RO), the rest become 1.
+        assert_eq!(tg.read_word(0x80), 0xFFFF_FFF8);
+
+        // REGCLK (0xFC): only bit31 writable, reset 0.
+        assert_eq!(tg.read_word(0xFC), 0);
+        tg.write_word(0xFC, 0xFFFF_FFFF);
+        assert_eq!(tg.read_word(0xFC), 0x8000_0000);
+        tg.write_word(0xFC, 0);
+        assert_eq!(tg.read_word(0xFC), 0);
+    }
+
+    #[test]
     fn alarm_fires_and_emits_source() {
         let mut tg = new_timg0();
         // Alarm at count 5, up-counter, divider 1, alarm_en, NO autoreload.
         tg.write_word(0x10, 5); // T0ALARMLO = 5
         tg.write_word(0x14, 0); // T0ALARMHI = 0
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         tg.write_word(0x70, INT_T0_BIT); // INT_ENA T0
 
@@ -709,7 +766,8 @@ mod tests {
         let mut tg = new_timg0();
         // Configure T1 (block at +0x24).
         tg.write_word(0x34, 3); // T1ALARMLO = 3
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x24, cfg);
         tg.write_word(0x70, INT_T1_BIT);
         let mut fired = None;
@@ -757,14 +815,19 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(second, Some(12), "autoreloaded alarm re-fires one period later");
+        assert_eq!(
+            second,
+            Some(12),
+            "autoreloaded alarm re-fires one period later"
+        );
     }
 
     #[test]
     fn int_clr_is_w1c() {
         let mut tg = new_timg0();
         tg.write_word(0x10, 2); // alarm = 2
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         tg.write_word(0x70, INT_T0_BIT);
         for _ in 0..30 {
@@ -784,7 +847,8 @@ mod tests {
     fn int_ena_gates_irq_emission_but_not_pending() {
         let mut tg = new_timg0();
         tg.write_word(0x10, 2);
-        let cfg = CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
+        let cfg =
+            CONFIG_EN_BIT | CONFIG_INCREASE_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         // INT_ENA left 0 → no IRQ emitted, but pending still sets.
         for _ in 0..30 {
@@ -800,11 +864,19 @@ mod tests {
         // The bootloader's rtc_clk_cal busy-polls RTC_CALI_RDY after START;
         // without auto-completion the boot hangs (regression that this models).
         let mut tg = new_timg0();
-        assert_eq!(tg.read_word(0x68) & RTC_CALI_RDY, 0, "RDY clear before START");
+        assert_eq!(
+            tg.read_word(0x68) & RTC_CALI_RDY,
+            0,
+            "RDY clear before START"
+        );
         // Start a calibration with a max-cycle count in bits[31:13].
         let max = 1024u32;
         tg.write_word(0x68, RTC_CALI_START | (max << 13));
-        assert_eq!(tg.read_word(0x68) & RTC_CALI_RDY, RTC_CALI_RDY, "RDY latched on START");
+        assert_eq!(
+            tg.read_word(0x68) & RTC_CALI_RDY,
+            RTC_CALI_RDY,
+            "RDY latched on START"
+        );
         assert_ne!(tg.read_word(0x6C), 0, "RTCCALICFG1 holds a measured value");
         assert_eq!(tg.read_word(0x6C) & 1, 1, "value valid bit set");
     }
@@ -825,7 +897,11 @@ mod tests {
         assert!(!tg.wdt_unlocked());
         let before = tg.read_word(0x48);
         tg.write_word(0x48, 0xFFFF_FFFF); // should be ignored while locked
-        assert_eq!(tg.read_word(0x48), before, "locked: WDTCONFIG0 write ignored");
+        assert_eq!(
+            tg.read_word(0x48),
+            before,
+            "locked: WDTCONFIG0 write ignored"
+        );
         // Unlock with the key, then the write lands.
         tg.write_word(0x64, WDT_WKEY);
         assert!(tg.wdt_unlocked());
@@ -840,7 +916,7 @@ mod tests {
         tg.write_word(0x18, 10); // LOADLO = 10
         tg.write_word(0x20, 1); // LOAD → counter = 10
         tg.write_word(0x10, 5); // alarm = 5
-        // EN | (INCREASE cleared = down) | ALARM_EN | div1.
+                                // EN | (INCREASE cleared = down) | ALARM_EN | div1.
         let cfg = CONFIG_EN_BIT | CONFIG_ALARM_EN_BIT | (1 << CONFIG_DIVIDER_SHIFT);
         tg.write_word(0x00, cfg);
         tg.write_word(0x70, INT_T0_BIT);

@@ -1325,9 +1325,9 @@
     ]
   },
   "TIMG0": {
-    "modelled": 20,
+    "modelled": 23,
     "indeterminate": 0,
-    "unmodelled": 15,
+    "unmodelled": 12,
     "total": 35,
     "unmodelled_regs": [
       "T0LO",
@@ -1341,16 +1341,13 @@
       "WDTFEED",
       "INT_RAW_TIMERS",
       "INT_ST_TIMERS",
-      "INT_CLR_TIMERS",
-      "RTCCALICFG2",
-      "NTIMERS_DATE",
-      "REGCLK"
+      "INT_CLR_TIMERS"
     ]
   },
   "TIMG1": {
-    "modelled": 20,
+    "modelled": 23,
     "indeterminate": 0,
-    "unmodelled": 15,
+    "unmodelled": 12,
     "total": 35,
     "unmodelled_regs": [
       "T0LO",
@@ -1364,10 +1361,7 @@
       "WDTFEED",
       "INT_RAW_TIMERS",
       "INT_ST_TIMERS",
-      "INT_CLR_TIMERS",
-      "RTCCALICFG2",
-      "NTIMERS_DATE",
-      "REGCLK"
+      "INT_CLR_TIMERS"
     ]
   },
   "TWAI0": {
