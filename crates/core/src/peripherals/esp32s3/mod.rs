@@ -22,6 +22,7 @@ pub mod rsa;
 pub mod sha;
 pub mod rom_thunks;
 pub mod spi_mem_flash;
+pub mod system;
 pub mod system_stub;
 pub mod systimer;
 pub mod tmp102;
