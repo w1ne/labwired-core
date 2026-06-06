@@ -871,24 +871,22 @@
     ]
   },
   "LEDC": {
-    "modelled": 39,
+    "modelled": 40,
     "indeterminate": 14,
-    "unmodelled": 1,
+    "unmodelled": 0,
     "total": 54,
-    "unmodelled_regs": [
-      "DATE"
-    ]
+    "unmodelled_regs": []
   },
   "MCPWM0": {
-    "modelled": 0,
-    "indeterminate": 74,
+    "modelled": 65,
+    "indeterminate": 9,
     "unmodelled": 0,
     "total": 74,
     "unmodelled_regs": []
   },
   "MCPWM1": {
-    "modelled": 0,
-    "indeterminate": 74,
+    "modelled": 65,
+    "indeterminate": 9,
     "unmodelled": 0,
     "total": 74,
     "unmodelled_regs": []
