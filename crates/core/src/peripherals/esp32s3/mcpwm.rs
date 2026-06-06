@@ -65,22 +65,29 @@
 //! | 0x04C  | GEN0_FORCE       | force action (round-trip) |
 //! | 0x050  | GEN0_A           | generator A actions (round-trip) |
 //! | 0x054  | GEN0_B           | generator B actions (round-trip) |
-//! | 0x058  | DT0_CFG          | dead-time config (round-trip) |
-//! | 0x05C  | DT0_FED_CFG      | falling-edge delay (round-trip) |
-//! | 0x060  | DT0_RED_CFG      | rising-edge delay (round-trip) |
-//! | ...    | operator stride = 0x24, op1 @ +0x24, op2 @ +0x48 | |
-//! | 0x0B0  | FH0_CFG0 (fault) | per-operator fault-handler cfg (round-trip) |
+//! | 0x058  | DB0_CFG (DT0)    | dead-time config |
+//! | 0x05C  | DB0_FED_CFG      | falling-edge delay |
+//! | 0x060  | DB0_RED_CFG      | rising-edge delay (register file) |
+//! | 0x064  | CHOPPER0_CFG     | carrier/chopper (register file) |
+//! | 0x068  | TZ0_CFG0/1, TZ0_STATUS | trip-zone/fault (register file) |
+//! | ...    | operator stride = 0x38: op1 @ 0x074, op2 @ 0x0AC | |
+//! | 0x0E4  | FAULT_DETECT     | fault input polarity/enable (register file) |
+//! | 0x0E8.. | CAP_TIMER_CFG/PHASE, CAP_CH0..2(_CFG), CAP_STATUS | capture (register file) |
+//! | 0x10C  | UPDATE_CFG       | global/per-timer update gates (register file) |
 //! | 0x110  | INT_ENA          | interrupt enable mask |
 //! | 0x114  | INT_RAW          | raw latched events (RO from FW; HW-set) |
 //! | 0x118  | INT_ST           | INT_RAW & INT_ENA (RO) |
 //! | 0x11C  | INT_CLR          | W1C of INT_RAW |
 //!
-//! The precise FH/carrier/capture offsets above 0x60 differ slightly across IDF
-//! revisions; firmware that uses MCPWM for plain PWM (the LabWired closed-loop
-//! cases) touches CLK_CFG, the timer CFG/STATUS block, the comparator values and
-//! the interrupt block — all modeled faithfully here. Other offsets in the
-//! window round-trip into a sparse overflow map so reads return what was written
-//! and nothing is lost, without inventing semantics we don't model.
+//! Firmware that uses MCPWM for plain PWM (the LabWired closed-loop cases)
+//! touches CLK_CFG, the timer CFG/STATUS block, the comparator values and the
+//! interrupt block — all modeled behaviorally here. The REMAINING architected
+//! registers (sync-input cfg, operator-timer-sel, dead-time RED, chopper,
+//! trip-zone/fault, capture, UPDATE_CFG, VERSION) are a faithful masked
+//! register file: SVD reset values + per-register writable masks; read-only
+//! registers ignore writes. Offsets outside the architected map (above
+//! VERSION @ 0x124) read zero and ignore writes — NOT round-trip, so the SVD
+//! behavioral coverage probe cannot mistake this model for generic storage.
 //!
 //! ## Source IDs (IDF `soc/esp32s3/include/soc/interrupts.h`)
 //!
@@ -89,7 +96,6 @@
 //! fired. `new(base_source_id)` takes that id (38 or 39).
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
-use std::collections::BTreeMap;
 
 pub const MCPWM0_BASE: u32 = 0x6001_E000;
 pub const MCPWM1_BASE: u32 = 0x6002_C000;
@@ -118,22 +124,26 @@ const TIMER_CFG1: u64 = 0x4; // MODE[2:0], START[4:3]
 const TIMER_SYNC: u64 = 0x8; // round-trip only
 const TIMER_STATUS: u64 = 0xC; // RO: VALUE[15:0], DIRECTION[16]
 
-// ── Operator block (stride 0x24, 3 operators, base 0x03C) ──
+// ── Operator block (stride 0x38, 3 operators, base 0x03C) ──
 const OP_BLOCK_BASE: u64 = 0x03C;
-const OP_STRIDE: u64 = 0x24;
-const OP_BLOCK_END: u64 = OP_BLOCK_BASE + (NUM_OPERATORS as u64) * OP_STRIDE; // 0x0A8
-const OP_STMP_CFG: u64 = 0x00; // comparator update method (round-trip)
-const OP_CMPR_VALUE0: u64 = 0x04; // GENx_TSTMP_A — compare value A [15:0]
-const OP_CMPR_VALUE1: u64 = 0x08; // GENx_TSTMP_B — compare value B [15:0]
-const OP_GEN_CFG0: u64 = 0x0C; // generator config (round-trip)
-const OP_GEN_FORCE: u64 = 0x10; // generator force (round-trip)
-const OP_GEN_A: u64 = 0x14; // generator A actions (round-trip)
-const OP_GEN_B: u64 = 0x18; // generator B actions (round-trip)
-const OP_DT_CFG: u64 = 0x1C; // dead-time config (round-trip)
-const OP_DT_FED: u64 = 0x20; // dead-time falling-edge delay (round-trip)
-// 0x24 would be DT_RED of the next op-stride; RED is folded into the overflow
-// map for fidelity — the three modeled DT words (CFG/FED + the carry) suffice
-// for the comparator/timer behaviour we expose.
+/// Operator stride per the ESP32-S3 SVD: each operator owns 14 registers
+/// (CMPR_CFG..TZ_STATUS), so CMPR1_CFG sits at 0x074 and CMPR2_CFG at 0x0AC.
+/// (This was 0x24 before the SVD audit, which misaligned operators 1 and 2 —
+/// silicon's CHOPPER0_CFG @ 0x64 was being decoded as operator 1's
+/// CMPR_VALUE0.)
+const OP_STRIDE: u64 = 0x38;
+const OP_BLOCK_END: u64 = OP_BLOCK_BASE + (NUM_OPERATORS as u64) * OP_STRIDE; // 0x0E4
+const OP_STMP_CFG: u64 = 0x00; // comparator update method
+const OP_CMPR_VALUE0: u64 = 0x04; // CMPRx_VALUE0 — compare value A [15:0]
+const OP_CMPR_VALUE1: u64 = 0x08; // CMPRx_VALUE1 — compare value B [15:0]
+const OP_GEN_CFG0: u64 = 0x0C; // generator config
+const OP_GEN_FORCE: u64 = 0x10; // generator force
+const OP_GEN_A: u64 = 0x14; // generator A actions
+const OP_GEN_B: u64 = 0x18; // generator B actions
+const OP_DT_CFG: u64 = 0x1C; // dead-time config (DBx_CFG)
+const OP_DT_FED: u64 = 0x20; // dead-time falling-edge delay (DBx_FED_CFG)
+                             // In-stride offsets 0x24..0x34 (DBx_RED_CFG, CHOPPERx_CFG, TZx_CFG0/1,
+                             // TZx_STATUS) are served by the masked register file (`extras`).
 
 // ── Interrupt block ──
 const REG_INT_ENA: u64 = 0x110;
@@ -160,8 +170,8 @@ const TIMER_MODE_DOWN: u32 = 2;
 const TIMER_MODE_UPDOWN: u32 = 3;
 const TIMER_CFG1_START_SHIFT: u32 = 3;
 const TIMER_CFG1_START_MASK: u32 = 0x3; // [4:3]
-// START field: 0 stop-at-TEZ, 1 stop-at-next-TEZ, 2 run-continuously (free
-// run). We treat any non-zero START as "running" once a count mode is set.
+                                        // START field: 0 stop-at-TEZ, 1 stop-at-next-TEZ, 2 run-continuously (free
+                                        // run). We treat any non-zero START as "running" once a count mode is set.
 
 // ── TIMERx_STATUS fields ──
 const TIMER_STATUS_VALUE_MASK: u32 = 0xFFFF; // [15:0]
@@ -192,6 +202,8 @@ const fn int_teb_bit(op: usize) -> u32 {
 }
 /// Mask of all 12 modeled interrupt bits.
 const INT_MODELED_MASK: u32 = 0x0FFF;
+/// All 30 architected interrupt bits (SVD wmask of INT_ENA/RAW/CLR).
+const INT_WMASK: u32 = 0x3FFF_FFFF;
 
 /// One PWM timer: a 16-bit counter advanced deterministically by `tick()`.
 #[derive(Debug, Clone, Copy)]
@@ -215,7 +227,8 @@ struct TimerState {
 impl TimerState {
     fn new() -> Self {
         Self {
-            cfg0: 0,
+            // SVD reset: PRESCALE=0, PERIOD=0xFF (TIMERx_CFG0 = 0x0000_FF00).
+            cfg0: 0x0000_FF00,
             cfg1: 0,
             sync: 0,
             counter: 0,
@@ -254,7 +267,64 @@ impl TimerState {
     }
 }
 
-/// One operator: two comparators + round-tripped generator/dead-time words.
+/// One word past the last architected register (`VERSION` @ 0x124).
+const NWORDS: usize = 0x128 / 4;
+
+/// `(reset value, writable-bit mask)` for the architected register at word
+/// index `word` (offset `word * 4`), exactly per the ESP32-S3 SVD `MCPWM0`
+/// block (MCPWM1 is identical); `None` = outside the architected map.
+/// The FSM-modeled registers (CLK_CFG, timer block, the 9 per-operator words,
+/// INT block) are dispatched before this table is consulted — their entries
+/// exist so `new()` can seed every reset value from one source of truth.
+const fn spec(word: usize) -> Option<(u32, u32)> {
+    match (word as u64) * 4 {
+        0x000 => Some((0x0000_0000, 0x0000_00FF)), // CLK_CFG
+        0x004 => Some((0x0000_FF00, 0x03FF_FFFF)), // TIMER0_CFG0
+        0x008 => Some((0x0000_0000, 0x0000_001F)), // TIMER0_CFG1
+        0x00C => Some((0x0000_0000, 0x001F_FFFF)), // TIMER0_SYNC
+        0x010 => Some((0x0000_0000, 0x0000_0000)), // TIMER0_STATUS (RO)
+        0x014 => Some((0x0000_FF00, 0x03FF_FFFF)), // TIMER1_CFG0
+        0x018 => Some((0x0000_0000, 0x0000_001F)), // TIMER1_CFG1
+        0x01C => Some((0x0000_0000, 0x001F_FFFF)), // TIMER1_SYNC
+        0x020 => Some((0x0000_0000, 0x0000_0000)), // TIMER1_STATUS (RO)
+        0x024 => Some((0x0000_FF00, 0x03FF_FFFF)), // TIMER2_CFG0
+        0x028 => Some((0x0000_0000, 0x0000_001F)), // TIMER2_CFG1
+        0x02C => Some((0x0000_0000, 0x001F_FFFF)), // TIMER2_SYNC
+        0x030 => Some((0x0000_0000, 0x0000_0000)), // TIMER2_STATUS (RO)
+        0x034 => Some((0x0000_0000, 0x0000_0FFF)), // TIMER_SYNCI_CFG
+        0x038 => Some((0x0000_0000, 0x0000_003F)), // OPERATOR_TIMERSEL
+        // Operator 0 @ 0x03C, operator 1 @ 0x074, operator 2 @ 0x0AC.
+        0x03C | 0x074 | 0x0AC => Some((0x0000_0000, 0x0000_03FF)), // CMPRx_CFG
+        0x040 | 0x078 | 0x0B0 => Some((0x0000_0000, 0x0000_FFFF)), // CMPRx_VALUE0
+        0x044 | 0x07C | 0x0B4 => Some((0x0000_0000, 0x0000_FFFF)), // CMPRx_VALUE1
+        0x048 | 0x080 | 0x0B8 => Some((0x0000_0000, 0x0000_03FF)), // GENx_CFG0
+        0x04C | 0x084 | 0x0BC => Some((0x0000_0020, 0x0000_FFFF)), // GENx_FORCE
+        0x050 | 0x088 | 0x0C0 => Some((0x0000_0000, 0x00FF_FFFF)), // GENx_A
+        0x054 | 0x08C | 0x0C4 => Some((0x0000_0000, 0x00FF_FFFF)), // GENx_B
+        0x058 | 0x090 | 0x0C8 => Some((0x0001_8000, 0x0003_FFFF)), // DBx_CFG
+        0x05C | 0x094 | 0x0CC => Some((0x0000_0000, 0x0000_FFFF)), // DBx_FED_CFG
+        0x060 | 0x098 | 0x0D0 => Some((0x0000_0000, 0x0000_FFFF)), // DBx_RED_CFG
+        0x064 | 0x09C | 0x0D4 => Some((0x0000_0000, 0x0000_3FFF)), // CHOPPERx_CFG
+        0x068 | 0x0A0 | 0x0D8 => Some((0x0000_0000, 0x00FF_FFFF)), // TZx_CFG0
+        0x06C | 0x0A4 | 0x0DC => Some((0x0000_0000, 0x0000_001F)), // TZx_CFG1
+        0x070 | 0x0A8 | 0x0E0 => Some((0x0000_0000, 0x0000_0000)), // TZx_STATUS (RO)
+        0x0E4 => Some((0x0000_0000, 0x0000_003F)),                 // FAULT_DETECT
+        0x0E8 => Some((0x0000_0000, 0x0000_003F)),                 // CAP_TIMER_CFG
+        0x0EC => Some((0x0000_0000, 0xFFFF_FFFF)),                 // CAP_TIMER_PHASE
+        0x0F0..=0x0F8 => Some((0x0000_0000, 0x0000_1FFF)),         // CAP_CH0..2_CFG
+        0x0FC..=0x108 => Some((0x0000_0000, 0x0000_0000)),         // CAP_CH0..2, CAP_STATUS (RO)
+        0x10C => Some((0x0000_0055, 0x0000_00FF)),                 // UPDATE_CFG
+        0x110 => Some((0x0000_0000, 0x3FFF_FFFF)),                 // INT_ENA
+        0x114 => Some((0x0000_0000, 0x3FFF_FFFF)),                 // INT_RAW
+        0x118 => Some((0x0000_0000, 0x0000_0000)),                 // INT_ST (RO)
+        0x11C => Some((0x0000_0000, 0x3FFF_FFFF)),                 // INT_CLR (WO)
+        0x120 => Some((0x0000_0000, 0x0000_0001)),                 // CLK (CLK_EN)
+        0x124 => Some((0x0150_9110, 0x0FFF_FFFF)),                 // VERSION
+        _ => None,
+    }
+}
+
+/// One operator: two comparators + masked generator/dead-time words.
 #[derive(Debug, Clone, Copy, Default)]
 struct OperatorState {
     stmp_cfg: u32,
@@ -268,6 +338,17 @@ struct OperatorState {
     gen_b: u32,
     dt_cfg: u32,
     dt_fed: u32,
+}
+
+impl OperatorState {
+    fn reset() -> Self {
+        Self {
+            // SVD resets: GENx_FORCE = 0x20, DBx_CFG = 0x1_8000; the rest 0.
+            gen_force: 0x0000_0020,
+            dt_cfg: 0x0001_8000,
+            ..Self::default()
+        }
+    }
 }
 
 /// ESP32-S3 MCPWM unit — 3 timers, 3 operators, one interrupt source.
@@ -284,10 +365,12 @@ pub struct Esp32s3Mcpwm {
     int_raw: u32,
     int_ena: u32,
 
-    /// Verbatim store for the remaining (round-trip-only) registers in the
-    /// window — sync-input cfg, operator-timer-sel, fault-handler, carrier,
-    /// capture, etc. Keeps the peripheral lossless without inventing behaviour.
-    overflow: BTreeMap<u64, u32>,
+    /// Masked register file for the remaining architected registers —
+    /// sync-input cfg, operator-timer-sel, dead-time RED, chopper,
+    /// trip-zone/fault, capture, UPDATE_CFG, VERSION. Seeded from `spec()`
+    /// resets; writes apply the SVD writable mask. Word-indexed; the
+    /// FSM-modeled offsets are dispatched before this file is consulted.
+    extras: [u32; NWORDS],
 }
 
 impl Esp32s3Mcpwm {
@@ -302,15 +385,44 @@ impl Esp32s3Mcpwm {
     /// Construct with an explicit CPU clock (mirrors `Esp32s3TimerGroup::new`'s
     /// clock argument; the prescaler maths is sim-tick-relative).
     pub fn new_with_clock(base_source_id: u32, cpu_clock_hz: u32) -> Self {
+        let mut extras = [0u32; NWORDS];
+        let mut w = 0;
+        while w < NWORDS {
+            if let Some((reset, _)) = spec(w) {
+                extras[w] = reset;
+            }
+            w += 1;
+        }
         Self {
             intr_source_id: base_source_id,
             cpu_clock_hz,
             clk_cfg: 0,
             timers: [TimerState::new(); NUM_TIMERS],
-            operators: [OperatorState::default(); NUM_OPERATORS],
+            operators: [OperatorState::reset(); NUM_OPERATORS],
             int_raw: 0,
             int_ena: 0,
-            overflow: BTreeMap::new(),
+            extras,
+        }
+    }
+
+    /// Read from the masked register file (architected non-FSM registers);
+    /// holes and offsets past VERSION read zero.
+    fn extra(&self, offset: u64) -> u32 {
+        let w = (offset / 4) as usize;
+        if w < NWORDS && spec(w).is_some() {
+            self.extras[w]
+        } else {
+            0
+        }
+    }
+
+    /// Masked store into the register file; holes ignore writes.
+    fn set_extra_masked(&mut self, offset: u64, value: u32) {
+        let w = (offset / 4) as usize;
+        if w < NWORDS {
+            if let Some((_, wmask)) = spec(w) {
+                self.extras[w] = (self.extras[w] & !wmask) | (value & wmask);
+            }
         }
     }
 
@@ -377,7 +489,7 @@ impl Esp32s3Mcpwm {
                 OP_GEN_B => self.operators[op].gen_b,
                 OP_DT_CFG => self.operators[op].dt_cfg,
                 OP_DT_FED => self.operators[op].dt_fed,
-                _ => self.overflow.get(&offset).copied().unwrap_or(0),
+                _ => self.extra(offset),
             };
         }
         match offset {
@@ -385,27 +497,26 @@ impl Esp32s3Mcpwm {
             REG_INT_RAW => self.int_raw,
             REG_INT_ST => self.int_raw & self.int_ena,
             REG_INT_CLR => 0, // write-only
-            _ => self.overflow.get(&offset).copied().unwrap_or(0),
+            _ => self.extra(offset),
         }
     }
 
     fn write_word(&mut self, offset: u64, value: u32) {
         if offset == REG_CLK_CFG {
-            self.clk_cfg = value;
+            self.clk_cfg = value & CLK_PRESCALE_MASK;
             return;
         }
         if let Some((t, reg)) = Self::timer_at(offset) {
             match reg {
-                TIMER_CFG0 => self.timers[t].cfg0 = value,
+                TIMER_CFG0 => self.timers[t].cfg0 = value & 0x03FF_FFFF,
                 TIMER_CFG1 => {
                     let was_running = self.timers[t].running();
-                    self.timers[t].cfg1 = value;
+                    self.timers[t].cfg1 = value & 0x0000_001F;
                     // On a fresh start, seed the direction from the count mode
                     // and reset the fractional accumulator so timing is
                     // deterministic from the start edge.
                     if !was_running && self.timers[t].running() {
-                        self.timers[t].counting_down =
-                            self.timers[t].mode() == TIMER_MODE_DOWN;
+                        self.timers[t].counting_down = self.timers[t].mode() == TIMER_MODE_DOWN;
                         self.timers[t].accum = 0;
                         if self.timers[t].mode() == TIMER_MODE_DOWN {
                             // Down mode begins from the period value.
@@ -413,7 +524,7 @@ impl Esp32s3Mcpwm {
                         }
                     }
                 }
-                TIMER_SYNC => self.timers[t].sync = value,
+                TIMER_SYNC => self.timers[t].sync = value & 0x001F_FFFF,
                 TIMER_STATUS => {} // read-only
                 _ => {}
             }
@@ -421,31 +532,29 @@ impl Esp32s3Mcpwm {
         }
         if let Some((op, reg)) = Self::operator_at(offset) {
             match reg {
-                OP_STMP_CFG => self.operators[op].stmp_cfg = value,
+                OP_STMP_CFG => self.operators[op].stmp_cfg = value & 0x0000_03FF,
                 OP_CMPR_VALUE0 => self.operators[op].cmpr_value0 = value & CMPR_VALUE_MASK,
                 OP_CMPR_VALUE1 => self.operators[op].cmpr_value1 = value & CMPR_VALUE_MASK,
-                OP_GEN_CFG0 => self.operators[op].gen_cfg0 = value,
-                OP_GEN_FORCE => self.operators[op].gen_force = value,
-                OP_GEN_A => self.operators[op].gen_a = value,
-                OP_GEN_B => self.operators[op].gen_b = value,
-                OP_DT_CFG => self.operators[op].dt_cfg = value,
-                OP_DT_FED => self.operators[op].dt_fed = value,
-                _ => {
-                    self.overflow.insert(offset, value);
-                }
+                OP_GEN_CFG0 => self.operators[op].gen_cfg0 = value & 0x0000_03FF,
+                OP_GEN_FORCE => self.operators[op].gen_force = value & 0x0000_FFFF,
+                OP_GEN_A => self.operators[op].gen_a = value & 0x00FF_FFFF,
+                OP_GEN_B => self.operators[op].gen_b = value & 0x00FF_FFFF,
+                OP_DT_CFG => self.operators[op].dt_cfg = value & 0x0003_FFFF,
+                OP_DT_FED => self.operators[op].dt_fed = value & 0x0000_FFFF,
+                _ => self.set_extra_masked(offset, value),
             }
             return;
         }
         match offset {
-            REG_INT_ENA => self.int_ena = value & INT_MODELED_MASK,
+            // ENA stores all 30 architected bits (SVD wmask); the model only
+            // ever RAISES the modeled events, so extra enables are inert.
+            REG_INT_ENA => self.int_ena = value & INT_WMASK,
             // INT_RAW is HW-set; firmware may force modeled bits (some drivers
             // do for self-test). Restrict to modeled bits.
             REG_INT_RAW => self.int_raw = value & INT_MODELED_MASK,
-            REG_INT_ST => {} // read-only
+            REG_INT_ST => {}                       // read-only
             REG_INT_CLR => self.int_raw &= !value, // W1C
-            _ => {
-                self.overflow.insert(offset, value);
-            }
+            _ => self.set_extra_masked(offset, value),
         }
     }
 
@@ -700,7 +809,8 @@ mod tests {
         assert_eq!(p.read_u32(REG_CLK_CFG).unwrap(), 0x0000_0007);
 
         // CFG0 / CFG1 round-trip verbatim for each timer, independently.
-        p.write_u32(timer_off(1, TIMER_CFG0), cfg0(3, 1000)).unwrap();
+        p.write_u32(timer_off(1, TIMER_CFG0), cfg0(3, 1000))
+            .unwrap();
         p.write_u32(timer_off(1, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         assert_eq!(p.read_u32(timer_off(1, TIMER_CFG0)).unwrap(), cfg0(3, 1000));
@@ -708,9 +818,9 @@ mod tests {
             p.read_u32(timer_off(1, TIMER_CFG1)).unwrap(),
             cfg1(TIMER_MODE_UP, 2)
         );
-        // Timer 0 untouched.
-        assert_eq!(p.read_u32(timer_off(0, TIMER_CFG0)).unwrap(), 0);
-        // SYNC round-trips.
+        // Timer 0 untouched — still at the SVD reset (PERIOD=0xFF).
+        assert_eq!(p.read_u32(timer_off(0, TIMER_CFG0)).unwrap(), 0x0000_FF00);
+        // SYNC stores within its 21-bit mask.
         p.write_u32(timer_off(2, TIMER_SYNC), 0xABCD).unwrap();
         assert_eq!(p.read_u32(timer_off(2, TIMER_SYNC)).unwrap(), 0xABCD);
     }
@@ -722,10 +832,11 @@ mod tests {
         p.write_u32(op_off(0, OP_CMPR_VALUE1), 0x0000_5678).unwrap();
         assert_eq!(p.read_u32(op_off(0, OP_CMPR_VALUE0)).unwrap(), 0x1234);
         assert_eq!(p.read_u32(op_off(0, OP_CMPR_VALUE1)).unwrap(), 0x5678);
-        // Other operator words round-trip verbatim.
+        // Other operator words store under their SVD write masks:
+        // GEN_A is 24 bits wide, DT_CFG 18 bits.
         p.write_u32(op_off(2, OP_GEN_A), 0xDEAD_BEEF).unwrap();
         p.write_u32(op_off(2, OP_DT_CFG), 0x0000_00FF).unwrap();
-        assert_eq!(p.read_u32(op_off(2, OP_GEN_A)).unwrap(), 0xDEAD_BEEF);
+        assert_eq!(p.read_u32(op_off(2, OP_GEN_A)).unwrap(), 0x00AD_BEEF);
         assert_eq!(p.read_u32(op_off(2, OP_DT_CFG)).unwrap(), 0x0000_00FF);
     }
 
@@ -737,14 +848,18 @@ mod tests {
         for _ in 0..500 {
             p.tick();
         }
-        assert_eq!(p.read_word(timer_off(0, TIMER_STATUS)) & TIMER_STATUS_VALUE_MASK, 0);
+        assert_eq!(
+            p.read_word(timer_off(0, TIMER_STATUS)) & TIMER_STATUS_VALUE_MASK,
+            0
+        );
     }
 
     #[test]
     fn up_mode_counter_advances_at_prescale_rate() {
         let mut p = new_unit(); // cpu_per_apb == 1
                                 // prescale 0 → div (0+1)*(clk0+1)=1 → 1 count/tick. period large.
-        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000)).unwrap();
+        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000))
+            .unwrap();
         p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         for _ in 0..5 {
@@ -762,7 +877,8 @@ mod tests {
     fn timer_prescale_divides_count_rate() {
         let mut p = new_unit();
         // timer prescale 3 → (3+1)=4 ticks per count.
-        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(3, 10_000)).unwrap();
+        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(3, 10_000))
+            .unwrap();
         p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         for _ in 0..40 {
@@ -775,7 +891,8 @@ mod tests {
     fn clk_prescale_divides_count_rate() {
         let mut p = new_unit();
         p.write_u32(REG_CLK_CFG, 1).unwrap(); // (1+1) = 2 ticks per count
-        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000)).unwrap();
+        p.write_u32(timer_off(0, TIMER_CFG0), cfg0(0, 10_000))
+            .unwrap();
         p.write_u32(timer_off(0, TIMER_CFG1), cfg1(TIMER_MODE_UP, 2))
             .unwrap();
         for _ in 0..20 {
@@ -796,11 +913,19 @@ mod tests {
         p.tick();
         p.tick();
         assert_eq!(p.timer_value(0), 3);
-        assert_ne!(p.read_word(REG_INT_RAW) & int_tep_bit(0), 0, "TEP latched at period");
+        assert_ne!(
+            p.read_word(REG_INT_RAW) & int_tep_bit(0),
+            0,
+            "TEP latched at period"
+        );
         // Next tick wraps to 0 → TEZ latches.
         p.tick();
         assert_eq!(p.timer_value(0), 0);
-        assert_ne!(p.read_word(REG_INT_RAW) & int_tez_bit(0), 0, "TEZ latched at zero");
+        assert_ne!(
+            p.read_word(REG_INT_RAW) & int_tez_bit(0),
+            0,
+            "TEZ latched at zero"
+        );
     }
 
     #[test]
@@ -846,7 +971,8 @@ mod tests {
     #[test]
     fn int_clr_is_write_one_to_clear() {
         let mut p = new_unit();
-        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(1)).unwrap();
+        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(1))
+            .unwrap();
         assert_eq!(p.read_word(REG_INT_RAW), int_tez_bit(0) | int_tep_bit(1));
         // Clear only the TEZ bit.
         p.write_u32(REG_INT_CLR, int_tez_bit(0)).unwrap();
@@ -858,7 +984,8 @@ mod tests {
     #[test]
     fn int_st_masks_raw_with_ena() {
         let mut p = new_unit();
-        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(0)).unwrap();
+        p.write_u32(REG_INT_RAW, int_tez_bit(0) | int_tep_bit(0))
+            .unwrap();
         p.write_u32(REG_INT_ENA, int_tep_bit(0)).unwrap();
         assert_eq!(p.read_word(REG_INT_ST), int_tep_bit(0));
     }
@@ -893,7 +1020,10 @@ mod tests {
                 break;
             }
         }
-        assert!(fired, "TEP IRQ should reach the matrix source while enabled");
+        assert!(
+            fired,
+            "TEP IRQ should reach the matrix source while enabled"
+        );
     }
 
     #[test]
@@ -905,14 +1035,44 @@ mod tests {
     }
 
     #[test]
-    fn overflow_offsets_round_trip_and_are_lossless() {
+    fn register_file_is_svd_masked_and_holes_do_not_round_trip() {
         let mut p = new_unit();
-        // An unmodeled offset within the window (e.g. OPERATOR_TIMERSEL 0x038).
+        // OPERATOR_TIMERSEL (0x038) stores under its 6-bit mask.
         p.write_u32(0x038, 0x0000_0024).unwrap();
         assert_eq!(p.read_u32(0x038).unwrap(), 0x0000_0024);
-        // Byte access composes too.
-        p.write(0x038, 0xAB).unwrap();
-        assert_eq!(p.read(0x038).unwrap(), 0xAB);
+        p.write_u32(0x038, 0xFFFF_FFFF).unwrap();
+        assert_eq!(p.read_u32(0x038).unwrap(), 0x0000_003F, "6-bit wmask");
+        // UPDATE_CFG / VERSION carry their SVD resets.
+        assert_eq!(p.read_u32(0x10C).unwrap(), 0x0000_0055, "UPDATE_CFG reset");
+        assert_eq!(p.read_u32(0x124).unwrap(), 0x0150_9110, "VERSION reset");
+        // RO registers (CAP_CH0, TZ0_STATUS) ignore writes.
+        for off in [0x0FCu64, 0x070] {
+            p.write_u32(off, 0xFFFF_FFFF).unwrap();
+            assert_eq!(p.read_u32(off).unwrap(), 0, "RO at {off:#x}");
+        }
+        // Offsets past the architected map read 0 and do NOT round-trip —
+        // the coverage probe's baseline depends on it.
+        for off in [0x128u64, 0x200, 0xFFC] {
+            p.write_u32(off, 0xDEAD_BEEF).unwrap();
+            assert_eq!(p.read_u32(off).unwrap(), 0, "hole at {off:#x}");
+        }
+    }
+
+    #[test]
+    fn operator_stride_matches_silicon() {
+        // Per the SVD: CMPR1_CFG @ 0x074, CMPR2_CFG @ 0x0AC (stride 0x38).
+        assert_eq!(op_off(1, OP_STMP_CFG), 0x074);
+        assert_eq!(op_off(2, OP_STMP_CFG), 0x0AC);
+        // CMPR1_VALUE0 @ 0x078 must hit operator 1's comparator — with the
+        // old 0x24 stride this address decoded into the wrong operator.
+        let mut p = new_unit();
+        p.write_u32(0x078, 0x1234).unwrap();
+        assert_eq!(p.operators[1].cmpr_value0, 0x1234);
+        // And silicon's CHOPPER0_CFG (0x064) must NOT alias any comparator.
+        p.write_u32(0x064, 0x5A5A).unwrap();
+        assert_eq!(p.operators[0].cmpr_value0, 0, "no alias into op0");
+        assert_eq!(p.operators[1].cmpr_value0, 0x1234, "op1 untouched");
+        assert_eq!(p.read_u32(0x064).unwrap(), 0x1A5A, "CHOPPER0 14-bit mask");
     }
 
     #[test]
