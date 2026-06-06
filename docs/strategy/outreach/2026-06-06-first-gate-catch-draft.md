@@ -1,8 +1,8 @@
 # Draft — "The simulation gate's first catch was our own CI" (proof-artifact note)
 
-**Status:** DRAFT, do not publish until the gate is green on main (run 3 pending) and
-the claim below is re-verified against the final logs. Per wedge v2 rule: no claim
-without its artifact.
+**Status:** DRAFT — gate confirmed green on main (run 27049922536, success, sim step
+55s). Facts below verified against final logs. Publishable when the user signs off;
+per wedge v2 rule the headline write-up still waits for a real firmware-logic catch.
 
 **Artifacts:** SpiceDispenser commits dc8057c → 141224b; GH Actions runs
 27049765671 (fail) / 27049922536 (fix); sim-gate.log artifacts on both runs.
