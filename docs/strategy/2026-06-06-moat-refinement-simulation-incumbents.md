@@ -69,8 +69,21 @@ The 2026-06-05/06 S3 sessions proved an uncomfortable fact: **an agent + SVD + t
 4. **MCP v2 = fleet primitives:** the 11 tools are single-session; agents need spawn-N-instances, deterministic seeds, coverage/trace artifacts as tool outputs. (Counter to Wokwi's experimental flag while it's still experimental.)
 5. Funded-model-development lane (Antmicro precedent): a customer pays for chip X bring-up; code lands public, their fixtures/validation stay private to them. Revenue without closing anything.
 
-## 5. Decision record
+## 5. Wedge v2 (post-roast, same day)
+
+The §4 wedge ("agent execution substrate for firmware teams") failed the roast on four counts: (a) the agent-firmware workload barely exists yet — the only entities running it in anger are embedder/bootloop, i.e. competitors; (b) the fidelity lead (MCPWM/I2C/SPI/LEDC/SENS) is orthogonal to the modal S3 firmware's critical path (WiFi/BLE/USB — unsimulated here, WiFi full-stack at Wokwi); (c) "self-hosted unmetered MIT" un-monetizes itself — nothing excludable was named; (d) **zero documented cases of labwired catching a real bug in real user firmware** — the MCPWM stride find was a bug in our own model. Instant-completion semantics (SPI in 0 cycles, ADC constant 0x800) can *hide* the timing bugs buyers fear; the honest catch-class today is driver bring-up / register misuse / init ordering — real, narrow, undemonstrated.
+
+**Revised wedge — prove it on ourselves, then sell the story:**
+
+1. **Dogfood-proof:** "An agent developed, tested, and shipped firmware for a real, shipping product (SpiceDispenser) with the simulator as its only hardware." The dispense path is I2C/PCA9685/servo — squarely inside the fidelity lead, no WiFi dependency. Deliverables: labwired gate in the SpiceDispenser firmware CI (rom-boot + dispense-path assertion on every PR); first real regression caught in CI → write-up; demo video of the loop.
+2. **Named beachhead, not "firmware teams":** driver-bringup CI for the S3 peripherals QEMU stubs and Wokwi lacks — motor control (MCPWM), sensors (I2C/SENS), addressable-LED/RMT. Findable buyers (ESP32 robotics/mechatronics), demos that don't die at `esp_wifi_init()`.
+3. **The excludable thing, in one sentence:** *the workbench is free; the worker and the proof are paid.* Self-host the simulator forever; pay for (a) the closed-loop firmware agent product on top (06-03 doc expansion #1), (b) hosted fleet + golden-trace/regression-corpus service, (c) funded chip bring-up, (d) support SLA. $19/seat attaches to (a)/(b), never to the MIT engine.
+4. **WiFi/BLE is the acknowledged ceiling**, scoped out of the wedge explicitly; S3 radio twin (reusing the classic-ESP32 SimNet work) is the post-wedge expansion that unlocks the modal IoT segment.
+5. **Proof-artifact bar for all marketing:** no claim ships without its artifact — the badge page launches only when ≥1 real-firmware-bug write-up exists, so the trust surface never outruns the evidence (the same truth-discipline as the coverage probe).
+
+## 6. Decision record
 
 - **labwired-core stays public MIT.** Closing it protects the wrong layer, kills the trust wedge against Wokwi's closed core, and can't retract what's published (everything through PR #176 is out, 2 forks exist).
-- Moat = §2 ranking; investment order = §4.
+- Moat = §2 ranking; go-to-market = §5 wedge v2 (dogfood-proof first, named beachhead, excludable = agent product + hosted proof services); §4 items re-ordered beneath it.
 - Revisit trigger: a competitor publishes silicon-validation evidence, or a paying customer demands a private chip model (then use §4.5 lane, not relicensing).
+- Next concrete action: labwired gate in SpiceDispenser firmware CI (wedge deliverable 1).
