@@ -184,8 +184,16 @@ const CONFIG_REGS: &[(u64, u32, u32)] = &[
     (OFF_IDLE_CONF, RESET_IDLE_CONF, MASK_IDLE_CONF),
     (OFF_RS485_CONF, RESET_RS485_CONF, MASK_RS485_CONF),
     (OFF_AT_CMD_PRECNT, RESET_AT_CMD_PRECNT, MASK_AT_CMD_PRECNT),
-    (OFF_AT_CMD_POSTCNT, RESET_AT_CMD_POSTCNT, MASK_AT_CMD_POSTCNT),
-    (OFF_AT_CMD_GAPTOUT, RESET_AT_CMD_GAPTOUT, MASK_AT_CMD_GAPTOUT),
+    (
+        OFF_AT_CMD_POSTCNT,
+        RESET_AT_CMD_POSTCNT,
+        MASK_AT_CMD_POSTCNT,
+    ),
+    (
+        OFF_AT_CMD_GAPTOUT,
+        RESET_AT_CMD_GAPTOUT,
+        MASK_AT_CMD_GAPTOUT,
+    ),
     (OFF_AT_CMD_CHAR, RESET_AT_CMD_CHAR, MASK_AT_CMD_CHAR),
     (OFF_MEM_CONF, RESET_MEM_CONF, MASK_MEM_CONF),
     (OFF_CLK_CONF, RESET_CLK_CONF, MASK_CLK_CONF),
@@ -635,13 +643,37 @@ mod tests {
         assert_eq!(u.read_u32(OFF_CONF0).unwrap(), 0x1000_001C, "CONF0 reset");
         assert_eq!(u.read_u32(OFF_CONF1).unwrap(), 0x0001_8060, "CONF1 reset");
         assert_eq!(u.read_u32(OFF_CLKDIV).unwrap(), 0x0000_02B6, "CLKDIV reset");
-        assert_eq!(u.read_u32(OFF_SWFC_CONF0).unwrap(), 0x0000_4CE0, "SWFC_CONF0 reset");
-        assert_eq!(u.read_u32(OFF_AT_CMD_CHAR).unwrap(), 0x0000_032B, "AT_CMD_CHAR reset");
-        assert_eq!(u.read_u32(OFF_MEM_CONF).unwrap(), 0x0014_0012, "MEM_CONF reset");
-        assert_eq!(u.read_u32(OFF_CLK_CONF).unwrap(), 0x0370_1000, "CLK_CONF reset");
+        assert_eq!(
+            u.read_u32(OFF_SWFC_CONF0).unwrap(),
+            0x0000_4CE0,
+            "SWFC_CONF0 reset"
+        );
+        assert_eq!(
+            u.read_u32(OFF_AT_CMD_CHAR).unwrap(),
+            0x0000_032B,
+            "AT_CMD_CHAR reset"
+        );
+        assert_eq!(
+            u.read_u32(OFF_MEM_CONF).unwrap(),
+            0x0014_0012,
+            "MEM_CONF reset"
+        );
+        assert_eq!(
+            u.read_u32(OFF_CLK_CONF).unwrap(),
+            0x0370_1000,
+            "CLK_CONF reset"
+        );
         assert_eq!(u.read_u32(OFF_DATE).unwrap(), 0x0200_8270, "DATE reset");
-        assert_eq!(u.read_u32(OFF_ID).unwrap(), 0x4000_0500, "ID reset (HW-validated)");
-        assert_eq!(u.read_u32(OFF_IDLE_CONF).unwrap(), 0x0004_0100, "IDLE_CONF reset");
+        assert_eq!(
+            u.read_u32(OFF_ID).unwrap(),
+            0x4000_0500,
+            "ID reset (HW-validated)"
+        );
+        assert_eq!(
+            u.read_u32(OFF_IDLE_CONF).unwrap(),
+            0x0004_0100,
+            "IDLE_CONF reset"
+        );
     }
 
     #[test]
@@ -649,29 +681,69 @@ mod tests {
         let mut u = Esp32s3Uart::new(false, 27);
         // RX_FILT: mask=0x1FF
         u.write_u32(OFF_RX_FILT, 0xFFFF_FFFF).unwrap();
-        assert_eq!(u.read_u32(OFF_RX_FILT).unwrap(), 0x0000_01FF, "RX_FILT masked to 9 bits");
+        assert_eq!(
+            u.read_u32(OFF_RX_FILT).unwrap(),
+            0x0000_01FF,
+            "RX_FILT masked to 9 bits"
+        );
         // FLOW_CONF: mask=0x3F
         u.write_u32(OFF_FLOW_CONF, 0xFFFF_FFFF).unwrap();
-        assert_eq!(u.read_u32(OFF_FLOW_CONF).unwrap(), 0x0000_003F, "FLOW_CONF masked to 6 bits");
+        assert_eq!(
+            u.read_u32(OFF_FLOW_CONF).unwrap(),
+            0x0000_003F,
+            "FLOW_CONF masked to 6 bits"
+        );
         // RS485_CONF: mask=0x3FF
         u.write_u32(OFF_RS485_CONF, 0xFFFF_FFFF).unwrap();
-        assert_eq!(u.read_u32(OFF_RS485_CONF).unwrap(), 0x0000_03FF, "RS485_CONF masked to 10 bits");
+        assert_eq!(
+            u.read_u32(OFF_RS485_CONF).unwrap(),
+            0x0000_03FF,
+            "RS485_CONF masked to 10 bits"
+        );
     }
 
     #[test]
     fn uart_readonly_status_registers() {
         let mut u = Esp32s3Uart::new(false, 27);
         // Read constants match SVD reset values.
-        assert_eq!(u.read_u32(OFF_LOWPULSE).unwrap(), 0x0000_0FFF, "LOWPULSE constant");
-        assert_eq!(u.read_u32(OFF_HIGHPULSE).unwrap(), 0x0000_0FFF, "HIGHPULSE constant");
-        assert_eq!(u.read_u32(OFF_POSPULSE).unwrap(), 0x0000_0FFF, "POSPULSE constant");
-        assert_eq!(u.read_u32(OFF_NEGPULSE).unwrap(), 0x0000_0FFF, "NEGPULSE constant");
-        assert_eq!(u.read_u32(OFF_MEM_RX_STATUS).unwrap(), 0x0010_0200, "MEM_RX_STATUS constant");
+        assert_eq!(
+            u.read_u32(OFF_LOWPULSE).unwrap(),
+            0x0000_0FFF,
+            "LOWPULSE constant"
+        );
+        assert_eq!(
+            u.read_u32(OFF_HIGHPULSE).unwrap(),
+            0x0000_0FFF,
+            "HIGHPULSE constant"
+        );
+        assert_eq!(
+            u.read_u32(OFF_POSPULSE).unwrap(),
+            0x0000_0FFF,
+            "POSPULSE constant"
+        );
+        assert_eq!(
+            u.read_u32(OFF_NEGPULSE).unwrap(),
+            0x0000_0FFF,
+            "NEGPULSE constant"
+        );
+        assert_eq!(
+            u.read_u32(OFF_MEM_RX_STATUS).unwrap(),
+            0x0010_0200,
+            "MEM_RX_STATUS constant"
+        );
         // Writes are ignored; read returns unchanged constant.
         u.write_u32(OFF_LOWPULSE, 0xDEAD_BEEF).unwrap();
-        assert_eq!(u.read_u32(OFF_LOWPULSE).unwrap(), 0x0000_0FFF, "LOWPULSE unchanged after write");
+        assert_eq!(
+            u.read_u32(OFF_LOWPULSE).unwrap(),
+            0x0000_0FFF,
+            "LOWPULSE unchanged after write"
+        );
         u.write_u32(OFF_MEM_RX_STATUS, 0xDEAD_BEEF).unwrap();
-        assert_eq!(u.read_u32(OFF_MEM_RX_STATUS).unwrap(), 0x0010_0200, "MEM_RX_STATUS unchanged after write");
+        assert_eq!(
+            u.read_u32(OFF_MEM_RX_STATUS).unwrap(),
+            0x0010_0200,
+            "MEM_RX_STATUS unchanged after write"
+        );
     }
 
     #[test]

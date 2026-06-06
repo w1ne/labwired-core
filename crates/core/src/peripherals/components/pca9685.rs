@@ -148,7 +148,7 @@ mod tests {
     fn set_angle(d: &mut Pca9685, ch: u8, deg: f64) {
         let us = 500.0 + (deg / 180.0) * 1900.0;
         let ticks = (us / 20000.0 * 4096.0) as u16;
-        let base = (0x06 + 4 * ch) as u8;
+        let base = 0x06 + 4 * ch;
         d.start();
         d.write(base); // pointer
         d.write(0x00); // ON_L

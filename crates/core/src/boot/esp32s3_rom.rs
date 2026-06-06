@@ -51,7 +51,11 @@ fn build_window(elf: &Elf, bytes: &[u8], base: u32, size: usize, by_paddr: bool)
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
             continue;
         }
-        let addr = if by_paddr { ph.p_paddr as u32 } else { ph.p_vaddr as u32 };
+        let addr = if by_paddr {
+            ph.p_paddr as u32
+        } else {
+            ph.p_vaddr as u32
+        };
         if addr >= base && addr < win_end {
             let rel = (addr - base) as usize;
             let off = ph.p_offset as usize;
@@ -131,8 +135,7 @@ fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_bas
         let dst_e = u32::from_le_bytes(irom[off + 4..off + 8].try_into().unwrap());
         let src = u32::from_le_bytes(irom[off + 8..off + 12].try_into().unwrap());
         let term = u32::from_le_bytes(irom[off + 12..off + 16].try_into().unwrap());
-        let ok = DRAM_LO <= dst_s
-            && dst_s < DRAM_HI
+        let ok = (DRAM_LO..DRAM_HI).contains(&dst_s)
             && dst_s <= dst_e
             && dst_e < DRAM_HI
             && irom_base <= src
@@ -281,14 +284,14 @@ mod tests {
         elf[4] = 1; // ELFCLASS32
         elf[5] = 1; // little-endian
         elf[6] = 1; // version
-        // e_type=ET_EXEC(2), e_machine=94 (Xtensa), e_version=1
+                    // e_type=ET_EXEC(2), e_machine=94 (Xtensa), e_version=1
         elf[16..18].copy_from_slice(&2u16.to_le_bytes());
         elf[18..20].copy_from_slice(&94u16.to_le_bytes());
         elf[20..24].copy_from_slice(&1u32.to_le_bytes());
         elf[28..32].copy_from_slice(&e_phoff.to_le_bytes()); // e_phoff
         elf[42..44].copy_from_slice(&e_phentsize.to_le_bytes()); // e_phentsize
         elf[44..46].copy_from_slice(&1u16.to_le_bytes()); // e_phnum = 1
-        // program header (ELF32): type, offset, vaddr, paddr, filesz, memsz, flags, align
+                                                          // program header (ELF32): type, offset, vaddr, paddr, filesz, memsz, flags, align
         let ph = e_phoff as usize;
         elf[ph..ph + 4].copy_from_slice(&1u32.to_le_bytes()); // PT_LOAD
         elf[ph + 4..ph + 8].copy_from_slice(&p_offset.to_le_bytes());
@@ -371,8 +374,7 @@ mod tests {
         elf[sh_data_off as usize..sh_data_off as usize + s].copy_from_slice(sh_payload);
 
         // ---- String table ----
-        elf[strtab_off as usize..strtab_off as usize + strtab_len as usize]
-            .copy_from_slice(strtab);
+        elf[strtab_off as usize..strtab_off as usize + strtab_len as usize].copy_from_slice(strtab);
 
         // ---- Section headers ----
         // [0] SHT_NULL — all zeros (already zero)
@@ -459,7 +461,7 @@ mod tests {
         ph_payload[4..8].copy_from_slice(&dst_e.to_le_bytes());
         ph_payload[8..12].copy_from_slice(&src.to_le_bytes());
         ph_payload[12..16].copy_from_slice(&0u32.to_le_bytes()); // term = 0
-        // src slot at payload[0x20..0x28] — left as zero initially
+                                                                 // src slot at payload[0x20..0x28] — left as zero initially
 
         // ph_paddr = IROM_BASE (so the PT_LOAD lands at window offset 0)
         // ph_vaddr = anything outside DROM (so DROM doesn't see it)

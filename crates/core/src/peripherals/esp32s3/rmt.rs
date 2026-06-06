@@ -832,8 +832,15 @@ mod tests {
         r.write(0x06, 0xAD).unwrap();
         r.write(0x07, 0xDE).unwrap();
         // The newest entry is the complete word, and that is what reads see.
-        assert_eq!(r.read_word(0x04), 0xDEAD_BEEF, "final assembled word readable");
-        assert_eq!(r.ch_mem[1][3], 0xDEAD_BEEF, "complete word landed at slot 3");
+        assert_eq!(
+            r.read_word(0x04),
+            0xDEAD_BEEF,
+            "final assembled word readable"
+        );
+        assert_eq!(
+            r.ch_mem[1][3], 0xDEAD_BEEF,
+            "complete word landed at slot 3"
+        );
         // Four byte-writes → four pushes of the evolving entry; the pointer is
         // sane and no index ever went out of range.
         assert_eq!(r.ch_wr[1], 4, "one push per byte-write RMW");

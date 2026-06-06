@@ -795,11 +795,11 @@ fn run_firmware(args: RunArgs) -> ExitCode {
         // the 2nd-stage bootloader + app and jumps to it — same path as
         // silicon. No fast_boot, no ELF pre-load, no handshake pre-paint.
         let _ = &elf_bytes; // ELF used only for symbol/diagnostic context
-        // --rom-boot runs the genuine boot ROM. The ROM is auto-provisioned from
-        // the installed toolchain by configure_xtensa_esp32s3 (or pinned via
-        // LABWIRED_ESP32S3_ROM/_DROM); we only need the flash image here. If no
-        // real ROM was resolved we are in harness mode, where --rom-boot is
-        // meaningless — fail clearly.
+                            // --rom-boot runs the genuine boot ROM. The ROM is auto-provisioned from
+                            // the installed toolchain by configure_xtensa_esp32s3 (or pinned via
+                            // LABWIRED_ESP32S3_ROM/_DROM); we only need the flash image here. If no
+                            // real ROM was resolved we are in harness mode, where --rom-boot is
+                            // meaningless — fail clearly.
         if boot_mode != Esp32s3BootMode::Faithful {
             eprintln!(
                 "error: --rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
@@ -809,7 +809,9 @@ fn run_firmware(args: RunArgs) -> ExitCode {
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
         if std::env::var("LABWIRED_ESP32S3_FLASH").is_err() {
-            eprintln!("error: --rom-boot needs LABWIRED_ESP32S3_FLASH set (the firmware flash image)");
+            eprintln!(
+                "error: --rom-boot needs LABWIRED_ESP32S3_FLASH set (the firmware flash image)"
+            );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
         eprintln!(
@@ -914,9 +916,9 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     let watch_mem: Vec<u32> = args.watch_mem.iter().filter_map(|s| parse_hex(s)).collect();
     let mut break_hit = vec![false; break_at.len()]; // PRO_CPU first-hit flags
     let mut break_hit1 = vec![false; break_at.len()]; // APP_CPU first-hit flags
-    // On the first time a core's PC reaches a --break-at address, dump its
-    // a0..a15 + window state and the --watch-mem words. Covers both cores so an
-    // APP_CPU fault is observable too.
+                                                      // On the first time a core's PC reaches a --break-at address, dump its
+                                                      // a0..a15 + window state and the --watch-mem words. Covers both cores so an
+                                                      // APP_CPU fault is observable too.
     macro_rules! check_break {
         ($c:expr, $pc:expr, $hits:expr) => {
             if let Some(bi) = break_at.iter().position(|&b| b == $pc) {
@@ -949,8 +951,14 @@ fn run_firmware(args: RunArgs) -> ExitCode {
     if !break_at.is_empty() {
         eprintln!(
             "labwired-cli run: breakpoints {:?} watch-mem {:?}",
-            break_at.iter().map(|a| format!("0x{a:08x}")).collect::<Vec<_>>(),
-            watch_mem.iter().map(|a| format!("0x{a:08x}")).collect::<Vec<_>>(),
+            break_at
+                .iter()
+                .map(|a| format!("0x{a:08x}"))
+                .collect::<Vec<_>>(),
+            watch_mem
+                .iter()
+                .map(|a| format!("0x{a:08x}"))
+                .collect::<Vec<_>>(),
         );
     }
 

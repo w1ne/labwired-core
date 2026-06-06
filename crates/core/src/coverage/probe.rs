@@ -90,14 +90,21 @@ fn compute_baseline(target: &mut dyn ProbeTarget, regs: &[ProbeReg], window_size
     let mut write_roundtrips = false;
     for &o in &unmapped {
         let orig = target.probe_read(o).unwrap_or(read);
-        let s = if read == SENTINEL { SENTINEL_ALT } else { SENTINEL };
+        let s = if read == SENTINEL {
+            SENTINEL_ALT
+        } else {
+            SENTINEL
+        };
         if target.probe_write(o, s) && target.probe_read(o) == Some(s) {
             write_roundtrips = true;
         }
         target.probe_write(o, orig);
     }
 
-    Baseline { read, write_roundtrips }
+    Baseline {
+        read,
+        write_roundtrips,
+    }
 }
 
 fn mode(vals: &[u32]) -> u32 {
@@ -136,9 +143,7 @@ fn classify(target: &mut dyn ProbeTarget, reg: &ProbeReg, base: &Baseline) -> Re
     // tests confirm those registers.
     if base.write_roundtrips {
         RegStatus::Indeterminate
-    } else if retains {
-        RegStatus::Modelled
-    } else if read_distinct {
+    } else if retains || read_distinct {
         RegStatus::Modelled
     } else {
         match reg.access {
@@ -204,7 +209,12 @@ mod tests {
     }
 
     fn rw(name: &str, offset: u64) -> ProbeReg {
-        ProbeReg { name: name.into(), offset, access: Access::ReadWrite, reset_value: 0 }
+        ProbeReg {
+            name: name.into(),
+            offset,
+            access: Access::ReadWrite,
+            reset_value: 0,
+        }
     }
 
     #[test]
@@ -214,7 +224,11 @@ mod tests {
         let regs = vec![rw("CTRL", 0x00), rw("DATA", 0x04)];
         let out = probe_peripheral(&mut m, &regs, 0x100);
         assert_eq!(out[0].status, RegStatus::Modelled, "CTRL retains writes");
-        assert_eq!(out[1].status, RegStatus::Unmodelled, "DATA is accept-and-ignore");
+        assert_eq!(
+            out[1].status,
+            RegStatus::Unmodelled,
+            "DATA is accept-and-ignore"
+        );
     }
 
     #[test]
@@ -222,12 +236,21 @@ mod tests {
         struct ResetModel;
         impl ProbeTarget for ResetModel {
             fn probe_read(&self, offset: u64) -> Option<u32> {
-                if offset == 0x08 { Some(0x11) } else { Some(0) }
+                if offset == 0x08 {
+                    Some(0x11)
+                } else {
+                    Some(0)
+                }
             }
-            fn probe_write(&mut self, _o: u64, _v: u32) -> bool { true }
+            fn probe_write(&mut self, _o: u64, _v: u32) -> bool {
+                true
+            }
         }
         let regs = vec![ProbeReg {
-            name: "SR".into(), offset: 0x08, access: Access::ReadOnly, reset_value: 0x11,
+            name: "SR".into(),
+            offset: 0x08,
+            access: Access::ReadOnly,
+            reset_value: 0x11,
         }];
         let out = probe_peripheral(&mut ResetModel, &regs, 0x100);
         assert_eq!(out[0].status, RegStatus::Modelled);
@@ -238,15 +261,20 @@ mod tests {
         let mut s = StorageStub::default();
         let regs = vec![rw("CTRL", 0x00), rw("DATA", 0x04)];
         let out = probe_peripheral(&mut s, &regs, 0x100);
-        assert!(out.iter().all(|r| r.status == RegStatus::Indeterminate),
-            "generic storage must score Indeterminate, never Modelled");
+        assert!(
+            out.iter().all(|r| r.status == RegStatus::Indeterminate),
+            "generic storage must score Indeterminate, never Modelled"
+        );
     }
 
     #[test]
     fn readonly_zero_reset_reading_catchall_is_indeterminate() {
         let mut m = RealModel::default();
         let regs = vec![ProbeReg {
-            name: "STATUS".into(), offset: 0x0C, access: Access::ReadOnly, reset_value: 0,
+            name: "STATUS".into(),
+            offset: 0x0C,
+            access: Access::ReadOnly,
+            reset_value: 0,
         }];
         let out = probe_peripheral(&mut m, &regs, 0x100);
         assert_eq!(out[0].status, RegStatus::Indeterminate);
@@ -259,29 +287,46 @@ mod tests {
         let mut s = StorageStub::default();
         s.mem.insert(0x08, 0x11); // pre-written, coincides with reset_value below
         let regs = vec![ProbeReg {
-            name: "MAGIC".into(), offset: 0x08, access: Access::ReadOnly, reset_value: 0x11,
+            name: "MAGIC".into(),
+            offset: 0x08,
+            access: Access::ReadOnly,
+            reset_value: 0x11,
         }];
         let out = probe_peripheral(&mut s, &regs, 0x100);
-        assert_ne!(out[0].status, RegStatus::Modelled,
-            "generic storage must never score Modelled, even when a cell holds the reset value");
+        assert_ne!(
+            out[0].status,
+            RegStatus::Modelled,
+            "generic storage must never score Modelled, even when a cell holds the reset value"
+        );
     }
 
     #[test]
     fn register_with_only_even_bit_writable_scores_modelled() {
         // A RW register where the only writable bit is one that 0xA5A5_A5A5 writes
         // as 0 must still be detected as Modelled (two-sentinel retention).
-        struct Bit1Only { v: u32 }
+        struct Bit1Only {
+            v: u32,
+        }
         impl ProbeTarget for Bit1Only {
             fn probe_read(&self, offset: u64) -> Option<u32> {
-                if offset == 0x00 { Some(self.v) } else { Some(0) }
+                if offset == 0x00 {
+                    Some(self.v)
+                } else {
+                    Some(0)
+                }
             }
             fn probe_write(&mut self, offset: u64, value: u32) -> bool {
-                if offset == 0x00 { self.v = value & 0b10; } // only bit 1 writable
+                if offset == 0x00 {
+                    self.v = value & 0b10;
+                } // only bit 1 writable
                 true
             }
         }
         let regs = vec![ProbeReg {
-            name: "CFG".into(), offset: 0x00, access: Access::ReadWrite, reset_value: 0,
+            name: "CFG".into(),
+            offset: 0x00,
+            access: Access::ReadWrite,
+            reset_value: 0,
         }];
         let out = probe_peripheral(&mut Bit1Only { v: 0 }, &regs, 0x100);
         assert_eq!(out[0].status, RegStatus::Modelled,
