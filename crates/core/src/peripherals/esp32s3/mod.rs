@@ -28,6 +28,7 @@ pub mod rom_thunks;
 pub mod rsa;
 pub mod sar_adc;
 pub mod sdmmc;
+pub mod sens;
 pub mod sha;
 pub mod spi_mem_flash;
 pub mod system;

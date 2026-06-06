@@ -1197,6 +1197,22 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(RtcCntlStub::new()),
     );
+    // ── SENS (DR_REG_SENS_BASE, 0x6000_8800) ─────────────────────────────
+    // Faithful register file for the RTC-domain SAR-ADC / touch / TSENS
+    // controller + immediate SAR1/SAR2 oneshot completion (the IDF oneshot
+    // ADC driver busy-polls MEAS*_DONE_SAR). Registered AFTER the broad
+    // round-tripping `rtc_cntl` stub above: by the bus router's
+    // greatest-start-wins containment lookup this narrower window takes the
+    // SENS block while the stub keeps serving the rest of the RTC range.
+    // The window is exactly 0x400 — the gap up to RTC_I2C @ 0x6000_8C00 —
+    // so the neighbouring RTC_IO / RTC_I2C blocks stay on the stub.
+    bus.add_peripheral(
+        "sens_s3",
+        0x6000_8800,
+        0x400,
+        None,
+        Box::new(crate::peripherals::esp32s3::sens::Esp32s3Sens::new()),
+    );
     bus.add_peripheral(
         "efuse",
         0x6000_7000,
