@@ -1,10 +1,14 @@
 {
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",
-    "source_rev": "b508acdb09e3e1be97fc7527cf142e709ccecab7"
+    "source_rev": "c11a2b1a1baf77de7785f23797309ed486157c47"
   },
   "esp32s3.elf": {
     "sha256": "27a61f851c798edbf2dabc38526cf4ca9211ab51a89387baba9faa1936060a5f",
-    "source_rev": "b508acdb09e3e1be97fc7527cf142e709ccecab7"
+    "source_rev": "c11a2b1a1baf77de7785f23797309ed486157c47"
+  },
+  "esp32.elf": {
+    "sha256": "ce936666617ee8b3e8cfffeeaca39df2138e62edb84efeb6036d2782e3f3e730",
+    "source_rev": "c11a2b1a1baf77de7785f23797309ed486157c47"
   }
 }

@@ -733,6 +733,88 @@ fn main() -> ExitCode {
     }
 }
 
+/// Fast-boot an ESP32-classic (LX6) ELF and run the step loop.
+///
+/// Mirrors the pattern in `crates/core/tests/e2e_esp32_epaper.rs`:
+/// `configure_xtensa_esp32` + ELF load + set_pc(entry) + set_sp + step loop.
+/// UART0 (0x3FF4_0000, STM32F1 layout, echo_stdout=true) carries the TIER1
+/// protocol lines to the tier1 harness via stdout.
+fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
+    use labwired_core::bus::SystemBus;
+    use labwired_core::system::xtensa::configure_xtensa_esp32;
+    use labwired_core::SimulationError;
+
+    // Read the firmware ELF.
+    let elf_bytes = match std::fs::read(&args.firmware) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "error: cannot read firmware ELF at {:?}: {e}",
+                args.firmware
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let image = match labwired_loader::load_elf_bytes(&elf_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            eprintln!("error: failed to parse ELF: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let mut bus = SystemBus::new();
+    let mut cpu = configure_xtensa_esp32(&mut bus);
+
+    // Load ELF segments into bus memory (IRAM/DRAM/flash windows).
+    for segment in &image.segments {
+        for (i, &byte) in segment.data.iter().enumerate() {
+            let addr = segment.start_addr + i as u64;
+            let _ = bus.write_u8(addr, byte);
+        }
+    }
+
+    // Set PC to ELF entry and seed SP at top of SRAM1 (post-BROM default on
+    // real silicon; see e2e_external_arduino_esp32_in_sim for the rationale).
+    cpu.set_pc(image.entry_point as u32);
+    cpu.set_sp(0x3FFE_0000);
+    // Post-bootloader PS state: WOE=1 (windowed ABI), INTLEVEL=0, EXCM=0.
+    cpu.ps = labwired_core::cpu::xtensa_regs::Ps::from_raw(1 << 18);
+
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
+    let config = labwired_core::SimulationConfig::default();
+    let mut steps = 0u64;
+
+    while steps < limit {
+        match cpu.step(&mut bus, &observers, &config) {
+            Ok(()) => {}
+            Err(SimulationError::BreakpointHit(_)) => break,
+            Err(SimulationError::ExceptionRaised { cause, pc }) => {
+                eprintln!(
+                    "labwired-cli run (esp32): ExceptionRaised cause={cause} at 0x{pc:08x}"
+                );
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+            Err(e) => {
+                eprintln!(
+                    "labwired-cli run (esp32): simulator error at pc=0x{:08x}: {e}",
+                    cpu.get_pc(),
+                );
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+        bus.tick_peripherals_with_costs();
+        steps += 1;
+    }
+    eprintln!(
+        "labwired-cli run (esp32): reached --max-steps {limit}; pc=0x{:08x}",
+        cpu.get_pc(),
+    );
+    ExitCode::from(EXIT_PASS)
+}
+
 fn run_firmware(args: RunArgs) -> ExitCode {
     use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
     use labwired_core::bus::SystemBus;
@@ -747,6 +829,11 @@ fn run_firmware(args: RunArgs) -> ExitCode {
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+    // ESP32-classic (LX6) fast-boot path. Dispatches before the LX7 guard
+    // so the tier1 matrix harness can run esp32.elf without rom-boot.
+    if chip_yaml.contains("xtensa-lx6") {
+        return run_firmware_esp32(&args);
+    }
     if !chip_yaml.contains("xtensa-lx7") {
         eprintln!(
             "error: chip {:?} does not look like an Xtensa LX7 chip; \
