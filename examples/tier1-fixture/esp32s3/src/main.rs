@@ -74,10 +74,11 @@ fn uart0_write_byte(byte: u8) {
 
     // Bounded poll for FIFO space (deterministic sim — fixed iterations).
     for _ in 0..1_000_000 {
-        if (reg_read(STATUS) >> 16) & 0x3FF < TXFIFO_LEN {
+        if ((reg_read(STATUS) >> 16) & 0x3FF) < TXFIFO_LEN {
             break;
         }
     }
+    // On timeout, write anyway; a garbled line beats a hung fixture.
     reg_write(FIFO, byte as u32);
 }
 
@@ -211,9 +212,10 @@ fn check_timer() -> Result<(), &'static str> {
 // TRM §9.4: INTERRUPT_CORE0_<source>_MAP_REG @ INTMATRIX_BASE + 4*source_id;
 // the register holds the CPU interrupt slot (bits [4:0]). Use a real source
 // row: I2C_EXT0 = ETS_I2C_EXT0_INTR_SOURCE = 42. This proves the matrix
-// wiring (slot binding round-trips); delivery is covered elsewhere. The
-// binding stays inert: every check here polls INT_RAW with INT_ENA = 0, so
-// no source ever asserts.
+// wiring (slot binding round-trips); delivery is covered by
+// `crates/core/tests/intmatrix_alarm.rs` (SYSTIMER alarm → intmatrix → CPU
+// vector). The binding stays inert: every check here polls INT_RAW with
+// INT_ENA = 0, so no source ever asserts.
 fn check_irq() -> Result<(), &'static str> {
     const I2C_EXT0_SOURCE: u32 = 42;
     const MAP_REG: u32 = INTMATRIX_BASE + 4 * I2C_EXT0_SOURCE;
@@ -281,7 +283,7 @@ fn check_dma() -> Result<(), &'static str> {
         return Err("gdma-conf-roundtrip");
     }
 
-    let (src_addr, dst_addr, tx_desc_addr, rx_desc_addr, src, dst) = unsafe {
+    let (src_addr, dst_addr, tx_desc_addr, rx_desc_addr, len) = unsafe {
         let src = &raw mut DMA_SRC;
         let dst = &raw mut DMA_DST;
         let len = (*src).len() as u32;
@@ -297,11 +299,9 @@ fn check_dma() -> Result<(), &'static str> {
             dst as u32,
             (&raw const DMA_TX_DESC) as u32,
             (&raw const DMA_RX_DESC) as u32,
-            &*src,
-            &*dst,
+            len,
         )
     };
-    let _ = (src_addr, dst_addr);
 
     reg_write(IN_INT_CLR, 0xFFFF_FFFF);
     reg_write(OUT_INT_CLR, 0xFFFF_FFFF);
@@ -318,8 +318,16 @@ fn check_dma() -> Result<(), &'static str> {
     if !eof {
         return Err("gdma-eof-timeout");
     }
-    // EOF alone is not a transfer: the bytes must actually have moved.
-    if src.iter().zip(dst.iter()).all(|(a, b)| a == b) {
+    // EOF alone is not a transfer: the bytes must actually have moved. Both
+    // buffers are read VOLATILE through the raw pointers — a DMA write is
+    // invisible to the compiler, so a plain read of DMA_DST could be folded
+    // to its all-zero initializer and freeze this check at
+    // `gdma-no-m2m-model` even after the model gains real m2m moves.
+    let moved = (0..len).all(|i| unsafe {
+        core::ptr::read_volatile((src_addr + i) as *const u8)
+            == core::ptr::read_volatile((dst_addr + i) as *const u8)
+    });
+    if moved {
         Ok(())
     } else {
         Err("gdma-no-m2m-model")
