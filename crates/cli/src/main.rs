@@ -862,9 +862,7 @@ fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(_)) => break,
             Err(SimulationError::ExceptionRaised { cause, pc }) => {
-                eprintln!(
-                    "labwired-cli run (esp32): ExceptionRaised cause={cause} at 0x{pc:08x}"
-                );
+                eprintln!("labwired-cli run (esp32): ExceptionRaised cause={cause} at 0x{pc:08x}");
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
             Err(e) => {

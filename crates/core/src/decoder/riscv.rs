@@ -481,12 +481,20 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                         0 => {
                             // C.SRLI: rd = rd >> shamt
                             let shamt = (((inst >> 12) & 0x1) << 5) | ((inst >> 2) & 0x1F);
-                            Instruction::Srli { rd, rs1: rd, shamt: shamt as u8 }
+                            Instruction::Srli {
+                                rd,
+                                rs1: rd,
+                                shamt: shamt as u8,
+                            }
                         }
                         1 => {
                             // C.SRAI: rd = rd >>> shamt (arithmetic)
                             let shamt = (((inst >> 12) & 0x1) << 5) | ((inst >> 2) & 0x1F);
-                            Instruction::Srai { rd, rs1: rd, shamt: shamt as u8 }
+                            Instruction::Srai {
+                                rd,
+                                rs1: rd,
+                                shamt: shamt as u8,
+                            }
                         }
                         2 => {
                             // C.ANDI: rd = rd & sign_extend(imm[5:0])
@@ -496,7 +504,11 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                             } else {
                                 imm as i32
                             };
-                            Instruction::Andi { rd, rs1: rd, imm: signed_imm }
+                            Instruction::Andi {
+                                rd,
+                                rs1: rd,
+                                imm: signed_imm,
+                            }
                         }
                         3 => {
                             // R-type ops: C.SUB, C.XOR, C.OR, C.AND (bit[12]=0)
@@ -510,7 +522,7 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                                 match funct {
                                     0 => Instruction::Sub { rd, rs1: rd, rs2 },
                                     1 => Instruction::Xor { rd, rs1: rd, rs2 },
-                                    2 => Instruction::Or  { rd, rs1: rd, rs2 },
+                                    2 => Instruction::Or { rd, rs1: rd, rs2 },
                                     3 => Instruction::And { rd, rs1: rd, rs2 },
                                     _ => Instruction::Unknown(inst as u32),
                                 }
@@ -536,7 +548,7 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                               | (((inst >> 7) & 0x1) << 6)    // offset[6]
                               | (((inst >> 6) & 0x1) << 7)    // offset[7]
                               | (((inst >> 3) & 0x7) << 1)    // offset[3:1]
-                              | (((inst >> 2) & 0x1) << 5);   // offset[5]
+                              | (((inst >> 2) & 0x1) << 5); // offset[5]
                     let signed_imm = if (imm & 0x800) != 0 {
                         (imm as i32) | !0xFFF
                     } else {

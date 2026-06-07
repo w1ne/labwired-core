@@ -47,8 +47,13 @@ pub struct Cell {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tier1Matrix(pub BTreeMap<String, BTreeMap<String, Cell>>);
 
-/// The six rubric classes every chip reports.
-pub const RUBRIC_CLASSES: &[&str] = &["clock", "gpio", "uart", "timer", "dma", "irq"];
+/// The standard classes every chip's row carries: the six bring-up rubric
+/// classes plus the typical MCU peripheral set. Classes a chip doesn't declare
+/// render `na`; classes a fixture hasn't attempted yet render `unrecorded`.
+pub const RUBRIC_CLASSES: &[&str] = &[
+    "clock", "gpio", "uart", "timer", "dma", "irq", // bring-up rubric
+    "i2c", "spi", "adc", "pwm", "wdt", "rtc", // typical peripherals
+];
 
 /// Parsed `TIER1` protocol from a UART capture.
 #[derive(Debug, Default)]
@@ -67,6 +72,21 @@ pub struct ParsedTier1 {
 /// `TIER1` lines are ignored (never fatal — boot noise is expected). Leading and
 /// trailing whitespace on each token is normalised by `split_whitespace`; CRLF
 /// line endings are handled by `lines()`.
+/// Printed-class aliases: fixtures may report a chip-specific peripheral name
+/// that maps onto a standard column (the ESP32-S3 fixture prints `mcpwm`, that
+/// chip's PWM block). Applied at parse time so committed fixture blobs keep
+/// working as columns standardize.
+const CLASS_ALIASES: &[(&str, &str)] = &[("mcpwm", "pwm"), ("ledc", "pwm")];
+
+fn canonical_class(class: &str) -> String {
+    for (alias, std) in CLASS_ALIASES {
+        if class == *alias {
+            return (*std).to_string();
+        }
+    }
+    class.to_string()
+}
+
 pub fn parse_tier1_uart(uart: &[u8]) -> ParsedTier1 {
     let mut out = ParsedTier1::default();
     for line in String::from_utf8_lossy(uart).lines() {
@@ -77,10 +97,11 @@ pub fn parse_tier1_uart(uart: &[u8]) -> ParsedTier1 {
         match (it.next(), it.next()) {
             (Some("done"), _) => out.done = true,
             (Some(class), Some("PASS")) => {
-                out.classes.insert(class.to_string(), CellStatus::Pass);
+                out.classes.insert(canonical_class(class), CellStatus::Pass);
             }
             (Some(class), Some("FAIL")) => {
-                out.classes.insert(class.to_string(), CellStatus::Blocked);
+                out.classes
+                    .insert(canonical_class(class), CellStatus::Blocked);
             }
             _ => {} // malformed TIER1 line — ignore
         }
@@ -98,8 +119,10 @@ impl ParsedTier1 {
     ///   done` line over UART is itself the proof of a working UART channel.
     ///   `!classes.is_empty()` is **not** required.
     /// - Missing `done` degrades every reported Pass to Partial (hung
-    ///   mid-sequence).
-    /// - Classes never reported are Blocked.
+    ///   mid-sequence), and classes never reported are Blocked (the fixture
+    ///   hung before reaching them).
+    /// - With `done` seen, classes never reported are Unrecorded — the fixture
+    ///   simply doesn't attempt them yet; no claim either way.
     pub fn resolve_row(&self, classes: &[&str]) -> BTreeMap<String, Cell> {
         let mut row = BTreeMap::new();
         for &class in classes {
@@ -117,7 +140,10 @@ impl ParsedTier1 {
                 match self.classes.get(class) {
                     Some(CellStatus::Pass) if !self.done => CellStatus::Partial,
                     Some(s) => *s,
-                    None => CellStatus::Blocked,
+                    // Not attempted by this fixture: no claim either way. The
+                    // ratchet flags pass->unrecorded if a check is removed.
+                    None if self.done => CellStatus::Unrecorded,
+                    None => CellStatus::Blocked, // hung before reaching it
                 }
             };
             row.insert(
@@ -137,6 +163,7 @@ impl ParsedTier1 {
 /// is added.
 const CLASS_MARKERS: &[(&str, &str)] = &[
     ("uart", "uart"),
+    ("usart", "uart"),      // STM32 naming: usart1 does not substring-match "uart"
     ("usb_serial", "uart"), // S3 console can be USB-Serial-JTAG
     ("gpio", "gpio"),
     ("timg", "timer"),
@@ -151,8 +178,19 @@ const CLASS_MARKERS: &[(&str, &str)] = &[
     ("clk", "clock"),
     ("rtc_cntl", "clock"),
     ("system", "clock"),
-    ("mcpwm", "mcpwm"),
     ("i2c", "i2c"),
+    ("spi", "spi"),
+    ("sar_adc", "adc"),
+    ("adc", "adc"),
+    ("mcpwm", "pwm"),
+    ("ledc", "pwm"),
+    ("pwm", "pwm"),
+    ("iwdg", "wdt"),
+    ("wwdg", "wdt"),
+    ("wdt", "wdt"),
+    // NOTE: "rtc_cntl" -> clock is matched FIRST (listed above); bare "rtc"
+    // ids map to the rtc class.
+    ("rtc", "rtc"),
     ("rmt", "rmt"),
 ];
 
@@ -277,7 +315,7 @@ pub const TIER1_TARGETS: &[Tier1Target] = &[
         // Real ROM + bootloader + app + self-tests. Measured: the full TIER1
         // transcript lands between 16M and 24M steps; 30M = measured + headroom.
         max_steps: 30_000_000,
-        extra_classes: &["mcpwm", "i2c", "rmt"],
+        extra_classes: &["rmt"],
     },
     fast_boot(
         "esp32",
@@ -634,7 +672,9 @@ mod tests {
         let parsed = parse_tier1_uart(b"TIER1 done\n");
         let row = parsed.resolve_row(&["uart", "gpio"]);
         assert_eq!(row["uart"].status, CellStatus::Pass);
-        assert_eq!(row["gpio"].status, CellStatus::Blocked);
+        // Unattempted class with done seen: no claim (NOT blocked) — blocked
+        // is reserved for explicit FAILs and hung-before-done sequences.
+        assert_eq!(row["gpio"].status, CellStatus::Unrecorded);
     }
 
     #[test]
