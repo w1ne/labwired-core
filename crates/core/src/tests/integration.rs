@@ -1973,5 +1973,4 @@ pub mod integration_tests {
             "Should have executed one instruction (thumb)"
         );
     }
-
 }

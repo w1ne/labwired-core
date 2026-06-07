@@ -202,7 +202,9 @@ fn esp32_brom_loads_and_executes() {
     // Last-N PC ring buffer so we can dump the trail right before any fault.
     let trail_len = 32usize;
     let mut pc_trail: std::collections::VecDeque<u32> = std::collections::VecDeque::new();
+    let mut steps_executed = 0usize;
     for i in 0..1_000_000 {
+        steps_executed = i + 1;
         let pc_now = machine.cpu.get_pc();
         pc_trail.push_back(pc_now);
         if pc_trail.len() > trail_len {
@@ -278,6 +280,15 @@ fn esp32_brom_loads_and_executes() {
         eprintln!("  0x{:08x}: {} cycles", pc, count);
     }
 
-    // The smoke test passes if we got past the loader; the diagnostic
-    // output above is the actual Phase 1 deliverable.
+    eprintln!("[BROM] steps_executed={}", steps_executed);
+    // Floor set at 50% of the observed 12 947-step run. If BROM regresses
+    // (e.g. an unimplemented opcode now faults immediately) this fires fast.
+    const STEP_FLOOR: usize = 6_400;
+    assert!(
+        steps_executed >= STEP_FLOOR,
+        "BROM smoke ran only {} steps before stalling (floor {}); \
+         a regression likely caused an early abort — check the step_err above",
+        steps_executed,
+        STEP_FLOOR
+    );
 }

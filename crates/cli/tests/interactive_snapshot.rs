@@ -41,5 +41,24 @@ fn test_cli_interactive_writes_snapshot() {
     let regs = snapshot["cpu"]["registers"].as_array().unwrap();
     assert_eq!(regs.len(), 16);
 
+    // PC must be in the CI-fixture flash range (linked near 0x400).
+    let pc = snapshot["cpu"]["pc"]
+        .as_u64()
+        .expect("cpu.pc must be numeric");
+    assert!(
+        (0x400..0x1_0000).contains(&pc),
+        "PC 0x{pc:08x} is not in the expected flash range [0x400, 0x10000)"
+    );
+
+    // SP is registers[13] and must be in the RAM region.
+    let sp = regs[13]
+        .as_u64()
+        .expect("SP (registers[13]) must be numeric");
+    assert!(
+        (0x2000_0000..0x2100_0000).contains(&sp),
+        "SP 0x{sp:08x} is not in expected RAM range [0x20000000, 0x21000000)"
+    );
+
+    eprintln!("[interactive_snapshot] pc=0x{pc:08x}  sp=0x{sp:08x}");
     let _ = std::fs::remove_file(&snapshot_path);
 }

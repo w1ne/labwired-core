@@ -64,6 +64,47 @@ fn test_asset_import_fixtures() {
             svd_path
         );
 
+        // Parse the output and assert structural correctness.
+        let json_str = fs::read_to_string(&output_path)
+            .unwrap_or_else(|e| panic!("read output JSON for {svd_path:?}: {e}"));
+        let json: serde_json::Value =
+            serde_json::from_str(&json_str).expect("output JSON must parse");
+
+        let peripherals = json["peripherals"]
+            .as_object()
+            .expect("peripherals must be an object");
+        assert!(
+            !peripherals.is_empty(),
+            "imported SVD {svd_path:?} has 0 peripherals in output JSON"
+        );
+
+        // Every peripheral must have >= 1 register with a sane (>0) address.
+        let mut found_register_with_address = false;
+        for (pname, peripheral) in peripherals {
+            let regs = peripheral["registers"]
+                .as_array()
+                .unwrap_or_else(|| panic!("peripheral {pname} missing registers array"));
+            if regs.is_empty() {
+                continue;
+            }
+            for reg in regs {
+                // base_address is on the peripheral; offset is on the register.
+                let base = peripheral["base_address"].as_u64().unwrap_or(0);
+                let offset = reg["offset"].as_u64().unwrap_or(0);
+                if base + offset > 0 {
+                    found_register_with_address = true;
+                    break;
+                }
+            }
+            if found_register_with_address {
+                break;
+            }
+        }
+        assert!(
+            found_register_with_address,
+            "no peripheral register with a sane (>0) address found in imported {svd_path:?}"
+        );
+
         // Basic clean up
         let _ = fs::remove_file(output_path);
     }

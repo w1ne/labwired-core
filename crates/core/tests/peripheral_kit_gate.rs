@@ -130,7 +130,10 @@ fn manifest_json_matches_registry() {
     // (for monorepo dev where live edits should be caught immediately).
     let manifest_path = if let Ok(p) = std::env::var("LABWIRED_PERIPHERALS_MANIFEST") {
         let p = PathBuf::from(p);
-        assert!(p.exists(), "LABWIRED_PERIPHERALS_MANIFEST={p:?} does not exist");
+        assert!(
+            p.exists(),
+            "LABWIRED_PERIPHERALS_MANIFEST={p:?} does not exist"
+        );
         p
     } else {
         // Check live parent-repo copies first (monorepo dev).
@@ -146,8 +149,7 @@ fn manifest_json_matches_registry() {
         let live = live_candidates.into_iter().flatten().find(|p| p.exists());
         live.unwrap_or_else(|| {
             // Fall back to the vendored snapshot committed in this repo.
-            workspace_root()
-                .join("crates/core/tests/fixtures/peripherals/manifest.json")
+            workspace_root().join("crates/core/tests/fixtures/peripherals/manifest.json")
         })
     };
     assert!(

@@ -894,114 +894,124 @@ fn run_riscv_firmware(
     (machine.cpu.get_pc(), uart_bytes)
 }
 
+/// Lookup a `SurvivalCase` by name. Panics immediately if the name is not
+/// found, so index-drift bugs fail at the test boundary rather than silently
+/// running the wrong case.
+fn case_by_name(name: &str) -> &'static SurvivalCase {
+    SURVIVAL_CASES
+        .iter()
+        .find(|c| c.name == name)
+        .unwrap_or_else(|| panic!("no SurvivalCase named {name:?}"))
+}
+
 #[test]
 fn test_stm32f103_blinky_survival() {
-    run_survival_case(&SURVIVAL_CASES[0]);
+    run_survival_case(case_by_name("stm32f103_blinky"));
 }
 
 #[test]
 fn test_stm32f401_blinky_survival() {
-    run_survival_case(&SURVIVAL_CASES[1]);
+    run_survival_case(case_by_name("stm32f401_blinky"));
 }
 
 #[test]
 fn test_rp2040_demo_survival() {
-    run_survival_case(&SURVIVAL_CASES[2]);
+    run_survival_case(case_by_name("rp2040_demo"));
 }
 
 #[test]
 fn test_nrf52840_demo_survival() {
-    run_survival_case(&SURVIVAL_CASES[3]);
+    run_survival_case(case_by_name("nrf52840_demo"));
 }
 
 #[test]
 fn test_nrf52832_demo_survival() {
-    run_survival_case(&SURVIVAL_CASES[4]);
+    run_survival_case(case_by_name("nrf52832_demo"));
 }
 
 #[test]
 fn test_stm32h563_demo_survival() {
-    run_survival_case(&SURVIVAL_CASES[5]);
+    run_survival_case(case_by_name("stm32h563_demo"));
 }
 
 #[test]
 fn test_riscv_ci_fixture_survival() {
-    run_survival_case(&SURVIVAL_CASES[6]);
+    run_survival_case(case_by_name("riscv_ci_fixture"));
 }
 
 #[test]
 fn test_esp32c3_demo_survival() {
-    run_survival_case(&SURVIVAL_CASES[7]);
+    run_survival_case(case_by_name("esp32c3_demo"));
 }
 
 #[test]
 fn test_nucleo_l476rg_smoke_survival() {
-    run_survival_case(&SURVIVAL_CASES[8]);
+    run_survival_case(case_by_name("nucleo_l476rg_smoke"));
 }
 
 #[test]
 fn test_nucleo_l476rg_spi_survival() {
-    run_survival_case(&SURVIVAL_CASES[9]);
+    run_survival_case(case_by_name("nucleo_l476rg_spi"));
 }
 
 #[test]
 fn test_nucleo_l476rg_pll_survival() {
-    run_survival_case(&SURVIVAL_CASES[10]);
+    run_survival_case(case_by_name("nucleo_l476rg_pll"));
 }
 
 #[test]
 fn test_nucleo_l476rg_misc_survival() {
-    run_survival_case(&SURVIVAL_CASES[11]);
+    run_survival_case(case_by_name("nucleo_l476rg_misc"));
 }
 
 #[test]
 fn test_nucleo_l476rg_l4periphs_survival() {
-    run_survival_case(&SURVIVAL_CASES[12]);
+    run_survival_case(case_by_name("nucleo_l476rg_l4periphs"));
 }
 
 #[test]
 fn test_nucleo_l476rg_demo_survival() {
-    run_survival_case(&SURVIVAL_CASES[13]);
+    run_survival_case(case_by_name("nucleo_l476rg_demo"));
 }
 
 #[test]
 fn test_nucleo_l476rg_dma_survival() {
-    run_survival_case(&SURVIVAL_CASES[14]);
+    run_survival_case(case_by_name("nucleo_l476rg_dma"));
 }
 
 #[test]
 fn test_nucleo_l476rg_adc_survival() {
-    run_survival_case(&SURVIVAL_CASES[15]);
+    run_survival_case(case_by_name("nucleo_l476rg_adc"));
 }
 
 #[test]
 fn test_nucleo_l476rg_i2c_survival() {
-    run_survival_case(&SURVIVAL_CASES[16]);
+    run_survival_case(case_by_name("nucleo_l476rg_i2c"));
 }
 
 #[test]
 fn test_nucleo_l476rg_l4periphs2_survival() {
-    run_survival_case(&SURVIVAL_CASES[17]);
+    run_survival_case(case_by_name("nucleo_l476rg_l4periphs2"));
 }
 
 #[test]
 fn test_nucleo_l476rg_tim1_advanced_survival() {
-    run_survival_case(&SURVIVAL_CASES[19]);
+    run_survival_case(case_by_name("nucleo_l476rg_tim1_advanced"));
 }
 
 #[test]
 fn test_nucleo_l476rg_r11_survival() {
-    run_survival_case(&SURVIVAL_CASES[20]);
+    run_survival_case(case_by_name("nucleo_l476rg_r11"));
 }
 
 #[test]
 fn test_nucleo_l476rg_r12_survival() {
-    run_survival_case(&SURVIVAL_CASES[21]);
+    run_survival_case(case_by_name("nucleo_l476rg_r12"));
 }
 
 #[test]
 fn test_nucleo_f407_smoke_survival() {
-    run_survival_case(&SURVIVAL_CASES[22]);
+    run_survival_case(case_by_name("nucleo_f407_smoke"));
 }
 
 #[test]
@@ -1009,7 +1019,7 @@ fn test_nucleo_f407_i2c_survival() {
     // Capture and print whatever sim produces — the literal in
     // SURVIVAL_CASES gets updated to match after the first run, then
     // diffed against silicon.
-    let case = &SURVIVAL_CASES[23];
+    let case = case_by_name("nucleo_f407_i2c");
     let firmware = fixtures().join(case.fixture);
     let (pc, uart) = run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES * 2);
     assert_pc_in_range(pc, SURVIVAL_CYCLES * 2, case.valid_pc_ranges);
@@ -1022,17 +1032,14 @@ fn test_nucleo_f407_i2c_survival() {
 
 #[test]
 fn test_nucleo_l073rz_smoke_survival() {
-    // Index 24: appended L073 case (see SURVIVAL_CASES). Byte-for-byte gate
-    // against real NUCLEO-L073RZ silicon — locks the stm32l0 RCC layout,
-    // CRC, DMA, and the M0+ decoder.
-    run_survival_case(&SURVIVAL_CASES[24]);
+    run_survival_case(case_by_name("nucleo_l073rz_smoke"));
 }
 
 #[test]
 fn test_nucleo_l476rg_cubemx_hal_survival() {
     // HAL flow needs more cycles than other tests because it spends most
     // of its time in HAL_Delay() polling SysTick (RVR=80_000-1).
-    let case = &SURVIVAL_CASES[18];
+    let case = case_by_name("nucleo_l476rg_cubemx_hal");
     let firmware = fixtures().join(case.fixture);
     let (pc, uart_bytes) =
         run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES * 4);

@@ -117,4 +117,26 @@ assertions: []
             i
         );
     }
+
+    // Pin specific result fields so any regression in determinism is instantly visible.
+    let steps = first["steps_executed"]
+        .as_u64()
+        .expect("steps_executed must be numeric");
+    assert_eq!(
+        steps, 1000,
+        "steps_executed must equal the configured max_steps=1000 for a deterministic run"
+    );
+
+    let firmware_hash = first["firmware_hash"].as_str().unwrap_or("");
+    assert!(
+        !firmware_hash.is_empty(),
+        "firmware_hash must be non-empty in result.json"
+    );
+    // Hash must be a 64-char hex SHA-256.
+    assert_eq!(
+        firmware_hash.len(),
+        64,
+        "firmware_hash should be a 64-char hex SHA-256, got: {firmware_hash:?}"
+    );
+    eprintln!("[determinism] steps_executed={steps}, firmware_hash={firmware_hash}");
 }

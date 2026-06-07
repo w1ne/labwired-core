@@ -236,11 +236,14 @@ fn machine_step_parity_with_no_scheduler_users() {
         let _ = machine.step();
     }
     let advanced = machine.total_cycles - before;
-    // Even if step() bails partway, the loop must produce *some* progress
-    // without panicking. Concretely: as long as the new sched code path
-    // doesn't perturb cycle accounting, this stays equal whether the flag
-    // is on or off.
-    assert!(advanced > 0, "machine.step must make progress");
+    // The comment above documents that total_cycles grows by exactly 1 per
+    // step when the stub returns a 0-cost tick. Assert the exact count so any
+    // regression in the scheduler's cycle-accounting integration fires here.
+    assert_eq!(
+        advanced, 1000,
+        "total_cycles should advance by exactly 1 per step (1000 steps = 1000 cycles); \
+         actual advance={advanced}. Scheduler or tick-cost regression detected."
+    );
 
     // Scheduler must remain inert when nobody opts in.
     assert_eq!(machine.sched.stats().past_schedule_clamps, 0);

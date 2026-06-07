@@ -68,6 +68,22 @@ fn test_cli_vcd_generation() {
         "VCD signal definitions missing"
     );
 
+    // Count $var declarations and # timestamp events.
+    let var_count = content.lines().filter(|l| l.starts_with("$var")).count();
+    assert!(
+        var_count >= 1,
+        "VCD must declare at least 1 $var signal, got {var_count}"
+    );
+    let timestamp_count = content
+        .lines()
+        .filter(|l| l.starts_with('#') && l[1..].chars().all(|c| c.is_ascii_digit()))
+        .count();
+    assert!(
+        timestamp_count >= 1,
+        "VCD must have at least 1 # timestamp event, got {timestamp_count}"
+    );
+    eprintln!("[vcd] $var count={var_count}, # timestamps={timestamp_count}");
+
     std::fs::remove_file(vcd_path).ok();
 }
 

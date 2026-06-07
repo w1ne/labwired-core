@@ -123,24 +123,105 @@ fn test_gdb_rsp_basic_commands() {
 
     // 5. Test Single Step ($s)
     send_packet(&mut stream, "s");
-    let resp = read_packet(&mut stream);
+    let step_resp = read_packet(&mut stream);
     assert!(
-        resp.contains("05"),
+        step_resp.contains("05"),
         "GDB did not return stop reply (SIGTRAP) after step. Got: {}",
-        resp
+        step_resp
     );
 
-    // 6. Verify PC Changed
-    send_packet(&mut stream, "p0f");
+    // 6. Verify PC Changed — read all registers with $g and extract PC (reg 15).
+    //    GDB RSP $g response is RLE-encoded: "X*N" means repeat X for (N - 29) times.
+    //    Expand it, then extract bytes 15*8..16*8 (PC, little-endian).
+    send_packet(&mut stream, "g");
     let resp = read_packet(&mut stream);
-    assert!(!resp.contains("E"), "Failed to read PC. Got: {}", resp);
-    let _pc_after_step = resp
+    eprintln!("[gdb_e2e] g response after step: {resp:?}");
+    assert!(
+        !resp.contains('E'),
+        "Failed to read registers after step. Got: {resp}"
+    );
+    let raw = resp
         .trim_start_matches('+')
         .trim_start_matches('$')
         .split('#')
         .next()
-        .unwrap();
-    // We don't compare values yet, just that we got a valid response.
+        .unwrap_or("")
+        .trim();
+
+    // Expand GDB RSP RLE encoding.
+    fn expand_rle(s: &str) -> String {
+        let chars: Vec<char> = s.chars().collect();
+        let mut out = String::new();
+        let mut i = 0;
+        while i < chars.len() {
+            if i + 1 < chars.len() && chars[i + 1] == '*' && i + 2 < chars.len() {
+                let repeat = chars[i + 2] as u32 - 29 + 1; // total count including the original
+                for _ in 0..repeat {
+                    out.push(chars[i]);
+                }
+                i += 3;
+            } else {
+                out.push(chars[i]);
+                i += 1;
+            }
+        }
+        out
+    }
+    let reg_hex = expand_rle(raw);
+    eprintln!(
+        "[gdb_e2e] g expanded ({} chars): {}…",
+        reg_hex.len(),
+        &reg_hex[..reg_hex.len().min(32)]
+    );
+
+    // PC is register 15; 16 ARM regs × 8 hex chars = 128 total.
+    let pc_after_step: u32 = if reg_hex.len() >= 16 * 8 {
+        let pc_le = &reg_hex[15 * 8..15 * 8 + 8];
+        u32::from_str_radix(pc_le, 16)
+            .ok()
+            .map(u32::swap_bytes)
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    eprintln!(
+        "[gdb_e2e] pc_after_step=0x{:08x} (expanded {} chars)",
+        pc_after_step,
+        reg_hex.len()
+    );
+
+    // ELF entry is 0x401 (Thumb). After one step, PC advances by at least 2.
+    assert!(
+        pc_after_step > 0x400,
+        "PC 0x{pc_after_step:08x} must have advanced beyond ELF entry 0x401 after one step"
+    );
+
+    // 6b. Read the first 4 bytes from the ELF entry region (0x400) and verify
+    //     they are non-zero (real instruction bytes, not blank flash).
+    send_packet(&mut stream, "m400,4");
+    let mem_resp = read_packet(&mut stream);
+    assert!(
+        !mem_resp.contains("E01"),
+        "Memory read at 0x400 failed: {mem_resp}"
+    );
+    let mem_hex = mem_resp
+        .trim_start_matches('+')
+        .trim_start_matches('$')
+        .split('#')
+        .next()
+        .unwrap_or("")
+        .trim();
+    assert!(
+        mem_hex.len() == 8,
+        "Expected 4 bytes (8 hex chars) from memory read, got: {mem_hex:?}"
+    );
+    // The uart-ok firmware places real Thumb-2 instructions at 0x400; they
+    // must not be all-zeros (blank flash).
+    assert!(
+        mem_hex != "00000000",
+        "Instruction bytes at 0x400 are all zero — firmware not loaded correctly"
+    );
+    eprintln!("[gdb_e2e] instruction bytes at 0x400: {mem_hex}");
 
     // 7. Test Interrupt (Pause)
     // Send we continue, then interrupt

@@ -3,6 +3,23 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Chips that have an example directory but have NOT yet received an
+/// io-smoke.yaml. This list is shrink-only: removing a chip from here when
+/// io-smoke.yaml is added is mandatory (the test fails if an allowlisted chip
+/// gains a smoke, preventing stale entries from silently accumulating).
+///
+/// Adding a new chip to this list is TEMPORARY. Update with a tracking comment
+/// and a GitHub issue number so the debt is visible.
+const SMOKE_LESS_ALLOWLIST: &[&str] = &[
+    "stm32f407",     // HIL oracle capture pending (nucleo-f407 I2C board)
+    "stm32f401cdu6", // BlackPill variant; shared smoke with stm32f401 pending
+    "stm32g474re",   // STM32G4 peripheral models in progress
+    "stm32l476",     // L476 smoke added per survival tests, io-smoke.yaml pending
+    "stm32wb55",     // BLE peripheral not yet modelled
+    "stm32wba52",    // WBA series, early onboarding
+    "esp32",         // Classic ESP32 Xtensa; separate e2e lane
+];
+
 #[test]
 fn test_strict_board_onboarding() -> anyhow::Result<()> {
     // Locate the `core` root (where Cargo.toml is)
@@ -20,6 +37,10 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
 
     let mut failed_boards = Vec::new();
     let mut unexpected_skips = Vec::new();
+    // Track which allowlisted chips we actually saw without a smoke, so we can
+    // detect when an allowlisted chip GAINS a smoke and the allowlist entry
+    // becomes stale.
+    let mut allowlisted_seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for entry in fs::read_dir(&chips_dir)? {
         let entry = entry?;
@@ -78,18 +99,31 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                 let smoke_test = dir.join("io-smoke.yaml");
 
                 if !smoke_test.exists() {
-                    // The example directory exists (chip is on-boarded) but
-                    // its io-smoke.yaml hasn't been authored yet. Treat this
-                    // as a skip rather than a hard failure — the strict gate
-                    // here is "every chip has at least an example dir."
-                    // Adding io-smoke.yaml is tracked per-board via
-                    // REQUIRED_DOCS.md / EXTERNAL_COMPONENTS.md placeholders.
-                    println!(
-                        "  [SKIP] {} — example dir present but io-smoke.yaml \
-                         not yet authored.",
-                        file_stem
-                    );
-                    continue;
+                    if SMOKE_LESS_ALLOWLIST.contains(&file_stem) {
+                        // Known gap — tracked in the allowlist. Record it so the
+                        // post-loop check can verify this chip is genuinely smoke-less.
+                        allowlisted_seen.insert(file_stem.to_string());
+                        println!(
+                            "  [SKIP] {} — in SMOKE_LESS_ALLOWLIST (io-smoke.yaml not yet authored).",
+                            file_stem
+                        );
+                        continue;
+                    } else {
+                        // NOT in the allowlist: every new chip must have an
+                        // io-smoke.yaml the moment it lands, or be added to
+                        // SMOKE_LESS_ALLOWLIST with a tracking comment.
+                        println!(
+                            "  [FAIL] {} — example dir present but no io-smoke.yaml \
+                             and chip is NOT in SMOKE_LESS_ALLOWLIST. Add the smoke \
+                             or add the chip to SMOKE_LESS_ALLOWLIST with a tracking comment.",
+                            file_stem
+                        );
+                        failed_boards.push(format!(
+                            "{} (missing io-smoke.yaml, not in allowlist)",
+                            file_stem
+                        ));
+                        continue;
+                    }
                 }
 
                 // 1.5 Build firmware if io-smoke references a workspace target output path.
@@ -136,6 +170,27 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
         return Err(anyhow::anyhow!(
             "Strict Board Onboarding has unexpected example gaps: {:?}",
             unexpected_skips
+        ));
+    }
+
+    // Shrink-only check: if an allowlisted chip now HAS an io-smoke.yaml (it
+    // passed the smoke test above and was NOT added to allowlisted_seen), it
+    // must be removed from SMOKE_LESS_ALLOWLIST. Stale allowlist entries defeat
+    // the purpose of the gate.
+    let mut stale_allowlist: Vec<&str> = Vec::new();
+    for &chip in SMOKE_LESS_ALLOWLIST {
+        if !allowlisted_seen.contains(chip as &str) {
+            // This chip is in the allowlist but was NOT seen as smoke-less.
+            // Either it gained an io-smoke.yaml (must be removed from allowlist)
+            // or its example directory no longer exists (remove from list too).
+            stale_allowlist.push(chip);
+        }
+    }
+    if !stale_allowlist.is_empty() {
+        return Err(anyhow::anyhow!(
+            "SMOKE_LESS_ALLOWLIST entries are stale (chip gained io-smoke.yaml or no \
+             longer exists): {:?}. Remove them from the allowlist in strict_onboarding.rs.",
+            stale_allowlist
         ));
     }
 

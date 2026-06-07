@@ -48,8 +48,7 @@ pub fn discover_svd() -> Option<PathBuf> {
     }
     // Fallback: vendored copy committed under tests/fixtures/svd/ so CI runs
     // the ratchet without requiring PlatformIO or the Xtensa toolchain.
-    let vendored = crate::tier1::workspace_root()
-        .join("tests/fixtures/svd/esp32s3.svd");
+    let vendored = crate::tier1::workspace_root().join("tests/fixtures/svd/esp32s3.svd");
     vendored.is_file().then_some(vendored)
 }
 
