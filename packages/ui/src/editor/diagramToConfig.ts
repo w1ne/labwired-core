@@ -206,6 +206,20 @@ const DEFAULT_CPU_HZ_BY_BOARD: Record<string, number> = {
   stm32l476: 250_000,
 };
 
+// I2C sensor/display devices the engine models, with their default bus address.
+// Building one from a diagram needs an external_devices entry plus an
+// i2c_device board_io binding (these attach by address, no chip-select line).
+const I2C_DEVICE_ADDRESSES: Record<string, number> = {
+  adxl345: 0x53,
+  mpu6050: 0x68,
+  bme280: 0x76,
+  'oled-ssd1306': 0x3c,
+};
+
+// SPI display/sensor devices the engine models, addressed by a chip-select pin
+// — same shape as the PCD8544 path below, minus the data/command line.
+const SPI_DEVICE_TYPES = new Set(['ili9341', 'max31855', 'ssd1680_tricolor_290']);
+
 /**
  * Parse an MCU pin label into { peripheral, pin } for various naming conventions.
  * Supports: PA5 (STM32), D0/A0 (Arduino), GPIO0 (ESP32), GP0 (RPi Pico), P0.00 (nRF).
@@ -276,6 +290,16 @@ export function diagramToConfig(
       if (!mcuPin) continue;
       const uart = findPinFunction(diagram.board, mcuPin, 'uart');
       if (uart) return uart.peripheral;
+    }
+    return null;
+  };
+
+  const i2cPeripheralForPart = (partId: string): string | null => {
+    for (const pinId of ['SDA', 'SCL']) {
+      const mcuPin = mcuPinForPartPin(partId, pinId);
+      if (!mcuPin) continue;
+      const i2c = findPinFunction(diagram.board, mcuPin, 'i2c');
+      if (i2c) return i2c.peripheral;
     }
     return null;
   };
@@ -356,6 +380,72 @@ export function diagramToConfig(
       com: "COM2"`);
   }
 
+  // I2C sensors/displays (ADXL345, MPU6050, BME280, SSD1306 OLED). Attach by
+  // address on the resolved I2C bus; emit both the device model and its
+  // i2c_device board_io binding so the engine wires it up.
+  for (const part of diagram.parts) {
+    const address = I2C_DEVICE_ADDRESSES[part.type];
+    if (address === undefined) continue;
+    const connection = i2cPeripheralForPart(part.id);
+    if (!connection) continue;
+    const addr = `0x${address.toString(16)}`;
+    externalDeviceEntries.push(`  - id: "${part.id}"
+    type: "${part.type}"
+    connection: "${connection}"
+    config:
+      i2c_address: ${addr}`);
+    boardIoEntries.push(`  - id: "${part.id}"
+    kind: "i2c_device"
+    peripheral: "${connection}"
+    pin: 0
+    signal: "input"
+    active_high: true
+    i2c_address: ${addr}
+    device_type: "${part.type}"`);
+  }
+
+  // SPI displays/sensors addressed by a chip-select pin (ILI9341 TFT, MAX31855
+  // thermocouple, SSD1680 tri-color e-paper). Mirrors the PCD8544 path.
+  for (const part of diagram.parts) {
+    if (!SPI_DEVICE_TYPES.has(part.type)) continue;
+    const connection = spiPeripheralForPart(part.id);
+    const csPin = mcuPinForPartPin(part.id, 'CS');
+    if (!connection || !csPin) continue;
+    externalDeviceEntries.push(`  - id: "${part.id}"
+    type: "${part.type}"
+    connection: "${connection}"
+    config:
+      cs_pin: "${csPin}"`);
+    const csGpio = parseMcuPin(csPin);
+    if (csGpio) {
+      boardIoEntries.push(`  - id: "${part.id}"
+    kind: "spi_device"
+    peripheral: "${connection}"
+    pin: ${csGpio.pin}
+    signal: "input"
+    active_high: true
+    device_type: "${part.type}"`);
+    }
+  }
+
+  // UART stream device: NEO-6M GPS. Emits NMEA on the resolved UART.
+  for (const part of diagram.parts) {
+    if (part.type !== 'neo6m-gps') continue;
+    const connection = uartPeripheralForPart(part.id);
+    if (!connection) continue;
+    externalDeviceEntries.push(`  - id: "${part.id}"
+    type: "neo6m-gps"
+    connection: "${connection}"
+    config: {}`);
+    boardIoEntries.push(`  - id: "${part.id}"
+    kind: "uart_device"
+    peripheral: "${connection}"
+    pin: 0
+    signal: "input"
+    active_high: true
+    device_type: "neo6m-gps"`);
+  }
+
   for (const wire of diagram.wires) {
     // Find which end is the MCU and which is a component
     let mcuEnd: typeof wire.from | null = null;
@@ -378,6 +468,9 @@ export function diagramToConfig(
     if (part.type === 'pcd8544') continue;
     if (part.type === 'sn74hc165') continue;
     if (part.type === 'iolink-master') continue;
+    if (part.type === 'neo6m-gps') continue;
+    if (I2C_DEVICE_ADDRESSES[part.type] !== undefined) continue;
+    if (SPI_DEVICE_TYPES.has(part.type)) continue;
     const def = COMPONENT_REGISTRY.get(part.type);
     if (!def?.boardIoKind) continue;
 

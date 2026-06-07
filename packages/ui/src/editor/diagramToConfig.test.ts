@@ -177,4 +177,77 @@ describe('diagramToConfig', () => {
     expect(systemYaml).toContain('type: "sn74hc165"');
     expect(systemYaml).toContain('inputs: 170');
   });
+
+  it('maps wired I2C sensors (BME280) into i2c external_devices + board_io', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'weather', type: 'bme280', x: 200, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'weather', pin: 'SCL' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'weather', pin: 'SDA' }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'weather', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'weather', pin: 'GND' }, color: '#888888' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('id: "weather"');
+    expect(systemYaml).toContain('type: "bme280"');
+    expect(systemYaml).toContain('connection: "i2c1"');
+    expect(systemYaml).toContain('i2c_address: 0x76');
+    expect(systemYaml).toContain('kind: "i2c_device"');
+    expect(systemYaml).toContain('device_type: "bme280"');
+  });
+
+  it('maps wired SPI displays (ILI9341) into spi external_devices + board_io', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'tft', type: 'ili9341', x: 200, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PB3' }, to: { part: 'tft', pin: 'SCK' }, color: '#5BD8FF' },
+        { from: { part: 'mcu', pin: 'PB5' }, to: { part: 'tft', pin: 'MOSI' }, color: '#B07BFF' },
+        { from: { part: 'mcu', pin: 'PA4' }, to: { part: 'tft', pin: 'CS' }, color: '#FFD166' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('id: "tft"');
+    expect(systemYaml).toContain('type: "ili9341"');
+    expect(systemYaml).toContain('connection: "spi1"');
+    expect(systemYaml).toContain('cs_pin: "PA4"');
+    expect(systemYaml).toMatch(/kind: "spi_device"[\s\S]*device_type: "ili9341"/);
+  });
+
+  it('maps wired UART devices (NEO-6M GPS) into uart external_devices + board_io', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'nucleo-l476rg', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'gps', type: 'neo6m-gps', x: 200, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PA9' }, to: { part: 'gps', pin: 'RX' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PA10' }, to: { part: 'gps', pin: 'TX' }, color: '#118AB2' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram);
+
+    expect(systemYaml).toContain('id: "gps"');
+    expect(systemYaml).toContain('type: "neo6m-gps"');
+    expect(systemYaml).toContain('connection: "uart1"');
+    expect(systemYaml).toContain('kind: "uart_device"');
+    expect(systemYaml).toContain('device_type: "neo6m-gps"');
+  });
 });
