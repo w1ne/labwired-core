@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 /// One cell's status. `Na` = chip YAML declares no peripheral of this class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +18,19 @@ pub enum CellStatus {
     Blocked,
     Na,
     Unrecorded,
+}
+
+impl CellStatus {
+    /// Snapshot vocabulary — must stay in sync with the serde snake_case names.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CellStatus::Pass => "pass",
+            CellStatus::Partial => "partial",
+            CellStatus::Blocked => "blocked",
+            CellStatus::Na => "na",
+            CellStatus::Unrecorded => "unrecorded",
+        }
+    }
 }
 
 /// A cell with its evidence link (CI run that produced it; None until CI stamps it).
@@ -38,6 +52,9 @@ pub const RUBRIC_CLASSES: &[&str] = &["clock", "gpio", "uart", "timer", "dma", "
 #[derive(Debug, Default)]
 pub struct ParsedTier1 {
     /// class → status from explicit `TIER1 <class> PASS|FAIL` lines.
+    /// Repeated reports for a class take the last occurrence — supports
+    /// fixture-internal retries. Class tokens are case-sensitive: `TIER1 GPIO
+    /// PASS` records a class `GPIO` that no standard row consumes.
     pub classes: BTreeMap<String, CellStatus>,
     /// `TIER1 done` seen — the fixture completed its sequence.
     pub done: bool,
@@ -45,7 +62,9 @@ pub struct ParsedTier1 {
 
 /// Parse `TIER1 <class> PASS|FAIL[ code=..]` lines + `TIER1 done` out of a raw
 /// UART byte capture. Non-UTF8 and unrelated lines are skipped; malformed
-/// `TIER1` lines are ignored (never fatal — boot noise is expected).
+/// `TIER1` lines are ignored (never fatal — boot noise is expected). Leading and
+/// trailing whitespace on each token is normalised by `split_whitespace`; CRLF
+/// line endings are handled by `lines()`.
 pub fn parse_tier1_uart(uart: &[u8]) -> ParsedTier1 {
     let mut out = ParsedTier1::default();
     for line in String::from_utf8_lossy(uart).lines() {
@@ -69,18 +88,28 @@ pub fn parse_tier1_uart(uart: &[u8]) -> ParsedTier1 {
 
 impl ParsedTier1 {
     /// Resolve a full row over `classes`. Rules (spec §2 conventions):
-    /// - `uart` is implicitly Pass once any protocol arrived AND done was seen
-    ///   (receiving the lines is the proof), Blocked otherwise.
-    /// - missing `done` degrades every reported Pass to Partial (hung mid-sequence);
-    /// - classes never reported are Blocked.
-    pub fn into_row(&self, classes: &[&str]) -> BTreeMap<String, Cell> {
+    ///
+    /// - If the fixture explicitly reported `uart` (a `TIER1 uart PASS|FAIL`
+    ///   line), that explicit status wins, subject to the same done-degradation
+    ///   rule as every other class (explicit Pass without done → Partial).
+    /// - Otherwise `uart` is Pass iff `done` was seen — receiving a `TIER1
+    ///   done` line over UART is itself the proof of a working UART channel.
+    ///   `!classes.is_empty()` is **not** required.
+    /// - Missing `done` degrades every reported Pass to Partial (hung
+    ///   mid-sequence).
+    /// - Classes never reported are Blocked.
+    pub fn resolve_row(&self, classes: &[&str]) -> BTreeMap<String, Cell> {
         let mut row = BTreeMap::new();
         for &class in classes {
             let status = if class == "uart" {
-                if self.done && !self.classes.is_empty() {
-                    CellStatus::Pass
-                } else {
-                    CellStatus::Blocked
+                match self.classes.get("uart") {
+                    // Explicit uart verdict from the fixture — honour it, same
+                    // done-degradation as every other class.
+                    Some(CellStatus::Pass) if !self.done => CellStatus::Partial,
+                    Some(s) => *s,
+                    // No explicit uart line: done alone proves UART is alive.
+                    None if self.done => CellStatus::Pass,
+                    None => CellStatus::Blocked,
                 }
             } else {
                 match self.classes.get(class) {
@@ -101,8 +130,9 @@ impl ParsedTier1 {
     }
 }
 
-/// peripheral-id substring → tier1 class. First match wins; order matters
-/// (e.g. "gdma" must map to dma before "dma" generic).
+/// peripheral-id substring → tier1 class. First match wins; currently no pair
+/// is order-sensitive — keep it that way or document the pair explicitly if one
+/// is added.
 const CLASS_MARKERS: &[(&str, &str)] = &[
     ("uart", "uart"),
     ("usb_serial", "uart"), // S3 console can be USB-Serial-JTAG
@@ -136,11 +166,9 @@ struct ChipYamlDoc {
 }
 
 /// Which tier1 classes a chip YAML declares, by peripheral-id heuristics.
-pub fn declared_classes_from_yaml(
-    yaml: &str,
-) -> Result<std::collections::BTreeSet<String>, String> {
+pub fn declared_classes_from_yaml(yaml: &str) -> Result<BTreeSet<String>, String> {
     let doc: ChipYamlDoc = serde_yaml::from_str(yaml).map_err(|e| e.to_string())?;
-    let mut classes = std::collections::BTreeSet::new();
+    let mut classes = BTreeSet::new();
     for p in &doc.peripherals {
         let id = p.id.to_lowercase();
         for (marker, class) in CLASS_MARKERS {
@@ -153,8 +181,10 @@ pub fn declared_classes_from_yaml(
     Ok(classes)
 }
 
-/// Cells whose class is not declared by the chip become `Na`.
-pub fn apply_na(row: &mut BTreeMap<String, Cell>, declared: &std::collections::BTreeSet<String>) {
+/// Cells whose class is not declared by the chip become `Na`. This deliberately
+/// downgrades even Pass cells — heuristic misses surface as `pass -> na` in the
+/// ratchet diff rather than silently shadow-passing.
+pub fn apply_na(row: &mut BTreeMap<String, Cell>, declared: &BTreeSet<String>) {
     for (class, cell) in row.iter_mut() {
         if !declared.contains(class) {
             cell.status = CellStatus::Na;
@@ -179,10 +209,7 @@ pub fn ratchet_regressions(snapshot: &Tier1Matrix, live: &Tier1Matrix) -> Vec<St
                 .map(|c| c.status);
             match live_status {
                 Some(CellStatus::Pass) | None => {} // None = chip not exercised in this run
-                Some(s) => out.push(format!(
-                    "{chip}/{class}: pass -> {}",
-                    serde_json::to_string(&s).unwrap().trim_matches('"')
-                )),
+                Some(s) => out.push(format!("{chip}/{class}: pass -> {}", s.as_str())),
             }
         }
     }
@@ -209,7 +236,7 @@ mod tests {
         let uart = b"TIER1 clock PASS\nTIER1 gpio PASS\n"; // hung before done
         let parsed = parse_tier1_uart(uart);
         assert!(!parsed.done);
-        let row = parsed.into_row(&["clock", "gpio", "uart"]);
+        let row = parsed.resolve_row(&["clock", "gpio", "uart"]);
         // reported passes degrade to partial; unreported classes are blocked
         assert_eq!(row["clock"].status, CellStatus::Partial);
         assert_eq!(row["gpio"].status, CellStatus::Partial);
@@ -221,7 +248,7 @@ mod tests {
         let parsed = parse_tier1_uart(b"garbage \xff\xfe binary noise");
         assert!(!parsed.done);
         assert!(parsed.classes.is_empty());
-        let row = parsed.into_row(RUBRIC_CLASSES);
+        let row = parsed.resolve_row(RUBRIC_CLASSES);
         for class in RUBRIC_CLASSES {
             assert_eq!(row[*class].status, CellStatus::Blocked, "{class}");
         }
@@ -239,8 +266,40 @@ mod tests {
     fn uart_class_is_implicitly_pass_when_done_arrives() {
         // The fixture never prints "TIER1 uart ..." — receiving the protocol IS the proof.
         let parsed = parse_tier1_uart(b"TIER1 clock PASS\nTIER1 done\n");
-        let row = parsed.into_row(&["clock", "uart"]);
+        let row = parsed.resolve_row(&["clock", "uart"]);
         assert_eq!(row["uart"].status, CellStatus::Pass);
+    }
+
+    #[test]
+    fn explicit_uart_fail_wins_over_implicit_rule() {
+        let parsed =
+            parse_tier1_uart(b"TIER1 clock PASS\nTIER1 uart FAIL code=parity\nTIER1 done\n");
+        let row = parsed.resolve_row(&["clock", "uart"]);
+        assert_eq!(row["uart"].status, CellStatus::Blocked);
+    }
+
+    #[test]
+    fn done_alone_proves_uart() {
+        let parsed = parse_tier1_uart(b"TIER1 done\n");
+        let row = parsed.resolve_row(&["uart", "gpio"]);
+        assert_eq!(row["uart"].status, CellStatus::Pass);
+        assert_eq!(row["gpio"].status, CellStatus::Blocked);
+    }
+
+    #[test]
+    fn duplicate_class_lines_last_wins() {
+        let parsed = parse_tier1_uart(b"TIER1 gpio PASS\nTIER1 gpio FAIL code=retry\nTIER1 done\n");
+        assert_eq!(parsed.classes["gpio"], CellStatus::Blocked);
+        // and the reverse: a retry that recovers
+        let parsed = parse_tier1_uart(b"TIER1 gpio FAIL code=first\nTIER1 gpio PASS\nTIER1 done\n");
+        assert_eq!(parsed.classes["gpio"], CellStatus::Pass);
+    }
+
+    #[test]
+    fn whitespace_and_crlf_are_tolerated() {
+        let parsed = parse_tier1_uart(b"  TIER1\tclock   PASS\r\nTIER1 done\r\n");
+        assert_eq!(parsed.classes["clock"], CellStatus::Pass);
+        assert!(parsed.done);
     }
 
     #[test]
@@ -267,9 +326,8 @@ peripherals:
     #[test]
     fn na_overrides_blocked_in_row_resolution() {
         let parsed = parse_tier1_uart(b"TIER1 clock PASS\nTIER1 done\n");
-        let mut row = parsed.into_row(RUBRIC_CLASSES);
-        let declared: std::collections::BTreeSet<String> =
-            ["clock", "uart"].iter().map(|s| s.to_string()).collect();
+        let mut row = parsed.resolve_row(RUBRIC_CLASSES);
+        let declared: BTreeSet<String> = ["clock", "uart"].iter().map(|s| s.to_string()).collect();
         apply_na(&mut row, &declared);
         assert_eq!(row["clock"].status, CellStatus::Pass);
         assert_eq!(row["dma"].status, CellStatus::Na); // undeclared
@@ -336,5 +394,12 @@ peripherals:
         let j2 = serde_json::to_string_pretty(&serde_json::from_str::<Tier1Matrix>(&j1).unwrap())
             .unwrap();
         assert_eq!(j1, j2);
+        assert!(j1.find("\"a\"").unwrap() < j1.find("\"b\"").unwrap());
+    }
+
+    #[test]
+    fn cell_status_as_str_matches_serde() {
+        assert_eq!(serde_json::to_string(&CellStatus::Na).unwrap(), "\"na\"");
+        assert_eq!(CellStatus::Na.as_str(), "na");
     }
 }
