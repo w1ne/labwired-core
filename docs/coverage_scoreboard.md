@@ -54,3 +54,7 @@ Additional matrix sentinel target:
 2. Matrix CI aggregates and publishes scoreboard artifacts via `scripts/generate_coverage_matrix_scoreboard.py`.
 3. Update this file when the Top-5 scope, thresholds, or status policy changes.
 4. Do not mark `green` without deterministic re-run evidence.
+
+## Tier-1 validation matrix
+
+Per-chip, per-peripheral real-firmware validation: [tier1-scoreboard](coverage/tier1-scoreboard.md).
