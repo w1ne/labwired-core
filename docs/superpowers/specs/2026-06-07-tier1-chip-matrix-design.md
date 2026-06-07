@@ -219,3 +219,31 @@ The matrix is built **beachhead-first**, not coverage-first:
 - Non-Tier-1 peripherals (SPI/I2C/ADC device labs remain covered by
   `firmware_survival` / e2e suites).
 - HIL/silicon capture — the hw-oracle pipeline is untouched.
+
+## Amendment — overview vs. detail report (2026-06-07, post-P3)
+
+Owner direction after the full 15-chip matrix shipped:
+
+1. **Overview table = the 12 universal subsystems only** (clock, gpio, uart,
+   timer, dma, irq, i2c, spi, adc, pwm, wdt, rtc). Chip-specific classes (rmt,
+   twai, i2s, usb, …) leave the top-level grid.
+2. **`na` relabels honestly.** For universal subsystems every silicon has the
+   feature, so an undeclared class is a *model gap*, not "not applicable" —
+   render 🚧 "not modeled" (distinct from ⛔ model-broken and · check-not-written).
+   True n/a remains only for chip-specific classes on chips whose silicon lacks
+   them.
+3. **Per-chip detail report (click-through on the page; sections in the md
+   scoreboard)** with *instance-level* honesty — each MCU has UART1/2/3 etc.;
+   the report states exactly what is modeled:
+   - per class, three lists: **modeled** instances (chip yaml ids / programmatic
+     wiring), **validated** instance(s) (per-target metadata maintained beside
+     the fixture), **on-silicon** inventory (machine-derived from the vendor SVD
+     via svd-ingestor where an SVD is in-tree; "inventory pending" otherwise —
+     never a hand-asserted complete list).
+   - per cell: the check performed, FAIL `code=` (parser to retain it in the
+     snapshot), evidence link.
+4. Page drill-down ships as expandable rows first; linkable per-chip pages
+   (/validation/<chip>) when outreach needs them.
+
+Sequencing: lands as its own slice after the model-bugfix integration PR
+(bit-band / thumb / gdma / c3-timer) and its pending-silicon-verification doc.
