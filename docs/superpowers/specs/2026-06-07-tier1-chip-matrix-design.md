@@ -144,14 +144,44 @@ P1 blocker for chips without an in-tree SVD).
 `generate_coverage_matrix_scoreboard.py` grows a chip × peripheral grid
 (✅ pass / 🟡 partial / ⛔ blocked / — n/a) rendered into
 `docs/coverage_scoreboard.md` and the docs site — public, Renode-dashboard-style
-proof of what works.
+proof of what works. Each cell carries the `run_url` of the CI run that
+produced it (stored alongside the status in `tier1-matrix.json`); cells without
+evidence render as `unrecorded` regardless of local results.
+
+## Wedge alignment (wedge v2, 2026-06-06 moat doc §5)
+
+The matrix is built **beachhead-first**, not coverage-first:
+
+1. **P1 targets the named beachhead.** The wedge's beachhead is driver-bringup
+   CI for the ESP32-S3 peripherals QEMU stubs and Wokwi lacks (MCPWM, I2C/SENS,
+   RMT). The S3 row of this matrix — riding the vendored-ROM faithful boot — IS
+   the public proof surface for that claim. STM32 breadth follows; it serves
+   trust, not the wedge.
+2. **Proof-artifact bar applies to the scoreboard.** Every non-`unrecorded`
+   cell links to its evidence: the CI `run_url` (and artifact bundle) that
+   produced it, same contract as the onboarding manifests. A green cell with no
+   linked run does not render green. No claim without its artifact.
+3. **Moat boundary stays intact.** Public = the Tier-1 bring-up fixtures, their
+   sources, and the matrix (trust surface). Private = the silicon-captured
+   golden-trace corpus, hw-oracle captures, and any customer-firmware
+   regression corpora — the excludable, paid layer (hosted
+   golden-trace/regression-corpus service). This matrix must never grow
+   silicon-trace-derived golden outputs as public fixtures.
+4. **Beachhead extension for S3 only:** beyond the six rubric classes, the S3
+   row adds `mcpwm`, `i2c`, `rmt` cells (the beachhead peripherals), validated
+   by the same fixture. Other chips stay at the six rubric classes until the
+   wedge expands.
 
 ## Phasing
 
-- **P1** — harness + ratchet + exporter + STM32-family fixture: 10 of 17 chips,
-  including all currently-untested STM32s. Most coverage per firmware authored.
-- **P2** — nRF52, RP2040, ESP32-C3 fixtures.
-- **P3** — ESP32/S3 Xtensa fixture (rides the vendored-ROM faithful boot path).
+- **P1 (wedge)** — harness + ratchet + exporter + scoreboard + **ESP32-S3
+  Xtensa fixture** (esp32s3, esp32s3-zero; classic esp32 variant included),
+  six rubric classes + `mcpwm`/`i2c`/`rmt` beachhead cells, riding the
+  vendored-ROM faithful boot path. Output doubles as the driver-bringup-CI
+  proof page for outreach.
+- **P2** — ESP32-C3 + STM32-family fixture (10 chips, incl. all
+  currently-untested STM32s).
+- **P3** — nRF52, RP2040 fixtures.
 - **P4** — Zephyr-samples breadth layer per board (Renode-style); separate spec.
 
 ## Error handling
