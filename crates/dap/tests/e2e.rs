@@ -45,8 +45,9 @@ fn test_dap_e2e_launch_and_uart() {
     );
     send_dap_message(&mut stdin, &launch_req);
 
-    // Read response
-    let resp = read_dap_message(&mut reader);
+    // Use wait_for_response to skip any intermediate events (e.g. the
+    // `initialized` event the server sends alongside the initialize response).
+    let resp = wait_for_response(&mut reader, "launch", &mut uart_buffer);
     assert!(resp.contains("\"command\":\"launch\""));
 
     // 3. Send ConfigurationDone
