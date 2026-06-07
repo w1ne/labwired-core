@@ -22,6 +22,25 @@ const RUBRIC = [
 ];
 
 type Cell = { status: string; run_url?: string };
+
+// Proper part names for display — row keys stay the stable chip ids.
+const DISPLAY_NAMES: Record<string, string> = {
+  esp32: 'ESP32 (Xtensa LX6)',
+  esp32c3: 'ESP32-C3 (RISC-V)',
+  esp32s3: 'ESP32-S3 (Xtensa LX7)',
+  nrf52832: 'nRF52832',
+  nrf52840: 'nRF52840',
+  rp2040: 'RP2040',
+  stm32f103: 'STM32F103C8',
+  stm32f401: 'STM32F401RE',
+  stm32f407: 'STM32F407VG',
+  stm32g474re: 'STM32G474RE',
+  stm32h563: 'STM32H563',
+  stm32l073: 'STM32L073RZ',
+  stm32l476: 'STM32L476RG',
+  stm32wb55: 'STM32WB55',
+  stm32wba52: 'STM32WBA52',
+};
 type Matrix = Record<string, Record<string, Cell>>;
 
 const ICON: Record<string, string> = {
@@ -148,7 +167,7 @@ export function ValidationMatrix() {
                 className={chipIdx < chips.length - 1 ? 'border-b border-[#d6d8dc]' : ''}
               >
                 <td className="py-3 px-4 font-mono text-fg-primary font-semibold whitespace-nowrap text-[12.5px]">
-                  {chip}
+                  {DISPLAY_NAMES[chip] ?? chip}
                 </td>
                 {classes.map((cls) => {
                   const { status, url } = effectiveStatus(matrix[chip]?.[cls]);

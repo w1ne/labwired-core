@@ -20,7 +20,7 @@ describe('ValidationMatrix', () => {
 
   it('fetches the core-main snapshot and renders evidence-linked cells', async () => {
     render(<ValidationMatrix />);
-    await waitFor(() => expect(screen.getByText('esp32s3')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ESP32-S3 (Xtensa LX7)')).toBeTruthy());
     expect(fetch).toHaveBeenCalledWith(MATRIX_URL, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     const gpioLink = screen.getByRole('link', { name: /gpio: pass/i });
     expect(gpioLink.getAttribute('href')).toContain('/actions/runs/1');
@@ -28,7 +28,7 @@ describe('ValidationMatrix', () => {
 
   it('downgrades evidence-less cells to unrecorded (proof-artifact bar)', async () => {
     render(<ValidationMatrix />);
-    await waitFor(() => expect(screen.getByText('esp32s3')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ESP32-S3 (Xtensa LX7)')).toBeTruthy());
     expect(screen.getByLabelText('mcpwm: unrecorded')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /mcpwm: pass/i })).toBeNull();
   });
@@ -41,7 +41,7 @@ describe('ValidationMatrix', () => {
 
   it('renders na status as unlinked "—" with correct aria-label', async () => {
     render(<ValidationMatrix />);
-    await waitFor(() => expect(screen.getByText('esp32s3')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ESP32-S3 (Xtensa LX7)')).toBeTruthy());
     const naCell = screen.getByLabelText('uart: na');
     expect(naCell.tagName.toLowerCase()).not.toBe('a');
     expect(naCell.textContent).toBe('—');
@@ -49,7 +49,7 @@ describe('ValidationMatrix', () => {
 
   it('column order: rubric classes appear before extras', async () => {
     render(<ValidationMatrix />);
-    await waitFor(() => expect(screen.getByText('esp32s3')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ESP32-S3 (Xtensa LX7)')).toBeTruthy());
     const headers = screen.getAllByRole('columnheader').map((th) => th.textContent?.toLowerCase());
     const clockIdx = headers.findIndex((h) => h === 'clock');
     const irqIdx = headers.findIndex((h) => h === 'irq');
