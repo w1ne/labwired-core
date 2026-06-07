@@ -250,26 +250,18 @@ pub struct Tier1Target {
     pub extra_classes: &'static [&'static str],
 }
 
-pub const TIER1_TARGETS: &[Tier1Target] = &[
-    Tier1Target {
-        chip: "esp32s3",
-        chip_yaml: "configs/chips/esp32s3.yaml",
-        elf: "tests/fixtures/tier1/esp32s3.elf",
-        flash_bin: Some("tests/fixtures/tier1/esp32s3-flash.bin"),
-        rom_boot: true,
-        max_steps: 40_000_000, // real ROM + bootloader + app + self-tests
-        extra_classes: &["mcpwm", "i2c", "rmt"],
-    },
-    Tier1Target {
-        chip: "esp32s3-zero",
-        chip_yaml: "configs/chips/esp32s3-zero.yaml",
-        elf: "tests/fixtures/tier1/esp32s3.elf", // same silicon, same fixture
-        flash_bin: Some("tests/fixtures/tier1/esp32s3-flash.bin"),
-        rom_boot: true,
-        max_steps: 40_000_000,
-        extra_classes: &["mcpwm", "i2c", "rmt"],
-    },
-];
+pub const TIER1_TARGETS: &[Tier1Target] = &[Tier1Target {
+    chip: "esp32s3",
+    chip_yaml: "configs/chips/esp32s3.yaml",
+    elf: "tests/fixtures/tier1/esp32s3.elf",
+    flash_bin: Some("tests/fixtures/tier1/esp32s3-flash.bin"),
+    rom_boot: true,
+    // Real ROM + bootloader + app + self-tests. Measured: the full TIER1
+    // transcript lands between 16M and 24M steps; 30M = measured + headroom.
+    // One row per SILICON — board variants (e.g. esp32s3-zero) share this row.
+    max_steps: 30_000_000,
+    extra_classes: &["mcpwm", "i2c", "rmt"],
+}];
 
 /// Workspace root = two parents up from the cli crate (crates/cli → core).
 pub fn workspace_root() -> PathBuf {

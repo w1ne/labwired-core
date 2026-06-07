@@ -49,3 +49,11 @@ jobs:
 
       - name: Run Workspace Tests
         run: cargo test --workspace
+
+      # Tier-1 matrix gates: rom-boot sims (~30M steps) are debug-ignored and
+      # run here in release (~25s/run instead of ~5.5min each). The ratchet
+      # blocks any PR that regresses a recorded pass cell.
+      - name: Tier-1 matrix + ratchet (release)
+        # NOTE: no `--ignored` flag — the cfg_attr ignore only applies to debug
+        # builds; in release these tests are regular tests and must run.
+        run: cargo test --release -p labwired-cli --test tier1_matrix --test tier1_matrix_ratchet -- --nocapture

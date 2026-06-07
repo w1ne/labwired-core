@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 
 name: "esp32s3"
-arch: "xtensa"
+arch: "xtensa-lx7"
 flash:
   base: 0x42000000
   size: "16MB"
@@ -32,3 +32,31 @@ peripherals:
     base_address: 0x600C2000
     config:
       path: "../peripherals/esp32s3/interrupt_core0.yaml"
+  # The entries below are address-map declarations only: on the Xtensa path
+  # the peripherals are registered programmatically by
+  # crates/core/src/system/xtensa.rs (configure_xtensa_esp32s3); base
+  # addresses mirror the model sources in crates/core/src/peripherals/esp32s3/.
+  - id: "systimer"
+    type: "systimer"
+    base_address: 0x60023000
+    size: "4KB"
+  - id: "system"
+    type: "system_stub"
+    base_address: 0x600C0000
+    size: "4KB"
+  - id: "gdma"
+    type: "gdma"
+    base_address: 0x6003F000
+    size: "4KB"
+  - id: "mcpwm0"
+    type: "mcpwm"
+    base_address: 0x6001E000
+    size: "4KB"
+  - id: "i2c0"
+    type: "i2c"
+    base_address: 0x60013000
+    size: "4KB"
+  - id: "rmt"
+    type: "rmt"
+    base_address: 0x60016000
+    size: "4KB"

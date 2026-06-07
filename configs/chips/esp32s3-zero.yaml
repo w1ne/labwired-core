@@ -58,3 +58,34 @@ peripherals:
     type: "i2c"
     base_address: 0x60013000
     size: "4KiB"
+  # Address-map declarations matching configure_xtensa_esp32s3's
+  # programmatic registrations (model sources in
+  # crates/core/src/peripherals/esp32s3/).
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x60000000
+    size: "512B"
+  - id: "gpio"
+    type: "gpio"
+    base_address: 0x60004000
+    size: "2KiB"
+  - id: "timg0"
+    type: "timer_group"
+    base_address: 0x6001F000
+    size: "4KiB"
+  - id: "interrupt_core0"
+    type: "intmatrix"
+    base_address: 0x600C2000
+    size: "4KiB"
+  - id: "gdma"
+    type: "gdma"
+    base_address: 0x6003F000
+    size: "4KiB"
+  - id: "mcpwm0"
+    type: "mcpwm"
+    base_address: 0x6001E000
+    size: "4KiB"
+  - id: "rmt"
+    type: "rmt"
+    base_address: 0x60016000
+    size: "4KiB"

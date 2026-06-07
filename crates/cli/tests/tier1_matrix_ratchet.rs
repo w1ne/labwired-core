@@ -7,6 +7,12 @@
 use labwired_cli::tier1;
 
 #[test]
+// ~5.5 min per run in debug (rom-boot, 30M steps). CI runs this in the
+// dedicated release step (core-ci.yml); locally: cargo test --release.
+#[cfg_attr(
+    debug_assertions,
+    ignore = "tier1 matrix sims run in release (see core-ci.yml tier1 step)"
+)]
 fn tier1_matrix_does_not_regress() {
     let root = tier1::workspace_root();
     let snapshot_path = root.join("docs/coverage/tier1-matrix.json");

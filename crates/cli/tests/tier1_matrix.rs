@@ -8,6 +8,12 @@
 use labwired_cli::tier1;
 
 #[test]
+// ~5.5 min per run in debug (rom-boot, 30M steps). CI runs this in the
+// dedicated release step (core-ci.yml); locally: cargo test --release.
+#[cfg_attr(
+    debug_assertions,
+    ignore = "tier1 matrix sims run in release (see core-ci.yml tier1 step)"
+)]
 fn tier1_matrix_runs_all_available_fixtures() {
     let bin = std::path::Path::new(env!("CARGO_BIN_EXE_labwired"));
     let (matrix, skipped) = tier1::run_all(bin).unwrap_or_else(|e| panic!("tier1 run_all: {e}"));

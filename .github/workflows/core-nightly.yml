@@ -5,6 +5,9 @@ on:
     - cron: '0 2 * * *' # 2 AM UTC
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   validation:
     name: Advanced Validation
@@ -62,3 +65,138 @@ jobs:
             out/unsupported-audit/
             out/digital-twin-verification/
             out/trace-drift-assert/
+
+  tier1-matrix-refresh:
+    name: Tier-1 Matrix Nightly Refresh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly
+          workspaces: |
+            . -> target
+
+      - name: Run tier1 matrix and stamp evidence
+        run: |
+          cargo run -p labwired-cli --release -- tier1-matrix \
+            --json-out docs/coverage/tier1-matrix.json \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Generate scoreboard
+        run: python3 scripts/generate_tier1_scoreboard.py
+
+      - name: Commit and push coverage artifacts
+        # Only main may receive refresh commits — a workflow_dispatch from a
+        # branch must not push there (same guard as core-validate-hw-targets).
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- docs/coverage/tier1-matrix.json docs/coverage/tier1-scoreboard.md; then
+            echo "No tier1 coverage changes"
+            exit 0
+          fi
+
+          git config user.name "LabWired CI"
+          git config user.email "ci@labwired.com"
+          git add docs/coverage/tier1-matrix.json docs/coverage/tier1-scoreboard.md
+          git commit -m "chore(tier1): nightly matrix refresh with run evidence"
+          git push
+
+  tier1-fixture-drift:
+    name: Tier-1 Fixture Drift Check
+    runs-on: ubuntu-latest
+    steps:
+      # Gate to Sundays only for scheduled runs; workflow_dispatch always proceeds.
+      - name: Set drift-skip flag on non-Sunday scheduled runs
+        run: |
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$(date -u +%u)" != "7" ]; then
+            echo "SKIP_DRIFT=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Checkout
+        if: env.SKIP_DRIFT != '1'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        if: env.SKIP_DRIFT != '1'
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        if: env.SKIP_DRIFT != '1'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly-esp
+          workspaces: |
+            . -> target
+
+      # Install the Espressif Xtensa toolchain via espup.
+      # NOTE: Xtensa release builds may not be bit-reproducible across toolchain versions.
+      # If espup installs a newer toolchain and the hashes differ from MANIFEST.json,
+      # this job fails and a human decides whether to refresh the committed blobs.
+      # That failure is the feature — it prevents silent blob drift.
+      - name: Install espup and espflash
+        if: env.SKIP_DRIFT != '1'
+        run: cargo install espup espflash --locked
+
+      - name: Install Xtensa toolchain via espup
+        if: env.SKIP_DRIFT != '1'
+        run: espup install
+
+      - name: Rebuild tier1 fixture blobs
+        if: env.SKIP_DRIFT != '1'
+        run: |
+          # Snapshot the COMMITTED manifest first — build_tier1_fixtures.sh
+          # overwrites MANIFEST.json with hashes of the fresh build, and
+          # comparing the rebuild against itself would always pass.
+          git show HEAD:tests/fixtures/tier1/MANIFEST.json > /tmp/committed-manifest.json
+          source ~/export-esp.sh
+          ./scripts/build_tier1_fixtures.sh
+
+      # Compare freshly-built blob hashes against sha256 values in the COMMITTED
+      # manifest (snapshotted above), ignoring source_rev (changes every rebuild).
+      - name: Verify fixture hashes match committed manifest
+        if: env.SKIP_DRIFT != '1'
+        run: |
+          python3 - <<'EOF'
+          import hashlib, json, pathlib, sys
+
+          manifest_path = pathlib.Path("/tmp/committed-manifest.json")
+          committed = json.loads(manifest_path.read_text())
+
+          failures = []
+          for filename, meta in committed.items():
+              blob = pathlib.Path("tests/fixtures/tier1") / filename
+              if not blob.exists():
+                  failures.append(f"MISSING: {filename}")
+                  continue
+              actual = hashlib.sha256(blob.read_bytes()).hexdigest()
+              expected = meta["sha256"]
+              if actual != expected:
+                  failures.append(
+                      f"DRIFT: {filename}\n"
+                      f"  committed sha256 : {expected}\n"
+                      f"  rebuilt  sha256  : {actual}"
+                  )
+
+          if failures:
+              for msg in failures:
+                  print(f"::error::{msg}")
+              print(
+                  "\nTier-1 fixture blobs drifted from the committed manifest.\n"
+                  "If the toolchain was upgraded intentionally, re-run "
+                  "./scripts/build_tier1_fixtures.sh locally and commit the updated blobs."
+              )
+              sys.exit(1)
+
+          print(f"All {len(committed)} fixture blobs match committed manifest hashes.")
+          EOF

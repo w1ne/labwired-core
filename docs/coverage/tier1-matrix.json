@@ -1,0 +1,31 @@
+{
+  "esp32s3": {
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "blocked"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "mcpwm": {
+      "status": "pass"
+    },
+    "rmt": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    }
+  }
+}
