@@ -180,4 +180,8 @@ See [Release & Merging Strategy](core/docs/release_strategy.md) for the full pro
 
 
 ## ⚖️ License
-MIT
+MIT — see [LICENSE](./LICENSE).
+
+The LabWired name and logo are not covered by the MIT license; see
+[TRADEMARKS.md](./TRADEMARKS.md). Contributions require a DCO sign-off; see
+[CONTRIBUTING.md](./CONTRIBUTING.md).
