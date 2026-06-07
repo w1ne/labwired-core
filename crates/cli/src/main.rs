@@ -1211,7 +1211,9 @@ fn run_tier1_matrix(args: Tier1MatrixArgs) -> ExitCode {
             }
             // --run-url given but nothing was actually exercised → vacuous green
             // is not permitted; fail loudly so CI notices the misconfiguration.
-            if args.run_url.is_some() && matrix.0.is_empty() {
+            // (Skipped targets still emit unrecorded rows, so key on the count
+            // of EXERCISED chips, not on matrix emptiness.)
+            if args.run_url.is_some() && matrix.0.len() == skipped.len() {
                 eprintln!("error: --run-url given but no fixtures were exercised");
                 return ExitCode::FAILURE;
             }

@@ -250,18 +250,106 @@ pub struct Tier1Target {
     pub extra_classes: &'static [&'static str],
 }
 
-pub const TIER1_TARGETS: &[Tier1Target] = &[Tier1Target {
-    chip: "esp32s3",
-    chip_yaml: "configs/chips/esp32s3.yaml",
-    elf: "tests/fixtures/tier1/esp32s3.elf",
-    flash_bin: Some("tests/fixtures/tier1/esp32s3-flash.bin"),
-    rom_boot: true,
-    // Real ROM + bootloader + app + self-tests. Measured: the full TIER1
-    // transcript lands between 16M and 24M steps; 30M = measured + headroom.
-    // One row per SILICON — board variants (e.g. esp32s3-zero) share this row.
-    max_steps: 30_000_000,
-    extra_classes: &["mcpwm", "i2c", "rmt"],
-}];
+/// Shorthand for the common fast-boot, rubric-only target shape.
+const fn fast_boot(chip: &'static str, chip_yaml: &'static str, elf: &'static str) -> Tier1Target {
+    Tier1Target {
+        chip,
+        chip_yaml,
+        elf,
+        flash_bin: None,
+        rom_boot: false,
+        max_steps: 8_000_000,
+        extra_classes: &[],
+    }
+}
+
+// One row per SILICON — board variants share their chip's row
+// (esp32s3-zero → esp32s3, stm32f401cdu6 → stm32f401).
+// Targets whose fixture ELF is not committed yet appear in the matrix as
+// full rows of `unrecorded` cells: visible breadth, zero claims.
+pub const TIER1_TARGETS: &[Tier1Target] = &[
+    Tier1Target {
+        chip: "esp32s3",
+        chip_yaml: "configs/chips/esp32s3.yaml",
+        elf: "tests/fixtures/tier1/esp32s3.elf",
+        flash_bin: Some("tests/fixtures/tier1/esp32s3-flash.bin"),
+        rom_boot: true,
+        // Real ROM + bootloader + app + self-tests. Measured: the full TIER1
+        // transcript lands between 16M and 24M steps; 30M = measured + headroom.
+        max_steps: 30_000_000,
+        extra_classes: &["mcpwm", "i2c", "rmt"],
+    },
+    fast_boot(
+        "esp32",
+        "configs/chips/esp32.yaml",
+        "tests/fixtures/tier1/esp32.elf",
+    ),
+    fast_boot(
+        "esp32c3",
+        "configs/chips/esp32c3.yaml",
+        "tests/fixtures/tier1/esp32c3.elf",
+    ),
+    fast_boot(
+        "nrf52832",
+        "configs/chips/nrf52832.yaml",
+        "tests/fixtures/tier1/nrf52832.elf",
+    ),
+    fast_boot(
+        "nrf52840",
+        "configs/chips/nrf52840.yaml",
+        "tests/fixtures/tier1/nrf52840.elf",
+    ),
+    fast_boot(
+        "rp2040",
+        "configs/chips/rp2040.yaml",
+        "tests/fixtures/tier1/rp2040.elf",
+    ),
+    fast_boot(
+        "stm32f103",
+        "configs/chips/stm32f103.yaml",
+        "tests/fixtures/tier1/stm32f103.elf",
+    ),
+    fast_boot(
+        "stm32f401",
+        "configs/chips/stm32f401.yaml",
+        "tests/fixtures/tier1/stm32f401.elf",
+    ),
+    fast_boot(
+        "stm32f407",
+        "configs/chips/stm32f407.yaml",
+        "tests/fixtures/tier1/stm32f407.elf",
+    ),
+    fast_boot(
+        "stm32g474re",
+        "configs/chips/stm32g474re.yaml",
+        "tests/fixtures/tier1/stm32g474re.elf",
+    ),
+    fast_boot(
+        "stm32h563",
+        "configs/chips/stm32h563.yaml",
+        "tests/fixtures/tier1/stm32h563.elf",
+    ),
+    fast_boot(
+        "stm32l073",
+        "configs/chips/stm32l073.yaml",
+        "tests/fixtures/tier1/stm32l073.elf",
+    ),
+    fast_boot(
+        "stm32l476",
+        "configs/chips/stm32l476.yaml",
+        "tests/fixtures/tier1/stm32l476.elf",
+    ),
+    fast_boot(
+        "stm32wb55",
+        "configs/chips/stm32wb55.yaml",
+        "tests/fixtures/tier1/stm32wb55.elf",
+    ),
+    fast_boot(
+        "stm32wba52",
+        "configs/chips/stm32wba52.yaml",
+        "tests/fixtures/tier1/stm32wba52.elf",
+    ),
+];
 
 /// Workspace root = two parents up from the cli crate (crates/cli → core).
 pub fn workspace_root() -> PathBuf {
@@ -436,7 +524,14 @@ pub fn run_all(labwired_bin: &Path) -> Result<(Tier1Matrix, Vec<String>), String
     let mut skipped = Vec::new();
     for target in TIER1_TARGETS {
         if !root.join(target.elf).exists() {
+            // Planned-but-unfixtured silicon stays VISIBLE: a full row of
+            // `unrecorded` cells (breadth without claims) instead of being
+            // silently absent. The ratchet ignores unrecorded; the scoreboard
+            // and /validation page render `·`.
             skipped.push(target.chip.to_string());
+            matrix
+                .0
+                .insert(target.chip.to_string(), unrecorded_row(target));
             continue;
         }
         let row = run_target(target, labwired_bin)?;
@@ -445,9 +540,36 @@ pub fn run_all(labwired_bin: &Path) -> Result<(Tier1Matrix, Vec<String>), String
     Ok((matrix, skipped))
 }
 
+/// Full row of `unrecorded` cells for a target with no committed fixture.
+fn unrecorded_row(target: &Tier1Target) -> BTreeMap<String, Cell> {
+    RUBRIC_CLASSES
+        .iter()
+        .chain(target.extra_classes.iter())
+        .map(|class| {
+            (
+                class.to_string(),
+                Cell {
+                    status: CellStatus::Unrecorded,
+                    run_url: None,
+                },
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skipped_targets_emit_full_unrecorded_rows() {
+        let target = &TIER1_TARGETS[1]; // a planned fast-boot target
+        let row = unrecorded_row(target);
+        assert_eq!(row.len(), RUBRIC_CLASSES.len() + target.extra_classes.len());
+        assert!(row
+            .values()
+            .all(|c| c.status == CellStatus::Unrecorded && c.run_url.is_none()));
+    }
 
     #[test]
     fn parses_pass_fail_lines_and_done() {
