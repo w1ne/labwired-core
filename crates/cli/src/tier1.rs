@@ -6,8 +6,10 @@
 //! labwired docs/superpowers/specs/2026-06-07-tier1-chip-matrix-design.md).
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 /// One cell's status. `Na` = chip YAML declares no peripheral of this class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -216,6 +218,133 @@ pub fn ratchet_regressions(snapshot: &Tier1Matrix, live: &Tier1Matrix) -> Vec<St
     out
 }
 
+/// One matrix target. Paths are workspace-root-relative.
+pub struct Tier1Target {
+    pub chip: &'static str,
+    pub chip_yaml: &'static str,
+    pub elf: &'static str,
+    /// Flash image for `--rom-boot` (None = fast-boot ELF entry).
+    pub flash_bin: Option<&'static str>,
+    pub rom_boot: bool,
+    pub max_steps: u64,
+    /// Beachhead classes beyond RUBRIC_CLASSES (spec wedge-alignment §4).
+    pub extra_classes: &'static [&'static str],
+}
+
+pub const TIER1_TARGETS: &[Tier1Target] = &[
+    Tier1Target {
+        chip: "esp32s3",
+        chip_yaml: "configs/chips/esp32s3.yaml",
+        elf: "tests/fixtures/tier1/esp32s3.elf",
+        flash_bin: Some("tests/fixtures/tier1/esp32s3-flash.bin"),
+        rom_boot: true,
+        max_steps: 40_000_000, // real ROM + bootloader + app + self-tests
+        extra_classes: &["mcpwm", "i2c", "rmt"],
+    },
+    Tier1Target {
+        chip: "esp32s3-zero",
+        chip_yaml: "configs/chips/esp32s3-zero.yaml",
+        elf: "tests/fixtures/tier1/esp32s3.elf", // same silicon, same fixture
+        flash_bin: Some("tests/fixtures/tier1/esp32s3-flash.bin"),
+        rom_boot: true,
+        max_steps: 40_000_000,
+        extra_classes: &["mcpwm", "i2c", "rmt"],
+    },
+];
+
+/// Workspace root = two parents up from the cli crate (crates/cli → core).
+pub fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("workspace root")
+        .to_path_buf()
+}
+
+#[derive(Deserialize)]
+struct ManifestEntry {
+    sha256: String,
+}
+
+/// Verify every blob listed in `<dir>/MANIFEST.json` against its sha256.
+/// Returns Err naming the first mismatching file.
+pub fn verify_fixture_manifest(dir: &Path) -> Result<(), String> {
+    let manifest_path = dir.join("MANIFEST.json");
+    let manifest: BTreeMap<String, ManifestEntry> = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path)
+            .map_err(|e| format!("{}: {e}", manifest_path.display()))?,
+    )
+    .map_err(|e| e.to_string())?;
+    for (file, entry) in &manifest {
+        let bytes = std::fs::read(dir.join(file)).map_err(|e| format!("{file}: {e}"))?;
+        let got = format!("{:x}", Sha256::digest(&bytes));
+        if got != entry.sha256 {
+            return Err(format!(
+                "{file}: sha256 mismatch (manifest {}, got {got})",
+                entry.sha256
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Run one target through the `labwired` binary and parse its TIER1 row.
+/// `labwired_bin` lets integration tests pass `env!("CARGO_BIN_EXE_labwired")`.
+pub fn run_target(
+    target: &Tier1Target,
+    labwired_bin: &Path,
+) -> Result<BTreeMap<String, Cell>, String> {
+    let root = workspace_root();
+    let mut cmd = std::process::Command::new(labwired_bin);
+    cmd.arg("run")
+        .arg("--chip")
+        .arg(root.join(target.chip_yaml))
+        .arg("--firmware")
+        .arg(root.join(target.elf))
+        .arg("--max-steps")
+        .arg(target.max_steps.to_string());
+    if target.rom_boot {
+        cmd.arg("--rom-boot");
+        let flash = target.flash_bin.ok_or("rom_boot target needs flash_bin")?;
+        cmd.env("LABWIRED_ESP32S3_FLASH", root.join(flash));
+    }
+    let out = cmd.output().map_err(|e| format!("spawn labwired: {e}"))?;
+    // UART echoes on stdout; the sim may exit nonzero on step-limit — that's
+    // fine, the protocol lines are the verdict.
+    let parsed = parse_tier1_uart(&out.stdout);
+    let classes: Vec<&str> = RUBRIC_CLASSES
+        .iter()
+        .chain(target.extra_classes.iter())
+        .copied()
+        .collect();
+    let mut row = parsed.resolve_row(&classes);
+    let chip_yaml =
+        std::fs::read_to_string(root.join(target.chip_yaml)).map_err(|e| e.to_string())?;
+    apply_na(&mut row, &declared_classes_from_yaml(&chip_yaml)?);
+    Ok(row)
+}
+
+/// Run every target whose fixture blobs exist. Returns the live matrix and the
+/// list of skipped chips (missing fixtures — fresh clone or fixtures not landed yet).
+pub fn run_all(labwired_bin: &Path) -> Result<(Tier1Matrix, Vec<String>), String> {
+    let root = workspace_root();
+    let fixture_dir = root.join("tests/fixtures/tier1");
+    if fixture_dir.join("MANIFEST.json").exists() {
+        verify_fixture_manifest(&fixture_dir)?;
+    }
+    let mut matrix = Tier1Matrix::default();
+    let mut skipped = Vec::new();
+    for target in TIER1_TARGETS {
+        if !root.join(target.elf).exists() {
+            skipped.push(target.chip.to_string());
+            continue;
+        }
+        let row = run_target(target, labwired_bin)?;
+        matrix.0.insert(target.chip.to_string(), row);
+    }
+    Ok((matrix, skipped))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,5 +530,28 @@ peripherals:
     fn cell_status_as_str_matches_serde() {
         assert_eq!(serde_json::to_string(&CellStatus::Na).unwrap(), "\"na\"");
         assert_eq!(CellStatus::Na.as_str(), "na");
+    }
+
+    #[test]
+    fn target_table_paths_resolve_relative_to_workspace_root() {
+        let t = &TIER1_TARGETS[0];
+        assert_eq!(t.chip, "esp32s3");
+        assert!(t.chip_yaml.ends_with("configs/chips/esp32s3.yaml"));
+        assert!(t.elf.ends_with("tests/fixtures/tier1/esp32s3.elf"));
+        assert!(t
+            .flash_bin
+            .unwrap()
+            .ends_with("tests/fixtures/tier1/esp32s3-flash.bin"));
+    }
+
+    #[test]
+    fn manifest_verification_rejects_corrupt_blob() {
+        let dir = std::env::temp_dir().join("tier1-manifest-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("esp32s3.elf"), b"not the real elf").unwrap();
+        let manifest = r#"{ "esp32s3.elf": { "sha256": "0000000000000000000000000000000000000000000000000000000000000000" } }"#;
+        std::fs::write(dir.join("MANIFEST.json"), manifest).unwrap();
+        let err = verify_fixture_manifest(&dir).unwrap_err();
+        assert!(err.contains("esp32s3.elf"), "{err}");
     }
 }
