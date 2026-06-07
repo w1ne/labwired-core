@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 
 name: "esp32s3"
-arch: "xtensa"
+arch: "xtensa-lx7"
 flash:
   base: 0x42000000
   size: "16MB"
