@@ -15,6 +15,6 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-06-01T15:45:08.911093+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/26765396309/attempts/1
+  timestamp_utc: '2026-06-07T00:22:47.054438+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/27077875750/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/renesas-r7fa6m5b.md
