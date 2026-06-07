@@ -110,6 +110,50 @@ jobs:
           git commit -m "chore(tier1): nightly matrix refresh with run evidence"
           git push
 
+  esp32s3-fixtures-e2e:
+    name: ESP32-S3 Fixtures E2E (espup)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly-esp32s3-e2e
+          workspaces: |
+            . -> target
+
+      - name: Install espup
+        run: cargo install espup --locked
+
+      - name: Install Xtensa toolchain via espup
+        run: espup install
+
+      # espup emits ~/export-esp.sh; source it so the +esp toolchain and
+      # xtensa-esp32s3-none-elf target are available for cargo build.
+      - name: Build ESP32-S3 example fixtures
+        run: |
+          source ~/export-esp.sh
+          cargo +esp build --release \
+            --manifest-path examples/esp32s3-blinky/Cargo.toml \
+            --target xtensa-esp32s3-none-elf
+          cargo +esp build --release \
+            --manifest-path examples/esp32s3-hello-world/Cargo.toml \
+            --target xtensa-esp32s3-none-elf
+          cargo +esp build --release \
+            --manifest-path examples/esp32s3-i2c-tmp102/Cargo.toml \
+            --target xtensa-esp32s3-none-elf
+
+      # The tests are gated on --features esp32s3-fixtures and call
+      # ensure_firmware_built() which skips the cargo +esp build if the ELF
+      # already exists (we built it above). The tests themselves run on the
+      # standard host toolchain; only the ELF needs the Xtensa cross-compiler.
+      - name: Run ESP32-S3 fixtures e2e tests
+        run: cargo test -p labwired-core --features esp32s3-fixtures
+
   tier1-fixture-drift:
     name: Tier-1 Fixture Drift Check
     runs-on: ubuntu-latest
