@@ -833,10 +833,18 @@ mod tests {
 
     #[test]
     fn test_location_to_pc() {
-        // This test requires the firmware to be built with debug symbols
-        let elf_path = std::path::PathBuf::from("../../target/thumbv7m-none-eabi/debug/firmware");
+        // This test requires the firmware to be built with debug symbols.
+        // Build it with: cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi
+        // (see core-ci.yml "Build test firmware fixture" step).
+        let elf_path = std::path::PathBuf::from(
+            "../../target/thumbv7m-none-eabi/debug/firmware-ci-fixture",
+        );
         if !elf_path.exists() {
-            return; // Skip if file not found (e.g. in some CI environments)
+            panic!(
+                "fixture missing — build firmware-ci-fixture first: \
+                 cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi \
+                 (see core-ci.yml Build test firmware fixture step)"
+            );
         }
 
         let provider = SymbolProvider::new(&elf_path).expect("Failed to create SymbolProvider");

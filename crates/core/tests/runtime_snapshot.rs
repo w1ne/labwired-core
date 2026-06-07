@@ -196,11 +196,17 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
 ///     --steps 30000000 \
 ///     --output /tmp/agentdeck-postpaint.lwrs
 #[test]
+#[ignore = "needs /tmp/agentdeck-postpaint.lwrs from a manual capture"]
 fn agentdeck_snapshot_file_restores_post_paint_panel() {
     let snap_path = std::path::PathBuf::from("/tmp/agentdeck-postpaint.lwrs");
     if !snap_path.exists() {
-        eprintln!("[skip] {snap_path:?} not present — run `labwired-cli snapshot capture` first");
-        return;
+        panic!(
+            "/tmp/agentdeck-postpaint.lwrs not found — generate it with:\n  \
+             cargo run --release -p labwired-cli -- snapshot capture \\\n  \
+               --firmware /tmp/demo-agentdeck.elf \\\n  \
+               --steps 30000000 \\\n  \
+               --output /tmp/agentdeck-postpaint.lwrs"
+        );
     }
     let bytes = std::fs::read(&snap_path).expect("read snapshot file");
     let snap = MachineRuntimeSnapshot::from_bytes(&bytes).expect("decode snapshot");

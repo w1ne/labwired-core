@@ -1,0 +1,360 @@
+{
+  "schema_version": 2,
+  "peripherals": [
+    {
+      "device_type": "bg770a-cellular",
+      "label": "Quectel BG770A Cellular",
+      "summary": "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
+      "detail": "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "apn",
+          "ty": "str",
+          "doc": "APN to set on the PDP context (e.g. \"internet\")."
+        },
+        {
+          "name": "rssi",
+          "ty": "int",
+          "doc": "Initial signal strength reported by AT+CSQ (0..99)."
+        },
+        {
+          "name": "ber",
+          "ty": "int",
+          "doc": "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99)."
+        },
+        {
+          "name": "boot_urcs",
+          "ty": "bool",
+          "doc": "If true, the modem emits the cold-boot URC sequence on attach."
+        },
+        {
+          "name": "auto_attach",
+          "ty": "bool",
+          "doc": "If true, the modem reports itself already registered + attached at boot."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "quectel-bg770a-lab",
+          "chip": "stm32f103",
+          "example_dir": "quectel-bg770a-lab",
+          "demo_elf": "demo-quectel-bg770a-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "neo6m-gps",
+      "label": "NEO-6M GPS",
+      "summary": "GPS module streaming NMEA sentences over UART RX.",
+      "detail": "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. Firmware echoes the stream back to the host UART.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "lat_deg",
+          "ty": "float",
+          "doc": "Initial latitude in decimal degrees (paired with lon_deg)."
+        },
+        {
+          "name": "lon_deg",
+          "ty": "float",
+          "doc": "Initial longitude in decimal degrees (paired with lat_deg)."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "neo6m-gps-lab",
+          "chip": "stm32f103",
+          "example_dir": "neo6m-gps-lab",
+          "demo_elf": "demo-neo6m-gps-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "adxl345",
+      "label": "ADXL345 Tilt",
+      "summary": "3-axis ±2/4/8/16 g digital accelerometer over I2C.",
+      "detail": "Analog Devices ADXL345 with the canonical 0x53 / 0x1D 7-bit address pair. Wired through the simulated I2C bus; host stimulus seeds X/Y/Z and the firmware reads them through the DATAX/Y/Z registers.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x53; 0x1D selects the alternate-pin variant."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "adxl345-sensor-lab",
+          "chip": "stm32f103",
+          "example_dir": "adxl345-sensor-lab",
+          "demo_elf": "demo-adxl345-sensor-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "mpu6050",
+      "label": "MPU6050 IMU",
+      "summary": "6-axis gyro + accelerometer over I2C.",
+      "detail": "InvenSense MPU-6050 with WHO_AM_I = 0x68. Reports static sample values today; host stimulus hooks into the WASM bridge for live updates.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68; 0x69 selects the AD0=high variant."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "mpu6050-sensor-lab",
+          "chip": "stm32f103",
+          "example_dir": "mpu6050-sensor-lab",
+          "demo_elf": "demo-mpu6050-sensor-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "bme280",
+      "label": "BME280 Weather",
+      "summary": "Bosch BME280 temp + humidity + pressure sensor over I2C.",
+      "detail": "Returns the same factory dummy readings the real silicon ships with (≈25 °C, 50 % RH, sea-level pressure). Real-time stimulus comes from the WASM bridge.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "bme280-weather-lab",
+          "chip": "stm32f103",
+          "example_dir": "bme280-weather-lab",
+          "demo_elf": "demo-bme280-weather-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "oled-ssd1306",
+      "label": "SSD1306 OLED",
+      "summary": "128×64 monochrome OLED display over I2C with a paged framebuffer.",
+      "detail": "Solomon Systech SSD1306 with the canonical 0x3C / 0x3D address pair. Tracks the 8-page-by-128-column framebuffer; the WASM bridge surfaces pixel state for the playground's display overlay.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "ssd1306-hello-lab",
+          "chip": "stm32f103",
+          "example_dir": "ssd1306-hello-lab",
+          "demo_elf": "demo-ssd1306-hello-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "ili9341",
+      "label": "ILI9341 TFT",
+      "summary": "240×320 RGB565 SPI TFT display.",
+      "detail": "Implements the cmd / RAMWR SPI protocol against an in-memory framebuffer. The playground surfaces pixels through the simulator bridge so the host can render the display verbatim.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "ili9341-tft-lab",
+          "chip": "stm32f103",
+          "example_dir": "ili9341-tft-lab",
+          "demo_elf": "demo-ili9341-tft-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "max31855",
+      "label": "MAX31855 Thermocouple",
+      "summary": "Cold-junction-compensated K-type thermocouple amplifier (read-only SPI).",
+      "detail": "Returns the 32-bit MAX31855 response on every CS-framed transaction. Host stimulus seeds thermocouple + cold-junction temperatures; bit layout matches the real silicon's datasheet exactly.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "max31855-thermocouple-lab",
+          "chip": "stm32f103",
+          "example_dir": "max31855-thermocouple-lab",
+          "demo_elf": "demo-max31855-thermocouple-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "ssd1680_tricolor_290",
+      "label": "SSD1680 Tri-Color E-Paper",
+      "summary": "2.9\" tri-color (black/white/red) SSD1680 e-paper over SPI.",
+      "detail": "Full SPI command + display-data RAM state machine, validated by the e2e e-paper integration test. Same model drives both the STM32F103 lab and the ESP32 playground board.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "epaper-tricolor-lab",
+          "chip": "stm32f103",
+          "example_dir": "epaper-tricolor-lab",
+          "demo_elf": "demo-epaper-tricolor-lab.elf"
+        },
+        {
+          "board_id": "esp32-epaper-lab",
+          "chip": "esp32",
+          "example_dir": "esp32-epaper-lab",
+          "demo_elf": "demo-esp32-epaper-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "sn74hc165",
+      "label": "74HC165 Shift Register",
+      "summary": "8-bit parallel-in / serial-out shift register over SPI.",
+      "detail": "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the AL2205 IO-Link DI lab to surface field-side switch state.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        },
+        {
+          "name": "inputs",
+          "ty": "int",
+          "doc": "Optional initial 8-bit input state (0..0xFF) — useful for static test stimulus."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "al2205-iolink-dido",
+          "chip": "stm32l476",
+          "example_dir": "al2205-iolink-dido",
+          "demo_elf": "demo-al2205-iolink-dido.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "pcd8544",
+      "label": "Nokia 5110 LCD",
+      "summary": "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI.",
+      "detail": "Tracks the 504-byte (84×48 / 8) DDRAM, command vs data discrimination via a host GPIO D/C line that the bus resolves to a concrete GPIO ODR address at attach time.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin (e.g. \"PB6\"). Defaults to PB6."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin (e.g. \"PC7\"). Defaults to PC7. Resolved to the driving GPIO's ODR address at attach time."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "nokia5110-invaders-lab",
+          "chip": "stm32l476",
+          "example_dir": "nokia5110-invaders-lab",
+          "demo_elf": "demo-nokia5110-invaders-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "iolink-master",
+      "label": "IO-Link Master",
+      "summary": "IO-Link master state machine over UART.",
+      "detail": "Drives wake-up / startup / operate cycles, m-sequence types, process-data exchange. The AL2205 DI device demo uses this to host two digital-input channels.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "pd_in_len",
+          "ty": "int",
+          "doc": "Process-data input length in bytes. Defaults to 1 (single-byte DI device)."
+        },
+        {
+          "name": "m_seq_type",
+          "ty": "int",
+          "doc": "M-sequence type (1..6). Used to derive od_len: types ≥ 4 use 2-byte OD frames."
+        },
+        {
+          "name": "com",
+          "ty": "str",
+          "doc": "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud)."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "al2205-iolink-dido",
+          "chip": "stm32l476",
+          "example_dir": "al2205-iolink-dido",
+          "demo_elf": "demo-al2205-iolink-dido.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "ntc-thermistor",
+      "label": "NTC Thermistor",
+      "summary": "10 kΩ NTC + voltage divider on an ADC channel.",
+      "detail": "Beta-equation thermistor model. Constructor takes a channel + initial temperature; the kit seeds the ADC channel with the corresponding divider voltage. Live updates come from the WASM bridge as the host moves the temperature slider.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        },
+        {
+          "name": "initial_temperature_c",
+          "ty": "float",
+          "doc": "Initial temperature in °C used to seed the channel voltage. Defaults to 25.0."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "ntc-thermistor-lab",
+          "chip": "stm32f103",
+          "example_dir": "ntc-thermistor-lab",
+          "demo_elf": "demo-ntc-thermistor-lab.elf"
+        }
+      ]
+    }
+  ]
+}

@@ -8,7 +8,11 @@ fn test_dap_e2e_launch_and_uart() {
     let firmware_path = root.join("../../target/thumbv7m-none-eabi/debug/firmware-ci-fixture");
 
     if !firmware_path.exists() {
-        return;
+        panic!(
+            "fixture missing — build firmware-ci-fixture first: \
+             cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi \
+             (see core-ci.yml Build test firmware fixture step)"
+        );
     }
 
     // Start labwired-dap

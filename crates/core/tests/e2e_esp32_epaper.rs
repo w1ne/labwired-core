@@ -57,11 +57,18 @@ fn ensure_firmware_built() -> PathBuf {
 }
 
 #[test]
+#[ignore = "needs +esp-built epaper ELF; armed by the nightly espup lane"]
 fn firmware_drives_panel_to_ereader_bitmap() {
     let elf_path = ensure_firmware_built();
     if !elf_path.exists() {
-        eprintln!("[skip] esp32-epaper-lab ELF unavailable; skipping");
-        return;
+        // Comment in core-ci.yml claimed CI builds this — it does NOT.
+        // The nightly espup lane (core-nightly.yml) is responsible.
+        panic!(
+            "esp32-epaper-lab ELF not found at {elf_path:?}. \
+             Build with: cd core/examples/esp32-epaper-lab && \
+             source ~/export-esp.sh && cargo build --release. \
+             This test is armed by the nightly espup lane (core-nightly.yml)."
+        );
     }
 
     let mut bus = SystemBus::new();

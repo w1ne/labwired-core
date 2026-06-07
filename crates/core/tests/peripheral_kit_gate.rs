@@ -121,25 +121,41 @@ fn manifest_json_matches_registry() {
     // test fails — keeping the TS / browser layer from silently drifting
     // out of sync with the Rust source of truth.
     //
-    // The manifest lives in the *parent* labwired repo. When labwired-core
-    // is checked out standalone (released crate, contributor fork), that
-    // path doesn't exist — skip rather than fail to avoid a false signal.
-    let candidates = [
-        // Standard layout: core is a submodule under labwired/.
-        workspace_root()
-            .parent()
-            .map(|p| p.join("packages/ui/src/peripherals/manifest.json")),
-        // Direct sibling layout (some dev environments).
-        workspace_root().parent().and_then(|p| {
-            p.parent()
-                .map(|p| p.join("labwired/packages/ui/src/peripherals/manifest.json"))
-        }),
-    ];
-    let manifest_path = candidates.into_iter().flatten().find(|p| p.exists());
-    let Some(manifest_path) = manifest_path else {
-        eprintln!("[peripheral_kit_gate] skipping manifest-drift check: no parent labwired/ checkout found");
-        return;
+    // Primary source: vendored copy at crates/core/tests/fixtures/peripherals/manifest.json.
+    // This file is committed here so the gate fires in CI without needing a parent
+    // labwired/ checkout. Freshness is owned by the parent repo's CI — when
+    // packages/ui/src/peripherals/manifest.json changes, vendor it here too.
+    //
+    // Override: LABWIRED_PERIPHERALS_MANIFEST env var, then parent-repo paths
+    // (for monorepo dev where live edits should be caught immediately).
+    let manifest_path = if let Ok(p) = std::env::var("LABWIRED_PERIPHERALS_MANIFEST") {
+        let p = PathBuf::from(p);
+        assert!(p.exists(), "LABWIRED_PERIPHERALS_MANIFEST={p:?} does not exist");
+        p
+    } else {
+        // Check live parent-repo copies first (monorepo dev).
+        let live_candidates = [
+            workspace_root()
+                .parent()
+                .map(|p| p.join("packages/ui/src/peripherals/manifest.json")),
+            workspace_root().parent().and_then(|p| {
+                p.parent()
+                    .map(|p| p.join("labwired/packages/ui/src/peripherals/manifest.json"))
+            }),
+        ];
+        let live = live_candidates.into_iter().flatten().find(|p| p.exists());
+        live.unwrap_or_else(|| {
+            // Fall back to the vendored snapshot committed in this repo.
+            workspace_root()
+                .join("crates/core/tests/fixtures/peripherals/manifest.json")
+        })
     };
+    assert!(
+        manifest_path.exists(),
+        "peripherals manifest not found at {manifest_path:?}; vendor it from \
+         packages/ui/src/peripherals/manifest.json into \
+         crates/core/tests/fixtures/peripherals/manifest.json"
+    );
 
     let committed = std::fs::read_to_string(&manifest_path)
         .unwrap_or_else(|e| panic!("reading {manifest_path:?}: {e}"));
