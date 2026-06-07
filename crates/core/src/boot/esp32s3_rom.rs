@@ -4,11 +4,17 @@
 
 //! ESP32-S3 boot-ROM provisioning for the faithful `--rom-boot` path.
 //!
-//! The ESP32-S3 boot ROM is Espressif copyright and is NOT vendored. Instead
-//! we read the ROM ELF shipped with the user's installed toolchain and extract
-//! the two flat images the model loads:
+//! The two flat images the model loads:
 //!   * IROM (instruction bus) 0x4000_0000..0x4006_0000 (384 KiB)
 //!   * DROM (data bus)        0x3FF0_0000..0x3FF2_0000 (128 KiB)
+//!
+//! Resolution order: explicit env pins, then the ROM ELF shipped with the
+//! user's installed toolchain (PlatformIO/ESP-IDF), then the vendored images
+//! under `crates/core/roms/esp32s3/` (embedded at build time, non-wasm only)
+//! so `--rom-boot` works out of the box with no toolchain installed. The
+//! vendored bins are extracted from Espressif's published
+//! `esp32s3_rev0_rom.elf` (mask-ROM contents, Espressif copyright — see
+//! `crates/core/roms/esp32s3/README.md` for provenance).
 //!
 //! This is a Rust port of `scripts/make_esp32s3_rom_bins.py`: PT_LOAD laid by
 //! load-address (p_paddr) for IROM / vaddr for DROM, the boot ROM's `.data`
@@ -169,6 +175,8 @@ fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_bas
 ///      tests that assert fast-boot-specific wiring.
 ///   1. Explicit pre-extracted `LABWIRED_ESP32S3_ROM`/`_DROM` bins (back-compat).
 ///   2. Discover the toolchain ROM ELF, extract (cached by ELF content hash), load.
+///   3. Vendored images embedded at build time (non-wasm only) — the
+///      out-of-the-box path when no toolchain is installed.
 pub fn provision_rom_images() -> Option<RomImages> {
     // 0. Explicit opt-out: force fast-boot/harness even when a real ROM is
     //    available (used by the fast-boot playground path and by unit tests that
@@ -188,24 +196,52 @@ pub fn provision_rom_images() -> Option<RomImages> {
     }
 
     // 2. Discover + extract (cached).
-    let elf_path = discover_rom_elf()?;
-    let elf_bytes = std::fs::read(&elf_path).ok()?;
-    let key = fnv1a_64(&elf_bytes);
-    let dir = cache_dir();
-    let irom_path = dir.join(format!("esp32s3_irom_{key:016x}.bin"));
-    let drom_path = dir.join(format!("esp32s3_drom_{key:016x}.bin"));
+    if let Some(elf_path) = discover_rom_elf() {
+        if let Ok(elf_bytes) = std::fs::read(&elf_path) {
+            let key = fnv1a_64(&elf_bytes);
+            let dir = cache_dir();
+            let irom_path = dir.join(format!("esp32s3_irom_{key:016x}.bin"));
+            let drom_path = dir.join(format!("esp32s3_drom_{key:016x}.bin"));
 
-    if let (Ok(irom), Ok(drom)) = (std::fs::read(&irom_path), std::fs::read(&drom_path)) {
-        if irom.len() == IROM_SIZE && drom.len() == DROM_SIZE {
-            return Some(RomImages { irom, drom });
+            if let (Ok(irom), Ok(drom)) = (std::fs::read(&irom_path), std::fs::read(&drom_path)) {
+                if irom.len() == IROM_SIZE && drom.len() == DROM_SIZE {
+                    return Some(RomImages { irom, drom });
+                }
+            }
+
+            if let Ok(images) = extract_rom_images(&elf_bytes) {
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = std::fs::write(&irom_path, &images.irom);
+                let _ = std::fs::write(&drom_path, &images.drom);
+                return Some(images);
+            }
         }
     }
 
-    let images = extract_rom_images(&elf_bytes).ok()?;
-    let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(&irom_path, &images.irom);
-    let _ = std::fs::write(&drom_path, &images.drom);
-    Some(images)
+    // 3. Vendored images — out-of-the-box fallback (no toolchain needed).
+    vendored_rom_images()
+}
+
+/// Vendored flat ROM images, embedded at build time. Extracted from
+/// Espressif's published `esp32s3_rev0_rom.elf` by
+/// `scripts/make_esp32s3_rom_bins.py` — see `crates/core/roms/esp32s3/`.
+/// Not compiled into wasm builds (the playground uses the fast-boot path and
+/// must not carry the 512 KiB of ROM in its bundle).
+#[cfg(not(target_arch = "wasm32"))]
+fn vendored_rom_images() -> Option<RomImages> {
+    static VENDORED_IROM: &[u8] = include_bytes!("../../roms/esp32s3/esp32s3_rom.bin");
+    static VENDORED_DROM: &[u8] = include_bytes!("../../roms/esp32s3/esp32s3_drom.bin");
+    debug_assert_eq!(VENDORED_IROM.len(), IROM_SIZE);
+    debug_assert_eq!(VENDORED_DROM.len(), DROM_SIZE);
+    Some(RomImages {
+        irom: VENDORED_IROM.to_vec(),
+        drom: VENDORED_DROM.to_vec(),
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+fn vendored_rom_images() -> Option<RomImages> {
+    None
 }
 
 /// Cache directory for extracted ROM images (`$XDG_CACHE_HOME` or `~/.cache`).
@@ -538,5 +574,19 @@ mod tests {
 
         std::env::remove_var("LABWIRED_ESP32S3_ROM_ELF");
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    /// Out-of-the-box guarantee: with no env pins and no toolchain ELF, the
+    /// vendored images must resolve with the architected window sizes and the
+    /// BROM reset-vector code present (non-zero bytes at 0x400).
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn vendored_images_resolve_with_architected_sizes() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let images = vendored_rom_images().expect("vendored ROM images embedded");
+        assert_eq!(images.irom.len(), IROM_SIZE);
+        assert_eq!(images.drom.len(), DROM_SIZE);
+        // Reset vector 0x40000400 (IROM offset 0x400) holds real code.
+        assert!(images.irom[0x400..0x410].iter().any(|&b| b != 0));
     }
 }
