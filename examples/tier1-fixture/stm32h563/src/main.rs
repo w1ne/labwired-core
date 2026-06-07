@@ -1,0 +1,209 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+//
+// This software is released under the MIT License.
+// See the LICENSE file in the project root for full license information.
+
+//! STM32H563 Tier-1 fixture firmware (Cortex-M33; built thumbv7m-none-eabi,
+//! matching the in-repo H563 firmware convention).
+//!
+//! Validates the simulator's chip model peripheral-by-peripheral with RAW
+//! REGISTER accesses against the peripherals wired by
+//! `configs/chips/stm32h563.yaml`, reporting one line per peripheral class
+//! over USART3 using the TIER1 protocol:
+//!
+//! ```text
+//! TIER1 <class> PASS
+//! TIER1 <class> FAIL code=<reason>
+//! TIER1 done
+//! ```
+//!
+//! The `uart` class is implicit: receiving `TIER1 done` over the UART is
+//! itself the proof of a working UART path, so no `uart` line is printed.
+//!
+//! `timer` and `irq` are NOT reported: the H563 yaml declares no
+//! TIM/NVIC-class peripheral ids (systick does not count as a `timer`
+//! class marker), so the matrix renders those cells `na`.
+//!
+//! Every poll is bounded by a fixed iteration count (the simulator is
+//! deterministic — no wall-clock timeouts). Register offsets follow the
+//! simulator's models: rcc.rs (`stm32v2` profile), gpio.rs (`stm32v2`),
+//! uart.rs (`stm32v2`) and dma.rs (Dma1 — the yaml wires the generic
+//! 7-channel STM32 DMA model, not the H5 GPDMA).
+
+#![no_std]
+#![no_main]
+
+use core::ptr::{read_volatile, write_volatile};
+use cortex_m_rt::entry;
+use panic_halt as _;
+
+// ── Wired peripherals (configs/chips/stm32h563.yaml) ──────────────────────
+const RCC_BASE: u32 = 0x4402_0C00; // type rcc, profile stm32v2
+const GPIOA_BASE: u32 = 0x4202_0000; // type gpio, profile stm32v2
+const USART3_BASE: u32 = 0x4000_4800; // type uart, profile stm32v2
+const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
+
+// USART3, stm32v2 layout: ISR @ 0x1C (TXE = bit 7), TDR @ 0x28.
+// Read the full ISR word and bit-test TXE: a sign-bit test on a byte
+// load compiles to LDRSB reg-offset, which the simulator's 16-bit
+// Thumb decoder does not implement (decoder/arm.rs only matches
+// even-op 0101-family encodings).
+const UART_STATUS: *const u32 = (USART3_BASE + 0x1C) as *const u32;
+const UART_TX: *mut u8 = (USART3_BASE + 0x28) as *mut u8;
+const TXE_BIT: u32 = 1 << 7;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+#[inline(always)]
+fn rd32(addr: u32) -> u32 {
+    unsafe { read_volatile(addr as *const u32) }
+}
+
+#[inline(always)]
+fn wr32(addr: u32, value: u32) {
+    unsafe { write_volatile(addr as *mut u32, value) }
+}
+
+/// Fixed-iteration busy spin — deterministic in the simulator.
+fn spin(iters: u32) {
+    for i in 0..iters {
+        core::hint::black_box(i);
+    }
+}
+
+fn putc(byte: u8) {
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(UART_STATUS) } & TXE_BIT != 0 {
+            break;
+        }
+    }
+    unsafe { write_volatile(UART_TX, byte) };
+}
+
+fn puts(s: &[u8]) {
+    for &b in s {
+        putc(b);
+    }
+}
+
+fn report(class: &[u8], result: Result<(), &'static [u8]>) {
+    puts(b"TIER1 ");
+    puts(class);
+    match result {
+        Ok(()) => puts(b" PASS\n"),
+        Err(code) => {
+            puts(b" FAIL code=");
+            puts(code);
+            puts(b"\n");
+        }
+    }
+}
+
+// ── Checks ──────────────────────────────────────────────────────────────────
+
+/// clock: V2 (H5-style) RCC. HSI is on+ready out of reset; HSEON (bit 16)
+/// must latch HSERDY (bit 17); SW→SWS mirrors in CFGR @ 0x04; AHB2ENR @
+/// 0x8C round-trips GPIO port enables.
+fn check_clock() -> Result<(), &'static [u8]> {
+    if rd32(RCC_BASE) & (1 << 1) == 0 {
+        return Err(b"clock-hsirdy");
+    }
+    let cr = rd32(RCC_BASE);
+    wr32(RCC_BASE, cr | (1 << 16)); // HSEON
+    if rd32(RCC_BASE) & (1 << 17) == 0 {
+        return Err(b"clock-hserdy");
+    }
+    wr32(RCC_BASE, cr); // drop HSE; HSERDY must clear
+    if rd32(RCC_BASE) & (1 << 17) != 0 {
+        return Err(b"clock-hserdy-stuck");
+    }
+    // CFGR SW=01 → SWS must mirror.
+    wr32(RCC_BASE + 0x04, 0x1);
+    if (rd32(RCC_BASE + 0x04) >> 2) & 0x3 != 0x1 {
+        return Err(b"clock-sws");
+    }
+    // AHB2ENR round-trip: GPIOA..GPIOG enables.
+    wr32(RCC_BASE + 0x8C, 0x7F);
+    if rd32(RCC_BASE + 0x8C) != 0x7F {
+        return Err(b"clock-enr");
+    }
+    Ok(())
+}
+
+/// gpio: stm32v2 port. PA5 to output via MODER, set via BSRR, observe ODR,
+/// clear via BRR.
+///
+/// KNOWN MODEL GAP: this port's MMIO window (0x4202_xxxx) lies inside the
+/// Cortex-M peripheral bit-band ALIAS range (0x4200_0000-0x43FF_FFFF), and
+/// the simulator bus applies bit-band translation to every 32-bit access on
+/// every ARM chip (bus/mod.rs `bit_band_translate`), even though this core
+/// has no bit-banding and the chip yaml wires real peripherals here. Word
+/// accesses therefore never reach the GPIO model and the check fails with
+/// `gpio-bitband-shadow` (same root cause as the nucleo-h563zi io-smoke
+/// assertion failure). The failure code names the root cause rather than
+/// the first failing sub-step.
+fn check_gpio() -> Result<(), &'static [u8]> {
+    let moder = rd32(GPIOA_BASE);
+    wr32(GPIOA_BASE, (moder & !(0x3 << 10)) | (0x1 << 10)); // PA5 output
+    wr32(GPIOA_BASE + 0x18, 1 << 5); // BSRR set
+    if rd32(GPIOA_BASE + 0x14) & (1 << 5) == 0 {
+        return Err(b"gpio-bitband-shadow");
+    }
+    wr32(GPIOA_BASE + 0x28, 1 << 5); // BRR clear
+    if rd32(GPIOA_BASE + 0x14) & (1 << 5) != 0 {
+        return Err(b"gpio-bitband-shadow");
+    }
+    Ok(())
+}
+
+/// dma: DMA1 channel 1 mem-to-mem copy (CCR.MEM2MEM, CMAR → CPAR), byte
+/// elements with MINC+PINC. TCIF1 must latch and the destination must match.
+fn check_dma() -> Result<(), &'static [u8]> {
+    const N: usize = 8;
+    let src: [u8; N] = [0xA5, 0x5A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+    let mut dst: [u8; N] = [0; N];
+
+    wr32(DMA1_BASE + 0x04, 0xF); // IFCR: clear stale CH1 flags
+    wr32(DMA1_BASE + 0x10, dst.as_mut_ptr() as u32); // CPAR1 = destination
+    wr32(DMA1_BASE + 0x14, src.as_ptr() as u32); // CMAR1 = source
+    wr32(DMA1_BASE + 0x0C, N as u32); // CNDTR1
+                                      // Configure first WITHOUT EN (the bus issues byte writes low-to-high, so
+                                      // setting EN in the same word write would start the channel before the
+                                      // MEM2MEM bit lands), then flip EN alone.
+    let cfg: u32 = (1 << 14) | (1 << 7) | (1 << 6) | (1 << 4); // MEM2MEM|MINC|PINC|DIR
+    wr32(DMA1_BASE + 0x08, cfg);
+    unsafe { write_volatile((DMA1_BASE + 0x08) as *mut u8, (cfg | 1) as u8) }; // EN
+
+    let mut done = false;
+    for _ in 0..20_000 {
+        if rd32(DMA1_BASE) & (1 << 1) != 0 {
+            // TCIF1
+            done = true;
+            break;
+        }
+    }
+    wr32(DMA1_BASE + 0x08, 0); // disable channel
+    wr32(DMA1_BASE + 0x04, 0xF); // clear CH1 flags
+    if !done {
+        return Err(b"dma-tcif-timeout");
+    }
+    for i in 0..N {
+        if unsafe { read_volatile(dst.as_ptr().add(i)) } != src[i] {
+            return Err(b"dma-data-mismatch");
+        }
+    }
+    Ok(())
+}
+
+#[entry]
+fn main() -> ! {
+    report(b"clock", check_clock());
+    report(b"gpio", check_gpio());
+    report(b"dma", check_dma());
+    puts(b"TIER1 done\n");
+
+    loop {
+        spin(1_000_000);
+    }
+}
