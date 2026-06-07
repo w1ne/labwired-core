@@ -21,6 +21,11 @@ def render(matrix: dict) -> str:
         "",
         "Every cell links the CI run that produced it; no link → `·` unrecorded.",
         "",
+        "**Confidence tier:** ✅ means *sim-consistent* — the check passed against",
+        "the simulator's peripheral models on real firmware. Silicon-anchored",
+        "verification (hardware-in-the-loop capture replay) is a separate tier",
+        "that arrives with the HIL workstream; no cell currently claims it.",
+        "",
         "| chip | " + " | ".join(classes) + " |",
         "|---|" + "---|" * len(classes),
     ]

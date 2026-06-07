@@ -1,0 +1,24 @@
+[package]
+name = "tier1-fixture-rp2040"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team <team@labwired.io>"]
+license = "MIT"
+description = "RP2040 Tier-1 fixture firmware: raw-register peripheral self-tests reporting over UART0 via the TIER1 protocol."
+
+[dependencies]
+cortex-m     = "0.7"
+cortex-m-rt  = "0.7"
+panic-halt   = "0.2"
+
+[[bin]]
+name = "tier1-fixture-rp2040"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.release]
+opt-level     = "s"
+lto           = "thin"
+codegen-units = 1
+debug         = true

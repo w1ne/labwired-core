@@ -16,6 +16,12 @@ build_s3() {
 
 build_s3
 
+# Per-family fixture builders (added with the full-matrix expansion).
+for fam in scripts/tier1/build_*.sh; do
+  [ -x "$fam" ] || chmod +x "$fam"
+  "$ROOT/$fam"
+done
+
 (cd "$OUT" && python3 - <<'EOF'
 import hashlib, json, pathlib, subprocess
 rev = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()

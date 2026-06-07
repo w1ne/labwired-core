@@ -61,6 +61,9 @@ members = [
     "examples/ili9341-tft-lab",
     "examples/epaper-tricolor-lab",
     "examples/nokia5110-invaders-lab",
+    "examples/tier1-fixture/nrf52832",
+    "examples/tier1-fixture/nrf52840",
+    "examples/tier1-fixture/rp2040",
 ]
 # firmware-hal-test is a standalone reference example pinned to stm32f1xx-hal.
 # It carries its own [profile.release] (opt-level = "z", lto = true) that is
@@ -75,6 +78,7 @@ exclude = [
     "examples/esp32s3-i2c-tmp102",
     "examples/esp32-epaper-lab",
     "examples/tier1-fixture/esp32s3",
+    "examples/tier1-fixture/esp32",
 ]
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader"]
 

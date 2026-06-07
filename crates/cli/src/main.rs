@@ -733,6 +733,156 @@ fn main() -> ExitCode {
     }
 }
 
+/// Fast-boot path for RISC-V chip descriptors (e.g. ESP32-C3).
+///
+/// Loads the chip's declarative peripherals from the YAML via
+/// `SystemBus::from_config`, creates a RISC-V CPU, loads the ELF at its entry
+/// point, and runs the step loop up to `max_steps`. UART output is echoed to
+/// stdout, which is how the Tier-1 harness reads protocol lines
+/// (`TIER1 <class> PASS|FAIL` / `TIER1 done`).
+fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
+    use labwired_core::bus::SystemBus;
+
+    let chip = match labwired_config::ChipDescriptor::from_file(&args.chip) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: cannot parse chip YAML {:?}: {e}", args.chip);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    // Minimal system manifest: no external devices, no extra peripherals.
+    // All peripherals come from the chip descriptor.
+    let manifest = labwired_config::SystemManifest {
+        schema_version: "1.0".to_string(),
+        name: chip.name.clone(),
+        chip: args.chip.to_string_lossy().into_owned(),
+        memory_overrides: Default::default(),
+        external_devices: vec![],
+        board_io: vec![],
+        peripherals: vec![],
+        walk_deleted: false,
+    };
+
+    let mut bus = match SystemBus::from_config(&chip, &manifest) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: failed to build system bus: {e:#}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let program = match labwired_loader::load_elf(&args.firmware) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: cannot load ELF {:?}: {e}", args.firmware);
+            return ExitCode::from(EXIT_RUNTIME_ERROR);
+        }
+    };
+
+    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    if let Err(e) = machine.load_firmware(&program) {
+        eprintln!("error: firmware load failed: {e}");
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    for i in 0..limit {
+        if let Err(e) = machine.step() {
+            tracing::debug!(
+                "labwired-riscv: step {} pc={:#010x} halt: {}",
+                i,
+                machine.cpu.get_pc(),
+                e
+            );
+            break;
+        }
+    }
+
+    ExitCode::from(EXIT_PASS)
+}
+
+/// Fast-boot an ESP32-classic (LX6) ELF and run the step loop.
+///
+/// Mirrors the pattern in `crates/core/tests/e2e_esp32_epaper.rs`:
+/// `configure_xtensa_esp32` + ELF load + set_pc(entry) + set_sp + step loop.
+/// UART0 (0x3FF4_0000, STM32F1 layout, echo_stdout=true) carries the TIER1
+/// protocol lines to the tier1 harness via stdout.
+fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
+    use labwired_core::bus::SystemBus;
+    use labwired_core::system::xtensa::configure_xtensa_esp32;
+    use labwired_core::SimulationError;
+
+    // Read the firmware ELF.
+    let elf_bytes = match std::fs::read(&args.firmware) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "error: cannot read firmware ELF at {:?}: {e}",
+                args.firmware
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let image = match labwired_loader::load_elf_bytes(&elf_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            eprintln!("error: failed to parse ELF: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let mut bus = SystemBus::new();
+    let mut cpu = configure_xtensa_esp32(&mut bus);
+
+    // Load ELF segments into bus memory (IRAM/DRAM/flash windows).
+    for segment in &image.segments {
+        for (i, &byte) in segment.data.iter().enumerate() {
+            let addr = segment.start_addr + i as u64;
+            let _ = bus.write_u8(addr, byte);
+        }
+    }
+
+    // Set PC to ELF entry and seed SP at top of SRAM1 (post-BROM default on
+    // real silicon; see e2e_external_arduino_esp32_in_sim for the rationale).
+    cpu.set_pc(image.entry_point as u32);
+    cpu.set_sp(0x3FFE_0000);
+    // Post-bootloader PS state: WOE=1 (windowed ABI), INTLEVEL=0, EXCM=0.
+    cpu.ps = labwired_core::cpu::xtensa_regs::Ps::from_raw(1 << 18);
+
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
+    let config = labwired_core::SimulationConfig::default();
+    let mut steps = 0u64;
+
+    while steps < limit {
+        match cpu.step(&mut bus, &observers, &config) {
+            Ok(()) => {}
+            Err(SimulationError::BreakpointHit(_)) => break,
+            Err(SimulationError::ExceptionRaised { cause, pc }) => {
+                eprintln!("labwired-cli run (esp32): ExceptionRaised cause={cause} at 0x{pc:08x}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+            Err(e) => {
+                eprintln!(
+                    "labwired-cli run (esp32): simulator error at pc=0x{:08x}: {e}",
+                    cpu.get_pc(),
+                );
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+        bus.tick_peripherals_with_costs();
+        steps += 1;
+    }
+    eprintln!(
+        "labwired-cli run (esp32): reached --max-steps {limit}; pc=0x{:08x}",
+        cpu.get_pc(),
+    );
+    ExitCode::from(EXIT_PASS)
+}
+
 fn run_firmware(args: RunArgs) -> ExitCode {
     use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
     use labwired_core::bus::SystemBus;
@@ -747,6 +897,26 @@ fn run_firmware(args: RunArgs) -> ExitCode {
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
+    // ARM fast-boot path: parse the chip YAML, build the bus, run the firmware
+    // through a Cortex-M machine, and stream UART bytes to stdout so the
+    // TIER1 protocol lines are visible to the caller.
+    if chip_yaml.contains("arch: \"arm\"") || chip_yaml.contains("arch: arm") {
+        return run_firmware_arm(&args, &chip_yaml);
+    }
+
+    // RISC-V fast-boot path: load peripherals from the chip YAML and run the
+    // RV32I core. This is the path used by Tier-1 fixtures for RISC-V chips
+    // (e.g. ESP32-C3) which cannot go through the Xtensa boot sequence.
+    if chip_yaml.contains("arch: \"riscv\"") || chip_yaml.contains("arch: riscv") {
+        return run_firmware_riscv(args, chip_yaml);
+    }
+
+    // Classic ESP32 (Xtensa LX6) fast-boot path.
+    if chip_yaml.contains("xtensa-lx6") {
+        return run_firmware_esp32(&args);
+    }
+
     if !chip_yaml.contains("xtensa-lx7") {
         eprintln!(
             "error: chip {:?} does not look like an Xtensa LX7 chip; \
@@ -1211,7 +1381,9 @@ fn run_tier1_matrix(args: Tier1MatrixArgs) -> ExitCode {
             }
             // --run-url given but nothing was actually exercised → vacuous green
             // is not permitted; fail loudly so CI notices the misconfiguration.
-            if args.run_url.is_some() && matrix.0.is_empty() {
+            // (Skipped targets still emit unrecorded rows, so key on the count
+            // of EXERCISED chips, not on matrix emptiness.)
+            if args.run_url.is_some() && matrix.0.len() == skipped.len() {
                 eprintln!("error: --run-url given but no fixtures were exercised");
                 return ExitCode::FAILURE;
             }
@@ -2955,6 +3127,96 @@ fn run_machine_load(args: LoadArgs) -> ExitCode {
             ExitCode::from(EXIT_CONFIG_ERROR)
         }
     }
+}
+
+/// Fast-boot an ARM Cortex-M firmware from a chip YAML and ELF path.
+///
+/// Builds the bus directly from the chip descriptor (no system manifest
+/// required — the chip YAML's `peripherals` list is sufficient for raw-register
+/// fixture firmware).  UART bytes are streamed to stdout so the TIER1 protocol
+/// lines are visible to callers that pipe stdout.  Exits when the step limit
+/// is reached or the firmware halts.
+fn run_firmware_arm(args: &RunArgs, chip_yaml: &str) -> ExitCode {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::SystemBus;
+    use labwired_core::system::cortex_m::configure_cortex_m;
+    use labwired_core::Machine;
+    use std::io::Write;
+
+    // Parse the chip descriptor.
+    let chip = match serde_yaml::from_str::<ChipDescriptor>(chip_yaml) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: cannot parse chip YAML: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    // Synthesise a minimal system manifest (no external devices) so the bus
+    // builder has something to work with.  The chip path is already absolute
+    // because `chip_yaml` was read from `args.chip`.
+    let manifest_yaml = format!(
+        "name: \"tier1-run\"\nchip: \"{}\"\nexternal_devices: []\n",
+        args.chip.display()
+    );
+    let mut manifest = match serde_yaml::from_str::<SystemManifest>(&manifest_yaml) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("error: cannot build minimal manifest: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    // Chip field must be an absolute path string; already is (args.chip is absolute
+    // relative to the caller's cwd, which is the workspace root per run_target).
+    manifest.chip = args.chip.to_string_lossy().into_owned();
+
+    // Build the bus.
+    let mut bus = match SystemBus::from_config(&chip, &manifest) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: cannot build bus from chip config: {e}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    // Attach stdout echo to every UART so protocol lines flow through.
+    // `echo_stdout = true` prints each byte as it arrives.
+    let uart_sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    bus.attach_uart_tx_sink(uart_sink.clone(), true);
+
+    // Configure Cortex-M CPU.
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+
+    // Load ELF.
+    let image = match labwired_loader::load_elf(&args.firmware) {
+        Ok(img) => img,
+        Err(e) => {
+            eprintln!("error: cannot load firmware ELF {:?}: {e}", args.firmware);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    if let Err(e) = machine.load_firmware(&image) {
+        eprintln!("error: cannot map firmware into bus: {e}");
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
+
+    // Run the step loop.
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    for _ in 0..limit {
+        match machine.step() {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("labwired run (arm): simulation error: {e}");
+                // Non-fatal for TIER1: the protocol may already be complete.
+                break;
+            }
+        }
+    }
+
+    // Flush stdout.
+    let _ = std::io::stdout().flush();
+    ExitCode::from(EXIT_PASS)
 }
 
 fn run_interactive_arm(

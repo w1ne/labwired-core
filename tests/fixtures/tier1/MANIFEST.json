@@ -1,10 +1,66 @@
 {
+  "esp32.elf": {
+    "sha256": "ce936666617ee8b3e8cfffeeaca39df2138e62edb84efeb6036d2782e3f3e730",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "esp32c3.elf": {
+    "sha256": "356f7d60f420b21db009fdd72a928df2075f0a467f544f08844ccafd5c4256b4",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",
-    "source_rev": "b508acdb09e3e1be97fc7527cf142e709ccecab7"
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
   },
   "esp32s3.elf": {
     "sha256": "27a61f851c798edbf2dabc38526cf4ca9211ab51a89387baba9faa1936060a5f",
-    "source_rev": "b508acdb09e3e1be97fc7527cf142e709ccecab7"
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "nrf52832.elf": {
+    "sha256": "9933cb55cf63861ddd89d1f769a29ed4448ece3d665091cf1831d8c04d80e8a6",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "nrf52840.elf": {
+    "sha256": "b92af3da22eef1426ffa58d793085bf9ab9b92faa702d1911b5baaa5cf665139",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "rp2040.elf": {
+    "sha256": "9e5b3b3ee61d013d19b82f7ad5b9563eb9476d175bca9f108b7eeb2c76aabd24",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32f103.elf": {
+    "sha256": "44b50e179b1503ff37ea29dd669455d93471a4822de25c1401883f05f3586692",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32f401.elf": {
+    "sha256": "b4b22699b32b7fbe2f631a2bf3cce9170b5a8803ff65cc80c9363500da0e83f3",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32f407.elf": {
+    "sha256": "668cbc65fb6afea33dc3288bbae8d90b324855ded83c181a0681413bedd791f2",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32g474re.elf": {
+    "sha256": "a5df5703ee6186234879093d309fb98917587953526bd482d8bd52c334b6ed66",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32h563.elf": {
+    "sha256": "f2f0a221a7fcafef099cbb36e9734bea065d842e37097c4a6f301d441fa7ab62",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32l073.elf": {
+    "sha256": "ccde5651b202c2c6797b0b3e9f23c3798b879070d1b85a23f28c683e1558c447",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32l476.elf": {
+    "sha256": "39f7c9632a46397fc058f39b27088d2fd2f7d393205b244879b0ee84bf146ccc",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32wb55.elf": {
+    "sha256": "535f592f3d206cffe8fe3a44ea374eca8247ba8b9e758ee88504bf57b8fd0744",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
+  },
+  "stm32wba52.elf": {
+    "sha256": "d0ccfab48a603e89adb0222ee91e08fb4e654b7fdca03c1360a2611583c79baa",
+    "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
   }
 }

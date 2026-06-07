@@ -58,3 +58,21 @@ peripherals:
     type: "uart"
     base_address: 0x3FF40000
     size: "256B"
+  # Declared for the Tier-1 matrix class derivation (wiring stays programmatic
+  # in configure_xtensa_esp32 — see header note). Bases match the model files.
+  - id: "gpio"
+    type: "gpio_esp32"
+    base_address: 0x3FF44000
+    size: "1KB"
+  - id: "timg0"
+    type: "timer_group"
+    base_address: 0x3FF5F000
+    size: "4KB"
+  - id: "rtc_cntl"
+    type: "rtc_cntl_stub"
+    base_address: 0x3FF48000
+    size: "1KB"
+  - id: "dport_intmatrix"
+    type: "intmatrix_stub"
+    base_address: 0x3FF00000
+    size: "4KB"

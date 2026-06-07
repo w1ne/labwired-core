@@ -472,16 +472,83 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                         }
                     }
                 }
+                4 => {
+                    // Quadrant 1, funct3=4: arithmetic/logic group
+                    // rd/rs1 = inst[9:7] + 8 (compressed register encoding)
+                    let rd = (((inst >> 7) & 0x7) + 8) as u8;
+                    let funct2 = (inst >> 10) & 0x3;
+                    match funct2 {
+                        0 => {
+                            // C.SRLI: rd = rd >> shamt
+                            let shamt = (((inst >> 12) & 0x1) << 5) | ((inst >> 2) & 0x1F);
+                            Instruction::Srli {
+                                rd,
+                                rs1: rd,
+                                shamt: shamt as u8,
+                            }
+                        }
+                        1 => {
+                            // C.SRAI: rd = rd >>> shamt (arithmetic)
+                            let shamt = (((inst >> 12) & 0x1) << 5) | ((inst >> 2) & 0x1F);
+                            Instruction::Srai {
+                                rd,
+                                rs1: rd,
+                                shamt: shamt as u8,
+                            }
+                        }
+                        2 => {
+                            // C.ANDI: rd = rd & sign_extend(imm[5:0])
+                            let imm = (((inst >> 12) & 0x1) << 5) | ((inst >> 2) & 0x1F);
+                            let signed_imm = if (imm & 0x20) != 0 {
+                                (imm as i32) | !0x3F
+                            } else {
+                                imm as i32
+                            };
+                            Instruction::Andi {
+                                rd,
+                                rs1: rd,
+                                imm: signed_imm,
+                            }
+                        }
+                        3 => {
+                            // R-type ops: C.SUB, C.XOR, C.OR, C.AND (bit[12]=0)
+                            // C.SUBW, C.ADDW (bit[12]=1, RV64C only — treat as Unknown)
+                            let rs2 = (((inst >> 2) & 0x7) + 8) as u8;
+                            let bit12 = (inst >> 12) & 0x1;
+                            let funct = (inst >> 5) & 0x3;
+                            if bit12 != 0 {
+                                Instruction::Unknown(inst as u32)
+                            } else {
+                                match funct {
+                                    0 => Instruction::Sub { rd, rs1: rd, rs2 },
+                                    1 => Instruction::Xor { rd, rs1: rd, rs2 },
+                                    2 => Instruction::Or { rd, rs1: rd, rs2 },
+                                    3 => Instruction::And { rd, rs1: rd, rs2 },
+                                    _ => Instruction::Unknown(inst as u32),
+                                }
+                            }
+                        }
+                        _ => Instruction::Unknown(inst as u32),
+                    }
+                }
                 5 => {
-                    // C.J
-                    let imm = ((inst >> 2) & 0xE) |     // imm[3:1]
-                              ((inst >> 7) & 0x10) |    // imm[4]
-                              ((inst >> 2) & 0x20) |    // imm[5]
-                              ((inst >> 1) & 0x40) |    // imm[6]
-                              ((inst >> 11) & 0x80) |   // imm[7]
-                              ((inst >> 1) & 0x300) |   // imm[9:8]
-                              ((inst >> 1) & 0x400) |   // imm[10]
-                              ((inst >> 1) & 0x800); // imm[11]
+                    // C.J  (CJ format)
+                    // offset[11] = inst[12]
+                    // offset[4]  = inst[11]
+                    // offset[9:8]= inst[10:9]
+                    // offset[10] = inst[8]
+                    // offset[6]  = inst[7]
+                    // offset[7]  = inst[6]
+                    // offset[3:1]= inst[5:3]
+                    // offset[5]  = inst[2]
+                    let imm = (((inst >> 12) & 0x1) << 11)  // offset[11]
+                              | (((inst >> 11) & 0x1) << 4)   // offset[4]
+                              | (((inst >> 9) & 0x3) << 8)    // offset[9:8]
+                              | (((inst >> 8) & 0x1) << 10)   // offset[10]
+                              | (((inst >> 7) & 0x1) << 6)    // offset[6]
+                              | (((inst >> 6) & 0x1) << 7)    // offset[7]
+                              | (((inst >> 3) & 0x7) << 1)    // offset[3:1]
+                              | (((inst >> 2) & 0x1) << 5); // offset[5]
                     let signed_imm = if (imm & 0x800) != 0 {
                         (imm as i32) | !0xFFF
                     } else {
@@ -490,13 +557,14 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                     Instruction::CJ { imm: signed_imm }
                 }
                 6 => {
-                    // C.BEQZ
+                    // C.BEQZ  (CB format)
+                    // offset = { inst[12], inst[6:5], inst[2], inst[11:10], inst[4:3], 0 }
                     let rs1 = (((inst >> 7) & 0x7) + 8) as u8;
-                    let imm = ((inst >> 2) & 0x6) |     // imm[2:1]
-                              ((inst >> 7) & 0x60) |    // imm[6:5]
-                              ((inst >> 1) & 0x18) |    // imm[4:3]
-                              (((inst >> 12) & 1) << 8) | // imm[8]
-                              ((inst >> 2) & 0x80); // imm[7]
+                    let imm = (((inst >> 12) & 0x1) << 8) // offset[8]   = inst[12]
+                              | (((inst >> 10) & 0x3) << 3) // offset[4:3] = inst[11:10]
+                              | (((inst >> 5) & 0x3) << 6)  // offset[7:6] = inst[6:5]
+                              | (((inst >> 3) & 0x3) << 1)  // offset[2:1] = inst[4:3]
+                              | (((inst >> 2) & 0x1) << 5); // offset[5]   = inst[2]
                     let signed_imm = if (imm & 0x100) != 0 {
                         (imm as i32) | !0x1FF
                     } else {
@@ -508,13 +576,13 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                     }
                 }
                 7 => {
-                    // C.BNEZ
+                    // C.BNEZ  (CB format, same offset encoding as C.BEQZ)
                     let rs1 = (((inst >> 7) & 0x7) + 8) as u8;
-                    let imm = ((inst >> 2) & 0x6) |     // imm[2:1]
-                              ((inst >> 7) & 0x60) |    // imm[6:5]
-                              ((inst >> 1) & 0x18) |    // imm[4:3]
-                              (((inst >> 12) & 1) << 8) | // imm[8]
-                              ((inst >> 2) & 0x80); // imm[7]
+                    let imm = (((inst >> 12) & 0x1) << 8) // offset[8]   = inst[12]
+                              | (((inst >> 10) & 0x3) << 3) // offset[4:3] = inst[11:10]
+                              | (((inst >> 5) & 0x3) << 6)  // offset[7:6] = inst[6:5]
+                              | (((inst >> 3) & 0x3) << 1)  // offset[2:1] = inst[4:3]
+                              | (((inst >> 2) & 0x1) << 5); // offset[5]   = inst[2]
                     let signed_imm = if (imm & 0x100) != 0 {
                         (imm as i32) | !0x1FF
                     } else {

@@ -24,14 +24,20 @@ peripherals:
     type: "gpio"
     base_address: 0x40020000
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpiob"
     type: "gpio"
     base_address: 0x40020400
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpioc"
     type: "gpio"
     base_address: 0x40020800
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

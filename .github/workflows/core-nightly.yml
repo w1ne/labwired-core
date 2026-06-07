@@ -85,6 +85,11 @@ jobs:
           workspaces: |
             . -> target
 
+      # The refresh must not launder a regression into the new baseline —
+      # the ratchet (live run vs the COMMITTED snapshot) gates the commit.
+      - name: Ratchet against committed snapshot before refreshing
+        run: cargo test --release -p labwired-cli --test tier1_matrix_ratchet -- --nocapture
+
       - name: Run tier1 matrix and stamp evidence
         run: |
           cargo run -p labwired-cli --release -- tier1-matrix \
