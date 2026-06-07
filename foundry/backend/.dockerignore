@@ -1,8 +1,0 @@
-*.db
-*.db-shm
-*.db-wal
-server
-server.log
-key*.txt
-foundry_e2e.db*
-foundry_test.db*

@@ -5,7 +5,7 @@
 # Required repo secrets:
 #   CLOUDFLARE_API_TOKEN  — Pages:Edit + Account:Read on shylenkoa account
 #   CLOUDFLARE_ACCOUNT_ID — 53f45abe9550f62856af4475880e0a77
-#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY — pk_live_… (reused from foundry-deploy)
+#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY — pk_live_…
 #
 # If these aren't set, the deploy step fails fast. The workflow can also be
 # triggered manually via the Actions tab (workflow_dispatch).

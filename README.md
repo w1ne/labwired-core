@@ -41,8 +41,6 @@ The shipped LabWired product is:
 - VS Code-assisted debugging (DAP)
 - a paid CI tier ($19/seat/month Pro) backed by the Cloudflare Worker in [`packages/api`](./packages/api/)
 
-> The previous "Foundry" hosted-API framing has been deprecated. The [`/foundry/`](./foundry/) directory and its workflows remain on the legacy Hetzner deploy for the moment but are not the product story.
-
 ## 🤖 Agent-First Architecture
 LabWired is also built as an **API for Agents (AIPi)**. While it offers human-readable interfaces (VS Code, CLI), its long-term mission is to serve as the **"Remote Hands and Eyes"** for autonomous AI agents verifying hardware.
 

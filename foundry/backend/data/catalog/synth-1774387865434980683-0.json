@@ -1,7 +1,0 @@
-{
-  "datasheet_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL345.pdf",
-  "generated_at": "2026-03-24T21:31:05Z",
-  "name": "ADXL345",
-  "requirements": "I2C interface required. Register 0x00 should return Device ID 0xE5.",
-  "source": "foundry-synthesis"
-}
