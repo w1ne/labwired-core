@@ -14,7 +14,12 @@ function matrixUrl(): string {
   return new URLSearchParams(window.location.search).get('matrix') ?? MATRIX_URL;
 }
 
-const RUBRIC = ['clock', 'gpio', 'uart', 'timer', 'dma', 'irq'];
+const RUBRIC = [
+  // bring-up rubric
+  'clock', 'gpio', 'uart', 'timer', 'dma', 'irq',
+  // typical MCU peripherals (standard columns as of the 15-chip matrix)
+  'i2c', 'spi', 'adc', 'pwm', 'wdt', 'rtc',
+];
 
 type Cell = { status: string; run_url?: string };
 type Matrix = Record<string, Record<string, Cell>>;
@@ -93,10 +98,13 @@ export function ValidationMatrix() {
         What Tier-1 means
       </h2>
       <p className="text-fg-secondary text-[16px] leading-[1.6] mb-10 max-w-[70ch]">
-        Tier-1 is the bring-up baseline every supported chip must prove on real
-        firmware: clock, GPIO, UART, timers, DMA, and interrupt routing. Chips with
-        flagship peripherals beyond the baseline get extra columns. A blocked cell
-        is a documented simulator gap, not a hidden one.
+        Tier-1 is what every supported chip must prove on real firmware: the
+        bring-up six (clock, GPIO, UART, timers, DMA, interrupt routing) plus the
+        typical peripherals — I²C, SPI, ADC, PWM, watchdog, RTC. A green cell is
+        sim-consistent: the check passed against the simulator&rsquo;s peripheral
+        models. Silicon-anchored verification is a separate tier, coming with
+        hardware-in-the-loop. A blocked cell is a documented simulator gap, not a
+        hidden one; a dot is a check we haven&rsquo;t written yet.
       </p>
 
       {/* Legend */}
