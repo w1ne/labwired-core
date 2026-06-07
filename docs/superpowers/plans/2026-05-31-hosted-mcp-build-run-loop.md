@@ -1,5 +1,7 @@
 # Hosted MCP build→run loop — Implementation Plan
 
+> **Pivot 2026-05-31: run-only.** Hosted compile dropped (untrusted-code liability); agents compile in their own sandbox (see docs/firmware-scaffolds) and upload the ELF. LabWired hosts the digital-twin run + a hardware-level failure diagnosis. Positioning unchanged: digital twins for HW simulation + agent grounding.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let an agent drive write→compile→build-device→run→read-results headlessly through the hosted MCP, for the single v1 path C/C++ → `stm32l476`.

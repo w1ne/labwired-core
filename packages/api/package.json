@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@clerk/backend": "^2.33.3",
+    "@labwired/board-config": "file:../board-config",
     "stripe": "^17.0.0"
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 # Hosted MCP build→run loop — design
 
+> **Pivot 2026-05-31: run-only.** Hosted compile dropped (untrusted-code liability); agents compile in their own sandbox (see docs/firmware-scaffolds) and upload the ELF. LabWired hosts the digital-twin run + a hardware-level failure diagnosis. Positioning unchanged: digital twins for HW simulation + agent grounding.
+
 **Date:** 2026-05-31
 **Status:** Approved design, ready for implementation planning
 **Scope:** Expand the hosted MCP (`packages/api/src/mcp`) so an agent can drive the full firmware loop — write code → compile → build a device → run → read results — headlessly.

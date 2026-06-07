@@ -1,0 +1,18 @@
+{
+  "name": "labwired-builder",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "BUILDER_ENTRY=1 node --import tsx src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "tsx": "^4.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.9.3",
+    "vitest": "~3.2.0"
+  }
+}

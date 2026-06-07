@@ -1,0 +1,38 @@
+[Unit]
+Description=LabWired Builder — run service for AI agents (digital-twin run + failure diagnosis)
+After=network.target
+Documentation=https://github.com/labwired/core
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/labwired-builder
+ExecStart=/usr/bin/node --import tsx src/server.ts
+
+# Entrypoint guard — server.ts only starts listening when BUILDER_ENTRY=1
+# Without this the process exits immediately.
+Environment=BUILDER_ENTRY=1
+Environment=PORT=8080
+Environment=MAX_CONCURRENT=2
+Environment=LABWIRED_BIN=/usr/local/bin/labwired
+
+# Secrets (BUILDER_SECRET) are loaded from this file — not baked into the unit.
+EnvironmentFile=/etc/labwired-builder.env
+
+# Hardening
+DynamicUser=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/tmp
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=200%
+
+# Auto-restart
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

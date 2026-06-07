@@ -1,0 +1,10 @@
+name: "blink-l476-fixture"
+chip: "inline"
+external_devices: []
+board_io:
+  - id: "led_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

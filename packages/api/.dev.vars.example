@@ -24,3 +24,10 @@ CF_DNS_TOKEN=REPLACE_ME
 # the Worker. ROTATE IMMEDIATELY if exposed since it can ship
 # malicious package versions.
 NPM_TOKEN=REPLACE_ME
+
+# ── Build-run loop (compile + sim via labwired-builder) ──────────────────────
+# Override BUILDER_URL so local dev hits a local builder instead of prod.
+# wrangler.toml [vars] bakes in https://builder.labwired.com at deploy time;
+# .dev.vars values take precedence during `wrangler dev`.
+BUILDER_URL=http://localhost:8080
+BUILDER_SECRET=dev-secret

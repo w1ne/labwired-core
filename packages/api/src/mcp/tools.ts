@@ -1,10 +1,11 @@
 import type { Env } from '../types.js';
 import type { HostedMcpIdentity, McpTool, McpToolResult } from './types.js';
-
-type DiagnosticSeverity = 'error' | 'warning';
+import { diagramToConfig, COMPONENT_META } from '@labwired/board-config';
+import { builderRun } from './builder-client.js';
+import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
 
 interface HostedDiagnostic {
-  severity: DiagnosticSeverity;
+  severity: 'error' | 'warning';
   code:
     | 'DIAGRAM_MALFORMED'
     | 'UNKNOWN_COMPONENT'
@@ -61,7 +62,7 @@ const hostedTools: McpTool[] = [
         },
         board: {
           type: 'string',
-          description: 'Optional board id. Defaults to stm32f103-blinky.',
+          description: 'Optional board id. Defaults to stm32l476-blinky.',
         },
         run: {
           type: 'boolean',
@@ -94,6 +95,33 @@ const hostedTools: McpTool[] = [
       },
     },
   },
+  {
+    name: 'labwired_run',
+    description:
+      'Run a compiled ELF firmware in the LabWired digital-twin simulator against a virtual hardware diagram.' +
+      ' Returns run status, serial output, cycle counts, and — on fault, hang, or step-limit — a hardware-level' +
+      ' diagnosis explaining what went wrong and why (e.g. infinite loop, unmodeled peripheral poll, bad pointer).' +
+      ' The caller must supply a compiled ELF; see docs/firmware-scaffolds/README.md for the exact arm-none-eabi-gcc' +
+      ' flags and linker script to produce a bootable ELF for stm32l476.',
+    inputSchema: {
+      type: 'object',
+      required: ['elf_base64', 'target', 'diagram'],
+      properties: {
+        elf_base64: { type: 'string', description: 'Base64-encoded ELF firmware binary.' },
+        target: { type: 'string', enum: ['stm32l476'], description: 'Target MCU identifier, must match diagram.board.' },
+        diagram: { type: 'object', description: 'Diagram JSON with board, parts, and wires.' },
+        max_steps: { type: 'number', description: 'Maximum simulation steps (default 1,000,000).' },
+      },
+    },
+  },
+  {
+    name: 'labwired_list_components',
+    description: 'List all available virtual hardware components and their board_io kinds.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 export function listHostedTools(): McpTool[] {
@@ -118,9 +146,12 @@ export async function callHostedTool(
         textContent({
           boards: [
             {
-              id: 'stm32f103-blinky',
-              name: 'STM32F103 LED starter',
-              description: 'STM32F103 with LED on PA5; best first hosted lab.',
+              id: 'stm32l476-blinky',
+              name: 'STM32L476 LED starter',
+              description: 'STM32L476 with an LED on PA5; best first hosted lab.',
+              board: 'stm32l476',
+              target: 'stm32l476',
+              languages: ['c', 'cpp'],
             },
           ],
         }),
@@ -136,6 +167,17 @@ export async function callHostedTool(
     };
   }
 
+  if (name === 'labwired_run') {
+    return handleRun(parsed?.arguments, env, identity);
+  }
+
+  if (name === 'labwired_list_components') {
+    const components = Object.entries(COMPONENT_META)
+      .filter(([, m]) => m.boardIoKind)
+      .map(([type, m]) => ({ type, board_io_kind: m.boardIoKind }));
+    return { content: [textContent({ components })] };
+  }
+
   return {
     content: [textContent({ error: 'UNKNOWN_TOOL', name })],
     isError: true,
@@ -144,6 +186,72 @@ export async function callHostedTool(
 
 function textContent(value: unknown): { type: 'text'; text: string } {
   return { type: 'text', text: JSON.stringify(value) };
+}
+
+async function handleRun(
+  args: unknown,
+  env: Env,
+  identity: HostedMcpIdentity,
+): Promise<McpToolResult> {
+  const input = (args ?? {}) as Record<string, unknown>;
+  const elfBase64 = typeof input.elf_base64 === 'string' && input.elf_base64 ? input.elf_base64 : null;
+  const target = typeof input.target === 'string' && input.target ? input.target : null;
+  const diagram = input.diagram;
+  const maxSteps = typeof input.max_steps === 'number' ? input.max_steps : 1_000_000;
+
+  if (!elfBase64 || !target || !diagram) {
+    return {
+      content: [textContent({ error: 'INVALID_ARGS', detail: 'elf_base64, target, and diagram are required' })],
+      isError: true,
+    };
+  }
+
+  // Consistency guard: target must match diagram.board
+  const diagramBoard = typeof (diagram as Record<string, unknown>).board === 'string'
+    ? (diagram as Record<string, unknown>).board as string
+    : null;
+  if (!diagramBoard || diagramBoard !== target) {
+    return {
+      content: [textContent({ error: `TARGET_BOARD_MISMATCH: target=${target} but diagram.board=${diagramBoard ?? 'missing'}` })],
+      isError: true,
+    };
+  }
+
+  // Convert diagram to system + chip YAML
+  let systemYaml: string;
+  let chipYaml: string;
+  try {
+    const config = diagramToConfig(diagram as Parameters<typeof diagramToConfig>[0]);
+    systemYaml = config.systemYaml;
+    chipYaml = config.chipYaml;
+  } catch (err) {
+    return {
+      content: [textContent({ error: 'DIAGRAM_INVALID', detail: String(err) })],
+      isError: true,
+    };
+  }
+
+  const result = await builderRun(env, { elfBase64, systemYaml, chipYaml, maxSteps });
+
+  // Meter cycles against workspace if present
+  if (identity.workspaceId && result.status !== 'error') {
+    await meterRunCycles(env, identity.workspaceId, result.cycles).catch(() => {
+      // best-effort; don't fail the run response on metering errors
+    });
+  }
+
+  return {
+    content: [textContent(result)],
+    isError: result.status === 'error' ? true : undefined,
+  };
+}
+
+async function meterRunCycles(env: Env, workspaceId: string, cycles: number): Promise<void> {
+  const workspace = await getWorkspaceRecord(env, workspaceId);
+  if (!workspace) return;
+  const updated = await maybeResetMtdCycles(env, workspaceId, workspace);
+  updated.cycles_used_mtd += cycles;
+  await writeWorkspaceRecord(env, workspaceId, updated);
 }
 
 function randomHex(bytes: number): string {
@@ -158,7 +266,7 @@ async function startPlaygroundLab(
   identity: HostedMcpIdentity,
 ): Promise<McpToolResult> {
   const input = (args ?? {}) as { goal?: unknown; board?: unknown; run?: unknown };
-  const board = typeof input.board === 'string' && input.board ? input.board : 'stm32f103-blinky';
+  const board = typeof input.board === 'string' && input.board ? input.board : 'stm32l476-blinky';
   const sessionId = `mcp_${randomHex(8)}`;
   const watchUrl = `https://app.labwired.com/?watch=${encodeURIComponent(sessionId)}`;
   const stub = env.SESSIONS.get(env.SESSIONS.idFromName(sessionId));
@@ -237,11 +345,18 @@ async function startPlaygroundLab(
   };
 }
 
-function starterDiagram(board: string): Record<string, unknown> {
+function boardChipForLabId(labId: string): string {
+  if (labId === 'stm32l476-blinky') return 'stm32l476';
+  // Fall back to the id itself if it doesn't match a known lab entry.
+  return labId;
+}
+
+function starterDiagram(labId: string): Record<string, unknown> {
+  const chip = boardChipForLabId(labId);
   return {
-    board,
+    board: chip,
     parts: [
-      { id: 'mcu', type: 'mcu', label: 'STM32F103' },
+      { id: 'mcu', type: 'mcu', label: 'STM32L476' },
       { id: 'led1', type: 'led', label: 'LED', color: 'green' },
     ],
     wires: [
@@ -476,15 +591,27 @@ function isMcuPart(part: DiagramPart): boolean {
 }
 
 function pinsForBoard(board: string): Set<string> {
-  const normalized = board.startsWith('stm32f103') ? 'stm32f103' : board;
-  if (normalized !== 'stm32f103') return new Set();
-  return new Set([
-    'PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PA8', 'PA9', 'PA10', 'PA11',
-    'PA12', 'PA13', 'PA14', 'PA15', 'PB0', 'PB1', 'PB3', 'PB4', 'PB5', 'PB6', 'PB7', 'PB8',
-    'PB9', 'PB10', 'PB11', 'PB12', 'PB13', 'PB14', 'PB15', 'PC0', 'PC1', 'PC2', 'PC3',
-    'PC4', 'PC5', 'PC6', 'PC7', 'PC8', 'PC9', 'PC10', 'PC11', 'PC12', 'PC13', 'PC14',
-    'PC15',
-  ]);
+  if (board.startsWith('stm32l476')) {
+    return new Set([
+      'PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PA8', 'PA9', 'PA10', 'PA11',
+      'PA12', 'PA13', 'PA14', 'PA15', 'PB0', 'PB1', 'PB2', 'PB3', 'PB4', 'PB5', 'PB6', 'PB7',
+      'PB8', 'PB9', 'PB10', 'PB11', 'PB12', 'PB13', 'PB14', 'PB15', 'PC0', 'PC1', 'PC2', 'PC3',
+      'PC4', 'PC5', 'PC6', 'PC7', 'PC8', 'PC9', 'PC10', 'PC11', 'PC12', 'PC13', 'PC14', 'PC15',
+      'PD0', 'PD1', 'PD2', 'PD3', 'PD4', 'PD5', 'PD6', 'PD7', 'PD8', 'PD9', 'PD10', 'PD11',
+      'PD12', 'PD13', 'PD14', 'PD15', 'PE0', 'PE1', 'PE2', 'PE3', 'PE4', 'PE5', 'PE6', 'PE7',
+      'PE8', 'PE9', 'PE10', 'PE11', 'PE12', 'PE13', 'PE14', 'PE15',
+    ]);
+  }
+  if (board.startsWith('stm32f103')) {
+    return new Set([
+      'PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PA8', 'PA9', 'PA10', 'PA11',
+      'PA12', 'PA13', 'PA14', 'PA15', 'PB0', 'PB1', 'PB3', 'PB4', 'PB5', 'PB6', 'PB7', 'PB8',
+      'PB9', 'PB10', 'PB11', 'PB12', 'PB13', 'PB14', 'PB15', 'PC0', 'PC1', 'PC2', 'PC3',
+      'PC4', 'PC5', 'PC6', 'PC7', 'PC8', 'PC9', 'PC10', 'PC11', 'PC12', 'PC13', 'PC14',
+      'PC15',
+    ]);
+  }
+  return new Set();
 }
 
 function isPowerPin(pin: string): boolean {

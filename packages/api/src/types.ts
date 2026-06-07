@@ -64,6 +64,10 @@ export interface Env {
    *  metadata (RFC 9728). Must be set (= the Clerk Frontend API origin, e.g.
    *  https://clerk.labwired.com) or agents can't discover where to log in. */
   MCP_AUTHORIZATION_SERVER?: string;
+  /** Base URL for the labwired-builder service (e.g. https://builder.labwired.com). */
+  BUILDER_URL: string;
+  /** Shared secret for authenticating requests to the builder service. */
+  BUILDER_SECRET: string;
 }
 
 /** Response body for POST /v1/keys/validate */

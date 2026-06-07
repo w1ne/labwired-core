@@ -56,6 +56,9 @@ new_sqlite_classes = ["SessionDO"]
 
 # ── Environment variables ────────────────────────────────────────────────────
 [vars]
+# Production URL — baked at deploy time.
+# For local dev override this in .dev.vars (see .dev.vars.example).
+BUILDER_URL = "https://builder.labwired.com"
 LABWIRED_API_BASE = "https://api.labwired.com"
 PRO_CYCLES_QUOTA = "100000000"
 # Designer ($5/seat/mo) — 10M cycles/mo, 10× less than Pro.
