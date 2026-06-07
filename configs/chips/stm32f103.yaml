@@ -6,6 +6,7 @@
 
 name: "stm32f103c8"
 arch: "arm"
+core: "cortex-m3"
 registers_count: 125
 flash:
   base: 0x08000000

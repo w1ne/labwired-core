@@ -875,6 +875,28 @@ impl SystemBus {
         sources
     }
 
+    /// Whether this chip's core implements the Cortex-M bit-band feature.
+    ///
+    /// Bit-band aliasing is an optional feature of the Cortex-M3 and
+    /// Cortex-M4 cores only — M0/M0+/M23/M33/M7 do not implement it.
+    /// Chips without it may map real peripherals inside the would-be alias
+    /// ranges (e.g. STM32H5/WBA M33 parts put GPIO at 0x4202_xxxx), so
+    /// translating there would shadow those peripherals.
+    ///
+    /// A chip yaml without a `core` field keeps the historical default
+    /// (enabled on Arm) so pre-existing third-party configs that rely on
+    /// bit-band keep working; all in-tree Arm chip configs declare `core`.
+    fn chip_has_bit_band(chip: &ChipDescriptor) -> bool {
+        match chip.core.as_deref() {
+            Some(core) => {
+                let c = core.trim().to_ascii_lowercase();
+                let c = c.strip_prefix("cortex-").unwrap_or(&c);
+                matches!(c, "m3" | "m4" | "m4f")
+            }
+            None => matches!(chip.arch, labwired_config::Arch::Arm),
+        }
+    }
+
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         let flash_size = parse_size(&chip.flash.size)?;
         let ram_size = parse_size(&chip.ram.size)?;
@@ -887,7 +909,7 @@ impl SystemBus {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
-            bit_band_enabled: matches!(chip.arch, labwired_config::Arch::Arm),
+            bit_band_enabled: Self::chip_has_bit_band(chip),
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             peripheral_ranges: Vec::new(),
@@ -2458,6 +2480,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0800_0000,
                 size: "64KB".to_string(),
@@ -2504,6 +2527,117 @@ mod tests {
         assert_eq!(i2c.attached_devices().len(), 1);
     }
 
+    /// Parse a minimal chip yaml with the given header lines (name/arch/core).
+    fn bit_band_test_chip(header: &str, gpio_base: &str, gpio_profile: &str) -> ChipDescriptor {
+        let yaml = format!(
+            r#"
+{header}
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+peripherals:
+  - id: "gpiox"
+    type: "gpio"
+    base_address: {gpio_base}
+    size: "1KB"
+    config:
+      profile: "{gpio_profile}"
+"#
+        );
+        serde_yaml::from_str(&yaml).expect("test chip yaml must parse")
+    }
+
+    fn empty_manifest() -> SystemManifest {
+        SystemManifest {
+            walk_deleted: false,
+            schema_version: "1.0".to_string(),
+            name: "bit-band-test".to_string(),
+            chip: "unused".to_string(),
+            memory_overrides: std::collections::HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+            peripherals: Vec::new(),
+        }
+    }
+
+    /// Cortex-M33 parts (STM32H5/WBA) have no bit-band feature and map real
+    /// peripherals inside 0x4200_0000-0x43FF_FFFF. Word accesses there must
+    /// reach the peripheral model, never be alias-translated.
+    #[test]
+    fn from_config_m33_gpio_in_alias_range_receives_word_accesses() {
+        let chip = bit_band_test_chip(
+            "name: \"m33-test\"\narch: \"arm\"\ncore: \"cortex-m33\"",
+            "0x42020400",
+            "stm32v2",
+        );
+        let mut bus = SystemBus::from_config(&chip, &empty_manifest()).unwrap();
+
+        // Go through the `crate::Bus` trait — the CPU's access path, where
+        // bit-band translation lives (the inherent methods skip it).
+        // BSRR (V2 offset 0x18): set pin 0.
+        crate::Bus::write_u32(&mut bus, 0x4202_0418, 0x0000_0001)
+            .expect("BSRR word write must reach the GPIO model, not bit-band");
+        // ODR (V2 offset 0x14) must show the pin high.
+        let odr = crate::Bus::read_u32(&bus, 0x4202_0414)
+            .expect("ODR word read must reach the GPIO model, not bit-band");
+        assert_eq!(odr & 1, 1, "GPIO BSRR write was shadowed by bit-band alias");
+    }
+
+    /// Cortex-M3 parts (STM32F1) DO have the bit-band feature: word accesses
+    /// to the 0x4200_0000 alias region must keep translating to single-bit
+    /// operations on the underlying 0x4000_0000 peripheral registers.
+    #[test]
+    fn from_config_m3_bit_band_alias_still_translates() {
+        let chip = bit_band_test_chip(
+            "name: \"m3-test\"\narch: \"arm\"\ncore: \"cortex-m3\"",
+            "0x40011000",
+            "stm32f1",
+        );
+        let mut bus = SystemBus::from_config(&chip, &empty_manifest()).unwrap();
+
+        // Alias word for GPIOC_ODR (0x4001100C) bit 0:
+        // 0x42000000 + (0x1100C * 32) + (0 * 4) = 0x42220180.
+        // Trait path (`crate::Bus`) — the CPU's access path with bit-band.
+        crate::Bus::write_u32(&mut bus, 0x4222_0180, 1)
+            .expect("bit-band alias write must translate on M3");
+        let odr = crate::Bus::read_u32(&bus, 0x4001_100C).unwrap();
+        assert_eq!(odr & 1, 1, "bit-band alias write must set ODR bit 0");
+        assert_eq!(
+            crate::Bus::read_u32(&bus, 0x4222_0180).unwrap(),
+            1,
+            "bit-band alias read must return the physical bit"
+        );
+    }
+
+    /// Bit-band gating matrix: only M3/M4 cores have the feature. Absent
+    /// core info on an Arm chip preserves the historical default (enabled)
+    /// for configs that predate the `core` field.
+    #[test]
+    fn from_config_bit_band_gated_on_core() {
+        let manifest = empty_manifest();
+        let cases: &[(&str, bool)] = &[
+            ("core: \"cortex-m3\"", true),
+            ("core: \"cortex-m4\"", true),
+            ("core: \"cortex-m0+\"", false),
+            ("core: \"cortex-m7\"", false),
+            ("core: \"cortex-m23\"", false),
+            ("core: \"cortex-m33\"", false),
+            ("", true), // absent core on Arm: historical default
+        ];
+        for (core_line, expected) in cases {
+            let header = format!("name: \"gate-test\"\narch: \"arm\"\n{core_line}");
+            let chip = bit_band_test_chip(&header, "0x40011000", "stm32f1");
+            let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+            assert_eq!(
+                bus.bit_band_enabled, *expected,
+                "bit_band_enabled mismatch for chip header {header:?}"
+            );
+        }
+    }
+
     fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
         use labwired_config::{Arch, MemoryRange, PeripheralConfig};
         use std::collections::HashMap;
@@ -2512,6 +2646,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0800_0000,
                 size: "64KB".to_string(),

@@ -395,6 +395,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),
@@ -496,6 +497,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip-2".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),
@@ -562,6 +564,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip-3".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),
@@ -613,6 +616,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip-gpio-v2".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),
@@ -670,6 +674,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip-uart-v2".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),
@@ -724,6 +729,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip-rcc-v2".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),
@@ -778,6 +784,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip-rcc-f4".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),
@@ -832,6 +839,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-chip-gpio-v2-alias".to_string(),
             arch: Arch::Arm,
+            core: None,
             flash: MemoryRange {
                 base: 0x0,
                 size: "128KB".to_string(),

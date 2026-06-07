@@ -81,6 +81,13 @@ pub struct ChipDescriptor {
     pub schema_version: String,
     pub name: String,
     pub arch: Arch, // Parsed from string
+    /// Exact CPU core, e.g. "cortex-m3", "cortex-m33", "cortex-m0+".
+    /// `Arch` collapses all Cortex-M variants into `Arm`, but some bus
+    /// behavior is core-specific (bit-band aliasing exists only on M3/M4),
+    /// so the precise core is carried separately. Optional for configs
+    /// that predate this field.
+    #[serde(default)]
+    pub core: Option<String>,
     pub flash: MemoryRange,
     pub ram: MemoryRange,
     pub peripherals: Vec<PeripheralConfig>,
@@ -424,12 +431,18 @@ impl From<labwired_ir::IrPeripheral> for PeripheralDescriptor {
 
 impl From<labwired_ir::IrDevice> for ChipDescriptor {
     fn from(ir: labwired_ir::IrDevice) -> Self {
-        let arch = match ir.arch.to_uppercase().as_str() {
+        let ir_arch = ir.arch.to_uppercase();
+        let arch = match ir_arch.as_str() {
             "CM3" | "CM4" | "CM7" | "ARM" => Arch::Arm,
             "RISCV" | "RV32" => Arch::RiscV,
             "XTENSA" | "LX7" | "LX6" => Arch::Xtensa,
             _ => Arch::Arm, // Default to Arm for CMSIS-SVD
         };
+        // CMSIS-SVD carries the exact core ("CM3", "CM4", "CM33", ...);
+        // preserve it so core-specific bus behavior (bit-band) can be gated.
+        let core = ir_arch
+            .strip_prefix("CM")
+            .map(|rest| format!("cortex-m{}", rest.to_lowercase()));
 
         let flash = ir
             .memory_regions
@@ -459,6 +472,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             schema_version: default_schema_version(),
             name: ir.name,
             arch,
+            core,
             flash,
             ram,
             peripherals: ir

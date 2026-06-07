@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Bit-band translation gated on cores that have it (M3/M4)**: the bus applied Cortex-M bit-band alias translation (0x4200_0000–0x43FF_FFFF → bit ops on 0x4000_0000) to every ARM chip, but the feature exists only on Cortex-M3/M4. M33 parts (STM32H563, STM32WBA52) map their real GPIO ports at 0x4202_xxxx, so word accesses there were translated into bit-band operations and never reached the GPIO model. Chip descriptors now carry an explicit `core` field; `SystemBus::from_config` enables translation only for `cortex-m3`/`cortex-m4` (configs without a `core` field keep the historical Arm default). Un-blocks the Tier-1 `gpio` cells for `stm32h563` and `stm32wba52` and the NUCLEO-H563ZI io-smoke.
+
 ### Added
+- **`core` field in chip descriptors** (`configs/chips/*.yaml`): exact CPU core (e.g. `cortex-m3`, `cortex-m33`, `cortex-m0+`). `arch` collapses all Cortex-M variants, so core-specific bus behavior keys off this field; SVD-IR imports derive it from the CMSIS `arch` automatically. All in-tree ARM chip yamls now declare it.
 - **ESP32-S3 Faithful ROM Auto-Provisioning** (`crates/core/src/boot/esp32s3_rom.rs`): the real Espressif boot ROM is now discovered and extracted automatically from the installed toolchain (PlatformIO/ESP-IDF), cached by ELF content hash, and loaded by default — so `--rom-boot` needs only `LABWIRED_ESP32S3_FLASH` (no manual `make_esp32s3_rom_bins.py` step or `LABWIRED_ESP32S3_ROM/_DROM` env vars). The Rust extractor is byte-identical to the previous Python script. `LABWIRED_ESP32S3_ROM_ELF` overrides the ELF path; pre-extracted `LABWIRED_ESP32S3_ROM/_DROM` bins still work.
 - **`Esp32s3BootMode` telemetry**: `Esp32s3Wiring.boot_mode` reports `Faithful` (real ROM) vs `Harness` (no blob found → thunk fallback); the CLI `--rom-boot` path uses it to fail clearly when no real ROM is available.
 - **`LABWIRED_ESP32S3_FASTBOOT`** opt-out: forces the fast-boot/thunk path even when a real ROM is available (playground speed; deterministic fast-boot tests).

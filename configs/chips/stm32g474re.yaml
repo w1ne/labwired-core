@@ -1,6 +1,7 @@
 schema_version: "1.0"
 name: "STM32G474RE"
 arch: "arm"
+core: "cortex-m4"
 flash:
   base: 0x08000000
   size: "512KB"

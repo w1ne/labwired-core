@@ -1,5 +1,6 @@
 name: "nrf52840"
 arch: "arm"
+core: "cortex-m4"
 flash:
   base: 0x00000000
   size: "1024KB"

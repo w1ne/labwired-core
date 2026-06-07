@@ -1079,6 +1079,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
+            core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
                 size: "128KB".to_string(),
@@ -1130,6 +1131,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
+            core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
                 size: "128KB".to_string(),
@@ -1194,6 +1196,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
+            core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
                 size: "128KB".to_string(),

@@ -15,6 +15,9 @@ Defines the invariant properties of the silicon.
 
 ```yaml
 name: "STM32F103"
+arch: "arm"
+core: "cortex-m3"   # Exact CPU core; gates core-specific behavior
+                    # (e.g. bit-band aliasing exists only on M3/M4)
 flash:
   base: 0x08000000
   size: "64KB"  # Supports KB/MB suffixes

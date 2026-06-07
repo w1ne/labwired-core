@@ -11,6 +11,7 @@
 
 name: "stm32l476rg"
 arch: "arm"
+core: "cortex-m4"
 registers_count: 200
 flash:
   base: 0x08000000

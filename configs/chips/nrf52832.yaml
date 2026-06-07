@@ -1,6 +1,7 @@
 # LabWired - nRF52832 Chip Descriptor
 name: "nrf52832"
 arch: "arm"
+core: "cortex-m4"
 registers_count: 50
 flash:
   base: 0x00000000

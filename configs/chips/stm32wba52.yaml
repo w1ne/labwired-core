@@ -1,6 +1,7 @@
 schema_version: "1.0"
 name: "STM32WBA52"
 arch: "arm"
+core: "cortex-m33"
 flash:
   base: 0x08000000
   size: "1024KB"

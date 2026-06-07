@@ -15,6 +15,7 @@
 
 name: "stm32f407vgt6"
 arch: "arm"
+core: "cortex-m4"
 registers_count: 150
 flash:
   base: 0x08000000
