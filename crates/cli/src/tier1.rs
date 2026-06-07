@@ -163,6 +163,32 @@ pub fn apply_na(row: &mut BTreeMap<String, Cell>, declared: &std::collections::B
     }
 }
 
+/// Cells recorded `Pass` in the snapshot must still pass live. Everything else
+/// (partial/blocked/na/unrecorded, chips missing from the live run) moves freely.
+pub fn ratchet_regressions(snapshot: &Tier1Matrix, live: &Tier1Matrix) -> Vec<String> {
+    let mut out = Vec::new();
+    for (chip, row) in &snapshot.0 {
+        for (class, snap_cell) in row {
+            if snap_cell.status != CellStatus::Pass {
+                continue;
+            }
+            let live_status = live
+                .0
+                .get(chip)
+                .and_then(|r| r.get(class))
+                .map(|c| c.status);
+            match live_status {
+                Some(CellStatus::Pass) | None => {} // None = chip not exercised in this run
+                Some(s) => out.push(format!(
+                    "{chip}/{class}: pass -> {}",
+                    serde_json::to_string(&s).unwrap().trim_matches('"')
+                )),
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,5 +274,67 @@ peripherals:
         assert_eq!(row["clock"].status, CellStatus::Pass);
         assert_eq!(row["dma"].status, CellStatus::Na); // undeclared
         assert_eq!(row["gpio"].status, CellStatus::Na); // undeclared
+    }
+
+    fn cell(s: CellStatus) -> Cell {
+        Cell {
+            status: s,
+            run_url: None,
+        }
+    }
+
+    #[test]
+    fn ratchet_flags_pass_regressions_only() {
+        let mut snap = Tier1Matrix::default();
+        snap.0
+            .entry("esp32s3".into())
+            .or_default()
+            .insert("gpio".into(), cell(CellStatus::Pass));
+        snap.0
+            .entry("esp32s3".into())
+            .or_default()
+            .insert("dma".into(), cell(CellStatus::Blocked));
+
+        let mut live = Tier1Matrix::default();
+        live.0
+            .entry("esp32s3".into())
+            .or_default()
+            .insert("gpio".into(), cell(CellStatus::Blocked)); // regression!
+        live.0
+            .entry("esp32s3".into())
+            .or_default()
+            .insert("dma".into(), cell(CellStatus::Pass)); // improvement — fine
+
+        let regressions = ratchet_regressions(&snap, &live);
+        assert_eq!(
+            regressions,
+            vec!["esp32s3/gpio: pass -> blocked".to_string()]
+        );
+    }
+
+    #[test]
+    fn ratchet_ignores_unrecorded_and_missing_chips() {
+        let mut snap = Tier1Matrix::default();
+        snap.0
+            .entry("esp32s3".into())
+            .or_default()
+            .insert("gpio".into(), cell(CellStatus::Unrecorded));
+        let live = Tier1Matrix::default(); // chip absent from live run
+        assert!(ratchet_regressions(&snap, &live).is_empty());
+    }
+
+    #[test]
+    fn snapshot_roundtrip_is_deterministic() {
+        let mut m = Tier1Matrix::default();
+        m.0.entry("b".into())
+            .or_default()
+            .insert("z".into(), cell(CellStatus::Pass));
+        m.0.entry("a".into())
+            .or_default()
+            .insert("gpio".into(), cell(CellStatus::Na));
+        let j1 = serde_json::to_string_pretty(&m).unwrap();
+        let j2 = serde_json::to_string_pretty(&serde_json::from_str::<Tier1Matrix>(&j1).unwrap())
+            .unwrap();
+        assert_eq!(j1, j2);
     }
 }
