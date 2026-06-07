@@ -141,12 +141,21 @@ P1 blocker for chips without an in-tree SVD).
 
 ### 6. Dashboard
 
-`generate_coverage_matrix_scoreboard.py` grows a chip × peripheral grid
-(✅ pass / 🟡 partial / ⛔ blocked / — n/a) rendered into
-`docs/coverage_scoreboard.md` and the docs site — public, Renode-dashboard-style
-proof of what works. Each cell carries the `run_url` of the CI run that
-produced it (stored alongside the status in `tier1-matrix.json`); cells without
-evidence render as `unrecorded` regardless of local results.
+Two surfaces, one source of truth (`docs/coverage/tier1-matrix.json` on core
+main, refreshed nightly with `run_url` evidence):
+
+1. **Repo scoreboard** — a chip × peripheral markdown grid
+   (✅ pass / 🟡 partial / ⛔ blocked / — n/a) rendered into
+   `docs/coverage/tier1-scoreboard.md`, linked from `docs/coverage_scoreboard.md`.
+2. **Website scoreboard (the public trace)** — a styled validation-matrix page
+   on the playground site (the `/ci` audience), fetching the raw
+   `tier1-matrix.json` from core main client-side so it is always as fresh as
+   the last nightly run. This page is the outreach link for the
+   driver-bringup-CI beachhead claim.
+
+On both surfaces every cell links its CI `run_url` (stored alongside the
+status in `tier1-matrix.json`); cells without evidence render as `unrecorded`
+regardless of local results.
 
 ## Wedge alignment (wedge v2, 2026-06-06 moat doc §5)
 
