@@ -74,6 +74,7 @@ exclude = [
     "examples/esp32s3-hello-world",
     "examples/esp32s3-i2c-tmp102",
     "examples/esp32-epaper-lab",
+    "examples/tier1-fixture/esp32s3",
 ]
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader"]
 
