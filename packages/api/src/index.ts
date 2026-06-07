@@ -41,6 +41,7 @@ import {
 } from './sessions.js';
 import { handleMcpProtectedResourceMetadata } from './mcp/oauth.js';
 import { handleHostedMcp } from './mcp/http.js';
+import { handleTrackEvent } from './usage.js';
 export { SessionDO } from './SessionDO.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
@@ -96,6 +97,9 @@ export default {
       }
       if (method === 'POST' && pathname === '/v1/runs') {
         return handleRecordRun(request, env);
+      }
+      if (method === 'POST' && pathname === '/v1/events') {
+        return handleTrackEvent(request, env);
       }
       if (method === 'GET' && pathname === '/v1/workspaces/me') {
         return handleGetWorkspace(request, env);

@@ -3,6 +3,7 @@ import type { HostedMcpIdentity, McpTool, McpToolResult } from './types.js';
 import { diagramToConfig, COMPONENT_META } from '@labwired/board-config';
 import { builderRun } from './builder-client.js';
 import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
+import { trackUsage } from '../usage.js';
 
 interface HostedDiagnostic {
   severity: 'error' | 'warning';
@@ -135,6 +136,32 @@ export async function callHostedTool(
 ): Promise<McpToolResult> {
   const parsed = params as { name?: unknown; arguments?: unknown } | null;
   const name = typeof parsed?.name === 'string' ? parsed.name : '';
+  const started = Date.now();
+  const result = await dispatchHostedTool(parsed, name, env, identity);
+  trackUsage(env, {
+    event: 'mcp_tool',
+    tool: name,
+    board: boardFromArgs(parsed?.arguments),
+    status: result.isError ? 'error' : 'ok',
+    durationMs: Date.now() - started,
+  });
+  return result;
+}
+
+/** Best-effort board/target extraction for usage stats. */
+function boardFromArgs(args: unknown): string | undefined {
+  const a = args as { target?: unknown; diagram?: { board?: unknown } } | null;
+  if (typeof a?.target === 'string') return a.target;
+  if (typeof a?.diagram?.board === 'string') return a.diagram.board;
+  return undefined;
+}
+
+async function dispatchHostedTool(
+  parsed: { name?: unknown; arguments?: unknown } | null,
+  name: string,
+  env: Env,
+  identity: HostedMcpIdentity,
+): Promise<McpToolResult> {
 
   if (name === 'labwired_start_playground_lab') {
     return startPlaygroundLab(parsed?.arguments, env, identity);

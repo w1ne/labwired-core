@@ -46,6 +46,12 @@ export interface Env {
   /** Live agent-driven sessions for the playground watch mode (v0.3 MCP bridge). */
   SESSIONS: DurableObjectNamespace;
 
+  /**
+   * Anonymous product usage events (Analytics Engine). Optional — local dev
+   * and tests run without it and tracking degrades to a no-op (src/usage.ts).
+   */
+  USAGE?: AnalyticsEngineDataset;
+
   // Secrets (set via `wrangler secret put`)
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;

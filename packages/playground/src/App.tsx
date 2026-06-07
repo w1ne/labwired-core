@@ -70,6 +70,7 @@ import { renderComponentRuntimeControl } from './multi-mcu/componentRuntimeContr
 import { PartActions } from './multi-mcu/PartActions';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { BoardPicker } from './BoardPicker';
+import { trackUsage } from './usage';
 import { syncSensorAttributeToSimulator } from './sensor-attribute-sync';
 import {
   CheckIcon, UploadIcon, CodeIcon, PanelBottomIcon,
@@ -705,6 +706,7 @@ export function App() {
   // Fetch catalog on mount
   useEffect(() => {
     fetchCatalog().then(setCatalog);
+    trackUsage('app_loaded');
   }, []);
 
   // Persist selected board
@@ -717,6 +719,7 @@ export function App() {
     (config: BoardConfig) => {
       const workspace = loadBoardWorkspace(config);
       setSelectedBoard(config);
+      trackUsage('board_selected', { board: config.boardId });
       editor.loadDiagram(workspace.diagram);
       setSource(workspace.source);
       setCanvasValidationMessage(null);
@@ -836,6 +839,7 @@ export function App() {
 
   // "Upload" (compile + run): convert diagram → config, init simulator
   const handleRun = useCallback(async () => {
+    trackUsage('run_clicked', { board: selectedBoard.boardId });
     setLoading(true);
     setError(null);
     try {
@@ -1519,6 +1523,7 @@ export function App() {
     (labId: string) => {
       const next = BOARD_CONFIGS.find((b) => b.boardId === labId);
       if (!next) return;
+      trackUsage('lab_opened', { board: next.boardId });
       const workspace = loadBoardWorkspace(next);
       setSelectedBoard(next);
       editor.loadDiagram(workspace.diagram);

@@ -74,3 +74,10 @@ CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsubGFid2lyZWQuY29tJA"
 # (src/mcp/oauth.ts). Without it, `authorization_servers` is omitted and agent
 # OAuth discovery dead-ends. = the Clerk Frontend API origin (serves RFC 8414 + PKCE).
 MCP_AUTHORIZATION_SERVER = "https://clerk.labwired.com"
+
+# ── Analytics Engine ─────────────────────────────────────────────────────────
+# Anonymous product usage events (src/usage.ts). Query via the Analytics
+# Engine SQL API; dataset is created automatically on first write.
+[[analytics_engine_datasets]]
+binding = "USAGE"
+dataset = "labwired_usage"
