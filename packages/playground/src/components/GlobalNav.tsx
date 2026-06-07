@@ -1,11 +1,13 @@
 // Shared top-level navigation for every LabWired page. One source of
-// truth for the four nav links — Playground, Library, For CI, GitHub —
-// plus the LabWired wordmark that links back to the marketing domain.
+// truth for the five nav links — Playground, Library, Tools, For CI,
+// Validation — plus the LabWired wordmark that links back to the
+// marketing domain.
 //
 // Used by:
-//   * studio/TopChrome.tsx          (playground, dark variant)
-//   * library/Library.tsx           (light variant, active=library)
-//   * ci/CiLanding.tsx              (light variant, active=ci)
+//   * studio/TopChrome.tsx                (playground, dark variant)
+//   * library/Library.tsx                 (light variant, active=library)
+//   * ci/CiLanding.tsx                    (light variant, active=ci)
+//   * validation/ValidationLanding.tsx    (light variant, active=validation)
 //
 // Add or rename a nav item by editing NAV_ITEMS below; every page picks
 // it up automatically. Visual variant differences (dark playground
@@ -24,7 +26,10 @@ export const LABWIRED_HOME_URL = 'https://labwired.com';
 const BUILD_EPOCH = '2026-05-22T16:31:00Z';
 
 // app.labwired.com is JUST the demo (the running simulator). Library, For
-// CI, pricing — every marketing/discovery surface — lives on labwired.com.
+// CI, pricing — every marketing/discovery surface — lives on labwired.com,
+// with one deliberate exception: the Validation matrix page is served from
+// the playground app (same-origin fetch + shared design system); a
+// labwired.com nav entry for Validation is tracked separately.
 // The Tools entry opens the in-app tool panel; the rest exit back to the
 // marketing domain when the user clicks anything except the brand logo.
 export const NAV_ITEMS = [
@@ -32,6 +37,7 @@ export const NAV_ITEMS = [
   { id: 'library', label: 'Library', href: 'https://labwired.com/library.html', external: true },
   { id: 'tools', label: 'Tools', href: '/?tools=1' },
   { id: 'ci', label: 'For CI', href: 'https://labwired.com/ci.html', external: true },
+  { id: 'validation', label: 'Validation', href: '/validation.html' },
 ] as const;
 
 export type NavId = (typeof NAV_ITEMS)[number]['id'];

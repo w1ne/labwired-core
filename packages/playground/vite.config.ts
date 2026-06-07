@@ -29,6 +29,7 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         ci: path.resolve(__dirname, 'ci.html'),
         library: path.resolve(__dirname, 'library.html'),
+        validation: path.resolve(__dirname, 'validation.html'),
       },
     },
   },

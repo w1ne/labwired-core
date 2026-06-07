@@ -1,0 +1,40 @@
+{
+  "esp32s3": {
+    "clock": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "dma": {
+      "status": "blocked",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "gpio": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "i2c": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "irq": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "mcpwm": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "rmt": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "timer": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    },
+    "uart": {
+      "status": "pass",
+      "run_url": "https://github.com/w1ne/labwired-core/actions/runs/27090383705"
+    }
+  }
+}
