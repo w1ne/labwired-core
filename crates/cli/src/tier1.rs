@@ -101,6 +101,68 @@ impl ParsedTier1 {
     }
 }
 
+/// peripheral-id substring → tier1 class. First match wins; order matters
+/// (e.g. "gdma" must map to dma before "dma" generic).
+const CLASS_MARKERS: &[(&str, &str)] = &[
+    ("uart", "uart"),
+    ("usb_serial", "uart"), // S3 console can be USB-Serial-JTAG
+    ("gpio", "gpio"),
+    ("timg", "timer"),
+    ("systimer", "timer"),
+    ("tim", "timer"),
+    ("gdma", "dma"),
+    ("dma", "dma"),
+    ("intmatrix", "irq"),
+    ("interrupt", "irq"),
+    ("nvic", "irq"),
+    ("rcc", "clock"),
+    ("clk", "clock"),
+    ("rtc_cntl", "clock"),
+    ("system", "clock"),
+    ("mcpwm", "mcpwm"),
+    ("i2c", "i2c"),
+    ("rmt", "rmt"),
+];
+
+#[derive(Deserialize)]
+struct ChipYamlPeripheral {
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct ChipYamlDoc {
+    #[serde(default)]
+    peripherals: Vec<ChipYamlPeripheral>,
+}
+
+/// Which tier1 classes a chip YAML declares, by peripheral-id heuristics.
+pub fn declared_classes_from_yaml(
+    yaml: &str,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    let doc: ChipYamlDoc = serde_yaml::from_str(yaml).map_err(|e| e.to_string())?;
+    let mut classes = std::collections::BTreeSet::new();
+    for p in &doc.peripherals {
+        let id = p.id.to_lowercase();
+        for (marker, class) in CLASS_MARKERS {
+            if id.contains(marker) {
+                classes.insert(class.to_string());
+                break;
+            }
+        }
+    }
+    Ok(classes)
+}
+
+/// Cells whose class is not declared by the chip become `Na`.
+pub fn apply_na(row: &mut BTreeMap<String, Cell>, declared: &std::collections::BTreeSet<String>) {
+    for (class, cell) in row.iter_mut() {
+        if !declared.contains(class) {
+            cell.status = CellStatus::Na;
+            cell.run_url = None;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +215,38 @@ mod tests {
         let parsed = parse_tier1_uart(b"TIER1 clock PASS\nTIER1 done\n");
         let row = parsed.into_row(&["clock", "uart"]);
         assert_eq!(row["uart"].status, CellStatus::Pass);
+    }
+
+    #[test]
+    fn derives_na_from_chip_yaml_peripheral_ids() {
+        // Minimal chip yaml shape — only `peripherals[].id` matters here.
+        let yaml = r#"
+name: "fakechip"
+arch: "xtensa"
+peripherals:
+  - { id: "uart0", type: "uart", base_address: 0x60000000 }
+  - { id: "gpio", type: "declarative", base_address: 0x60004000 }
+  - { id: "timg0", type: "declarative", base_address: 0x6001F000 }
+  - { id: "interrupt_core0", type: "declarative", base_address: 0x600C2000 }
+"#;
+        let declared = declared_classes_from_yaml(yaml).unwrap();
+        assert!(declared.contains("uart"));
+        assert!(declared.contains("gpio"));
+        assert!(declared.contains("timer"));
+        assert!(declared.contains("irq"));
+        assert!(!declared.contains("dma")); // not declared → n/a, not blocked
+        assert!(!declared.contains("mcpwm"));
+    }
+
+    #[test]
+    fn na_overrides_blocked_in_row_resolution() {
+        let parsed = parse_tier1_uart(b"TIER1 clock PASS\nTIER1 done\n");
+        let mut row = parsed.into_row(RUBRIC_CLASSES);
+        let declared: std::collections::BTreeSet<String> =
+            ["clock", "uart"].iter().map(|s| s.to_string()).collect();
+        apply_na(&mut row, &declared);
+        assert_eq!(row["clock"].status, CellStatus::Pass);
+        assert_eq!(row["dma"].status, CellStatus::Na); // undeclared
+        assert_eq!(row["gpio"].status, CellStatus::Na); // undeclared
     }
 }
