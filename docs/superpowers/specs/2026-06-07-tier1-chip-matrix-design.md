@@ -1,0 +1,182 @@
+# Tier-1 Chip-Regression Validation Matrix — Design
+
+**Date:** 2026-06-07
+**Repo affected:** `core` (submodule); scoreboard surfaces in core docs site
+**Status:** approved design, pending implementation plan
+
+## Problem
+
+"Supported chip" is currently proven unevenly. The full workspace test pass runs
+real firmware on ~6 chips well (L476, nRF52x, ESP32-family via `firmware_survival`
+and the e2e suite), but stm32g474re, stm32wb55, stm32wba52, stm32l073 and others
+have chip YAMLs and catalog entries with no real-firmware evidence in the per-PR
+gate. The L0–L3 target-support rubric (`docs/target_support_rubric.md`) defines a
+Tier-1 peripheral checklist — `clock/rcc`, `gpio`, `uart`, `timer`, `dma`, `irq` —
+but nothing in CI enforces it, and the SVD register-coverage ratchet protects only
+ESP32-S3. Net effect: a core upgrade can silently break a chip or a peripheral on
+a chip and CI stays green.
+
+## Prior art consulted
+
+- **Renode Zephyr dashboard** — runs Zephyr samples on 470+ simulated boards
+  nightly; per-board color-coded statuses; platform definitions derived from
+  devicetree. Takeaway: a small set of well-chosen firmware images validates a
+  peripheral class each; breadth comes from an ecosystem corpus, not hand-written
+  tests.
+- **Renode per-platform Robot suites** (e.g. `tests/platforms/NRF52840.robot`) —
+  13 cases per platform exercising UART shell, SPI/I2C sensors, GPIO LED/button,
+  watchdog; binaries precompiled, content-hashed, fetched from
+  `dl.antmicro.com`. Takeaway: CI never installs cross-toolchains; ELFs are
+  pinned by hash; assertions are UART strings + GPIO state.
+- **In-repo precedents** — `svd_coverage_ratchet.rs` (floor that can only rise),
+  `firmware_survival.rs` (real-FW harness with UART/PC assertions),
+  `catalog_validation.md` + `core-validate-hw-targets.yml` (CI writes
+  `pass_rate`/`validation.*` into onboarding manifests),
+  `generate_coverage_matrix_scoreboard.py` (rendered scoreboard).
+
+## Design
+
+### 1. Matrix model
+
+The unit of truth is a **cell**: `(chip, peripheral-class) → status`.
+
+- Peripheral classes = exactly the rubric's Tier-1 list:
+  `clock/rcc`, `gpio`, `uart`, `timer`, `dma`, `irq`.
+- Status ∈ `pass | partial | blocked | n/a | unrecorded`.
+- Rows = the chip YAMLs in `configs/chips/`. A chip whose YAML declares no
+  peripheral of a class gets `n/a` for that cell (not `blocked`).
+- Committed snapshot: `docs/coverage/tier1-matrix.json` (same pattern and
+  directory as `esp32s3-coverage.json`).
+- A chip's rubric L-level is **derived** from its row (all six `pass` → eligible
+  for L3), not hand-asserted.
+
+### 2. Tier-1 fixture firmware
+
+One small bare-metal firmware per **chip family**, not per chip (~5 sources):
+
+| family source | chips covered |
+|---|---|
+| `stm32` (variants via cfg) | f103, f401, f401cdu6, f407, g474re, h563, l073, l476, wb55, wba52 |
+| `nrf52` | nrf52832, nrf52840 |
+| `rp2040` | rp2040 |
+| `esp32-riscv` | esp32c3 |
+| `esp32-xtensa` | esp32, esp32s3, esp32s3-zero |
+
+Each fixture runs a self-test sequence and reports one line per peripheral class
+over UART:
+
+```
+TIER1 clock PASS
+TIER1 gpio PASS
+TIER1 timer PASS
+TIER1 dma FAIL code=<reason>
+TIER1 irq PASS
+TIER1 done
+```
+
+Conventions:
+
+- UART is validated implicitly: no `TIER1` lines within the step budget →
+  `uart = blocked` for that chip.
+- `TIER1 done` is mandatory; missing `done` marks the whole row `partial`
+  (firmware hung mid-sequence).
+- Deterministic: fixed step budget per chip, no wall-clock dependence; budgets
+  recorded next to the chip entry in the harness table.
+
+**Binary policy** (per explicit user decision): ELFs are **committed in-repo**,
+content-hashed:
+
+- `crates/core/tests/fixtures/tier1/<chip>.elf`
+- `crates/core/tests/fixtures/tier1/MANIFEST.json` — sha256 + source revision
+  per ELF
+- Sources in `examples/tier1-fixture/<family>/`
+- A scheduled toolchain-equipped CI job rebuilds from source and fails on
+  source↔binary drift (weekly; Xtensa rides the espressif toolchain runner).
+
+### 3. Harness
+
+New integration test `crates/core/tests/tier1_matrix.rs`, structured like
+`firmware_survival`:
+
+1. Table of `(chip, system-yaml, elf, step-budget)`.
+2. Run each ELF against its system YAML; capture UART.
+3. Parse `TIER1` lines → cell statuses; merge `n/a` from chip YAML peripheral
+   declarations.
+4. Expose the live matrix for the ratchet test and the CLI exporter.
+
+CLI exporter (mirrors the SVD coverage exporter):
+
+```
+cargo run -p labwired-cli -- tier1-matrix --json-out docs/coverage/tier1-matrix.json
+```
+
+### 4. Ratchet gating
+
+New test `tier1_matrix_ratchet` (same shape as `svd_coverage_ratchet`):
+
+- Any recorded `pass` cell that no longer passes → **test fails, PR blocked**;
+  failure message names exact cells and the regenerate command.
+- `unrecorded`, `partial`, `blocked` cells move freely — adding chips never
+  blocks anyone.
+- Improving a cell = regenerate the snapshot in the same PR; progress is
+  recorded and immediately protected.
+- Demotion happens only by editing `tier1-matrix.json` in a PR — visible in
+  diff review; satisfies the rubric's demotion rules with no side channel.
+
+**SVD coverage ratchet extension:** same mechanism as today's ESP32-S3 ratchet,
+extended chip-by-chip as SVD snapshots are generated (incremental opt-in; not a
+P1 blocker for chips without an in-tree SVD).
+
+### 5. CI wiring
+
+- **Per-PR:** `tier1_matrix` + ratchet run inside the existing `core-integrity`
+  workspace test pass. No new workflow, no toolchains (ELFs committed). Cost:
+  ~17 bounded sim smokes, seconds each.
+- **Nightly** (`core-nightly.yml`): full matrix with generous budgets + drift
+  check job.
+- **Catalog refresh** (`core-validate-hw-targets.yml`): writes per-chip Tier-1
+  results into onboarding manifests' `validation.checks`, replacing the generic
+  `simulation: true` with per-peripheral verdicts. Downstream catalog consumers
+  keep the same contract (`catalog_validation.md`), with richer checks.
+
+### 6. Dashboard
+
+`generate_coverage_matrix_scoreboard.py` grows a chip × peripheral grid
+(✅ pass / 🟡 partial / ⛔ blocked / — n/a) rendered into
+`docs/coverage_scoreboard.md` and the docs site — public, Renode-dashboard-style
+proof of what works.
+
+## Phasing
+
+- **P1** — harness + ratchet + exporter + STM32-family fixture: 10 of 17 chips,
+  including all currently-untested STM32s. Most coverage per firmware authored.
+- **P2** — nRF52, RP2040, ESP32-C3 fixtures.
+- **P3** — ESP32/S3 Xtensa fixture (rides the vendored-ROM faithful boot path).
+- **P4** — Zephyr-samples breadth layer per board (Renode-style); separate spec.
+
+## Error handling
+
+- Fixture ELF missing/corrupt (hash mismatch) → harness fails that chip's row as
+  `blocked` with a distinct reason; ratchet then reports it only if the row had
+  recorded passes.
+- Sim crash/hang → step budget exhausts; row marked from whatever `TIER1` lines
+  arrived; missing `done` → `partial`.
+- Ratchet snapshot regeneration is idempotent and deterministic; running it
+  twice produces identical JSON (sorted keys).
+
+## Testing
+
+- Harness unit tests: UART-line parser (PASS/FAIL/garbage/truncated), `n/a`
+  derivation from chip YAML, budget exhaustion paths.
+- Ratchet tests: regression detected, improvement allowed, unrecorded ignored,
+  explicit-demotion diff respected.
+- Drift check: corrupting one committed ELF locally must fail the manifest
+  verification.
+- The matrix harness itself is the regression test for the 17 chips.
+
+## Out of scope
+
+- Zephyr corpus integration (P4, separate spec).
+- Non-Tier-1 peripherals (SPI/I2C/ADC device labs remain covered by
+  `firmware_survival` / e2e suites).
+- HIL/silicon capture — the hw-oracle pipeline is untouched.
