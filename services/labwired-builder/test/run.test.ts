@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +8,23 @@ import { CHIP_YAMLS } from '../../../packages/board-config/src/chip-yamls';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-describe('run', () => {
+/** Resolve the labwired binary path (env override or PATH lookup).
+ *  Returns true when the binary can be spawned, false when absent. */
+function checkBinAvailable(): boolean {
+  const bin = process.env.LABWIRED_BIN ?? 'labwired';
+  try {
+    const result = spawnSync(bin, ['--version'], { timeout: 5000 });
+    // spawnSync sets error when the binary is not found (ENOENT); a non-zero
+    // exit code (e.g. "labwired --version" returning 1) still means it's there.
+    return result.error === undefined;
+  } catch {
+    return false;
+  }
+}
+
+const binAvailable = checkBinAvailable();
+
+describe.skipIf(!binAvailable)('run (requires labwired binary — set LABWIRED_BIN or add to PATH)', () => {
   it('runs a known stm32l476 ELF and returns status + serial', async () => {
     const elfBase64 = (await readFile(join(__dirname, 'fixtures/blink-l476.elf'))).toString('base64');
     const systemYaml = await readFile(join(__dirname, 'fixtures/blink-l476.system.yaml'), 'utf8');
