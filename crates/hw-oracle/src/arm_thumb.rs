@@ -423,7 +423,10 @@ pub fn ldrsh_reg(rt: u8, rn: u8, rm: u8) -> u16 {
 /// (`EQ=0`, `NE=1`, …).  Used to pin the "16-bit data-processing inside an
 /// IT block does not update APSR" rule (#2) against silicon.
 pub fn it(firstcond: u8, mask: u8) -> u16 {
-    assert!(firstcond < 16 && mask != 0 && mask < 16, "IT fields out of range");
+    assert!(
+        firstcond < 16 && mask != 0 && mask < 16,
+        "IT fields out of range"
+    );
     0xBF00 | ((firstcond as u16) << 4) | (mask as u16)
 }
 
