@@ -1598,15 +1598,21 @@ impl CortexM {
                     self.update_nzcv(res, c, v);
                 }
                 Instruction::Ror { rd, rm } => {
+                    // Register rotate: amount = Rm[7:0]. Carry = the rotated
+                    // result's MSB; n==0 leaves C unchanged (ARMv7-M ROR_C).
+                    // Silicon-verified on STM32F103 via thumb_oracles.
                     let val = self.read_reg(rd);
-                    let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val
+                    let n = self.read_reg(rm) & 0xFF;
+                    let (res, carry) = if n == 0 {
+                        (val, self.get_carry())
                     } else {
-                        val.rotate_right(shift % 32)
+                        let r = val.rotate_right(n % 32);
+                        (r, (r >> 31) & 1 == 1)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::Rev { rd, rm } => {
                     let val = self.read_reg(rm);

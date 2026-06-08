@@ -367,6 +367,11 @@ pub fn asr_reg(rdn: u8, rm: u8) -> u16 {
     assert!(rdn < 8 && rm < 8, "ASRS reg needs low registers");
     0x4100 | ((rm as u16) << 3) | (rdn as u16)
 }
+/// `RORS Rdn, Rm` — T1 (rotate right by Rm[7:0]).
+pub fn ror_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "RORS reg needs low registers");
+    0x41C0 | ((rm as u16) << 3) | (rdn as u16)
+}
 
 /// `CMP Rn, Rm` — T1.
 pub fn cmp_reg(rn: u8, rm: u8) -> u16 {
@@ -1089,6 +1094,7 @@ mod encoder_tests {
         assert_eq!(lsl_reg(2, 1), 0x408A); // LSLS r2, r1
         assert_eq!(lsr_reg(2, 1), 0x40CA); // LSRS r2, r1
         assert_eq!(asr_reg(2, 1), 0x410A); // ASRS r2, r1
+        assert_eq!(ror_reg(2, 1), 0x41CA); // RORS r2, r1
     }
 
     #[test]

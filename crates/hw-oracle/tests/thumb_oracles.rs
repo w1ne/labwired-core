@@ -32,8 +32,8 @@
 use labwired_hw_oracle::arm_thumb::{
     adds_imm3, adds_imm8, adds_reg, ands, asr_reg, asrs_imm, b_uncond, beq, cmp_reg, eors, it,
     ldr_imm5, ldrh_reg, ldrsb_reg, ldrsh_reg, lsl_reg, lsls_imm, lsr_reg, lsrs_imm, movs_imm8,
-    movw_imm16, muls, orrs, sdiv, str_imm5, strb_reg, strh_reg, subs_reg, udiv, ThumbOracleCase,
-    COND_EQ, DATA_BASE,
+    movw_imm16, muls, orrs, ror_reg, sdiv, str_imm5, strb_reg, strh_reg, subs_reg, udiv,
+    ThumbOracleCase, COND_EQ, DATA_BASE,
 };
 use labwired_hw_oracle::thumb_oracle_test;
 
@@ -413,5 +413,63 @@ fn it_block_reg_shift_preserves_flags() -> ThumbOracleCase {
         .expect(|st| {
             st.assert_reg("r2", 0x8000_0000); // shift executed (EQ true)
             st.assert_nzcv(false, true, true, false); // flags still from the CMP
+        })
+}
+
+// ── 24. RORS Rdn, Rm — carry = rotated result's MSB ───────────────────────────
+// Pins the ROR carry fix (the last shift-family member). 0x1 ror 1 = 0x8000_0000,
+// carry = result bit 31 = 1.
+#[thumb_oracle_test]
+fn ror_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[ror_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0x0000_0001);
+            st.write_reg("r1", 1); // rotate right by 1
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x8000_0000);
+            st.assert_nzcv(true, false, true, false); // N=1, C=1
+        })
+}
+
+// ── 25. ADDS carry-out + zero: 0xFFFF_FFFF + 1 = 0 with C=1, Z=1 ───────────────
+#[thumb_oracle_test]
+fn adds_carry_and_zero() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[adds_reg(2, 0, 1)])
+        .setup(|st| {
+            st.write_reg("r0", 0xFFFF_FFFF);
+            st.write_reg("r1", 1);
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0);
+            st.assert_nzcv(false, true, true, false); // Z=1, C=1
+        })
+}
+
+// ── 26. ADDS signed overflow: 0x7FFF_FFFF + 1 = 0x8000_0000, V=1, N=1 ──────────
+#[thumb_oracle_test]
+fn adds_signed_overflow() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[adds_reg(2, 0, 1)])
+        .setup(|st| {
+            st.write_reg("r0", 0x7FFF_FFFF);
+            st.write_reg("r1", 1);
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x8000_0000);
+            st.assert_nzcv(true, false, false, true); // N=1, V=1, C=0
+        })
+}
+
+// ── 27. SUBS borrow: 0 - 1 = 0xFFFF_FFFF with C=0 (borrow), N=1 ────────────────
+#[thumb_oracle_test]
+fn subs_borrow_clears_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[subs_reg(2, 0, 1)])
+        .setup(|st| {
+            st.write_reg("r0", 0);
+            st.write_reg("r1", 1);
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0xFFFF_FFFF);
+            st.assert_nzcv(true, false, false, false); // N=1, C=0 (borrow)
         })
 }
