@@ -210,6 +210,19 @@ pub struct ThumbOracleCase {
     /// halts at the breakpoint, so the HW runner ignores this.  Set via
     /// [`ThumbOracleCase::settle_ticks`].
     pub settle_ticks: usize,
+    /// Byte offset from the load base at which execution starts. 0 means the
+    /// first instruction (the default flat-program case). Interrupt oracles set
+    /// this so a vector table can sit at the load base while `main` runs from
+    /// after it. Set via [`ThumbOracleCase::entry_offset`].
+    pub entry_offset: u32,
+    /// Drive the sim's peripherals **live** during execution: after each CPU
+    /// step, tick all peripherals and pend any IRQs they raise into the CPU
+    /// (mirroring `Machine::step`), and build the CPU with the Cortex-M system
+    /// block (shared NVIC/VTOR) so it can actually take them. Required for
+    /// interrupt-delivery oracles; default off, so static oracles are
+    /// unaffected. On silicon this is automatic. Set via
+    /// [`ThumbOracleCase::live_peripherals`].
+    pub live_peripherals: bool,
 }
 
 impl ThumbOracleCase {
@@ -224,6 +237,8 @@ impl ThumbOracleCase {
             mem_capture_addrs: Vec::new(),
             sim_bus: None,
             settle_ticks: 0,
+            entry_offset: 0,
+            live_peripherals: false,
         }
     }
 
@@ -266,6 +281,8 @@ impl ThumbOracleCase {
             mem_capture_addrs: Vec::new(),
             sim_bus: None,
             settle_ticks: 0,
+            entry_offset: 0,
+            live_peripherals: false,
         }
     }
 
@@ -290,6 +307,21 @@ impl ThumbOracleCase {
     /// is idle).
     pub fn settle_ticks(mut self, n: usize) -> Self {
         self.settle_ticks = n;
+        self
+    }
+
+    /// Start execution `bytes` into the program rather than at the first byte.
+    /// Lets a vector table sit at the load base while `main` runs from after it
+    /// (see [`ThumbOracleCase::entry_offset`]).
+    pub fn entry_offset(mut self, bytes: u32) -> Self {
+        self.entry_offset = bytes;
+        self
+    }
+
+    /// Drive peripherals live and let the CPU take their interrupts — required
+    /// for interrupt-delivery oracles (see [`ThumbOracleCase::live_peripherals`]).
+    pub fn live_peripherals(mut self, on: bool) -> Self {
+        self.live_peripherals = on;
         self
     }
 
@@ -599,11 +631,15 @@ pub enum Thumb {
     H(u16),
     /// 32-bit Thumb-2 instruction (high halfword in bits 31..16).
     W(u32),
+    /// Raw little-endian 32-bit data word (natural byte order). For vector
+    /// tables / literal pools — NOT an instruction, so unlike `W` it is not
+    /// hi-then-lo swapped.
+    Data(u32),
 }
 
 /// Assemble a mixed 16/32-bit Thumb instruction stream into little-endian
 /// bytes.  Thumb-2 words are emitted high-halfword-first (each halfword LE),
-/// matching [`ThumbOracleCase::t2_words`].
+/// matching [`ThumbOracleCase::t2_words`]; `Data` words are plain LE.
 pub fn assemble(insns: &[Thumb]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(insns.len() * 2);
     for insn in insns {
@@ -615,9 +651,22 @@ pub fn assemble(insns: &[Thumb]) -> Vec<u8> {
                 bytes.extend_from_slice(&hi.to_le_bytes());
                 bytes.extend_from_slice(&lo.to_le_bytes());
             }
+            Thumb::Data(d) => bytes.extend_from_slice(&d.to_le_bytes()),
         }
     }
     bytes
+}
+
+/// `BX Rm` — T1 branch-and-exchange (`0b0100_0111_0_rmmmm_000`). With `Rm = lr`
+/// (14) this is the canonical exception return (`0x4770`).
+pub fn bx(rm: u8) -> u16 {
+    assert!(rm < 16, "BX Rm out of range");
+    0x4700 | ((rm as u16) << 3)
+}
+
+/// `CPSIE i` — clear PRIMASK (enable IRQs). T1 encoding `0xB662`.
+pub fn cpsie_i() -> u16 {
+    0xB662
 }
 
 /// `UDIV Rd, Rn, Rm` — T1 encoding (ARMv7-M unsigned divide).
@@ -769,7 +818,7 @@ fn capture_sim_state(case: &ThumbOracleCase) -> ThumbOracleState {
                 });
             i += 4;
         }
-        return run_capture(case, bus, PROG_BASE_HW);
+        return run_capture(case, bus, PROG_BASE_HW + case.entry_offset, true);
     }
 
     // Use empty() to avoid the STM32-default peripherals colliding with
@@ -837,7 +886,7 @@ fn capture_sim_state(case: &ThumbOracleCase) -> ThumbOracleState {
         Box::new(ram_peripheral::RamPeripheral::new(ORACLE_MEM_SIZE)),
     );
 
-    run_capture(case, bus, entry_pc)
+    run_capture(case, bus, entry_pc, false)
 }
 
 /// Shared sim driver: reset the CPU on `bus`, apply `case.setup`, run from
@@ -848,11 +897,20 @@ fn run_capture(
     case: &ThumbOracleCase,
     mut bus: labwired_core::bus::SystemBus,
     entry_pc: u32,
+    cortex_m_system: bool,
 ) -> ThumbOracleState {
     use labwired_core::cpu::cortex_m::CortexM;
     use labwired_core::Cpu;
 
-    let mut cpu = CortexM::new();
+    // For interrupt-delivery oracles the CPU must share the bus's NVIC/SCB/VTOR
+    // state, so build it through the Cortex-M system wiring; otherwise a bare
+    // CPU is enough (and is what the RAM-only instruction oracles use).
+    let mut cpu = if cortex_m_system {
+        let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+        cpu
+    } else {
+        CortexM::new()
+    };
     // reset() reads SP+PC from the vector table at VTOR (0).  On the bare
     // bus that window is unmapped (reads fail → defaults kept); on a full
     // chip bus flash is mapped but unprogrammed (zeros) — either way the
@@ -889,6 +947,15 @@ fn run_capture(
     for _ in 0..MAX_STEPS {
         cpu.step(&mut bus, &[], &sim_config)
             .unwrap_or_else(|e| panic!("thumb oracle sim error at pc=0x{:08X}: {e:?}", cpu.pc));
+        // Interrupt-delivery mode: after each instruction, advance peripherals
+        // and pend any IRQs they raise so the CPU takes them on the next step —
+        // mirroring `Machine::step`. On silicon this happens autonomously.
+        if case.live_peripherals {
+            let (interrupts, _costs) = bus.tick_peripherals_fully();
+            for irq in interrupts {
+                cpu.set_exception_pending(irq);
+            }
+        }
         if cpu.pc == last_pc {
             stable_count += 1;
             if stable_count >= 2 {
@@ -1070,8 +1137,10 @@ fn capture_hw_state(case: &ThumbOracleCase) -> ThumbOracleState {
             .unwrap_or_else(|e| panic!("run_hw: setup write_memory(0x{addr:08X}) failed: {e:?}"));
     }
 
-    // 7. PC = PROG_BASE_HW with Thumb bit set.
-    oc.write_register("pc", PROG_BASE_HW | 1)
+    // 7. PC = entry (PROG_BASE_HW + entry_offset) with Thumb bit set. The
+    // offset lets a vector table sit at the load base while `main` runs after
+    // it (interrupt-delivery oracles).
+    oc.write_register("pc", (PROG_BASE_HW + case.entry_offset) | 1)
         .expect("run_hw: write pc failed");
 
     // 8. Resume execution.
@@ -1279,5 +1348,23 @@ mod encoder_tests {
         // IT EQ (one-instruction block): 0xBF00 | (cond<<4) | mask, cond=EQ=0,
         // mask=0b1000. Cross-checked: arm-none-eabi-as `it eq` → 08 bf (0xBF08).
         assert_eq!(it(COND_EQ, 0x8), 0xBF08);
+    }
+
+    #[test]
+    fn bx_lr_and_cpsie_encodings() {
+        // BX LR = 0x4700 | (14<<3) = 0x4770 (arm-none-eabi-as `bx lr` → 70 47).
+        assert_eq!(bx(14), 0x4770);
+        // CPSIE i = 0xB662 (arm-none-eabi-as `cpsie i` → 62 b6).
+        assert_eq!(cpsie_i(), 0xB662);
+    }
+
+    #[test]
+    fn data_word_is_plain_little_endian() {
+        // Unlike a 32-bit instruction (`W`, hi-then-lo), a `Data` word is emitted
+        // in natural LE order — required for vector-table entries.
+        assert_eq!(
+            assemble(&[Thumb::Data(0x2000_2081)]),
+            vec![0x81, 0x20, 0x00, 0x20]
+        );
     }
 }

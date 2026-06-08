@@ -29,9 +29,9 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_hw_oracle::arm_thumb::{
-    ldr_imm5, movs_imm8, movt_imm16, movw_imm16, orrs, str_imm5, Thumb, ThumbOracleCase,
+    assemble, bx, cpsie_i, ldr_imm5, movs_imm8, movt_imm16, movw_imm16, orrs, str_imm5, Thumb,
+    ThumbOracleCase, INIT_SP, PROG_BASE_HW,
 };
 use labwired_hw_oracle::thumb_oracle_test;
 use std::path::PathBuf;
@@ -182,14 +182,12 @@ fn f103_bus() -> SystemBus {
     let anchored = system_path.parent().unwrap().join(&manifest.chip);
     manifest.chip = anchored.to_str().unwrap().to_string();
 
-    let mut bus = SystemBus::from_config(&chip, &manifest)
-        .unwrap_or_else(|e| panic!("build F103 sim bus: {e}"));
-    // Wire the Cortex-M system block (NVIC @ 0xE000E100, SCB @ 0xE000ED00,
-    // DWT @ 0xE000_1000) so oracles can drive those over MMIO. Idempotent and
-    // at addresses no other oracle touches; the returned cpu/nvic are unused
-    // here (run_capture builds the CPU).
-    let _ = configure_cortex_m(&mut bus);
-    bus
+    // The full-chip sim path wires the Cortex-M system block (NVIC @
+    // 0xE000E100, SCB @ 0xE000ED00, DWT @ 0xE000_1000) when it builds the CPU
+    // (run_capture → configure_cortex_m), so NVIC/SCB/DWT MMIO is available to
+    // every oracle and interrupt-delivery oracles get a CPU sharing the bus's
+    // NVIC/VTOR.
+    SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build F103 sim bus: {e}"))
 }
 
 // ── 1. TIM2 update-generation (UG) event ───────────────────────────────────────
@@ -596,4 +594,80 @@ fn nvic_iser_icer_enable_disable() -> ThumbOracleCase {
         .sim_bus(f103_bus)
         .capture_mem(&[NVIC_ISER0])
         .expect(|st| st.assert_mem(NVIC_ISER0, IRQ28)) // IRQ28 enabled, IRQ6 cleared
+}
+
+// ── 13. EXTI0 interrupt delivery (the first real exception-entry oracle) ─────────
+//
+// Lays out [vector table @ load base][ISR][main]. `main` relocates VTOR to the
+// table, unmasks EXTI line 0, enables IRQ6 in the NVIC, clears PRIMASK, and
+// software-triggers the line. The CPU must vector to the ISR (exception entry +
+// stacking), which writes a RAM marker and clears EXTI_PR, then `BX LR` returns
+// (unstacking) into `main`, which settles at the terminator.
+//
+// Exercises the whole delivery path — VTOR relocation, NVIC enable, vectoring,
+// stacking/unstacking, exception return — that the static oracles never touch.
+// The ISR is idempotent (a marker store, not a counter) so the sim's
+// tick-granular level-source re-pend (it may run the ISR an extra time before
+// EXTI_PR clears) produces the same final state as silicon's single entry.
+
+/// Build [32-entry vector table][isr][main] and return the program + the byte
+/// offset of `main` (the entry point). `exc_num` is the exception number
+/// (IRQ + 16) whose vector points at the ISR.
+fn interrupt_program(isr: &[Thumb], main: &[Thumb], exc_num: usize) -> (Vec<Thumb>, u32) {
+    const TABLE_ENTRIES: usize = 32; // 128 bytes — VTOR is 128-byte aligned at the load base
+    let table_bytes = (TABLE_ENTRIES * 4) as u32;
+    let isr_bytes = assemble(isr).len() as u32;
+    let isr_addr = PROG_BASE_HW + table_bytes;
+    let main_offset = table_bytes + isr_bytes;
+
+    let mut prog: Vec<Thumb> = vec![Thumb::Data(0); TABLE_ENTRIES];
+    prog[0] = Thumb::Data(INIT_SP); // initial SP (vector 0)
+    prog[1] = Thumb::Data((PROG_BASE_HW + main_offset) | 1); // reset vector (unused; PC set directly)
+    prog[exc_num] = Thumb::Data(isr_addr | 1); // the handler under test
+    prog.extend_from_slice(isr);
+    prog.extend_from_slice(main);
+    (prog, main_offset)
+}
+
+#[thumb_oracle_test]
+fn exti0_interrupt_delivery() -> ThumbOracleCase {
+    const VTOR_REG: u32 = 0xE000_ED08; // SCB->VTOR
+    const NVIC_ISER0: u32 = 0xE000_E100;
+    const MARKER: u32 = 0x2000_0300; // RAM marker the ISR writes
+    const MARKER_VALUE: u32 = 0xABCD_1234;
+    const EXTI0_EXC: usize = 16 + 6; // IRQ6 → exception 22
+
+    // ISR: write the marker, clear the EXTI pending bit, return.
+    let mut isr: Vec<Thumb> = Vec::new();
+    isr.extend(load_addr(0, MARKER));
+    isr.extend(store_imm32(MARKER_VALUE));
+    isr.extend(load_addr(0, EXTI_PR));
+    isr.extend(store_imm32(0x1)); // rc_w1: clear pending line 0
+    isr.push(Thumb::H(bx(14))); // BX LR — exception return
+
+    // main: relocate VTOR, zero the marker, enable + trigger the interrupt.
+    let mut main: Vec<Thumb> = Vec::new();
+    main.extend(load_addr(0, VTOR_REG));
+    main.extend(store_imm32(PROG_BASE_HW)); // VTOR = table base
+    main.extend(load_addr(0, MARKER));
+    main.extend(store_imm32(0x0)); // clear marker → proves the ISR set it
+    main.extend(load_addr(0, EXTI_IMR));
+    main.extend(store_imm32(0x1)); // unmask EXTI line 0
+    main.extend(load_addr(0, NVIC_ISER0));
+    main.extend(store_imm32(1 << 6)); // enable IRQ6 (EXTI0)
+    main.push(Thumb::H(cpsie_i())); // clear PRIMASK
+    main.extend(load_addr(0, EXTI_SWIER));
+    main.extend(store_imm32(0x1)); // software-trigger line 0 → IRQ fires
+
+    let (prog, entry) = interrupt_program(&isr, &main, EXTI0_EXC);
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .entry_offset(entry)
+        .live_peripherals(true)
+        .capture_mem(&[MARKER, EXTI_PR])
+        .expect(|st| {
+            st.assert_mem(MARKER, MARKER_VALUE); // the ISR ran (exception delivered)
+            st.assert_mem(EXTI_PR, 0); // the ISR cleared the pending bit
+        })
 }

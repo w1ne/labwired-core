@@ -57,9 +57,13 @@ self-hosted runner on the Mac server (`hil/README.md`), set the board `active`,
 enable the `schedule:` trigger, and make `hil` a required check **only** once the
 runner is reliably online. Every supported chip gets a `boards.json` entry.
 
-### P1 — Interrupt delivery oracles
-Validate exception entry/exit, vectoring, priority — the biggest dynamics gap.
-The machinery already exists in the model; the harness needs:
+### P1 — Interrupt delivery oracles — *first oracle landed (ledger #23)*
+`exti0_interrupt_delivery` validates the full path — VTOR relocation, NVIC
+enable, vectoring, register stacking/unstacking, exception return — byte-exact on
+the bench F103. The harness gained `Thumb::Data`, `bx`/`cpsie_i`, per-case
+`entry_offset`, and opt-in `live_peripherals`. Next within P1: priority/nesting
+(two IRQs), fault handlers, SysTick interrupt. The original design notes (now
+implemented):
 - **CPU built via `configure_cortex_m`** in `run_capture` (opt-in) so the CPU
   shares the bus NVIC/VTOR (currently `run_capture` builds a bare `CortexM`).
 - **Live-peripheral dispatch** (opt-in `live_peripherals`): after each
