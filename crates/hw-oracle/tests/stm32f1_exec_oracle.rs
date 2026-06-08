@@ -81,6 +81,12 @@ const CRC_BASE: u32 = 0x4002_3000;
 const CRC_DR: u32 = CRC_BASE + 0x00; // data in / CRC result out
 const CRC_CR: u32 = CRC_BASE + 0x08; // control (RESET = bit 0)
 
+/// EXTI (RM0008 §10): software-interrupt + pending registers.
+const EXTI_BASE: u32 = 0x4001_0400;
+const EXTI_IMR: u32 = EXTI_BASE + 0x00; // interrupt mask
+const EXTI_SWIER: u32 = EXTI_BASE + 0x10; // software interrupt event
+const EXTI_PR: u32 = EXTI_BASE + 0x14; // pending (rc_w1)
+
 const TIM2_BASE: u32 = 0x4000_0000;
 const TIM2_SR: u32 = TIM2_BASE + 0x10; // status (UIF=bit0, CC1..4IF=bits1..4)
 
@@ -348,5 +354,36 @@ fn dma1_mem_to_mem() -> ThumbOracleCase {
             st.assert_mem(DMA_DST + 4, W1); // engine copied word 1
             st.assert_mem(DMA1_CNDTR1, 0); // all 8 elements moved
             st.assert_mem(DMA1_ISR, 0x0000_0007); // GIF1 | TCIF1 | HTIF1
+        })
+}
+
+// ── 5. EXTI software-interrupt trigger (SWIER → PR), then PR clear ───────────────
+//
+// EXTI needs no clock enable on F1 (the block sits directly on the bus; only the
+// AFIO EXTICR muxes need AFIOEN, which this oracle doesn't touch). Pure register
+// dynamics, no external signal:
+//   1. IMR  = 0x05            — unmask lines 0 and 2
+//   2. SWIER = 0x05           — software-trigger lines 0 and 2 → PR sets bits 0,2
+//   3. PR   = 0x01            — rc_w1: clear pending line 0
+//
+// After: PR reads 0x04 (line 2 still pending, line 0 cleared). SWIER reads 0x04
+// too — on silicon clearing a PR bit also clears the matching SWIER bit (RM0008
+// §10.3.6). Capturing SWIER pins that coupling.
+#[thumb_oracle_test]
+fn exti_swier_sets_and_clears_pr() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(load_addr(0, EXTI_IMR));
+    prog.extend(store_imm32(0x0000_0005));
+    prog.extend(load_addr(0, EXTI_SWIER));
+    prog.extend(store_imm32(0x0000_0005));
+    prog.extend(load_addr(0, EXTI_PR));
+    prog.extend(store_imm32(0x0000_0001)); // rc_w1: clear line 0
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[EXTI_PR, EXTI_SWIER])
+        .expect(|st| {
+            st.assert_mem(EXTI_PR, 0x0000_0004); // line 2 still pending
+            st.assert_mem(EXTI_SWIER, 0x0000_0004); // SWIER bit0 cleared with PR bit0
         })
 }

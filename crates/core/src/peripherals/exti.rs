@@ -79,7 +79,15 @@ impl ExtiBank {
                 self.swier = value & mask;
                 self.pr |= diff;
             }
-            0x14 => self.pr &= !(value & mask), // rc_w1
+            0x14 => {
+                // PR is rc_w1: writing 1 clears the pending bit. Clearing a PR
+                // bit also clears the matching SWIER bit (RM0008 §10.3.6) — the
+                // software-event line de-asserts. Silicon-verified on the bench
+                // STM32F103 (stm32f1_exec_oracle::exti_swier_sets_and_clears_pr).
+                let clear = value & mask;
+                self.pr &= !clear;
+                self.swier &= !clear;
+            }
             _ => {}
         }
     }
@@ -216,6 +224,22 @@ impl Peripheral for Exti {
         Ok(())
     }
 
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_reg(offset & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // SWIER (0->1 edge-detect → sets PR) and PR (rc_w1) only behave
+        // correctly under whole-word access. The default byte-decomposition
+        // reads back the current value for the un-targeted bytes and writes it
+        // back: for the rc_w1 PR that clears still-pending bits (write-1-clear),
+        // and it mis-fires SWIER's edge detector. Silicon performs the STR as
+        // one 32-bit transaction; mirror that by handing write_reg the whole
+        // word. Silicon-verified on bench STM32F103 (stm32f1_exec_oracle::exti_*).
+        self.write_reg(offset & !3, value);
+        Ok(())
+    }
+
     fn tick(&mut self) -> PeripheralTickResult {
         let mut irqs = Vec::new();
         match self {
@@ -321,5 +345,25 @@ mod tests {
         poke(&mut e, 0x10, 1 << 0); // SWIER line 0 -> PR
         let r = e.tick();
         assert!(r.explicit_irqs.expect("irqs").contains(&6), "EXTI0 -> IRQ6");
+    }
+
+    #[test]
+    fn f1_word_write_pr_clear_is_atomic_and_clears_swier() {
+        // Whole-word access (as a 32-bit STR performs). SWIER=0x5 software-
+        // triggers lines 0 and 2 -> PR=0x5; an rc_w1 word-write of 0x1 clears
+        // ONLY line 0 (the default byte-decomposition would also wipe line 2 by
+        // reading PR back and re-writing it). Clearing PR line 0 also clears
+        // SWIER line 0. Silicon-verified on bench F103 (exti_swier oracle).
+        let mut e = Exti::new_with_layout(ExtiRegisterLayout::Stm32F1);
+        e.write_u32(0x00, 0x5).unwrap(); // IMR lines 0,2
+        e.write_u32(0x10, 0x5).unwrap(); // SWIER lines 0,2 -> PR
+        assert_eq!(e.read_u32(0x14).unwrap(), 0x5, "PR set on lines 0,2");
+        e.write_u32(0x14, 0x1).unwrap(); // rc_w1: clear line 0 only
+        assert_eq!(e.read_u32(0x14).unwrap(), 0x4, "PR line 2 still pending");
+        assert_eq!(
+            e.read_u32(0x10).unwrap(),
+            0x4,
+            "SWIER line 0 cleared with PR"
+        );
     }
 }
