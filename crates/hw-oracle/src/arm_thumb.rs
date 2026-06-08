@@ -203,6 +203,13 @@ pub struct ThumbOracleCase {
     /// [`ThumbOracleCase::sim_bus`]; the HW runner is unaffected (silicon
     /// always has its peripherals).
     pub sim_bus: Option<SimBusFactory>,
+    /// After the CPU program settles on `B .`, tick the sim's peripherals this
+    /// many times so an **autonomous** peripheral the program armed (e.g. a DMA
+    /// mem-to-mem transfer) runs to completion.  Sim-only: on silicon such
+    /// engines run concurrently and have long finished by the time the core
+    /// halts at the breakpoint, so the HW runner ignores this.  Set via
+    /// [`ThumbOracleCase::settle_ticks`].
+    pub settle_ticks: usize,
 }
 
 impl ThumbOracleCase {
@@ -216,6 +223,7 @@ impl ThumbOracleCase {
             expect: Box::new(|_| {}),
             mem_capture_addrs: Vec::new(),
             sim_bus: None,
+            settle_ticks: 0,
         }
     }
 
@@ -257,6 +265,7 @@ impl ThumbOracleCase {
             expect: Box::new(|_| {}),
             mem_capture_addrs: Vec::new(),
             sim_bus: None,
+            settle_ticks: 0,
         }
     }
 
@@ -271,6 +280,16 @@ impl ThumbOracleCase {
         F: Fn() -> labwired_core::bus::SystemBus + Send + Sync + 'static,
     {
         self.sim_bus = Some(Box::new(f));
+        self
+    }
+
+    /// Tick the sim's peripherals `n` times after the program settles, so an
+    /// armed autonomous engine (e.g. DMA mem-to-mem) completes.  Sim-only — see
+    /// [`ThumbOracleCase::settle_ticks`].  `n` should comfortably exceed the
+    /// number of elements the engine must move (extra ticks are no-ops once it
+    /// is idle).
+    pub fn settle_ticks(mut self, n: usize) -> Self {
+        self.settle_ticks = n;
         self
     }
 
@@ -879,6 +898,14 @@ fn run_capture(
             stable_count = 0;
             last_pc = cpu.pc;
         }
+    }
+
+    // Let any autonomous engine the program armed (DMA mem-to-mem, …) run to
+    // completion before the snapshot.  On silicon these run concurrently and
+    // have long finished by the breakpoint halt; in sim they advance one
+    // element per peripheral tick, so we tick explicitly here.
+    for _ in 0..case.settle_ticks {
+        let _ = bus.tick_peripherals_fully();
     }
 
     // Build end state.
