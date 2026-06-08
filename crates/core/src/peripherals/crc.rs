@@ -21,6 +21,10 @@
 
 use crate::SimResult;
 
+fn full_idr_mask() -> u32 {
+    0xFFFF_FFFF
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Crc {
     dr: u32,
@@ -28,6 +32,12 @@ pub struct Crc {
     cr: u32,
     init: u32,
     pol: u32,
+    /// Implemented width of the IDR scratch register: 8-bit on F0/F1/L0
+    /// (mask 0xFF), 32-bit on F2+/L4+ (mask 0xFFFF_FFFF). Set via
+    /// [`Crc::with_idr_width`]. Transient config — serde-skipped so the
+    /// snapshot format is unchanged; defaults to 32-bit on resume.
+    #[serde(skip, default = "full_idr_mask")]
+    idr_mask: u32,
 }
 
 impl Crc {
@@ -38,7 +48,19 @@ impl Crc {
             cr: 0,
             init: 0xFFFF_FFFF,
             pol: 0x04C1_1DB7,
+            idr_mask: 0xFFFF_FFFF,
         }
+    }
+
+    /// Set the IDR implemented width (8 → mask 0xFF, ≥32 → 0xFFFF_FFFF).
+    /// STM32F1/F0/L0 have an 8-bit IDR (RM0008 §6.4.2); F2+/L4+ have 32-bit.
+    pub fn with_idr_width(mut self, bits: u8) -> Self {
+        self.idr_mask = if bits >= 32 {
+            0xFFFF_FFFF
+        } else {
+            (1u32 << bits) - 1
+        };
+        self
     }
 
     fn step32(&mut self, value: u32) {
@@ -118,7 +140,7 @@ impl crate::Peripheral for Crc {
                     self.dr = new;
                 }
             }
-            0x04 => self.idr = new,
+            0x04 => self.idr = new & self.idr_mask,
             0x08 => {
                 self.cr = new & 0x000000FF;
                 if (self.cr & 1) != 0 {
@@ -140,7 +162,7 @@ impl crate::Peripheral for Crc {
                 // DR write: feed the polynomial engine with the new word.
                 self.step32(value);
             }
-            0x04 => self.idr = value,
+            0x04 => self.idr = value & self.idr_mask,
             0x08 => {
                 self.cr = value & 0x000000FF;
                 if (self.cr & 1) != 0 {
@@ -156,5 +178,25 @@ impl crate::Peripheral for Crc {
     }
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Crc;
+    use crate::Peripheral;
+
+    #[test]
+    fn idr_width_masks_on_write() {
+        // 8-bit IDR (F0/F1/L0): only the low byte survives. Silicon-verified on
+        // the bench F103 (stm32f1_exec_oracle::crc_idr_is_8bit_on_f1).
+        let mut f1 = Crc::new().with_idr_width(8);
+        f1.write_u32(0x04, 0x1234_5678).unwrap();
+        assert_eq!(f1.read_u32(0x04).unwrap(), 0x0000_0078);
+
+        // 32-bit IDR (F2+/L4+, the default): the full word is retained.
+        let mut l4 = Crc::new();
+        l4.write_u32(0x04, 0x1234_5678).unwrap();
+        assert_eq!(l4.read_u32(0x04).unwrap(), 0x1234_5678);
     }
 }

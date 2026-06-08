@@ -79,6 +79,7 @@ const GPIOA_BRR: u32 = GPIOA_BASE + 0x14; // atomic reset (lo16)
 /// CRC unit (RM0008): data register + control.
 const CRC_BASE: u32 = 0x4002_3000;
 const CRC_DR: u32 = CRC_BASE + 0x00; // data in / CRC result out
+const CRC_IDR: u32 = CRC_BASE + 0x04; // independent data register (8-bit on F1)
 const CRC_CR: u32 = CRC_BASE + 0x08; // control (RESET = bit 0)
 
 /// AFIO (RM0008 §9): the remap register. AFIOEN is APB2ENR bit 0.
@@ -468,5 +469,28 @@ fn iwdg_pr_rlr_write_protected_without_key() -> ThumbOracleCase {
         .expect(|st| {
             st.assert_mem(IWDG_PR, 0x0); // write dropped → reset value
             st.assert_mem(IWDG_RLR, 0xFFF); // write dropped → reset value
+        })
+}
+
+// ── 8. CRC_IDR is 8-bit on STM32F1 ──────────────────────────────────────────────
+//
+// The CRC independent data register is a general-purpose scratch byte. On
+// STM32F1 it is 8-bit: bits [31:8] are reserved and read 0 (RM0008 §6.4.2).
+// (On L4+ the same register is 32-bit — hence the model needs a width flag.)
+//
+// Program: enable the CRC clock, write a full 32-bit word to IDR, read it back.
+// Silicon keeps only the low byte → 0x78.
+#[thumb_oracle_test]
+fn crc_idr_is_8bit_on_f1() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(enable_clock_bit(RCC_AHBENR, RCC_AHBENR_CRCEN));
+    prog.extend(load_addr(0, CRC_IDR));
+    prog.extend(store_imm32(0x1234_5678));
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[CRC_IDR])
+        .expect(|st| {
+            st.assert_mem(CRC_IDR, 0x0000_0078); // only the low byte survives
         })
 }

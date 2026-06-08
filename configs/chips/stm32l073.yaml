@@ -294,6 +294,8 @@ peripherals:
     type: "crc"
     base_address: 0x40023000
     size: "1KB"
+    config:
+      idr_width: 8  # STM32L0 CRC_IDR is 8-bit (RM0367 §14)
 
   - id: "rng"
     type: "rng"

@@ -1109,7 +1109,17 @@ impl SystemBus {
                     Box::new(crate::peripherals::flash::Flash::new_with_layout(layout))
                 }
                 "rng" => Box::new(crate::peripherals::rng::Rng::new()),
-                "crc" => Box::new(crate::peripherals::crc::Crc::new()),
+                "crc" => {
+                    // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
+                    // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
+                    let idr_width: u8 = p_cfg
+                        .config
+                        .get("idr_width")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u8)
+                        .unwrap_or(32);
+                    Box::new(crate::peripherals::crc::Crc::new().with_idr_width(idr_width))
+                }
                 "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
                 "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
                 "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),

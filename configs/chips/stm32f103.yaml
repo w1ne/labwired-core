@@ -112,6 +112,8 @@ peripherals:
     type: "crc"
     base_address: 0x40023000
     size: "1KB"
+    config:
+      idr_width: 8  # STM32F1 CRC_IDR is 8-bit (RM0008 §6.4.2)
   # bxCAN + USB share SRAM @ 0x4000_6000; bxCAN registers at 0x6400.
   - id: "bxcan1"
     type: "stub"
