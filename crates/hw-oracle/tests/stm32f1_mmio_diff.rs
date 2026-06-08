@@ -150,6 +150,24 @@ const USART2_BASE: u32 = 0x4000_4400;
 const USART2_SR: u32 = USART2_BASE + 0x00;
 const USART2_SR_RESET: u32 = 0x0000_00C0; // TXE | TC set out of reset
 
+// ── DMA1 (0x4002_0000 — AHB, 7-channel controller) ───────────────────────────
+const DMA1_BASE: u32 = 0x4002_0000;
+const DMA1_ISR: u32 = DMA1_BASE + 0x00; // interrupt status
+const DMA1_CCR1: u32 = DMA1_BASE + 0x08; // channel-1 config
+const DMA1_CNDTR1: u32 = DMA1_BASE + 0x0C; // channel-1 count
+const DMA1_CPAR1: u32 = DMA1_BASE + 0x10; // channel-1 peripheral addr
+
+// ── RTC (0x4000_2800 — F1 backup-domain RTC) ─────────────────────────────────
+// Register access needs the PWR + BKP APB1 clocks; the CRH/CNT values below are
+// independent of the LSI/sync timing (silicon-confirmed on the bench). CRL is
+// deliberately not pinned — see the note at its RESET_CASES slot.
+const RTC_BASE: u32 = 0x4000_2800;
+const RTC_CRH: u32 = RTC_BASE + 0x00;
+const RTC_CNTH: u32 = RTC_BASE + 0x18;
+const RTC_CNTL: u32 = RTC_BASE + 0x1C;
+const PWREN: u32 = 1 << 28; // RCC APB1ENR
+const BKPEN: u32 = 1 << 27; // RCC APB1ENR
+
 // ── Reset-value cases ─────────────────────────────────────────────────────────
 // Read at fresh reset. `prep` is RCC clock-enables ONLY (a peripheral must be
 // clocked for its registers to read on silicon); enabling a clock does not alter
@@ -287,6 +305,62 @@ const RESET_CASES: &[ResetCase] = &[
         read_addr: USART2_SR,
         mask: 0xFF,
         expect: USART2_SR_RESET,
+    },
+    // ── DMA1 channel-1 reset state (matrix dma cell at register level) ──
+    ResetCase {
+        label: "DMA1.ISR reset = 0 (no pending flags)",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        read_addr: DMA1_ISR,
+        mask: 0xFFFF_FFFF,
+        expect: 0,
+    },
+    ResetCase {
+        label: "DMA1.CCR1 reset = 0 (channel disabled)",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        read_addr: DMA1_CCR1,
+        mask: 0xFFFF,
+        expect: 0,
+    },
+    ResetCase {
+        label: "DMA1.CNDTR1 reset = 0",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        read_addr: DMA1_CNDTR1,
+        mask: 0xFFFF,
+        expect: 0,
+    },
+    ResetCase {
+        label: "DMA1.CPAR1 reset = 0",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        read_addr: DMA1_CPAR1,
+        mask: 0xFFFF_FFFF,
+        expect: 0,
+    },
+    // ── RTC (backup domain; PWR+BKP clocks gate register access) ──
+    ResetCase {
+        label: "RTC.CRH reset = 0 (no interrupts enabled)",
+        prep: &[(RCC_APB1ENR, PWREN | BKPEN)],
+        read_addr: RTC_CRH,
+        mask: 0xF,
+        expect: 0,
+    },
+    // NOTE: RTC.CRL is intentionally NOT pinned here. Cold silicon reads 0
+    // (RTOFF/RSF only latch once the RTC is clocked + synced), while the sim's
+    // RTC model returns 0x2101 — a real but state/clock-dependent discrepancy,
+    // not a clean reset value. Reconciling the F1 RTC operational-state model
+    // vs silicon is tracked as a follow-up rather than forced into a reset diff.
+    ResetCase {
+        label: "RTC.CNTH reset = 0",
+        prep: &[(RCC_APB1ENR, PWREN | BKPEN)],
+        read_addr: RTC_CNTH,
+        mask: 0xFFFF,
+        expect: 0,
+    },
+    ResetCase {
+        label: "RTC.CNTL reset = 0",
+        prep: &[(RCC_APB1ENR, PWREN | BKPEN)],
+        read_addr: RTC_CNTL,
+        mask: 0xFFFF,
+        expect: 0,
     },
 ];
 
