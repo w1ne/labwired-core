@@ -67,6 +67,9 @@ pub const INIT_SP: u32 = 0x2000_4FF8;
 /// `B .` — 16-bit Thumb branch-to-self.  Used as the program terminator.
 const B_SELF: u16 = 0xE7FE;
 
+/// APSR condition-flag bits (N, Z, C, V) within `xpsr`.
+pub const NZCV_MASK: u32 = 0xF000_0000;
+
 /// Maximum simulator steps before declaring runaway.
 const MAX_STEPS: usize = 10_000;
 
@@ -110,6 +113,26 @@ impl ThumbOracleState {
             actual, expected,
             "thumb oracle: register {name} masked by 0x{mask:08X}: \
              expected 0x{expected:08X}, got 0x{actual:08X}"
+        );
+    }
+
+    /// Assert the APSR condition flags (N, Z, C, V), read from the captured
+    /// `xpsr`.  Used to pin flag-setting behaviour — and, for IT-block cases,
+    /// flag *preservation* — against silicon.
+    pub fn assert_nzcv(&self, n: bool, z: bool, c: bool, v: bool) {
+        let x = self.read_reg("xpsr");
+        let got = (
+            (x >> 31) & 1 == 1,
+            (x >> 30) & 1 == 1,
+            (x >> 29) & 1 == 1,
+            (x >> 28) & 1 == 1,
+        );
+        assert_eq!(
+            got,
+            (n, z, c, v),
+            "thumb oracle: APSR NZCV: expected {:?}, got {:?} (xpsr=0x{x:08X})",
+            (n, z, c, v),
+            got
         );
     }
 
@@ -325,6 +348,31 @@ pub fn asrs_imm(rd: u8, rm: u8, imm5: u8) -> u16 {
     0x1000 | ((imm5 as u16) << 6) | ((rm as u16) << 3) | (rd as u16)
 }
 
+// ── Thumb-1 register-controlled shifts (`Rdn` shifted by `Rm[7:0]`) ───────────
+// Two-arg data-processing form (`0b0100_00` group); pin the carry-out the
+// register-shift model fix corrected.
+
+/// `LSLS Rdn, Rm` — T1 (shift amount from Rm).
+pub fn lsl_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "LSLS reg needs low registers");
+    0x4080 | ((rm as u16) << 3) | (rdn as u16)
+}
+/// `LSRS Rdn, Rm` — T1.
+pub fn lsr_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "LSRS reg needs low registers");
+    0x40C0 | ((rm as u16) << 3) | (rdn as u16)
+}
+/// `ASRS Rdn, Rm` — T1.
+pub fn asr_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "ASRS reg needs low registers");
+    0x4100 | ((rm as u16) << 3) | (rdn as u16)
+}
+/// `RORS Rdn, Rm` — T1 (rotate right by Rm[7:0]).
+pub fn ror_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "RORS reg needs low registers");
+    0x41C0 | ((rm as u16) << 3) | (rdn as u16)
+}
+
 /// `CMP Rn, Rm` — T1.
 pub fn cmp_reg(rn: u8, rm: u8) -> u16 {
     assert!(rn < 8 && rm < 8, "CMP T1 needs low registers");
@@ -348,6 +396,67 @@ pub fn ldr_imm5(rt: u8, rn: u8, imm5: u8) -> u16 {
     );
     0x6800 | ((imm5 as u16) << 6) | ((rn as u16) << 3) | (rt as u16)
 }
+
+// ── Thumb-1 register-offset load/store family (`[Rn, Rm]`) ────────────────────
+// All share the layout `base | (rm << 6) | (rn << 3) | rt`, low registers only.
+// These are the encodings whose decode the #3 model fix corrected
+// (STRH/LDRSB/LDRH/LDRSH were mis-masked); the oracle cases below pin the
+// sign-extension + halfword semantics to silicon.
+
+/// Encode one register-offset load/store given its 7-bit opcode `base`.
+fn reg_offset(base: u16, rt: u8, rn: u8, rm: u8) -> u16 {
+    assert!(rt < 8 && rn < 8 && rm < 8, "reg-offset needs low registers");
+    base | ((rm as u16) << 6) | ((rn as u16) << 3) | (rt as u16)
+}
+
+/// `STR Rt, [Rn, Rm]` — T1.
+pub fn str_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5000, rt, rn, rm)
+}
+/// `STRH Rt, [Rn, Rm]` — T1 (stores the low halfword).
+pub fn strh_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5200, rt, rn, rm)
+}
+/// `STRB Rt, [Rn, Rm]` — T1 (stores the low byte).
+pub fn strb_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5400, rt, rn, rm)
+}
+/// `LDRSB Rt, [Rn, Rm]` — T1 (sign-extends the loaded byte to 32 bits).
+pub fn ldrsb_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5600, rt, rn, rm)
+}
+/// `LDR Rt, [Rn, Rm]` — T1.
+pub fn ldr_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5800, rt, rn, rm)
+}
+/// `LDRH Rt, [Rn, Rm]` — T1 (zero-extends the loaded halfword).
+pub fn ldrh_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5A00, rt, rn, rm)
+}
+/// `LDRB Rt, [Rn, Rm]` — T1 (zero-extends the loaded byte).
+pub fn ldrb_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5C00, rt, rn, rm)
+}
+/// `LDRSH Rt, [Rn, Rm]` — T1 (sign-extends the loaded halfword to 32 bits).
+pub fn ldrsh_reg(rt: u8, rn: u8, rm: u8) -> u16 {
+    reg_offset(0x5E00, rt, rn, rm)
+}
+
+/// `IT{x{y{z}}} <firstcond>` — T1 (`0b1011_1111_<cond>_<mask>`).  `mask`
+/// selects the then/else pattern; `0b1000` (`0x8`) is a one-instruction
+/// `IT <cond>` block.  Condition codes are the standard ARM encodings
+/// (`EQ=0`, `NE=1`, …).  Used to pin the "16-bit data-processing inside an
+/// IT block does not update APSR" rule (#2) against silicon.
+pub fn it(firstcond: u8, mask: u8) -> u16 {
+    assert!(
+        firstcond < 16 && mask != 0 && mask < 16,
+        "IT fields out of range"
+    );
+    0xBF00 | ((firstcond as u16) << 4) | (mask as u16)
+}
+
+/// ARM condition code `EQ` (Z == 1) — the only one the oracle cases need.
+pub const COND_EQ: u8 = 0b0000;
 
 /// `B label` (T2, unconditional) — `0b11100_iiiiiiiiiii`.  `offset` is the
 /// signed byte offset from the *address of this instruction* (the
@@ -648,6 +757,9 @@ fn capture_sim_state(case: &ThumbOracleCase) -> ThumbOracleState {
     end.regs.insert("sp".to_string(), cpu.sp);
     end.regs.insert("lr".to_string(), cpu.lr);
     end.regs.insert("pc".to_string(), cpu.pc);
+    // Capture the program status register so cases can assert the APSR
+    // condition flags (NZCV in bits 31..28).
+    end.regs.insert("xpsr".to_string(), cpu.xpsr);
     end.pc = cpu.pc;
 
     let mut addrs: Vec<u32> = init_state.mem.keys().copied().collect();
@@ -824,6 +936,9 @@ fn capture_hw_state(case: &ThumbOracleCase) -> ThumbOracleState {
         .insert("lr".to_string(), oc.read_register("lr").unwrap());
     let final_pc = oc.read_register("pc").unwrap();
     end.regs.insert("pc".to_string(), final_pc);
+    // OpenOCD exposes the Cortex-M program status register as "xpsr".
+    end.regs
+        .insert("xpsr".to_string(), oc.read_register("xpsr").unwrap_or(0));
     end.pc = final_pc;
 
     let mut addrs: Vec<u32> = init_state.mem.keys().copied().collect();
@@ -870,6 +985,16 @@ pub fn run_diff(case: ThumbOracleCase) {
             "diff: register {name}: sim 0x{sim_v:08X} vs hw 0x{hw_v:08X}"
         );
     }
+    // Diff the APSR condition flags (NZCV, bits 31..28). Mode bits (T-bit,
+    // IPSR) are masked out: they're architecturally fixed here (thread mode,
+    // Thumb) and not what these oracles validate.
+    let sim_nzcv = sim_end.read_reg("xpsr") & NZCV_MASK;
+    let hw_nzcv = hw_end.read_reg("xpsr") & NZCV_MASK;
+    assert_eq!(
+        sim_nzcv, hw_nzcv,
+        "diff: APSR NZCV: sim 0x{sim_nzcv:08X} vs hw 0x{hw_nzcv:08X}"
+    );
+
     // Don't diff PC — sim halts at the B-self instruction address, HW
     // halts one halfword *into* it because the FPB unit fires before
     // the instruction executes; the absolute addresses differ anyway
@@ -947,5 +1072,35 @@ mod encoder_tests {
         // Cross-checked: arm-none-eabi-as `movw r0, #0xBEEF` → 4b f6 ef 60
         // (LE byte stream: hi=0xF64B, lo=0x60EF).
         assert_eq!(movw_imm16(0, 0xBEEF), 0xF64B_60EF);
+    }
+
+    // Register-offset load/store family (ARMv7-M ARM §A6.7, T1):
+    //   base | (Rm << 6) | (Rn << 3) | Rt, with Rt=2/3, Rn=1, Rm=0.
+    #[test]
+    fn reg_offset_encodings() {
+        assert_eq!(str_reg(2, 1, 0), 0x500A); // STR  r2,[r1,r0]
+        assert_eq!(strh_reg(2, 1, 0), 0x520A); // STRH r2,[r1,r0]
+        assert_eq!(strb_reg(2, 1, 0), 0x540A); // STRB r2,[r1,r0]
+        assert_eq!(ldrsb_reg(3, 1, 0), 0x560B); // LDRSB r3,[r1,r0]
+        assert_eq!(ldr_reg(3, 1, 0), 0x580B); // LDR  r3,[r1,r0]
+        assert_eq!(ldrh_reg(3, 1, 0), 0x5A0B); // LDRH r3,[r1,r0]
+        assert_eq!(ldrb_reg(3, 1, 0), 0x5C0B); // LDRB r3,[r1,r0]
+        assert_eq!(ldrsh_reg(3, 1, 0), 0x5E0B); // LDRSH r3,[r1,r0]
+    }
+
+    #[test]
+    fn register_shift_encodings() {
+        // Two-arg register-shift T1 (Rdn=2, Rm=1): base | (Rm<<3) | Rdn.
+        assert_eq!(lsl_reg(2, 1), 0x408A); // LSLS r2, r1
+        assert_eq!(lsr_reg(2, 1), 0x40CA); // LSRS r2, r1
+        assert_eq!(asr_reg(2, 1), 0x410A); // ASRS r2, r1
+        assert_eq!(ror_reg(2, 1), 0x41CA); // RORS r2, r1
+    }
+
+    #[test]
+    fn it_eq_single_encoding() {
+        // IT EQ (one-instruction block): 0xBF00 | (cond<<4) | mask, cond=EQ=0,
+        // mask=0b1000. Cross-checked: arm-none-eabi-as `it eq` → 08 bf (0xBF08).
+        assert_eq!(it(COND_EQ, 0x8), 0xBF08);
     }
 }

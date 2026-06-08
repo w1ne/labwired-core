@@ -225,9 +225,9 @@ impl SystemBus {
         match t.as_str() {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
             | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
-            | "pwr" | "flash" | "rng" | "crc" | "rtc" | "iwdg" | "wwdg" | "dac" | "dbgmcu"
-            | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc" | "comp" | "tsc"
-            | "fmc" => {
+            | "pwr" | "flash" | "rng" | "crc" | "rtc" | "rtc_f1" | "iwdg" | "wwdg" | "dac"
+            | "dbgmcu" | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc" | "comp"
+            | "tsc" | "fmc" => {
                 return t;
             }
             _ => {}
@@ -1103,6 +1103,7 @@ impl SystemBus {
                 "rng" => Box::new(crate::peripherals::rng::Rng::new()),
                 "crc" => Box::new(crate::peripherals::crc::Crc::new()),
                 "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
+                "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
                 "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
                 "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
                 "dac" => Box::new(crate::peripherals::dac::Dac::new()),

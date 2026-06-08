@@ -30,9 +30,10 @@
 //! encodings as cited in the relevant helper.
 
 use labwired_hw_oracle::arm_thumb::{
-    adds_imm3, adds_imm8, adds_reg, ands, asrs_imm, b_uncond, beq, cmp_reg, eors, ldr_imm5,
-    lsls_imm, lsrs_imm, movs_imm8, movw_imm16, muls, orrs, sdiv, str_imm5, subs_reg, udiv,
-    ThumbOracleCase, DATA_BASE,
+    adds_imm3, adds_imm8, adds_reg, ands, asr_reg, asrs_imm, b_uncond, beq, cmp_reg, eors, it,
+    ldr_imm5, ldrh_reg, ldrsb_reg, ldrsh_reg, lsl_reg, lsls_imm, lsr_reg, lsrs_imm, movs_imm8,
+    movw_imm16, muls, orrs, ror_reg, sdiv, str_imm5, strb_reg, strh_reg, subs_reg, udiv,
+    ThumbOracleCase, COND_EQ, DATA_BASE,
 };
 use labwired_hw_oracle::thumb_oracle_test;
 
@@ -275,5 +276,200 @@ fn sdiv_signed_negative() -> ThumbOracleCase {
         })
         .expect(|st| {
             st.assert_reg("r2", (-14_i32) as u32);
+        })
+}
+
+// ── 16. STRH/LDRH [Rn, Rm] — register-offset halfword roundtrip ───────────────
+// Pins the #3 decode fix: STRH must write only the low 16 bits and LDRH must
+// zero-extend.  The data word is pre-set to all-ones, so a 16-bit store leaves
+// the high half intact (0xFFFF_BEEF) and LDRH reads back 0x0000_BEEF.
+#[thumb_oracle_test]
+fn strh_ldrh_reg_offset() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[strh_reg(2, 1, 0), ldrh_reg(3, 1, 0)])
+        .setup(|st| {
+            st.write_reg("r0", 0); // offset register = 0
+            st.write_reg("r1", DATA_BASE); // base
+            st.write_reg("r2", 0xBEEF); // value to store (low halfword)
+            st.write_mem(DATA_BASE, 0xFFFF_FFFF); // sentinel: prove only 2 bytes change
+        })
+        .capture_mem(&[DATA_BASE])
+        .expect(|st| {
+            st.assert_reg("r3", 0x0000_BEEF); // LDRH zero-extends
+            st.assert_mem(DATA_BASE, 0xFFFF_BEEF); // STRH left the high half intact
+        })
+}
+
+// ── 17. LDRSB [Rn, Rm] — register-offset signed-byte load ─────────────────────
+// Pins the #3 decode fix: STRB writes one byte; LDRSB sign-extends it.  0x80
+// stored, loaded back as 0xFFFF_FF80.
+#[thumb_oracle_test]
+fn ldrsb_reg_offset_sign_extends() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[strb_reg(2, 1, 0), ldrsb_reg(3, 1, 0)])
+        .setup(|st| {
+            st.write_reg("r0", 0);
+            st.write_reg("r1", DATA_BASE);
+            st.write_reg("r2", 0x80); // negative byte
+            st.write_mem(DATA_BASE, 0x0000_0000);
+        })
+        .capture_mem(&[DATA_BASE])
+        .expect(|st| {
+            st.assert_reg("r3", 0xFFFF_FF80); // sign-extended
+            st.assert_mem(DATA_BASE, 0x0000_0080); // only the low byte written
+        })
+}
+
+// ── 18. LDRSH [Rn, Rm] — register-offset signed-halfword load ─────────────────
+// Pins the #3 decode fix: STRH writes two bytes; LDRSH sign-extends them.
+// 0x8000 stored, loaded back as 0xFFFF_8000.
+#[thumb_oracle_test]
+fn ldrsh_reg_offset_sign_extends() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[strh_reg(2, 1, 0), ldrsh_reg(3, 1, 0)])
+        .setup(|st| {
+            st.write_reg("r0", 0);
+            st.write_reg("r1", DATA_BASE);
+            st.write_reg("r2", 0x8000); // negative halfword
+            st.write_mem(DATA_BASE, 0x0000_0000);
+        })
+        .capture_mem(&[DATA_BASE])
+        .expect(|st| {
+            st.assert_reg("r3", 0xFFFF_8000); // sign-extended
+            st.assert_mem(DATA_BASE, 0x0000_8000);
+        })
+}
+
+// ── 19. IT block: a 16-bit shift inside IT must NOT update APSR ───────────────
+// Pins the #2 fix.  CMP r0,r1 (0-0) sets NZCV = (0,1,1,0).  Then `IT EQ` guards
+// an LSLS whose result (0x4000_0000 << 1 = 0x8000_0000) would, outside an IT
+// block, set N=1/Z=0/C=0.  Inside the IT block the 16-bit encoding must leave
+// the flags from the CMP untouched, while still computing the shift (EQ true).
+#[thumb_oracle_test]
+fn it_block_shift_preserves_flags() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[cmp_reg(0, 1), it(COND_EQ, 0x8), lsls_imm(2, 3, 1)])
+        .setup(|st| {
+            st.write_reg("r0", 0);
+            st.write_reg("r1", 0);
+            st.write_reg("r3", 0x4000_0000);
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x8000_0000); // shift executed (EQ was true)
+            st.assert_nzcv(false, true, true, false); // flags still from the CMP
+        })
+}
+
+// ── 20. LSLS Rdn, Rm (register-controlled) sets carry from the shifted-out bit
+// Pins the register-shift carry fix. 0x8000_0000 << 1 = 0, carry = bit 31 = 1.
+#[thumb_oracle_test]
+fn lsl_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[lsl_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0x8000_0000); // value (also dest)
+            st.write_reg("r1", 1); // shift amount
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0);
+            st.assert_nzcv(false, true, true, false); // Z=1 (result 0), C=1
+        })
+}
+
+// ── 21. LSRS Rdn, Rm — carry = last bit shifted out (Rm[shift-1]) ──────────────
+#[thumb_oracle_test]
+fn lsr_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[lsr_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0xFF);
+            st.write_reg("r1", 4); // 0xFF >> 4 = 0x0F, carry = bit 3 = 1
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x0F);
+            st.assert_nzcv(false, false, true, false); // C=1
+        })
+}
+
+// ── 22. ASRS Rdn, Rm — arithmetic, carry = Rm[shift-1] ────────────────────────
+#[thumb_oracle_test]
+fn asr_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[asr_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0x8000_0008); // negative; bit 3 set
+            st.write_reg("r1", 4); // >> 4 = 0xF800_0000, carry = bit 3 = 1
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0xF800_0000);
+            st.assert_nzcv(true, false, true, false); // N=1, C=1
+        })
+}
+
+// ── 23. Register shift inside an IT block must NOT update APSR ─────────────────
+// Companion to it_block_shift_preserves_flags for the register-shift form.
+#[thumb_oracle_test]
+fn it_block_reg_shift_preserves_flags() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[cmp_reg(0, 1), it(COND_EQ, 0x8), lsl_reg(2, 3)])
+        .setup(|st| {
+            st.write_reg("r0", 0);
+            st.write_reg("r1", 0);
+            st.write_reg("r2", 0x4000_0000);
+            st.write_reg("r3", 1); // shift amount
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x8000_0000); // shift executed (EQ true)
+            st.assert_nzcv(false, true, true, false); // flags still from the CMP
+        })
+}
+
+// ── 24. RORS Rdn, Rm — carry = rotated result's MSB ───────────────────────────
+// Pins the ROR carry fix (the last shift-family member). 0x1 ror 1 = 0x8000_0000,
+// carry = result bit 31 = 1.
+#[thumb_oracle_test]
+fn ror_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[ror_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0x0000_0001);
+            st.write_reg("r1", 1); // rotate right by 1
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x8000_0000);
+            st.assert_nzcv(true, false, true, false); // N=1, C=1
+        })
+}
+
+// ── 25. ADDS carry-out + zero: 0xFFFF_FFFF + 1 = 0 with C=1, Z=1 ───────────────
+#[thumb_oracle_test]
+fn adds_carry_and_zero() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[adds_reg(2, 0, 1)])
+        .setup(|st| {
+            st.write_reg("r0", 0xFFFF_FFFF);
+            st.write_reg("r1", 1);
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0);
+            st.assert_nzcv(false, true, true, false); // Z=1, C=1
+        })
+}
+
+// ── 26. ADDS signed overflow: 0x7FFF_FFFF + 1 = 0x8000_0000, V=1, N=1 ──────────
+#[thumb_oracle_test]
+fn adds_signed_overflow() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[adds_reg(2, 0, 1)])
+        .setup(|st| {
+            st.write_reg("r0", 0x7FFF_FFFF);
+            st.write_reg("r1", 1);
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x8000_0000);
+            st.assert_nzcv(true, false, false, true); // N=1, V=1, C=0
+        })
+}
+
+// ── 27. SUBS borrow: 0 - 1 = 0xFFFF_FFFF with C=0 (borrow), N=1 ────────────────
+#[thumb_oracle_test]
+fn subs_borrow_clears_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[subs_reg(2, 0, 1)])
+        .setup(|st| {
+            st.write_reg("r0", 0);
+            st.write_reg("r1", 1);
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0xFFFF_FFFF);
+            st.assert_nzcv(true, false, false, false); // N=1, C=0 (borrow)
         })
 }

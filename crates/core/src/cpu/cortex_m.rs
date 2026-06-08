@@ -1490,77 +1490,96 @@ impl CortexM {
                     // leaking flags here would corrupt the remaining block
                     // conditions (Tier-1 H563/WBA52 gpio-check regression).
                     if !it_block_instruction {
-                        self.update_nz(res);
+                        // LSL #n (n>0) sets C to the last bit shifted out:
+                        // Rm[32-n]. LSL #0 is a move and leaves C unchanged.
+                        // (Verified against STM32F103 silicon via thumb_oracles.)
+                        if imm == 0 {
+                            self.update_nz(res);
+                        } else {
+                            let carry = (val >> (32 - imm as u32)) & 1 == 1;
+                            self.update_nzcv(res, carry, self.get_overflow());
+                        }
                     }
-                    // Note: Carry out not fully implemented for shifts yet
                 }
                 Instruction::Lsr { rd, rm, imm } => {
                     let val = self.read_reg(rm);
-                    let res = if imm == 0 {
-                        0
-                    } else {
-                        val.wrapping_shr(imm as u32)
-                    };
-                    // Actually LSR imm=0 is 32 in some contexts, but Thumb T1 usually:
-                    // imm5=0 for LSL is imm=0. imm5=0 for LSR is imm=32.
-                    // For MVP, letting wrapping_shr handle basics.
+                    // Thumb T1: imm5 == 0 encodes a shift of 32.
+                    let n = if imm == 0 { 32 } else { imm as u32 };
+                    let res = if n >= 32 { 0 } else { val.wrapping_shr(n) };
                     self.write_reg(rd, res);
-                    // T1 shift-immediate: setflags = !InITBlock().
+                    // T1 shift-immediate: setflags = !InITBlock(). LSR #n sets C
+                    // to Rm[n-1], the last bit shifted out (silicon-verified).
                     if !it_block_instruction {
-                        self.update_nz(res);
+                        let carry = (val >> (n - 1)) & 1 == 1;
+                        self.update_nzcv(res, carry, self.get_overflow());
                     }
                 }
                 Instruction::Asr { rd, rm, imm } => {
-                    let val = self.read_reg(rm) as i32;
-                    let res = (if imm == 0 {
-                        val >> 31
-                    } else {
-                        val >> (imm as u32)
-                    }) as u32;
+                    let val = self.read_reg(rm);
+                    // Thumb T1: imm5 == 0 encodes a shift of 32.
+                    let n = if imm == 0 { 32 } else { imm as u32 };
+                    let res = ((val as i32) >> n.min(31)) as u32;
                     self.write_reg(rd, res);
-                    // T1 shift-immediate: setflags = !InITBlock().
+                    // T1 shift-immediate: setflags = !InITBlock(). ASR #n sets C
+                    // to Rm[n-1], the last bit shifted out (silicon-verified).
                     if !it_block_instruction {
-                        self.update_nz(res);
+                        let carry = (val >> (n - 1)) & 1 == 1;
+                        self.update_nzcv(res, carry, self.get_overflow());
                     }
                 }
                 Instruction::LslReg { rd, rm } => {
+                    // Register-controlled shift: amount = Rm[7:0]. Carry = last
+                    // bit shifted out; n==0 leaves C unchanged (ARMv7-M Shift_C).
+                    // Silicon-verified on STM32F103 via thumb_oracles.
                     let val = self.read_reg(rd);
                     let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val
-                    } else if shift >= 32 {
-                        0
+                    let (res, carry) = if shift == 0 {
+                        (val, self.get_carry())
+                    } else if shift < 32 {
+                        (val << shift, (val >> (32 - shift)) & 1 == 1)
+                    } else if shift == 32 {
+                        (0, val & 1 == 1)
                     } else {
-                        val.wrapping_shl(shift)
+                        (0, false)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::LsrReg { rd, rm } => {
                     let val = self.read_reg(rd);
                     let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val
-                    } else if shift >= 32 {
-                        0
+                    let (res, carry) = if shift == 0 {
+                        (val, self.get_carry())
+                    } else if shift < 32 {
+                        (val >> shift, (val >> (shift - 1)) & 1 == 1)
+                    } else if shift == 32 {
+                        (0, (val >> 31) & 1 == 1)
                     } else {
-                        val.wrapping_shr(shift)
+                        (0, false)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::AsrReg { rd, rm } => {
-                    let val = self.read_reg(rd) as i32;
+                    let val = self.read_reg(rd);
+                    let vali = val as i32;
                     let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val as u32
-                    } else if shift >= 32 {
-                        (val >> 31) as u32
+                    let (res, carry) = if shift == 0 {
+                        (val, self.get_carry())
+                    } else if shift < 32 {
+                        ((vali >> shift) as u32, (val >> (shift - 1)) & 1 == 1)
                     } else {
-                        (val >> shift) as u32
+                        // shift >= 32: result is all sign bits; C = Rm[31].
+                        ((vali >> 31) as u32, (val >> 31) & 1 == 1)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::Adc { rd, rm } => {
                     let op1 = self.read_reg(rd);
@@ -1579,15 +1598,21 @@ impl CortexM {
                     self.update_nzcv(res, c, v);
                 }
                 Instruction::Ror { rd, rm } => {
+                    // Register rotate: amount = Rm[7:0]. Carry = the rotated
+                    // result's MSB; n==0 leaves C unchanged (ARMv7-M ROR_C).
+                    // Silicon-verified on STM32F103 via thumb_oracles.
                     let val = self.read_reg(rd);
-                    let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val
+                    let n = self.read_reg(rm) & 0xFF;
+                    let (res, carry) = if n == 0 {
+                        (val, self.get_carry())
                     } else {
-                        val.rotate_right(shift % 32)
+                        let r = val.rotate_right(n % 32);
+                        (r, (r >> 31) & 1 == 1)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::Rev { rd, rm } => {
                     let val = self.read_reg(rm);

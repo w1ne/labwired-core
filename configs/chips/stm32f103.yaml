@@ -105,7 +105,7 @@ peripherals:
     base_address: 0x40002C00
     size: "1KB"
   - id: "rtc"
-    type: "rtc"
+    type: "rtc_f1"
     base_address: 0x40002800
     size: "1KB"
   - id: "crc"
