@@ -82,7 +82,8 @@ implemented):
   marker (proves the ISR ran) and the unstacked register state. Silicon-
   verifiable on the connected F103.
 
-### P2 — Timed oracles
+### P2 — Timed oracles — *DWT mechanism oracle landed (ledger #24)*
+`dwt_cyccnt_advances` validates the DWT enable→count→read path with a self-relative boolean (the absolute count diverges — the sim is not cycle-accurate). True cycle-fidelity is a known sim limitation, not closeable by an oracle.
 DWT is now mapped. Enable `DWT_CYCCNT`, run a known instruction/delay sequence,
 compare cycle counts within a tolerance band (sim cycle models aren't
 cycle-exact). Then timer counts over a fixed delay, and `systick` reload→COUNTFLAG.

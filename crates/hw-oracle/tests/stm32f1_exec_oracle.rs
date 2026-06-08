@@ -30,8 +30,8 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_hw_oracle::arm_thumb::{
-    assemble, bx, cpsie_i, ldr_imm5, movs_imm8, movt_imm16, movw_imm16, orrs, str_imm5, Thumb,
-    ThumbOracleCase, INIT_SP, PROG_BASE_HW,
+    assemble, bx, cmp_reg, cpsie_i, it, ldr_imm5, movs_imm8, movt_imm16, movw_imm16, orrs,
+    str_imm5, Thumb, ThumbOracleCase, INIT_SP, PROG_BASE_HW,
 };
 use labwired_hw_oracle::thumb_oracle_test;
 use std::path::PathBuf;
@@ -670,4 +670,53 @@ fn exti0_interrupt_delivery() -> ThumbOracleCase {
             st.assert_mem(MARKER, MARKER_VALUE); // the ISR ran (exception delivered)
             st.assert_mem(EXTI_PR, 0); // the ISR cleared the pending bit
         })
+}
+
+// ── 14. DWT cycle counter advances (timed-peripheral mechanism, roadmap P2) ──────
+//
+// Enables the DWT cycle counter (DEMCR.TRCENA + DWT_CTRL.CYCCNTENA), resets it,
+// then reads it back after a few instructions and records a self-relative
+// boolean: CYCCNT != 0. The absolute cycle count diverges between sim (which is
+// NOT cycle-accurate — its DWT advances one tick per executed instruction) and
+// silicon (true core cycles + wait states), so an exact diff of CYCCNT would be
+// meaningless. The boolean is invariant — the counter advances on both — so this
+// pins the DWT *mechanism* (enable → count → read), not timing fidelity. True
+// cycle-accuracy is out of scope for this simulator; see roadmap.md P2.
+#[thumb_oracle_test]
+fn dwt_cyccnt_advances() -> ThumbOracleCase {
+    const DEMCR: u32 = 0xE000_EDFC;
+    const DEMCR_TRCENA: u32 = 1 << 24;
+    const DWT_CTRL: u32 = 0xE000_1000;
+    const DWT_CYCCNT: u32 = 0xE000_1004;
+    const DWT_CTRL_CYCCNTENA: u32 = 1 << 0;
+    const MARKER: u32 = 0x2000_0304;
+    const COND_NE: u8 = 0b0001;
+
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(load_addr(0, DEMCR));
+    prog.extend(store_imm32(DEMCR_TRCENA)); // enable the trace/DWT block
+    prog.extend(load_addr(0, DWT_CTRL));
+    prog.extend(store_imm32(DWT_CTRL_CYCCNTENA)); // enable CYCCNT
+    prog.extend(load_addr(0, DWT_CYCCNT));
+    prog.extend(store_imm32(0)); // reset the counter
+    prog.extend(load_addr(0, DWT_CYCCNT));
+    prog.push(Thumb::H(ldr_imm5(3, 0, 0))); // r3 = CYCCNT (nonzero — cycles elapsed)
+                                            // marker = (r3 != 0) ? 1 : 0, via an IT NE block (no branches).
+    prog.push(Thumb::H(movs_imm8(1, 0))); // r1 = 0
+    prog.push(Thumb::H(movs_imm8(2, 0))); // r2 = 0
+    prog.push(Thumb::H(cmp_reg(3, 2))); // Z = (CYCCNT == 0)
+    prog.push(Thumb::H(it(COND_NE, 0x8))); // IT NE
+    prog.push(Thumb::H(movs_imm8(1, 1))); // r1 = 1 iff CYCCNT != 0
+                                          // r3 holds the absolute (divergent) cycle count — clear it so the final
+                                          // register state the _diff compares is deterministic. NZCV stays equal:
+                                          // the prior CMP gives Z=0/C=1 on both (both counts are positive-nonzero).
+    prog.push(Thumb::H(movs_imm8(3, 0)));
+    prog.extend(load_addr(0, MARKER));
+    prog.push(Thumb::H(str_imm5(1, 0, 0))); // marker = r1
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .live_peripherals(true) // tick the DWT each step so CYCCNT advances in sim
+        .capture_mem(&[MARKER])
+        .expect(|st| st.assert_mem(MARKER, 1)) // counter advanced on both sim and silicon
 }
