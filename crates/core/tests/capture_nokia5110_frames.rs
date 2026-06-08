@@ -54,6 +54,10 @@ fn ensure_firmware_built() -> PathBuf {
             "thumbv7em-none-eabihf",
             "--release",
         ])
+        // See e2e_epaper_tricolor: clear coverage instrumentation flags so the
+        // no_std firmware cross-build doesn't fail with E0463 under llvm-cov.
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
         .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .status()
         .expect("cargo build nokia5110-invaders-lab");

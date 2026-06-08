@@ -43,6 +43,12 @@ fn ensure_firmware_built() -> PathBuf {
             "thumbv7m-none-eabi",
             "--release",
         ])
+        // Under `cargo llvm-cov` the parent process exports
+        // RUSTFLAGS=-C instrument-coverage, which injects a profiler_builtins
+        // dependency that has no bare-metal target → the no_std firmware build
+        // fails with E0463. Strip the coverage flags from this child build.
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
         .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .status()
         .expect("cargo build epaper-tricolor-lab");
