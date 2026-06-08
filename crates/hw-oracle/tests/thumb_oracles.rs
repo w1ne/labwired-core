@@ -30,9 +30,10 @@
 //! encodings as cited in the relevant helper.
 
 use labwired_hw_oracle::arm_thumb::{
-    adds_imm3, adds_imm8, adds_reg, ands, asrs_imm, b_uncond, beq, cmp_reg, eors, it, ldr_imm5,
-    ldrh_reg, ldrsb_reg, ldrsh_reg, lsls_imm, lsrs_imm, movs_imm8, movw_imm16, muls, orrs, sdiv,
-    str_imm5, strb_reg, strh_reg, subs_reg, udiv, ThumbOracleCase, COND_EQ, DATA_BASE,
+    adds_imm3, adds_imm8, adds_reg, ands, asr_reg, asrs_imm, b_uncond, beq, cmp_reg, eors, it,
+    ldr_imm5, ldrh_reg, ldrsb_reg, ldrsh_reg, lsl_reg, lsls_imm, lsr_reg, lsrs_imm, movs_imm8,
+    movw_imm16, muls, orrs, sdiv, str_imm5, strb_reg, strh_reg, subs_reg, udiv, ThumbOracleCase,
+    COND_EQ, DATA_BASE,
 };
 use labwired_hw_oracle::thumb_oracle_test;
 
@@ -351,6 +352,66 @@ fn it_block_shift_preserves_flags() -> ThumbOracleCase {
         })
         .expect(|st| {
             st.assert_reg("r2", 0x8000_0000); // shift executed (EQ was true)
+            st.assert_nzcv(false, true, true, false); // flags still from the CMP
+        })
+}
+
+// ── 20. LSLS Rdn, Rm (register-controlled) sets carry from the shifted-out bit
+// Pins the register-shift carry fix. 0x8000_0000 << 1 = 0, carry = bit 31 = 1.
+#[thumb_oracle_test]
+fn lsl_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[lsl_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0x8000_0000); // value (also dest)
+            st.write_reg("r1", 1); // shift amount
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0);
+            st.assert_nzcv(false, true, true, false); // Z=1 (result 0), C=1
+        })
+}
+
+// ── 21. LSRS Rdn, Rm — carry = last bit shifted out (Rm[shift-1]) ──────────────
+#[thumb_oracle_test]
+fn lsr_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[lsr_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0xFF);
+            st.write_reg("r1", 4); // 0xFF >> 4 = 0x0F, carry = bit 3 = 1
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x0F);
+            st.assert_nzcv(false, false, true, false); // C=1
+        })
+}
+
+// ── 22. ASRS Rdn, Rm — arithmetic, carry = Rm[shift-1] ────────────────────────
+#[thumb_oracle_test]
+fn asr_reg_sets_carry() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[asr_reg(2, 1)])
+        .setup(|st| {
+            st.write_reg("r2", 0x8000_0008); // negative; bit 3 set
+            st.write_reg("r1", 4); // >> 4 = 0xF800_0000, carry = bit 3 = 1
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0xF800_0000);
+            st.assert_nzcv(true, false, true, false); // N=1, C=1
+        })
+}
+
+// ── 23. Register shift inside an IT block must NOT update APSR ─────────────────
+// Companion to it_block_shift_preserves_flags for the register-shift form.
+#[thumb_oracle_test]
+fn it_block_reg_shift_preserves_flags() -> ThumbOracleCase {
+    ThumbOracleCase::halfwords(&[cmp_reg(0, 1), it(COND_EQ, 0x8), lsl_reg(2, 3)])
+        .setup(|st| {
+            st.write_reg("r0", 0);
+            st.write_reg("r1", 0);
+            st.write_reg("r2", 0x4000_0000);
+            st.write_reg("r3", 1); // shift amount
+        })
+        .expect(|st| {
+            st.assert_reg("r2", 0x8000_0000); // shift executed (EQ true)
             st.assert_nzcv(false, true, true, false); // flags still from the CMP
         })
 }

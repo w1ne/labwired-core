@@ -1528,43 +1528,58 @@ impl CortexM {
                     }
                 }
                 Instruction::LslReg { rd, rm } => {
+                    // Register-controlled shift: amount = Rm[7:0]. Carry = last
+                    // bit shifted out; n==0 leaves C unchanged (ARMv7-M Shift_C).
+                    // Silicon-verified on STM32F103 via thumb_oracles.
                     let val = self.read_reg(rd);
                     let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val
-                    } else if shift >= 32 {
-                        0
+                    let (res, carry) = if shift == 0 {
+                        (val, self.get_carry())
+                    } else if shift < 32 {
+                        (val << shift, (val >> (32 - shift)) & 1 == 1)
+                    } else if shift == 32 {
+                        (0, val & 1 == 1)
                     } else {
-                        val.wrapping_shl(shift)
+                        (0, false)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::LsrReg { rd, rm } => {
                     let val = self.read_reg(rd);
                     let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val
-                    } else if shift >= 32 {
-                        0
+                    let (res, carry) = if shift == 0 {
+                        (val, self.get_carry())
+                    } else if shift < 32 {
+                        (val >> shift, (val >> (shift - 1)) & 1 == 1)
+                    } else if shift == 32 {
+                        (0, (val >> 31) & 1 == 1)
                     } else {
-                        val.wrapping_shr(shift)
+                        (0, false)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::AsrReg { rd, rm } => {
-                    let val = self.read_reg(rd) as i32;
+                    let val = self.read_reg(rd);
+                    let vali = val as i32;
                     let shift = self.read_reg(rm) & 0xFF;
-                    let res = if shift == 0 {
-                        val as u32
-                    } else if shift >= 32 {
-                        (val >> 31) as u32
+                    let (res, carry) = if shift == 0 {
+                        (val, self.get_carry())
+                    } else if shift < 32 {
+                        ((vali >> shift) as u32, (val >> (shift - 1)) & 1 == 1)
                     } else {
-                        (val >> shift) as u32
+                        // shift >= 32: result is all sign bits; C = Rm[31].
+                        ((vali >> 31) as u32, (val >> 31) & 1 == 1)
                     };
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    if !it_block_instruction {
+                        self.update_nzcv(res, carry, self.get_overflow());
+                    }
                 }
                 Instruction::Adc { rd, rm } => {
                     let op1 = self.read_reg(rd);

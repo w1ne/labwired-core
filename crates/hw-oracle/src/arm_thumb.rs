@@ -348,6 +348,26 @@ pub fn asrs_imm(rd: u8, rm: u8, imm5: u8) -> u16 {
     0x1000 | ((imm5 as u16) << 6) | ((rm as u16) << 3) | (rd as u16)
 }
 
+// ── Thumb-1 register-controlled shifts (`Rdn` shifted by `Rm[7:0]`) ───────────
+// Two-arg data-processing form (`0b0100_00` group); pin the carry-out the
+// register-shift model fix corrected.
+
+/// `LSLS Rdn, Rm` — T1 (shift amount from Rm).
+pub fn lsl_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "LSLS reg needs low registers");
+    0x4080 | ((rm as u16) << 3) | (rdn as u16)
+}
+/// `LSRS Rdn, Rm` — T1.
+pub fn lsr_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "LSRS reg needs low registers");
+    0x40C0 | ((rm as u16) << 3) | (rdn as u16)
+}
+/// `ASRS Rdn, Rm` — T1.
+pub fn asr_reg(rdn: u8, rm: u8) -> u16 {
+    assert!(rdn < 8 && rm < 8, "ASRS reg needs low registers");
+    0x4100 | ((rm as u16) << 3) | (rdn as u16)
+}
+
 /// `CMP Rn, Rm` — T1.
 pub fn cmp_reg(rn: u8, rm: u8) -> u16 {
     assert!(rn < 8 && rm < 8, "CMP T1 needs low registers");
@@ -1061,6 +1081,14 @@ mod encoder_tests {
         assert_eq!(ldrh_reg(3, 1, 0), 0x5A0B); // LDRH r3,[r1,r0]
         assert_eq!(ldrb_reg(3, 1, 0), 0x5C0B); // LDRB r3,[r1,r0]
         assert_eq!(ldrsh_reg(3, 1, 0), 0x5E0B); // LDRSH r3,[r1,r0]
+    }
+
+    #[test]
+    fn register_shift_encodings() {
+        // Two-arg register-shift T1 (Rdn=2, Rm=1): base | (Rm<<3) | Rdn.
+        assert_eq!(lsl_reg(2, 1), 0x408A); // LSLS r2, r1
+        assert_eq!(lsr_reg(2, 1), 0x40CA); // LSRS r2, r1
+        assert_eq!(asr_reg(2, 1), 0x410A); // ASRS r2, r1
     }
 
     #[test]
