@@ -244,6 +244,10 @@ fn ensure_f407_firmware_built() -> PathBuf {
     let status = Command::new("cargo")
         .arg("build")
         .arg("--release")
+        // See e2e_epaper_tricolor: clear coverage instrumentation flags so the
+        // no_std firmware cross-build doesn't fail with E0463 under llvm-cov.
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
         .current_dir(&example_dir)
         .status()
         .expect("invoke cargo build for nucleo-f407-i2c");
