@@ -184,11 +184,25 @@ pub enum ThumbProgram {
     Elf(PathBuf),
 }
 
+/// Factory that builds the simulator bus for a case.  When `None`, the
+/// sim runner uses a bare RAM-only [`SystemBus::empty`] and loads the
+/// program into flash at [`PROG_BASE`] — right for pure-CPU instruction
+/// oracles.  When `Some`, the runner builds a **full chip bus** from the
+/// factory (peripherals mapped) and loads/runs the program from SRAM at
+/// [`PROG_BASE_HW`] — the same address silicon uses — so MMIO accesses
+/// in the program hit real peripheral models.  This is the peripheral-
+/// execution oracle path.
+type SimBusFactory = Box<dyn Fn() -> labwired_core::bus::SystemBus + Send + Sync>;
+
 pub struct ThumbOracleCase {
     pub program: ThumbProgram,
     pub setup: Box<dyn Fn(&mut ThumbOracleState) + Send + Sync>,
     pub expect: Box<dyn Fn(&ThumbOracleState) + Send + Sync>,
     pub mem_capture_addrs: Vec<u32>,
+    /// Optional full-chip sim bus factory (see [`SimBusFactory`]).  Set via
+    /// [`ThumbOracleCase::sim_bus`]; the HW runner is unaffected (silicon
+    /// always has its peripherals).
+    pub sim_bus: Option<SimBusFactory>,
 }
 
 impl ThumbOracleCase {
@@ -201,7 +215,14 @@ impl ThumbOracleCase {
             setup: Box::new(|_| {}),
             expect: Box::new(|_| {}),
             mem_capture_addrs: Vec::new(),
+            sim_bus: None,
         }
+    }
+
+    /// Build from a mixed sequence of 16-bit and 32-bit Thumb instructions
+    /// (see [`Thumb`]).  The `B .` terminator is appended automatically.
+    pub fn mixed(insns: &[Thumb]) -> Self {
+        Self::from_bytes(assemble(insns))
     }
 
     /// Build from a sequence of 16-bit Thumb halfwords.  Each is emitted
@@ -235,7 +256,22 @@ impl ThumbOracleCase {
             setup: Box::new(|_| {}),
             expect: Box::new(|_| {}),
             mem_capture_addrs: Vec::new(),
+            sim_bus: None,
         }
+    }
+
+    /// Run the sim side on a **full chip bus** built by `f` (peripherals
+    /// mapped), executing the program from SRAM at [`PROG_BASE_HW`] — the
+    /// same address the HW runner uses.  Turns a case into a peripheral-
+    /// execution oracle: MMIO writes/reads in the program exercise real
+    /// peripheral models on the sim side and real silicon on the HW side,
+    /// and `_diff` cross-validates the two.
+    pub fn sim_bus<F>(mut self, f: F) -> Self
+    where
+        F: Fn() -> labwired_core::bus::SystemBus + Send + Sync + 'static,
+    {
+        self.sim_bus = Some(Box::new(f));
+        self
     }
 
     pub fn setup<F>(mut self, f: F) -> Self
@@ -506,14 +542,63 @@ fn b_cond(cond: u8, offset_from_self: i32) -> u16 {
 /// encoding has a 4-bit Rd field).
 pub fn movw_imm16(rd: u8, imm16: u16) -> u32 {
     assert!(rd <= 12, "MOV.W T3 Rd must be r0..r12 (got r{rd})");
+    movw_movt_common(0b1111_0010_0100_0000u32, rd, imm16)
+}
+
+/// `MOVT Rd, #imm16` — T1 encoding.  Writes `imm16` into Rd's top 16 bits,
+/// leaving the bottom 16 unchanged.  Paired with [`movw_imm16`] this loads
+/// an arbitrary 32-bit constant (e.g. a peripheral MMIO base) into a
+/// register without a literal pool.  The encoding is identical to MOV.W's
+/// T3 except bit 7 of the first halfword (0xF2C0 base vs 0xF240).
+pub fn movt_imm16(rd: u8, imm16: u16) -> u32 {
+    assert!(rd <= 12, "MOVT T1 Rd must be r0..r12 (got r{rd})");
+    movw_movt_common(0b1111_0010_1100_0000u32, rd, imm16)
+}
+
+/// Shared field-packing for MOV.W T3 / MOVT T1 (same layout, different base).
+fn movw_movt_common(hi_base: u32, rd: u8, imm16: u16) -> u32 {
     let imm = imm16 as u32;
     let i = (imm >> 11) & 0x1;
     let imm4 = (imm >> 12) & 0xF;
     let imm3 = (imm >> 8) & 0x7;
     let imm8 = imm & 0xFF;
-    let hi = 0b1111_0010_0100_0000u32 | (i << 10) | imm4;
+    let hi = hi_base | (i << 10) | imm4;
     let lo = (imm3 << 12) | ((rd as u32) << 8) | imm8;
     (hi << 16) | lo
+}
+
+/// One Thumb instruction for the mixed-width [`assemble`] stream: a 16-bit
+/// halfword (`H`) or a 32-bit Thumb-2 word (`W`, hi-then-lo order).
+///
+/// Peripheral-execution oracle programs interleave 32-bit `MOV.W`/`MOVT`
+/// (to materialise MMIO addresses) with 16-bit `STR`/`LDR`, so neither
+/// [`ThumbOracleCase::halfwords`] (16-bit only) nor
+/// [`ThumbOracleCase::t2_words`] (32-bit only) fits — `Thumb` carries both.
+#[derive(Clone, Copy, Debug)]
+pub enum Thumb {
+    /// 16-bit Thumb-1 instruction.
+    H(u16),
+    /// 32-bit Thumb-2 instruction (high halfword in bits 31..16).
+    W(u32),
+}
+
+/// Assemble a mixed 16/32-bit Thumb instruction stream into little-endian
+/// bytes.  Thumb-2 words are emitted high-halfword-first (each halfword LE),
+/// matching [`ThumbOracleCase::t2_words`].
+pub fn assemble(insns: &[Thumb]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(insns.len() * 2);
+    for insn in insns {
+        match insn {
+            Thumb::H(h) => bytes.extend_from_slice(&h.to_le_bytes()),
+            Thumb::W(w) => {
+                let hi = ((*w >> 16) & 0xFFFF) as u16;
+                let lo = (*w & 0xFFFF) as u16;
+                bytes.extend_from_slice(&hi.to_le_bytes());
+                bytes.extend_from_slice(&lo.to_le_bytes());
+            }
+        }
+    }
+    bytes
 }
 
 /// `UDIV Rd, Rn, Rm` — T1 encoding (ARMv7-M unsigned divide).
@@ -633,9 +718,40 @@ mod ram_peripheral {
 
 fn capture_sim_state(case: &ThumbOracleCase) -> ThumbOracleState {
     use labwired_core::bus::SystemBus;
-    use labwired_core::cpu::cortex_m::CortexM;
-    use labwired_core::Cpu;
     use ram_peripheral::RamPeripheral;
+
+    // Peripheral-execution path: a full chip bus was supplied.  Build it,
+    // load the program into SRAM at PROG_BASE_HW (the same address the HW
+    // runner uses), and run from there so the program's MMIO accesses hit
+    // real peripheral models — exactly mirroring silicon.
+    if let Some(factory) = &case.sim_bus {
+        let mut bus = factory();
+        let bytes: &[u8] = match &case.program {
+            ThumbProgram::Asm(b) => b.as_slice(),
+            ThumbProgram::Elf(_) => panic!(
+                "thumb oracle: ELF programs are not supported on the full-chip \
+                 sim bus; use mixed()/halfwords()/t2_words()"
+            ),
+        };
+        // Write the program word by word into SRAM via the bus (the chip
+        // config maps real RAM at this window).
+        let mut i = 0;
+        while i < bytes.len() {
+            let mut w = [0u8; 4];
+            let n = (bytes.len() - i).min(4);
+            w[..n].copy_from_slice(&bytes[i..i + n]);
+            let word = u32::from_le_bytes(w);
+            labwired_core::Bus::write_u32(&mut bus, (PROG_BASE_HW + i as u32) as u64, word)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "thumb oracle: load program word at 0x{:08X} failed: {e:?}",
+                        PROG_BASE_HW + i as u32
+                    )
+                });
+            i += 4;
+        }
+        return run_capture(case, bus, PROG_BASE_HW);
+    }
 
     // Use empty() to avoid the STM32-default peripherals colliding with
     // our oracle program at PROG_BASE.  Bit-band is also disabled here,
@@ -702,10 +818,26 @@ fn capture_sim_state(case: &ThumbOracleCase) -> ThumbOracleState {
         Box::new(ram_peripheral::RamPeripheral::new(ORACLE_MEM_SIZE)),
     );
 
+    run_capture(case, bus, entry_pc)
+}
+
+/// Shared sim driver: reset the CPU on `bus`, apply `case.setup`, run from
+/// `entry_pc` until the `B .` terminator settles the PC, and snapshot the
+/// end state (registers + captured memory).  Used by both the bare-bus
+/// instruction-oracle path and the full-chip peripheral-execution path.
+fn run_capture(
+    case: &ThumbOracleCase,
+    mut bus: labwired_core::bus::SystemBus,
+    entry_pc: u32,
+) -> ThumbOracleState {
+    use labwired_core::cpu::cortex_m::CortexM;
+    use labwired_core::Cpu;
+
     let mut cpu = CortexM::new();
-    // reset() reads SP+PC from VTOR (defaults to 0, which is unmapped on
-    // our empty bus → both reads silently fail → SP/PC stay at the
-    // defaults reset() writes before the bus reads).
+    // reset() reads SP+PC from the vector table at VTOR (0).  On the bare
+    // bus that window is unmapped (reads fail → defaults kept); on a full
+    // chip bus flash is mapped but unprogrammed (zeros) — either way the
+    // explicit overrides below set the real entry state.
     cpu.reset(&mut bus).unwrap();
     cpu.set_pc(entry_pc);
     cpu.sp = INIT_SP;
@@ -1095,6 +1227,24 @@ mod encoder_tests {
         assert_eq!(lsr_reg(2, 1), 0x40CA); // LSRS r2, r1
         assert_eq!(asr_reg(2, 1), 0x410A); // ASRS r2, r1
         assert_eq!(ror_reg(2, 1), 0x41CA); // RORS r2, r1
+    }
+
+    #[test]
+    fn movt_r0_0x4002_encoding() {
+        // MOVT r0, #0x4002 (T1) per ARMv7-M ARM §A6.7.79: same field layout
+        // as MOV.W T3 but hi base 0xF2C0. imm16=0x4002 → imm4=4,i=0,imm3=0,
+        // imm8=0x02. hi=0xF2C0|4=0xF2C4, lo=0x0002.
+        // Cross-checked: arm-none-eabi-as `movt r0,#0x4002` → c4 f2 02 00.
+        assert_eq!(movt_imm16(0, 0x4002), 0xF2C4_0002);
+    }
+
+    #[test]
+    fn assemble_mixes_16_and_32_bit() {
+        // W(movw r0,#0x101C) then H(b .) → hi,lo of the word (each LE) then
+        // the halfword (LE).  movw r0,#0x101C: imm4=1,i=0,imm3=0,imm8=0x1C →
+        // hi=0xF241, lo=0x001C.
+        let bytes = assemble(&[Thumb::W(movw_imm16(0, 0x101C)), Thumb::H(B_SELF)]);
+        assert_eq!(bytes, vec![0x41, 0xF2, 0x1C, 0x00, 0xFE, 0xE7]);
     }
 
     #[test]

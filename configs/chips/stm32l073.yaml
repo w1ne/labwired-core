@@ -235,17 +235,22 @@ peripherals:
     irq: 16
 
   # TIM6 / TIM7 — 16-bit basic timers (HAL time-base candidates).
+  # `basic: true` → counter + UIF only, no capture/compare channels.
   - id: "tim6"
     type: "timer"
     base_address: 0x40001000
     size: "1KB"
     irq: 17
+    config:
+      basic: true
 
   - id: "tim7"
     type: "timer"
     base_address: 0x40001400
     size: "1KB"
     irq: 18
+    config:
+      basic: true
 
   # TIM21 / TIM22 — 16-bit general-purpose timers.
   - id: "tim21"

@@ -1039,9 +1039,17 @@ impl SystemBus {
                             .get("advanced")
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
-                        Box::new(crate::peripherals::timer::Timer::new_with_layout(
-                            width, advanced,
-                        ))
+                        // `basic: true` (TIM6/TIM7) → counter + UIF only, no
+                        // capture/compare channels.
+                        let basic = p_cfg
+                            .config
+                            .get("basic")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        Box::new(
+                            crate::peripherals::timer::Timer::new_with_layout(width, advanced)
+                                .basic(basic),
+                        )
                     }
                 }
                 "i2c"

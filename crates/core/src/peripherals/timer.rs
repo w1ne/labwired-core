@@ -57,6 +57,11 @@ pub struct Timer {
     /// (TIM1/TIM8). Gates the RCR/BDTR/CCMR3/CCR5-6/OR1-2 fields.
     advanced: bool,
 
+    /// Whether this is a **basic** timer (TIM6/TIM7): counter + UIF only,
+    /// no capture/compare channels. Suppresses the compare-match flags an
+    /// update event would otherwise latch on a general-purpose timer.
+    basic: bool,
+
     // Internal state
     psc_cnt: u32,
 }
@@ -102,7 +107,37 @@ impl Timer {
             or2: 0,
             width,
             advanced,
+            basic: false,
             psc_cnt: 0,
+        }
+    }
+
+    /// Mark this timer as a basic timer (TIM6/TIM7): no capture/compare
+    /// channels, so an update event latches only UIF. Builder form so the
+    /// existing `new_with_layout` call sites stay unchanged.
+    pub fn basic(mut self, basic: bool) -> Self {
+        self.basic = basic;
+        self
+    }
+
+    /// Latch CCxIF for every output-compare channel whose CCRx currently
+    /// equals CNT. Called at an update (UG) event, which reloads CNT and so
+    /// re-evaluates the compare for all four channels. At reset (CCRx=0,
+    /// CCMR in output-compare mode) CNT=0 matches every channel, so SR reads
+    /// 0x1F after a bare UG — silicon-verified on STM32F103 TIM2. Channels in
+    /// input-capture mode (CCxS != 0) don't compare and are skipped.
+    fn latch_compare_match_flags(&mut self) {
+        let mask = self.cnt_mask();
+        let channels = [
+            (self.ccr1, self.ccmr1 & 0x3, 1u32),
+            (self.ccr2, (self.ccmr1 >> 8) & 0x3, 2),
+            (self.ccr3, self.ccmr2 & 0x3, 3),
+            (self.ccr4, (self.ccmr2 >> 8) & 0x3, 4),
+        ];
+        for (ccr, ccs, bit) in channels {
+            if ccs == 0 && (ccr & mask) == self.cnt {
+                self.sr |= 1 << bit;
+            }
         }
     }
 
@@ -159,9 +194,18 @@ impl Timer {
             0x14 => {
                 self.egr = value & 0xFF;
                 if (self.egr & 0x01) != 0 {
+                    // Update event: reload counter/prescaler and set UIF.
                     self.cnt = 0;
                     self.psc_cnt = 0;
-                    self.sr |= 1; // UIF
+                    self.sr |= 1;
+                    // The UG reload re-evaluates every output-compare channel:
+                    // on a general-purpose/advanced timer the channels whose
+                    // CCRx now equals CNT latch their CCxIF (at reset, all of
+                    // them — SR=0x1F, silicon-verified on F103 TIM2). Basic
+                    // timers have no compare channels, so UG sets UIF only.
+                    if !self.basic {
+                        self.latch_compare_match_flags();
+                    }
                 }
                 if self.advanced {
                     if (self.egr & 0x02) != 0 {
@@ -305,6 +349,32 @@ mod tests {
         let sr = tim.read(0x10).unwrap();
         assert_eq!((cnt_hi as u16) << 8 | cnt_lo as u16, 0);
         assert_eq!(sr & 0x1, 0x1);
+    }
+
+    #[test]
+    fn test_egr_ug_latches_compare_match_flags() {
+        // A bare UG from the reset state reloads CNT=0, which matches every
+        // CCRx (all reset 0) in output-compare mode → SR = UIF + CC1..4IF =
+        // 0x1F. Silicon-verified on STM32F103 TIM2 (stm32f1_exec_oracle).
+        let mut tim = Timer::new();
+        tim.write(0x14, 0x01).unwrap(); // EGR.UG
+        assert_eq!(tim.read_reg(0x10), 0x1F);
+
+        // With a CCRx moved off the (post-UG) CNT=0, that channel's compare
+        // no longer matches, so its CCxIF stays clear after the next UG.
+        tim.write(0x10, 0).unwrap(); // clear SR
+        tim.write_reg(0x34, 0x20); // CCR1 = 0x20 (!= 0)
+        tim.write(0x14, 0x01).unwrap(); // EGR.UG again
+        assert_eq!(tim.read_reg(0x10), 0x1F & !0x2); // CC1IF (bit1) now clear
+    }
+
+    #[test]
+    fn test_basic_timer_ug_sets_only_uif() {
+        // Basic timers (TIM6/7) have no capture/compare channels, so UG must
+        // latch UIF alone — never the CCxIF flags a GP timer would set.
+        let mut tim = Timer::new().basic(true);
+        tim.write(0x14, 0x01).unwrap(); // EGR.UG
+        assert_eq!(tim.read_reg(0x10), 0x1);
     }
 
     #[test]

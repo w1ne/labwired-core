@@ -1489,6 +1489,8 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
+ "svd-ingestor",
+ "svd-parser",
  "thiserror 1.0.69",
  "tracing",
  "wasmtime",

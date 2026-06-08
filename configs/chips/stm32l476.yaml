@@ -246,17 +246,24 @@ peripherals:
     irq: 30
 
   # 16-bit basic timers TIM6, TIM7 — used by HAL as time base.
+  # `basic: true` → counter + UIF only, no capture/compare channels (so an
+  # update event latches UIF, not the CCxIF compare-match flags a GP timer
+  # would set).
   - id: "tim6"
     type: "timer"
     base_address: 0x40001000
     size: "1KB"
     irq: 54
+    config:
+      basic: true
 
   - id: "tim7"
     type: "timer"
     base_address: 0x40001400
     size: "1KB"
     irq: 55
+    config:
+      basic: true
 
   # Advanced-control timers TIM1 / TIM8 — full register file with BDTR
   # (break + dead-time + MOE), RCR (repetition counter), CCMR3, CCR5/6.
