@@ -70,11 +70,19 @@ const CCR_MEM2MEM: u32 = 1 << 14;
 const DMA_SRC: u32 = 0x2000_0100;
 const DMA_DST: u32 = 0x2000_0200;
 
-/// GPIOA (RM0008): output-data + atomic set/reset registers.
+/// GPIOA (RM0008): config + output-data + atomic set/reset registers.
 const GPIOA_BASE: u32 = 0x4001_0800;
+const GPIOA_CRL: u32 = GPIOA_BASE + 0x00; // pin config, pins 0..7
+const GPIOA_CRH: u32 = GPIOA_BASE + 0x04; // pin config, pins 8..15
 const GPIOA_ODR: u32 = GPIOA_BASE + 0x0C; // output data
 const GPIOA_BSRR: u32 = GPIOA_BASE + 0x10; // atomic set (lo16) / reset (hi16)
 const GPIOA_BRR: u32 = GPIOA_BASE + 0x14; // atomic reset (lo16)
+
+/// AFIO EXTICR1 (line-source mux for EXTI 0..3); upper 16 bits reserved.
+const AFIO_EXTICR1: u32 = 0x4001_0008;
+
+/// DBGMCU control register (Cortex-M debug-MCU block); bits [4:3] reserved.
+const DBGMCU_CR: u32 = 0xE004_2004;
 
 /// CRC unit (RM0008): data register + control.
 const CRC_BASE: u32 = 0x4002_3000;
@@ -493,4 +501,63 @@ fn crc_idr_is_8bit_on_f1() -> ThumbOracleCase {
         .expect(|st| {
             st.assert_mem(CRC_IDR, 0x0000_0078); // only the low byte survives
         })
+}
+
+// ── 9. AFIO EXTICR1 upper half reserved ─────────────────────────────────────────
+//
+// Each EXTICR holds four 4-bit line-source fields in bits [15:0]; bits [31:16]
+// are reserved and read 0 (RM0008 §9.4.3). Same masking class as MAPR (#17).
+// Program: enable AFIO clock, write a reserved upper bit + a valid nibble.
+#[thumb_oracle_test]
+fn afio_exticr1_upper_half_reads_zero() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(enable_clock_bit(RCC_APB2ENR, RCC_APB2ENR_AFIOEN));
+    prog.extend(load_addr(0, AFIO_EXTICR1));
+    prog.extend(store_imm32(0x0001_0002)); // reserved bit 16 + EXTI0→port C
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[AFIO_EXTICR1])
+        .expect(|st| st.assert_mem(AFIO_EXTICR1, 0x0000_0002))
+}
+
+// ── 10. GPIOA CRL/CRH config round-trip ─────────────────────────────────────────
+//
+// CRL/CRH are plain 32-bit R/W config registers (4 bits per pin, all bits
+// implemented — no reserved fields). A validation oracle: the written config
+// must read back verbatim on both sim and silicon.
+#[thumb_oracle_test]
+fn gpioa_crl_crh_round_trip() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(enable_clock_bit(RCC_APB2ENR, RCC_APB2ENR_IOPAEN));
+    prog.extend(load_addr(0, GPIOA_CRL));
+    prog.extend(store_imm32(0x3333_3333)); // all low pins: output 50MHz push-pull
+    prog.extend(load_addr(0, GPIOA_CRH));
+    prog.extend(store_imm32(0x4848_4848)); // mix of floating-input / output
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[GPIOA_CRL, GPIOA_CRH])
+        .expect(|st| {
+            st.assert_mem(GPIOA_CRL, 0x3333_3333);
+            st.assert_mem(GPIOA_CRH, 0x4848_4848);
+        })
+}
+
+// ── 11. DBGMCU_CR round-trip (incl. RM-reserved bits [4:3]) ──────────────────────
+//
+// A validation oracle with a silicon surprise: RM0008 §31.16.2 documents
+// DBGMCU_CR bits [4:3] as reserved, but the bench F103 reads them back exactly
+// as written (0x1F, not 0x07) — they are plain R/W storage on this silicon. The
+// model's verbatim store already matches; this oracle pins the actual behaviour
+// so a future "mask the reserved bits" change can't silently break it.
+// (Only the safe low/reserved bits are touched — no TRACE_IOEN, so the SWD pins
+// are untouched and the debugger stays connected.)
+#[thumb_oracle_test]
+fn dbgmcu_cr_round_trip() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(load_addr(0, DBGMCU_CR));
+    prog.extend(store_imm32(0x0000_001F)); // DBG_SLEEP/STOP/STANDBY + RM-reserved 3,4
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[DBGMCU_CR])
+        .expect(|st| st.assert_mem(DBGMCU_CR, 0x0000_001F)) // bits 3,4 stick on silicon
 }
