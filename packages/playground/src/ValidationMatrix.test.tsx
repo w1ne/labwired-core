@@ -5,7 +5,8 @@ import { ValidationMatrix, MATRIX_URL } from './ValidationMatrix';
 const SAMPLE = {
   esp32s3: {
     gpio: { status: 'pass', run_url: 'https://github.com/w1ne/labwired-core/actions/runs/1' },
-    mcpwm: { status: 'pass' }, // no evidence -> must render unrecorded
+    spi: { status: 'pass' }, // universal, no evidence -> must render unrecorded
+    mcpwm: { status: 'pass', run_url: 'https://github.com/w1ne/labwired-core/actions/runs/1' }, // chip-specific -> excluded from overview
     dma: { status: 'blocked', run_url: 'https://github.com/w1ne/labwired-core/actions/runs/1' },
     uart: { status: 'na' },
   },
@@ -29,8 +30,8 @@ describe('ValidationMatrix', () => {
   it('downgrades evidence-less cells to unrecorded (proof-artifact bar)', async () => {
     render(<ValidationMatrix />);
     await waitFor(() => expect(screen.getByText('ESP32-S3 (Xtensa LX7)')).toBeTruthy());
-    expect(screen.getByLabelText('mcpwm: unrecorded')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /mcpwm: pass/i })).toBeNull();
+    expect(screen.getByLabelText('spi: unrecorded')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /spi: pass/i })).toBeNull();
   });
 
   it('shows a graceful empty state when the fetch fails', async () => {
@@ -39,23 +40,28 @@ describe('ValidationMatrix', () => {
     await waitFor(() => expect(screen.getByText(/validation data unavailable/i)).toBeTruthy());
   });
 
-  it('renders na status as unlinked "—" with correct aria-label', async () => {
+  it('renders na status as unlinked "not modeled" 🚧 with correct aria-label', async () => {
     render(<ValidationMatrix />);
     await waitFor(() => expect(screen.getByText('ESP32-S3 (Xtensa LX7)')).toBeTruthy());
     const naCell = screen.getByLabelText('uart: na');
     expect(naCell.tagName.toLowerCase()).not.toBe('a');
-    expect(naCell.textContent).toBe('—');
+    expect(naCell.textContent).toBe('🚧');
   });
 
-  it('column order: rubric classes appear before extras', async () => {
+  it('overview is the 12 universal subsystems only; chip-specific classes are excluded', async () => {
     render(<ValidationMatrix />);
     await waitFor(() => expect(screen.getByText('ESP32-S3 (Xtensa LX7)')).toBeTruthy());
     const headers = screen.getAllByRole('columnheader').map((th) => th.textContent?.toLowerCase());
     const clockIdx = headers.findIndex((h) => h === 'clock');
     const irqIdx = headers.findIndex((h) => h === 'irq');
-    const mcpwmIdx = headers.findIndex((h) => h === 'mcpwm');
     expect(clockIdx).toBeGreaterThanOrEqual(0);
     expect(irqIdx).toBeGreaterThan(clockIdx);
-    expect(mcpwmIdx).toBeGreaterThan(irqIdx);
+    // The 12 universal subsystems are present; chip-specific peripherals
+    // (e.g. ESP32 RMT/MCPWM) are intentionally not columns in the overview.
+    for (const cls of ['clock', 'gpio', 'uart', 'timer', 'dma', 'irq', 'i2c', 'spi', 'adc', 'pwm', 'wdt', 'rtc']) {
+      expect(headers).toContain(cls);
+    }
+    expect(headers).not.toContain('mcpwm');
+    expect(headers).not.toContain('rmt');
   });
 });

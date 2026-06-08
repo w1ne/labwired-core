@@ -47,7 +47,7 @@ const ICON: Record<string, string> = {
   pass: '✅',
   partial: '🟡',
   blocked: '⛔',
-  na: '—',
+  na: '🚧',
   unrecorded: '·',
 };
 
@@ -106,10 +106,11 @@ export function ValidationMatrix() {
     );
   }
 
-  const extras = [...new Set(chips.flatMap((c) => Object.keys(matrix[c])))]
-    .filter((k) => !RUBRIC.includes(k))
-    .sort();
-  const classes = [...RUBRIC, ...extras];
+  // Overview = the 12 universal subsystems only. Chip-specific peripherals
+  // (e.g. ESP32 RMT) are intentionally excluded here — they exist on some
+  // parts but not others, so they can't share an apples-to-apples grid where
+  // 🚧 means "not modeled yet". They belong in the per-chip detail report.
+  const classes = RUBRIC;
 
   return (
     <section className="validation-matrix">
@@ -122,8 +123,11 @@ export function ValidationMatrix() {
         typical peripherals — I²C, SPI, ADC, PWM, watchdog, RTC. A green cell is
         sim-consistent: the check passed against the simulator&rsquo;s peripheral
         models. Silicon-anchored verification is a separate tier, coming with
-        hardware-in-the-loop. A blocked cell is a documented simulator gap, not a
-        hidden one; a dot is a check we haven&rsquo;t written yet.
+        hardware-in-the-loop. Because every chip here has all of these
+        subsystems in silicon, a non-green cell is honest about why: ⛔ is a
+        modeled subsystem that&rsquo;s currently failing, 🚧 is a subsystem the
+        model doesn&rsquo;t cover yet, and a dot is a check we haven&rsquo;t
+        written.
       </p>
 
       {/* Legend */}
@@ -131,9 +135,9 @@ export function ValidationMatrix() {
         {([
           ['pass', '✅', 'passed with evidence'],
           ['partial', '🟡', 'partial coverage'],
-          ['blocked', '⛔', 'blocked'],
-          ['unrecorded', '·', 'no evidence link'],
-          ['na', '—', 'not applicable'],
+          ['blocked', '⛔', 'modeled, failing'],
+          ['unrecorded', '·', 'no check written'],
+          ['na', '🚧', 'not modeled yet'],
         ] as const).map(([, icon, desc]) => (
           <span key={desc} className="flex items-center gap-1.5">
             <span className="text-[15px]">{icon}</span>
